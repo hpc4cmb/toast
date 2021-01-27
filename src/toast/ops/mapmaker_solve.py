@@ -344,8 +344,6 @@ class SolverLHS(Operator):
         if comm is not None:
             rank = comm.rank
 
-        print("\n\n==============================================\n\n", flush=True)
-
         # Check that input traits are set
         if self.binning is None:
             raise RuntimeError("You must set the binning trait before calling exec()")
@@ -371,6 +369,20 @@ class SolverLHS(Operator):
         self.binning.pre_process = None
 
         self._log_debug(comm, rank, "projection and binning finished in", timer=timer)
+
+        # Add noise prior
+
+        self._log_debug(comm, rank, "begin add noise prior")
+
+        # Zero out the amplitudes before accumulating the updated values
+        if self.out in data:
+            data[self.out].reset()
+
+        self.template_matrix.add_prior(
+            data[self.template_matrix.amplitudes], data[self.out]
+        )
+
+        self._log_debug(comm, rank, "add noise prior finished in", timer=timer)
 
         # Build a pipeline for the map scanning and template matrix application.
         # First create the operators that we will use.
@@ -401,8 +413,6 @@ class SolverLHS(Operator):
         template_transpose.amplitudes = self.out
         template_transpose.transpose = True
 
-        # print("project input amps = ", data[self.template_matrix.amplitudes])
-
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
 
@@ -430,11 +440,6 @@ class SolverLHS(Operator):
                     template_transpose,
                 ],
             )
-
-        # Zero out the amplitudes before accumulating the updated values
-
-        if self.out in data:
-            data[self.out].reset()
 
         # Run the projection pipeline.
 
@@ -587,22 +592,20 @@ def solve(
     residual = rhs.duplicate()
     residual -= lhs_out
 
-    print("RHS ", rhs)
-    print("LHS ", lhs_out)
-    print("residual", residual)
+    # print("RHS ", rhs)
+    # print("LHS ", lhs_out)
+    # print("residual", residual)
 
     # The preconditioned residual
     # s = M^-1 * r
     precond = rhs.duplicate()
     precond.reset()
     lhs_op.template_matrix.apply_precond(residual, precond)
-    print("Start precond = ", precond)
 
     # The proposal
     # d = s
     for k, v in proposal.items():
         v.local[:] = precond[k].local
-    print("proposal", proposal)
 
     # Set LHS amplitude inputs to this proposal
     lhs_op.template_matrix.amplitudes = proposal_key
@@ -615,7 +618,7 @@ def solve(
 
     # delta_new = delta_0 = r^T * d
     delta = proposal.dot(residual)
-    print("delta = ", delta)
+    # print("delta = ", delta)
     delta_init = delta
 
     if comm is not None:
@@ -636,14 +639,14 @@ def solve(
         # q = A * d
         lhs_op.apply(data, detectors=detectors)
 
-        print("LHS output", lhs_out)
+        # print("LHS output", lhs_out)
 
         # alpha = delta_new / (d^T * q)
-        print("alpha num = ", delta)
-        print("alpha den = ", proposal.dot(lhs_out))
+        # print("alpha num = ", delta)
+        # print("alpha den = ", proposal.dot(lhs_out))
         alpha = delta / proposal.dot(lhs_out)
 
-        print("alpha = ", alpha)
+        # print("alpha = ", alpha)
 
         # Update the result
         # x += alpha * d
@@ -663,7 +666,7 @@ def solve(
 
         # Epsilon
         sqsum = residual.dot(residual)
-        print("sqsum = ", sqsum)
+        # print("sqsum = ", sqsum)
 
         if comm is not None:
             comm.barrier()
@@ -688,7 +691,7 @@ def solve(
             break
 
         sqsum_best = min(sqsum, sqsum_best)
-        print("sqsum_best = ", sqsum_best)
+        # print("sqsum_best = ", sqsum_best)
 
         # Check for stall / divergence
         if iter % 10 == 0 and iter >= n_iter_min:
@@ -715,11 +718,11 @@ def solve(
 
         # beta = delta_new / delta_old
         beta = delta / delta_last
-        print("beta = ", beta)
+        # print("beta = ", beta)
 
         # New proposal
         # d = s + beta * d
         proposal *= beta
         proposal += precond
 
-        print("proposal[{}]".format(iter), proposal, flush=True)
+        # print("proposal[{}]".format(iter), proposal, flush=True)

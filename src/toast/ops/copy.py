@@ -169,24 +169,12 @@ class Copy(Operator):
                             raise RuntimeError(msg)
                         if ob.detdata[out_key].detectors != dets:
                             # The output has a different set of detectors.  Reallocate.
-                            print(
-                                "Copy:  reset detdata {} for dets {}".format(
-                                    out_key, dets
-                                ),
-                                flush=True,
-                            )
                             ob.detdata[out_key].change_detectors(dets)
                     else:
                         sample_shape = None
                         shp = ob.detdata[in_key].detector_shape
                         if len(shp) > 1:
                             sample_shape = shp[1:]
-                        print(
-                            "Copy:  allocate detdata {} for dets {}".format(
-                                out_key, dets
-                            ),
-                            flush=True,
-                        )
                         ob.detdata.create(
                             out_key,
                             sample_shape=sample_shape,

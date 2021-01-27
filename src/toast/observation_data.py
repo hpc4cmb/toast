@@ -453,7 +453,6 @@ class DetDataMgr(MutableMapping):
             raise RuntimeError(msg)
 
         # Create the data object
-        print("DetDataMgr[{}] allocate for {}".format(name, detectors), flush=True)
         self._internal[name] = DetectorData(detectors, data_shape, dtype)
 
         return
@@ -509,18 +508,7 @@ class DetDataMgr(MutableMapping):
                 if d not in self._internal[name].detectors:
                     change = True
             if change:
-                print(
-                    "DetDataMgr[{}] change detectors to {}".format(name, detectors),
-                    flush=True,
-                )
                 self._internal[name].change_detectors(detectors)
-            else:
-                print(
-                    "DetDataMgr[{}] detectors {} already included".format(
-                        name, detectors
-                    ),
-                    flush=True,
-                )
         else:
             # Create the data object
             self.create(

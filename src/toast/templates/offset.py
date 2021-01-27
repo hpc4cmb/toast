@@ -4,6 +4,8 @@
 
 from collections import OrderedDict
 
+import traitlets
+
 import numpy as np
 
 import scipy
@@ -62,19 +64,51 @@ class Offset(Template):
 
     use_noise_prior = Bool(
         False,
-        help="Construct the offset noise covariance and use it for a noise prior and as a preconditioner",
+        help="Use detector PSDs to build the noise prior and preconditioner",
     )
 
     precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
 
+    @traitlets.validate("precond_width")
+    def _check_precond_width(self, proposal):
+        w = proposal["value"]
+        if w < 1:
+            raise traitlets.TraitError("Preconditioner width should be >= 1")
+        return w
+
+    @traitlets.validate("good_fraction")
+    def _check_good_fraction(self, proposal):
+        f = proposal["value"]
+        if f < 0.0 or f > 1.0:
+            raise traitlets.TraitError("good_fraction should be a value from 0 to 1")
+        return f
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def clear(self):
+        """Delete the underlying C-allocated memory."""
+        if hasattr(self, "_offsetvar"):
+            del self._offsetvar
+        if hasattr(self, "_offsetvar_raw"):
+            self._offsetvar_raw.clear()
+            del self._offsetvar_raw
+
+    def __del__(self):
+        self.clear()
+
     @function_timer
     def _initialize(self, new_data):
+        # This function is called whenever a new data trait is assigned to the template.
+        # Clear any C-allocated buffers from previous uses.
+        self.clear()
+
         # Compute the step boundaries for every observation and the number of
         # amplitude values on this process.  Every process only stores amplitudes
         # for its locally assigned data.
+
+        if self.use_noise_prior and self.noise_model is None:
+            raise RuntimeError("cannot use noise prior without specifying noise_model")
 
         # Use this as an "Ordered Set".  We want the unique detectors on this process,
         # but sorted in order of occurrence.
@@ -123,7 +157,7 @@ class Offset(Template):
                 # Determine the binning for the noise prior
                 if self.use_noise_prior:
                     obstime = ob.shared[self.times][-1] - ob.shared[self.times][0]
-                    tbase = step_length
+                    tbase = self.step_time
                     fbase = 1.0 / tbase
                     powmin = np.floor(np.log10(1 / obstime)) - 1
                     powmax = min(np.ceil(np.log10(1 / tbase)) + 2, self._obs_rate[iob])
@@ -168,11 +202,13 @@ class Offset(Template):
         # Boolean flags
         self._amp_flags = np.zeros(self._n_local, dtype=np.bool)
 
-        # For the sigmasq values (offset / baseline variance), we have one per
-        # amplitude, which can approach the size of the time ordered data.  Store these
-        # in C-allocated memory as 32bit float.
-        self._sigmasq_raw = AlignedF32.zeros(self._n_local)
-        self._sigmasq = self._sigmasq_raw.array()
+        # Here we track the variance of the offsets based on the detector noise weights
+        # and the number of unflagged / good samples per offset.  Since we have one
+        # value per amplitude, this can approach the size of the time ordered data.
+        # Store these in C-allocated memory as 32bit float.  These are used when
+        # building both the diagonal and banded preconditioners.
+        self._offsetvar_raw = AlignedF32.zeros(self._n_local)
+        self._offsetvar = self._offsetvar_raw.array()
 
         offset = 0
         for det in self._all_dets:
@@ -180,7 +216,7 @@ class Offset(Template):
                 if det not in ob.local_detectors:
                     continue
 
-                # Noise weight
+                # "Noise weight" (time-domain inverse variance)
                 detnoise = 1.0
                 if self.noise_model is not None:
                     detnoise = ob[self.noise_model].detector_weight(det)
@@ -199,14 +235,16 @@ class Offset(Template):
                         view_samples = vw.stop - vw.start
                     n_amp_view = self._obs_views[iob][ivw]
 
-                    # Move this loop to compiled code if it is slow
+                    # Move this loop to compiled code if it is slow...
+                    # Note:  we are building the offset amplitude *variance*, which is
+                    # why the "noise weight" (inverse variance) is in the denominator.
                     if self.flags is None:
                         voff = 0
                         for amp in range(n_amp_view):
                             amplen = step_length
                             if amp == n_amp_view - 1:
                                 amplen = view_samples - voff
-                            self._sigmasq[offset + amp] = 1.0 / (detnoise * amplen)
+                            self._offsetvar[offset + amp] = 1.0 / (detnoise * amplen)
                             voff += step_length
                     else:
                         flags = views.detdata[self.flags][ivw]
@@ -220,18 +258,22 @@ class Offset(Template):
                             )
                             if (n_good / amplen) > self.good_fraction:
                                 # Keep this
-                                self._sigmasq[offset + amp] = 1.0 / (detnoise * n_good)
+                                self._offsetvar[offset + amp] = 1.0 / (
+                                    detnoise * n_good
+                                )
                             else:
                                 # Flag it
-                                self._sigmasq[offset + amp] = 0.0
+                                self._offsetvar[offset + amp] = 0.0
                                 self._amp_flags[offset + amp] = True
                             voff += step_length
                     offset += n_amp_view
 
         # Compute the amplitude noise filter and preconditioner for each detector
-        # and each view.
-
-        # print("Offset sigmasq = ", self._sigmasq, flush=True)
+        # and each view.  The "noise filter" is the real-space inverse amplitude
+        # covariance, which is constructed from the Fourier domain amplitude PSD.
+        #
+        # The preconditioner is either a diagonal one using the amplitude variance,
+        # or is a banded one using the amplitude covariance plus the diagonal term.
 
         self._filters = dict()
         self._precond = dict()
@@ -245,117 +287,144 @@ class Offset(Template):
                     if iob not in self._filters:
                         self._filters[iob] = dict()
                         self._precond[iob] = dict()
-                    if self.noise_model is not None:
-                        # We have noise information.  Get the PSD describing noise
-                        # correlations between offset amplitudes for this observation.
-                        offset_psd = self._get_offset_psd(
-                            ob[self.noise_model], self._freq[iob], self.step_time, det
+
+                    offset_psd = self._get_offset_psd(
+                        ob[self.noise_model], self._freq[iob], self.step_time, det
+                    )
+
+                    # "Noise weight" (time-domain inverse variance)
+                    detnoise = ob[self.noise_model].detector_weight(det)
+
+                    # Log version of offset PSD and its inverse for interpolation
+                    logfreq = np.log(self._freq[iob])
+                    logpsd = np.log(offset_psd)
+                    logfilter = np.log(1.0 / offset_psd)
+
+                    # Compute the list of filters and preconditioners (one per view)
+                    # For this detector.
+
+                    self._filters[iob][det] = list()
+                    self._precond[iob][det] = list()
+
+                    # Loop over views
+                    views = ob.view[self.view]
+                    for ivw, vw in enumerate(views):
+                        view_samples = None
+                        if vw.start is None:
+                            # This is a view of the whole obs
+                            view_samples = ob.n_local_samples
+                        else:
+                            view_samples = vw.stop - vw.start
+                        n_amp_view = self._obs_views[iob][ivw]
+                        offsetvar_slice = self._offsetvar[offset : offset + n_amp_view]
+
+                        filterlen = 2
+                        while filterlen < 2 * n_amp_view:
+                            filterlen *= 2
+                        filterfreq = np.fft.rfftfreq(filterlen, self.step_time)
+
+                        # Recall that the "noise filter" is the inverse amplitude
+                        # covariance, which is why we are using 1/PSD.  Also note that
+                        # the truncate function shifts the filter to be symmetric about
+                        # the center, which is needed for use with scipy.signal.convolve
+                        # If we move this application back to compiled FFT based
+                        # methods, we should instead keep this filter in the fourier
+                        # domain.
+
+                        noisefilter = self._truncate(
+                            np.fft.irfft(
+                                self._interpolate_psd(filterfreq, logfreq, logfilter)
+                            )
                         )
 
-                        # Log version of offset PSD for interpolation
-                        logfreq = np.log(self._freq[iob])
-                        logpsd = np.log(offset_psd)
-                        logfilter = np.log(1 / offset_psd)
+                        self._filters[iob][det].append(noisefilter)
 
-                        # Helper functions
-                        def _interpolate(x, psd):
-                            result = np.zeros(x.size)
-                            good = np.abs(x) > 1e-10
-                            logx = np.log(np.abs(x[good]))
-                            logresult = np.interp(logx, logfreq, psd)
-                            result[good] = np.exp(logresult)
-                            return result
+                        # Build the preconditioner
+                        lower = None
+                        preconditioner = None
 
-                        def _truncate(noisefilter, lim=1e-4):
+                        if self.precond_width == 1:
+                            # We are using a Toeplitz preconditioner.  The first row
+                            # of the matrix is the inverse FFT of the offset PSD,
+                            # with an added zero-lag component from the detector
+                            # weight.  NOTE:  the truncate function shifts the real
+                            # space filter to the center of the vector.
+                            preconditioner = self._truncate(
+                                np.fft.irfft(
+                                    self._interpolate_psd(filterfreq, logfreq, logpsd)
+                                )
+                            )
+                            icenter = preconditioner.size // 2
+                            preconditioner[icenter] += 1.0 / detnoise
+                        else:
+                            # We are using a banded matrix for the preconditioner.
+                            # This contains a Toeplitz component from the inverse
+                            # offset variance in the LHS, and another diagonal term
+                            # from the individual offset variance.
+                            #
+                            # NOTE:  Instead of directly solving x = M^{-1} b, we do
+                            # not invert "M" and solve M x = b using the Cholesky
+                            # decomposition of M (*not* M^{-1}).
                             icenter = noisefilter.size // 2
-                            ind = (
-                                np.abs(noisefilter[:icenter])
-                                > np.abs(noisefilter[0]) * lim
+                            wband = min(self.precond_width, icenter)
+                            precond_width = max(
+                                wband, min(self.precond_width, n_amp_view)
                             )
-                            icut = np.argwhere(ind)[-1][0]
-                            if icut % 2 == 0:
-                                icut += 1
-                            noisefilter = np.roll(noisefilter, icenter)
-                            noisefilter = noisefilter[
-                                icenter - icut : icenter + icut + 1
-                            ]
-                            return noisefilter
-
-                        # Compute the list of filters and preconditioners (one per view)
-                        # For this detector.
-                        self._filters[iob][det] = list()
-                        self._precond[iob][det] = list()
-
-                        # Loop over views
-                        views = ob.view[self.view]
-                        for ivw, vw in enumerate(views):
-                            view_samples = None
-                            if vw.start is None:
-                                # This is a view of the whole obs
-                                view_samples = ob.n_local_samples
-                            else:
-                                view_samples = vw.stop - vw.start
-                            n_amp_view = self._obs_views[iob][ivw]
-                            sigmasq_slice = self._sigmasq[offset : offset + n_amp_view]
-
-                            # nstep = offset_slice.stop - offset_slice.start
-
-                            filterlen = n_amp_view * 2 + 1
-                            filterfreq = np.fft.rfftfreq(filterlen, self.step_time)
-                            noisefilter = _truncate(
-                                np.fft.irfft(_interpolate(filterfreq, logfilter))
+                            preconditioner = np.zeros(
+                                [precond_width, n_amp_view], dtype=np.float64
                             )
-                            self._filters[iob][det].append(noisefilter)
-
-                            # Build the band-diagonal preconditioner
-                            lower = None
-                            if self.precond_width <= 1:
-                                # Compute C_a prior
-                                preconditioner = _truncate(
-                                    np.fft.irfft(_interpolate(filterfreq, logpsd))
-                                )
-                            else:
-                                # Compute Cholesky decomposition prior
-                                wband = min(self.precond_width, noisefilter.size // 2)
-                                precond_width = max(
-                                    wband, min(self.precond_width, n_amp_view)
-                                )
-                                icenter = noisefilter.size // 2
-                                preconditioner = np.zeros(
-                                    [precond_width, n_amp_view], dtype=np.float64
-                                )
-                                preconditioner[0] = sigmasq_slice
-                                preconditioner[:wband, :] += np.repeat(
-                                    noisefilter[icenter : icenter + wband, np.newaxis],
-                                    n_amp_view,
-                                    1,
-                                )
-                                lower = True
-                                scipy.linalg.cholesky_banded(
-                                    preconditioner,
-                                    overwrite_ab=True,
-                                    lower=lower,
-                                    check_finite=True,
-                                )
-                            self._precond[iob][det].append((preconditioner, lower))
-                            offset += n_amp_view
+                            preconditioner[0, :] = 1.0 / offsetvar_slice
+                            preconditioner[:wband, :] += np.repeat(
+                                noisefilter[icenter : icenter + wband, np.newaxis],
+                                n_amp_view,
+                                1,
+                            )
+                            lower = True
+                            preconditioner = scipy.linalg.cholesky_banded(
+                                preconditioner,
+                                overwrite_ab=True,
+                                lower=lower,
+                                check_finite=True,
+                            )
+                        self._precond[iob][det].append((preconditioner, lower))
+                        offset += n_amp_view
         return
 
     def __del__(self):
-        if hasattr(self, "_sigmasq"):
-            del self._sigmasq
-        if hasattr(self, "_sigmasq_raw"):
-            self._sigmasq_raw.clear()
-            del self._sigmasq_raw
+        if hasattr(self, "_offsetvar"):
+            del self._offsetvar
+        if hasattr(self, "_offsetvar_raw"):
+            self._offsetvar_raw.clear()
+            del self._offsetvar_raw
 
-    @staticmethod
-    def _get_offset_psd(noise, freq, step_time, det):
+    # Helper functions for noise / preconditioner calculations
+
+    def _interpolate_psd(self, x, lfreq, lpsd):
+        result = np.zeros(x.size)
+        good = np.abs(x) > 1e-10
+        logx = np.log(np.abs(x[good]))
+        logresult = np.interp(logx, lfreq, lpsd)
+        result[good] = np.exp(logresult)
+        return result
+
+    def _truncate(self, noisefilter, lim=1e-4):
+        icenter = noisefilter.size // 2
+        ind = np.abs(noisefilter[:icenter]) > np.abs(noisefilter[0]) * lim
+        icut = np.argwhere(ind)[-1][0]
+        if icut % 2 == 0:
+            icut += 1
+        noisefilter = np.roll(noisefilter, icenter)
+        noisefilter = noisefilter[icenter - icut : icenter + icut + 1]
+        return noisefilter
+
+    def _get_offset_psd(self, noise, freq, step_time, det):
         """Compute the PSD of the baseline offsets."""
         psdfreq = noise.freq(det)
         psd = noise.psd(det)
         rate = noise.rate(det)
+
         # Remove the white noise component from the PSD
-        psd = psd.copy() * np.sqrt(rate)
+        psd = psd.copy()
         psd -= np.amin(psd[psdfreq > 1.0])
         psd[psd < 1e-30] = 1e-30
 
@@ -364,14 +433,6 @@ class Offset(Template):
         # A&A 510:A57, 2010
         logfreq = np.log(psdfreq)
         logpsd = np.log(psd)
-
-        def interpolate_psd(x):
-            result = np.zeros(x.size)
-            good = np.abs(x) > 1e-10
-            logx = np.log(np.abs(x[good]))
-            logresult = np.interp(logx, logfreq, logpsd)
-            result[good] = np.exp(logresult)
-            return result
 
         def g(x):
             bad = np.abs(x) < 1e-10
@@ -383,10 +444,18 @@ class Offset(Template):
 
         tbase = step_time
         fbase = 1.0 / tbase
-        offset_psd = interpolate_psd(freq) * g(freq * tbase)
+
+        offset_psd = np.zeros_like(freq)
+        offset_psd[:] += self._interpolate_psd(freq, logfreq, logpsd) * g(freq * tbase)
+
         for m in range(1, 2):
-            offset_psd += interpolate_psd(freq + m * fbase) * g(freq * tbase + m)
-            offset_psd += interpolate_psd(freq - m * fbase) * g(freq * tbase - m)
+            offset_psd[:] += self._interpolate_psd(
+                freq + m * fbase, logfreq, logpsd
+            ) * g(freq * tbase + m)
+            offset_psd[:] += self._interpolate_psd(
+                freq - m * fbase, logfreq, logpsd
+            ) * g(freq * tbase - m)
+
         offset_psd *= fbase
         return offset_psd
 
@@ -409,34 +478,14 @@ class Offset(Template):
                 continue
             # The step length for this observation
             step_length = self._step_length(self.step_time, self._obs_rate[iob])
-            # print(
-            #     "Offset input det {}, ob {} = ".format(detector, iob),
-            #     ob.view[self.view].detdata[self.det_data],
-            #     flush=True,
-            # )
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 n_amp_view = self._obs_views[iob][ivw]
-                # print(
-                #     "Offset input det {}, ob {}, view {} = ".format(detector, iob, ivw),
-                #     vw[detector],
-                #     flush=True,
-                # )
-                # print(
-                #     "Offset input amplitude range = {} - {}".format(
-                #         offset, offset + n_amp_view - 1
-                #     )
-                # )
                 template_offset_add_to_signal(
                     step_length,
                     amplitudes.local[offset : offset + n_amp_view],
                     vw[detector],
                 )
                 offset += n_amp_view
-            # print(
-            #     "Offset output det {}, ob {} = ".format(detector, iob),
-            #     ob.detdata[self.det_data],
-            #     flush=True,
-            # )
 
     @function_timer
     def _project_signal(self, detector, amplitudes):
@@ -453,36 +502,23 @@ class Offset(Template):
                     vw[detector],
                     amplitudes.local[offset : offset + n_amp_view],
                 )
-                # amplitudes.local[offset : offset + n_amp_view] *= self._sigmasq[
-                #     offset : offset + n_amp_view
-                # ]
-                # print(
-                #     "offset project det {}, amps = ".format(detector),
-                #     flush=True,
-                # )
-                # for i in range(n_amp_view):
-                #     offset = self._det_start[detector]
-                #     print(
-                #         "base {} = {} sumsq = {}".format(
-                #             i, amplitudes.local[offset + i], self._sigmasq[offset + i]
-                #         )
-                #     )
                 offset += n_amp_view
 
     @function_timer
     def _add_prior(self, amplitudes_in, amplitudes_out):
-        if self.noise_model is None:
-            # No noise model is specified, so no prior is used.
+        if not self.use_noise_prior:
+            # Not using the noise prior term
             return
         for det in self._all_dets:
-            offset = self._det_start[detector]
+            offset = self._det_start[det]
             for iob, ob in enumerate(self.data.obs):
                 if det not in ob.local_detectors:
                     continue
                 for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                     n_amp_view = self._obs_views[iob][ivw]
-                    amps_in = amplitudes_in[offset : offset + n_amp_view]
-                    amps_out = amplitudes_out[offset : offset + n_amp_view]
+                    amp_slice = slice(offset, offset + n_amp_view, 1)
+                    amps_in = amplitudes_in.local[amp_slice]
+                    amps_out = amplitudes_out.local[amp_slice]
                     amps_out[:] += scipy.signal.convolve(
                         amps_in, self._filters[iob][det][ivw], mode="same"
                     )
@@ -491,7 +527,8 @@ class Offset(Template):
     @function_timer
     def _apply_precond(self, amplitudes_in, amplitudes_out):
         if self.use_noise_prior:
-            # C_a preconditioner
+            # Our design matrix includes a term with the inverse offset covariance.
+            # This means that our preconditioner should include this term as well.
             for det in self._all_dets:
                 offset = self._det_start[det]
                 for iob, ob in enumerate(self.data.obs):
@@ -513,14 +550,16 @@ class Offset(Template):
                         amps_in = amplitudes_in.local[amp_slice]
                         amps_out = None
                         if self.precond_width <= 1:
-                            # Use C_a prior
+                            # We are using a Toeplitz preconditioner.
                             # scipy.signal.convolve will use either `convolve` or
                             # `fftconvolve` depending on the size of the inputs
                             amps_out = scipy.signal.convolve(
-                                amps_in, self._precond[iob][det][ivw], mode="same"
+                                amps_in, self._precond[iob][det][ivw][0], mode="same"
                             )
                         else:
-                            # Use pre-computed Cholesky decomposition
+                            # Use pre-computed Cholesky decomposition.  Note that this
+                            # is the decomposition of the actual preconditioner (not
+                            # its inverse), since we are solving Mx=b.
                             amps_out = scipy.linalg.cho_solve_banded(
                                 self._precond[iob][det][ivw],
                                 amps_in,
@@ -529,22 +568,8 @@ class Offset(Template):
                             )
                         amplitudes_out.local[amp_slice] = amps_out
         else:
-            # Diagonal preconditioner
-            # print("diagonal prec = ")
-            # ndetbase = amplitudes_in.n_local // 2
-            # print(
-            #     "ndetbase = {}, len(sigmasq) = {}".format(ndetbase, len(self._sigmasq))
-            # )
-            # for det in self._all_dets:
-            #     offset = self._det_start[det]
-            #     for i in range(ndetbase):
-            #         print(
-            #             "det {} base {} = {:0.6e}".format(
-            #                 det, i, self._sigmasq[offset + i]
-            #             ),
-            #             flush=True,
-            #         )
-            # print(self._sigmasq)
+            # Since we do not have a noise filter term in our LHS, our diagonal
+            # preconditioner is just the application of offset variance.
             amplitudes_out.local[:] = amplitudes_in.local
-            amplitudes_out.local *= self._sigmasq
+            amplitudes_out.local *= self._offsetvar
         return

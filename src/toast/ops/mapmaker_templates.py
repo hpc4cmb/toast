@@ -107,6 +107,27 @@ class TemplateMatrix(Operator):
         for tmpl in self.templates:
             tmpl.apply_precond(amps_in[tmpl.name], amps_out[tmpl.name])
 
+    def add_prior(self, amps_in, amps_out):
+        """Apply the noise prior from all templates to the amplitudes.
+
+        This can only be called after the operator has been used at least once so that
+        the templates are initialized.
+
+        Args:
+            amps_in (AmplitudesMap):  The input amplitudes.
+            amps_out (AmplitudesMap):  The output amplitudes, modified in place.
+
+        Returns:
+            None
+
+        """
+        if not self._initialized:
+            raise RuntimeError(
+                "You must call exec() once before applying the noise prior"
+            )
+        for tmpl in self.templates:
+            tmpl.add_prior(amps_in[tmpl.name], amps_out[tmpl.name])
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
@@ -156,12 +177,6 @@ class TemplateMatrix(Operator):
             if self.amplitudes not in data:
                 # The output template amplitudes do not yet exist.  Create these with
                 # all zero values.
-                print(
-                    "template matrix transpose create amplitudes {}".format(
-                        self.amplitudes
-                    ),
-                    flush=True,
-                )
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
@@ -186,20 +201,9 @@ class TemplateMatrix(Operator):
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
 
-            # print("template matrix in = ", data[self.amplitudes], flush=True)
             for d in all_dets:
                 for tmpl in self.templates:
                     tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
-                # print(
-                #     "template matrix out {} --> {}".format(
-                #         self.det_data, self.templates[0].det_data
-                #     )
-                # )
-                # print(
-                #     "template matrix out {} = ".format(d),
-                #     ob.detdata[self.det_data][d],
-                #     flush=True,
-                # )
         return
 
     def _finalize(self, data, **kwargs):

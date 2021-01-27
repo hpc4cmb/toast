@@ -458,7 +458,7 @@ class MapMaker(Operator):
         )
         rhs_calc.apply(data, detectors=detectors)
 
-        print("RHS = ", data[solver_rhs], flush=True)
+        # print("RHS = ", data[solver_rhs], flush=True)
 
         self._log_info(comm, rank, "  finished RHS calculation in", timer=timer)
 

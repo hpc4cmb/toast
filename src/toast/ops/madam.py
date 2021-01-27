@@ -10,7 +10,7 @@ import traitlets
 
 import numpy as np
 
-from ..utils import Logger, Timer, GlobalTimers, dtype_to_aligned
+from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 
 from ..traits import trait_docs, Int, Unicode, Bool, Dict
 
@@ -171,6 +171,21 @@ class Madam(Operator):
             raise traitlets.TraitError(
                 "If det_out is not None, restore_det_data should be False"
             )
+        return check
+
+    @traitlets.validate("params")
+    def _check_params(self, proposal):
+        check = proposal["value"]
+        if "info" not in check:
+            # The user did not specify the info level- set it from the toast loglevel
+            env = Environment.get()
+            level = env.log_level()
+            if level == "DEBUG":
+                check["info"] = 2
+            elif level == "VERBOSE":
+                check["info"] = 3
+            else:
+                check["info"] = 1
         return check
 
     def __init__(self, **kwargs):
@@ -790,9 +805,7 @@ class Madam(Operator):
                 psdvals = []
                 for idet, det in enumerate(all_dets):
                     if det not in psds:
-                        raise RuntimeError(
-                            "Every detector must have at least " "one PSD"
-                        )
+                        raise RuntimeError("Every detector must have at least one PSD")
                     psdlist = psds[det]
                     npsd[idet] = len(psdlist)
                     for psdstart, psd, detw in psdlist:

@@ -191,7 +191,9 @@ class Template(TraitConfig):
     def apply_precond(self, amplitudes_in, amplitudes_out):
         """Apply the template preconditioner.
 
-        This performs:
+        Formally, the preconditioner "M" is an approximation to the "design matrix"
+        (the "A" matrix in "Ax = b").  This function applies the inverse preconditioner
+        to the template amplitudes:
 
         .. math::
             a' += M^{-1} \\cdot a
