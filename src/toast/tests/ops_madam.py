@@ -177,7 +177,6 @@ class MadamTest(MPITestCase):
         pars["write_hits"] = "T"
         pars["kfilter"] = "F"
         pars["path_output"] = self.outdir
-        pars["info"] = 2
 
         # FIXME: add a view here once our test data includes it
 

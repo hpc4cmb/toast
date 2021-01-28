@@ -157,7 +157,6 @@ class MapmakerBinningTest(MPITestCase):
         pars["write_hits"] = "T"
         pars["kfilter"] = "F"
         pars["path_output"] = self.outdir
-        pars["info"] = 0
 
         madam = ops.Madam(
             params=pars,

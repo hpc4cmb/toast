@@ -8,6 +8,8 @@ import numpy as np
 
 import traitlets
 
+from ..mpi import MPI
+
 from ..utils import Logger, AlignedU8, AlignedF32, AlignedF64, dtype_to_aligned
 
 from ..traits import TraitConfig, Instance, Unicode, Int
@@ -324,11 +326,13 @@ class Amplitudes(object):
             self._global_last = self._n_local - 1
         else:
             if self._local_indices is None:
-                check = [self._n_local]
+                check = None
                 rank = 0
                 if self._comm is not None:
-                    check = self._comm.allgather(check)
+                    check = self._comm.allgather(self._n_local)
                     rank = self._comm.rank
+                else:
+                    check = [self._n_local]
                 if np.sum(check) != self._n_global:
                     msg = "Total amplitudes on all processes does not equal n_global"
                     raise RuntimeError(msg)
@@ -479,7 +483,7 @@ class Amplitudes(object):
         """The number of local amplitudes that are flagged."""
         return np.count_nonzero(self.local_flags)
 
-    def _get_global_values(comm_offset, send_buffer):
+    def _get_global_values(self, comm_offset, send_buffer):
         n_buf = len(send_buffer)
         if self._full:
             # Shortcut if we have all global amplitudes locally
@@ -509,11 +513,17 @@ class Amplitudes(object):
                 send_view[:] = self.local[local_off : local_off + n_copy]
                 send_view[self.local_flags[local_off : local_off + n_copy] != 0] = 0
             else:
-                # Need to efficiently do the lookup.  Pull existing techniques from
-                # old code when we need this.
-                raise NotImplementedError("sync of explicitly indexed amplitudes")
+                selected = np.logical_and(
+                    np.logical_and(
+                        self._local_indices >= comm_offset,
+                        self._local_indices < comm_offset + n_buf,
+                    ),
+                    self.local_flags == 0,
+                )
+                buf_indices = self._local_indices[selected] - comm_offset
+                send_buffer[buf_indices] = self.local[selected]
 
-    def _set_global_values(comm_offset, recv_buffer):
+    def _set_global_values(self, comm_offset, recv_buffer):
         n_buf = len(recv_buffer)
         if self._full:
             # Shortcut if we have all global amplitudes locally
@@ -541,9 +551,15 @@ class Amplitudes(object):
                     buf_off : buf_off + n_copy
                 ]
             else:
-                # Need to efficiently do the lookup.  Pull existing techniques from
-                # old code when we need this.
-                raise NotImplementedError("sync of explicitly indexed amplitudes")
+                selected = np.logical_and(
+                    np.logical_and(
+                        self._local_indices >= comm_offset,
+                        self._local_indices < comm_offset + n_buf,
+                    ),
+                    self.local_flags == 0,
+                )
+                buf_indices = self._local_indices[selected] - comm_offset
+                self.local[selected] = recv_buffer[buf_indices]
 
     def sync(self, comm_bytes=10000000):
         """Perform an Allreduce across all processes.
@@ -556,14 +572,15 @@ class Amplitudes(object):
             None
 
         """
-        if self._comm is None or self._local_indices is None:
-            # We have either one process or every process has a disjoint set of
-            # amplitudes.  Nothing to sync.
+        if self._comm is None or (not self._full and self._local_indices is None):
+            # Either no MPI or fully disjoint set of amplitudes.
             return
         log = Logger.get()
 
         n_comm = int(comm_bytes / self._itemsize)
         n_total = self._n_global
+        if n_comm > n_total:
+            n_comm = n_total
 
         # Create persistent buffers for the reduction
 
@@ -591,7 +608,7 @@ class Amplitudes(object):
         del send_raw
         del recv_raw
 
-    def dot(self, other):
+    def dot(self, other, comm_bytes=10000000):
         """Perform a dot product with another Amplitudes object.
 
         The other instance must have the same data distribution.  The two objects are
@@ -601,6 +618,9 @@ class Amplitudes(object):
 
         Args:
             other (Amplitudes):  The other instance.
+            comm_bytes (int):  The maximum number of bytes to communicate in each
+                call to Allreduce.  Only used in the case of explicitly indexed
+                amplitudes on each process.
 
         Result:
             (float):  The dot product.
@@ -610,20 +630,82 @@ class Amplitudes(object):
             raise RuntimeError("Amplitudes must have the same number of values")
         if other.n_local != self.n_local:
             raise RuntimeError("Amplitudes must have the same number of local values")
-        local_result = np.dot(self.local, other.local)
         result = None
         if self._comm is None or self._full:
             # Only one process, or every process has the full set of values.
-            result = local_result
+            result = np.dot(
+                np.where(self.local_flags == 0, self.local, 0),
+                np.where(other.local_flags == 0, other.local, 0),
+            )
         else:
             if self._local_indices is None:
                 # Every process has a unique set of amplitudes.  Reduce the local
                 # dot products.
-                result = MPI.allreduce(local_result, op=MPI.SUM)
+                local_result = np.dot(
+                    np.where(self.local_flags == 0, self.local, 0),
+                    np.where(other.local_flags == 0, other.local, 0),
+                )
+                result = self._comm.allreduce(local_result, op=MPI.SUM)
             else:
-                # More complicated, since we need to reduce each amplitude only
-                # once.  Implement techniques from other existing code when needed.
-                raise NotImplementedError("dot of explicitly indexed amplitudes")
+                # Each amplitude must only contribute once to the dot product.  Every
+                # amplitude will be processed by the lowest-rank process which has
+                # that amplitude.  We do this in a buffered way so that we don't need
+                # store this amplitude assignment information for the whole data at
+                # once.
+                n_comm = int(comm_bytes / self._itemsize)
+                n_total = self._n_global
+                if n_comm > n_total:
+                    n_comm = n_total
+
+                local_raw = AlignedI32.zeros(n_comm)
+                assigned_raw = AlignedI32.zeros(n_comm)
+                local = local_raw.array()
+                assigned = assigned_raw.array()
+
+                local_result = 0
+
+                comm_offset = 0
+                while comm_offset < n_total:
+                    if comm_offset + n_comm > n_total:
+                        n_comm = n_total - comm_offset
+                    local[:] = self._comm.size
+
+                    selected = np.logical_and(
+                        self._local_indices >= comm_offset,
+                        self._local_indices < comm_offset + n_buf,
+                    )
+                    buf_indices = self._local_indices[selected] - comm_offset
+                    local[buf_indices] = self._comm.rank
+                    self._comm.Allreduce(local, assigned, op=MPI.MIN)
+
+                    # Compute local dot product of just our assigned, unflagged elements
+                    local_result += np.dot(
+                        np.where(
+                            np.logical_and(
+                                self.local_flags == 0, assigned == self._comm.rank
+                            ),
+                            self.local,
+                            0,
+                        ),
+                        np.where(
+                            np.logical_and(
+                                other.local_flags == 0, assigned == self._comm.rank
+                            ),
+                            other.local,
+                            0,
+                        ),
+                    )
+                    comm_offset += n_comm
+
+                result = self._comm.allreduce(local_result, op=MPI.SUM)
+
+                del local
+                del assigned
+                local_raw.clear()
+                assigned_raw.clear()
+                del local_raw
+                del assigned_raw
+
         return result
 
 

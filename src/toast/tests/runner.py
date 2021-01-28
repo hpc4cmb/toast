@@ -45,17 +45,13 @@ from . import ops_madam as test_ops_madam
 
 from . import covariance as test_covariance
 
+from . import template as test_template
 from . import template_offset as test_template_offset
 
-#
-# from . import cache as testcache
-#
-# from . import tod as testtod
 #
 # from . import psd_math as testpsdmath
 #
 # from . import ops_dipole as testopsdipole
-# from . import ops_simnoise as testopssimnoise
 # from . import ops_sim_sss as testopssimsss
 #
 # from . import ops_polyfilter as testopspolyfilter
@@ -64,16 +60,9 @@ from . import template_offset as test_template_offset
 # from . import ops_gainscrambler as testopsgainscrambler
 # from . import ops_applygain as testopsapplygain
 #
-#
-#
-# from . import ops_madam as testopsmadam
-# from . import ops_mapmaker as testopsmapmaker
-#
 # from . import map_satellite as testmapsatellite
 #
 # from . import map_ground as testmapground
-#
-# from . import binned as testbinned
 #
 # from . import sim_focalplane as testsimfocalplane
 # from . import tod_satellite as testtodsat
@@ -161,25 +150,25 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
+        suite.addTest(loader.loadTestsFromModule(test_template))
         suite.addTest(loader.loadTestsFromModule(test_template_offset))
 
         #
-        # suite.addTest(loader.loadTestsFromModule(testtod))
-        #
         # suite.addTest(loader.loadTestsFromModule(testopssimsss))
+
         # suite.addTest(loader.loadTestsFromModule(testopsapplygain))
-        # suite.addTest(loader.loadTestsFromModule(testcov))
+
         # suite.addTest(loader.loadTestsFromModule(testopsdipole))
         # suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))
         # suite.addTest(loader.loadTestsFromModule(testsimfocalplane))
         # suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
         # suite.addTest(loader.loadTestsFromModule(testopsgainscrambler))
+
         # suite.addTest(loader.loadTestsFromModule(testpsdmath))
-        # suite.addTest(loader.loadTestsFromModule(testopsmadam))
-        # suite.addTest(loader.loadTestsFromModule(testopsmapmaker))
+
         # suite.addTest(loader.loadTestsFromModule(testmapsatellite))
         # suite.addTest(loader.loadTestsFromModule(testmapground))
-        # suite.addTest(loader.loadTestsFromModule(testbinned))
+
         # suite.addTest(loader.loadTestsFromModule(testopsatm))
         #
         # # These tests segfault locally.  Re-enable once we are doing bandpass
