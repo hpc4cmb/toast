@@ -11,6 +11,8 @@ from ..data import Data
 
 from .template import Template
 
+from .amplitudes import Amplitudes
+
 
 @trait_docs
 class SubHarmonic(Template):

@@ -45,7 +45,7 @@ from . import ops_madam as test_ops_madam
 
 from . import covariance as test_covariance
 
-from . import template as test_template
+from . import template_amplitudes as test_template_amplitudes
 from . import template_offset as test_template_offset
 
 #
@@ -150,7 +150,7 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
-        suite.addTest(loader.loadTestsFromModule(test_template))
+        suite.addTest(loader.loadTestsFromModule(test_template_amplitudes))
         suite.addTest(loader.loadTestsFromModule(test_template_offset))
 
         #

@@ -183,6 +183,9 @@ class TemplateMatrix(Operator):
             for d in all_dets:
                 for tmpl in self.templates:
                     tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
+            # Synchronize the result
+            for tmpl in self.templates:
+                data[self.amplitudes][tmpl.name].sync()
         else:
             if self.amplitudes not in data:
                 msg = "Template amplitudes '{}' do not exist in data".format(

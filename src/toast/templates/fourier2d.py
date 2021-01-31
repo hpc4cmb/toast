@@ -12,6 +12,8 @@ from ..data import Data
 
 from .template import Template
 
+from .amplitudes import Amplitudes
+
 
 @trait_docs
 class Fourier2D(Template):
@@ -59,6 +61,44 @@ class Fourier2D(Template):
         if self.fit_subharmonics:
             self._nmode += 2
 
+        # Determine the total number of amplitudes.  The rank zero process in each
+        # group does this.
+
+        comm = new_data.comm
+
+        self._group_start = 0
+        self._total_amps = 0
+
+        if comm.group_rank == 0:
+            group_n_amp = list()
+            for iob, ob in enumerate(new_data.obs):
+                group_n_amp.append(ob.n_all_samples * self._nmode)
+
+            group_n_amp = np.array(group_n_amp, dtype=np.int64)
+
+            all_n_amp = None
+            if comm.comm_rank is None:
+                all_n_amp = [group_n_amp]
+            else:
+                all_n_amp = comm.comm_rank.allgather(group_n_amp)
+
+            for gamps in all_n_amp:
+                self._total_amps += np.sum(gamps)
+
+            # Rank 0 of every group figures out the offset for their group
+            for g in range(comm.ngroups):
+                if g == comm.group:
+                    # This is our group
+                    break
+                else:
+                    # Increment our offset
+                    self._group_start += np.sum(all_n_amp[g])
+
+        if comm.comm_group is not None:
+            # Broadcast to the rest of the group
+            self._group_start = comm.comm_group.bcast(self._group_start, root=0)
+            self._total_amps = comm.comm_group.bcast(self._total_amps, root=0)
+
         def evaluate_template(theta, phi, radius):
             """Helper function to get the template values for a detector."""
             values = np.zeros(self._nmode)
@@ -86,8 +126,11 @@ class Fourier2D(Template):
         # Amplitude lengths of all views for each obs
         self._obs_view_namp = dict()
 
-        # Starting amplitude for each view within each obs
-        self._obs_view_offset = dict()
+        # Starting local amplitude for each view within each obs
+        self._obs_view_local_offset = dict()
+
+        # Starting global amplitude for each view within each obs
+        self._obs_view_global_offset = dict()
 
         # Sample rate for each obs.
         self._obs_rate = dict()
@@ -108,7 +151,8 @@ class Fourier2D(Template):
 
             # Track number of offset amplitudes per view.
             self._obs_view_namp[iob] = list()
-            self._obs_view_offset[iob] = list()
+            self._obs_view_local_offset[iob] = list()
+            self._obs_view_global_offset[iob] = list()
 
             for view_slice in ob.view[self.view]:
                 slice_len = None
@@ -132,7 +176,8 @@ class Fourier2D(Template):
 
                 view_n_amp = slice_len * self._nmode
                 self._obs_view_namp[iob].append(view_n_amp)
-                self._obs_view_offset[iob].append(offset)
+                self._obs_view_local_offset[iob].append(offset)
+                self._obs_view_global_offset[iob].append(offset + self._group_start)
                 offset += view_n_amp
 
         for iobs, obs in enumerate(self.data.obs):

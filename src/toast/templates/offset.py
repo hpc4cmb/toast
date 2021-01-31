@@ -21,7 +21,9 @@ from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
 
 from ..data import Data
 
-from .template import Template, Amplitudes
+from .template import Template
+
+from .amplitudes import Amplitudes
 
 from .._libtoast import template_offset_add_to_signal, template_offset_project_signal
 
@@ -463,7 +465,7 @@ class Offset(Template):
         return self._all_dets
 
     def _zeros(self):
-        z = Amplitudes(self.data.comm.comm_world, self._n_global, self._n_local)
+        z = Amplitudes(self.data.comm, self._n_global, self._n_local)
         z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
