@@ -32,11 +32,10 @@ from .._libtoast import template_offset_add_to_signal, template_offset_project_s
 class Offset(Template):
     """This class represents noise fluctuations as a step function.
 
-    Every process stores the offsets for its local data.  Although our data is arranged
-    in observations and then in terms of detectors, we will often be projecting our
-    template for a single detector at a time.  Because of this, we will arrange our
-    template amplitudes in "detector major" order and store offsets into this for each
-    observation.
+    Every process stores the amplitudes for its local data, which is disjoint from the
+    amplitudes on other processes.  We project amplitudes one detector at a time, and
+    so we arrange our template amplitudes in "detector major" order and store offsets
+    into this for each observation.
 
     """
 
@@ -133,17 +132,17 @@ class Offset(Template):
             # The step length for this observation
             step_length = self._step_length(self.step_time, self._obs_rate[iob])
 
-            # Track number of offset amplitudes per view.
+            # Track number of offset amplitudes per view, per det.
             self._obs_views[iob] = list()
             for view_slice in ob.view[self.view]:
-                slice_len = None
+                view_len = None
                 if view_slice.start is None:
                     # This is a view of the whole obs
-                    slice_len = ob.n_local_samples
+                    view_len = ob.n_local_samples
                 else:
-                    slice_len = view_slice.stop - view_slice.start
-                view_n_amp = slice_len // step_length
-                if view_n_amp * step_length < slice_len:
+                    view_len = view_slice.stop - view_slice.start
+                view_n_amp = view_len // step_length
+                if view_n_amp * step_length < view_len:
                     view_n_amp += 1
                 self._obs_views[iob].append(view_n_amp)
 
@@ -509,7 +508,7 @@ class Offset(Template):
     @function_timer
     def _add_prior(self, amplitudes_in, amplitudes_out):
         if not self.use_noise_prior:
-            # Not using the noise prior term
+            # Not using the noise prior term, nothing to accumulate to output.
             return
         for det in self._all_dets:
             offset = self._det_start[det]

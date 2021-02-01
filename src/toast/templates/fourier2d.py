@@ -2,11 +2,24 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from collections import OrderedDict
+
+import numpy as np
+
+import scipy
+import scipy.signal
+
 from astropy import units as u
 
-from ..utils import Logger
+import traitlets
 
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
+from ..mpi import MPI
+
+from ..utils import Logger, AlignedF64
+
+from .. import qarray as qa
+
+from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float, Quantity
 
 from ..data import Data
 
@@ -17,8 +30,11 @@ from .amplitudes import Amplitudes
 
 @trait_docs
 class Fourier2D(Template):
-    """This class represents atmospheric fluctuations in front of the focalplane
-    as 2D Fourier modes.
+    """This class models 2D Fourier modes across the focalplane.
+
+    Since the modes are shared across detectors, our amplitudes are organized by
+    observation and views within each observation.  Each detector projection
+    will traverse all the local amplitudes.
 
     """
 
@@ -30,6 +46,8 @@ class Fourier2D(Template):
     #    flags            : Optional detector solver flags
     #    flag_mask        : Bit mask for detector solver flags
     #
+
+    times = Unicode("times", help="Observation shared key for timestamps")
 
     correlation_length = Quantity(10.0 * u.second, help="Correlation length in time")
 
@@ -55,49 +73,118 @@ class Fourier2D(Template):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def clear(self):
+        """Delete the underlying C-allocated memory."""
+        if hasattr(self, "_norms"):
+            del self._norms
+        if hasattr(self, "_norms_raw"):
+            self._norms_raw.clear()
+            del self._norms_raw
+
+    def __del__(self):
+        self.clear()
+
     def _initialize(self, new_data):
+        zaxis = np.array([0.0, 0.0, 1.0])
+
+        # This function is called whenever a new data trait is assigned to the template.
+        # Clear any C-allocated buffers from previous uses.
+        self.clear()
+
         self._norder = self.order + 1
         self._nmode = (2 * self.order) ** 2 + 1
         if self.fit_subharmonics:
             self._nmode += 2
 
-        # Determine the total number of amplitudes.  The rank zero process in each
-        # group does this.
+        # Every process determines their local amplitude ranges.
 
-        comm = new_data.comm
+        # The local ranges of amplitudes (in terms of global indices)
+        self._local_ranges = list()
 
-        self._group_start = 0
-        self._total_amps = 0
+        # Starting local amplitude for each view within each obs
+        self._obs_view_local_offset = dict()
 
-        if comm.group_rank == 0:
-            group_n_amp = list()
-            for iob, ob in enumerate(new_data.obs):
-                group_n_amp.append(ob.n_all_samples * self._nmode)
+        # Starting global amplitude for each view within each obs
+        self._obs_view_global_offset = dict()
 
-            group_n_amp = np.array(group_n_amp, dtype=np.int64)
+        # Number of amplitudes in each local view for each obs
+        self._obs_view_namp = dict()
 
-            all_n_amp = None
-            if comm.comm_rank is None:
-                all_n_amp = [group_n_amp]
-            else:
-                all_n_amp = comm.comm_rank.allgather(group_n_amp)
+        # This is the total number of amplitudes for each observation, across all
+        # views.
+        self._obs_total_namp = dict()
 
-            for gamps in all_n_amp:
-                self._total_amps += np.sum(gamps)
+        # Use this as an "Ordered Set".  We want the unique detectors on this process,
+        # but sorted in order of occurrence.
+        all_dets = OrderedDict()
 
-            # Rank 0 of every group figures out the offset for their group
-            for g in range(comm.ngroups):
-                if g == comm.group:
-                    # This is our group
-                    break
+        local_offset = 0
+        global_offset = 0
+
+        for iob, ob in enumerate(new_data.obs):
+            self._obs_view_namp[iob] = list()
+            self._obs_view_local_offset[iob] = list()
+            self._obs_view_global_offset[iob] = list()
+
+            # Build up detector list
+            for d in ob.local_detectors:
+                if d not in all_dets:
+                    all_dets[d] = None
+
+            obs_n_amp = 0
+
+            views = ob.view[self.view]
+            for ivw, vw in enumerate(views):
+                # First obs sample of this view
+                obs_start = ob.local_index_offset
+
+                view_len = None
+                if vw.start is None:
+                    # This is a view of the whole obs
+                    view_len = ob.n_local_samples
                 else:
-                    # Increment our offset
-                    self._group_start += np.sum(all_n_amp[g])
+                    view_len = vw.stop - vw.start
+                    obs_start += vw.start
 
-        if comm.comm_group is not None:
-            # Broadcast to the rest of the group
-            self._group_start = comm.comm_group.bcast(self._group_start, root=0)
-            self._total_amps = comm.comm_group.bcast(self._total_amps, root=0)
+                obs_offset = obs_start * self._nmode
+
+                self._obs_view_local_offset[iob].append(local_offset)
+                self._obs_view_global_offset[iob].append(global_offset + obs_offset)
+
+                view_n_amp = view_len * self._nmode
+                obs_n_amp += view_n_amp
+                self._obs_view_namp[iob].append(view_n_amp)
+
+                self._local_ranges.append((global_offset + obs_offset, view_n_amp))
+
+                local_offset += view_n_amp
+
+            # To get the total number of amplitudes in this observation, we must
+            # accumulate across the grid row communicator.
+            if ob.comm_row is not None:
+                obs_n_amp = ob.comm_row.allreduce(obs_n_amp)
+            self._obs_total_namp[iob] = obs_n_amp
+            global_offset += obs_n_amp
+
+        self._all_dets = list(all_dets.keys())
+
+        # The global number of amplitudes for our process group and our local process.
+        # Since different groups have different observations, their amplitude values
+        # are completely disjoint.  We create Amplitudes with the `use_group` option
+        # and so only have to consider the full set if we are doing things like I/O
+        # (i.e. nothing needed by this class).
+
+        self._n_global = np.sum(
+            [self._obs_total_namp[x] for x, y in enumerate(new_data.obs)]
+        )
+
+        self._n_local = np.sum([x[1] for x in self._local_ranges])
+
+        # Allocate norms.  This data is the same size as a set of amplitudes,
+        # so we allocate it in C memory.
+
+        self._norms_raw = AlignedF64.zeros(self._n_local)
+        self._norms = self._norms_raw.array()
 
         def evaluate_template(theta, phi, radius):
             """Helper function to get the template values for a detector."""
@@ -119,284 +206,180 @@ class Fourier2D(Template):
                 values[offset:] = np.outer(thetavec, phivec).ravel()
             return values
 
-        # The detector templates and norms for each observation
-        self.templates = dict()
-        self.norms = dict()
+        # The detector templates for each observation
+        self._templates = dict()
 
-        # Amplitude lengths of all views for each obs
-        self._obs_view_namp = dict()
-
-        # Starting local amplitude for each view within each obs
-        self._obs_view_local_offset = dict()
-
-        # Starting global amplitude for each view within each obs
-        self._obs_view_global_offset = dict()
-
-        # Sample rate for each obs.
-        self._obs_rate = dict()
-
-        offset = 0
+        # The noise filter for each observation
+        self._filters = dict()
 
         for iob, ob in enumerate(new_data.obs):
-            # Compute sample rate from timestamps
-            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(ob.shared[self.times])
-            self._obs_rate[iob] = rate
+            # Focalplane for this observation
+            fp = ob.telescope.focalplane
 
             # Focalplane radius
-            radius = np.radians(ob.telescope.focalplane.radius)
+            radius = np.radians(fp.radius)
 
             noise = None
             if self.noise_model in ob:
                 noise = ob[self.noise_model]
 
-            # Track number of offset amplitudes per view.
-            self._obs_view_namp[iob] = list()
-            self._obs_view_local_offset[iob] = list()
-            self._obs_view_global_offset[iob] = list()
+            self._templates[iob] = list()
+            self._filters[iob] = list()
 
-            for view_slice in ob.view[self.view]:
-                slice_len = None
-                if view_slice.start is None:
+            obs_local_namp = 0
+
+            views = ob.view[self.view]
+            for ivw, vw in enumerate(views):
+                view_len = None
+                if vw.start is None:
                     # This is a view of the whole obs
-                    slice_len = ob.n_local_samples
+                    view_len = ob.n_local_samples
                 else:
-                    slice_len = view_slice.stop - view_slice.start
+                    view_len = vw.stop - vw.start
 
-                view_norms = np.zeros((slice_len, self._nmode))
-                view_templates = dict()
+                # Build the filter for this view
 
-                for det in ob.local_detectors:
-                    detweight = 1.0
-                    if noise is not None:
-                        detweight = noise.detector_weight(det)
-                    det_quat = ob.focalplane.detector_quats[det]
-                    x, y, z = qa.rotate(det_quat, ZAXIS)
-                    theta, phi = np.arcsin([x, y])
-                    view_templates[det] = evaluate_template(theta, phi, radius)
-
-                view_n_amp = slice_len * self._nmode
-                self._obs_view_namp[iob].append(view_n_amp)
-                self._obs_view_local_offset[iob].append(offset)
-                self._obs_view_global_offset[iob].append(offset + self._group_start)
-                offset += view_n_amp
-
-        for iobs, obs in enumerate(self.data.obs):
-            tod = obs["tod"]
-            common_flags = tod.local_common_flags(self.common_flags)
-            common_flags = (common_flags & self.common_flag_mask) != 0
-            nsample = tod.total_samples
-            obs_templates = {}
-            focalplane = obs["focalplane"]
-            if self.focalplane_radius:
-                radius = np.radians(self.focalplane_radius)
-            else:
-                try:
-                    radius = np.radians(focalplane.radius)
-                except AttributeError:
-                    # Focalplane is just a dictionary
-                    radius = np.radians(obs["fpradius"])
-            norms = np.zeros([nsample, self.nmode])
-            local_offset, local_nsample = tod.local_samples
-            todslice = slice(local_offset, local_offset + local_nsample)
-            for det in tod.local_dets:
-                flags = tod.local_flags(det, self.flags)
-                good = ((flags & self.flag_mask) | common_flags) == 0
-                detweight = self.detweights[iobs][det]
-                det_quat = focalplane[det]["quat"]
-                x, y, z = qa.rotate(det_quat, ZAXIS)
-                theta, phi = np.arcsin([x, y])
-                obs_templates[det] = evaluate_template(theta, phi, radius)
-                norms[todslice] += np.outer(good, obs_templates[det] ** 2 * detweight)
-            self.comm.allreduce(norms)
-            good = norms != 0
-            norms[good] = 1 / norms[good]
-            self.norms.append(norms.ravel())
-            self.templates.append(obs_templates)
-            self.namplitude += nsample * self.nmode
-
-        self.norms = np.hstack(self.norms)
-
-        self._get_templates()
-        if correlation_length:
-            self._get_prior()
-        return
-
-    @function_timer
-    def _get_prior(self):
-        """Evaluate C_a^{-1} for the 2D polynomial coefficients based
-        on the correlation length.
-        """
-        if self.correlation_length:
-            # Correlation length is given in seconds and we cannot assume
-            # that each observation has the same sampling rate.  Therefore,
-            # we will build the filter for each observation
-            self.filters = []  # all observations
-            self.preconditioners = []  # all observations
-            for iobs, obs in enumerate(self.data.obs):
-                tod = obs["tod"]
-                times = tod.local_times()
+                corr_len = self.correlation_length.to_value(u.second)
+                times = views.shared[self.times][ivw]
                 corr = (
-                    np.exp((times[0] - times) / self.correlation_length)
-                    * self.correlation_amplitude
+                    np.exp((times[0] - times) / corr_len) * self.correlation_amplitude
                 )
                 ihalf = times.size // 2
                 corr[ihalf + 1 :] = corr[ihalf - 1 : 0 : -1]
                 fcorr = np.fft.rfft(corr)
                 invcorr = np.fft.irfft(1 / fcorr)
-                self.filters.append(invcorr)
-            # Scale the filter by the prescribed correlation strength
-            # and the number of modes at each angular scale
-            self.filter_scale = np.zeros(self.nmode)
-            self.filter_scale[0] = 1
-            offset = 1
-            if self.fit_subharmonics:
-                self.filter_scale[1:3] = 2
-                offset += 2
-            self.filter_scale[offset:] = 4
-            self.filter_scale *= self.correlation_amplitude
-        return
+                self._filters[iob].append(invcorr)
 
-    @function_timer
-    def _get_templates(self):
-        """Evaluate and normalize the polynomial templates.
+                # Now compute templates and norm for this view
 
-        Each template corresponds to a fixed value for each detector
-        and depends on the position of the detector.
-        """
-        self.templates = []
+                view_templates = dict()
 
-        def evaluate_template(theta, phi, radius):
-            values = np.zeros(self._nmode)
-            values[0] = 1
-            offset = 1
-            if self.fit_subharmonics:
-                values[1:3] = theta / radius, phi / radius
-                offset += 2
-            if self.order > 0:
-                rinv = np.pi / radius
-                orders = np.arange(self.order) + 1
-                thetavec = np.zeros(self.order * 2)
-                phivec = np.zeros(self.order * 2)
-                thetavec[::2] = np.cos(orders * theta * rinv)
-                thetavec[1::2] = np.sin(orders * theta * rinv)
-                phivec[::2] = np.cos(orders * phi * rinv)
-                phivec[1::2] = np.sin(orders * phi * rinv)
-                values[offset:] = np.outer(thetavec, phivec).ravel()
-            return values
+                good = np.empty(view_len, dtype=np.float64)
+                norm_slice = slice(
+                    self._obs_view_local_offset[iob][ivw],
+                    self._obs_view_local_offset[iob][ivw]
+                    + self._obs_view_namp[iob][ivw],
+                    1,
+                )
+                norms_view = self._norms[norm_slice].reshape((-1, self._nmode))
 
-        self.norms = []
-        for iobs, obs in enumerate(self.data.obs):
-            tod = obs["tod"]
-            common_flags = tod.local_common_flags(self.common_flags)
-            common_flags = (common_flags & self.common_flag_mask) != 0
-            nsample = tod.total_samples
-            obs_templates = {}
-            focalplane = obs["focalplane"]
-            if self.focalplane_radius:
-                radius = np.radians(self.focalplane_radius)
-            else:
-                try:
-                    radius = np.radians(focalplane.radius)
-                except AttributeError:
-                    # Focalplane is just a dictionary
-                    radius = np.radians(obs["fpradius"])
-            norms = np.zeros([nsample, self.nmode])
-            local_offset, local_nsample = tod.local_samples
-            todslice = slice(local_offset, local_offset + local_nsample)
-            for det in tod.local_dets:
-                flags = tod.local_flags(det, self.flags)
-                good = ((flags & self.flag_mask) | common_flags) == 0
-                detweight = self.detweights[iobs][det]
-                det_quat = focalplane[det]["quat"]
-                x, y, z = qa.rotate(det_quat, ZAXIS)
-                theta, phi = np.arcsin([x, y])
-                obs_templates[det] = evaluate_template(theta, phi, radius)
-                norms[todslice] += np.outer(good, obs_templates[det] ** 2 * detweight)
-            self.comm.allreduce(norms)
-            good = norms != 0
-            norms[good] = 1 / norms[good]
-            self.norms.append(norms.ravel())
-            self.templates.append(obs_templates)
-            self.namplitude += nsample * self.nmode
+                for det in ob.local_detectors:
+                    detweight = 1.0
+                    if noise is not None:
+                        detweight = noise.detector_weight(det)
+                    det_quat = fp.detector_quats[det]
+                    x, y, z = qa.rotate(det_quat, zaxis)
+                    theta, phi = np.arcsin([x, y])
+                    view_templates[det] = evaluate_template(theta, phi, radius)
 
-        self.norms = np.hstack(self.norms)
+                    good[:] = 1.0
+                    if self.flags is not None:
+                        flags = views.detdata[self.flags][ivw][det]
+                        good[(flags & self.flag_mask) != 0] = 0
+                    norms_view += np.outer(good, view_templates[det] ** 2 * detweight)
 
-        return
+                obs_local_namp += self._obs_view_namp[iob][ivw]
+                self._templates[iob].append(view_templates)
+
+            # Reduce norm values across the process grid column
+            norm_slice = slice(
+                self._obs_view_local_offset[iob][0],
+                self._obs_view_local_offset[iob][0] + obs_local_namp,
+                1,
+            )
+            norms_view = self._norms[norm_slice]
+            if ob.comm_col is not None:
+                temp = np.array(norms_view)
+                ob.comm_col.Allreduce(temp, norms_view, op=MPI.SUM)
+                del temp
+
+            # Invert norms
+            good = norms_view != 0
+            norms_view[good] = 1.0 / norms_view[good]
+
+        # Set the filter scale by the prescribed correlation strength
+        # and the number of modes at each angular scale
+        self._filter_scale = np.zeros(self._nmode)
+        self._filter_scale[0] = 1
+        offset = 1
+        if self.fit_subharmonics:
+            self._filter_scale[1:3] = 2
+            offset += 2
+        self._filter_scale[offset:] = 4
+        self._filter_scale *= self.correlation_amplitude
+
+    def _detectors(self):
+        return self._all_dets
 
     def _zeros(self):
-        raise NotImplementedError("Derived class must implement _zeros()")
+        # Return amplitudes distributed over the group communicator and using our
+        # local ranges.
+        z = Amplitudes(
+            self.data.comm,
+            self._n_global,
+            self._n_local,
+            local_ranges=self._local_ranges,
+        )
+        # Amplitude flags are not used by this template- if some samples are flagged
+        # across all detectors then they will just not contribute to the projection.
+        # z.local_flags[:] = np.where(self._amp_flags, 1, 0)
+        return z
 
     def _add_to_signal(self, detector, amplitudes):
-        poly_amplitudes = amplitudes[self.name]
-        amplitude_offset = 0
-        for iobs, obs in enumerate(self.data.obs):
-            tod = obs["tod"]
-            nsample = tod.total_samples
-            # For each observation, sample indices start from 0
-            local_offset, local_nsample = tod.local_samples
-            todslice = slice(local_offset, local_offset + local_nsample)
-            obs_amplitudes = poly_amplitudes[
-                amplitude_offset : amplitude_offset + nsample * self.nmode
-            ].reshape([nsample, self.nmode])[todslice]
-            for det in tod.local_dets:
-                templates = self.templates[iobs][det]
-                signal[iobs, det, todslice] += np.sum(obs_amplitudes * templates, 1)
-            amplitude_offset += nsample * self.nmode
+        for iob, ob in enumerate(self.data.obs):
+            if detector not in ob.local_detectors:
+                continue
+            views = ob.view[self.view]
+            for ivw, vw in enumerate(views):
+                amp_slice = slice(
+                    self._obs_view_local_offset[iob][ivw],
+                    self._obs_view_local_offset[iob][ivw]
+                    + self._obs_view_namp[iob][ivw],
+                    1,
+                )
+                views.detdata[self.det_data][ivw][detector] += np.sum(
+                    amplitudes.local[amp_slice].reshape((-1, self._nmode))
+                    * self._templates[iob][ivw][detector],
+                    1,
+                )
 
     def _project_signal(self, detector, amplitudes):
-        poly_amplitudes = amplitudes[self.name]
-        amplitude_offset = 0
-        for iobs, obs in enumerate(self.data.obs):
-            tod = obs["tod"]
-            nsample = tod.total_samples
-            # For each observation, sample indices start from 0
-            local_offset, local_nsample = tod.local_samples
-            todslice = slice(local_offset, local_offset + local_nsample)
-            obs_amplitudes = poly_amplitudes[
-                amplitude_offset : amplitude_offset + nsample * self.nmode
-            ].reshape([nsample, self.nmode])
-            if self.comm is not None:
-                my_amplitudes = np.zeros_like(obs_amplitudes)
-            else:
-                my_amplitudes = obs_amplitudes
-            for det in tod.local_dets:
-                templates = self.templates[iobs][det]
-                my_amplitudes[todslice] += np.outer(
-                    signal[iobs, det, todslice], templates
+        for iob, ob in enumerate(self.data.obs):
+            if detector not in ob.local_detectors:
+                continue
+            views = ob.view[self.view]
+            for ivw, vw in enumerate(views):
+                amp_slice = slice(
+                    self._obs_view_local_offset[iob][ivw],
+                    self._obs_view_local_offset[iob][ivw]
+                    + self._obs_view_namp[iob][ivw],
+                    1,
                 )
-            if self.comm is not None:
-                self.comm.allreduce(my_amplitudes)
-                obs_amplitudes += my_amplitudes
-            amplitude_offset += nsample * self.nmode
+                amp_view = amplitudes.local[amp_slice].reshape((-1, self._nmode))
+                amp_view[:] += np.outer(
+                    views.detdata[self.det_data][ivw][detector],
+                    self._templates[iob][ivw][detector],
+                )
 
     def _add_prior(self, amplitudes_in, amplitudes_out):
-        if self.correlation_length:
-            poly_amplitudes_in = amplitudes_in[self.name]
-            poly_amplitudes_out = amplitudes_out[self.name]
-            amplitude_offset = 0
-            for obs, noisefilter in zip(self.data.obs, self.filters):
-                tod = obs["tod"]
-                nsample = tod.total_samples
-                obs_amplitudes_in = poly_amplitudes_in[
-                    amplitude_offset : amplitude_offset + nsample * self.nmode
-                ].reshape([nsample, self.nmode])
-                obs_amplitudes_out = poly_amplitudes_out[
-                    amplitude_offset : amplitude_offset + nsample * self.nmode
-                ].reshape([nsample, self.nmode])
-                # import pdb
-                # import matplotlib.pyplot as plt
-                # pdb.set_trace()
-                for mode in range(self.nmode):
-                    scale = self.filter_scale[mode]
-                    obs_amplitudes_out[:, mode] += scipy.signal.convolve(
-                        obs_amplitudes_in[:, mode],
-                        noisefilter * scale,
+        for iob, ob in enumerate(self.data.obs):
+            views = ob.view[self.view]
+            for ivw, vw in enumerate(views):
+                amp_slice = slice(
+                    self._obs_view_local_offset[iob][ivw],
+                    self._obs_view_local_offset[iob][ivw]
+                    + self._obs_view_namp[iob][ivw],
+                    1,
+                )
+                in_view = amplitudes_in.local[amp_slice].reshape((-1, self._nmode))
+                out_view = amplitudes_out.local[amp_slice].reshape((-1, self._nmode))
+                for mode in range(self._nmode):
+                    scale = self._filter_scale[mode]
+                    out_view[:, mode] += scipy.signal.convolve(
+                        in_view[:, mode],
+                        self._filters[iob][ivw] * scale,
                         mode="same",
                     )
-                amplitude_offset += nsample * self.nmode
-        return
 
     def _apply_precond(self, amplitudes_in, amplitudes_out):
-        poly_amplitudes_in = amplitudes_in[self.name]
-        poly_amplitudes_out = amplitudes_out[self.name]
-        poly_amplitudes_out[:] = poly_amplitudes_in * self.norms
+        amplitudes_out[:] = amplitudes_in * self._norms

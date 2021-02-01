@@ -6,5 +6,7 @@ install(FILES
     template.py
     amplitudes.py
     offset.py
+    fourier2d.py
+    subharmonic.py
     DESTINATION ${PYTHON_SITE}/toast/templates
 )
