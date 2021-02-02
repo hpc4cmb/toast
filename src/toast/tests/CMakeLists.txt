@@ -30,6 +30,7 @@ install(FILES
     psd_math.py
     ops_madam.py
     ops_mapmaker.py
+    ops_filterbin.py
     map_satellite.py
     map_ground.py
     binned.py

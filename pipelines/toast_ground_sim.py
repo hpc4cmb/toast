@@ -74,6 +74,7 @@ def parse_arguments(comm):
     pipeline_tools.add_gainscrambler_args(parser)
     pipeline_tools.add_madam_args(parser)
     pipeline_tools.add_mapmaker_args(parser)
+    pipeline_tools.add_filterbin_args(parser)
     pipeline_tools.add_sky_map_args(parser)
     pipeline_tools.add_pysm_args(parser)
     pipeline_tools.add_sss_args(parser)
@@ -566,11 +567,25 @@ def main():
                 )
 
             if (
+                args.filterbin_ground_order is not None
+                or args.filterbin_poly_order is not None
+            ):
+                pipeline_tools.apply_filterbin(
+                    args,
+                    comm,
+                    data,
+                    outpath,
+                    totalname_freq,
+                    time_comms=time_comms,
+                    telescope_data=telescope_data,
+                    first_call=(mc == firstmc),
+                )
+
+            if (
                 args.apply_polyfilter
                 or args.apply_polyfilter2D
                 or args.apply_groundfilter
             ):
-
                 # Filter signal
 
                 pipeline_tools.apply_polyfilter(args, comm, data, totalname_freq)

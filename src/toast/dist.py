@@ -99,7 +99,7 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
 
     if len(dist) != groups:
         raise RuntimeError(
-            "Number of distributed groups different than " "number requested"
+            "Number of distributed groups different than number requested"
         )
     return dist
 

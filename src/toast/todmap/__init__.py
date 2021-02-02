@@ -47,3 +47,4 @@ from .mapsampler import MapSampler
 
 from .madam import OpMadam
 from .mapmaker import OpMapMaker
+from .filterbin import OpFilterBin

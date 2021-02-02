@@ -117,7 +117,7 @@ class OpMapMakerTest(MPITestCase):
         for iobs in range(self.nobs):
             if iobs % 3 == 1:
                 rot = qa.from_angles(np.pi / 2, 0, 0)
-            if iobs % 3 == 2:
+            elif iobs % 3 == 2:
                 rot = qa.from_angles(np.pi / 2, np.pi / 2, 0)
             else:
                 rot = None

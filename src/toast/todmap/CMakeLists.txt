@@ -8,6 +8,7 @@ install(FILES
     groundfilter.py
     madam.py
     mapmaker.py
+    filterbin.py
     mapsampler.py
     pointing_math.py
     pointing.py

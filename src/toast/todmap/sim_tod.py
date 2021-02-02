@@ -1579,10 +1579,6 @@ class TODGround(TOD):
         tmin, tmax = tvec[0], tvec[-1]
         tdelta = tmax - tmin
         az_sample = np.interp((times - tmin) % tdelta, tvec - tmin, azvec)
-        if self._cosecant_modulation and self._azmin_ces > np.pi:
-            # We always simulate a rising cosecant scan and then
-            # mirror it if necessary
-            az_sample += np.pi
 
         el_sample = np.zeros_like(az_sample) + self._el_ces
         if self._el_mod_rate != 0:

@@ -233,13 +233,13 @@ class OpAccumDiag(Operator):
                 if self._apply_flags:
                     gt.start("OpAccumDiag.exec.apply_flags")
                     # Don't change the cached pixel numbers
-                    pixels = pixels.copy()
+                    pixels = pixels.astype(np.int64).copy()
                     detflags = tod.local_flags(det, self._flag_name)
                     apply_flags_to_pixels(
-                        commonflags,
-                        self._common_flag_mask,
-                        detflags,
-                        self._flag_mask,
+                        commonflags.astype(np.uint8),
+                        np.uint8(self._common_flag_mask),
+                        detflags.astype(np.uint8),
+                        np.uint8(self._flag_mask),
                         pixels,
                     )
                     gt.stop("OpAccumDiag.exec.apply_flags")
@@ -278,9 +278,9 @@ class OpAccumDiag(Operator):
                         self._nsub,
                         self._subsize,
                         self._nnz,
-                        sm,
-                        lpix,
-                        weights.reshape(-1),
+                        sm.astype(np.int64),
+                        lpix.astype(np.int64),
+                        weights.reshape(-1).astype(np.float64),
                         detweight,
                         signal,
                         invnpp,
@@ -299,9 +299,9 @@ class OpAccumDiag(Operator):
                         self._nsub,
                         self._subsize,
                         self._nnz,
-                        sm,
-                        lpix,
-                        weights.reshape(-1),
+                        sm.astype(np.int64),
+                        lpix.astype(np.int64),
+                        weights.reshape(-1).astype(np.float64),
                         detweight,
                         invnpp,
                         hits,
@@ -317,7 +317,7 @@ class OpAccumDiag(Operator):
                         self._nnz,
                         sm.astype(np.int64),
                         lpix.astype(np.int64),
-                        weights.reshape(-1),
+                        weights.reshape(-1).astype(np.float64),
                         detweight,
                         signal,
                         zmap,
