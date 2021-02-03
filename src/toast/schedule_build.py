@@ -109,6 +109,15 @@ class Patch(object):
             el_max = np.pi / 2 - np.abs(corner._dec - self.site_lat)
             if el_max < site_el_max:
                 site_el_max = el_max
+        self.parse_elevations(elevations, site_el_max)
+        if el_step != 0:
+            self.nstep_el = int((self.el_max0 - self.el_min0 + 1e-3) // el_step) + 1
+        self.el_max = self.el_max0
+        self.el_lim = self.el_min0
+        self.step_azel()
+        return
+
+    def parse_elevations(self, elevations, site_el_max=np.pi / 2):
         if elevations is None:
             if site_el_max < self.el_max0:
                 self.el_max0 = site_el_max
@@ -152,12 +161,7 @@ class Patch(object):
                     sys.exit()
             self.el_min0 = np.amin(self.elevations)
             self.el_max0 = np.amax(self.elevations)
-        if el_step != 0:
-            self.nstep_el = int((self.el_max0 - self.el_min0 + 1e-3) // el_step) + 1
         self.elevations0 = self.elevations
-        self.el_max = self.el_max0
-        self.el_lim = self.el_min0
-        self.step_azel()
         return
 
     def oscillate(self):
@@ -386,10 +390,23 @@ class Patch(object):
 
 
 class SSOPatch(Patch):
-    def __init__(self, name, weight, radius):
+    def __init__(
+        self,
+        name,
+        weight,
+        radius,
+        el_min=0,
+        el_max=np.pi / 2,
+        elevations=None,
+    ):
         self.name = name
         self.weight = weight
         self.radius = radius
+        self._area = np.pi * radius ** 2 / (4 * np.pi)
+        self.el_min0 = el_min
+        self.el_min = el_min
+        self.el_max0 = el_max
+        self.parse_elevations(elevations)
         try:
             self.body = getattr(ephem, name)()
         except:
