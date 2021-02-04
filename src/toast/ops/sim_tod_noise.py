@@ -202,6 +202,10 @@ class SimNoise(Operator):
     want to enforce reproducibility of a given sample, even when using
     different-sized observations.
 
+    This operator intentionally does not provide a "view" trait.  To avoid
+    discontinuities, the full observation must be simulated regardless of any data
+    views that will be used for subsequent analysis.
+
     """
 
     # Class traits
