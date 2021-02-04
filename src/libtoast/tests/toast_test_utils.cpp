@@ -12,6 +12,8 @@
 TEST_F(TOASTutilsTest, logging) {
     auto & env = toast::Environment::get();
 
+    std::string orig_level = env.log_level();
+
     std::cout << "Testing level CRITICAL" << std::endl;
     env.set_log_level("CRITICAL");
     auto & log = toast::Logger::get();
@@ -91,6 +93,9 @@ TEST_F(TOASTutilsTest, logging) {
     log.info("This message level is INFO at ", here);
     log.debug("This message level is DEBUG");
     log.debug("This message level is DEBUG at ", here);
+
+    // Restore original log level
+    env.set_log_level(orig_level.c_str());
 }
 
 TEST_F(TOASTutilsTest, singletimer) {

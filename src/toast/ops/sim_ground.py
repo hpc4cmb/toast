@@ -32,6 +32,8 @@ from ..observation import Observation
 
 from ..instrument import Telescope
 
+from ..schedule import Schedule
+
 from ..healpix import ang2vec
 
 from .operator import Operator

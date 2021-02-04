@@ -312,7 +312,7 @@ class ObservationTest(MPITestCase):
                 )
 
             # ... Or you can access it as one big array (first dimension is detector)
-            print("\n", obs.detdata["signal"].data, "\n")
+            # print("\n", obs.detdata["signal"].data, "\n")
 
     def test_view(self):
         np.random.seed(12345)

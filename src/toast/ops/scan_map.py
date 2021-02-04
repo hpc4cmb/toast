@@ -37,6 +37,10 @@ class ScanMap(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
 
     weights = Unicode("weights", help="Observation detdata key for Stokes weights")
@@ -95,67 +99,76 @@ class ScanMap(Operator):
                 log.error(msg)
                 raise RuntimeError(msg)
 
-            # Temporary array, re-used for all detectors
-            maptod_raw = AlignedF64.zeros(ob.n_local_samples)
-            maptod = maptod_raw.array()
-
             # If our output detector data does not yet exist, create it
             ob.detdata.ensure(self.det_data, detectors=dets)
 
-            for det in dets:
-                # The pixels, weights, and data.
-                pix = ob.detdata[self.pixels][det]
-                wts = ob.detdata[self.weights][det]
-                ddata = ob.detdata[self.det_data][det]
-
-                # Get local submap and pixels
-                local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
-
-                # We support projecting from either float64 or float32 maps.
-
-                maptod[:] = 0.0
-
-                if map_data.dtype.char == "d":
-                    scan_map_float64(
-                        map_data.distribution.n_pix_submap,
-                        map_data.n_value,
-                        local_sm.astype(np.int64),
-                        local_pix.astype(np.int64),
-                        map_data.raw,
-                        wts.astype(np.float64).reshape(-1),
-                        maptod,
-                    )
-                elif map_data.dtype.char == "f":
-                    scan_map_float32(
-                        map_data.distribution.n_pix_submap,
-                        map_data.n_value,
-                        local_sm.astype(np.int64),
-                        local_pix.astype(np.int64),
-                        map_data.raw,
-                        wts.astype(np.float64).reshape(-1),
-                        maptod,
-                    )
+            views = ob.view[self.view]
+            for ivw, vw in enumerate(views):
+                view_samples = None
+                if vw.start is None:
+                    # This is a view of the whole obs
+                    view_samples = ob.n_local_samples
                 else:
-                    raise RuntimeError(
-                        "Projection supports only float32 and float64 binned maps"
-                    )
+                    view_samples = vw.stop - vw.start
 
-                # zero-out if needed
-                if self.zero:
-                    ddata[:] = 0.0
+                # Temporary array, re-used for all detectors
+                maptod_raw = AlignedF64.zeros(view_samples)
+                maptod = maptod_raw.array()
 
-                # Add or subtract.  Note that the map scanned timestream will have
-                # zeros anywhere that the pointing is bad, but those samples (and
-                # any other detector flags) should be handled at other steps of the
-                # processing.
-                if self.subtract:
-                    ddata[:] -= maptod
-                else:
-                    ddata[:] += maptod
+                for det in dets:
+                    # The pixels, weights, and data.
+                    pix = views.detdata[self.pixels][ivw][det]
+                    wts = views.detdata[self.weights][ivw][det]
+                    ddata = views.detdata[self.det_data][ivw][det]
 
-            del maptod
-            maptod_raw.clear()
-            del maptod_raw
+                    # Get local submap and pixels
+                    local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
+
+                    # We support projecting from either float64 or float32 maps.
+
+                    maptod[:] = 0.0
+
+                    if map_data.dtype.char == "d":
+                        scan_map_float64(
+                            map_data.distribution.n_pix_submap,
+                            map_data.n_value,
+                            local_sm.astype(np.int64),
+                            local_pix.astype(np.int64),
+                            map_data.raw,
+                            wts.astype(np.float64).reshape(-1),
+                            maptod,
+                        )
+                    elif map_data.dtype.char == "f":
+                        scan_map_float32(
+                            map_data.distribution.n_pix_submap,
+                            map_data.n_value,
+                            local_sm.astype(np.int64),
+                            local_pix.astype(np.int64),
+                            map_data.raw,
+                            wts.astype(np.float64).reshape(-1),
+                            maptod,
+                        )
+                    else:
+                        raise RuntimeError(
+                            "Projection supports only float32 and float64 binned maps"
+                        )
+
+                    # zero-out if needed
+                    if self.zero:
+                        ddata[:] = 0.0
+
+                    # Add or subtract.  Note that the map scanned timestream will have
+                    # zeros anywhere that the pointing is bad, but those samples (and
+                    # any other detector flags) should be handled at other steps of the
+                    # processing.
+                    if self.subtract:
+                        ddata[:] -= maptod
+                    else:
+                        ddata[:] += maptod
+
+                del maptod
+                maptod_raw.clear()
+                del maptod_raw
 
         return
 
@@ -167,7 +180,10 @@ class ScanMap(Operator):
             "meta": [map_key],
             "shared": list(),
             "detdata": [self.pixels, self.weights, self.det_data],
+            "intervals": list(),
         }
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):
@@ -199,6 +215,10 @@ class ScanMask(Operator):
 
     det_flags_value = Int(
         1, help="The detector flag value to set where the mask result is non-zero"
+    )
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
     )
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
@@ -248,17 +268,19 @@ class ScanMask(Operator):
             if self.det_flags not in ob.detdata:
                 ob.detdata.create(self.det_flags, dtype=np.uint8, detectors=dets)
 
-            for det in dets:
-                # The pixels and flags.
-                pix = ob.detdata[self.pixels][det]
-                dflags = ob.detdata[self.det_flags][det]
+            views = ob.view[self.view]
+            for ivw, vw in enumerate(views):
+                for det in dets:
+                    # The pixels and flags.
+                    pix = views.detdata[self.pixels][ivw][det]
+                    dflags = views.detdata[self.det_flags][ivw][det]
 
-                # Get local submap and pixels
-                local_sm, local_pix = mask_dist.global_pixel_to_submap(pix)
+                    # Get local submap and pixels
+                    local_sm, local_pix = mask_dist.global_pixel_to_submap(pix)
 
-                # We could move this to compiled code if it is too slow...
-                masked = mask_data[local_sm, local_pix, 0] & self.mask_bits
-                dflags[masked != 0] |= self.det_flags_value
+                    # We could move this to compiled code if it is too slow...
+                    masked = mask_data[local_sm, local_pix, 0] & self.mask_bits
+                    dflags[masked != 0] |= self.det_flags_value
 
         return
 
@@ -270,7 +292,10 @@ class ScanMask(Operator):
             "meta": [mask_key],
             "shared": list(),
             "detdata": [self.pixels, self.det_flags],
+            "intervals": list(),
         }
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):
@@ -297,6 +322,10 @@ class ScanScale(Operator):
 
     det_data = Unicode(
         None, allow_none=True, help="Observation detdata key for the timestream data"
+    )
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
     )
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
@@ -348,55 +377,64 @@ class ScanScale(Operator):
                 log.error(msg)
                 raise RuntimeError(msg)
 
-            # Temporary array, re-used for all detectors
-            maptod_raw = AlignedF64.zeros(ob.n_local_samples)
-            maptod = maptod_raw.array()
-
-            for det in dets:
-                # The pixels, weights, and data.
-                pix = ob.detdata[self.pixels][det]
-                ddata = ob.detdata[self.det_data][det]
-
-                # Get local submap and pixels
-                local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
-
-                # We support projecting from either float64 or float32 maps.  We
-                # use a shortcut here by passing the original timestream values
-                # as the pointing "weights", so that the output is equal to the
-                # pixel values times the original timestream.
-
-                maptod[:] = 0.0
-
-                if map_data.dtype.char == "d":
-                    scan_map_float64(
-                        map_data.distribution.n_pix_submap,
-                        1,
-                        local_sm.astype(np.int64),
-                        local_pix.astype(np.int64),
-                        map_data.raw,
-                        ddata.astype(np.float64).reshape(-1),
-                        maptod,
-                    )
-                elif map_data.dtype.char == "f":
-                    scan_map_float32(
-                        map_data.distribution.n_pix_submap,
-                        1,
-                        local_sm.astype(np.int64),
-                        local_pix.astype(np.int64),
-                        map_data.raw,
-                        ddata.astype(np.float64).reshape(-1),
-                        maptod,
-                    )
+            views = ob.view[self.view]
+            for ivw, vw in enumerate(views):
+                view_samples = None
+                if vw.start is None:
+                    # This is a view of the whole obs
+                    view_samples = ob.n_local_samples
                 else:
-                    raise RuntimeError(
-                        "Projection supports only float32 and float64 binned maps"
-                    )
+                    view_samples = vw.stop - vw.start
 
-                ddata[:] = maptod
+                # Temporary array, re-used for all detectors
+                maptod_raw = AlignedF64.zeros(view_samples)
+                maptod = maptod_raw.array()
 
-            del maptod
-            maptod_raw.clear()
-            del maptod_raw
+                for det in dets:
+                    # The pixels, weights, and data.
+                    pix = views.detdata[self.pixels][ivw][det]
+                    ddata = views.detdata[self.det_data][ivw][det]
+
+                    # Get local submap and pixels
+                    local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
+
+                    # We support projecting from either float64 or float32 maps.  We
+                    # use a shortcut here by passing the original timestream values
+                    # as the pointing "weights", so that the output is equal to the
+                    # pixel values times the original timestream.
+
+                    maptod[:] = 0.0
+
+                    if map_data.dtype.char == "d":
+                        scan_map_float64(
+                            map_data.distribution.n_pix_submap,
+                            1,
+                            local_sm.astype(np.int64),
+                            local_pix.astype(np.int64),
+                            map_data.raw,
+                            ddata.astype(np.float64).reshape(-1),
+                            maptod,
+                        )
+                    elif map_data.dtype.char == "f":
+                        scan_map_float32(
+                            map_data.distribution.n_pix_submap,
+                            1,
+                            local_sm.astype(np.int64),
+                            local_pix.astype(np.int64),
+                            map_data.raw,
+                            ddata.astype(np.float64).reshape(-1),
+                            maptod,
+                        )
+                    else:
+                        raise RuntimeError(
+                            "Projection supports only float32 and float64 binned maps"
+                        )
+
+                    ddata[:] = maptod
+
+                del maptod
+                maptod_raw.clear()
+                del maptod_raw
 
         return
 
@@ -408,7 +446,10 @@ class ScanScale(Operator):
             "meta": [map_key],
             "shared": list(),
             "detdata": [self.pixels, self.weights, self.det_data],
+            "intervals": list(),
         }
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):

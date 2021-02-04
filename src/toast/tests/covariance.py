@@ -53,7 +53,8 @@ class CovarianceTest(MPITestCase):
         build_invnpp = ops.BuildInverseCovariance(
             pixel_dist="pixel_dist", noise_model="noise_model"
         )
-        invnpp = build_invnpp.apply(data)
+        build_invnpp.apply(data)
+        invnpp = data[build_invnpp.inverse_covariance]
 
         del data
         return invnpp

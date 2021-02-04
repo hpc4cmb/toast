@@ -135,7 +135,6 @@ def stage_in_turns(
         if nodecomm.rank % n_copy_groups == copying:
             # Our turn to copy data
             storage, _ = dtype_to_aligned(madam_dtype)
-            print("Allocate local of len ", nsamp * len(dets) * nnz)
             raw = storage.zeros(nsamp * len(dets) * nnz)
             wrapped = raw.array()
             stage_local(
@@ -180,10 +179,7 @@ def restore_local(
             ob.detdata.create(detdata_name, dtype=detdata_dtype)
         else:
             ob.detdata.create(detdata_name, dtype=detdata_dtype, sample_shape=(nnz,))
-        print("Created detdata {} = {}".format(detdata_name, ob.detdata[detdata_name]))
-        print("madam buffer has shape = ", madam_buffer.shape)
         for vw in ob.view[view].detdata[detdata_name]:
-            print("copying view {}".format(vw))
             offset = interval_starts[interval]
             for idet, det in enumerate(dets):
                 if det not in ob.local_detectors:
@@ -193,14 +189,6 @@ def restore_local(
                     (idet * nsamp + offset + len(vw[idet])) * nnz,
                     1,
                 )
-                print("vw[idet].shape = ", vw[idet].shape)
-                print(
-                    "idet = {}, nsamp = {}, offset = {} len = {}, nnz = {}".format(
-                        idet, nsamp, offset, len(vw[idet]), nnz
-                    )
-                )
-                print(slc)
-                print("madam[slc].shape = ", madam_buffer[slc].shape)
                 if nnz > 1:
                     vw[idet] = madam_buffer[slc].reshape((-1, nnz))
                 else:

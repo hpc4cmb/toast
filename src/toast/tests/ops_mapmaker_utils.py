@@ -105,13 +105,17 @@ class MapmakerUtilsTest(MPITestCase):
         # Build an inverse covariance from both
 
         build_invnpp = ops.BuildInverseCovariance(
-            pixel_dist="pixel_dist", noise_model="noise_model"
+            pixel_dist="pixel_dist",
+            noise_model="noise_model",
+            inverse_covariance="invnpp_out",
         )
         build_invnpp.apply(data)
         invnpp = data[build_invnpp.inverse_covariance]
 
         build_invnpp_corr = ops.BuildInverseCovariance(
-            pixel_dist="pixel_dist", noise_model="noise_model_corr"
+            pixel_dist="pixel_dist",
+            noise_model="noise_model_corr",
+            inverse_covariance="invnpp_out_corr",
         )
         build_invnpp_corr.apply(data)
         invnpp_corr = data[build_invnpp_corr.inverse_covariance]
@@ -194,7 +198,10 @@ class MapmakerUtilsTest(MPITestCase):
         # Build a noise weighted map from both
 
         build_zmap = ops.BuildNoiseWeighted(
-            pixel_dist="pixel_dist", noise_model="noise_model", det_data="noise"
+            pixel_dist="pixel_dist",
+            noise_model="noise_model",
+            det_data="noise",
+            zmap="zmap",
         )
         build_zmap.apply(data)
         zmap = data[build_zmap.zmap]
@@ -203,6 +210,7 @@ class MapmakerUtilsTest(MPITestCase):
             pixel_dist="pixel_dist",
             noise_model="noise_model_corr",
             det_data="noise_corr",
+            zmap="zmap_corr",
         )
         build_zmap_corr.apply(data)
         zmap_corr = data[build_zmap_corr.zmap]

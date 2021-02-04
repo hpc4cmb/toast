@@ -95,7 +95,6 @@ class MapmakerSolveTest(MPITestCase):
         rhs_binned = data[binner.binned]
 
         bd = data[binner.binned].data
-        print("rhs binned map = ", bd[bd != 0])
 
         # Manual check.  This applies the same operators as the RHS operator, but
         # checks things along the way.  And these lower-level operators are unit
@@ -108,7 +107,6 @@ class MapmakerSolveTest(MPITestCase):
 
         check_binned = data[binner.binned]
         bd = data[binner.binned].data
-        print("check binned map = ", bd[bd != 0], flush=True)
 
         # Verify that the binned map elements agree
         np.testing.assert_equal(rhs_binned.raw.array(), check_binned.raw.array())
@@ -180,8 +178,6 @@ class MapmakerSolveTest(MPITestCase):
             low=-1000.0, high=1000.0, size=data["amplitudes"][tmpl.name].n_local
         )
 
-        print("amplitudes = ", data["amplitudes"])
-
         for ob in data.obs:
             ob.detdata.create("signal")
 
@@ -190,9 +186,6 @@ class MapmakerSolveTest(MPITestCase):
         tmatrix.data = data
         tmatrix.transpose = False
         tmatrix.apply(data)
-
-        for ob in data.obs:
-            print("signal = ", ob.detdata["signal"])
 
         # Pointing operator
         pointing = ops.PointingHealpix(nside=64, mode="I", hwp_angle="hwp_angle")
@@ -228,9 +221,6 @@ class MapmakerSolveTest(MPITestCase):
         rhs_calc.apply(data)
 
         bd = data[binner.binned].data
-        print("rhs binned map = ", bd[bd != 0])
-
-        print("amplitudes_check = ", data["amplitudes_check"])
 
         # Now we will run the LHS operator and compare.  Re-use the previous detdata
         # array for temp space.
@@ -238,6 +228,8 @@ class MapmakerSolveTest(MPITestCase):
         tmatrix.amplitudes = "amplitudes"
         binner.binned = "lhs_binned"
         out_amps = "out_amplitudes"
+        data[out_amps] = data["amplitudes"].duplicate()
+
         lhs_calc = SolverLHS(
             det_temp="signal",
             binning=binner,
@@ -245,8 +237,6 @@ class MapmakerSolveTest(MPITestCase):
             out=out_amps,
         )
         lhs_calc.apply(data)
-
-        print("amplitudes out = ", data[out_amps])
 
         # Verify that the output amplitudes agree
         np.testing.assert_equal(

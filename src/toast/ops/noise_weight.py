@@ -34,6 +34,10 @@ class NoiseWeight(Operator):
         "noise_model", help="The observation key containing the noise model"
     )
 
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
     det_data = Unicode(
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
@@ -60,19 +64,26 @@ class NoiseWeight(Operator):
 
             noise = ob[self.noise_model]
 
-            for d in dets:
-                # Get the detector weight from the noise model.
-                detweight = noise.detector_weight(d)
+            for vw in ob.view[self.view].detdata[self.det_data]:
+                for d in dets:
+                    # Get the detector weight from the noise model.
+                    detweight = noise.detector_weight(d)
 
-                # Apply
-                ob.detdata[self.det_data][d] *= detweight
+                    # Apply
+                    vw[d] *= detweight
         return
 
     def _finalize(self, data, **kwargs):
         return
 
     def _requires(self):
-        req = {"meta": [self.noise_model], "detdata": [self.det_data]}
+        req = {
+            "meta": [self.noise_model],
+            "detdata": [self.det_data],
+            "intervals": list(),
+        }
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):

@@ -582,8 +582,6 @@ class BuildNoiseWeighted(Operator):
                     # Data for this detector
                     ddata = dview[det]
 
-                    # print("Zmap det {} = {}".format(det, ddata), flush=True)
-
                     # We require that the pointing matrix has the same number of
                     # non-zero elements for every detector and every observation.
                     # We check that here, and if this is the first observation and
@@ -609,25 +607,13 @@ class BuildNoiseWeighted(Operator):
                                 )
                                 log.error(msg)
                                 raise RuntimeError(msg)
-                            # print(
-                            #     "Zmap found existing PixelData {}".format(self.zmap),
-                            #     flush=True,
-                            # )
                             zmap = data[self.zmap]
                         else:
-                            # print(
-                            #     "Zmap allocating PixelData {}".format(self.zmap),
-                            #     flush=True,
-                            # )
                             data[self.zmap] = PixelData(
                                 dist, np.float64, n_value=weight_nnz
                             )
                             zmap = data[self.zmap]
                     else:
-                        # print(
-                        #     "Zmap PixelData {} already loaded".format(self.zmap),
-                        #     flush=True,
-                        # )
                         check_nnz = None
                         if len(wview.detector_shape) == 1:
                             check_nnz = 1
@@ -645,7 +631,7 @@ class BuildNoiseWeighted(Operator):
                     # Get the detector weight from the noise model.
                     detweight = noise.detector_weight(det)
 
-                    # Samples with telescope pointing problems are already flagged in the
+                    # Samples with telescope pointing problems are already flagged in
                     # the pointing operators by setting the pixel numbers to a negative
                     # value.  Here we optionally apply detector flags to the local
                     # pixel numbers to flag more samples.
@@ -653,28 +639,6 @@ class BuildNoiseWeighted(Operator):
                     # Apply the flags if needed
                     if self.det_flags is not None:
                         local_pix[fview[det] & self.det_flag_mask != 0] = -1
-
-                    # print(
-                    #     "Offset output det {}, ob {} [:100] = ".format(det, ob.name),
-                    #     flush=True,
-                    # )
-                    # for i in range(100):
-                    #     print(
-                    #         "{} {} weight {} {} {}".format(
-                    #             i,
-                    #             ddata[i],
-                    #             wview[det][i, 0],
-                    #             wview[det][i, 1],
-                    #             wview[det][i, 2],
-                    #         )
-                    #     )
-                    # print("", flush=True)
-
-                    # print(
-                    #     "Offset output det {}, ob {} [-100:] = ".format(det, ob.name),
-                    #     ob.detdata[self.det_data][detector][-100:],
-                    #     flush=True,
-                    # )
 
                     # Accumulate
                     cov_accum_zmap(
@@ -689,7 +653,6 @@ class BuildNoiseWeighted(Operator):
                         zmap.raw,
                     )
                     zm = zmap.raw.array()
-                    # print("Zmap after det {} ".format(det), zm[zm != 0], flush=True)
         return
 
     def _finalize(self, data, **kwargs):
@@ -699,7 +662,6 @@ class BuildNoiseWeighted(Operator):
                 data[self.zmap].sync_alltoallv()
             else:
                 data[self.zmap].sync_allreduce()
-            # print("Zmap final sync of {}".format(self.zmap), flush=True)
         return
 
     def _requires(self):
@@ -765,10 +727,6 @@ class CovarianceAndHits(Operator):
     rcond = Unicode(
         "rcond",
         help="The Data key where the inverse condition number should be stored",
-    )
-
-    view = Unicode(
-        None, allow_none=True, help="Use this view of the data in all observations"
     )
 
     det_flags = Unicode(

@@ -125,8 +125,13 @@ class BinMap(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        data.comm.comm_world.barrier()
+        if data.comm.world_rank == 0:
+            log.verbose("  BinMap building pipeline")
+
         if self.covariance not in data:
             msg = "Data does not contain noise covariance '{}'".format(self.covariance)
+            log.error(msg)
             raise RuntimeError(msg)
 
         cov = data[self.covariance]
@@ -137,11 +142,11 @@ class BinMap(Operator):
 
         # Sanity check that the covariance pixel distribution agrees
         if cov.distribution != data[self.pixel_dist]:
-            raise RuntimeError(
-                "Pixel distribution '{}' does not match the one used by covariance '{}'".format(
-                    self.pixel_dist, self.covariance
-                )
+            msg = "Pixel distribution '{}' does not match the one used by covariance '{}'".format(
+                self.pixel_dist, self.covariance
             )
+            log.error(msg)
+            raise RuntimeError(msg)
 
         # Set outputs of the pointing operator
 
@@ -152,11 +157,11 @@ class BinMap(Operator):
 
         if self.binned in data:
             if data[self.binned].distribution != data[self.pixel_dist]:
-                raise RuntimeError(
-                    "Pixel distribution '{}' does not match existing binned map '{}'".format(
-                        self.pixel_dist, self.binned
-                    )
+                msg = "Pixel distribution '{}' does not match existing binned map '{}'".format(
+                    self.pixel_dist, self.binned
                 )
+                log.error(msg)
+                raise RuntimeError(msg)
             data[self.binned].raw[:] = 0.0
 
         # Noise weighted map.  We output this to the final binned map location,
@@ -189,43 +194,20 @@ class BinMap(Operator):
             # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
             accum_ops.extend([self.pointing, build_zmap])
+
         accum.operators = accum_ops
+
+        if data.comm.world_rank == 0:
+            log.verbose("  BinMap running pipeline")
         pipe_out = accum.apply(data, detectors=detectors)
 
         # Extract the results
         binned_map = data[self.binned]
 
-        # dist = binned_map.distribution
-        # print("binned zmap = ")
-        # for ism, sm in enumerate(dist.local_submaps):
-        #     for spix in range(dist.n_pix_submap):
-        #         if binned_map.data[ism, spix, 0] != 0:
-        #             pix = sm * dist.n_pix_submap + spix
-        #             print(
-        #                 "{}   {:0.6e}  {:0.6e}  {:0.6e}".format(
-        #                     pix,
-        #                     binned_map.data[ism, spix, 0],
-        #                     binned_map.data[ism, spix, 1],
-        #                     binned_map.data[ism, spix, 2],
-        #                 )
-        #             )
-
         # Apply the covariance in place
+        if data.comm.world_rank == 0:
+            log.verbose("  BinMap applying covariance")
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
-
-        # print("binned = ")
-        # for ism, sm in enumerate(dist.local_submaps):
-        #     for spix in range(dist.n_pix_submap):
-        #         if binned_map.data[ism, spix, 0] != 0:
-        #             pix = sm * dist.n_pix_submap + spix
-        #             print(
-        #                 "{}   {:0.6e}  {:0.6e}  {:0.6e}".format(
-        #                     pix,
-        #                     binned_map.data[ism, spix, 0],
-        #                     binned_map.data[ism, spix, 1],
-        #                     binned_map.data[ism, spix, 2],
-        #                 )
-        #             )
 
         return
 

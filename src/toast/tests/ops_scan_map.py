@@ -77,7 +77,7 @@ class ScanMapTest(MPITestCase):
         pointing.apply(data)
 
         # Create fake polarized sky pixel values locally
-        self.create_fake_sky(data, "pixel_dist", "fake_map")
+        create_fake_sky(data, "pixel_dist", "fake_map")
 
         # Scan map into timestreams twice, adding once and then subtracting.  Also test
         # zero option.
@@ -133,7 +133,7 @@ class ScanMapTest(MPITestCase):
         pointing.apply(data)
 
         # Create fake polarized sky pixel values locally
-        self.create_fake_sky(data, "pixel_dist", "fake_map")
+        create_fake_sky(data, "pixel_dist", "fake_map")
 
         # Generate a mask
         data["fake_mask"] = PixelData(data["pixel_dist"], np.uint8, n_value=1)

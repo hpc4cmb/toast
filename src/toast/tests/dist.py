@@ -174,14 +174,14 @@ class DataTest(MPITestCase):
         # Verify that the observations are shared
 
         sum1 = 0
-        for value, site_data in datasplit_site:
+        for value, site_data in datasplit_site.items():
             for obs in site_data.obs:
                 assert "var1" not in obs
                 obs["var1"] = 1
                 sum1 += 1
 
         sum2 = 0
-        for value, season_data in datasplit_season:
+        for value, season_data in datasplit_season.items():
             for obs in season_data.obs:
                 sum2 += obs["var1"]
 

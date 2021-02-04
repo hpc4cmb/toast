@@ -4,6 +4,8 @@
 
 from collections.abc import MutableMapping
 
+from collections import OrderedDict
+
 import numpy as np
 
 from .mpi import Comm
@@ -216,6 +218,7 @@ class Data(MutableMapping):
 
         for value, obslist in selected.items():
             new_data = Data(comm=self._comm)
+            new_data._internal = self._internal
             for ob in obslist:
                 new_data.obs.append(ob)
             datasplit[value] = new_data

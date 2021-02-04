@@ -111,9 +111,33 @@ class SolverRHS(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def _log_debug(self, comm, rank, msg, timer=None):
+        """Helper function to log a DEBUG level message from rank zero"""
+        log = Logger.get()
+        if comm is not None:
+            comm.barrier()
+        if timer is not None:
+            timer.stop()
+        if rank == 0:
+            if timer is None:
+                msg = "MapMaker   RHS {}".format(msg)
+            else:
+                msg = "MapMaker   RHS {} {:0.2f} s".format(msg, timer.seconds())
+            log.debug(msg)
+        if timer is not None:
+            timer.clear()
+            timer.start()
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        timer = Timer()
+
+        # The global communicator we are using (or None)
+        comm = data.comm.comm_world
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
 
         # Check that the inputs are set
         if self.det_data is None:
@@ -127,11 +151,18 @@ class SolverRHS(Operator):
 
         # Make a binned map
 
+        timer.start()
+        self._log_debug(comm, rank, "begin binned map")
+
         self.binning.det_data = self.det_data
         self.binning.apply(data, detectors=detectors)
 
+        self._log_debug(comm, rank, "binned map finished in", timer=timer)
+
         # Build a pipeline for the projection and template matrix application.
         # First create the operators that we will use.
+
+        self._log_debug(comm, rank, "begin create projection pipeline")
 
         # Name of the temporary detdata created if we are not overwriting inputs
         det_temp = "temp_RHS"
@@ -157,6 +188,7 @@ class SolverRHS(Operator):
         scan_map = ScanMap(
             pixels=pointing.pixels,
             weights=pointing.weights,
+            view=pointing.view,
             map_key=self.binning.binned,
             det_data=detdata_name,
             subtract=True,
@@ -164,12 +196,15 @@ class SolverRHS(Operator):
 
         # Set up noise weighting operator
         noise_weight = NoiseWeight(
-            noise_model=self.binning.noise_model, det_data=detdata_name
+            noise_model=self.binning.noise_model,
+            det_data=detdata_name,
+            view=pointing.view,
         )
 
         # Set up template matrix operator.
         self.template_matrix.transpose = True
         self.template_matrix.det_data = detdata_name
+        self.template_matrix.view = pointing.view
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
@@ -205,14 +240,24 @@ class SolverRHS(Operator):
             )
             proj_pipe.operators = oplist
 
+        self._log_debug(comm, rank, "projection pipeline created in", timer=timer)
+
         # Run this projection pipeline.
 
+        self._log_debug(comm, rank, "begin run projection pipeline")
+
         proj_pipe.apply(data, detectors=detectors)
+
+        self._log_debug(comm, rank, "projection pipeline finished in", timer=timer)
+
+        self._log_debug(comm, rank, "begin cleanup temporary detector data")
 
         if not self.overwrite:
             # Clean up our temp buffer
             delete_temp = Delete(detdata=[det_temp])
             delete_temp.apply(data)
+
+        self._log_debug(comm, rank, "cleanup finished in", timer=timer)
 
         return
 
@@ -354,6 +399,9 @@ class SolverLHS(Operator):
         if self.out is None:
             raise RuntimeError("You must set the 'out' trait before calling exec()")
 
+        # Pointing operator used in the binning
+        pointing = self.binning.pointing
+
         # Project amplitudes into timestreams and make a binned map.
 
         timer.start()
@@ -361,6 +409,7 @@ class SolverLHS(Operator):
 
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
+        self.template_matrix.view = pointing.view
 
         self.binning.det_data = self.det_temp
 
@@ -389,13 +438,11 @@ class SolverLHS(Operator):
 
         self._log_debug(comm, rank, "begin scan map and accumulate amplitudes")
 
-        # Use the same pointing operator as the binning
-        pointing = self.binning.pointing
-
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
             pixels=pointing.pixels,
             weights=pointing.weights,
+            view=pointing.view,
             map_key=self.binning.binned,
             det_data=self.det_temp,
             subtract=True,
@@ -403,7 +450,9 @@ class SolverLHS(Operator):
 
         # Set up noise weighting operator
         noise_weight = NoiseWeight(
-            noise_model=self.binning.noise_model, det_data=self.det_temp
+            noise_model=self.binning.noise_model,
+            det_data=self.det_temp,
+            view=pointing.view,
         )
 
         # Make a copy of the template_matrix operator so that we can apply both the
@@ -592,10 +641,6 @@ def solve(
     residual = rhs.duplicate()
     residual -= lhs_out
 
-    # print("RHS ", rhs)
-    # print("LHS ", lhs_out)
-    # print("residual", residual)
-
     # The preconditioned residual
     # s = M^-1 * r
     precond = rhs.duplicate()
@@ -618,7 +663,6 @@ def solve(
 
     # delta_new = delta_0 = r^T * d
     delta = proposal.dot(residual)
-    # print("delta = ", delta)
     delta_init = delta
 
     if comm is not None:
@@ -639,14 +683,8 @@ def solve(
         # q = A * d
         lhs_op.apply(data, detectors=detectors)
 
-        # print("LHS output", lhs_out)
-
         # alpha = delta_new / (d^T * q)
-        # print("alpha num = ", delta)
-        # print("alpha den = ", proposal.dot(lhs_out))
         alpha = delta / proposal.dot(lhs_out)
-
-        # print("alpha = ", alpha)
 
         # Update the result
         # x += alpha * d
@@ -666,7 +704,6 @@ def solve(
 
         # Epsilon
         sqsum = residual.dot(residual)
-        # print("sqsum = ", sqsum)
 
         if comm is not None:
             comm.barrier()
@@ -691,7 +728,6 @@ def solve(
             break
 
         sqsum_best = min(sqsum, sqsum_best)
-        # print("sqsum_best = ", sqsum_best)
 
         # Check for stall / divergence
         if iter % 10 == 0 and iter >= n_iter_min:
@@ -718,11 +754,8 @@ def solve(
 
         # beta = delta_new / delta_old
         beta = delta / delta_last
-        # print("beta = ", beta)
 
         # New proposal
         # d = s + beta * d
         proposal *= beta
         proposal += precond
-
-        # print("proposal[{}]".format(iter), proposal, flush=True)

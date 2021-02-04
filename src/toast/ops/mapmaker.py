@@ -338,6 +338,7 @@ class MapMaker(Operator):
             scanner = ScanMask(
                 det_flags=flagname,
                 pixels=scan_pointing.pixels,
+                view=solve_view,
                 mask_bits=1,
             )
 
@@ -381,7 +382,6 @@ class MapMaker(Operator):
                 covariance=self.binning.covariance,
                 hits=solver_hits_name,
                 rcond=solver_rcond_name,
-                view=self.binning.pointing.view,
                 det_flags=flagname,
                 det_flag_mask=255,
                 pointing=self.binning.pointing,
@@ -421,17 +421,19 @@ class MapMaker(Operator):
                     for d in dets:
                         local_total += len(vw[d])
                         local_cut += np.count_nonzero(vw[d])
-            total = 0
-            cut = 0
+            total = None
+            cut = None
+            msg = None
             if comm is None:
                 total = local_total
                 cut = local_cut
             else:
                 total = comm.reduce(local_total, op=MPI.SUM, root=0)
                 cut = comm.reduce(local_cut, op=MPI.SUM, root=0)
-            msg = "Solver flags cut {} / {} = {:0.2f}% of samples".format(
-                cut, total, 100.0 * (cut / total)
-            )
+                if comm.rank == 0:
+                    msg = "Solver flags cut {} / {} = {:0.2f}% of samples".format(
+                        cut, total, 100.0 * (cut / total)
+                    )
             self._log_info(comm, rank, msg)
 
         # Compute the RHS.  Overwrite inputs, either the original or the copy.
@@ -456,9 +458,8 @@ class MapMaker(Operator):
             binning=self.binning,
             template_matrix=self.template_matrix,
         )
-        rhs_calc.apply(data, detectors=detectors)
 
-        # print("RHS = ", data[solver_rhs], flush=True)
+        rhs_calc.apply(data, detectors=detectors)
 
         self._log_info(comm, rank, "  finished RHS calculation in", timer=timer)
 
@@ -528,7 +529,6 @@ class MapMaker(Operator):
                 covariance=self.map_binning.covariance,
                 hits=hits_name,
                 rcond=rcond_name,
-                view=self.map_binning.pointing.view,
                 det_flags=self.map_binning.det_flags,
                 det_flag_mask=self.map_binning.det_flag_mask,
                 shared_flags=self.map_binning.shared_flags,
