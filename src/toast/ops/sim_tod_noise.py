@@ -255,10 +255,10 @@ class SimNoise(Operator):
                 continue
 
             # Unique observation ID
-            obsindx = ob.UID
+            obsindx = ob.uid
 
-            # FIXME: we should unify naming of UID / id.
-            telescope = ob.telescope.id
+            # Telescope UID
+            telescope = ob.telescope.uid
 
             # FIXME:  Every observation has a set of timestamps.  This global
             # offset is specified separately so that opens the possibility for

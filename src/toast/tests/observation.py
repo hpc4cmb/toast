@@ -17,7 +17,7 @@ from ..observation import DetectorData, Observation
 
 from ..mpi import Comm, MPI
 
-from ._helpers import create_outdir, create_distdata
+from ._helpers import create_outdir, create_satellite_empty
 
 
 class ObservationTest(MPITestCase):
@@ -25,7 +25,7 @@ class ObservationTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
 
-        self.data = create_distdata(self.comm, obs_per_group=1)
+        self.data = create_satellite_empty(self.comm, obs_per_group=1)
 
         self.dets = ["d00", "d01", "d02", "d03"]
         self.shapes = [(10,), (10, 4), (10, 3, 2)]
@@ -432,3 +432,97 @@ class ObservationTest(MPITestCase):
                 np.testing.assert_equal(
                     ob.detdata[dd][:, -1], ob.view["good"].detdata[dd][-1][:, -1]
                 )
+
+    def test_redistribute(self):
+        # Populate the observations
+        np.random.seed(12345)
+        rms = 10.0
+        for obs in self.data.obs:
+            n_samp = obs.n_local_samples
+            dets = obs.local_detectors
+            n_det = len(dets)
+
+            fake_bore = np.ravel(np.random.random((n_samp, 4))).reshape(-1, 4)
+            fake_flags = np.random.uniform(low=0, high=2, size=n_samp).astype(
+                np.uint8, copy=True
+            )
+            bore = None
+            common_flags = None
+            times = None
+            if obs.comm_col_rank == 0:
+                bore = fake_bore
+                common_flags = fake_flags
+                times = np.arange(n_samp, dtype=np.float64)
+
+            # Construct some default shared objects from local buffers
+            obs.shared.create("boresight_azel", shape=(n_samp, 4), comm=obs.comm_col)
+            obs.shared["boresight_azel"][:, :] = bore
+
+            obs.shared.create("boresight_radec", shape=(n_samp, 4), comm=obs.comm_col)
+            obs.shared["boresight_radec"][:, :] = bore
+
+            obs.shared.create(
+                "flags", shape=(n_samp,), dtype=np.uint8, comm=obs.comm_col
+            )
+            obs.shared["flags"][:] = common_flags
+
+            obs.shared.create(
+                "timestamps", shape=(n_samp,), dtype=np.float64, comm=obs.comm_col
+            )
+            obs.shared["timestamps"][:] = times
+
+            # Create some shared objects over the whole comm
+            local_array = None
+            if obs.comm_rank == 0:
+                local_array = np.arange(100, dtype=np.int16)
+            obs.shared["everywhere"] = local_array
+
+            # Allocate the default detector data and flags
+            obs.detdata.create("signal", dtype=np.float64)
+            obs.detdata.create("flags", sample_shape=(), dtype=np.uint16)
+
+            # Allocate some other detector data
+            obs.detdata["calibration"] = np.ones(
+                (len(obs.local_detectors), obs.n_local_samples), dtype=np.float64
+            )
+
+            obs.detdata["sim_noise"] = np.zeros(
+                (obs.n_local_samples,), dtype=np.float64
+            )
+
+            # Store some values for detector data
+            for det in dets:
+                obs.detdata["signal"][det] = np.random.normal(
+                    loc=0.0, scale=rms, size=n_samp
+                )
+                obs.detdata["calibration"][det] = np.random.normal(
+                    loc=0.0, scale=rms, size=n_samp
+                ).astype(np.float32)
+                obs.detdata["sim_noise"][det] = np.random.normal(
+                    loc=0.0, scale=rms, size=n_samp
+                )
+                obs.detdata["flags"][det] = fake_flags
+
+            # Make some shared objects, one per detector, shared across the process
+            # rows.
+            obs.shared.create(
+                "beam_profile",
+                shape=(len(dets), 1000, 1000),
+                dtype=np.float32,
+                comm=obs.comm_row,
+            )
+            for didx, det in enumerate(dets):
+                beam_data = None
+                if obs.comm_row_rank == 0:
+                    beam_data = (
+                        np.random.uniform(low=0, high=100, size=(1000 * 1000))
+                        .astype(np.float32, copy=True)
+                        .reshape(1, 1000, 1000)
+                    )
+                obs.shared["beam_profile"].set(
+                    beam_data, offset=(didx, 0, 0), fromrank=0
+                )
+
+        # Redistribute
+        for ob in self.data.obs:
+            ob.redistribute(1, times="timestamps")

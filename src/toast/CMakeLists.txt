@@ -110,6 +110,13 @@ install(FILES
     DESTINATION ${PYTHON_SITE}/toast
 )
 
+# Install package data
+
+install(DIRECTORY
+    aux
+    DESTINATION ${PYTHON_SITE}/toast
+)
+
 # Process the sub directories
 add_subdirectory(tests)
 add_subdirectory(ops)

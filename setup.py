@@ -233,11 +233,12 @@ conf["install_requires"] = [
     "traitlets>=5.0",
     "numpy",
     "scipy",
-    "pshmem",
-    "healpy",
     "matplotlib",
-    "ephem",
     "h5py",
+    "pshmem",
+    "astropy",
+    "healpy",
+    "skyfield",
 ]
 conf["extras_require"] = {"mpi": ["mpi4py>=3.0"]}
 conf["packages"] = find_packages("src")

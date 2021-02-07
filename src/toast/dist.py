@@ -207,14 +207,11 @@ def distribute_samples(
             split up between process columns
 
     Returns:
-        (tuple):  The 3 lists returned contain information about
-            the detector distribution, the sample distribution, and the chunk
-            distribution.  The first list has one entry for each detrank and contains
-            the list of detectors for that row of the process grid.  The second list
-            contains tuples of (first sample, N samples) for each column of the process
-            grid.  The third list contains tuples of (first chunk, N chunks) for each
-            column of the process grid.  The third element is None if the input
-            sampsets was None.
+        (tuple):  4 lists are returned, and each has an entry for every process.  The
+            first list entries are the (first det, n_det) for each process.  The
+            second list is the (first det set, n_detset) for each process.  The third
+            list is the (first sample, n_sample) for each process and the last list
+            is the (first sample set, n_sample_set) for each process.
 
     """
     nproc = 1

@@ -219,7 +219,7 @@ class Observation(MutableMapping):
         telescope (Telescope):  An instance of a Telescope object.
         n_samples (int):  The total number of samples for this observation.
         name (str):  (Optional) The observation name.
-        UID (int):  (Optional) The Unique ID for this observation.  If not specified,
+        uid (int):  (Optional) The Unique ID for this observation.  If not specified,
             the UID will be computed from a hash of the name.
         comm (mpi4py.MPI.Comm):  (Optional) The MPI communicator to use.
         detector_sets (list):  (Optional) List of lists containing detector names.
@@ -245,7 +245,7 @@ class Observation(MutableMapping):
         telescope,
         n_samples,
         name=None,
-        UID=None,
+        uid=None,
         comm=None,
         detector_sets=None,
         sample_sets=None,
@@ -255,13 +255,13 @@ class Observation(MutableMapping):
         self._telescope = telescope
         self._samples = n_samples
         self._name = name
-        self._UID = UID
+        self._uid = uid
         self._comm = comm
         self._detector_sets = detector_sets
         self._sample_sets = sample_sets
 
-        if self._UID is None and self._name is not None:
-            self._UID = name_UID(self._name)
+        if self._uid is None and self._name is not None:
+            self._uid = name_UID(self._name)
 
         self.dist = DistDetSamp(
             self._samples,
@@ -325,11 +325,11 @@ class Observation(MutableMapping):
         return self._name
 
     @property
-    def UID(self):
+    def uid(self):
         """
         (int):  The Unique ID for this observation.
         """
-        return self._UID
+        return self._uid
 
     # The overall MPI communicator for this observation.
 
@@ -522,7 +522,7 @@ class Observation(MutableMapping):
     def __repr__(self):
         val = "<Observation"
         val += "\n  name = '{}'".format(self.name)
-        val += "\n  UID = '{}'".format(self.UID)
+        val += "\n  uid = '{}'".format(self.uid)
         if self._comm is None:
             val += "  group has a single process (no MPI)"
         else:
@@ -548,13 +548,27 @@ class Observation(MutableMapping):
             (int):  The number of bytes of memory used by timestream data.
 
         """
+        # Get local memory from detector data
         local_mem = self.detdata.memory_use()
+
+        # If there are many intervals, this could take up non-trivial space.  Add them
+        # to the local total
+        for iname, it in self.intervals.items():
+            if len(it) > 0:
+                local_mem += len(it) * (
+                    sys.getsizeof(it[0]._start)
+                    + sys.getsizeof(it[0]._stop)
+                    + sys.getsizeof(it[0]._first)
+                    + sys.getsizeof(it[0]._last)
+                )
+
         # Sum the aggregate local memory
         total = None
         if self.comm is None:
             total = local_mem
         else:
             total = self.comm.allreduce(local_mem, op=MPI.SUM)
+
         # The total shared memory use is already returned on every process by this
         # next function.
         total += self.shared.memory_use()
@@ -562,7 +576,7 @@ class Observation(MutableMapping):
 
     # Redistribution
 
-    def redistribute(self, process_rows):
+    def redistribute(self, process_rows, times=None):
         """Take the currently allocated observation and redistribute in place.
 
         This changes the data distribution within the observation.  After
@@ -574,14 +588,19 @@ class Observation(MutableMapping):
             process_rows (int):  The size of the new process grid in the detector
                 direction.  This number must evenly divide into the size of the
                 observation communicator.
+            times (str):  The shared data field representing the timestamps.  This
+                is used to recompute the intervals after redistribution.
 
         Returns:
             None
 
         """
+        log = Logger.get()
         if process_rows == self.dist.process_rows:
             # Nothing to do!
             return
+
+        # Construct the new distribution
         newdist = DistDetSamp(
             self._samples,
             self._telescope.focalplane.detectors,
@@ -590,6 +609,8 @@ class Observation(MutableMapping):
             self._comm,
             process_rows,
         )
+
+        det_order = {y: x for x, y in enumerate(self.all_detectors)}
 
         if newdist.comm_rank == 0:
             # check that all processes have some data, otherwise print warning
@@ -604,24 +625,166 @@ class Observation(MutableMapping):
                     "in new distribution.".format(r)
                     log.warning(msg)
 
-        # Redistribute shared data
+        # Clear all views, since they depend on the intervals we are about to
+        # delete.  Views are re-created on demand.
 
-        newshared = SharedDataMgr(
-            self._comm,
-            newdist.comm_row,
-            newdist.comm_col,
-        )
+        print("clearing views", flush=True)
+        self.view.clear()
+
+        # After an IntervalList is added, only the local intervals on each process are
+        # kept.  We need to construct the original timespans that were used and save,
+        # so that we can rebuild them after the timestamps have been redistributed.
+
+        if times is None:
+            if self.comm_rank == 0:
+                msg = "Time stamps not specified when redistributing observation {}."
+                msg += "  Intervals will not be redistributed."
+                log.warning(msg)
+
+        global_intervals = None
+        if self.comm_rank == 0:
+            global_intervals = dict()
+
+        for iname in list(self.intervals.keys()):
+            print("gathering interval {}".format(iname), flush=True)
+            ilist = self.intervals[iname]
+            all_ilist = None
+            if self.comm_row is None:
+                all_ilist = [(ilist, self.n_local_samples)]
+            else:
+                # Gather across the process row
+                if self.comm_col_rank == 0:
+                    all_ilist = self.comm_row.gather(
+                        (ilist, self.n_local_samples), root=0
+                    )
+            del ilist
+            if self.comm_rank == 0:
+                # Only one process builds the list of start / stop times.
+                glist = list()
+                last_continue = False
+                last_start = 0
+                last_stop = 0
+                for pdata, pn in all_ilist:
+                    if len(pdata) == 0:
+                        continue
+
+                    for intvl in pdata:
+                        if last_continue:
+                            if invl.first == 0:
+                                last_stop = intvl.stop
+                            else:
+                                glist.append((last_start, last_stop))
+                                last_continue = False
+                                last_start = intvl.start
+                                last_stop = intvl.stop
+                        else:
+                            last_start = intvl.start
+                            last_stop = intvl.stop
+
+                        if intvl.last == pn - 1:
+                            last_continue = True
+                        else:
+                            glist.append((last_start, last_stop))
+                            last_continue = False
+                if last_continue:
+                    # add final range
+                    glist.append((last_start, last_stop))
+            global_intervals[iname] = glist
+            print("purging interval {}".format(iname), flush=True)
+            del self.intervals[iname]
+
+        def compute_1d(old_off, old_n, pdist):
+            """Helper function to compute slices along one dimension."""
+            pnew = list()
+            for ip, p in enumerate(pdist):
+                poff = p[0]
+                pend = p[0] + p[1]
+                if poff >= old_off + old_n:
+                    continue
+                if pend <= old_off:
+                    continue
+                new_off = old_off
+                if poff > old_off:
+                    new_off = poff
+                new_n = old_off + old_n - new_off
+                if pend < old_off + old_n:
+                    new_n = pend - new_off
+                pnew.append((ip, new_off, new_n))
+            return pnew
 
         # Redistribute detector data
 
         newdetdata = DetDataMgr(
-            newdist.dets[self.dist.comm_col_rank],
-            newdist.samps[self.dist.comm_row_rank][1],
+            newdist.dets[newdist.comm_col_rank],
+            newdist.samps[newdist.comm_row_rank][1],
         )
 
-        # Redistribute intervals
+        newdets = list()
+        for pdet in newdist.dets:
+            dfirst = det_order[pdet[0]]
+            dlast = det_order[pdet[-1]]
+            newdets.append(dfirst, dlast - dfirst + 1)
 
-        newintervals = IntervalMgr(self._comm, newdist.comm_row, newdist.comm_col)
+        olddets = list()
+        for pdet in self.dist.dets:
+            dfirst = det_order[pdet[0]]
+            dlast = det_order[pdet[-1]]
+            olddets.append(dfirst, dlast - dfirst + 1)
+
+        # Every process figures out its send and receive information
+
+        send_row = compute_1d(
+            self.local_index_offset, self.n_local_samples, newdist.samps
+        )
+        det_first = det_order[self.local_detectors[0]]
+        det_last = det_order[self.local_detectors[-1]]
+        send_col = compute_1d(det_first, det_last - det_first + 1, newdets)
+        send_info = list()
+        for sr in send_row:
+            for sc in send_col:
+                psend = sr[0] * newdist.comm_col_size + sc[0]
+                send_info.append((psend, sr[1], sr[2], sc[1], sc[2]))
+
+        msg = "Proc {} det send:  {}".format(self.comm_rank, send_info)
+        print(msg, flush=True)
+
+        recv_row = compute_1d(
+            newdist.samps[newdist.comm_row_rank][0],
+            newdist.samps[newdist.comm_row_rank][1],
+            self.dist.samps,
+        )
+        det_first = det_order[newdist.dets[newdist.comm_col_rank][0]]
+        det_last = det_order[newdist.dets[newdist.comm_col_rank][-1]]
+        recv_col = compute_1d(det_first, det_last - det_first + 1, olddets)
+        recv_info = list()
+        for rr in recv_row:
+            for rc in recv_col:
+                precv = rr[0] * self.dist.comm_col_size + rc[0]
+                recv_info.append((precv, rr[1], rr[2], rc[1], rc[2]))
+
+        msg = "Proc {} det recv:  {}".format(self.comm_rank, recv_info)
+        print(msg, flush=True)
+
+        # for field in list(self.detdata.keys()):
+        #
+        #     self._dist.comm.Alltoallv(
+        #         [self.raw, self._send_counts, self._send_displ, self.mpitype],
+        #         [self.receive, self._recv_counts, self._recv_displ, self.mpitype],
+        #     )
+        #
+        #     del self.datadata[field]
+        #
+        # # Redistribute shared data
+        #
+        # newshared = SharedDataMgr(
+        #     self._comm,
+        #     newdist.comm_row,
+        #     newdist.comm_col,
+        # )
+        #
+        # # Redistribute intervals
+        #
+        # newintervals = IntervalMgr(self._comm, newdist.comm_row, newdist.comm_col)
 
     # Accelerator use
 

@@ -403,7 +403,7 @@ class SimSatellite(Operator):
                 self.telescope,
                 obsrange[obindx].samples,
                 name=obname,
-                UID=name_UID(obname),
+                uid=name_UID(obname),
                 comm=comm.comm_group,
                 process_rows=det_ranks,
             )

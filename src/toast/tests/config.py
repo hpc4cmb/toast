@@ -23,7 +23,7 @@ from ..ops import SimSatellite, Pipeline, SimNoise, DefaultNoiseModel
 
 from ..data import Data
 
-from ._helpers import create_outdir, create_comm, create_telescope
+from ._helpers import create_outdir, create_comm, create_space_telescope
 
 
 class ConfigTest(MPITestCase):
@@ -93,7 +93,7 @@ class ConfigTest(MPITestCase):
         run = create(conf)
 
         data = Data(self.toastcomm)
-        tele = create_telescope(self.toastcomm.group_size)
+        tele = create_space_telescope(self.toastcomm.group_size)
 
         # Add our fake telescope
         run["operators"]["sim_satellite"].telescope = tele

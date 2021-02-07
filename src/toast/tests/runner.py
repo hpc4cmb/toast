@@ -24,6 +24,7 @@ from . import healpix as test_healpix
 from . import qarray as test_qarray
 from . import intervals as test_intervals
 from . import pixels as test_pixels
+from . import weather as test_weather
 
 from . import observation as test_observation
 
@@ -135,6 +136,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_qarray))
         suite.addTest(loader.loadTestsFromModule(test_intervals))
         suite.addTest(loader.loadTestsFromModule(test_pixels))
+        suite.addTest(loader.loadTestsFromModule(test_weather))
 
         suite.addTest(loader.loadTestsFromModule(test_observation))
         suite.addTest(loader.loadTestsFromModule(test_dist))

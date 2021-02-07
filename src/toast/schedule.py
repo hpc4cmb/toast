@@ -50,6 +50,9 @@ class CES(object):
         self.el_sun = el_sun
 
 
+# datetime.datetime.utcfromtimestamp(self._time)
+
+
 class Schedule(object):
     """Class representing an observing schedule.
 

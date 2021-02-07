@@ -14,7 +14,7 @@ from ..data import Data
 
 from .. import qarray as qa
 
-from ..instrument import Focalplane, Telescope
+from ..instrument import Focalplane, Telescope, GroundSite, SpaceSite
 
 from ..instrument_sim import fake_hexagon_focalplane
 
@@ -82,8 +82,8 @@ def create_comm(mpicomm):
     return toastcomm
 
 
-def create_telescope(group_size, sample_rate=10.0 * u.Hz):
-    """Create a fake telescope with at least one detector per process."""
+def create_space_telescope(group_size, sample_rate=10.0 * u.Hz):
+    """Create a fake satellite telescope with at least one detector per process."""
     npix = 1
     ring = 1
     while 2 * npix < group_size:
@@ -97,14 +97,33 @@ def create_telescope(group_size, sample_rate=10.0 * u.Hz):
         net=0.5,
         f_knee=(sample_rate / 2000.0),
     )
-    return Telescope("test", focalplane=fp)
+    site = SpaceSite("L2")
+    return Telescope("test", focalplane=fp, site=site)
 
 
-def create_distdata(mpicomm, obs_per_group=1, samples=10):
+# def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz):
+#     """Create a fake ground telescope with at least one detector per process."""
+#     npix = 1
+#     ring = 1
+#     while 2 * npix < group_size:
+#         npix += 6 * ring
+#         ring += 1
+#     fp = fake_hexagon_focalplane(
+#         n_pix=npix,
+#         sample_rate=sample_rate,
+#         f_min=1.0e-5 * u.Hz,
+#         # net=1.0,
+#         net=0.5,
+#         f_knee=(sample_rate / 2000.0),
+#     )
+#     return Telescope("test", focalplane=fp)
+
+
+def create_satellite_empty(mpicomm, obs_per_group=1, samples=10):
     """Create a toast communicator and (empty) distributed data object.
 
     Use the specified MPI communicator to attempt to create 2 process groups,
-    each with some empty observations.
+    each with some empty observations.  Use a space telescope for each observation.
 
     Args:
         mpicomm (MPI.Comm): the MPI communicator (or None).
@@ -120,11 +139,11 @@ def create_distdata(mpicomm, obs_per_group=1, samples=10):
     for obs in range(obs_per_group):
         oname = "test-{}-{}".format(toastcomm.group, obs)
         oid = obs_per_group * toastcomm.group + obs
-        tele = create_telescope(toastcomm.group_size)
+        tele = create_space_telescope(toastcomm.group_size)
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
         ob = Observation(
-            tele, n_samples=samples, name=oname, UID=oid, comm=toastcomm.comm_group
+            tele, n_samples=samples, name=oname, uid=oid, comm=toastcomm.comm_group
         )
         data.obs.append(ob)
     return data
@@ -152,7 +171,7 @@ def create_satellite_data(
     toastcomm = create_comm(mpicomm)
     data = Data(toastcomm)
 
-    tele = create_telescope(toastcomm.group_size, sample_rate=sample_rate)
+    tele = create_space_telescope(toastcomm.group_size, sample_rate=sample_rate)
 
     # Scan fast enough to cover some sky in a short amount of time.  Reduce the
     # angles to achieve a more compact hit map.

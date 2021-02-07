@@ -17,6 +17,7 @@ install(FILES
     observation.py
     timing.py
     pixels.py
+    weather.py
     ops_sim_satellite.py
     ops_sim_tod_noise.py
     ops_mapmaker_utils.py

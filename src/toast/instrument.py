@@ -7,6 +7,8 @@ import sys
 
 import numpy as np
 
+from astropy import units as u
+
 import tomlkit
 
 from .timing import function_timer, Timer
@@ -22,6 +24,80 @@ from . import qarray
 # be done as part of the 3.0 transition.
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
+
+
+class Site(object):
+    """Site base class.
+
+    Args:
+        name (str):  Site name
+        uid (int):  Unique identifier.  If not specified, constructed from a hash
+            of the site name.
+
+    """
+
+    def __init__(self, name, uid=None):
+        self.name = name
+        self.uid = uid
+        if self.uid is None:
+            self.uid = name_UID(self.name)
+
+    def __repr__(self):
+        value = "<Site '{}' : uid = {}>".format(self.name, self.uid)
+        return value
+
+
+class GroundSite(Site):
+    """Site on the Earth.
+
+    This represents a fixed location on the Earth.
+
+    Args:
+        name (str):  Site name
+        lat (str):  Site latitude as a pyEphem string
+        lon (str):  Site longitude as a pyEphem string
+        alt (Quantity):  Site altitude.
+        uid (int):  Unique identifier.  If not specified, constructed from a hash
+            of the site name.
+        weather (Weather):  Weather information for this site.
+    """
+
+    def __init__(self, name, lat, lon, alt, uid=None, weather=None):
+        super().__init__(name, uid)
+        # Strings get interpreted correctly by pyEphem.
+        # Floats must be in radians
+        self.lat = str(lat)
+        self.lon = str(lon)
+        self.alt = alt.to_value(u.meter)
+        self.weather = weather
+
+    def __repr__(self):
+        value = "<GroundSite '{}' : uid = {}, lon = {}, lat = {}, alt = {} m, weather = {}>".format(
+            self.name, self.uid, self.lon, self.lat, self.alt, self.weather
+        )
+        return value
+
+
+class SpaceSite(Site):
+    """Site with no atmosphere.
+
+    This represents a location beyond the Earth's atmosphere.  In practice, this
+    should be sub-classed for real satellite experiments.  However, we keep this here
+    in case we wish to implement generic satellite location properties.
+
+    Args:
+        name (str):  Site name
+        uid (int):  Unique identifier.  If not specified, constructed from a hash
+            of the site name.
+
+    """
+
+    def __init__(self, name, uid=None):
+        super().__init__(name, uid)
+
+    def __repr__(self):
+        value = "<SpaceSite '{}' : uid = {}>".format(self.name, self.uid)
+        return value
 
 
 class Focalplane(object):
@@ -196,53 +272,33 @@ class Focalplane(object):
 
 
 class Telescope(object):
-    """Class representing telescope properties for one observation."""
+    """Class representing telescope properties for one observation.
 
-    def __init__(self, name, id=None, focalplane=None, site=None, coord=None):
+    Args:
+        name (str):  The name of the telescope.
+        uid (int):  The Unique ID of the telescope.  If not specified, constructed from
+            a hash of the site name.
+        focalplane (Focalplane):  The focalplane for this observation.
+        site (Site):  The site of the telescope for this observation.
+
+    """
+
+    def __init__(self, name, uid=None, focalplane=None, site=None):
         self.name = name
-        self.id = id
-        if self.id is None:
-            self.id = name_UID(name)
+        self.uid = uid
+        if self.uid is None:
+            self.uid = name_UID(name)
+        if not isinstance(focalplane, Focalplane):
+            raise RuntimeError("focalplane should be a Focalplane class instance")
         self.focalplane = focalplane
+        if not isinstance(site, Site):
+            raise RuntimeError("site should be a Site class instance")
         self.site = site
-        self.coord = coord
 
     def __repr__(self):
-        value = "<Telescope '{}': ID = {}, Site = {}, Coord = {}, Focalplane = ".format(
-            self.name, self.id, self.site, self.coord, self.focalplane
+        value = "<Telescope '{}': uid = {}, site = {}, focalplane = ".format(
+            self.name, self.uid, self.site
         )
         value += self.focalplane.__repr__()
         value += ">"
-        return value
-
-
-class Site(object):
-    """Site on the Earth.
-
-    args:
-        name (str):  Site name
-        lat (str):  Site latitude as a pyEphem string
-        lon (str):  Site longitude as a pyEphem string
-        alt_m (float):  Site altitude in meters
-        id (int):  Unique identifier.  If not specified, constructed from a hash
-            of the site name.
-        weather (Weather):  Weather information for this site.
-    """
-
-    def __init__(self, name, lat, lon, alt_m, id=None, weather=None):
-        self.name = name
-        # Strings get interpreted correctly pyEphem.
-        # Floats must be in radians
-        self.lat = str(lat)
-        self.lon = str(lon)
-        self.alt = alt_m
-        self.id = name_UID(self.name)
-        self.weather = weather
-
-    def __repr__(self):
-        value = (
-            "<Site '{}' : ID = {}, lon = {}, lat = {}, alt = {} m, "
-            "weather = {}>"
-            "".format(self.name, self.id, self.lon, self.lat, self.alt, self.weather)
-        )
         return value

@@ -14,7 +14,12 @@ from ..data import Data
 from ..observation import Observation
 from ..mpi import Comm, MPI
 
-from ._helpers import create_outdir, create_distdata, create_comm, create_telescope
+from ._helpers import (
+    create_outdir,
+    create_satellite_empty,
+    create_comm,
+    create_space_telescope,
+)
 
 
 class DataTest(MPITestCase):
@@ -24,7 +29,7 @@ class DataTest(MPITestCase):
 
         # Create one observation per group.
 
-        self.data = create_distdata(self.comm, obs_per_group=1)
+        self.data = create_satellite_empty(self.comm, obs_per_group=1)
 
         self.ntask = 24
         self.sizes1 = [
@@ -154,7 +159,9 @@ class DataTest(MPITestCase):
 
     def test_split(self):
         toastcomm = create_comm(self.comm)
-        tele = create_telescope(toastcomm.group_size)
+        # FIXME:  it does not matter for this test, but change to the ground helper
+        # function once implemented.
+        tele = create_space_telescope(toastcomm.group_size)
         data = Data(toastcomm)
         for season in range(3):
             data.obs.append(Observation(tele, 10, comm=toastcomm.comm_group))
