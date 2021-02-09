@@ -1547,6 +1547,17 @@ def add_scan(
             sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
             moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
             moon_phase2 = moon.phase
+            # optionally offset scan
+            if args.boresight_offset_az_deg != 0 or args.boresight_offset_el_deg != 0:
+                az_offset = np.radians(args.boresight_offset_az_deg)
+                el_offset = np.radians(args.boresight_offset_el_deg)
+                el_observe = el + el_offset / np.cos(az_offset)
+                az_offset = np.degrees(az_offset / np.cos(el_observe))
+                azmin += az_offset
+                azmax += az_offset
+                el_observe = np.degrees(el_observe)
+            else:
+                el_observe = np.degrees(el)
             # Create an entry in the schedule
             entry = fout_fmt.format(
                 to_UTC(t1),
@@ -1555,9 +1566,9 @@ def add_scan(
                 to_MJD(t2),
                 boresight_angle,
                 patch.name,
-                (azmin + args.boresight_offset_az_deg) % 360,
-                (azmax + args.boresight_offset_az_deg) % 360,
-                (el / degree + args.boresight_offset_el_deg),
+                azmin % 360,
+                azmax % 360,
+                el_observe,
                 rising_string,
                 sun_el1,
                 sun_az1,
