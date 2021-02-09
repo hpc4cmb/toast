@@ -105,6 +105,16 @@ class GroundScan(Scan):
         self.scan_indx = scan_indx
         self.subscan_indx = subscan_indx
 
+    def __repr__(self):
+        val = "<GroundScan '{}' at {} with El = {}, Az {} -- {}>".format(
+            self.name,
+            self.start.isoformat(timespec="seconds"),
+            self.el,
+            self.az_min,
+            self.az_max,
+        )
+        return val
+
     def min_sso_dist(self, sso_az_begin, sso_el_begin, sso_az_end, sso_el_end):
         """Rough minimum angle between the boresight and a solar system object.
 
@@ -169,6 +179,15 @@ class SatelliteScan(Scan):
         self.prec_period = prec_period
         self.spin_period = spin_period
 
+    def __repr__(self):
+        val = "<SatelliteScan '{}' at {} with prec period {}, spin period {}>".format(
+            self.name,
+            self.start.isoformat(timespec="seconds"),
+            self.prec_period,
+            self.spin_period,
+        )
+        return val
+
 
 class GroundSchedule(object):
     """Class representing a ground based observing schedule.
@@ -184,6 +203,25 @@ class GroundSchedule(object):
         self.scans = scans
         if scans is None:
             self.scans = list()
+
+    def __repr__(self):
+        val = "<GroundSchedule with "
+        if self.scans is None:
+            val += "0 scans>"
+            return val
+        else:
+            val += "{} scans".format(len(self.scans))
+        if len(self.scans) < 5:
+            for sc in self.scans:
+                val += "\n  {}".format(sc)
+        else:
+            for sc in self.scans[:2]:
+                val += "\n  {}".format(sc)
+            val += "\n  ... "
+            for sc in self.scans[-2:]:
+                val += "\n  {}".format(sc)
+        val += "\n>"
+        return val
 
     @function_timer
     def read(self, file, file_split=False, sort=False):
@@ -364,6 +402,29 @@ class SatelliteSchedule(object):
         self.scans = scans
         if scans is None:
             self.scans = list()
+        else:
+            for sc in self.scans:
+                if not isinstance(sc, SatelliteScan):
+                    raise RuntimeError("only SatelliteScan instances are supported")
+
+    def __repr__(self):
+        val = "<SatelliteSchedule with "
+        if self.scans is None:
+            val += "0 scans>"
+            return val
+        else:
+            val += "{} scans".format(len(self.scans))
+        if len(self.scans) < 5:
+            for sc in self.scans:
+                val += "\n  {}".format(sc)
+        else:
+            for sc in self.scans[:2]:
+                val += "\n  {}".format(sc)
+            val += "\n  ... "
+            for sc in self.scans[-2:]:
+                val += "\n  {}".format(sc)
+        val += "\n>"
+        return val
 
     @function_timer
     def read(self, file, sort=False):
@@ -405,51 +466,43 @@ class SatelliteSchedule(object):
             Column(
                 name="name",
                 length=nrows,
-                dtype=np.dtype("a20"),
+                dtype=np.dtype("a60"),
                 description="The name of the scan",
             ),
             Column(
-                name="name",
+                name="start",
                 length=nrows,
-                dtype=np.dtype("a20"),
-                description="The timestamp of the event (UTC, ISO format)",
+                dtype=np.dtype("a{}".format(max_tstr)),
+                description="The start time of the scan (UTC, ISO format)",
             ),
             Column(
-                name="PETAL",
+                name="stop",
                 length=nrows,
-                dtype=np.int32,
-                description="Petal location [0-9]",
+                dtype=np.dtype("a{}".format(max_tstr)),
+                description="The stop time of the scan (UTC, ISO format)",
             ),
             Column(
-                name="DEVICE",
+                name="prec_period",
                 length=nrows,
-                dtype=np.int32,
-                description="Device location on the petal",
+                dtype=np.float64,
+                description="Precession period in minutes",
             ),
             Column(
-                name="LOCATION",
+                name="spin_period",
                 length=nrows,
-                dtype=np.int32,
-                description="Global device location (PETAL * 1000 + DEVICE)",
-            ),
-            Column(
-                name="STATE",
-                length=nrows,
-                dtype=np.uint32,
-                description="State bit field (good == 0)",
-            ),
-            Column(
-                name="EXCLUSION",
-                length=nrows,
-                dtype=np.dtype("a9"),
-                description="The exclusion polygon for this device",
+                dtype=np.float64,
+                description="Spin period in minutes",
             ),
         ]
 
-    out_state = Table()
-    out_state.add_columns(out_cols)
+        out = Table()
+        out.add_columns(cols)
 
-     out_state_file = os.path.join(
-        outdir, "desi-state_{}.ecsv".format(file_date))
+        for isc, sc in enumerate(self.scans):
+            out[isc]["name"] = sc.name
+            out[isc]["start"] = sc.start.isoformat(sep="T")
+            out[isc]["stop"] = sc.stop.isoformat(sep="T")
+            out[isc]["prec_period"] = sc.prec_period.to_value(u.minute)
+            out[isc]["spin_period"] = sc.spin_period.to_value(u.minute)
 
-    out_fp.write(out_fp_file, format="ascii.ecsv", overwrite=True)
+        out.write(file, format="ascii.ecsv", overwrite=True)

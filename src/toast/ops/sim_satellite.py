@@ -20,7 +20,9 @@ from ..dist import distribute_uniform
 
 from ..timing import function_timer, Timer
 
-from ..intervals import Interval, regular_intervals
+from ..intervals import Interval
+
+from ..schedule import SatelliteSchedule
 
 from ..noise_sim import AnalyticNoise
 
@@ -276,24 +278,12 @@ class SimSatellite(Operator):
         klass=Telescope, allow_none=True, help="This must be an instance of a Telescope"
     )
 
-    start_time = Quantity(0.0 * u.second, help="The mission start time")
-
-    observation_time = Quantity(0.1 * u.hour, help="The time span for each observation")
-
-    gap_time = Quantity(0.0 * u.hour, help="The gap between each observation")
-
-    num_observations = Int(1, help="The number of observations to simulate")
-
-    spin_period = Quantity(
-        10.0 * u.minute, help="The period of the rotation about the spin axis"
+    schedule = Instance(
+        klass=SatelliteSchedule, allow_none=True, help="Instance of a SatelliteSchedule"
     )
 
     spin_angle = Quantity(
         30.0 * u.degree, help="The opening angle of the boresight from the spin axis"
-    )
-
-    prec_period = Quantity(
-        50.0 * u.minute, help="The period of the rotation about the precession axis"
     )
 
     prec_angle = Quantity(
@@ -342,10 +332,6 @@ class SimSatellite(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._AU = 149597870.7
-        self._radperday = 0.01720209895
-        self._radpersec = self._radperday / 86400.0
-        self._earthspeed = self._radpersec * self._AU
 
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
@@ -354,6 +340,7 @@ class SimSatellite(Operator):
                 "The telescope attribute must be set before calling exec()"
             )
         focalplane = self.telescope.focalplane
+        site = self.telescope.site
         comm = data.comm
 
         # List of detectors in this pipeline
@@ -371,20 +358,39 @@ class SimSatellite(Operator):
                 log.error("process group is too large for the number of detectors")
                 comm.comm_world.Abort()
 
-        # Distribute the observations uniformly among groups
+        # The global start is the beginning of the first scan
 
-        groupdist = distribute_uniform(self.num_observations, comm.ngroups)
+        mission_start = self.schedule.scans[0].start
 
-        # Compute global time and sample ranges of all observations
+        # Satellite motion is continuous across multiple observations, so we simulate
+        # continuous sampling and find the actual start / stop times for the samples
+        # that fall in each scan time range.
 
-        obsrange = regular_intervals(
-            self.num_observations,
-            self.start_time.to_value(u.second),
-            0,
-            focalplane.sample_rate,
-            self.observation_time.to_value(u.second),
-            self.gap_time.to_value(u.second),
-        )
+        scan_starts = list()
+        scan_stops = list()
+        scan_offsets = list()
+        scan_samples = list()
+
+        incr = 1.0 / focalplane.rate
+        off = 0
+        for scan in self.schedule.scans:
+            ffirst = focalplane.rate * (scan.start - mission_start).total_seconds()
+            first = int(ffirst)
+            if ffirst - first > 1.0e-3 * incr:
+                first += 1
+            start = first * incr
+            ns = 1 + int(focalplane.rate * (scan.stop.timestamp() - start))
+            stop = (ns - 1) * incr
+            scan_starts.append(start)
+            scan_stops.append(stop)
+            scan_samples.append(ns)
+            scan_offsets.append(off)
+            off += ns
+
+        # Distribute the observations uniformly among groups.  We take each scan and
+        # weight it by the duration.
+
+        groupdist = distribute_discrete(scan_samples, comm.ngroups)
 
         det_ranks = comm.group_size
         if self.distribute_time:
@@ -392,20 +398,20 @@ class SimSatellite(Operator):
 
         # Every process group creates its observations
 
-        radinc = self._radpersec / focalplane.sample_rate
-
         group_firstobs = groupdist[comm.group][0]
         group_numobs = groupdist[comm.group][1]
 
         for obindx in range(group_firstobs, group_firstobs + group_numobs):
-            obname = "science_{:05d}".format(obindx)
+            scan = self.schedule.scans[obindx]
+
             ob = Observation(
                 self.telescope,
-                obsrange[obindx].samples,
-                name=obname,
-                uid=name_UID(obname),
+                scan_samples[obindx],
+                name=scan.name,
+                uid=name_UID(scan.name),
                 comm=comm.comm_group,
                 process_rows=det_ranks,
+                global_sample_offset=scan_offsets[obindx],
             )
 
             # Create shared objects for timestamps, common flags, position,
@@ -440,50 +446,30 @@ class SimSatellite(Operator):
             position = None
             velocity = None
             if ob.comm_col_rank == 0:
-                start_abs = ob.local_index_offset + obsrange[obindx].first
                 start_time = (
-                    obsrange[obindx].start + float(start_abs) / focalplane.sample_rate
+                    scan_starts[obindx]
+                    + float(ob.local_index_offset) / focalplane.sample_rate
                 )
                 stop_time = (
-                    start_time + float(ob.n_local_samples) / focalplane.sample_rate
+                    start_time + float(ob.n_local_samples - 1) / focalplane.sample_rate
                 )
                 stamps = np.linspace(
                     start_time,
                     stop_time,
                     num=ob.n_local_samples,
-                    endpoint=False,
+                    endpoint=True,
                     dtype=np.float64,
                 )
-                # For this simple class, assume that the Earth is located
-                # along the X axis at time == 0.0s.  We also just use the
-                # mean values for distance and angular speed.  Classes for
-                # real experiments should obviously use ephemeris data.
-                rad = np.fmod(
-                    (start_time - self.start_time.to_value(u.second)) * self._radpersec,
-                    2.0 * np.pi,
-                )
-                ang = radinc * np.arange(ob.n_local_samples, dtype=np.float64) + rad
-                x = self._AU * np.cos(ang)
-                y = self._AU * np.sin(ang)
-                z = np.zeros_like(x)
-                position = np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
 
-                ang = (
-                    radinc * np.arange(ob.n_local_samples, dtype=np.float64)
-                    + rad
-                    + (0.5 * np.pi)
-                )
-                x = self._earthspeed * np.cos(ang)
-                y = self._earthspeed * np.sin(ang)
-                z = np.zeros_like(x)
-                velocity = np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
+                # Get the motion of the site for these times.
+                position, velocity = site.position_velocity(stamps)
 
             ob.shared[self.times].set(stamps, offset=(0,), fromrank=0)
             ob.shared[self.position].set(position, offset=(0, 0), fromrank=0)
             ob.shared[self.velocity].set(velocity, offset=(0, 0), fromrank=0)
 
             # Create boresight pointing
-            start_abs = ob.local_index_offset + obsrange[obindx].first
+            start_abs = ob.local_index_offset + sample_offset[obindx]
             degday = 360.0 / 365.25
 
             q_prec = None

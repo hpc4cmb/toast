@@ -260,13 +260,8 @@ class SimNoise(Operator):
             # Telescope UID
             telescope = ob.telescope.uid
 
-            # FIXME:  Every observation has a set of timestamps.  This global
-            # offset is specified separately so that opens the possibility for
-            # inconsistency.  Perhaps the global_offset should be made a property
-            # of the Observation class?
-            global_offset = 0
-            if "global_offset" in ob:
-                global_offset = ob["global_offset"]
+            # This global offset defaults to zero and is optional
+            global_offset = ob.global_sample_offset
 
             if self.noise_model not in ob:
                 msg = "Observation does not contain noise model key '{}'".format(

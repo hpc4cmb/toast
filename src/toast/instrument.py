@@ -9,6 +9,8 @@ import numpy as np
 
 from astropy import units as u
 
+import astropy.time as astime
+
 import astropy.coordinates as coord
 
 import tomlkit
@@ -74,6 +76,25 @@ class Site(object):
         """
         return self._velocity(times)
 
+    def position_velocity(self, times):
+        """Get the site position and velocity.
+
+        Convenience function to simultaneously return the position and velocity.
+
+        Args:
+            times (array):  The timestamps.
+
+        Returns:
+            (tuple):  The position and velocity arrays of vectors.
+
+        """
+        if hasattr(self, "_position_velocity"):
+            return self._position_velocity(times)
+        else:
+            p = self._position(times)
+            v = self._velocity(times)
+        return (p, v)
+
     def __repr__(self):
         value = "<Site '{}' : uid = {}>".format(self.name, self.uid)
         return value
@@ -96,7 +117,7 @@ class GroundSite(Site):
 
     def __init__(self, name, lat, lon, alt, uid=None, weather=None):
         super().__init__(name, uid)
-        # self._earthloc = coord.EarthLocation.from_geodetic(lon, lat, height=alt)
+        self._earthloc = coord.EarthLocation.from_geodetic(lon, lat, height=alt)
         self.weather = weather
 
     def __repr__(self):
@@ -105,20 +126,45 @@ class GroundSite(Site):
         )
         return value
 
+    def _position_velocity(self, times):
+        # Compute data at ~0.1Hz and interpolate.
+        sparse_incr = 10.0
+        n_sparse = int((times[-1] - times[0]) / sparse_incr)
+        sparse_times = np.linspace(times[0], times[-1], num=n_sparse, endpoint=True)
+        pos_x = np.array(n_sparse, np.float64)
+        pos_y = np.array(n_sparse, np.float64)
+        pos_z = np.array(n_sparse, np.float64)
+        vel_x = np.array(n_sparse, np.float64)
+        vel_y = np.array(n_sparse, np.float64)
+        vel_z = np.array(n_sparse, np.float64)
+        for i, t in enumerate(sparse_times):
+            atime = astime.Time(t, format="unix")
+            p, v = coord.get_body_barycentric_posvel("earth", atime)
+            # FIXME:  apply translation from earth center to earth location.
+            # itrs = self._earthloc.get_itrs(obstime)
+            pos_x[i] = p[0]
+            pos_y[i] = p[1]
+            pos_z[i] = p[2]
+            vel_x[i] = v[0]
+            vel_y[i] = v[1]
+            vel_z[i] = v[2]
+        pos_x = np.interp(times, sparse_times, pos_x)
+        pos_y = np.interp(times, sparse_times, pos_y)
+        pos_z = np.interp(times, sparse_times, pos_z)
+        vel_x = np.interp(times, sparse_times, vel_x)
+        vel_y = np.interp(times, sparse_times, vel_y)
+        vel_z = np.interp(times, sparse_times, vel_z)
+        pos = np.stack([pos_x, pos_y, pos_z], axis=-1)
+        vel = np.stack([vel_x, vel_y, vel_z], axis=-1)
+        return pos, vel
+
     def _position(self, times):
-        #
-        #  get_body_barycentric_posvel(body, time, ephemeris=None)
-        #
-        # # construct observation times
-        #
-        # itrs = self._earthloc.get_itrs(obstime)
-        # solar = itrs.transform_to(
-        #     coord.BarycentricMeanEcliptic(representation_type="cartesian")
-        # )
-        return np.zeros((len(times), 3), dtype=np.float64)
+        p, v = self._position_velocity(times)
+        return p
 
     def _velocity(self, times):
-        return np.zeros((len(times), 3), dtype=np.float64)
+        p, v = self._position_velocity(times)
+        return v
 
 
 class SpaceSite(Site):
@@ -141,11 +187,44 @@ class SpaceSite(Site):
         value = "<SpaceSite '{}' : uid = {}>".format(self.name, self.uid)
         return value
 
+    def _position_velocity(self, times):
+        # Compute data at ~0.1Hz and interpolate.
+        sparse_incr = 10.0
+        n_sparse = int((times[-1] - times[0]) / sparse_incr)
+        sparse_times = np.linspace(times[0], times[-1], num=n_sparse, endpoint=True)
+        pos_x = np.array(n_sparse, np.float64)
+        pos_y = np.array(n_sparse, np.float64)
+        pos_z = np.array(n_sparse, np.float64)
+        vel_x = np.array(n_sparse, np.float64)
+        vel_y = np.array(n_sparse, np.float64)
+        vel_z = np.array(n_sparse, np.float64)
+        for i, t in enumerate(sparse_times):
+            atime = astime.Time(t, format="unix")
+            p, v = coord.get_body_barycentric_posvel("earth", atime)
+            # FIXME:  apply translation from earth center to L2.
+            pos_x[i] = p[0]
+            pos_y[i] = p[1]
+            pos_z[i] = p[2]
+            vel_x[i] = v[0]
+            vel_y[i] = v[1]
+            vel_z[i] = v[2]
+        pos_x = np.interp(times, sparse_times, pos_x)
+        pos_y = np.interp(times, sparse_times, pos_y)
+        pos_z = np.interp(times, sparse_times, pos_z)
+        vel_x = np.interp(times, sparse_times, vel_x)
+        vel_y = np.interp(times, sparse_times, vel_y)
+        vel_z = np.interp(times, sparse_times, vel_z)
+        pos = np.stack([pos_x, pos_y, pos_z], axis=-1)
+        vel = np.stack([vel_x, vel_y, vel_z], axis=-1)
+        return pos, vel
+
     def _position(self, times):
-        return np.zeros((len(times), 3), dtype=np.float64)
+        p, v = self._position_velocity(times)
+        return p
 
     def _velocity(self, times):
-        return np.zeros((len(times), 3), dtype=np.float64)
+        p, v = self._position_velocity(times)
+        return v
 
 
 class Focalplane(object):

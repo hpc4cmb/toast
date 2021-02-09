@@ -40,6 +40,8 @@ def create_satellite_schedule(
         (SatelliteSchedule):  The resulting schedule.
 
     """
+    if mission_start is None:
+        raise RuntimeError("You must specify the mission start")
 
     obs = datetime.timedelta(seconds=observation_time.to_value(u.second))
     gap = datetime.timedelta(seconds=gap_time.to_value(u.second))
