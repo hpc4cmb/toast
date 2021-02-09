@@ -238,7 +238,7 @@ conf["install_requires"] = [
     "pshmem",
     "astropy",
     "healpy",
-    "skyfield",
+    "ephem",
 ]
 conf["extras_require"] = {"mpi": ["mpi4py>=3.0"]}
 conf["packages"] = find_packages("src")

@@ -106,6 +106,8 @@ install(FILES
     healpix.py
     weather.py
     schedule.py
+    schedule_sim_ground.py
+    schedule_sim_satellite.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )

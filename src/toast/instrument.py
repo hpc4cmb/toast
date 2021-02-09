@@ -9,21 +9,17 @@ import numpy as np
 
 from astropy import units as u
 
+import astropy.coordinates as coord
+
 import tomlkit
 
 from .timing import function_timer, Timer
 
+from . import qarray as qa
+
 from .utils import Logger, Environment, name_UID
 
 from . import qarray
-
-# FIXME: This Focalplane class should be much more generic and able to hold common
-# metadata as well as per-detector properties.  We should inherit from MutableMapping
-# to support full dictionary behavior and then have a special key for the
-# detector-specific properties.  Unfortunately, this will break the API, so should
-# be done as part of the 3.0 transition.
-
-XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 class Site(object):
@@ -42,6 +38,42 @@ class Site(object):
         if self.uid is None:
             self.uid = name_UID(self.name)
 
+    def _position(self, times):
+        raise NotImplementedError("Derived class must implement _position()")
+
+    def position(self, times):
+        """Get the site position in solar system barycentric cartesian vectors.
+
+        Given timestamps in POSIX seconds since 1970 (UTC), return the position as
+        solar system coordinates.
+
+        Args:
+            times (array):  The timestamps.
+
+        Returns:
+            (array):  The position vectors.
+
+        """
+        return self._position(times)
+
+    def _velocity(self, times):
+        raise NotImplementedError("Derived class must implement _velocity()")
+
+    def velocity(self, times):
+        """Get the site velocity in solar system barycentric cartesian vectors.
+
+        Given timestamps in POSIX seconds since 1970 (UTC), return the velocity as
+        quaternions in solar system barycentric coordinates.
+
+        Args:
+            times (array):  The timestamps.
+
+        Returns:
+            (array):  The velocity vectors.
+
+        """
+        return self._velocity(times)
+
     def __repr__(self):
         value = "<Site '{}' : uid = {}>".format(self.name, self.uid)
         return value
@@ -54,8 +86,8 @@ class GroundSite(Site):
 
     Args:
         name (str):  Site name
-        lat (str):  Site latitude as a pyEphem string
-        lon (str):  Site longitude as a pyEphem string
+        lat (Quantity):  Site latitude.
+        lon (Quantity):  Site longitude.
         alt (Quantity):  Site altitude.
         uid (int):  Unique identifier.  If not specified, constructed from a hash
             of the site name.
@@ -64,11 +96,7 @@ class GroundSite(Site):
 
     def __init__(self, name, lat, lon, alt, uid=None, weather=None):
         super().__init__(name, uid)
-        # Strings get interpreted correctly by pyEphem.
-        # Floats must be in radians
-        self.lat = str(lat)
-        self.lon = str(lon)
-        self.alt = alt.to_value(u.meter)
+        # self._earthloc = coord.EarthLocation.from_geodetic(lon, lat, height=alt)
         self.weather = weather
 
     def __repr__(self):
@@ -77,13 +105,27 @@ class GroundSite(Site):
         )
         return value
 
+    def _position(self, times):
+        #
+        #  get_body_barycentric_posvel(body, time, ephemeris=None)
+        #
+        # # construct observation times
+        #
+        # itrs = self._earthloc.get_itrs(obstime)
+        # solar = itrs.transform_to(
+        #     coord.BarycentricMeanEcliptic(representation_type="cartesian")
+        # )
+        return np.zeros((len(times), 3), dtype=np.float64)
+
+    def _velocity(self, times):
+        return np.zeros((len(times), 3), dtype=np.float64)
+
 
 class SpaceSite(Site):
     """Site with no atmosphere.
 
     This represents a location beyond the Earth's atmosphere.  In practice, this
-    should be sub-classed for real satellite experiments.  However, we keep this here
-    in case we wish to implement generic satellite location properties.
+    should be sub-classed for real satellite experiments.
 
     Args:
         name (str):  Site name
@@ -99,6 +141,12 @@ class SpaceSite(Site):
         value = "<SpaceSite '{}' : uid = {}>".format(self.name, self.uid)
         return value
 
+    def _position(self, times):
+        return np.zeros((len(times), 3), dtype=np.float64)
+
+    def _velocity(self, times):
+        return np.zeros((len(times), 3), dtype=np.float64)
+
 
 class Focalplane(object):
     """Class representing the focalplane for one observation.
@@ -113,6 +161,8 @@ class Focalplane(object):
         fname (str):  Load the focalplane from this file.
 
     """
+
+    XAXIS, YAXIS, ZAXIS = np.eye(3)
 
     def __init__(
         self, detector_data=None, radius_deg=None, sample_rate=None, fname=None
@@ -156,8 +206,8 @@ class Focalplane(object):
                 continue
             quat = detdata["quat"]
             theta, phi = qarray.to_position(quat)
-            yrot = qarray.rotation(YAXIS, -theta)
-            zrot = qarray.rotation(ZAXIS, -phi)
+            yrot = qarray.rotation(self.YAXIS, -theta)
+            zrot = qarray.rotation(self.ZAXIS, -phi)
             rot = qarray.norm(qarray.mult(yrot, zrot))
             pol_rot = qarray.mult(rot, quat)
             pol_angle = qarray.to_angles(pol_rot)[2]
