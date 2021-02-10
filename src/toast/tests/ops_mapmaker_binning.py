@@ -114,7 +114,10 @@ class MapmakerBinningTest(MPITestCase):
 
         # Build the covariance and hits
         cov_and_hits = ops.CovarianceAndHits(
-            pixel_dist="pixel_dist", pointing=pointing, noise_model="noise_model"
+            pixel_dist="pixel_dist",
+            pointing=pointing,
+            noise_model="noise_model",
+            rcond_threshold=1.0e-6,
         )
         cov_and_hits.apply(data)
 
@@ -150,6 +153,8 @@ class MapmakerBinningTest(MPITestCase):
         pars["nside_map"] = pointing.nside
         pars["nside_cross"] = pointing.nside
         pars["nside_submap"] = min(8, pointing.nside)
+        pars["pixlim_cross"] = 1.0e-6
+        pars["pixlim_map"] = 1.0e-6
         pars["write_map"] = "F"
         pars["write_binmap"] = "T"
         pars["write_matrix"] = "F"

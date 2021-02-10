@@ -50,6 +50,11 @@ class PixelDistribution(object):
     def __init__(self, n_pix=None, n_submap=1000, local_submaps=None, comm=None):
         self._n_pix = n_pix
         self._n_submap = n_submap
+        if self._n_submap > self._n_pix:
+            msg = "Cannot create a PixelDistribution with more submaps ({}) than pixels ({})".format(
+                n_submap, n_pix
+            )
+            raise RuntimeError(msg)
         self._n_pix_submap = self._n_pix // self._n_submap
         if self._n_pix % self._n_submap != 0:
             self._n_pix_submap += 1

@@ -169,9 +169,9 @@ class SimNoiseTest(MPITestCase):
                 dfreq = nse.rate(det) / float(fftlen)
                 (pytod, freqs[det], psds[det]) = sim_noise_timestream(
                     realization=0,
-                    telescope=ob.telescope.id,
+                    telescope=ob.telescope.uid,
                     component=0,
-                    obsindx=ob.UID,
+                    obsindx=ob.uid,
                     detindx=idet,
                     rate=nse.rate(det),
                     firstsamp=ob.local_index_offset,
@@ -293,9 +293,9 @@ class SimNoiseTest(MPITestCase):
                 dfreq = nse.rate(det) / float(fftlen)
                 (pytod, freqs[det], psds[det]) = sim_noise_timestream(
                     realization=0,
-                    telescope=ob.telescope.id,
+                    telescope=ob.telescope.uid,
                     component=0,
-                    obsindx=ob.UID,
+                    obsindx=ob.uid,
                     detindx=idet,
                     rate=nse.rate(det),
                     firstsamp=ob.local_index_offset,

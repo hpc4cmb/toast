@@ -79,7 +79,7 @@ def simulate_hwp_response(
     hwp_angle = None
     hwp_mueller = None
 
-    if ob.comm_col is None or ob.comm_col.rank == 0:
+    if ob.comm_col.rank == 0:
         if hwp_rate is not None:
             # continuous HWP
             # HWP increment per sample is:

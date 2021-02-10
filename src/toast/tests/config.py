@@ -8,6 +8,8 @@ import os
 
 import copy
 
+from datetime import datetime
+
 import numpy as np
 import numpy.testing as nt
 
@@ -18,6 +20,8 @@ from ..utils import Environment
 from ..config import load_config, dump_toml, build_config, create
 
 from ..instrument import Telescope, Focalplane
+
+from ..schedule_sim_satellite import create_satellite_schedule
 
 from ..ops import SimSatellite, Pipeline, SimNoise, DefaultNoiseModel
 
@@ -85,7 +89,6 @@ class ConfigTest(MPITestCase):
         conf = None
         if self.toastcomm.world_rank == 0:
             conf = load_config(self.doc2_file)
-            print("", flush=True)
 
         if self.toastcomm.comm_world is not None:
             conf = self.toastcomm.comm_world.bcast(conf, root=0)
@@ -93,21 +96,23 @@ class ConfigTest(MPITestCase):
         run = create(conf)
 
         data = Data(self.toastcomm)
+
         tele = create_space_telescope(self.toastcomm.group_size)
+        sch = create_satellite_schedule(
+            mission_start=datetime(2023, 2, 23), num_observations=self.toastcomm.ngroups
+        )
 
-        # Add our fake telescope
+        # Add our fake telescope and schedule
         run["operators"]["sim_satellite"].telescope = tele
-
-        # Generate one observation per group
-        run["operators"]["sim_satellite"].n_observation = self.toastcomm.ngroups
+        run["operators"]["sim_satellite"].schedule = sch
 
         run["operators"]["sim_pipe"].apply(data)
 
-        for obs in data.obs:
-            for d in obs.local_detectors:
-                print(
-                    "proc {}, det {}: {}".format(
-                        self.toastcomm.world_rank, d, obs.detdata["noise"][d][:5]
-                    ),
-                    flush=True,
-                )
+        # for obs in data.obs:
+        #     for d in obs.local_detectors:
+        #         print(
+        #             "proc {}, det {}: {}".format(
+        #                 self.toastcomm.world_rank, d, obs.detdata["noise"][d][:5]
+        #             ),
+        #             flush=True,
+        #         )

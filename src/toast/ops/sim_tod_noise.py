@@ -197,10 +197,7 @@ class SimNoise(Operator):
 
     This passes through each observation and every process generates data
     for its assigned samples.  The observation unique ID is used in the random
-    number generation.  The observation dictionary can optionally include a
-    'global_offset' member that might be useful if you are splitting observations and
-    want to enforce reproducibility of a given sample, even when using
-    different-sized observations.
+    number generation.
 
     This operator intentionally does not provide a "view" trait.  To avoid
     discontinuities, the full observation must be simulated regardless of any data
@@ -260,9 +257,6 @@ class SimNoise(Operator):
             # Telescope UID
             telescope = ob.telescope.uid
 
-            # This global offset defaults to zero and is optional
-            global_offset = ob.global_sample_offset
-
             if self.noise_model not in ob:
                 msg = "Observation does not contain noise model key '{}'".format(
                     self.noise_model
@@ -305,7 +299,7 @@ class SimNoise(Operator):
                     obsindx=obsindx,
                     detindx=nse.index(key),
                     rate=rate,
-                    firstsamp=ob.local_index_offset + global_offset,
+                    firstsamp=ob.local_index_offset,
                     samples=ob.n_local_samples,
                     oversample=self._oversample,
                     freq=nse.freq(key),

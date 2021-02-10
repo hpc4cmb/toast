@@ -235,10 +235,6 @@ class Observation(MutableMapping):
         process_rows (int):  (Optional) The size of the rectangular process grid
             in the detector direction.  This number must evenly divide into the size of
             comm.  If not specified, defaults to the size of the communicator.
-        global_sample_offset (int):  (Optional) In certain circumstances (some kinds of
-            simulations) it is useful to maintain the concept of a global sample index
-            across all observations.  This is not required- every observation is
-            independent.
 
     """
 
@@ -254,7 +250,6 @@ class Observation(MutableMapping):
         detector_sets=None,
         sample_sets=None,
         process_rows=None,
-        global_sample_offset=0,
     ):
         log = Logger.get()
         self._telescope = telescope
@@ -264,7 +259,6 @@ class Observation(MutableMapping):
         self._comm = comm
         self._detector_sets = detector_sets
         self._sample_sets = sample_sets
-        self._global_sample_offset = global_sample_offset
 
         if self._uid is None and self._name is not None:
             self._uid = name_UID(self._name)

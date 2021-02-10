@@ -16,7 +16,7 @@ from .. import qarray as qa
 
 from ..utils import Environment, name_UID, Logger, rate_from_times
 
-from ..dist import distribute_uniform
+from ..dist import distribute_discrete
 
 from ..timing import function_timer, Timer
 
@@ -37,66 +37,6 @@ from ..healpix import ang2vec
 from .operator import Operator
 
 from .sim_hwp import simulate_hwp_response
-
-
-@function_timer
-def slew_precession_axis(first_samp=0, n_samp=None, sample_rate=None, deg_day=None):
-    """Generate quaternions for constantly slewing precession axis.
-
-    This constructs quaternions which rotates the Z coordinate axis
-    to the X/Y plane, and then slowly rotates this.  This can be used
-    to generate quaternions for the precession axis used in satellite
-    scanning simulations.
-
-    Args:
-        first_samp (int): The offset in samples from the start
-            of rotation.
-        n_samp (int): The number of samples to simulate.
-        sample_rate (float): The sampling rate in Hz.
-        deg_day (float): The rotation rate in degrees per day.
-
-    """
-    env = Environment.get()
-    tod_buffer_length = env.tod_buffer_length()
-
-    zaxis = np.array([0.0, 0.0, 1.0])
-
-    # this is the increment in radians per sample
-    angincr = deg_day * (np.pi / 180.0) / (24.0 * 3600.0 * sample_rate)
-
-    result = np.zeros((n_samp, 4), dtype=np.float64)
-
-    # Compute the time-varying quaternions representing the rotation
-    # from the coordinate frame to the precession axis frame.  The
-    # angle of rotation is fixed (PI/2), but the axis starts at the Y
-    # coordinate axis and sweeps.
-
-    buf_off = 0
-    buf_n = tod_buffer_length
-    while buf_off < n_samp:
-        if buf_off + buf_n > n_samp:
-            buf_n = n_samp - buf_off
-        bslice = slice(buf_off, buf_off + buf_n)
-
-        satang = np.arange(buf_n, dtype=np.float64)
-        satang *= angincr
-        satang += angincr * (buf_off + first_samp)
-        # satang += angincr * firstsamp + (np.pi / 2)
-
-        cang = np.cos(satang)
-        sang = np.sin(satang)
-
-        # this is the time-varying rotation axis
-        sataxis = np.concatenate(
-            (cang.reshape(-1, 1), sang.reshape(-1, 1), np.zeros((buf_n, 1))), axis=1
-        )
-
-        result[bslice, :] = qa.from_vectors(
-            np.tile(zaxis, buf_n).reshape(-1, 3), sataxis
-        )
-        buf_off += buf_n
-
-    return result
 
 
 @function_timer
@@ -330,14 +270,29 @@ class SimSatellite(Operator):
                 )
         return tele
 
+    @traitlets.validate("schedule")
+    def _check_schedule(self, proposal):
+        sch = proposal["value"]
+        if sch is not None:
+            if not isinstance(sch, SatelliteSchedule):
+                raise traitlets.TraitError(
+                    "schedule must be an instance of a SatelliteSchedule"
+                )
+        return sch
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def _exec(self, data, detectors=None, **kwargs):
+        zaxis = np.array([0, 0, 1], dtype=np.float64)
         log = Logger.get()
         if self.telescope is None:
             raise RuntimeError(
                 "The telescope attribute must be set before calling exec()"
+            )
+        if self.schedule is None:
+            raise RuntimeError(
+                "The schedule attribute must be set before calling exec()"
             )
         focalplane = self.telescope.focalplane
         site = self.telescope.site
@@ -371,16 +326,18 @@ class SimSatellite(Operator):
         scan_offsets = list()
         scan_samples = list()
 
-        incr = 1.0 / focalplane.rate
+        incr = 1.0 / focalplane.sample_rate
         off = 0
         for scan in self.schedule.scans:
-            ffirst = focalplane.rate * (scan.start - mission_start).total_seconds()
+            ffirst = (
+                focalplane.sample_rate * (scan.start - mission_start).total_seconds()
+            )
             first = int(ffirst)
             if ffirst - first > 1.0e-3 * incr:
                 first += 1
-            start = first * incr
-            ns = 1 + int(focalplane.rate * (scan.stop.timestamp() - start))
-            stop = (ns - 1) * incr
+            start = first * incr + mission_start.timestamp()
+            ns = 1 + int(focalplane.sample_rate * (scan.stop.timestamp() - start))
+            stop = (ns - 1) * incr + mission_start.timestamp()
             scan_starts.append(start)
             scan_stops.append(stop)
             scan_samples.append(ns)
@@ -411,7 +368,6 @@ class SimSatellite(Operator):
                 uid=name_UID(scan.name),
                 comm=comm.comm_group,
                 process_rows=det_ranks,
-                global_sample_offset=scan_offsets[obindx],
             )
 
             # Create shared objects for timestamps, common flags, position,
@@ -442,9 +398,12 @@ class SimSatellite(Operator):
             )
 
             # Rank zero of each grid column creates the data
+
             stamps = None
             position = None
             velocity = None
+            q_prec = None
+
             if ob.comm_col_rank == 0:
                 start_time = (
                     scan_starts[obindx]
@@ -464,31 +423,30 @@ class SimSatellite(Operator):
                 # Get the motion of the site for these times.
                 position, velocity = site.position_velocity(stamps)
 
+                # Get the quaternions for the precession axis.  For now, assume that
+                # it simply points away from the solar system barycenter
+
+                pos_norm = np.sqrt((position * position).sum(axis=1)).reshape(-1, 1)
+                pos_norm = 1.0 / pos_norm
+                prec_axis = pos_norm * position
+                q_prec = qa.from_vectors(
+                    np.tile(zaxis, ob.n_local_samples).reshape(-1, 3), prec_axis
+                )
+
             ob.shared[self.times].set(stamps, offset=(0,), fromrank=0)
             ob.shared[self.position].set(position, offset=(0, 0), fromrank=0)
             ob.shared[self.velocity].set(velocity, offset=(0, 0), fromrank=0)
 
             # Create boresight pointing
-            start_abs = ob.local_index_offset + sample_offset[obindx]
-            degday = 360.0 / 365.25
-
-            q_prec = None
-            if ob.comm_col_rank == 0:
-                q_prec = slew_precession_axis(
-                    first_samp=start_abs,
-                    n_samp=ob.n_local_samples,
-                    sample_rate=focalplane.sample_rate,
-                    deg_day=degday,
-                )
 
             satellite_scanning(
                 ob,
                 self.boresight,
-                sample_offset=start_abs,
+                sample_offset=scan_offsets[obindx],
                 q_prec=q_prec,
-                spin_period_m=self.spin_period.to_value(u.minute),
+                spin_period_m=scan.spin_period.to_value(u.minute),
                 spin_angle_deg=self.spin_angle.to_value(u.degree),
-                prec_period_m=self.prec_period.to_value(u.minute),
+                prec_period_m=scan.prec_period.to_value(u.minute),
                 prec_angle_deg=self.prec_angle.to_value(u.degree),
             )
 
@@ -499,7 +457,7 @@ class SimSatellite(Operator):
                 ob_time_key=self.times,
                 ob_angle_key=self.hwp_angle,
                 ob_mueller_key=None,
-                hwp_start=obsrange[obindx].start * u.second,
+                hwp_start=scan_starts[obindx] * u.second,
                 hwp_rpm=self.hwp_rpm,
                 hwp_step=self.hwp_step,
                 hwp_step_time=self.hwp_step_time,

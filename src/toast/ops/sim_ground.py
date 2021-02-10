@@ -58,7 +58,13 @@ class SimGround(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    schedule = Instance(klass=Schedule, allow_none=True, help="The observing schedule")
+    telescope = Instance(
+        klass=Telescope, allow_none=True, help="This must be an instance of a Telescope"
+    )
+
+    schedule = Instance(
+        klass=GroundSchedule, allow_none=True, help="Instance of a GroundSchedule"
+    )
 
     scan_rate = Quantity(1.0 * u.degree / u.second, help="The sky scanning rate")
 
@@ -156,31 +162,30 @@ class SimGround(Operator):
         "sun_close", help="Interval name for times when the sun is close"
     )
 
-    @traitlets.validate("schedule")
-    def _check_schedule(self, proposal):
-        sch = proposal["value"]
-        if sch is not None:
-            if not isinstance(sch, Schedule):
-                raise traitlets.TraitError("schedule must be an instance of a Schedule")
-            if sch.telescope is None:
-                raise traitlets.TraitError("schedule must have a telescope")
-            if sch.ceslist is None:
-                raise traitlets.TraitError("schedule must have a list of CESs")
-            tele = sch.telescope
+    @traitlets.validate("telescope")
+    def _check_telescope(self, proposal):
+        tele = proposal["value"]
+        if tele is not None:
             try:
                 dets = tele.focalplane.detectors
             except Exception:
                 raise traitlets.TraitError(
-                    "schedule telescope must be a Telescope instance with a focalplane"
+                    "telescope must be a Telescope instance with a focalplane"
+                )
+        return tele
+
+    @traitlets.validate("schedule")
+    def _check_schedule(self, proposal):
+        sch = proposal["value"]
+        if sch is not None:
+            if not isinstance(sch, GroundSchedule):
+                raise traitlets.TraitError(
+                    "schedule must be an instance of a GroundSchedule"
                 )
         return sch
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._AU = 149597870.7
-        self._radperday = 0.01720209895
-        self._radpersec = self._radperday / 86400.0
-        self._earthspeed = self._radpersec * self._AU
 
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()

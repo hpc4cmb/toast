@@ -33,10 +33,19 @@ class MapmakerTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         np.random.seed(123456)
+        # We want to hold the number of observations fixed, so that we can compare
+        # results across different concurrencies.
+        self.total_obs = 8
+        self.obs_per_group = self.total_obs
+        if self.comm is not None and self.comm.size >= 2:
+            self.obs_per_group = self.total_obs // 2
 
     def test_offset(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm, obs_time=20.0 * u.minute)
+
+        data = create_satellite_data(
+            self.comm, obs_per_group=self.obs_per_group, obs_time=10.0 * u.minute
+        )
 
         # Create some sky signal timestreams.
 
@@ -117,7 +126,9 @@ class MapmakerTest(MPITestCase):
             os.makedirs(testdir)
 
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm, obs_time=30.0 * u.minute)
+        data = create_satellite_data(
+            self.comm, obs_per_group=self.obs_per_group, obs_time=10.0 * u.minute
+        )
 
         # Create some sky signal timestreams.
 
@@ -244,6 +255,8 @@ class MapmakerTest(MPITestCase):
         madam_hit_path = os.path.join(testdir, "madam_hmap.fits")
         madam_map_path = os.path.join(testdir, "madam_map.fits")
 
+        fail = False
+
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
             import matplotlib.pyplot as plt
@@ -290,7 +303,13 @@ class MapmakerTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                nt.assert_almost_equal(toast_map[stokes], madam_map[stokes], decimal=4)
+                if not np.allclose(toast_map[stokes], madam_map[stokes], rtol=0.01):
+                    fail = True
+
+        if data.comm.comm_world is not None:
+            fail = data.comm.comm_world.bcast(fail, root=0)
+
+        self.assertFalse(fail)
 
         del data
         return
@@ -305,7 +324,9 @@ class MapmakerTest(MPITestCase):
             os.makedirs(testdir)
 
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm, obs_time=30.0 * u.minute)
+        data = create_satellite_data(
+            self.comm, obs_per_group=self.obs_per_group, obs_time=10.0 * u.minute
+        )
 
         # Create some sky signal timestreams.
 
@@ -373,8 +394,8 @@ class MapmakerTest(MPITestCase):
             det_data="signal",
             binning=binner,
             template_matrix=tmatrix,
-            solve_rcond_threshold=1.0e-6,
-            map_rcond_threshold=1.0e-6,
+            solve_rcond_threshold=1.0e-4,
+            map_rcond_threshold=1.0e-4,
             iter_max=50,
         )
 
@@ -406,8 +427,8 @@ class MapmakerTest(MPITestCase):
         pars["nside_cross"] = pointing.nside
         pars["nside_submap"] = min(8, pointing.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
-        pars["pixlim_cross"] = 1.0e-6
-        pars["pixlim_map"] = 1.0e-6
+        pars["pixlim_cross"] = 1.0e-4
+        pars["pixlim_map"] = 1.0e-4
         pars["write_map"] = "T"
         pars["write_binmap"] = "F"
         pars["write_matrix"] = "F"
@@ -438,6 +459,8 @@ class MapmakerTest(MPITestCase):
 
         madam_hit_path = os.path.join(testdir, "madam_hmap.fits")
         madam_map_path = os.path.join(testdir, "madam_map.fits")
+
+        fail = False
 
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
@@ -485,7 +508,15 @@ class MapmakerTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                nt.assert_almost_equal(toast_map[stokes], madam_map[stokes], decimal=2)
+                if not np.allclose(
+                    toast_map[stokes], madam_map[stokes], atol=0.1, rtol=0.05
+                ):
+                    fail = True
+
+        if data.comm.comm_world is not None:
+            fail = data.comm.comm_world.bcast(fail, root=0)
+
+        self.assertFalse(fail)
 
         del data
         return
@@ -502,7 +533,9 @@ class MapmakerTest(MPITestCase):
             os.makedirs(testdir)
 
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm, obs_time=30.0 * u.minute)
+        data = create_satellite_data(
+            self.comm, obs_per_group=self.obs_per_group, obs_time=10.0 * u.minute
+        )
 
         # Create some sky signal timestreams.
 
@@ -570,8 +603,8 @@ class MapmakerTest(MPITestCase):
             det_data="signal",
             binning=binner,
             template_matrix=tmatrix,
-            solve_rcond_threshold=1.0e-6,
-            map_rcond_threshold=1.0e-6,
+            solve_rcond_threshold=1.0e-4,
+            map_rcond_threshold=1.0e-4,
             iter_max=50,
         )
 
@@ -603,8 +636,8 @@ class MapmakerTest(MPITestCase):
         pars["nside_cross"] = pointing.nside
         pars["nside_submap"] = min(8, pointing.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
-        pars["pixlim_cross"] = 1.0e-6
-        pars["pixlim_map"] = 1.0e-6
+        pars["pixlim_cross"] = 1.0e-4
+        pars["pixlim_map"] = 1.0e-4
         pars["write_map"] = "T"
         pars["write_binmap"] = "F"
         pars["write_matrix"] = "F"
@@ -635,6 +668,8 @@ class MapmakerTest(MPITestCase):
 
         madam_hit_path = os.path.join(testdir, "madam_hmap.fits")
         madam_map_path = os.path.join(testdir, "madam_map.fits")
+
+        fail = False
 
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
@@ -682,7 +717,15 @@ class MapmakerTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                nt.assert_almost_equal(toast_map[stokes], madam_map[stokes], decimal=2)
+                if not np.allclose(
+                    toast_map[stokes], madam_map[stokes], atol=0.1, rtol=0.05
+                ):
+                    fail = True
+
+        if data.comm.comm_world is not None:
+            fail = data.comm.comm_world.bcast(fail, root=0)
+
+        self.assertFalse(fail)
 
         del data
         return

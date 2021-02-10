@@ -127,33 +127,46 @@ class GroundSite(Site):
         return value
 
     def _position_velocity(self, times):
-        # Compute data at ~0.1Hz and interpolate.
+        # Compute data at 10 second intervals and interpolate.  If the timestamps are
+        # more coarsely sampled than that, just compute those times directly.
         sparse_incr = 10.0
-        n_sparse = int((times[-1] - times[0]) / sparse_incr)
-        sparse_times = np.linspace(times[0], times[-1], num=n_sparse, endpoint=True)
-        pos_x = np.array(n_sparse, np.float64)
-        pos_y = np.array(n_sparse, np.float64)
-        pos_z = np.array(n_sparse, np.float64)
-        vel_x = np.array(n_sparse, np.float64)
-        vel_y = np.array(n_sparse, np.float64)
-        vel_z = np.array(n_sparse, np.float64)
+        do_interp = True
+        if len(times) < 100 or (times[1] - times[0]) > sparse_incr:
+            do_interp = False
+
+        if do_interp:
+            n_sparse = int((times[-1] - times[0]) / sparse_incr)
+            sparse_times = np.linspace(times[0], times[-1], num=n_sparse, endpoint=True)
+        else:
+            n_sparse = len(times)
+            sparse_times = times
+        pos_x = np.zeros(n_sparse, np.float64)
+        pos_y = np.zeros(n_sparse, np.float64)
+        pos_z = np.zeros(n_sparse, np.float64)
+        vel_x = np.zeros(n_sparse, np.float64)
+        vel_y = np.zeros(n_sparse, np.float64)
+        vel_z = np.zeros(n_sparse, np.float64)
         for i, t in enumerate(sparse_times):
             atime = astime.Time(t, format="unix")
             p, v = coord.get_body_barycentric_posvel("earth", atime)
             # FIXME:  apply translation from earth center to earth location.
             # itrs = self._earthloc.get_itrs(obstime)
-            pos_x[i] = p[0]
-            pos_y[i] = p[1]
-            pos_z[i] = p[2]
-            vel_x[i] = v[0]
-            vel_y[i] = v[1]
-            vel_z[i] = v[2]
-        pos_x = np.interp(times, sparse_times, pos_x)
-        pos_y = np.interp(times, sparse_times, pos_y)
-        pos_z = np.interp(times, sparse_times, pos_z)
-        vel_x = np.interp(times, sparse_times, vel_x)
-        vel_y = np.interp(times, sparse_times, vel_y)
-        vel_z = np.interp(times, sparse_times, vel_z)
+            pm = p.xyz.to_value(u.kilometer)
+            vm = v.xyz.to_value(u.kilometer / u.second)
+            pos_x[i] = pm[0]
+            pos_y[i] = pm[1]
+            pos_z[i] = pm[2]
+            vel_x[i] = vm[0]
+            vel_y[i] = vm[1]
+            vel_z[i] = vm[2]
+
+        if do_interp:
+            pos_x = np.interp(times, sparse_times, pos_x)
+            pos_y = np.interp(times, sparse_times, pos_y)
+            pos_z = np.interp(times, sparse_times, pos_z)
+            vel_x = np.interp(times, sparse_times, vel_x)
+            vel_y = np.interp(times, sparse_times, vel_y)
+            vel_z = np.interp(times, sparse_times, vel_z)
         pos = np.stack([pos_x, pos_y, pos_z], axis=-1)
         vel = np.stack([vel_x, vel_y, vel_z], axis=-1)
         return pos, vel
@@ -188,32 +201,45 @@ class SpaceSite(Site):
         return value
 
     def _position_velocity(self, times):
-        # Compute data at ~0.1Hz and interpolate.
-        sparse_incr = 10.0
-        n_sparse = int((times[-1] - times[0]) / sparse_incr)
-        sparse_times = np.linspace(times[0], times[-1], num=n_sparse, endpoint=True)
-        pos_x = np.array(n_sparse, np.float64)
-        pos_y = np.array(n_sparse, np.float64)
-        pos_z = np.array(n_sparse, np.float64)
-        vel_x = np.array(n_sparse, np.float64)
-        vel_y = np.array(n_sparse, np.float64)
-        vel_z = np.array(n_sparse, np.float64)
+        # Compute data at 10 minute intervals and interpolate.  If the timestamps are
+        # more coarsely sampled than that, just compute those times directly.
+        sparse_incr = 600.0
+        do_interp = True
+        if len(times) < 100 or (times[1] - times[0]) > sparse_incr:
+            do_interp = False
+
+        if do_interp:
+            n_sparse = 1 + int((times[-1] - times[0]) / sparse_incr)
+            sparse_times = np.linspace(times[0], times[-1], num=n_sparse, endpoint=True)
+        else:
+            n_sparse = len(times)
+            sparse_times = times
+        pos_x = np.zeros(n_sparse, np.float64)
+        pos_y = np.zeros(n_sparse, np.float64)
+        pos_z = np.zeros(n_sparse, np.float64)
+        vel_x = np.zeros(n_sparse, np.float64)
+        vel_y = np.zeros(n_sparse, np.float64)
+        vel_z = np.zeros(n_sparse, np.float64)
         for i, t in enumerate(sparse_times):
             atime = astime.Time(t, format="unix")
             p, v = coord.get_body_barycentric_posvel("earth", atime)
             # FIXME:  apply translation from earth center to L2.
-            pos_x[i] = p[0]
-            pos_y[i] = p[1]
-            pos_z[i] = p[2]
-            vel_x[i] = v[0]
-            vel_y[i] = v[1]
-            vel_z[i] = v[2]
-        pos_x = np.interp(times, sparse_times, pos_x)
-        pos_y = np.interp(times, sparse_times, pos_y)
-        pos_z = np.interp(times, sparse_times, pos_z)
-        vel_x = np.interp(times, sparse_times, vel_x)
-        vel_y = np.interp(times, sparse_times, vel_y)
-        vel_z = np.interp(times, sparse_times, vel_z)
+            pm = p.xyz.to_value(u.kilometer)
+            vm = v.xyz.to_value(u.kilometer / u.second)
+            pos_x[i] = pm[0]
+            pos_y[i] = pm[1]
+            pos_z[i] = pm[2]
+            vel_x[i] = vm[0]
+            vel_y[i] = vm[1]
+            vel_z[i] = vm[2]
+
+        if do_interp:
+            pos_x = np.interp(times, sparse_times, pos_x)
+            pos_y = np.interp(times, sparse_times, pos_y)
+            pos_z = np.interp(times, sparse_times, pos_z)
+            vel_x = np.interp(times, sparse_times, vel_x)
+            vel_y = np.interp(times, sparse_times, vel_y)
+            vel_z = np.interp(times, sparse_times, vel_z)
         pos = np.stack([pos_x, pos_y, pos_z], axis=-1)
         vel = np.stack([vel_x, vel_y, vel_z], axis=-1)
         return pos, vel

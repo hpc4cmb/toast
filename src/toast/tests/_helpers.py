@@ -4,6 +4,8 @@
 
 import os
 
+from datetime import datetime
+
 import numpy as np
 
 from astropy import units as u
@@ -17,6 +19,8 @@ from .. import qarray as qa
 from ..instrument import Focalplane, Telescope, GroundSite, SpaceSite
 
 from ..instrument_sim import fake_hexagon_focalplane
+
+from ..schedule_sim_satellite import create_satellite_schedule
 
 from ..observation import DetectorData, Observation
 
@@ -173,17 +177,26 @@ def create_satellite_data(
 
     tele = create_space_telescope(toastcomm.group_size, sample_rate=sample_rate)
 
+    # Create a schedule
+
+    sch = create_satellite_schedule(
+        prefix="test_",
+        mission_start=datetime(2023, 2, 23),
+        observation_time=obs_time,
+        gap_time=0 * u.minute,
+        num_observations=(toastcomm.ngroups * obs_per_group),
+        prec_period=10 * u.minute,
+        spin_period=1 * u.minute,
+    )
+
     # Scan fast enough to cover some sky in a short amount of time.  Reduce the
     # angles to achieve a more compact hit map.
     sim_sat = ops.SimSatellite(
         name="sim_sat",
-        num_observations=(toastcomm.ngroups * obs_per_group),
         telescope=tele,
+        schedule=sch,
         hwp_rpm=10.0,
-        observation_time=obs_time,
-        spin_period=2.0 * u.minute,
         spin_angle=5.0 * u.degree,
-        prec_period=10.0 * u.minute,
         prec_angle=10.0 * u.degree,
     )
     sim_sat.apply(data)

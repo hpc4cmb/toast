@@ -126,11 +126,11 @@ class Pipeline(Operator):
         for ds_indx, ds in enumerate(data_sets):
             if len(ds.obs) == 0:
                 # No observations for this group
-                msg = "data set {}, group {} has no observations".format(
+                msg = "Pipeline starting data set {}, group {} has no observations.\n".format(
                     ds_indx, ds.comm.group
                 )
                 if data.comm.group_rank == 0:
-                    log.warning(msg)
+                    log.verbose(msg)
             for det_set in self.detector_sets:
                 if det_set == "ALL":
                     # If this is given, then there should be only one entry

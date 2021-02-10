@@ -245,7 +245,10 @@ class Fourier2D(Template):
                     np.exp((times[0] - times) / corr_len) * self.correlation_amplitude
                 )
                 ihalf = times.size // 2
-                corr[ihalf + 1 :] = corr[ihalf - 1 : 0 : -1]
+                if times.size % 2 == 0:
+                    corr[ihalf:] = corr[ihalf - 1 :: -1]
+                else:
+                    corr[ihalf + 1 :] = corr[ihalf - 1 :: -1]
                 fcorr = np.fft.rfft(corr)
                 invcorr = np.fft.irfft(1 / fcorr)
                 self._filters[iob].append(invcorr)

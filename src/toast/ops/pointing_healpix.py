@@ -118,6 +118,8 @@ class PointingHealpix(Operator):
         check = proposal["value"]
         if ~check & (check - 1) != check - 1:
             raise traitlets.TraitError("Invalid NSIDE value")
+        if check < self.nside_submap:
+            raise traitlets.TraitError("NSIDE value is less than nside_submap")
         return check
 
     @traitlets.validate("nside_submap")
@@ -128,10 +130,10 @@ class PointingHealpix(Operator):
         if check > self.nside:
             newval = 16
             if newval > self.nside:
-                newval = self.nside
+                newval = 1
             log = Logger.get()
             log.warning(
-                "NSIDE submap greater than NSIDE.  Setting to {} instead".format(newval)
+                "nside_submap greater than NSIDE.  Setting to {} instead".format(newval)
             )
             check = newval
         return check
@@ -341,6 +343,7 @@ class PointingHealpix(Operator):
                     while buf_off < view_samples:
                         if buf_off + buf_n > view_samples:
                             buf_n = view_samples - buf_off
+
                         bslice = slice(buf_off, buf_off + buf_n)
 
                         # This buffer of detector quaternions
