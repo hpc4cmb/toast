@@ -1547,6 +1547,33 @@ def add_scan(
             sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
             moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
             moon_phase2 = moon.phase
+            # optionally offset scan
+            if args.boresight_offset_az_deg != 0 or args.boresight_offset_el_deg != 0:
+                az_offset = np.radians(args.boresight_offset_az_deg)
+                el_offset = np.radians(args.boresight_offset_el_deg)
+
+                az_offset_rot = qa.rotation(ZAXIS, az_offset)
+                el_offset_rot = qa.rotation(YAXIS, el_offset)
+                offset_rot = qa.mult(az_offset_rot, el_offset_rot)
+                offset_vec = qa.rotate(offset_rot, XAXIS)
+
+                az_min_rot = qa.rotation(ZAXIS, np.radians(azmin))
+                az_max_rot = qa.rotation(ZAXIS, np.radians(azmax))
+                el_rot = qa.rotation(YAXIS, -el)
+                min_rot = qa.mult(az_min_rot, el_rot)
+
+                vec_min = qa.rotate(min_rot, offset_vec)
+
+                az_min, el_min = hp.vec2dir(vec_min, lonlat=True)
+
+                el_offset = np.degrees(el) - el_min
+                el_observe = np.degrees(el) + el_offset
+
+                az_offset = (az_min - azmin) * np.cos(el) / np.cos(np.radians(el_observe))
+                azmin += az_offset
+                azmax += az_offset
+            else:
+                el_observe = np.degrees(el)
             # Create an entry in the schedule
             entry = fout_fmt.format(
                 to_UTC(t1),
@@ -1555,9 +1582,9 @@ def add_scan(
                 to_MJD(t2),
                 boresight_angle,
                 patch.name,
-                (azmin + args.boresight_offset_az_deg) % 360,
-                (azmax + args.boresight_offset_az_deg) % 360,
-                (el / degree + args.boresight_offset_el_deg),
+                azmin % 360,
+                azmax % 360,
+                el_observe,
                 rising_string,
                 sun_el1,
                 sun_az1,
@@ -2327,14 +2354,16 @@ def parse_args(opts=None):
         required=False,
         default=0,
         type=np.float,
-        help="Optional offset added to every observing elevation",
+        help="Optional offset added to every observing elevation, "
+        "measured with boresight at horizon level.",
     )
     parser.add_argument(
         "--boresight-offset-az-deg",
         required=False,
         default=0,
         type=np.float,
-        help="Optional offset added to every observing azimuth",
+        help="Optional offset added to every observing azimuth, "
+        "measured with boresight at horizon level.",
     )
     parser.add_argument(
         "--elevations-deg",
