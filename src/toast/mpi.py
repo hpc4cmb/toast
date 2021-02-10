@@ -31,7 +31,7 @@ if use_mpi is None:
                 from ._libtoast import Logger
 
                 log = Logger.get()
-                log.info("mpi4py not found- using serial operations only")
+                log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
 # We put other imports and checks for accelerators *after* the MPI check, since

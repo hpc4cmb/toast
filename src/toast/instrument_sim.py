@@ -44,9 +44,17 @@ def cartesian_to_quat(offsets):
 
 
 def hex_nring(npix):
-    """
-    For a hexagonal layout with a given number of pixels, return the
+    """Return the number of rings in a hexagonal layout.
+
+    For a hexagonal layout with a given number of positions, return the
     number of rings.
+
+    Args:
+        npos (int): The number of positions.
+
+    Returns:
+        (int): The number of rings.
+
     """
     test = npix - 1
     nrings = 1
@@ -61,11 +69,20 @@ def hex_nring(npix):
 
 
 def hex_row_col(npix, pix):
-    """
+    """Return the location of a given position.
+
     For a hexagonal layout, indexed in a "spiral" scheme (see hex_layout),
-    this function returnes the "row" and "column" of a pixel.
+    this function returnes the "row" and "column" of a single position.
     The row is zero along the main vertex-vertex axis, and is positive
-    or negative above / below this line of pixels.
+    or negative above / below this line of positions.
+
+    Args:
+        npos (int): The number of positions.
+        pos (int): The position.
+
+    Returns:
+        (tuple): The (row, column) location of the position.
+
     """
     if pix >= npix:
         raise ValueError("pixel value out of range")
@@ -172,11 +189,11 @@ def hex_layout(
 ):
     """Return detectors in a hexagon layout.
 
-    This maps the physical positions of pixels into angular positions
+    This maps the physical posititions of spots into angular positions
     from the hexagon center.  The X axis in the hexagon frame is along
     the vertex-to-opposite-vertex direction.  The Y axis is along
-    flat-to-opposite-flat direction.  The origin is at the center of
-    the wafer.  For example::
+    flat-to-opposite-flat direction.  The origin is at the center.
+    For example::
 
         Y ^             O O O
         |              O O O O
@@ -313,8 +330,17 @@ def hex_layout(
 
 
 def rhomb_dim(npix):
-    """
-    For a rhombus layout, return the dimension of one side.
+    """Compute the dimensions of a rhombus.
+
+    For a rhombus with the specified number of positions, return the dimension
+    of one side.  This function is just a check around a sqrt.
+
+    Args:
+        npos (int): The number of positions.
+
+    Returns:
+        (int): The dimension of one side.
+
     """
     dim = int(np.sqrt(float(npix)))
     if dim ** 2 != npix:
@@ -323,10 +349,19 @@ def rhomb_dim(npix):
 
 
 def rhomb_row_col(npix, pix):
-    """
+    """Return the location of a given position.
+
     For a rhombus layout, indexed from top to bottom (see rhombus_layout),
-    this function returnes the "row" and "column" of a pixel.  The column
+    this function returnes the "row" and "column" of a position.  The column
     starts at zero on the left hand side of a row.
+
+    Args:
+        npos (int): The number of positions.
+        pos (int): The position.
+
+    Returns:
+        (tuple): The (row, column) location of the position.
+
     """
     if pix >= npix:
         raise ValueError("pixel value out of range")

@@ -227,6 +227,7 @@ conf["license"] = "BSD"
 conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = get_version()
 conf["python_requires"] = ">=3.6.0"
+conf["setup_requires"] = (["wheel"],)
 conf["install_requires"] = [
     "cmake",
     "tomlkit",
