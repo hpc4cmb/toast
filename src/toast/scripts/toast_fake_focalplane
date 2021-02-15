@@ -188,10 +188,8 @@ def main():
         random_seed=args.random_seed,
     )
 
-    # Get the default communicator
-    mpiworld, procs, rank = get_world()
-
     # Guard against being called with multiple processes
+    mpiworld, procs, rank = get_world()
     if rank == 0:
         fp.write(args.out)
         plotfile = "{}.png".format(args.out)

@@ -9,7 +9,7 @@ import numpy as np
 
 from astropy import units as u
 
-from astropy.table import Table, Column
+from astropy.table import QTable, Column
 
 from .timing import function_timer, Timer
 
@@ -441,7 +441,20 @@ class SatelliteSchedule(object):
             None
 
         """
-        pass
+        data = QTable.read(file, format="ascii.ecsv")
+        for row in data:
+            self.scans.append(
+                SatelliteScan(
+                    name=row["name"],
+                    start=row["start"],
+                    stop=row["stop"],
+                    prec_period=row["prec_period"],
+                    spin_period=row["spin_period"],
+                )
+            )
+        if sort:
+            sortedscans = sorted(self.scans, key=lambda scn: scn.name)
+            self.scans = sortedscans
 
     @function_timer
     def write(self, file):
@@ -456,53 +469,26 @@ class SatelliteSchedule(object):
             None
 
         """
-        n_rows = len(self.scans)
-
-        # The max number of characters to represent an ISO 8601 format time
-        # with a timezone and microsecond resolution.
-        max_tstr = 32
-
-        cols = [
-            Column(
-                name="name",
-                length=nrows,
-                dtype=np.dtype("a60"),
-                description="The name of the scan",
-            ),
-            Column(
-                name="start",
-                length=nrows,
-                dtype=np.dtype("a{}".format(max_tstr)),
-                description="The start time of the scan (UTC, ISO format)",
-            ),
-            Column(
-                name="stop",
-                length=nrows,
-                dtype=np.dtype("a{}".format(max_tstr)),
-                description="The stop time of the scan (UTC, ISO format)",
-            ),
-            Column(
-                name="prec_period",
-                length=nrows,
-                dtype=np.float64,
-                description="Precession period in minutes",
-            ),
-            Column(
-                name="spin_period",
-                length=nrows,
-                dtype=np.float64,
-                description="Spin period in minutes",
-            ),
-        ]
-
-        out = Table()
-        out.add_columns(cols)
-
-        for isc, sc in enumerate(self.scans):
-            out[isc]["name"] = sc.name
-            out[isc]["start"] = sc.start.isoformat(sep="T")
-            out[isc]["stop"] = sc.stop.isoformat(sep="T")
-            out[isc]["prec_period"] = sc.prec_period.to_value(u.minute)
-            out[isc]["spin_period"] = sc.spin_period.to_value(u.minute)
+        out = QTable(
+            [
+                Column(name="name", data=[x.name for x in self.scans]),
+                Column(
+                    name="start", data=[x.start.isoformat(sep="T") for x in self.scans]
+                ),
+                Column(
+                    name="stop", data=[x.stop.isoformat(sep="T") for x in self.scans]
+                ),
+                Column(
+                    name="prec_period",
+                    data=[x.prec_period.to_value(u.minute) for x in self.scans],
+                    unit=u.minute,
+                ),
+                Column(
+                    name="spin_period",
+                    data=[x.spin_period.to_value(u.minute) for x in self.scans],
+                    unit=u.minute,
+                ),
+            ]
+        )
 
         out.write(file, format="ascii.ecsv", overwrite=True)

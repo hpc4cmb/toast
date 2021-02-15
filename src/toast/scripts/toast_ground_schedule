@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -40,6 +40,6 @@ if __name__ == "__main__":
         lines = ["Proc {}: {}".format(rank, x) for x in lines]
         print("".join(lines), flush=True)
         if mpiworld is not None and procs > 1:
-            mpiworld.Abort(6)
+            mpiworld.Abort()
         else:
             raise e

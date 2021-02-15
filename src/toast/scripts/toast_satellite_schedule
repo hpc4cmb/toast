@@ -10,9 +10,17 @@ This script creates a schedule file compatible with the SatelliteSchedule class.
 
 import sys
 
+from datetime import datetime
+
 import argparse
 
-from ..schedule_sim_satellite import create_satellite_schedule
+from astropy import units as u
+
+from toast.mpi import get_world
+
+from toast.utils import Logger
+
+from toast.schedule_sim_satellite import create_satellite_schedule
 
 
 def main():
@@ -23,50 +31,83 @@ def main():
     )
 
     parser.add_argument(
-        "--input", required=True, default=None, help="The input covariance FITS file"
+        "--out",
+        required=False,
+        default="schedule.ecsv",
+        help="The output schedule file.",
     )
 
     parser.add_argument(
-        "--output",
+        "--start",
         required=False,
         default=None,
-        help="The output inverse covariance FITS file.",
+        help="The start time of the mission as an ISO-8601 string.",
     )
 
     parser.add_argument(
-        "--rcond",
+        "--num_obs",
         required=False,
-        default=None,
-        help="Optionally write the inverse condition number map to this file.",
+        type=int,
+        default=1,
+        help="The number of observations.",
     )
 
     parser.add_argument(
-        "--single",
+        "--obs_minutes",
         required=False,
-        default=False,
-        action="store_true",
-        help="Write the output in single precision.",
+        default=10.0,
+        type=float,
+        help="The length of each observation in minutes.",
     )
 
     parser.add_argument(
-        "--threshold",
+        "--gap_minutes",
         required=False,
-        default=1e-3,
-        type=np.float,
-        help="Reciprocal condition number threshold",
+        default=0.0,
+        type=float,
+        help="The length of the gaps between observations in minutes.",
+    )
+
+    parser.add_argument(
+        "--prec_minutes",
+        required=False,
+        default=10.0,
+        type=float,
+        help="The precession period in minutes.",
+    )
+
+    parser.add_argument(
+        "--spin_minutes",
+        required=False,
+        default=2.0,
+        type=float,
+        help="The spin period in minutes.",
     )
 
     args = parser.parse_args()
 
-    create_satellite_schedule(
-        prefix="",
-        mission_start=None,
-        observation_time=10 * u.minute,
-        gap_time=0 * u.minute,
-        num_observations=1,
-        prec_period=10 * u.minute,
-        spin_period=2 * u.minute,
-    )
+    mission_start = None
+    if args.start is None:
+        # start now
+        mission_start = datetime.now()
+    else:
+        # convert
+        mission_start = datetime.fromisoformat(args.start)
+
+    # This is a serial script, guard against being called with multiple processes
+    mpiworld, procs, rank = get_world()
+
+    if rank == 0:
+        sch = create_satellite_schedule(
+            prefix="",
+            mission_start=mission_start,
+            observation_time=args.obs_minutes * u.minute,
+            gap_time=args.gap_minutes * u.minute,
+            num_observations=args.num_obs,
+            prec_period=args.prec_minutes * u.minute,
+            spin_period=args.spin_minutes * u.minute,
+        )
+        sch.write(args.out)
 
 
 if __name__ == "__main__":

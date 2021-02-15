@@ -58,7 +58,7 @@ def create_satellite_schedule(
     for sc in range(num_observations):
         start = sc * total + mission_start
         stop = start + obs - epsilon
-        name = "{}{:06d}_{}".format(prefix, sc, start.isoformat(timespec="seconds"))
+        name = "{}{:06d}_{}".format(prefix, sc, start.isoformat(timespec="minutes"))
         scans.append(
             SatelliteScan(
                 name=name,
