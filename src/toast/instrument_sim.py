@@ -523,18 +523,24 @@ def fake_hexagon_focalplane(
     sample_rate=1.0 * u.Hz,
     epsilon=0.0,
     fwhm=10.0 * u.arcmin,
-    bandcenter=150 * u.Hz,
-    bandwidth=20 * u.Hz,
+    bandcenter=150 * u.GHz,
+    bandwidth=20 * u.GHz,
     psd_net=0.1 * u.K * np.sqrt(1 * u.second),
     psd_fmin=0.0 * u.Hz,
     psd_alpha=1.0,
     psd_fknee=0.05 * u.Hz,
+    fwhm_sigma=0.0 * u.arcmin,
+    bandcenter_sigma=0 * u.GHz,
+    bandwidth_sigma=0 * u.GHz,
+    random_seed=123456,
 ):
     """Create a simple focalplane model for testing.
 
     This function creates a basic focalplane with hexagon-packed pixels, each with
     two orthogonal detectors.  It is intended for unit tests, benchmarking, etc where
-    a Focalplane is needed but the details are less important.
+    a Focalplane is needed but the details are less important.  In addition to nominal
+    detector properties, this function adds other simulation-specific parameters to
+    the metadata.
 
     Args:
         n_pix (int):  The number of pixels with hexagonal packing
@@ -549,6 +555,13 @@ def fake_hexagon_focalplane(
         psd_fmin (Quantity):  The frequency below which to roll off the 1/f spectrum.
         psd_alpha (float):  The spectral slope.
         psd_fknee (Quantity):  The 1/f knee frequency.
+        fwhm_sigma (Quantity):  Draw random detector FWHM values from a normal
+            distribution with this width.
+        bandcenter_sigma (Quantity):  Draw random bandcenter values from a normal
+            distribution with this width.
+        bandwidth_sigma (Quantity):  Draw random bandwidth values from a normal
+            distribution with this width.
+        random_seed (int):  The seed to use for numpy random.
 
     Returns:
         (Focalplane):  The fake focalplane.
@@ -582,13 +595,21 @@ def fake_hexagon_focalplane(
         ]
     )
 
+    np.random.seed(random_seed)
+
     for idet, det in enumerate(det_data.keys()):
         det_table[idet]["name"] = det
         det_table[idet]["quat"] = det_data[det]["quat"]
         det_table[idet]["pol_leakage"] = epsilon
-        det_table[idet]["fwhm"] = fwhm
-        det_table[idet]["bandcenter"] = bandcenter
-        det_table[idet]["bandwidth"] = bandwidth
+        det_table[idet]["fwhm"] = fwhm * (
+            1 + np.random.randn() * fwhm_sigma.to_value(fwhm.unit)
+        )
+        det_table[idet]["bandcenter"] = bandcenter * (
+            1 + np.random.randn() * bandcenter_sigma.to_value(bandcenter.unit)
+        )
+        det_table[idet]["bandwidth"] = bandwidth * (
+            1 + np.random.randn() * bandcenter_sigma.to_value(bandcenter.unit)
+        )
         det_table[idet]["psd_fmin"] = psd_fmin
         det_table[idet]["psd_fknee"] = psd_fknee
         det_table[idet]["psd_alpha"] = psd_alpha

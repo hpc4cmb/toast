@@ -470,7 +470,7 @@ class Focalplane(object):
         return value
 
     def read(self, file):
-        self.detector_data = QTable.read(file, format="hdf5")
+        self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
         self.sample_rate = self.detector_data.meta["sample_rate"]
         if "field_of_view" in self.detector_data.meta:
             self.field_of_view = self.detector_data.meta["field_of_view"]
@@ -478,11 +478,11 @@ class Focalplane(object):
             self._compute_fov()
 
     def write(self, file):
-        self.detector_data.meta = {
-            "sample_rate": self.sample_rate,
-            "field_of_view": self.field_of_view,
-        }
-        self.detector_data.write(file, format="hdf5", overwrite=True)
+        self.detector_data.meta["sample_rate"] = self.sample_rate
+        self.detector_data.meta["field_of_view"] = self.field_of_view
+        self.detector_data.write(
+            file, format="hdf5", path="focalplane", serialize_meta=True, overwrite=True
+        )
 
 
 class Telescope(object):
