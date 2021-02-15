@@ -13,6 +13,8 @@ import astropy.time as astime
 
 import astropy.coordinates as coord
 
+from astropy.table import QTable, Column
+
 import tomlkit
 
 from .timing import function_timer, Timer
@@ -256,174 +258,231 @@ class SpaceSite(Site):
 class Focalplane(object):
     """Class representing the focalplane for one observation.
 
+    The detector_data Table may store arbitrary columns, but several are required.
+    They include:
+
+        "name":  The detector name.
+        "quat":  Each row should be a 4-element numpy array.
+
+    Some columns are optional:
+
+        "uid":  Unique integer ID for each detector.  Computed from detector name if
+            not specified.
+        "pol_angle":  Quantity to specify the polarization angle.  Default assumes
+            the polarization sensitive direction is aligned with the detector
+            quaternion rotation.  Computed if not specified.
+        "pol_leakage":  Float value "epsilon" between 0-1.  Set to zero by default.
+        "pol_efficiency":  Float value "eta" = (1 - epsilon) / (1 + epsilon).  Set
+            to one by default.
+        "fwhm":  Quantity with the nominal beam FWHM.  Used for plotting and for
+            smoothing of simulated sky signal with PySM.
+        "bandcenter":  Quantity for the band center.  Used for bandpass integration
+            with PySM simulations.
+        "bandwidth":  Quantity for width of the band.  Used for bandpass integration
+            with PySM simulations.
+        "psd_net":  The detector sensitivity.  Quantity used to create a synthetic
+            noise model with the DefaultNoiseModel operator.
+        "psd_fknee":  Quantity used to create a synthetic noise model with the
+            DefaultNoiseModel operator.
+        "psd_fmin":  Quantity used to create a synthetic noise model with the
+            DefaultNoiseModel operator.
+        "psd_alpha":  Quantity used to create a synthetic noise model with the
+            DefaultNoiseModel operator.
+
     Args:
-        detector_data (dict):  Dictionary of detector attributes, such
-            as detector quaternions and noise parameters.
-        radius_deg (float):  force the radius of the focal plane.
-            otherwise it will be calculated from the detector
-            offsets.
-        sample_rate (float):  The common (nominal) sample rate for all detectors.
-        fname (str):  Load the focalplane from this file.
+        detector_data (QTable):  Table of detector properties.
+        field_of_view (Quantity):  Angular diameter of the focal plane.  Used to
+            increase the effective size of the focalplane when simulating atmosphere,
+            etc.  Will be calculated from the detector offsets by default.
+        sample_rate (Quantity):  The common (nominal) sample rate for all detectors.
+        file (str):  Load the focalplane from this file.
 
     """
 
     XAXIS, YAXIS, ZAXIS = np.eye(3)
 
     def __init__(
-        self, detector_data=None, radius_deg=None, sample_rate=None, fname=None
+        self, detector_data=None, field_of_view=None, sample_rate=None, file=None
     ):
         self.detector_data = None
+        self.field_of_view = None
         self.sample_rate = None
-        self._radius = None
-        self._detweights = None
-        self._detquats = None
-        self._noise = None
 
-        if fname is not None:
-            raw = None
-            with open(fname, "r") as f:
-                raw = tomlkit.loads(f.read())
-            self.sample_rate = raw["sample_rate"]
-            if "radius" in raw:
-                self._radius = raw["radius"]
-            self.detector_data = raw["detector_data"]
+        if file is not None:
+            self.read(file)
         else:
-            if detector_data is None:
-                raise RuntimeError(
-                    "If not loading from a file, must specify detector_data"
-                )
             self.detector_data = detector_data
-            if sample_rate is None:
-                raise RuntimeError(
-                    "If not loading from a file, must specify sample_rate"
-                )
+            self.field_of_view = field_of_view
             self.sample_rate = sample_rate
-            if radius_deg is not None:
-                self._radius = radius_deg
 
+        # Add UID if not given
+        if "uid" not in self.detector_data.colnames:
+            self.detector_data.add_column(
+                Column(
+                    name="uid", data=[name_UID(x["name"]) for x in self.detector_data]
+                )
+            )
+
+        # Build index of detector to table row
+        self._det_to_row = {y["name"]: x for x, y in enumerate(self.detector_data)}
+
+        if self.field_of_view is None:
+            self._compute_fov()
         self._get_pol_angles()
         self._get_pol_efficiency()
 
+    def _compute_fov(self):
+        """Compute the field of view"""
+        # Find the largest distance from the bore sight
+        cosangs = list()
+        for row in self.detector_data:
+            quat = row["quat"]
+            vec = qarray.rotate(quat, self.ZAXIS)
+            cosangs.append(np.dot(self.ZAXIS, vec))
+        mincos = np.amin(cosangs)
+        # Add a very small margin to avoid numeric issues
+        # in the atmospheric simulation
+        self.field_of_view = 1.01 * 2.0 * np.arccos(mincos) * u.radian
+        # If we just have boresight detectors, we will need to give this some non-zero
+        # value.
+        if self.field_of_view == 0:
+            self.field_of_view = 1.0 * u.degree
+
     def _get_pol_angles(self):
         """Get the detector polarization angles from the quaternions"""
-        for detname, detdata in self.detector_data.items():
-            if "pol_angle_deg" in detdata or "pol_angle_rad" in detdata:
-                continue
-            quat = detdata["quat"]
-            theta, phi = qarray.to_position(quat)
-            yrot = qarray.rotation(self.YAXIS, -theta)
-            zrot = qarray.rotation(self.ZAXIS, -phi)
-            rot = qarray.norm(qarray.mult(yrot, zrot))
-            pol_rot = qarray.mult(rot, quat)
-            pol_angle = qarray.to_angles(pol_rot)[2]
-            detdata["pol_angle_rad"] = pol_angle
-        return
+
+        if "pol_angle" not in self.detector_data.colnames:
+            n_rows = len(self.detector_data)
+            self.detector_data.add_column(
+                Column(name="pol_angle", length=n_rows, unit=u.radian)
+            )
+            for row in self.detector_data:
+                quat = row["quat"]
+                theta, phi = qarray.to_position(quat)
+                yrot = qarray.rotation(self.YAXIS, -theta)
+                zrot = qarray.rotation(self.ZAXIS, -phi)
+                rot = qarray.norm(qarray.mult(yrot, zrot))
+                pol_rot = qarray.mult(rot, quat)
+                pol_angle = qarray.to_angles(pol_rot)[2]
+                row["pol_angle"] = pol_angle * u.radian
 
     def _get_pol_efficiency(self):
         """Get the polarization efficiency from polarization leakage or vice versa"""
-        for detname, detdata in self.detector_data.items():
-            if "pol_leakage" in detdata and "pol_efficiency" not in detdata:
-                # Derive efficiency from leakage
-                epsilon = detdata["pol_leakage"]
-                eta = (1 - epsilon) / (1 + epsilon)
-                detdata["pol_efficiency"] = eta
-            elif "pol_leakage" not in detdata and "pol_efficiency" in detdata:
-                # Derive leakage from efficiency
-                eta = detdata["pol_effiency"]
-                epsilon = (1 - eta) / (1 + eta)
-                detdata["pol_leakage"] = epsilon
-            elif "pol_leakage" not in detdata and "pol_efficiency" not in detdata:
-                # Assume a perfectly polarized detector
-                detdata["pol_efficiency"] = 1
-                detdata["pol_leakage"] = 0
-            else:
-                # Check that efficiency and leakage are consistent
-                epsilon = detdata["pol_leakage"]
-                eta = detdata["pol_efficiency"]
-                np.testing.assert_almost_equal(
-                    eta,
-                    (1 + epsilon) / (1 - epsilon),
-                    err_msg="inconsistent polarization leakage and efficiency",
+
+        n_rows = len(self.detector_data)
+        if ("pol_leakage" in self.detector_data.colnames) and (
+            "pol_efficiency" in self.detector_data.colnames
+        ):
+            # Check that efficiency and leakage are consistent
+            epsilon = self.detector_data["pol_leakage"]
+            eta = self.detector_data["pol_efficiency"]
+            np.testing.assert_almost_equal(
+                eta,
+                (1 + epsilon) / (1 - epsilon),
+                err_msg="inconsistent polarization leakage and efficiency",
+            )
+            return
+        elif "pol_leakage" in self.detector_data.colnames:
+            self.detector_data.add_column(
+                Column(
+                    name="pol_efficiency",
+                    data=[(1 - x) / (1 + x) for x in self.detector_data["pol_leakage"]],
                 )
-        return
+            )
+        elif "pol_efficiency" in self.detector_data.colnames:
+            self.detector_data.add_column(
+                Column(
+                    name="pol_leakage",
+                    data=[
+                        (1 - x) / (1 + x) for x in self.detector_data["pol_efficiency"]
+                    ],
+                )
+            )
+        else:
+            self.detector_data.add_column(
+                Column(name="pol_efficiency", data=np.ones(n_rows))
+            )
+            self.detector_data.add_column(
+                Column(name="pol_leakage", data=np.zeros(n_rows))
+            )
 
     def __contains__(self, key):
-        return key in self.detector_data
+        return key in self._det_to_row
 
     def __getitem__(self, key):
-        return self.detector_data[key]
+        return self.detector_data[self._det_to_row[key]]
 
     def __setitem__(self, key, value):
-        self.detector_data[key] = value
-        if "UID" not in value:
-            self.detector_data[key]["UID"] = name_UID(key)
-
-    def reset_properties(self):
-        """Clear automatic properties so they will be re-generated"""
-        self._detweights = None
-        self._radius = None
-        self._detquats = None
-        self._noise = None
+        if key not in self._det_to_row:
+            msg = "cannot assign to non-existent detector '{}'".format(key)
+            raise ValueError(msg)
+        indx = self._det_to_row[key]
+        if hasattr(value, "fields"):
+            # numpy structured array
+            if value.fields is None:
+                raise ValueError("assignment value must be structured")
+            for cname, ctype in value.fields.items():
+                if cname not in self.detector_data.colnames:
+                    msg = "assignment value element '{}' is not a det column".format(
+                        cname
+                    )
+                    raise ValueError(msg)
+                self.detector_data[indx][cname] = value[cname]
+        elif hasattr(value, "colnames"):
+            # table row
+            for c in value.colnames:
+                if c not in self.detector_data.colnames:
+                    msg = "assignment value element '{}' is not a det column".format(c)
+                    raise ValueError(msg)
+                self.detector_data[indx][c] = value[c]
+        else:
+            # see if it is like a dictionary
+            try:
+                for k, v in value.items():
+                    if k not in self.detector_data.colnames:
+                        msg = (
+                            "assignment value element '{}' is not a det column".format(
+                                k
+                            )
+                        )
+                        raise ValueError(msg)
+                    self.detector_data[indx][k] = v
+            except Exception:
+                raise ValueError(
+                    "assignment value must be a dictionary, Row, or structured array"
+                )
 
     @property
     def detectors(self):
-        return sorted(self.detector_data.keys())
+        return list(self._det_to_row.keys())
 
     def keys(self):
         return self.detectors
 
-    @property
-    def detector_index(self):
-        return {name: props["UID"] for name, props in self.detector_data.items()}
-
-    @property
-    def detector_weights(self):
-        """Return the inverse noise variance weights [K_CMB^-2]"""
-        if self._detweights is None:
-            self._detweights = {}
-            for detname, detdata in self.detector_data.items():
-                net = detdata["NET"]
-                if "fsample" in detdata:
-                    fsample = detdata["fsample"]
-                else:
-                    fsample = self.sample_rate
-                detweight = 1.0 / (fsample * net ** 2)
-                self._detweights[detname] = detweight
-        return self._detweights
-
-    @property
-    def radius(self):
-        """The focal plane radius in degrees"""
-        if self._radius is None:
-            # Find the largest distance from the bore sight
-            ZAXIS = np.array([0, 0, 1])
-            cosangs = []
-            for detname, detdata in self.detector_data.items():
-                quat = detdata["quat"]
-                vec = qarray.rotate(quat, ZAXIS)
-                cosangs.append(np.dot(ZAXIS, vec))
-            mincos = np.amin(cosangs)
-            self._radius = np.degrees(np.arccos(mincos))
-            # Add a very small margin to avoid numeric issues
-            # in the atmospheric simulation
-            self._radius *= 1.001
-        return self._radius
-
-    @property
-    def detector_quats(self):
-        if self._detquats is None:
-            self._detquats = {}
-            for detname, detdata in self.detector_data.items():
-                self._detquats[detname] = detdata["quat"]
-        return self._detquats
-
     def __repr__(self):
-        value = "<Focalplane: {} detectors, sample_rate = {} Hz, radius = {} deg, detectors = [".format(
-            len(self.detector_data), self.sample_rate, self.radius
+        value = "<Focalplane: {} detectors, sample_rate = {} Hz, FOV = {} deg, detectors = [".format(
+            len(self.detector_data),
+            self.sample_rate.to_value(u.Hz),
+            self.field_of_view.to_value(u.degree),
         )
         value += "{} .. {}".format(self.detectors[0], self.detectors[-1])
         value += "]>"
         return value
+
+    def read(self, file):
+        self.detector_data = QTable.read(file, format="hdf5")
+        self.sample_rate = self.detector_data.meta["sample_rate"]
+        if "field_of_view" in self.detector_data.meta:
+            self.field_of_view = self.detector_data.meta["field_of_view"]
+        else:
+            self._compute_fov()
+
+    def write(self, file):
+        self.detector_data.meta = {
+            "sample_rate": self.sample_rate,
+            "field_of_view": self.field_of_view,
+        }
+        self.detector_data.write(file, format="hdf5", overwrite=True)
 
 
 class Telescope(object):

@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import types
+
 import re
 
 import copy
@@ -49,7 +51,7 @@ def build_config(objects):
     return conf
 
 
-def add_config_args(parser, conf, section, ignore=list(), prefix="", separator=":"):
+def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="."):
     """Add arguments to an argparser for each parameter in a config dictionary.
 
     Using a previously created config dictionary, add a commandline argument for each
@@ -79,6 +81,16 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                 raise RuntimeError(msg)
             parent = parent[p]
     for obj, props in parent.items():
+        # Add an option to disable the object, so that the calling workflow can take
+        # actions to conditionally use some objects.  This does not affect the parsing
+        # of options.
+        parser.add_argument(
+            "--{}disable_{}".format(prefix, obj),
+            required=False,
+            default=False,
+            action="store_true",
+            help="Disable use of {}".format(obj),
+        )
         for name, info in props.items():
             # print("examine options for {} = {}".format(name, info))
             if name in ignore:
@@ -143,7 +155,7 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
     return
 
 
-def args_update_config(args, conf, defaults, section, prefix="", separator=":"):
+def args_update_config(args, conf, defaults, section, prefix="", separator="."):
     """Override options in a config dictionary from args namespace.
 
     Args:
@@ -216,7 +228,7 @@ def args_update_config(args, conf, defaults, section, prefix="", separator=":"):
     return remain
 
 
-def parse_config(parser, operators=list()):
+def parse_config(parser, operators=list(), templates=list(), prefix=""):
     """Load command line arguments associated with object properties.
 
     This function:
@@ -236,18 +248,25 @@ def parse_config(parser, operators=list()):
         operators (list):  The operator instances to add to the commandline.  These
             instances should have their "name" attribute set to something meaningful,
             since that name is used to construct the commandline options.
+        templates (list):  The template instances to add to the commandline.  These
+            instances should have their "name" attribute set to something meaningful,
+            since that name is used to construct the commandline options.
+        prefix (str):  Optional string to prefix all options by.
 
     Returns:
         (tuple):  The (config dictionary, args).  The args namespace contains all the
-            remaining parameters after extracting the operator options.
+            remaining parameters after extracting the operator and template options.
 
     """
 
     # The default configuration
-    defaults = build_config(operators)
+    objs = list(operators)
+    objs.extend(templates)
+    defaults = build_config(objs)
 
-    # Add commandline overrides for operators
-    add_config_args(parser, defaults, "operators", ignore=["API"])
+    # Add commandline overrides
+    add_config_args(parser, defaults, "operators", ignore=["API"], prefix=prefix)
+    add_config_args(parser, defaults, "templates", ignore=["API"], prefix=prefix)
 
     # Add an option to load one or more config files.  These should have compatible
     # names for the operators used in defaults.
@@ -259,8 +278,54 @@ def parse_config(parser, operators=list()):
         help="One or more input config files.",
     )
 
+    # Add options to dump default values
+    parser.add_argument(
+        "--default_toml",
+        type=str,
+        required=False,
+        default=None,
+        help="Dump default config values to a TOML file",
+    )
+    parser.add_argument(
+        "--default_json",
+        type=str,
+        required=False,
+        default=None,
+        help="Dump default config values to a JSON file",
+    )
+
+    parser.add_argument(
+        "--job_group_size",
+        required=False,
+        type=int,
+        default=None,
+        help="(Advanced) Size of the process groups",
+    )
+
+    parser.add_argument(
+        "--job_node_mem",
+        required=False,
+        type=int,
+        default=None,
+        help="(Advanced) Override the detected memory per node in bytes",
+    )
+
     # Parse commandline.
     args = parser.parse_args()
+
+    # Dump default config values.
+    if args.default_toml is not None:
+        dump_toml(args.default_toml, defaults)
+    if args.default_json is not None:
+        dump_json(args.default_json, defaults)
+
+    # Parse job args
+    jobargs = types.SimpleNamespace(
+        node_mem=args.job_node_mem,
+        group_size=args.job_group_size,
+    )
+    del args.job_node_mem
+    del args.job_group_size
 
     # Load any config files.  This overrides default values with config file contents.
     config = copy.deepcopy(defaults)
@@ -270,12 +335,19 @@ def parse_config(parser, operators=list()):
 
     # Parse operator commandline options.  These override any config file or default
     # values.
-    remaining = args_update_config(args, config, defaults, "operators")
+    op_remaining = args_update_config(
+        args, config, defaults, "operators", prefix=prefix
+    )
+    remaining = args_update_config(
+        op_remaining, config, defaults, "templates", prefix=prefix
+    )
 
-    # Remove the "config" option we created in this function
+    # Remove the options we created in this function
     del remaining.config
+    del remaining.default_toml
+    del remaining.default_json
 
-    return config, remaining
+    return config, remaining, jobargs
 
 
 def _merge_config(loaded, original):
@@ -622,7 +694,7 @@ def load_config(file, input=None):
     return ret
 
 
-def create(conf):
+def create_from_config(conf):
     """Instantiate classes in a configuration.
 
     This iteratively instantiates classes defined in the configuration, replacing
@@ -640,7 +712,8 @@ def create(conf):
         conf (dict):  the configuration
 
     Returns:
-        (dict):  The dictionary of instantiated classes
+        (SimpleNamespace):  A namespace containing the sections and instantiated
+            objects specified in the original config structure.
 
     """
     log = Logger.get()
@@ -804,4 +877,13 @@ def create(conf):
             done = False
         it += 1
 
-    return out
+    # Convert this recursively into a namespace for easy use
+
+    root_temp = dict()
+    for sect in list(out.keys()):
+        sect_ns = types.SimpleNamespace(**out[sect])
+        root_temp[sect] = sect_ns
+
+    out_ns = types.SimpleNamespace(**root_temp)
+
+    return out_ns

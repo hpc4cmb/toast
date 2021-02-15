@@ -446,6 +446,14 @@ class PixelData(object):
         self.raw = self.storage_class.zeros(self._flatshape)
         self.data = self.raw.array().reshape(self._shape)
 
+        # Allreduce quantites
+        self._all_comm_submap = None
+        self._all_send = None
+        self._all_send_raw = None
+        self._all_recv = None
+        self._all_recv_raw = None
+
+        # Alltoallv quantities
         self._send_counts = None
         self._send_displ = None
         self._recv_counts = None
@@ -479,6 +487,16 @@ class PixelData(object):
             if self._reduce_buf_raw is not None:
                 self._reduce_buf_raw.clear()
             del self._reduce_buf_raw
+        if hasattr(self, "_all_send"):
+            del self._all_send
+            if self._all_send_raw is not None:
+                self._all_send_raw.clear()
+            del self._all_send_raw
+        if hasattr(self, "_all_recv"):
+            del self._all_recv
+            if self._all_recv_raw is not None:
+                self._all_recv_raw.clear()
+            del self._all_recv_raw
 
     def __del__(self):
         self.clear()
@@ -543,13 +561,38 @@ class PixelData(object):
 
         """
         dbytes = self._dtype.itemsize
-        nsub = int(bytes / (dbytes * self._dist.n_pix_submap * self._n_value))
+        nsub = int(bytes / (dbytes * self._n_submap_value))
         if nsub == 0:
             nsub = 1
         allsub = int(self._dist.n_pix / self._dist.n_pix_submap)
         if nsub > allsub:
             nsub = allsub
         return nsub
+
+    @function_timer
+    def setup_allreduce(self, n_submap):
+        """Check that allreduce buffers exist and create them if needed."""
+        # Allocate persistent send / recv buffers that only change if number of submaps
+        # change.
+        if self._all_comm_submap is not None:
+            # We have already done a reduce...
+            if n_submap == self._all_comm_submap:
+                # Already allocated with correct size
+                return
+            else:
+                # Delete the old buffers.
+                del self._all_send
+                self._all_send_raw.clear()
+                del self._all_send_raw
+                del self._all_recv
+                self._all_recv_raw.clear()
+                del self._all_recv_raw
+        # Allocate with the new size
+        self._all_comm_submap = n_submap
+        self._all_recv_raw = self.storage_class.zeros(n_submap * self._n_submap_value)
+        self._all_recv = self._all_recv_raw.array()
+        self._all_send_raw = self.storage_class.zeros(n_submap * self._n_submap_value)
+        self._all_send = self._all_send_raw.array()
 
     @function_timer
     def sync_allreduce(self, comm_bytes=10000000):
@@ -566,19 +609,18 @@ class PixelData(object):
             return
 
         comm_submap = self.comm_nsubmap(comm_bytes)
+        self.setup_allreduce(comm_submap)
 
         dist = self._dist
         nsub = dist.n_submap
 
-        sendbuf = np.zeros(
-            comm_submap * dist.n_pix_submap * self._n_value, dtype=self._dtype
+        sendview = self._all_send.reshape(
+            (comm_submap, dist.n_pix_submap, self._n_value)
         )
-        sendview = sendbuf.reshape((comm_submap, dist.n_pix_submap, self._n_value))
 
-        recvbuf = np.zeros(
-            comm_submap * dist.n_pix_submap * self._n_value, dtype=self._dtype
+        recvview = self._all_recv.reshape(
+            (comm_submap, dist.n_pix_submap, self._n_value)
         )
-        recvview = recvbuf.reshape((comm_submap, dist.n_pix_submap, self._n_value))
 
         owners = dist.submap_owners
 
@@ -602,7 +644,7 @@ class PixelData(object):
                         sendview[c, :, :] = self.data[loc, :, :]
 
                 gt.start("REAL Allreduce")
-                dist.comm.Allreduce(sendbuf, recvbuf, op=MPI.SUM)
+                dist.comm.Allreduce(self._all_send, self._all_recv, op=MPI.SUM)
                 gt.stop("REAL Allreduce")
 
                 for c in range(ncomm):
@@ -612,8 +654,8 @@ class PixelData(object):
                         loc = dist.global_submap_to_local[glob]
                         self.data[loc, :, :] = recvview[c, :, :]
 
-                sendbuf.fill(0)
-                recvbuf.fill(0)
+                self._all_send.fill(0)
+                self._all_recv.fill(0)
 
             submap_off += ncomm
 

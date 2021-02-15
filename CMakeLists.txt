@@ -106,4 +106,4 @@ find_package(PythonInterp REQUIRED)
 
 enable_testing()
 add_subdirectory(src)
-add_subdirectory(pipelines)
+add_subdirectory(workflows)

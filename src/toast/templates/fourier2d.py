@@ -217,7 +217,7 @@ class Fourier2D(Template):
             fp = ob.telescope.focalplane
 
             # Focalplane radius
-            radius = np.radians(fp.radius)
+            radius = 0.5 * fp.field_of_view.to_value(u.radian)
 
             noise = None
             if self.noise_model in ob:
@@ -270,7 +270,7 @@ class Fourier2D(Template):
                     detweight = 1.0
                     if noise is not None:
                         detweight = noise.detector_weight(det)
-                    det_quat = fp.detector_quats[det]
+                    det_quat = fp[det]["quat"]
                     x, y, z = qa.rotate(det_quat, zaxis)
                     theta, phi = np.arcsin([x, y])
                     view_templates[det] = evaluate_template(theta, phi, radius)

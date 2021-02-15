@@ -49,9 +49,7 @@ class Madam(Operator):
 
     times = Unicode("times", help="Observation shared key for timestamps")
 
-    det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
-    )
+    det_data = Unicode("signal", help="Observation detdata key for the timestream data")
 
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to use"

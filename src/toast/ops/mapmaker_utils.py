@@ -77,7 +77,7 @@ class BuildHitMap(Operator):
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
 
     sync_type = Unicode(
-        "allreduce", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+        "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
     @traitlets.validate("det_flag_mask")
@@ -264,7 +264,7 @@ class BuildInverseCovariance(Operator):
     )
 
     sync_type = Unicode(
-        "allreduce", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+        "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
     @traitlets.validate("det_flag_mask")
@@ -502,7 +502,7 @@ class BuildNoiseWeighted(Operator):
     )
 
     sync_type = Unicode(
-        "allreduce", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+        "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
     @traitlets.validate("det_flag_mask")
@@ -756,7 +756,7 @@ class CovarianceAndHits(Operator):
     )
 
     sync_type = Unicode(
-        "allreduce", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+        "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
     save_pointing = Bool(

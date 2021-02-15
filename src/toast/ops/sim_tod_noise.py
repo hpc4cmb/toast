@@ -220,7 +220,7 @@ class SimNoise(Operator):
     times = Unicode("times", help="Observation shared key for timestamps")
 
     out = Unicode(
-        "noise", help="Observation detdata key for accumulating noise timestreams"
+        "signal", help="Observation detdata key for accumulating noise timestreams"
     )
 
     @traitlets.validate("realization")

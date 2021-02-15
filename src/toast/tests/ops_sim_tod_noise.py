@@ -249,7 +249,7 @@ class SimNoiseTest(MPITestCase):
         )
 
         # This is a simulation with the same focalplane for every obs...
-        sample_rate = data.obs[0].telescope.focalplane.sample_rate
+        sample_rate = data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)
 
         # Create a noise model from focalplane detector properties
         noise_model = ops.DefaultNoiseModel()
@@ -323,12 +323,15 @@ class SimNoiseTest(MPITestCase):
         # Perform noise realizations and accumulation statistics.
 
         for realization in range(self.nmc):
-            # Clear any previously generated data
-            for ob in data.obs:
-                del ob.detdata["noise"]
 
             # Simulate noise using the model, with a different realization each time
             sim_noise = ops.SimNoise(realization=realization)
+
+            # Clear any previously generated data
+            for ob in data.obs:
+                if sim_noise.out in ob.detdata:
+                    ob.detdata[sim_noise.out][:] = 0.0
+
             sim_noise.apply(data)
 
             if realization == 0:
@@ -338,7 +341,7 @@ class SimNoiseTest(MPITestCase):
 
                     for ob in data.obs:
                         for det in ob.local_detectors:
-                            check = ob.detdata["noise"][det]
+                            check = ob.detdata[sim_noise.out][det]
 
                             savefile = os.path.join(
                                 self.outdir,

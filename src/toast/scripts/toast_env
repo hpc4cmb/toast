@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
+# a BSD-style license that can be found in the LICENSE file.
+
+"""This does some simple tests of the TOAST runtime environment.
+"""
+
+import sys
+import argparse
+import traceback
+
+from ..mpi import get_world, Comm
+
+from ..utils import Logger, Environment, numba_threading_layer
+
+
+def main():
+    env = Environment.get()
+    log = Logger.get()
+
+    mpiworld, procs, rank = get_world()
+    if rank == 0:
+        print(env)
+        log.info("Numba threading layer set to '{}'".format(numba_threading_layer))
+    if mpiworld is None:
+        log.info("Running serially with one process")
+    else:
+        if rank == 0:
+            log.info("Running with {} processes".format(procs))
+
+    return
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except:
+        # We have an unhandled exception on at least one process.  Print a stack
+        # trace for this process and then abort so that all processes terminate.
+        mpiworld, procs, rank = get_world()
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = ["Proc {}: {}".format(rank, x) for x in lines]
+        print("".join(lines), flush=True)
+        if mpiworld is not None:
+            mpiworld.Abort()

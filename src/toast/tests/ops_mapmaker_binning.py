@@ -11,6 +11,8 @@ from astropy import units as u
 
 import healpy as hp
 
+from ..mpi import MPI
+
 from .mpi import MPITestCase
 
 from ..noise import Noise
@@ -32,9 +34,10 @@ class MapmakerBinningTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
-        np.random.seed(123456)
 
     def test_binned(self):
+        np.random.seed(123456)
+
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
@@ -49,24 +52,47 @@ class MapmakerBinningTest(MPITestCase):
         # Pointing operator
         pointing = ops.PointingHealpix(nside=64, mode="IQU", hwp_angle="hwp_angle")
 
-        # Build the covariance and hits
-        cov_and_hits = ops.CovarianceAndHits(
-            pixel_dist="pixel_dist", pointing=pointing, noise_model="noise_model"
-        )
-        cov_and_hits.apply(data)
+        binmap = dict()
+        for stype in ["allreduce", "alltoallv"]:
+            # Build the covariance and hits
+            cov_and_hits = ops.CovarianceAndHits(
+                pixel_dist="pixel_dist",
+                pointing=pointing,
+                noise_model="noise_model",
+                covariance="cov_{}".format(stype),
+                hits="hits_{}".format(stype),
+                rcond="rcond_{}".format(stype),
+                sync_type=stype,
+            )
+            cov_and_hits.apply(data)
 
-        # Set up binned map
+            # Set up binned map
 
-        binner = ops.BinMap(
-            pixel_dist="pixel_dist",
-            covariance=cov_and_hits.covariance,
-            det_data="noise",
-            pointing=pointing,
-            noise_model="noise_model",
-        )
-        binner.apply(data)
+            binner = ops.BinMap(
+                pixel_dist="pixel_dist",
+                covariance=cov_and_hits.covariance,
+                binned="binned_{}".format(stype),
+                det_data="noise",
+                pointing=pointing,
+                noise_model="noise_model",
+                sync_type=stype,
+            )
+            binner.apply(data)
 
-        binmap = data[binner.binned]
+            binmap[stype] = data[binner.binned]
+
+            toast_hit_path = os.path.join(
+                self.outdir, "toast_hits_{}.fits".format(stype)
+            )
+            toast_bin_path = os.path.join(
+                self.outdir, "toast_bin_{}.fits".format(stype)
+            )
+            toast_cov_path = os.path.join(
+                self.outdir, "toast_cov_{}.fits".format(stype)
+            )
+            write_healpix_fits(data[binner.binned], toast_bin_path, nest=True)
+            write_healpix_fits(data[cov_and_hits.hits], toast_hit_path, nest=True)
+            write_healpix_fits(data[cov_and_hits.covariance], toast_cov_path, nest=True)
 
         # Manual check
 
@@ -79,14 +105,25 @@ class MapmakerBinningTest(MPITestCase):
             weights=pointing.weights,
             det_data="noise",
             zmap="zmap",
+            sync_type="allreduce",
         )
         noise_weight.apply(data)
 
-        covariance_apply(data[cov_and_hits.covariance], data["zmap"])
+        covariance_apply(
+            data[cov_and_hits.covariance], data["zmap"], use_alltoallv=False
+        )
 
-        for sm in range(binmap.distribution.n_local_submap):
-            for px in range(binmap.distribution.n_pix_submap):
-                nt.assert_almost_equal(binmap.data[sm, px], data["zmap"].data[sm, px])
+        for stype in ["allreduce", "alltoallv"]:
+            bmap = binmap[stype]
+            comm = bmap.distribution.comm
+            failed = False
+            for sm in range(bmap.distribution.n_local_submap):
+                for px in range(bmap.distribution.n_pix_submap):
+                    if not np.allclose(bmap.data[sm, px], data["zmap"].data[sm, px]):
+                        failed = True
+            if comm is not None:
+                failed = comm.allreduce(failed, op=MPI.LOR)
+            self.assertFalse(failed)
 
         del data
         return
@@ -96,6 +133,7 @@ class MapmakerBinningTest(MPITestCase):
             print("libmadam not available, skipping binned map comparison")
             return
 
+        np.random.seed(123456)
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
@@ -118,6 +156,7 @@ class MapmakerBinningTest(MPITestCase):
             pointing=pointing,
             noise_model="noise_model",
             rcond_threshold=1.0e-6,
+            sync_type="alltoallv",
         )
         cov_and_hits.apply(data)
 
@@ -129,6 +168,7 @@ class MapmakerBinningTest(MPITestCase):
             det_data="noise",
             pointing=pointing,
             noise_model="noise_model",
+            sync_type="alltoallv",
         )
         binner.apply(data)
 
@@ -181,6 +221,8 @@ class MapmakerBinningTest(MPITestCase):
         madam_hit_path = os.path.join(self.outdir, "madam_hmap.fits")
         madam_bin_path = os.path.join(self.outdir, "madam_bmap.fits")
 
+        fail = False
+
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
             import matplotlib.pyplot as plt
@@ -227,7 +269,13 @@ class MapmakerBinningTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                nt.assert_almost_equal(toast_bin[stokes], madam_bin[stokes], decimal=6)
+                if not np.allclose(toast_bin[stokes], madam_bin[stokes]):
+                    fail = True
+
+        if data.comm.comm_world is not None:
+            fail = data.comm.comm_world.bcast(fail, root=0)
+
+        self.assertFalse(fail)
 
         del data
         return

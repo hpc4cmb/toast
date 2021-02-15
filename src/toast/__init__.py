@@ -64,7 +64,7 @@ except ImportError:
         raise ImportError("Cannot read RELEASE file")
 
 # Namespace imports
-from .mpi import Comm
+from .mpi import Comm, get_world
 
 from .timing import Timer, GlobalTimers
 
@@ -74,7 +74,7 @@ from .observation import Observation
 
 from .data import Data
 
-from .config import load_config
+from .config import load_config, parse_config, create_from_config
 
 from .instrument import Telescope, Focalplane, GroundSite, SpaceSite
 
@@ -83,3 +83,5 @@ from .instrument_sim import fake_hexagon_focalplane
 from .weather import Weather
 
 from .pixels import PixelDistribution, PixelData
+
+from .job import job_group_size

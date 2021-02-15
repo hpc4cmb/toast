@@ -6,6 +6,8 @@ import numpy as np
 
 from astropy import units as u
 
+from astropy.table import QTable, Column
+
 from . import qarray as qa
 
 from .instrument import Focalplane
@@ -520,10 +522,13 @@ def fake_hexagon_focalplane(
     width=5.0 * u.degree,
     sample_rate=1.0 * u.Hz,
     epsilon=0.0,
-    net=1.0,
-    f_min=0.0 * u.Hz,
-    alpha=1.0,
-    f_knee=0.05 * u.Hz,
+    fwhm=10.0 * u.arcmin,
+    bandcenter=150 * u.Hz,
+    bandwidth=20 * u.Hz,
+    psd_net=0.1 * u.K * np.sqrt(1 * u.second),
+    psd_fmin=0.0 * u.Hz,
+    psd_alpha=1.0,
+    psd_fknee=0.05 * u.Hz,
 ):
     """Create a simple focalplane model for testing.
 
@@ -537,10 +542,13 @@ def fake_hexagon_focalplane(
         width (Quantity):  The angular width of the focalplane field of view on the sky.
         sample_rate (Quantity):  The sample rate for all detectors.
         epsilon (float):  The cross-polar response for all detectors.
-        net (float):  The Noise Equivalent Temperature of each detector.
-        f_min (Quantity):  The frequency below which to roll off the 1/f spectrum.
-        alpha (float):  The spectral slope.
-        f_knee (Quantity):  The 1/f knee frequency.
+        fwhm (Quantity):  The beam FWHM
+        bandcenter (Quantity):  The detector band center.
+        bandwidth (Quantity):  The detector band width.
+        psd_net (Quantity):  The Noise Equivalent Temperature of each detector.
+        psd_fmin (Quantity):  The frequency below which to roll off the 1/f spectrum.
+        psd_alpha (float):  The spectral slope.
+        psd_fknee (Quantity):  The 1/f knee frequency.
 
     Returns:
         (Focalplane):  The fake focalplane.
@@ -556,18 +564,37 @@ def fake_hexagon_focalplane(
     det_data.update(quat_B)
 
     nrings = hex_nring(n_pix)
-    detfwhm = 0.5 * 60.0 * width_deg / (2 * nrings - 1)
 
-    for det in det_data.keys():
-        det_data[det]["pol_leakage"] = epsilon
-        det_data[det]["fmin"] = f_min.to_value(u.Hz)
-        det_data[det]["fknee"] = f_knee.to_value(u.Hz)
-        det_data[det]["alpha"] = alpha
-        det_data[det]["NET"] = net
-        det_data[det]["fwhm_arcmin"] = detfwhm
-        det_data[det]["fsample"] = sample_rate.to_value(u.Hz)
+    n_det = len(det_data)
 
-    return Focalplane(detector_data=det_data, sample_rate=sample_rate.to_value(u.Hz))
+    det_table = QTable(
+        [
+            Column(name="name", data=[x for x in det_data.keys()]),
+            Column(name="quat", data=[det_data[x]["quat"] for x in det_data.keys()]),
+            Column(name="pol_leakage", length=n_det, unit=None),
+            Column(name="fwhm", length=n_det, unit=u.arcmin),
+            Column(name="psd_fmin", length=n_det, unit=u.Hz),
+            Column(name="psd_fknee", length=n_det, unit=u.Hz),
+            Column(name="psd_alpha", length=n_det, unit=None),
+            Column(name="psd_net", length=n_det, unit=(u.K * np.sqrt(1.0 * u.second))),
+            Column(name="bandcenter", length=n_det, unit=u.GHz),
+            Column(name="bandwidth", length=n_det, unit=u.GHz),
+        ]
+    )
+
+    for idet, det in enumerate(det_data.keys()):
+        det_table[idet]["name"] = det
+        det_table[idet]["quat"] = det_data[det]["quat"]
+        det_table[idet]["pol_leakage"] = epsilon
+        det_table[idet]["fwhm"] = fwhm
+        det_table[idet]["bandcenter"] = bandcenter
+        det_table[idet]["bandwidth"] = bandwidth
+        det_table[idet]["psd_fmin"] = psd_fmin
+        det_table[idet]["psd_fknee"] = psd_fknee
+        det_table[idet]["psd_alpha"] = psd_alpha
+        det_table[idet]["psd_net"] = psd_net
+
+    return Focalplane(detector_data=det_table, sample_rate=sample_rate)
 
 
 def plot_focalplane(
@@ -643,7 +670,7 @@ def plot_focalplane(
 
     for d in focalplane.detectors:
         quat = focalplane[d]["quat"]
-        fwhm = focalplane[d]["fwhm_arcmin"]
+        fwhm = focalplane[d]["fwhm"].to_value(u.arcmin)
 
         # radius in degrees
         detradius = 0.5 * 5.0 / 60.0

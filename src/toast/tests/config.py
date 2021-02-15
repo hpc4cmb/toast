@@ -17,13 +17,15 @@ from tomlkit import comment, document, nl, table, dumps, loads
 
 from ..utils import Environment
 
-from ..config import load_config, dump_toml, build_config, create
+from ..config import load_config, dump_toml, build_config, create_from_config
 
 from ..instrument import Telescope, Focalplane
 
 from ..schedule_sim_satellite import create_satellite_schedule
 
 from ..ops import SimSatellite, Pipeline, SimNoise, DefaultNoiseModel
+
+from ..templates import Offset, SubHarmonic
 
 from ..data import Data
 
@@ -46,10 +48,15 @@ class ConfigTest(MPITestCase):
             SimNoise(name="sim_noise"),
         ]
 
+        templates = [Offset(name="baselines"), SubHarmonic(name="subharmonic")]
+
+        objs = list(ops)
+        objs.extend(templates)
+
         self.doc1_file = os.path.join(self.outdir, "doc1.toml")
         self.doc2_file = os.path.join(self.outdir, "doc2.toml")
 
-        conf = build_config(ops)
+        conf = build_config(objs)
 
         if self.toastcomm.world_rank == 0:
             dump_toml(self.doc1_file, conf)
@@ -93,7 +100,9 @@ class ConfigTest(MPITestCase):
         if self.toastcomm.comm_world is not None:
             conf = self.toastcomm.comm_world.bcast(conf, root=0)
 
-        run = create(conf)
+        run = create_from_config(conf)
+
+        print(run)
 
         data = Data(self.toastcomm)
 
@@ -103,10 +112,10 @@ class ConfigTest(MPITestCase):
         )
 
         # Add our fake telescope and schedule
-        run["operators"]["sim_satellite"].telescope = tele
-        run["operators"]["sim_satellite"].schedule = sch
+        run.operators.sim_satellite.telescope = tele
+        run.operators.sim_satellite.schedule = sch
 
-        run["operators"]["sim_pipe"].apply(data)
+        run.operators.sim_pipe.apply(data)
 
         # for obs in data.obs:
         #     for d in obs.local_detectors:

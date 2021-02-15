@@ -9,6 +9,8 @@ import numpy.testing as nt
 
 from astropy import units as u
 
+from ..mpi import MPI
+
 from .mpi import MPITestCase
 
 from ..noise import Noise
@@ -53,9 +55,13 @@ class MapmakerUtilsTest(MPITestCase):
         )
         pointing.apply(data)
 
-        build_hits = ops.BuildHitMap(pixel_dist="pixel_dist")
-        build_hits.apply(data)
-        hits = data[build_hits.hits]
+        hits = dict()
+        for stype in ["allreduce", "alltoallv"]:
+            build_hits = ops.BuildHitMap(
+                pixel_dist="pixel_dist", hits="hits_{}".format(stype), sync_type=stype
+            )
+            build_hits.apply(data)
+            hits[stype] = data[build_hits.hits]
 
         # Manual check
         check_hits = PixelData(data["pixel_dist"], np.int64, n_value=1)
@@ -69,7 +75,13 @@ class MapmakerUtilsTest(MPITestCase):
                         check_hits.data[local_sm[i], local_pix[i], 0] += 1
         check_hits.sync_allreduce()
 
-        nt.assert_equal(hits.data, check_hits.data)
+        for stype in ["allreduce", "alltoallv"]:
+            hmap = hits[stype]
+            comm = hmap.distribution.comm
+            failed = not np.all(np.equal(hmap.data, check_hits.data))
+            if comm is not None:
+                failed = comm.allreduce(failed, op=MPI.LOR)
+            self.assertFalse(failed)
 
         del data
         return
@@ -104,21 +116,26 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Build an inverse covariance from both
 
-        build_invnpp = ops.BuildInverseCovariance(
-            pixel_dist="pixel_dist",
-            noise_model="noise_model",
-            inverse_covariance="invnpp_out",
-        )
-        build_invnpp.apply(data)
-        invnpp = data[build_invnpp.inverse_covariance]
+        invnpp = dict()
+        invnpp_corr = dict()
+        for stype in ["allreduce", "alltoallv"]:
+            build_invnpp = ops.BuildInverseCovariance(
+                pixel_dist="pixel_dist",
+                noise_model="noise_model",
+                inverse_covariance="invnpp_{}".format(stype),
+                sync_type=stype,
+            )
+            build_invnpp.apply(data)
+            invnpp[stype] = data[build_invnpp.inverse_covariance]
 
-        build_invnpp_corr = ops.BuildInverseCovariance(
-            pixel_dist="pixel_dist",
-            noise_model="noise_model_corr",
-            inverse_covariance="invnpp_out_corr",
-        )
-        build_invnpp_corr.apply(data)
-        invnpp_corr = data[build_invnpp_corr.inverse_covariance]
+            build_invnpp_corr = ops.BuildInverseCovariance(
+                pixel_dist="pixel_dist",
+                noise_model="noise_model_corr",
+                inverse_covariance="invnpp_{}_corr".format(stype),
+                sync_type=stype,
+            )
+            build_invnpp_corr.apply(data)
+            invnpp_corr[stype] = data[build_invnpp_corr.inverse_covariance]
 
         # Manual check
 
@@ -154,16 +171,28 @@ class MapmakerUtilsTest(MPITestCase):
         check_invnpp.sync_allreduce()
         check_invnpp_corr.sync_allreduce()
 
-        for sm in range(invnpp.distribution.n_local_submap):
-            for px in range(invnpp.distribution.n_pix_submap):
-                if invnpp.data[sm, px, 0] != 0:
-                    nt.assert_almost_equal(
-                        invnpp.data[sm, px], check_invnpp.data[sm, px]
-                    )
-                if invnpp_corr.data[sm, px, 0] != 0:
-                    nt.assert_almost_equal(
-                        invnpp_corr.data[sm, px], check_invnpp_corr.data[sm, px]
-                    )
+        for stype in ["allreduce", "alltoallv"]:
+            comm = invnpp[stype].distribution.comm
+
+            failed = False
+
+            for sm in range(invnpp[stype].distribution.n_local_submap):
+                for px in range(invnpp[stype].distribution.n_pix_submap):
+                    if invnpp[stype].data[sm, px, 0] != 0:
+                        if not np.allclose(
+                            invnpp[stype].data[sm, px],
+                            check_invnpp.data[sm, px],
+                        ):
+                            failed = True
+                    if invnpp_corr[stype].data[sm, px, 0] != 0:
+                        if not np.allclose(
+                            invnpp_corr[stype].data[sm, px],
+                            check_invnpp_corr.data[sm, px],
+                        ):
+                            failed = True
+            if comm is not None:
+                failed = comm.allreduce(failed, op=MPI.LOR)
+            self.assertFalse(failed)
         del data
         return
 
@@ -197,23 +226,28 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Build a noise weighted map from both
 
-        build_zmap = ops.BuildNoiseWeighted(
-            pixel_dist="pixel_dist",
-            noise_model="noise_model",
-            det_data="noise",
-            zmap="zmap",
-        )
-        build_zmap.apply(data)
-        zmap = data[build_zmap.zmap]
+        zmap = dict()
+        zmap_corr = dict()
+        for stype in ["allreduce", "alltoallv"]:
+            build_zmap = ops.BuildNoiseWeighted(
+                pixel_dist="pixel_dist",
+                noise_model="noise_model",
+                det_data="noise",
+                zmap="zmap_{}".format(stype),
+                sync_type=stype,
+            )
+            build_zmap.apply(data)
+            zmap[stype] = data[build_zmap.zmap]
 
-        build_zmap_corr = ops.BuildNoiseWeighted(
-            pixel_dist="pixel_dist",
-            noise_model="noise_model_corr",
-            det_data="noise_corr",
-            zmap="zmap_corr",
-        )
-        build_zmap_corr.apply(data)
-        zmap_corr = data[build_zmap_corr.zmap]
+            build_zmap_corr = ops.BuildNoiseWeighted(
+                pixel_dist="pixel_dist",
+                noise_model="noise_model_corr",
+                det_data="noise_corr",
+                zmap="zmap_corr_{}".format(stype),
+                sync_type=stype,
+            )
+            build_zmap_corr.apply(data)
+            zmap_corr[stype] = data[build_zmap_corr.zmap]
 
         # Manual check
 
@@ -247,8 +281,27 @@ class MapmakerUtilsTest(MPITestCase):
         check_zmap.sync_allreduce()
         check_zmap_corr.sync_allreduce()
 
-        np.testing.assert_almost_equal(zmap.data, check_zmap.data)
-        np.testing.assert_almost_equal(zmap_corr.data, check_zmap_corr.data)
+        for stype in ["allreduce", "alltoallv"]:
+            comm = zmap[stype].distribution.comm
+
+            failed = False
+            for sm in range(zmap[stype].distribution.n_local_submap):
+                for px in range(zmap[stype].distribution.n_pix_submap):
+                    if zmap[stype].data[sm, px, 0] != 0:
+                        if not np.allclose(
+                            zmap[stype].data[sm, px],
+                            check_zmap.data[sm, px],
+                        ):
+                            failed = True
+                    if zmap_corr[stype].data[sm, px, 0] != 0:
+                        if not np.allclose(
+                            zmap_corr[stype].data[sm, px],
+                            check_zmap_corr.data[sm, px],
+                        ):
+                            failed = True
+            if comm is not None:
+                failed = comm.allreduce(failed, op=MPI.LOR)
+            self.assertFalse(failed)
 
         del data
         return

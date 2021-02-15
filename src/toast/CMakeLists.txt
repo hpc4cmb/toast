@@ -85,6 +85,7 @@ install(FILES
     timing.py
     traits.py
     config.py
+    job.py
     pixels.py
     pixels_io.py
     covariance.py
@@ -123,3 +124,4 @@ install(DIRECTORY
 add_subdirectory(tests)
 add_subdirectory(ops)
 add_subdirectory(templates)
+add_subdirectory(scripts)

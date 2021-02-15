@@ -33,9 +33,7 @@ class ScanMap(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
-    )
+    det_data = Unicode("signal", help="Observation detdata key for the timestream data")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"

@@ -6,6 +6,8 @@ import numpy as np
 
 import traitlets
 
+from astropy import units as u
+
 from ..utils import Environment, Logger
 
 from ..timing import function_timer, Timer
@@ -63,11 +65,11 @@ class DefaultNoiseModel(Operator):
             NET = {}
             rates = {}
             for d in dets:
-                rates[d] = focalplane.sample_rate
-                fmin[d] = focalplane[d]["fmin"]
-                fknee[d] = focalplane[d]["fknee"]
-                alpha[d] = focalplane[d]["alpha"]
-                NET[d] = focalplane[d]["NET"]
+                rates[d] = focalplane.sample_rate.to_value(u.Hz)
+                fmin[d] = focalplane[d]["psd_fmin"].to_value(u.Hz)
+                fknee[d] = focalplane[d]["psd_fknee"].to_value(u.Hz)
+                alpha[d] = focalplane[d]["psd_alpha"]
+                NET[d] = focalplane[d]["psd_net"].to_value(u.K * np.sqrt(1 * u.second))
 
             noise = AnalyticNoise(
                 rate=rates, fmin=fmin, detectors=dets, fknee=fknee, alpha=alpha, NET=NET

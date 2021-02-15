@@ -295,6 +295,7 @@ class SimSatellite(Operator):
                 "The schedule attribute must be set before calling exec()"
             )
         focalplane = self.telescope.focalplane
+        rate = focalplane.sample_rate.to_value(u.Hz)
         site = self.telescope.site
         comm = data.comm
 
@@ -326,17 +327,15 @@ class SimSatellite(Operator):
         scan_offsets = list()
         scan_samples = list()
 
-        incr = 1.0 / focalplane.sample_rate
+        incr = 1.0 / rate
         off = 0
         for scan in self.schedule.scans:
-            ffirst = (
-                focalplane.sample_rate * (scan.start - mission_start).total_seconds()
-            )
+            ffirst = rate * (scan.start - mission_start).total_seconds()
             first = int(ffirst)
             if ffirst - first > 1.0e-3 * incr:
                 first += 1
             start = first * incr + mission_start.timestamp()
-            ns = 1 + int(focalplane.sample_rate * (scan.stop.timestamp() - start))
+            ns = 1 + int(rate * (scan.stop.timestamp() - start))
             stop = (ns - 1) * incr + mission_start.timestamp()
             scan_starts.append(start)
             scan_stops.append(stop)
@@ -405,13 +404,8 @@ class SimSatellite(Operator):
             q_prec = None
 
             if ob.comm_col_rank == 0:
-                start_time = (
-                    scan_starts[obindx]
-                    + float(ob.local_index_offset) / focalplane.sample_rate
-                )
-                stop_time = (
-                    start_time + float(ob.n_local_samples - 1) / focalplane.sample_rate
-                )
+                start_time = scan_starts[obindx] + float(ob.local_index_offset) / rate
+                stop_time = start_time + float(ob.n_local_samples - 1) / rate
                 stamps = np.linspace(
                     start_time,
                     stop_time,

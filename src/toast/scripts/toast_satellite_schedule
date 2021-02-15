@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
+# a BSD-style license that can be found in the LICENSE file.
+
+"""
+This script creates a schedule file compatible with the SatelliteSchedule class.
+"""
+
+import sys
+
+import argparse
+
+from ..schedule_sim_satellite import create_satellite_schedule
+
+
+def main():
+    log = Logger.get()
+
+    parser = argparse.ArgumentParser(
+        description="Create a satellite observing schedule."
+    )
+
+    parser.add_argument(
+        "--input", required=True, default=None, help="The input covariance FITS file"
+    )
+
+    parser.add_argument(
+        "--output",
+        required=False,
+        default=None,
+        help="The output inverse covariance FITS file.",
+    )
+
+    parser.add_argument(
+        "--rcond",
+        required=False,
+        default=None,
+        help="Optionally write the inverse condition number map to this file.",
+    )
+
+    parser.add_argument(
+        "--single",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Write the output in single precision.",
+    )
+
+    parser.add_argument(
+        "--threshold",
+        required=False,
+        default=1e-3,
+        type=np.float,
+        help="Reciprocal condition number threshold",
+    )
+
+    args = parser.parse_args()
+
+    create_satellite_schedule(
+        prefix="",
+        mission_start=None,
+        observation_time=10 * u.minute,
+        gap_time=0 * u.minute,
+        num_observations=1,
+        prec_period=10 * u.minute,
+        spin_period=2 * u.minute,
+    )
+
+
+if __name__ == "__main__":
+    main()

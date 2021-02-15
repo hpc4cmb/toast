@@ -8,6 +8,7 @@ install(FILES
     mpi.py
     env.py
     dist.py
+    instrument.py
     intervals.py
     rng.py
     qarray.py
@@ -26,7 +27,6 @@ install(FILES
     ops_mapmaker.py
     covariance.py
     ops_pointing_healpix.py
-    sim_focalplane.py
     ops_memory_counter.py
     ops_scan_map.py
     ops_madam.py

@@ -208,7 +208,7 @@ class CMakeBuild(build_ext):
 
 ext_modules = [CMakeExtension("toast._libtoast")]
 
-scripts = glob.glob("pipelines/*.py")
+scripts = glob.glob("workflows/*.py")
 
 
 def readme():
@@ -246,6 +246,17 @@ conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
 conf["ext_modules"] = ext_modules
 conf["scripts"] = scripts
+conf["entry_points"] = {
+    "console_scripts": [
+        "toast_env = toast.scripts.toast_env:main",
+        "toast_cov_invert = toast.scripts.toast_cov_invert:main",
+        "toast_cov_rcond = toast.scripts.toast_cov_rcond:main",
+        "toast_fake_focalplane = toast.scripts.toast_fake_focalplane:main",
+        "toast_ground_schedule = toast.scripts.toast_ground_schedule:main",
+        "toast_satellite_schedule = toast.scripts.toast_satellite_schedule:main",
+        "toast_benchmark = toast.scripts.toast_benchmark:main",
+    ]
+}
 conf["cmdclass"] = {"build_ext": CMakeBuild}
 conf["zip_safe"] = False
 conf["classifiers"] = [

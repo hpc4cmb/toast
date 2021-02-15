@@ -53,9 +53,7 @@ class BinMap(Operator):
         help="The Data key where the binned map should be stored",
     )
 
-    det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
-    )
+    det_data = Unicode("signal", help="Observation detdata key for the timestream data")
 
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to use"
@@ -86,7 +84,7 @@ class BinMap(Operator):
     )
 
     sync_type = Unicode(
-        "allreduce", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+        "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
     saved_pointing = Bool(False, help="If True, use previously computed pointing")

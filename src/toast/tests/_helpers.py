@@ -96,11 +96,11 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz):
     fp = fake_hexagon_focalplane(
         n_pix=npix,
         sample_rate=sample_rate,
-        f_min=1.0e-5 * u.Hz,
-        # net=1.0,
-        net=0.5,
-        f_knee=(sample_rate / 2000.0),
+        psd_fmin=1.0e-5 * u.Hz,
+        psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+        psd_fknee=(sample_rate / 2000.0),
     )
+
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
 
@@ -211,9 +211,9 @@ def create_fake_sky(data, dist_key, map_key):
     # Just replicate the fake data across all local submaps
     off = 0
     for submap in range(dist.n_submap):
-        I_data = 100.0 * np.random.normal(size=dist.n_pix_submap)
-        Q_data = np.random.normal(size=dist.n_pix_submap)
-        U_data = np.random.normal(size=dist.n_pix_submap)
+        I_data = 0.1 * np.random.normal(size=dist.n_pix_submap)
+        Q_data = 0.01 * np.random.normal(size=dist.n_pix_submap)
+        U_data = 0.01 * np.random.normal(size=dist.n_pix_submap)
         if submap in dist.local_submaps:
             pix_data.data[off, :, 0] = I_data
             pix_data.data[off, :, 1] = Q_data

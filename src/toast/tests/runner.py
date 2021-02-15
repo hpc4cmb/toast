@@ -22,6 +22,7 @@ from . import rng as test_rng
 from . import fft as test_fft
 from . import healpix as test_healpix
 from . import qarray as test_qarray
+from . import instrument as test_instrument
 from . import intervals as test_intervals
 from . import pixels as test_pixels
 from . import weather as test_weather
@@ -135,6 +136,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_healpix))
         suite.addTest(loader.loadTestsFromModule(test_qarray))
         suite.addTest(loader.loadTestsFromModule(test_intervals))
+        suite.addTest(loader.loadTestsFromModule(test_instrument))
         suite.addTest(loader.loadTestsFromModule(test_pixels))
         suite.addTest(loader.loadTestsFromModule(test_weather))
 
