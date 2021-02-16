@@ -29,7 +29,7 @@ class MadamTest(MPITestCase):
         np.random.seed(123456)
 
     def test_madam_det_out(self):
-        if not ops.Madam.available:
+        if not ops.madam.available():
             print("libmadam not available, skipping tests")
             return
 

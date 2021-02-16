@@ -74,7 +74,7 @@ class MapmakerSolveTest(MPITestCase):
         tmpl = Offset(
             times="times",
             noise_model=default_model.noise_model,
-            step_time=step_seconds,
+            step_time=step_seconds * u.second,
         )
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
         tmatrix.amplitudes = "RHS"
@@ -159,7 +159,7 @@ class MapmakerSolveTest(MPITestCase):
         tmpl = Offset(
             times="times",
             noise_model=default_model.noise_model,
-            step_time=step_seconds,
+            step_time=step_seconds * u.second,
         )
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
 

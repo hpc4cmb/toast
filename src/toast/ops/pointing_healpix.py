@@ -321,7 +321,7 @@ class PointingHealpix(Operator):
 
                     # Get the cross polar response from the focalplane
                     epsilon = 0.0
-                    if "pol_leakage" in props:
+                    if "pol_leakage" in props.colnames:
                         epsilon = props["pol_leakage"]
 
                     # Detector quaternion offset from the boresight

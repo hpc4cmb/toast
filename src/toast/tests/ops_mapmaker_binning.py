@@ -129,7 +129,7 @@ class MapmakerBinningTest(MPITestCase):
         return
 
     def test_compare_madam(self):
-        if not ops.Madam.available:
+        if not ops.madam.available():
             print("libmadam not available, skipping binned map comparison")
             return
 

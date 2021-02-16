@@ -37,6 +37,12 @@ if use_mpi:
         madam = None
 
 
+def available():
+    """(bool): True if libmadam is found in the library search path."""
+    global madam
+    return (madam is not None) and madam.available
+
+
 @trait_docs
 class Madam(Operator):
     """Operator which passes data to libmadam for map-making."""
@@ -188,13 +194,10 @@ class Madam(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not available():
+            raise RuntimeError("Madam is either not installed or MPI is disabled")
         self._cached = False
         self._logprefix = "Madam:"
-
-    @classmethod
-    def available(cls):
-        """(bool): True if libmadam is found in the library search path."""
-        return madam is not None and madam.available
 
     def clear(self):
         """Delete the underlying memory.
@@ -224,7 +227,7 @@ class Madam(Operator):
     def _exec(self, data, detectors=None):
         log = Logger.get()
 
-        if not self.available:
+        if not available:
             raise RuntimeError("libmadam is not available")
 
         if len(data.obs) == 0:

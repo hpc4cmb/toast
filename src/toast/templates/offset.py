@@ -11,13 +11,15 @@ import numpy as np
 import scipy
 import scipy.signal
 
+from astropy import units as u
+
 from ..utils import Logger, rate_from_times, AlignedF32
 
 from ..timing import function_timer
 
 from ..mpi import MPI
 
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
+from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float, Quantity
 
 from ..data import Data
 
@@ -48,7 +50,7 @@ class Offset(Template):
     #    flag_mask        : Bit mask for detector solver flags
     #
 
-    step_time = Float(10000.0, help="Seconds per baseline step")
+    step_time = Quantity(10000.0 * u.second, help="Time per baseline step")
 
     times = Unicode("times", help="Observation shared key for timestamps")
 
@@ -130,7 +132,9 @@ class Offset(Template):
             self._obs_rate[iob] = rate
 
             # The step length for this observation
-            step_length = self._step_length(self.step_time, self._obs_rate[iob])
+            step_length = self._step_length(
+                self.step_time.to_value(u.second), self._obs_rate[iob]
+            )
 
             # Track number of offset amplitudes per view, per det.
             self._obs_views[iob] = list()
@@ -158,7 +162,7 @@ class Offset(Template):
                 # Determine the binning for the noise prior
                 if self.use_noise_prior:
                     obstime = ob.shared[self.times][-1] - ob.shared[self.times][0]
-                    tbase = self.step_time
+                    tbase = self.step_time.to_value(u.second)
                     fbase = 1.0 / tbase
                     powmin = np.floor(np.log10(1 / obstime)) - 1
                     powmax = min(np.ceil(np.log10(1 / tbase)) + 2, self._obs_rate[iob])
@@ -223,7 +227,9 @@ class Offset(Template):
                     detnoise = ob[self.noise_model].detector_weight(det)
 
                 # The step length for this observation
-                step_length = self._step_length(self.step_time, self._obs_rate[iob])
+                step_length = self._step_length(
+                    self.step_time.to_value(u.second), self._obs_rate[iob]
+                )
 
                 # Loop over views
                 views = ob.view[self.view]
@@ -290,7 +296,10 @@ class Offset(Template):
                         self._precond[iob] = dict()
 
                     offset_psd = self._get_offset_psd(
-                        ob[self.noise_model], self._freq[iob], self.step_time, det
+                        ob[self.noise_model],
+                        self._freq[iob],
+                        self.step_time.to_value(u.second),
+                        det,
                     )
 
                     # "Noise weight" (time-domain inverse variance)
@@ -322,7 +331,9 @@ class Offset(Template):
                         filterlen = 2
                         while filterlen < 2 * n_amp_view:
                             filterlen *= 2
-                        filterfreq = np.fft.rfftfreq(filterlen, self.step_time)
+                        filterfreq = np.fft.rfftfreq(
+                            filterlen, self.step_time.to_value(u.second)
+                        )
 
                         # Recall that the "noise filter" is the inverse amplitude
                         # covariance, which is why we are using 1/PSD.  Also note that
@@ -478,7 +489,9 @@ class Offset(Template):
             if detector not in ob.local_detectors:
                 continue
             # The step length for this observation
-            step_length = self._step_length(self.step_time, self._obs_rate[iob])
+            step_length = self._step_length(
+                self.step_time.to_value(u.second), self._obs_rate[iob]
+            )
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 n_amp_view = self._obs_views[iob][ivw]
                 template_offset_add_to_signal(
@@ -495,7 +508,9 @@ class Offset(Template):
             if detector not in ob.local_detectors:
                 continue
             # The step length for this observation
-            step_length = self._step_length(self.step_time, self._obs_rate[iob])
+            step_length = self._step_length(
+                self.step_time.to_value(u.second), self._obs_rate[iob]
+            )
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 n_amp_view = self._obs_views[iob][ivw]
                 template_offset_project_signal(

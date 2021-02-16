@@ -273,9 +273,15 @@ class PixelDistribution(object):
             # Already computed
             return self._owned_submaps
         owners = self.submap_owners
-        self._owned_submaps = np.array(
-            [x for x, y in enumerate(owners) if y == self._comm.rank], dtype=np.int32
-        )
+        if self._comm is None:
+            self._owned_submaps = np.array(
+                [x for x, y in enumerate(owners) if y == 0], dtype=np.int32
+            )
+        else:
+            self._owned_submaps = np.array(
+                [x for x, y in enumerate(owners) if y == self._comm.rank],
+                dtype=np.int32,
+            )
         return self._owned_submaps
 
     @property
@@ -709,7 +715,7 @@ class PixelData(object):
                     # For this case, point the receive member to the original data.
                     # This will allow codes processing locally owned submaps to work
                     # transparently in the serial case.
-                    self.receive = self.data
+                    self.receive = self.data.reshape((-1))
                 else:
                     # Check that our send and receive buffers do not exceed 32bit
                     # indices required by MPI
@@ -751,8 +757,6 @@ class PixelData(object):
             None.
 
         """
-        myp = self.distribution.comm.rank
-
         self.setup_alltoallv()
 
         if self._dist.comm is None:
@@ -806,7 +810,6 @@ class PixelData(object):
             None.
 
         """
-        myp = self.distribution.comm.rank
         self.forward_alltoallv()
 
         if local_func is None:

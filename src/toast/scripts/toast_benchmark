@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -12,7 +12,7 @@ This script dynamically builds a workflow tailored to the size of the communicat
 # This should be long enough to avoid filesystem contention when loading shared
 # libraries and python modules, but short enough that the scheduler does not think that
 # MPI has hung and kills the job.
-startup_delay = 2.0
+startup_delay = 10.0
 
 # These are builtin modules, hopefully fast to load.
 import random
@@ -60,42 +60,6 @@ from toast.pipeline_tools import Focalplane
 from toast.tod.sim_focalplane import hex_pol_angles_qu, hex_layout, hex_nring
 
 from toast.schedule import run_scheduler
-
-
-# This function is part of the package in TOAST 3.0.  Remove this here when porting.
-
-
-def fake_hexagon_focalplane(
-    n_pix=7,
-    width_deg=5.0,
-    samplerate=1.0,
-    epsilon=0.0,
-    net=1.0,
-    fmin=0.0,
-    alpha=1.0,
-    fknee=0.05,
-):
-    pol_A = hex_pol_angles_qu(n_pix, offset=0.0)
-    pol_B = hex_pol_angles_qu(n_pix, offset=90.0)
-    quat_A = hex_layout(n_pix, width_deg, "D", "A", pol_A)
-    quat_B = hex_layout(n_pix, width_deg, "D", "B", pol_B)
-
-    det_data = dict(quat_A)
-    det_data.update(quat_B)
-
-    nrings = hex_nring(n_pix)
-    detfwhm = 0.5 * 60.0 * width_deg / (2 * nrings - 1)
-
-    for det in det_data.keys():
-        det_data[det]["pol_leakage"] = epsilon
-        det_data[det]["fmin"] = fmin
-        det_data[det]["fknee"] = fknee
-        det_data[det]["alpha"] = alpha
-        det_data[det]["NET"] = net
-        det_data[det]["fwhm_arcmin"] = detfwhm
-        det_data[det]["fsample"] = samplerate
-
-    return Focalplane(detector_data=det_data, sample_rate=samplerate)
 
 
 def get_node_mem(mpicomm, node_rank):

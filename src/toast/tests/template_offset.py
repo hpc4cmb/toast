@@ -47,7 +47,7 @@ class TemplateOffsetTest(MPITestCase):
             det_data="signal",
             times="times",
             noise_model=noise_model.noise_model,
-            step_time=step_seconds,
+            step_time=step_seconds * u.second,
         )
         # Set the data
         tmpl.data = data

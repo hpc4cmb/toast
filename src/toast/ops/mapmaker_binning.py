@@ -123,7 +123,6 @@ class BinMap(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        data.comm.comm_world.barrier()
         if data.comm.world_rank == 0:
             log.verbose("  BinMap building pipeline")
 

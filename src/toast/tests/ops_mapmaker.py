@@ -95,7 +95,7 @@ class MapmakerTest(MPITestCase):
         tmpl = templates.Offset(
             times="times",
             noise_model=default_model.noise_model,
-            step_time=step_seconds,
+            step_time=step_seconds * u.second,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
@@ -117,7 +117,7 @@ class MapmakerTest(MPITestCase):
         return
 
     def test_compare_madam_noprior(self):
-        if not ops.Madam.available:
+        if not ops.madam.available():
             print("libmadam not available, skipping destriping comparison")
             return
 
@@ -183,7 +183,7 @@ class MapmakerTest(MPITestCase):
         tmpl = templates.Offset(
             times="times",
             noise_model=default_model.noise_model,
-            step_time=step_seconds,
+            step_time=step_seconds * u.second,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
@@ -315,7 +315,7 @@ class MapmakerTest(MPITestCase):
         return
 
     def test_compare_madam_diagpre(self):
-        if not ops.Madam.available:
+        if not ops.madam.available():
             print("libmadam not available, skipping comparison with noise prior")
             return
 
@@ -381,7 +381,7 @@ class MapmakerTest(MPITestCase):
         tmpl = templates.Offset(
             times="times",
             noise_model=default_model.noise_model,
-            step_time=step_seconds,
+            step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=1,
         )
@@ -522,7 +522,7 @@ class MapmakerTest(MPITestCase):
         return
 
     def test_compare_madam_bandpre(self):
-        if not ops.Madam.available:
+        if not ops.madam.available():
             print(
                 "libmadam not available, skipping comparison with banded preconditioner"
             )
@@ -590,7 +590,7 @@ class MapmakerTest(MPITestCase):
         tmpl = templates.Offset(
             times="times",
             noise_model=default_model.noise_model,
-            step_time=step_seconds,
+            step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=10,
         )
