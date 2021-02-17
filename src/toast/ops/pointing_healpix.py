@@ -382,8 +382,8 @@ class PointingHealpix(Operator):
                             detp,
                             hslice,
                             fslice,
-                            pxslice,
-                            wtslice,
+                            pbuf,
+                            wbuf,
                         )
 
                         if self.single_precision:

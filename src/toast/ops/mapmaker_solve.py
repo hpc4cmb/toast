@@ -14,6 +14,8 @@ from ..timing import function_timer, Timer
 
 from ..pixels import PixelDistribution, PixelData
 
+from ..templates import AmplitudesMap
+
 from .operator import Operator
 
 from .pipeline import Pipeline
@@ -576,8 +578,8 @@ def solve(
         result = data[result_key]
     else:
         result = data[result_key]
-        if not isinstance(result, Amplitudes):
-            raise RuntimeError("starting guess must be an Amplitudes instance")
+        if not isinstance(result, AmplitudesMap):
+            raise RuntimeError("starting guess must be an AmplitudesMap instance")
         if result.keys() != rhs.keys():
             raise RuntimeError("starting guess must have same keys as RHS")
         for k, v in result.items():

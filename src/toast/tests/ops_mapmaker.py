@@ -76,7 +76,9 @@ class MapmakerTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise and accumulate to signal
-        sim_noise = ops.SimNoise(noise_model=default_model.noise_model, out="signal")
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data="signal"
+        )
         sim_noise.apply(data)
 
         # Set up binning operator for solving
@@ -102,6 +104,7 @@ class MapmakerTest(MPITestCase):
 
         # Map maker
         mapper = ops.MapMaker(
+            name="test1",
             det_data="signal",
             binning=binner,
             template_matrix=tmatrix,
@@ -110,8 +113,11 @@ class MapmakerTest(MPITestCase):
         # Make the map
         mapper.apply(data)
 
-        # Access the output
-        # final_map = data[mapper.binning.binned]
+        # Check that we can also run in full-memory mode
+        pointing.apply(data)
+        binner.saved_pointing = True
+        mapper.name = "test2"
+        mapper.apply(data)
 
         del data
         return
@@ -163,7 +169,9 @@ class MapmakerTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise and accumulate to signal
-        sim_noise = ops.SimNoise(noise_model=default_model.noise_model, out="signal")
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data="signal"
+        )
         sim_noise.apply(data)
 
         # Set up binning operator for solving
@@ -361,7 +369,9 @@ class MapmakerTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise and accumulate to signal
-        sim_noise = ops.SimNoise(noise_model=default_model.noise_model, out="signal")
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data="signal"
+        )
         sim_noise.apply(data)
 
         # Set up binning operator for solving
@@ -570,7 +580,9 @@ class MapmakerTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise and accumulate to signal
-        sim_noise = ops.SimNoise(noise_model=default_model.noise_model, out="signal")
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data="signal"
+        )
         sim_noise.apply(data)
 
         # Set up binning operator for solving

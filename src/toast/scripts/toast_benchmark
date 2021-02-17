@@ -12,7 +12,7 @@ This script dynamically builds a workflow tailored to the size of the communicat
 # This should be long enough to avoid filesystem contention when loading shared
 # libraries and python modules, but short enough that the scheduler does not think that
 # MPI has hung and kills the job.
-startup_delay = 10.0
+startup_delay = 2.0
 
 # These are builtin modules, hopefully fast to load.
 import random

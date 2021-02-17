@@ -138,12 +138,28 @@ class Pipeline(Operator):
                         raise RuntimeError(
                             "If using 'ALL' for a detector set, there should only be one set"
                         )
+                    # The superset of detectors across all observations.
+                    all_local_dets = OrderedDict()
+                    for ob in ds.obs:
+                        for det in ob.local_detectors:
+                            all_local_dets[det] = None
+                    all_local_dets = list(all_local_dets.keys())
+
+                    # If we were given a more restrictive list, prune the global list
+                    selected_dets = all_local_dets
+                    if detectors is not None:
+                        selected_dets = list()
+                        for det in all_local_dets:
+                            if det in detectors:
+                                selected_dets.append(det)
+
+                    # Run the operators with this full list
                     for op in self.operators:
                         msg = "Pipeline calling operator '{}' exec() with ALL dets".format(
                             op.name
                         )
                         log.verbose(msg)
-                        op.exec(ds, detectors=detectors)
+                        op.exec(ds, detectors=selected_dets)
                 elif det_set == "SINGLE":
                     # If this is given, then there should be only one entry
                     if len(self.detector_sets) != 1:

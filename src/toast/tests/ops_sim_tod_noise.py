@@ -183,7 +183,7 @@ class SimNoiseTest(MPITestCase):
                 )
 
                 np.testing.assert_array_almost_equal(
-                    pytod, ob.detdata[sim_noise.out][det], decimal=2
+                    pytod, ob.detdata[sim_noise.det_data][det], decimal=2
                 )
 
             if wrank == 0:
@@ -329,8 +329,8 @@ class SimNoiseTest(MPITestCase):
 
             # Clear any previously generated data
             for ob in data.obs:
-                if sim_noise.out in ob.detdata:
-                    ob.detdata[sim_noise.out][:] = 0.0
+                if sim_noise.det_data in ob.detdata:
+                    ob.detdata[sim_noise.det_data][:] = 0.0
 
             sim_noise.apply(data)
 
@@ -341,7 +341,7 @@ class SimNoiseTest(MPITestCase):
 
                     for ob in data.obs:
                         for det in ob.local_detectors:
-                            check = ob.detdata[sim_noise.out][det]
+                            check = ob.detdata[sim_noise.det_data][det]
 
                             savefile = os.path.join(
                                 self.outdir,
@@ -374,7 +374,7 @@ class SimNoiseTest(MPITestCase):
             for ob in data.obs[:1]:
                 for det in ob.local_detectors:
                     # compute the TOD variance
-                    tod = ob.detdata[sim_noise.out][det]
+                    tod = ob.detdata[sim_noise.det_data][det]
                     dclevel = np.mean(tod)
                     variance = np.vdot(tod - dclevel, tod - dclevel) / len(tod)
                     todvar[det][realization] = variance
@@ -534,7 +534,7 @@ class SimNoiseTest(MPITestCase):
         for ob in data.obs:
             for det in ob.local_detectors:
                 # compute the TOD variance
-                tod = ob.detdata[sim_noise.out][det]
+                tod = ob.detdata[sim_noise.det_data][det]
                 self.assertTrue(np.std(tod) > 0)
                 if total is None:
                     total = np.zeros(ob.n_local_samples, dtype=np.float64)

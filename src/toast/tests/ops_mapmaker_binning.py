@@ -46,7 +46,7 @@ class MapmakerBinningTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise
-        sim_noise = ops.SimNoise(noise_model="noise_model", out="noise")
+        sim_noise = ops.SimNoise(noise_model="noise_model", det_data="noise")
         sim_noise.apply(data)
 
         # Pointing operator
@@ -72,9 +72,9 @@ class MapmakerBinningTest(MPITestCase):
                 pixel_dist="pixel_dist",
                 covariance=cov_and_hits.covariance,
                 binned="binned_{}".format(stype),
-                det_data="noise",
+                det_data=sim_noise.det_data,
                 pointing=pointing,
-                noise_model="noise_model",
+                noise_model=default_model.noise_model,
                 sync_type=stype,
             )
             binner.apply(data)
@@ -100,10 +100,10 @@ class MapmakerBinningTest(MPITestCase):
 
         noise_weight = ops.BuildNoiseWeighted(
             pixel_dist="pixel_dist",
-            noise_model="noise_model",
+            noise_model=default_model.noise_model,
             pixels=pointing.pixels,
             weights=pointing.weights,
-            det_data="noise",
+            det_data=sim_noise.det_data,
             zmap="zmap",
             sync_type="allreduce",
         )
@@ -142,7 +142,7 @@ class MapmakerBinningTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise
-        sim_noise = ops.SimNoise(noise_model="noise_model", out="noise")
+        sim_noise = ops.SimNoise(noise_model="noise_model", det_data="noise")
         sim_noise.apply(data)
 
         # Pointing operator
@@ -154,7 +154,7 @@ class MapmakerBinningTest(MPITestCase):
         cov_and_hits = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
             pointing=pointing,
-            noise_model="noise_model",
+            noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
         )
@@ -165,9 +165,9 @@ class MapmakerBinningTest(MPITestCase):
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
-            det_data="noise",
+            det_data=sim_noise.det_data,
             pointing=pointing,
-            noise_model="noise_model",
+            noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
         binner.apply(data)

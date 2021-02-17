@@ -108,10 +108,12 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Simulate noise using both models
 
-        sim_noise = ops.SimNoise(noise_model="noise_model", out="noise")
+        sim_noise = ops.SimNoise(noise_model="noise_model", det_data="noise")
         sim_noise.apply(data)
 
-        sim_noise_corr = ops.SimNoise(noise_model="noise_model_corr", out="noise_corr")
+        sim_noise_corr = ops.SimNoise(
+            noise_model="noise_model_corr", det_data="noise_corr"
+        )
         sim_noise_corr.apply(data)
 
         # Build an inverse covariance from both
@@ -218,10 +220,12 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Simulate noise using both models
 
-        sim_noise = ops.SimNoise(noise_model="noise_model", out="noise")
+        sim_noise = ops.SimNoise(noise_model="noise_model", det_data="noise")
         sim_noise.apply(data)
 
-        sim_noise_corr = ops.SimNoise(noise_model="noise_model_corr", out="noise_corr")
+        sim_noise_corr = ops.SimNoise(
+            noise_model="noise_model_corr", det_data="noise_corr"
+        )
         sim_noise_corr.apply(data)
 
         # Build a noise weighted map from both

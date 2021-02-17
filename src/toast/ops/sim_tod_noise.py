@@ -219,7 +219,7 @@ class SimNoise(Operator):
 
     times = Unicode("times", help="Observation shared key for timestamps")
 
-    out = Unicode(
+    det_data = Unicode(
         "signal", help="Observation detdata key for accumulating noise timestreams"
     )
 
@@ -244,6 +244,7 @@ class SimNoise(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
@@ -273,12 +274,14 @@ class SimNoise(Operator):
                 raise NotImplementedError(msg)
 
             # The previous code verified that a single process has whole
-            # detectors within the observation.
+            # detectors within the observation...
 
-            # Create output if it does not exist
-            if (self.out not in ob.detdata) or (dets != ob.detdata[self.out].detectors):
-                ob.detdata.create(self.out, dtype=np.float64, detectors=dets)
+            # Make sure correct output exists
+            ob.detdata.ensure(self.det_data, detectors=dets)
 
+            # Get the sample rate from the data.  We also have nominal sample rates
+            # from the noise model and also from the focalplane.  Perhaps we should add
+            # a check here that they are all consistent.
             (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
                 ob.shared[self.times].data
             )
@@ -312,7 +315,7 @@ class SimNoise(Operator):
                     weight = nse.weight(det, key)
                     if weight == 0:
                         continue
-                    ob.detdata[self.out][det] += weight * nsedata
+                    ob.detdata[self.det_data][det] += weight * nsedata
 
             # Release the work space allocated in the FFT plan store.
             #
@@ -346,7 +349,7 @@ class SimNoise(Operator):
     def _provides(self):
         return {
             "detdata": [
-                self.out,
+                self.det_data,
             ]
         }
 

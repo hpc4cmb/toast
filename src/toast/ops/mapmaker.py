@@ -571,13 +571,16 @@ class MapMaker(Operator):
         copy_input = Copy(detdata=[(self.det_data, clean_name)])
 
         pre_pipe = None
+        pre_pipe_dets = ["SINGLE"]
+        if self.map_binning.saved_pointing:
+            pre_pipe_dets = ["ALL"]
         if self.save_cleaned:
             # We are going to be saving a full copy of the template-subtracted data
             if self.overwrite_cleaned:
                 # We are going to modify the input data in place
                 sub_cleaned = Subtract(first=self.det_data, second=temp_project)
                 pre_pipe = Pipeline(
-                    detector_sets=["SINGLE"],
+                    detector_sets=pre_pipe_dets,
                     operators=[
                         self.template_matrix,
                         sub_cleaned,
@@ -590,7 +593,7 @@ class MapMaker(Operator):
                 # Pipeline to project one detector at a time and subtract.
                 sub_cleaned = Subtract(first=clean_name, second=temp_project)
                 pre_pipe = Pipeline(
-                    detector_sets=["SINGLE"],
+                    detector_sets=pre_pipe_dets,
                     operators=[
                         self.template_matrix,
                         sub_cleaned,
@@ -601,7 +604,7 @@ class MapMaker(Operator):
             # just projects and subtracts data one detector at a time.
             sub_cleaned = Subtract(first=clean_name, second=temp_project)
             pre_pipe = Pipeline(
-                detector_sets=["SINGLE"],
+                detector_sets=pre_pipe_dets,
                 operators=[
                     self.template_matrix,
                     copy_input,
