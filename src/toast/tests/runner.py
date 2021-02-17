@@ -42,6 +42,7 @@ from . import ops_mapmaker_binning as test_ops_mapmaker_binning
 from . import ops_mapmaker_solve as test_ops_mapmaker_solve
 from . import ops_mapmaker as test_ops_mapmaker
 from . import ops_scan_map as test_ops_scan_map
+from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_madam as test_ops_madam
 
 
@@ -153,6 +154,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_solve))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_map))
+        suite.addTest(loader.loadTestsFromModule(test_ops_scan_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_madam))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))

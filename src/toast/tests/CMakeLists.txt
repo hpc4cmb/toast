@@ -29,6 +29,7 @@ install(FILES
     ops_pointing_healpix.py
     ops_memory_counter.py
     ops_scan_map.py
+    ops_scan_healpix.py
     ops_madam.py
     template_amplitudes.py
     template_offset.py

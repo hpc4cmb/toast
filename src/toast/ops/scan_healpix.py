@@ -6,17 +6,21 @@ import traitlets
 
 import numpy as np
 
-from ..utils import Logger, AlignedF64
+from ..utils import Logger
 
-from ..traits import trait_docs, Int, Unicode, Bool
+from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
 from ..timing import function_timer
 
 from ..pixels import PixelDistribution, PixelData
 
-from .._libtoast import scan_map_float64, scan_map_float32
+from ..pixels_io import read_healpix_fits
 
 from .operator import Operator
+
+from .scan_map import ScanMap
+
+from .pipeline import Pipeline
 
 
 @trait_docs
@@ -100,8 +104,21 @@ class ScanHealpix(Operator):
         # files on disk are stored as float32, but even if not there is no real benefit
         # to having higher precision to simulated map signal that is projected into
         # timestreams.
-        data[self.map_name] = PixelData(dist, dtype=np.float32, n_value=nnz)
-        read_healpix_fits(data[self.map_name], self.file, nest=self.pointing.nest)
+        if self.map_name not in data:
+            data[self.map_name] = PixelData(dist, dtype=np.float32, n_value=nnz)
+            read_healpix_fits(data[self.map_name], self.file, nest=self.pointing.nest)
+
+        # The pipeline below will run one detector at a time in case we are computing
+        # pointing.  Make sure that our full set of requested detector output exists.
+        # FIXME:  This seems like a common pattern, maybe move to a "Create" operator?
+        for ob in data.obs:
+            # Get the detectors we are using for this observation
+            dets = ob.select_local_detectors(detectors)
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
+            # If our output detector data does not yet exist, create it
+            ob.detdata.ensure(self.det_data, detectors=dets)
 
         # Configure the low-level map scanning operator
 

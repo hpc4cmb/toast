@@ -17,6 +17,7 @@ install(FILES
     noise_weight.py
     pointing_healpix.py
     scan_map.py
+    scan_healpix.py
     mapmaker_utils.py
     mapmaker_binning.py
     mapmaker_solve.py
