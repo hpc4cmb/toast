@@ -149,7 +149,7 @@ class MapMaker(Operator):
                 "shared_flags",
                 "shared_flag_mask",
                 "noise_model",
-                "saved_pointing",
+                "full_pointing",
                 "sync_type",
             ]:
                 if not bin.has_trait(trt):
@@ -175,7 +175,7 @@ class MapMaker(Operator):
                 "shared_flags",
                 "shared_flag_mask",
                 "noise_model",
-                "saved_pointing",
+                "full_pointing",
                 "sync_type",
             ]:
                 if not bin.has_trait(trt):
@@ -388,7 +388,7 @@ class MapMaker(Operator):
                 noise_model=self.binning.noise_model,
                 rcond_threshold=self.solve_rcond_threshold,
                 sync_type=self.binning.sync_type,
-                save_pointing=self.binning.saved_pointing,
+                save_pointing=self.binning.full_pointing,
             )
 
             solver_cov.apply(data, detectors=detectors)
@@ -537,7 +537,7 @@ class MapMaker(Operator):
                 noise_model=self.map_binning.noise_model,
                 rcond_threshold=self.map_rcond_threshold,
                 sync_type=self.map_binning.sync_type,
-                save_pointing=self.map_binning.saved_pointing,
+                save_pointing=self.map_binning.full_pointing,
             )
 
             final_cov.apply(data, detectors=detectors)
@@ -572,7 +572,7 @@ class MapMaker(Operator):
 
         pre_pipe = None
         pre_pipe_dets = ["SINGLE"]
-        if self.map_binning.saved_pointing:
+        if self.map_binning.full_pointing:
             pre_pipe_dets = ["ALL"]
         if self.save_cleaned:
             # We are going to be saving a full copy of the template-subtracted data

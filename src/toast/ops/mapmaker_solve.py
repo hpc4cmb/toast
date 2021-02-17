@@ -87,7 +87,7 @@ class SolverRHS(Operator):
             if not isinstance(bin, Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["pointing", "det_data", "binned", "saved_pointing"]:
+            for trt in ["pointing", "det_data", "binned", "full_pointing"]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
@@ -212,7 +212,7 @@ class SolverRHS(Operator):
         # weights and templates.
 
         proj_pipe = None
-        if self.binning.saved_pointing:
+        if self.binning.full_pointing:
             # Process all detectors at once, since we have the pointing already
             proj_pipe = Pipeline(detector_sets=["ALL"])
             oplist = list()
@@ -337,7 +337,7 @@ class SolverLHS(Operator):
             if not isinstance(bin, Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["pointing", "det_data", "binned", "saved_pointing"]:
+            for trt in ["pointing", "det_data", "binned", "full_pointing"]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
@@ -468,7 +468,7 @@ class SolverLHS(Operator):
         # weights and templates.
 
         proj_pipe = None
-        if self.binning.saved_pointing:
+        if self.binning.full_pointing:
             # Process all detectors at once
             proj_pipe = Pipeline(
                 detector_sets=["ALL"],

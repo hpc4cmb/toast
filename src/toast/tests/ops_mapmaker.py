@@ -115,7 +115,7 @@ class MapmakerTest(MPITestCase):
 
         # Check that we can also run in full-memory mode
         pointing.apply(data)
-        binner.saved_pointing = True
+        binner.full_pointing = True
         mapper.name = "test2"
         mapper.apply(data)
 

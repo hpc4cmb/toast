@@ -87,7 +87,9 @@ class BinMap(Operator):
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
-    saved_pointing = Bool(False, help="If True, use previously computed pointing")
+    full_pointing = Bool(
+        False, help="If True, expand pointing for all detectors and save"
+    )
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -183,14 +185,13 @@ class BinMap(Operator):
         accum_ops = list()
         if self.pre_process is not None:
             accum_ops.append(self.pre_process)
-        if self.saved_pointing:
-            # Process all detectors at once, using existing pointing
+        if self.full_pointing:
+            # Process all detectors at once
             accum = Pipeline(detector_sets=["ALL"])
-            accum_ops.extend([build_zmap])
         else:
             # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
-            accum_ops.extend([self.pointing, build_zmap])
+        accum_ops.extend([self.pointing, build_zmap])
 
         accum.operators = accum_ops
 

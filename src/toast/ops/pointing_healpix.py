@@ -252,6 +252,16 @@ class PointingHealpix(Operator):
                 # Nothing to do for this observation
                 continue
 
+            # Do we already have pointing for all detectors?
+            if (self.pixels in ob.detdata) and (
+                ob.detdata[self.pixels].detectors == dets
+            ):
+                if (self.weights in ob.detdata) and (
+                    ob.detdata[self.weights].detectors == dets
+                ):
+                    # Yes!  We are done.
+                    continue
+
             # Create (or re-use) output data for the pixels, weights and optionally the
             # detector quaternions.
 
