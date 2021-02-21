@@ -210,6 +210,7 @@ class OpPolyFilter2D(Operator):
 
                     t_template += time() - t1
 
+                    comm.Barrier()
                     t1 = time()
                     if comm is not None:
                         comm.Barrier()
