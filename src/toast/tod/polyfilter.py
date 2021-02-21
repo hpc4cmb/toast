@@ -21,7 +21,32 @@ XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 class OpPolyFilter2D(Operator):
-    """Operator to regress out 2D polynomials across the focal plane."""
+    """Operator to regress out 2D polynomials across the focal plane.
+
+        Args:
+        order (int):  Order of the filtering polynomial.
+        pattern (str):  Regex pattern to match against detector names.
+            Only detectors that match the pattern are filtered.
+        name (str):  Name of the output signal cache object will be
+            <name_in>_<detector>.  If the object exists, it is used as
+            input.  Otherwise signal is read using the tod read method.
+        common_flag_name (str):  Cache name of the output common flags.
+            If it already exists, it is used.  Otherwise flags
+            are read from the tod object and stored in the cache under
+            common_flag_name.
+        common_flag_mask (byte):  Bitmask to use when flagging data
+           based on the common flags.
+        flag_name (str):  Cache name of the output detector flags will
+            be <flag_name>_<detector>.  If the object exists, it is
+            used.  Otherwise flags are read from the tod object.
+        flag_mask (byte):  Bitmask to use when flagging data
+           based on the detector flags.
+        poly_flag_mask (byte):  Bitmask to use when adding flags based
+           on polynomial filter failures.
+        intervals (str):  Name of the valid intervals in observation.
+        buffer_length ((int): Number of samples to filter at a time.
+            Default is usually fine.
+    """
 
     def __init__(
         self,
@@ -34,6 +59,7 @@ class OpPolyFilter2D(Operator):
         flag_mask=255,
         poly_flag_mask=1,
         intervals="intervals",
+        buffer_length=1000,
     ):
         self._order = order
         self._nmode = (order + 1) * (order + 2) // 2
@@ -45,6 +71,7 @@ class OpPolyFilter2D(Operator):
         self._flag_mask = flag_mask
         self._poly_flag_mask = poly_flag_mask
         self._intervals = intervals
+        self._buffer_length = buffer_length
 
         # Call the parent class constructor.
         super().__init__()
@@ -70,7 +97,7 @@ class OpPolyFilter2D(Operator):
 
             tod = obs["tod"]
             times = tod.local_times()
-            comm = tod.grid_comm_row
+            comm = tod.grid_comm_col
             detectors = tod.detectors
             ndet = len(detectors)
             detector_index = {}
@@ -124,127 +151,132 @@ class OpPolyFilter2D(Operator):
             # Iterate over each interval
 
             for ival in local_intervals:
-                ind = slice(ival.first, ival.last + 1)
-                nsample = ival.last - ival.first + 1
-                templates = np.zeros([ndet, nmode, nsample])
-                proj = np.zeros([nmode, nsample])
+                istart = ival.first
+                while istart < ival.last + 1:
+                    istop = min(istart + self._buffer_length, ival.last + 1)
+                    ind = slice(istart, istop)
+                    nsample = istop - istart
+                    templates = np.zeros([ndet, nmode, nsample])
+                    proj = np.zeros([nmode, nsample])
 
-                t1 = time()
+                    t1 = time()
 
-                norms = np.zeros(nmode)
+                    norms = np.zeros(nmode)
 
-                for det in tod.local_dets:
-                    if det not in detector_index:
-                        continue
-                    idet = detector_index[det]
+                    for det in tod.local_dets:
+                        if det not in detector_index:
+                            continue
+                        idet = detector_index[det]
 
-                    ref = tod.local_signal(det, self._name)[ind]
-                    flag_ref = tod.local_flags(det, self._flag_name)[ind]
+                        ref = tod.local_signal(det, self._name)[ind]
+                        flag_ref = tod.local_flags(det, self._flag_name)[ind]
 
-                    flg = common_ref[ind] & self._common_flag_mask
-                    flg |= flag_ref & self._flag_mask
-                    mask = flg == 0
+                        flg = common_ref[ind] & self._common_flag_mask
+                        flg |= flag_ref & self._flag_mask
+                        mask = flg == 0
 
-                    # We might want to remove the interval mean if the
-                    # data were not already 1D-filtered
-                    # ref -= np.mean(ref[mask])
+                        # We might want to remove the interval mean if the
+                        # data were not already 1D-filtered
+                        # ref -= np.mean(ref[mask])
 
-                    template = detector_templates[idet]
-                    templates[idet] = np.outer(template, mask)
-                    proj += np.outer(template, ref * mask)
-                    norms += template ** 2
+                        template = detector_templates[idet]
+                        templates[idet] = np.outer(template, mask)
+                        proj += np.outer(template, ref * mask)
+                        norms += template ** 2
 
-                    del ref
-                    del flag_ref
+                        del ref
+                        del flag_ref
 
-                t_template += time() - t1
+                    t_template += time() - t1
 
-                t1 = time()
-                comm.allreduce(templates)
-                comm.allreduce(proj)
-                comm.allreduce(norms)
-                good = norms != 0
-                norms[good] = norms[good] ** -0.5
-                t_get_norm += time() - t1
+                    t1 = time()
+                    comm.allreduce(templates)
+                    comm.allreduce(proj)
+                    comm.allreduce(norms)
+                    good = norms != 0
+                    norms[good] = norms[good] ** -0.5
+                    t_get_norm += time() - t1
 
-                t1 = time()
-                templates = np.transpose(
-                    templates, [1, 0, 2]
-                ).copy()  # nmode x ndet x nsample
-                for mode, norm in enumerate(norms):
-                    if norm:
-                        templates[mode] *= norm
-                        proj[mode] *= norm
-                t_apply_norm += time() - t1
+                    t1 = time()
+                    templates = np.transpose(
+                        templates, [1, 0, 2]
+                    ).copy()  # nmode x ndet x nsample
+                    for mode, norm in enumerate(norms):
+                        if norm:
+                            templates[mode] *= norm
+                            proj[mode] *= norm
+                    t_apply_norm += time() - t1
 
-                t1 = time()
-                templates = np.transpose(
-                    templates, [2, 1, 0]
-                ).copy()  # nsample x ndet x nmode
-                proj = proj.T.copy()  # nsample x nmode
-                coeff = np.zeros([nsample, nmode])
-                for isample in range(nsample):
-                    if isample % comm.size != comm.rank:
-                        continue
-                    templatesT = templates[isample].T.copy()  # ndet x nmode
-                    ccinv = np.dot(templatesT, templates[isample])
-                    try:
-                        cc = np.linalg.inv(ccinv)
-                        coeff[isample] = np.dot(cc, proj[isample])
-                    except np.linalg.LinAlgError:
-                        coeff[isample] = 0
-                comm.allreduce(coeff)
-                t_solve += time() - t1
+                    t1 = time()
+                    templates = np.transpose(
+                        templates, [2, 1, 0]
+                    ).copy()  # nsample x ndet x nmode
+                    proj = proj.T.copy()  # nsample x nmode
+                    coeff = np.zeros([nsample, nmode])
+                    for isample in range(nsample):
+                        if isample % comm.size != comm.rank:
+                            continue
+                        templatesT = templates[isample].T.copy()  # ndet x nmode
+                        ccinv = np.dot(templatesT, templates[isample])
+                        try:
+                            cc = np.linalg.inv(ccinv)
+                            coeff[isample] = np.dot(cc, proj[isample])
+                        except np.linalg.LinAlgError:
+                            coeff[isample] = 0
+                    comm.allreduce(coeff)
+                    t_solve += time() - t1
 
-                t1 = time()
+                    t1 = time()
 
-                """
-                for isample in range(nsample):
-                    if np.all(coeff[isample] == 0):
-                        common_ref[isample + ival.first] |= self._poly_flag_mask
-                        continue
+                    """
+                    for isample in range(nsample):
+                        if np.all(coeff[isample] == 0):
+                            common_ref[isample + ival.first] |= self._poly_flag_mask
+                            continue
+                        for det in tod.local_dets:
+                            if det not in detector_index:
+                                continue
+                            idet = detector_index[det]
+                            ref = tod.local_signal(det, self._name)[ind]
+                            ref[isample] -= np.dot(coeff[isample], templates[isample, idet])
+                    """
+
+                    for isample in range(nsample):
+                        if np.all(coeff[isample] == 0):
+                            common_ref[isample + ival.first] |= self._poly_flag_mask
+
+                    templates = np.transpose(
+                        templates, [1, 2, 0]
+                    ).copy()  # ndet x nmode x nsample
+                    coeff = coeff.T.copy()  # nmode x nsample
+
                     for det in tod.local_dets:
                         if det not in detector_index:
                             continue
                         idet = detector_index[det]
                         ref = tod.local_signal(det, self._name)[ind]
-                        ref[isample] -= np.dot(coeff[isample], templates[isample, idet])
-                """
+                        for mode in range(nmode):
+                            ref -= coeff[mode] * templates[idet, mode]
 
-                for isample in range(nsample):
-                    if np.all(coeff[isample] == 0):
-                        common_ref[isample + ival.first] |= self._poly_flag_mask
+                    t_clean += time() - t1
 
-                templates = np.transpose(
-                    templates, [1, 2, 0]
-                ).copy()  # ndet x nmode x nsample
-                coeff = coeff.T.copy()  # nmode x nsample
-
-                for det in tod.local_dets:
-                    if det not in detector_index:
-                        continue
-                    idet = detector_index[det]
-                    ref = tod.local_signal(det, self._name)[ind]
-                    for mode in range(nmode):
-                        ref -= coeff[mode] * templates[idet, mode]
-
-                t_clean += time() - t1
+                    del templates
+                    istart = istop
 
             del common_ref
 
-            """
-            print(
-                "Time per observation: {:.1f} s\n"
-                "   templates : {:6.1f} s\n"
-                "    get_norm : {:6.1f} s\n"
-                "  apply_norm : {:6.1f} s\n"
-                "       solve : {:6.1f} s\n"
-                "       clean : {:6.1f} s".format(
-                    time() - t0, t_template, t_get_norm, t_apply_norm, t_solve, t_clean
-                ),
-                flush=True,
-            )
-            """
+            if comm.rank == 0:
+                print(
+                    "Time per observation: {:.1f} s\n"
+                    "   templates : {:6.1f} s\n"
+                    "    get_norm : {:6.1f} s\n"
+                    "  apply_norm : {:6.1f} s\n"
+                    "       solve : {:6.1f} s\n"
+                    "       clean : {:6.1f} s".format(
+                        time() - t0, t_template, t_get_norm, t_apply_norm, t_solve, t_clean
+                    ),
+                    flush=True,
+                )
 
         return
 
@@ -275,7 +307,6 @@ class OpPolyFilter(Operator):
         poly_flag_mask (byte):  Bitmask to use when adding flags based
            on polynomial filter failures.
         intervals (str):  Name of the valid intervals in observation.
-
     """
 
     def __init__(
