@@ -6,6 +6,7 @@ import re
 
 from time import time
 
+import healpy as hp
 import numpy as np
 
 from .._libtoast import filter_polynomial
@@ -129,13 +130,15 @@ class OpPolyFilter2D(Operator):
                 if mode == nmode:
                     break
 
+            yrot = qa.rotation(YAXIS, np.pi / 2)
             for det in tod.local_dets:
                 if det not in detector_index:
                     continue
                 idet = detector_index[det]
                 det_quat = focalplane[det]["quat"]
-                x, y, z = qa.rotate(det_quat, ZAXIS)
-                theta, phi = np.arcsin([x, y])
+                vec = qa.rotate(det_quat, ZAXIS)
+                theta, phi = hp.vec2dir(qa.rotate(yrot, vec))
+                theta -= np.pi / 2
                 detector_templates[idet] = theta ** xorders * phi ** yorders
 
             if self._intervals in obs:
@@ -156,12 +159,13 @@ class OpPolyFilter2D(Operator):
                     istop = min(istart + self._buffer_length, ival.last + 1)
                     ind = slice(istart, istop)
                     nsample = istop - istart
-                    templates = np.zeros([ndet, nmode, nsample])
+
+                    templates = np.zeros([ndet, nmode])
+                    masks = np.zeros([ndet, nsample], dtype=np.bool)
                     proj = np.zeros([nmode, nsample])
+                    norms = np.zeros(nmode)
 
                     t1 = time()
-
-                    norms = np.zeros(nmode)
 
                     for det in tod.local_dets:
                         if det not in detector_index:
@@ -180,7 +184,8 @@ class OpPolyFilter2D(Operator):
                         # ref -= np.mean(ref[mask])
 
                         template = detector_templates[idet]
-                        templates[idet] = np.outer(template, mask)
+                        templates[idet] = template
+                        masks[idet] = mask
                         proj += np.outer(template, ref * mask)
                         norms += template ** 2
 
@@ -189,18 +194,18 @@ class OpPolyFilter2D(Operator):
 
                     t_template += time() - t1
 
+                    comm.Barrier()
                     t1 = time()
-                    comm.allreduce(templates)
-                    comm.allreduce(proj)
-                    comm.allreduce(norms)
+                    templates = comm.allreduce(templates)
+                    masks = comm.allreduce(masks)
+                    proj = comm.allreduce(proj)
+                    norms = comm.allreduce(norms)
                     good = norms != 0
                     norms[good] = norms[good] ** -0.5
                     t_get_norm += time() - t1
 
                     t1 = time()
-                    templates = np.transpose(
-                        templates, [1, 0, 2]
-                    ).copy()  # nmode x ndet x nsample
+                    templates = templates.T.copy()  # nmode x ndet
                     for mode, norm in enumerate(norms):
                         if norm:
                             templates[mode] *= norm
@@ -208,46 +213,30 @@ class OpPolyFilter2D(Operator):
                     t_apply_norm += time() - t1
 
                     t1 = time()
-                    templates = np.transpose(
-                        templates, [2, 1, 0]
-                    ).copy()  # nsample x ndet x nmode
                     proj = proj.T.copy()  # nsample x nmode
                     coeff = np.zeros([nsample, nmode])
+                    masks = np.transpose(masks)  # nsample x ndet
                     for isample in range(nsample):
                         if isample % comm.size != comm.rank:
                             continue
-                        templatesT = templates[isample].T.copy()  # ndet x nmode
-                        ccinv = np.dot(templatesT, templates[isample])
+                        mask = masks[isample]
+                        templatesT = mask * templates  # nmode * ndet
+                        invcov = np.dot(templatesT, templates.T)
                         try:
-                            cc = np.linalg.inv(ccinv)
-                            coeff[isample] = np.dot(cc, proj[isample])
+                            cov = np.linalg.inv(invcov)
+                            coeff[isample] = np.dot(cov, proj[isample])
                         except np.linalg.LinAlgError:
                             coeff[isample] = 0
-                    comm.allreduce(coeff)
+                    coeff = comm.allreduce(coeff)
                     t_solve += time() - t1
 
                     t1 = time()
 
-                    """
                     for isample in range(nsample):
                         if np.all(coeff[isample] == 0):
-                            common_ref[isample + ival.first] |= self._poly_flag_mask
-                            continue
-                        for det in tod.local_dets:
-                            if det not in detector_index:
-                                continue
-                            idet = detector_index[det]
-                            ref = tod.local_signal(det, self._name)[ind]
-                            ref[isample] -= np.dot(coeff[isample], templates[isample, idet])
-                    """
+                            common_ref[istart + isample] |= self._poly_flag_mask
 
-                    for isample in range(nsample):
-                        if np.all(coeff[isample] == 0):
-                            common_ref[isample + ival.first] |= self._poly_flag_mask
-
-                    templates = np.transpose(
-                        templates, [1, 2, 0]
-                    ).copy()  # ndet x nmode x nsample
+                    templates = templates.T.copy()  # ndet x nmode x nsample
                     coeff = coeff.T.copy()  # nmode x nsample
 
                     for det in tod.local_dets:
