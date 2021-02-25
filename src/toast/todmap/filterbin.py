@@ -236,7 +236,18 @@ class OpFilterBin(Operator):
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
         build_template_covariance(templates, good.astype(np.float64), invcov)
+        rcond = 1 / np.linalg.cond(invcov)
+        if self.grank == 0 or self.verbose > 1:
+            print(
+                f"{self.group:4} : OpFilterBin: Template covariance matrix rcond = {rcond}",
+                flush=True,
+            )
+        if rcond < 1e-6:
+            print(f"OpFilterBin: WARNING: template covariance matrix is poorly conditioned: "
+                  f"rcond = {rcond}", flush=True)
         cov = np.linalg.inv(invcov)
+        # np.save("invcov", invcov)  # DEBUG
+        # np.save("cov", cov)  # DEBUG
 
         return templates, cov
 
@@ -298,16 +309,17 @@ class OpFilterBin(Operator):
         templates = templates.T.copy()
         # Temporarily compress pixels
         t1 = time()
-        if self.verbose > 1:
-            print("Compressing pixels", flush=True)
+        if self.grank == 0 or self.verbose > 1:
+            print(f"{self.group:4} : OpFilterBin:     Compressing pixels", flush=True)
         c_pixels, c_npix, local_to_global = self._compress_pixels(pixels[good].copy())
-        if self.verbose > 1:
-            print("Compressed in {:.3f}s".format(time() - t1), flush=True)
+        if self.grank == 0:
+            print("{:4} : OpFilterBin: Compressed in {:.3f}s".format(
+                self.group, time() - t1), flush=True)
         c_npixtot = c_npix * self._nnz
         c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
         t0 = time()
-        if self.verbose > 1:
-            print("Accumulating", flush=True)
+        if self.grank == 0 or self.verbose > 1:
+            print(f"{self.group:4} : OpFilterBin:     Accumulating", flush=True)
         accumulate_observation_matrix(
             c_obs_matrix,
             c_pixels,
@@ -316,18 +328,24 @@ class OpFilterBin(Operator):
             template_covariance,
         )
         c_obs_matrix *= detweight
-        print("Accumulated in {:.3f}s".format(time() - t0), flush=True)
+        if self.grank == 0:
+            print("{:4} : OpFilterBin:     Accumulated in {:.3f}s".format(
+                self.group, time() - t0), flush=True)
         # add the compressed observation matrix onto the global one
         t1 = time()
-        if self.verbose > 1:
-            print("Expanding local to global", flush=True)
+        if self.grank == 0 or self.verbose > 1:
+            print(f"{self.group:4} : OpFilterBin:     Expanding local to global", flush=True)
         local_obs_matrix = self._expand_matrix(c_obs_matrix, local_to_global)
-        print("Expanded in {:.3f}s".format(time() - t1), flush=True)
+        if self.grank == 0:
+            print("{:4} : OpFilterBin:     Expanded in {:.3f}s".format(
+                self.group, time() - t1), flush=True)
         t1 = time()
-        if self.verbose > 1:
-            print("Adding to global", flush=True)
+        if self.grank == 0 or self.verbose > 1:
+            print(f"{self.group:4} : OpFilterBin:     Adding to global", flush=True)
         obs_matrix += local_obs_matrix
-        print("Added in {:.3f}s".format(time() - t1), flush=True)
+        if self.grank == 0:
+            print("{:4} : OpFilterBin:     Added in {:.3f}s".format(
+                self.group, time() - t1), flush=True)
         return obs_matrix
 
     @function_timer
@@ -398,7 +416,7 @@ class OpFilterBin(Operator):
         # than sending the sparse matrix objects directly
         factor = 1
         while factor < self.ntask:
-            if self.rank == 0:
+            if self.rank == 0 or self.verbose > 1:
                 print(
                     "OpFilterBin: Collecting {} / {}".format(2 * factor, self.ntask),
                     flush=True,
@@ -409,6 +427,8 @@ class OpFilterBin(Operator):
                 receive_from = self.rank + factor
                 if receive_from < self.ntask:
                     size_recv = self.comm.recv(source=receive_from, tag=factor)
+                    if self.verbose:
+                        print(f"{self.rank:5} : {factor} : Receiving {size_recv} nonzero elements from # {receive_from} to add to {obs_matrix.data.size} local elements", flush=True)
                     data_recv = np.zeros(size_recv, dtype=np.float64)
                     self.comm.Recv(
                         data_recv, source=receive_from, tag=factor + self.ntask
@@ -425,9 +445,14 @@ class OpFilterBin(Operator):
                         (data_recv, indices_recv, indptr_recv),
                         obs_matrix.shape,
                     )
+                    del data_recv, indices_recv, indptr_recv
+                    if self.verbose:
+                        print(f"{self.rank:5} : {factor} : There are now {obs_matrix.data.size} local elements", flush=True)
             elif self.rank % (factor * 2) == factor:
                 # this task sends
                 send_to = self.rank - factor
+                if self.verbose:
+                    print(f"{self.rank:5} : {factor} : Sending {obs_matrix.data.size} nonzero elements to # {send_to}", flush=True)
                 self.comm.send(obs_matrix.data.size, dest=send_to, tag=factor)
                 self.comm.Send(obs_matrix.data, dest=send_to, tag=factor + self.ntask)
                 self.comm.Send(
@@ -447,6 +472,11 @@ class OpFilterBin(Operator):
         if self.rank == 0:
             t1 = time()
             fname = os.path.join(self._outdir, self._outprefix + "obs_matrix")
+            if self.verbose:
+                print(
+                    f"OpFilterBin: Writing observation matrix to {fname}.npz",
+                    flush=True,
+                )
             scipy.sparse.save_npz(fname, obs_matrix)
             print(
                 "OpFilterBin: Wrote observation matrix to {} in {:.1f} s"
@@ -596,6 +626,12 @@ class OpFilterBin(Operator):
         else:
             self.rank = self.comm.rank
             self.ntask = self.comm.size
+        gcomm = data.comm.comm_group
+        self.group = data.comm.group
+        if gcomm is None:
+            self.grank = 0
+        else:
+            self.grank = gcomm.rank
 
         # Filter data
 
@@ -609,10 +645,13 @@ class OpFilterBin(Operator):
 
         t0 = time()
         t1 = time()
-        if self.verbose > 1 and self.rank == 0:
+        if self.rank == 0 or self.verbose > 1:
             print("OpFilterBin: Filtering signal", flush=True)
 
-        for obs in data.obs:
+        for iobs, obs in enumerate(data.obs):
+            if self.grank == 0 or self.verbose > 1:
+                print("{:4} : OpFilterBin: Processing observation {} / {}".format(
+                    self.group, iobs + 1, len(data.obs)), flush=True)
             tod = obs["tod"]
             if self._intervals in obs:
                 intervals = obs[self._intervals]
@@ -623,14 +662,18 @@ class OpFilterBin(Operator):
             common_flags = tod.local_common_flags(self._common_flag_name)
 
             phase = self._get_phase(tod)
-            t1 = time()
+            t2 = time()
             common_templates = self._build_common_templates(
                 times, phase, local_intervals, common_flags
             )
-            if self.verbose:
-                print("Built common templates in {:.3f} s".format(time() - t1), flush=True)
+            if self.grank == 0 or self.verbose > 1:
+                print("{:4} : OpFilterBin:   Built common templates in {:.3f} s".format(
+                    self.group, time() - t2), flush=True)
 
-            for det in tod.local_dets:
+            for idet, det in enumerate(tod.local_dets):
+                if self.grank == 0 or self.verbose > 1:
+                    print("{:4} : OpFilterBin:   Processing detector # {} / {}".format(
+                        self.group, idet + 1, len(tod.local_dets)), flush=True)
                 signal = tod.local_signal(det, self._name)
                 flags = tod.local_flags(det, self._flag_name)
                 good = np.logical_and(
@@ -645,7 +688,7 @@ class OpFilterBin(Operator):
                 pixels = tod.cache.reference(pixelsname)
                 weights = tod.cache.reference(weightsname)
 
-                t1 = time()
+                t2 = time()
                 templates, template_covariance = self._build_templates(
                     times,
                     phase,
@@ -657,12 +700,14 @@ class OpFilterBin(Operator):
                     det,
                     pixels,
                 )
-                if self.verbose:
-                    print("Built templates in {:.3f} s".format(time() - t1), flush=True)
-                t1 = time()
+                if self.grank == 0 or self.verbose > 1:
+                    print("{:4} : OpFilterBin:   Built templates in {:.3f} s".format(
+                        self.group, time() - t2), flush=True)
+                t2 = time()
                 self._regress_templates(templates, template_covariance, signal, good)
-                if self.verbose:
-                    print("Regressed templates in {:.3f} s".format(time() - t1), flush=True)
+                if self.grank == 0 or self.verbose > 1:
+                    print("{:4} : OpFilterBin:   Regressed templates in {:.3f} s".format(
+                        self.group, time() - t2), flush=True)
                 obs_matrix = self._accumulate_observation_matrix(
                     obs_matrix,
                     pixels,
@@ -675,43 +720,46 @@ class OpFilterBin(Operator):
 
         # Bin filtered signal
 
-        if self.verbose and self.rank == 0:
+        if self.grank == 0 or self.verbose > 1:
             print(
-                "OpFilterBin: Filtered signal in {:.1f} s".format(time() - t1),
-                flush=True,
+                "{:4} : OpFilterBin: Filtered signal in {:.1f} s".format(
+                    self.group, time() - t1), flush=True,
             )
-        if self.verbose > 1 and self.rank == 0:
+
+        if self.comm is not None:
+            self.comm.Barrier()
+        if self.rank == 0 or self.verbose > 1:
             print("OpFilterBin: Binning signal", flush=True)
         t1 = time()
 
         white_noise_cov = self._bin_map(data, detweights, "filtered", white_noise_cov)
 
-        if self.verbose and self.rank == 0:
+        if self.rank == 0 or self.verbose > 1:
             print(
                 "OpFilterBin: Binned signal in {:.1f} s".format(time() - t1), flush=True
             )
 
         if obs_matrix is not None:
-            if self.verbose > 1 and self.rank == 0:
+            if self.rank == 0 or self.verbose > 1:
                 print("OpFilterBin: Noise-weighting observation matrix", flush=True)
             t1 = time()
 
             obs_matrix = self._noiseweight_obs_matrix(obs_matrix, white_noise_cov)
 
-            if self.verbose and self.rank == 0:
+            if self.rank == 0 or self.verbose > 1:
                 print(
                     "OpFilterBin: Noise-weighted observation matrix in {:.1f} s".format(
                         time() - t1
                     ),
                     flush=True,
                 )
-            if self.verbose > 1 and self.rank == 0:
+            if self.rank == 0 or self.verbose > 1:
                 print("OpFilterBin: Collecting observation matrix", flush=True)
             t1 = time()
 
             obs_matrix = self._collect_obs_matrix(obs_matrix)
 
-            if self.verbose and self.rank == 0:
+            if self.rank == 0 or self.verbose > 1:
                 print(
                     "OpFilterBin: Collected observation matrix in {:.1f} s".format(
                         time() - t1
@@ -719,7 +767,7 @@ class OpFilterBin(Operator):
                     flush=True,
                 )
 
-        if self.verbose and self.rank == 0:
+        if self.rank == 0 or self.verbose > 1:
             print("OpFilterBin: Completed in {:.1f} s".format(time() - t0), flush=True)
 
         return

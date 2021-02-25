@@ -7,6 +7,7 @@
 #ifdef _OPENMP
 # include <omp.h>
 #endif // ifdef _OPENMP
+#include <chrono>
 
 
 void apply_flags_to_pixels(py::array_t <unsigned char> common_flags,
@@ -212,11 +213,22 @@ void accumulate_observation_matrix(py::array_t <double,
     size_t npixtot = fast_obs_matrix.shape(0);
     size_t npix = npixtot / nnz;
 
+    // Count number of dense templates in the beginning of template array
+    size_t ndense = 0;
+    for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
+        size_t nhit = 0;
+        for (size_t isample = 0; isample < nsample; ++isample) {
+            if (fast_templates(isample, itemplate) != 0) ++nhit;
+        }
+        if (nhit < 0.1 * nsample) break;
+        ++ndense;
+    }
+
     // Build lists of non-zeros for each row of the template matrix
     std::vector <std::vector <size_t> > nonzeros(nsample);
 #pragma omp parallel for schedule(static, 1)
     for (size_t isample = 0; isample < nsample; ++isample) {
-        for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
+        for (size_t itemplate = ndense; itemplate < ntemplate; ++itemplate) {
             if (fast_templates(isample, itemplate) != 0) {
                 nonzeros[isample].push_back(itemplate);
             }
@@ -232,19 +244,47 @@ void accumulate_observation_matrix(py::array_t <double,
         idthread = omp_get_thread_num();
 #endif // ifdef _OPENMP
 
+        //if (idthread == 0) std::cerr << "Accumulate loop, nsample = " << nsample << ".  nthreads = " << nthreads << std::endl;  // DEBUG
+
         for (size_t isample = 0; isample < nsample; ++isample) {
-            size_t ipixel = fast_pixels(isample);
+            const int64_t ipixel = fast_pixels(isample);
             if (ipixel % nthreads != idthread) continue;
+            const double * ipointer = &fast_templates(isample, 0);
+
+            //std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+
             for (size_t jsample = 0; jsample < nsample; ++jsample) {
-                size_t jpixel = fast_pixels(jsample);
+                const int64_t jpixel = fast_pixels(jsample);
                 double filter_matrix = 0;
-                for (auto itemplate : nonzeros[isample]) {
-                    for (auto jtemplate : nonzeros[jsample]) {
-                        filter_matrix
-                            += fast_templates(isample, itemplate)
-                               * fast_templates(jsample, jtemplate)
-                               * fast_covariance(itemplate, jtemplate);
+                const double * jpointer = &fast_templates(jsample, 0);
+                const double * pcov = &fast_covariance(0, 0);
+                // dense templates
+                for (size_t itemplate=0; itemplate < ndense; ++itemplate) {
+                    const double * covpointer = pcov + itemplate * ntemplate;
+                    double dtemp = 0;
+                    // dense X dense
+                    for (size_t jtemplate=0; jtemplate < ndense; ++jtemplate) {
+                        dtemp += jpointer[jtemplate] * covpointer[jtemplate];
                     }
+                    // dense X sparse
+                    for (const auto jtemplate : nonzeros[jsample]) {
+                        dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                    }
+                    filter_matrix += dtemp * ipointer[itemplate];
+                }
+                // sparse templates
+                for (const auto itemplate : nonzeros[isample]) {
+                    const double * covpointer = pcov + itemplate * ntemplate;
+                    double dtemp = 0;
+                    // sparse X dense
+                    for (size_t jtemplate=0; jtemplate < ndense; ++jtemplate) {
+                        dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                    }
+                    // sparse X sparse
+                    for (const auto jtemplate : nonzeros[jsample]) {
+                        dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                    }
+                    filter_matrix += dtemp * ipointer[itemplate];
                 }
                 if (isample == jsample) {
                     filter_matrix = 1 - filter_matrix;
@@ -259,6 +299,25 @@ void accumulate_observation_matrix(py::array_t <double,
                     }
                 }
             }
+
+            /*
+            std::chrono::steady_clock::time_point tstop = std::chrono::steady_clock::now();
+
+            std::cerr
+              << idthread
+              << " : Accumulate loop, isample = "
+              << isample
+              << " / "
+              << nsample
+              << ". ndense = "
+              << ndense
+              << ". nonzeros = "
+              << nonzeros[isample].size()
+              << ". Computed in "
+              <<  std::chrono::duration_cast<std::chrono::microseconds>(tstop-tstart).count() * 1e-6
+              << " s"
+              << std::endl;
+            */
         }
     }
 }

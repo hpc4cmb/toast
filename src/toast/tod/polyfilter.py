@@ -1,3 +1,4 @@
+
 # Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
@@ -98,6 +99,7 @@ class OpPolyFilter2D(Operator):
 
             tod = obs["tod"]
             times = tod.local_times()
+            # communicator for processes with the same sample range
             comm = tod.grid_comm_col
             detectors = tod.detectors
             ndet = len(detectors)
@@ -196,10 +198,11 @@ class OpPolyFilter2D(Operator):
 
                     comm.Barrier()
                     t1 = time()
-                    templates = comm.allreduce(templates)
-                    masks = comm.allreduce(masks)
-                    proj = comm.allreduce(proj)
-                    norms = comm.allreduce(norms)
+                    comm.allreduce(MPI.IN_PLACE, templates, op=MPI.SUM)
+                    comm.allreduce(MPI.IN_PLACE, masks, op=MPI.SUM)
+                    comm.allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
+                    comm.allreduce(MPI.IN_PLACE, norms, op=MPI.SUM)
+                    
                     good = norms != 0
                     norms[good] = norms[good] ** -0.5
                     t_get_norm += time() - t1
@@ -227,7 +230,7 @@ class OpPolyFilter2D(Operator):
                             coeff[isample] = np.dot(cov, proj[isample])
                         except np.linalg.LinAlgError:
                             coeff[isample] = 0
-                    coeff = comm.allreduce(coeff)
+                    comm.allreduce(MPI.IN_PLACE, coeff, op=MPI.SUM)
                     t_solve += time() - t1
 
                     t1 = time()
