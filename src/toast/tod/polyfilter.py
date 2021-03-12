@@ -3,6 +3,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from ..mpi import MPI
+
 import re
 
 from time import time
@@ -62,6 +64,7 @@ class OpPolyFilter2D(Operator):
         poly_flag_mask=1,
         intervals="intervals",
         buffer_length=1000,
+        verbose=True,
     ):
         self._order = order
         self._nmode = (order + 1) * (order + 2) // 2
@@ -74,6 +77,7 @@ class OpPolyFilter2D(Operator):
         self._poly_flag_mask = poly_flag_mask
         self._intervals = intervals
         self._buffer_length = buffer_length
+        self._verbose = verbose
 
         # Call the parent class constructor.
         super().__init__()
@@ -88,6 +92,11 @@ class OpPolyFilter2D(Operator):
         """
         norder = self._order + 1
         nmode = self._nmode
+        world_comm = data.comm.comm_world
+        if world_comm is None:
+            world_rank = 0
+        else:
+            world_rank = world_comm.rank
 
         for obs in data.obs:
             t0 = time()
@@ -101,6 +110,12 @@ class OpPolyFilter2D(Operator):
             times = tod.local_times()
             # communicator for processes with the same sample range
             comm = tod.grid_comm_col
+            if comm is None:
+                comm_rank = 0
+                comm_size = 1
+            else:
+                comm_rank = comm.rank
+                comm_size = comm.size
             detectors = tod.detectors
             ndet = len(detectors)
             detector_index = {}
@@ -196,12 +211,13 @@ class OpPolyFilter2D(Operator):
 
                     t_template += time() - t1
 
-                    comm.Barrier()
                     t1 = time()
-                    comm.allreduce(MPI.IN_PLACE, templates, op=MPI.SUM)
-                    comm.allreduce(MPI.IN_PLACE, masks, op=MPI.SUM)
-                    comm.allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
-                    comm.allreduce(MPI.IN_PLACE, norms, op=MPI.SUM)
+                    if comm is not None:
+                        comm.Barrier()
+                        comm.Allreduce(MPI.IN_PLACE, templates, op=MPI.SUM)
+                        comm.Allreduce(MPI.IN_PLACE, masks, op=MPI.LOR)
+                        comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
+                        comm.Allreduce(MPI.IN_PLACE, norms, op=MPI.SUM)
                     
                     good = norms != 0
                     norms[good] = norms[good] ** -0.5
@@ -220,7 +236,7 @@ class OpPolyFilter2D(Operator):
                     coeff = np.zeros([nsample, nmode])
                     masks = np.transpose(masks)  # nsample x ndet
                     for isample in range(nsample):
-                        if isample % comm.size != comm.rank:
+                        if isample % comm_size != comm_rank:
                             continue
                         mask = masks[isample]
                         templatesT = mask * templates  # nmode * ndet
@@ -230,7 +246,8 @@ class OpPolyFilter2D(Operator):
                             coeff[isample] = np.dot(cov, proj[isample])
                         except np.linalg.LinAlgError:
                             coeff[isample] = 0
-                    comm.allreduce(MPI.IN_PLACE, coeff, op=MPI.SUM)
+                    if comm is not None:
+                        comm.Allreduce(MPI.IN_PLACE, coeff, op=MPI.SUM)
                     t_solve += time() - t1
 
                     t1 = time()
@@ -257,7 +274,7 @@ class OpPolyFilter2D(Operator):
 
             del common_ref
 
-            if comm.rank == 0:
+            if world_rank == 0 or (comm_rank == 0 and self._verbose > 1):
                 print(
                     "Time per observation: {:.1f} s\n"
                     "   templates : {:6.1f} s\n"
@@ -334,6 +351,12 @@ class OpPolyFilter(Operator):
             data (toast.Data): The distributed data.
 
         """
+        world_comm = data.comm.comm_world
+        if world_comm is None:
+            world_rank = 0
+        else:
+            world_rank = world_comm.rank
+
         for obs in data.obs:
             tod = obs["tod"]
             if self._intervals in obs:

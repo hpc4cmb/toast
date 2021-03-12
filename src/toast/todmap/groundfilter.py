@@ -242,7 +242,7 @@ class OpGroundFilter(Operator):
         # Each group loops over its own CES:es
         for iobs, obs in enumerate(data.obs):
             tod = obs["tod"]
-            if self.grank == 0 or self.verbose > 1:
+            if (self.rank == 0 and self.verbose) or (self.grank == 0 and self.verbose > 1):
                 print("{:4} : OpGroundFilter: Processing observation {} / {}".format(
                     self.group, iobs + 1, len(data.obs)), flush=True)
                 
@@ -252,12 +252,12 @@ class OpGroundFilter(Operator):
 
             t1 = time()
             templates, legendre_trend, legendre_filter = self.build_templates(tod, obs)
-            if self.grank == 0 or self.verbose > 1:
+            if self.grank == 0 and self.verbose > 1:
                 print("{:4} : OpGroundFilter: Built templates in {:.1f}s".format(
                     self.group, time() - t1), flush=True)
 
             for idet, det in enumerate(tod.local_dets):
-                if self.grank == 0 or self.verbose > 1:
+                if self.grank == 0 and self.verbose > 1:
                     print("{:4} : OpGroundFilter:   Processing detector # {} / {}".format(
                         self.group, idet + 1, len(tod.local_dets)), flush=True)
                 ref = tod.local_signal(det, self._name)
@@ -270,7 +270,7 @@ class OpGroundFilter(Operator):
 
                 t1 = time()
                 coeff = self.fit_templates(tod, det, templates, ref, good)
-                if self.grank == 0 or self.verbose > 1:
+                if self.grank == 0 and self.verbose > 1:
                     print("{:4} : OpGroundFilter: Fit templates in {:.1f}s".format(
                         self.group, time() - t1), flush=True)
                 
@@ -279,7 +279,7 @@ class OpGroundFilter(Operator):
 
                 t1 = time()
                 self.subtract_templates(ref, good, coeff, legendre_trend, legendre_filter)
-                if self.grank == 0 or self.verbose > 1:
+                if self.grank == 0 and self.verbose > 1:
                     print("{:4} : OpGroundFilter: Subtract templates in {:.1f}s".format(
                         self.group, time() - t1), flush=True)
 
