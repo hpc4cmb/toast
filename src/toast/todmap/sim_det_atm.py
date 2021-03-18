@@ -181,8 +181,7 @@ class OpSimAtmosphere(Operator):
             site = self._get_from_obs("site_id", obs)
             weather = self._get_from_obs("weather", obs)
 
-            # Get the observation time span and initialize the weather
-            # object if one is provided.
+            # Get the observation time span
             times = tod.local_times()
             tmin = times[0]
             tmax = times[-1]
@@ -193,7 +192,6 @@ class OpSimAtmosphere(Operator):
                 tmax_tot = comm.allreduce(tmax, op=MPI.MAX)
             tmin_tot = np.floor(tmin_tot)
             tmax_tot = np.ceil(tmax_tot)
-            weather.set(site, self._realization, tmin_tot)
 
             key1, key2, counter1, counter2 = self._get_rng_keys(obs)
 

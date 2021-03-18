@@ -12,6 +12,7 @@ from .atm import (
     simulate_atmosphere,
     scale_atmosphere_by_frequency,
     update_atmospheric_noise_weights,
+    draw_weather,
 )
 from .binning import add_binner_args, init_binner, apply_binner
 from .classes import Telescope, Focalplane
