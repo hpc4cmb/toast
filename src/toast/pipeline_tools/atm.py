@@ -8,6 +8,7 @@ import os
 import numpy as np
 from scipy.constants import h, k
 
+from ..mpi import MPI
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
@@ -561,18 +562,17 @@ def draw_weather(args, comm, data, mc=0, verbose=True):
 
     for obs in data.obs:
         tod = obs["tod"]
-        comm = tod.mpicomm
         site = obs["site_id"]
         weather = obs["weather"]
 
         # Get the observation start and initialize the weather
         # object
         times = tod.local_times()
-        if comm is not None:
-            t_min = comm.allreduce(times[0], op=MPI.MIN)
+        if tod.mpicomm is not None:
+            t_min = tod.mpicomm.allreduce(times[0], op=MPI.MIN)
         else:
             t_min = times[0]
-        weather.set(site, mc, np.floor(tmin))
+        weather.set(site, mc, np.floor(t_min))
 
         # Check for optional overrides
         if args.weather_pwv is not None:
