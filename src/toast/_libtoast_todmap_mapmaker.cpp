@@ -158,15 +158,15 @@ void build_template_covariance(py::array_t <double,
     std::vector <size_t> stops(ntemplate);
 #pragma omp parallel for schedule(static, 1)
     for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
-        size_t istart;
-        for (istart = 0; istart < nsample; ++istart) {
+        size_t istart = 0;
+        for ( ; istart < nsample; ++istart) {
             if ((fast_templates(itemplate,
                                 istart) != 0) && (fast_good[istart] != 0)) break;
         }
         starts[itemplate] = istart;
 
-        size_t istop;
-        for (istop = nsample - 1; istop >= 0; --istop) {
+        size_t istop = nsample - 1;
+        for ( ; istop >= istart; --istop) {
             if ((fast_templates(itemplate,
                                 istop) != 0) && (fast_good[istop] != 0)) break;
         }
@@ -179,6 +179,7 @@ void build_template_covariance(py::array_t <double,
             double val = 0;
             size_t istart = std::max(starts[itemplate], starts[jtemplate]);
             size_t istop = std::min(stops[itemplate], stops[jtemplate]);
+            if (itemplate == jtemplate && istop - istart <= 1) val = 1;
             for (size_t isample = istart; isample < istop; ++isample) {
                 val += fast_templates(itemplate, isample)
                        * fast_templates(jtemplate, isample)
