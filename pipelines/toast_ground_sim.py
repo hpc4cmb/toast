@@ -488,6 +488,8 @@ def main():
 
     for mc in range(firstmc, firstmc + nsimu):
 
+        pipeline_tools.draw_weather(args, comm, data, mc)
+
         pipeline_tools.simulate_atmosphere(args, comm, data, mc, totalname)
 
         # Loop over frequencies with identical focal planes and identical

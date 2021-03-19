@@ -155,12 +155,15 @@ class OpsSimAtmosphereTest(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
+        weather = Weather(wfile)
+        weather.set(123, 4, 5)
+
         self.data.obs[0]["tod"] = tod
         self.data.obs[0]["id"] = self.data.comm.group
         self.data.obs[0]["telescope_id"] = 1
         self.data.obs[0]["site"] = "blah"
         self.data.obs[0]["site_id"] = 123
-        self.data.obs[0]["weather"] = Weather(wfile, site=123)
+        self.data.obs[0]["weather"] = weather
         self.data.obs[0]["altitude"] = 2000
         self.data.obs[0]["fpradius"] = 1.0
 
@@ -169,7 +172,7 @@ class OpsSimAtmosphereTest(MPITestCase):
         self.data_serial.obs[0]["telescope_id"] = 1
         self.data_serial.obs[0]["site"] = "blah"
         self.data_serial.obs[0]["site_id"] = 123
-        self.data_serial.obs[0]["weather"] = Weather(wfile, site=123)
+        self.data_serial.obs[0]["weather"] = weather
         self.data_serial.obs[0]["altitude"] = 2000
         self.data_serial.obs[0]["fpradius"] = 1.0
 

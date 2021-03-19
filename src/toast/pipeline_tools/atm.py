@@ -8,6 +8,7 @@ import os
 import numpy as np
 from scipy.constants import h, k
 
+from ..mpi import MPI
 from ..timing import function_timer, Timer
 from ..utils import Logger, Environment
 
@@ -218,6 +219,36 @@ def add_atmosphere_args(parser):
         default=False,
         action="store_true",
         help="Only simulate unflagged samples.",
+    )
+    parser.add_argument(
+        "--weather-pwv",
+        required=False,
+        type=np.float,
+        help="Override randomized PWV [mm]",
+    )
+    parser.add_argument(
+        "--weather-temperature",
+        required=False,
+        type=np.float,
+        help="Override randomized air temperature [K]",
+    )
+    parser.add_argument(
+        "--weather-pressure",
+        required=False,
+        type=np.float,
+        help="Override randomized surface pressure [Pa]",
+    )
+    parser.add_argument(
+        "--weather-west-wind",
+        required=False,
+        type=np.float,
+        help="Override randomized West wind [m/s]",
+    )
+    parser.add_argument(
+        "--weather-south-wind",
+        required=False,
+        type=np.float,
+        help="Override randomized South wind [m/s]",
     )
     # Common flag mask may already be added
     try:
@@ -519,4 +550,46 @@ def update_atmospheric_noise_weights(args, comm, data, freq, mc, verbose=False):
     timer.stop()
     if comm.world_rank == 0 and verbose:
         timer.report("Atmosphere weighting")
+    return
+
+
+@function_timer
+def draw_weather(args, comm, data, mc=0, verbose=True):
+    """ Draw the weather parameters for this Monte Carlo realization
+    """
+    timer = Timer()
+    timer.start()
+
+    for obs in data.obs:
+        tod = obs["tod"]
+        site = obs["site_id"]
+        weather = obs["weather"]
+
+        # Get the observation start and initialize the weather
+        # object
+        times = tod.local_times()
+        if tod.mpicomm is not None:
+            t_min = tod.mpicomm.allreduce(times[0], op=MPI.MIN)
+        else:
+            t_min = times[0]
+        weather.set(site, mc, np.floor(t_min))
+
+        # Check for optional overrides
+        if args.weather_pwv is not None:
+            weather._pwv = args.weather_pwv
+        if args.weather_temperature is not None:
+            weather._air_temperature = args.weather_temperature
+        if args.weather_pressure is not None:
+            weather._surface_pressure = args.weather_pressure
+        if args.weather_west_wind is not None:
+            weather._west_wind = args.weather_west_wind
+        if args.weather_south_wind is not None:
+            weather._south_wind = args.weather_south_wind
+
+    if verbose:
+        if comm.comm_world is not None:
+            comm.comm_world.barrier()
+        timer.stop()
+        if comm.world_rank == 0:
+            timer.report("draw_weather")
     return
