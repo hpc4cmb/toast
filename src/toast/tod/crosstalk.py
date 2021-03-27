@@ -1,5 +1,3 @@
-
-
 from __future__ import annotations
 
 import argparse
@@ -15,6 +13,16 @@ from toast.mpi import get_world
 from toast.op import Operator
 from toast.utils import Logger
 
+if TYPE_CHECKING:
+    from typing import List
+
+COMM: toast.mpi.Comm
+PROCS: int
+RANK: int
+COMM, PROCS, RANK = get_world()
+LOGGER = Logger.get()
+IS_SERIAL = COMM is None
+
 H5_CREATE_KW = {
     'compression': 'gzip',
     # shuffle minimize the output size
@@ -25,12 +33,9 @@ H5_CREATE_KW = {
     'track_times': False
 }
 
-if TYPE_CHECKING:
-    from typing import Optional, Tuple, List
-
 
 @jit(nopython=True, nogil=True, cache=False)
-def fma(out, ws, *arrays):
+def fma(out: np.ndarray[np.float64], ws: np.ndarray[np.float64], *arrays: np.ndarray[np.float64]):
     """Simple FMA, compiled to avoid Python memory implications.
 
     :param out: must be zero array in the same shape of each array in `arrays`
@@ -49,90 +54,113 @@ def add_crosstalk_args(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--crosstalk-matrix",
         type=Path,
+        nargs='*',
         required=False,
-        help="input path to crosstalk matrix in HDF5 container.",
+        help="input path(s) to crosstalk matrix in HDF5 container.",
     )
-    parser.add_argument(
-        "--crosstalk-write-tod-input",
-        type=Path,
-        required=False,
-        help="output path to write TOD input. For debug only.",
-    )
-    parser.add_argument(
-        "--crosstalk-write-tod-output",
-        type=Path,
-        required=False,
-        help="output path to write TOD input. For debug only.",
-    )
+
+
+@dataclass
+class SimpleCrosstalkMatrix:
+    """A thin crosstalk matrix class.
+
+    For feature-rich crosstalk matrix class, see `coscon.toast_helper.CrosstalkMatrix`.
+    """
+    names: np.ndarray['S']
+    data: np.ndarray[np.float64]
+
+    @property
+    def names_str(self) -> List[str]:
+        """names in list of str"""
+        return [name.decode() for name in self.names]
+
+    @classmethod
+    def load(cls, path: Path):
+        with h5py.File(path, 'r') as f:
+            names = f["names"][:]
+            data = f["data"][:]
+        return cls(names, data)
+
+    def dump(self, path: Path, compress_level: int = 9):
+        with h5py.File(path, 'w', libver='latest') as f:
+            f.create_dataset(
+                'names',
+                data=self.names,
+                compression_opts=compress_level,
+                **H5_CREATE_KW
+            )
+            f.create_dataset(
+                'data',
+                data=self.data,
+                compression_opts=compress_level,
+                **H5_CREATE_KW
+            )
 
 
 @dataclass
 class OpCrosstalk(Operator):
     """Operator that apply crosstalk matrix to detector ToDs.
     """
-    crosstalk_names: np.ndarray['S']
-    crosstalk_data: np.ndarray[np.float64]
-    crosstalk_write_tod_input_path: Optional[Path] = None
-    crosstalk_write_tod_output_path: Optional[Path] = None
+    # total no. of crosstalk matrices
+    n_crosstalk_matrices: int
+    # in MPI case, this holds only those matrices owned by a rank
+    # dictate by the condition i % PROCS == RANK
+    crosstalk_matrices: List[SimpleCrosstalkMatrix]
+    # this name is used to save data in tod.cache, so better be unique from other cache
     name: str = "crosstalk"
 
-    def __post_init__(self):
-        self._name = self.name
-        self.comm, self.procs, self.rank = get_world()
-        self.log = Logger.get()
+    def _get_crosstalk_matrix(self, i: int) -> SimpleCrosstalkMatrix:
+        """Get the i-th crosstalk matrix, used this with MPI only.
+        """
+        rank_owner = i % PROCS
+        # index of the i-th matrix in the local rank
+        idx = i // PROCS
 
-    @property
-    def is_serial(self):
-        return self.comm is None
+        if RANK == rank_owner:
+            crosstalk_matrix = self.crosstalk_matrices[idx]
 
-    @property
-    def crosstalk_names_str(self) -> List[str]:
-        """names in list of str"""
-        return [name.decode() for name in self.crosstalk_names]
+            names = crosstalk_matrix.names
+            data = crosstalk_matrix.data
 
-    @staticmethod
-    def read_serial(
-        path: Path,
-    ) -> Tuple[np.ndarray['S'], np.ndarray[np.float64]]:
-        with h5py.File(path, 'r') as f:
-            names = f["names"][:]
-            data = f["data"][:]
-        return names, data
-
-    @staticmethod
-    def read_mpi(
-        path: Path,
-        comm: toast.mpi.Comm,
-        procs: int,
-        rank: int,
-    ) -> Tuple[np.ndarray['S'], np.ndarray[np.float64]]:
-        log = Logger.get()
-        comm, procs, rank = get_world()
-
-        if rank == 0:
-            names, data = OpCrosstalk.read_serial(path)
-            lengths = np.array([names.size, names.dtype.itemsize], dtype=np.int64)
             # cast to int for boardcasting
             names_int = names.view(np.uint8)
             # the data from HDF5 is already float64
             # this is needed for comm.Bcast below
             data = data.view(np.float64)
+
+        # prepare lengths for creating arrays
+            lengths = np.array([names.size, names.dtype.itemsize], dtype=np.int64)
         else:
             lengths = np.empty(2, dtype=np.int64)
-        comm.Bcast(lengths, root=0)
-        log.debug(f'crosstalk: Rank {rank} receives lengths {lengths}')
-        if rank != 0:
+        COMM.Bcast(lengths, root=rank_owner)
+        LOGGER.debug(f'crosstalk: Rank {RANK} receives lengths {lengths}')
+
+        # broadcast arrays
+        if RANK != rank_owner:
             n = lengths[0]
             name_len = lengths[1]
             names_int = np.empty(n * name_len, dtype=np.uint8)
-            data = np.empty((n, n), dtype=np.float64)
-        comm.Bcast(names_int, root=0)
-        if rank != 0:
             names = names_int.view(f'S{name_len}')
-        log.debug(f'crosstalk: Rank {rank} receives names {names}')
-        comm.Bcast(data, root=0)
-        log.debug(f'crosstalk: Rank {rank} receives data {data}')
-        return names, data
+            data = np.empty((n, n), dtype=np.float64)
+        COMM.Bcast(names_int, root=rank_owner)
+        LOGGER.debug(f'crosstalk: Rank {RANK} receives names {names}')
+        COMM.Bcast(data, root=rank_owner)
+        LOGGER.debug(f'crosstalk: Rank {RANK} receives data {data}')
+
+        if RANK == rank_owner:
+            return crosstalk_matrix
+        else:
+            return SimpleCrosstalkMatrix(names, data)
+
+    @staticmethod
+    def _read_serial(paths: List[Path]) -> List[SimpleCrosstalkMatrix]:
+        return [SimpleCrosstalkMatrix.load(path) for path in paths]
+
+    @staticmethod
+    def _read_mpi(paths: List[Path]) -> List[SimpleCrosstalkMatrix]:
+        N = len(paths)
+        path_idxs_per_rank = range(RANK, N, PROCS)
+        return [SimpleCrosstalkMatrix.load(paths[i]) for i in path_idxs_per_rank]
 
     @classmethod
     def read(
@@ -140,223 +168,163 @@ class OpCrosstalk(Operator):
         args: argparse.Namespace,
         name: str = "crosstalk",
     ) -> OpCrosstalk:
-        path = args.crosstalk_matrix
-        comm, procs, rank = get_world()
-        names, data = cls.read_serial(path) if procs == 1 else cls.read_mpi(path, comm, procs, rank)
-        return cls(
-            names,
-            data,
-            crosstalk_write_tod_input_path=args.crosstalk_write_tod_input,
-            crosstalk_write_tod_output_path=args.crosstalk_write_tod_output,
-            name=name,
-        )
+        paths = args.crosstalk_matrix
+        crosstalk_matrices = cls._read_serial(paths) if IS_SERIAL else cls._read_mpi(paths)
+        return cls(len(paths), crosstalk_matrices, name=name)
 
-    def get_tod_serial(
-        self,
-        tod: toast.tod.TOD,
-        signal_name: str,
-    ) -> np.ndarray[np.float64]:
-        raise NotImplementedError
-
-    def get_tod_mpi(
-        self,
-        tod: toast.tod.TOD,
-        signal_name: str,
-    ) -> Optional[np.ndarray[np.float64]]:
-        """Obtain the TOD as a contiguous array.
-
-        This is very inefficient as it is for debug only!
-        """
-        rank = self.rank
-        comm = self.comm
-        log = self.log
-        names = self.crosstalk_names_str
-        names_set = set(names)
-        n = len(names)
-        n_samples = tod.total_samples
-
-        local_dets = tod.local_dets
-        send_data = [(det, tod.cache.reference(f"{signal_name}_{det}")) for det in local_dets if det in names_set]
-        log.debug(f"Rank {rank} collected local TOD from {local_dets}")
-        if rank == 0:
-            log.debug("Gathering TOD to root.")
-        data = comm.gather(send_data, root=0)
-        if rank == 0:
-            log.debug("Gathered TOD to root, constructing dict")
-            tod_dict = {}
-            for datum in data:
-                for name, t in datum:
-                    tod_dict[name] = t
-            # assume all names are found in tod!
-            tod_array = np.array([tod_dict[name] for name in names])
-            assert tod_array.shape == (n, n_samples)
-            log.debug(f"TOD array constructed with shape {(n, n_samples)}.")
-            return tod_array
-        else:
-            return None
-
-    def save_tod_serial(
-        self,
-        path: Path,
-        tod: toast.tod.TOD,
-        signal_name: str,
-    ):
-        raise NotImplementedError
-
-    def save_tod_mpi(
-        self,
-        path: Path,
-        tod: toast.tod.TOD,
-        signal_name: str,
-        compress_level: int = 1,
-    ):
-        log = self.log
-        rank = self.rank
-        # non-root should have None
-        tod_array = self.get_tod_mpi(
-            tod,
-            signal_name,
-        )
-        if rank == 0:
-            log.debug(f"Writing TOD array to file {path}.")
-            with h5py.File(path, 'w', libver='latest') as f:
-                f.create_dataset(
-                    'names',
-                    data=self.crosstalk_names,
-                    compression_opts=compress_level,
-                    **H5_CREATE_KW
-                )
-                f.create_dataset(
-                    'data',
-                    data=tod_array,
-                    compression_opts=compress_level,
-                    **H5_CREATE_KW
-                )
-
-    def exec_serial(
+    def _exec_serial(
         self,
         data: toast.dist.Data,
         signal_name: str,
-        debug: bool = True,  # TODO
+        debug: bool = False,
     ):
-        raise NotImplementedError
-
-    def exec_mpi(
-        self,
-        data: toast.dist.Data,
-        signal_name: str,
-        debug: bool = True,  # TODO
-    ):
-        log = self.log
-        comm = self.comm
-        procs = self.procs
-        rank = self.rank
         crosstalk_name = self.name
-        names = self.crosstalk_names_str
-        crosstalk_data = self.crosstalk_data
-        n = len(names)
 
-        for obs in data.obs:
-            tod = obs["tod"]
+        # loop over crosstalk matrices
+        for crosstalk_matrix in self.crosstalk_matrices:
+            names = crosstalk_matrix.names_str
+            names_set = set(names)
+            crosstalk_data = crosstalk_matrix.data
+            for obs in data.obs:
+                tod = obs["tod"]
+                # TODO: should we only check this only `if debug`?
+                detectors_set = set(tod.detectors)
+                if not (names_set & detectors_set):
+                    LOGGER.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
+                    continue
+                elif not (names_set <= detectors_set):
+                    raise ValueError(f"Crosstalk: tod {tod} only include some detectors from the crosstalk matrix with these detectors: {names}.")
+                del detectors_set
 
-            if self.crosstalk_write_tod_input_path:
-                if rank == 0:
-                    log.warning(f"Saving input TOD to {self.crosstalk_write_tod_input_path}. You should only use it for debug only!")
-                self.save_tod_mpi(
-                    self.crosstalk_write_tod_input_path,
-                    tod,
-                    signal_name,
-                )
+                n_samples = tod.total_samples
 
-            n_samples = tod.total_samples
-            local_dets = tod.local_dets
-            n_local_dets = len(local_dets)
-
-            # this is easier to understand and shorter
-            # but uses allgather instead of the more efficient Allgather
-            # construct detector LUT
-            # local_dets = tod.local_dets
-            # global_dets = comm.allgather(local_dets)
-            # det_lut = {}
-            # for i, dets in enumerate(global_dets):
-            #     for det in dets:
-            #         det_lut[det] = i
-            # log.debug(f'dets LUT: {dets_lut}')
-
-            # construct det_lut, a LUT to know which rank holds a detector
-            local_has_det = tod.cache.create(f"{crosstalk_name}_local_has_det_{rank}", np.uint8, (n,)).view(np.bool)
-            local_dets_set = set(tod.local_dets)
-            for i, name in enumerate(names):
-                if name in local_dets_set:
-                    local_has_det[i] = True
-            del local_dets_set
-
-            global_has_det = tod.cache.create(f"{crosstalk_name}_global_has_det_{rank}", np.uint8, (procs, n)).view(np.bool)
-            comm.Allgather(local_has_det, global_has_det)
-
-            if debug:
-                np.testing.assert_array_equal(local_has_det, global_has_det[rank])
-            del local_has_det
-            tod.cache.destroy(f"{crosstalk_name}_local_has_det_{rank}")
-
-            det_lut = {}
-            for i in range(procs):
-                for j in range(n):
-                    if global_has_det[i, j]:
-                        det_lut[names[j]] = i
-            del global_has_det
-            tod.cache.destroy(f"{crosstalk_name}_global_has_det_{rank}")
-
-            log.debug(f'Rank {rank} has detectors LUT: {det_lut}')
-
-            if debug:
-                for name in local_dets:
-                    assert det_lut[name] == rank
-
-            # mat-mul
-            row_local_total = tod.cache.create(f"{crosstalk_name}_row_local_total_{rank}", np.float64, (n_samples,))
-            row_local_weights = tod.cache.create(f"{crosstalk_name}_row_local_weights_{rank}", np.float64, (n_local_dets,))
-            local_det_idxs = tod.cache.create(f"{crosstalk_name}_local_det_idxs_{rank}", np.int64, (n_local_dets,))
-            for i, name in enumerate(local_dets):
-                local_det_idxs[i] = names.index(name)
-            # row-loop
-            # potentially the tod can have more detectors than OpCrosstalk.crosstalk_names has
-            # and they will be skipped
-            for name, row in zip(names, crosstalk_data):
-                rank_owner = det_lut[name]
-                # assume each process must have at least one detector
-                row_local_total[:] = 0.
-                row_local_weights[:] = row[local_det_idxs]
-                tods_list = [tod.cache.reference(f"{signal_name}_{names[local_det_idxs[i]]}") for i in range(n_local_dets)]
-                fma(row_local_total, row_local_weights, *tods_list)
-                if rank == rank_owner:
+                # mat-mul
+                # This follows the _exec_mpi mat-mul algorithm
+                # but not put them in a contiguous array and use real mat-mul @
+                # The advantage is to reduce memory use
+                # (if creating an intermediate contiguous array that would requires one more copy of tod then needed below)
+                # and perhaps served as a easier-to-understand version of _exec_mpi below
+                for name, row in zip(names, crosstalk_data):
                     row_global_total = tod.cache.create(f"{crosstalk_name}_{name}", np.float64, (n_samples,))
-                    comm.Reduce(row_local_total, row_global_total, root=rank_owner)
-                else:
-                    comm.Reduce(row_local_total, None, root=rank_owner)
-            del row_local_total, row_local_weights, local_det_idxs, tods_list
-            tod.cache.destroy(f"{crosstalk_name}_row_local_total_{rank}")
-            tod.cache.destroy(f"{crosstalk_name}_row_local_weights_{rank}")
-            tod.cache.destroy(f"{crosstalk_name}_local_det_idxs_{rank}")
+                    tods_list = [tod.cache.reference(f"{signal_name}_{name_j}") for name_j in names]
+                    fma(row_global_total, row, *tods_list)
+                for name in names:
+                    # overwrite it in-place
+                    # not using tod.cache.put as that will destroy and create
+                    tod.cache.reference(f"{signal_name}_{name}")[:] = tod.cache.reference(f"{crosstalk_name}_{name}")
+                    tod.cache.destroy(f"{crosstalk_name}_{name}")
 
-            # overwrite original tod from cache
-            for name in local_dets:
-                tod.cache.destroy(f"{signal_name}_{name}")
-                tod.cache.add_alias(f"{signal_name}_{name}", f"{crosstalk_name}_{name}")
+    def _exec_mpi(
+        self,
+        data: toast.dist.Data,
+        signal_name: str,
+        debug: bool = False,
+    ):
+        crosstalk_name = self.name
 
-            if self.crosstalk_write_tod_output_path:
-                if rank == 0:
-                    log.warning(f"Saving input TOD to {self.crosstalk_write_tod_output_path}. You should only use it for debug only!")
-                self.save_tod_mpi(
-                    self.crosstalk_write_tod_output_path,
-                    tod,
-                    signal_name,
-                )
+        # loop over crosstalk matrices
+        for idx_crosstalk_matrix in range(self.n_crosstalk_matrices):
+            crosstalk_matrix = self._get_crosstalk_matrix(idx_crosstalk_matrix)
+            names = crosstalk_matrix.names_str
+            names_set = set(names)
+            crosstalk_data = crosstalk_matrix.data
+            n = crosstalk_data.shape[0]
+            for obs in data.obs:
+                tod = obs["tod"]
+                # TODO: should we only check this only `if debug`?
+                # all ranks need to check this as they need to perform the same action
+                detectors_set = set(tod.detectors)
+                if not (names_set & detectors_set):
+                    LOGGER.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
+                    continue
+                elif not (names_set <= detectors_set):
+                    raise ValueError(f"Crosstalk: tod {tod} only include some detectors from the crosstalk matrix with these detectors: {names}.")
+                del detectors_set
+
+                n_samples = tod.total_samples
+                local_crosstalk_dets_set = set(tod.local_dets) & names_set
+                n_local_dets = len(local_crosstalk_dets_set)
+
+                # this is easier to understand and shorter
+                # but uses allgather instead of the more efficient Allgather
+                # construct detector LUT
+                # local_dets = tod.local_dets
+                # global_dets = comm.allgather(local_dets)
+                # det_lut = {}
+                # for i, dets in enumerate(global_dets):
+                #     for det in dets:
+                #         det_lut[det] = i
+                # log.debug(f'dets LUT: {dets_lut}')
+
+                # construct det_lut, a LUT to know which rank holds a detector
+                local_has_det = tod.cache.create(f"{crosstalk_name}_local_has_det_{RANK}", np.uint8, (n,)).view(np.bool_)
+                for i, name in enumerate(names):
+                    if name in local_crosstalk_dets_set:
+                        local_has_det[i] = True
+
+                global_has_det = tod.cache.create(f"{crosstalk_name}_global_has_det_{RANK}", np.uint8, (PROCS, n)).view(np.bool_)
+                COMM.Allgather(local_has_det, global_has_det)
+
+                if debug:
+                    np.testing.assert_array_equal(local_has_det, global_has_det[RANK])
+                del local_has_det
+                tod.cache.destroy(f"{crosstalk_name}_local_has_det_{RANK}")
+
+                det_lut = {}
+                for i in range(PROCS):
+                    for j in range(n):
+                        if global_has_det[i, j]:
+                            det_lut[names[j]] = i
+                del global_has_det, i, j
+                tod.cache.destroy(f"{crosstalk_name}_global_has_det_{RANK}")
+
+                LOGGER.debug(f'Rank {RANK} has detectors LUT: {det_lut}')
+
+                if debug:
+                    for name in local_crosstalk_dets_set:
+                        assert det_lut[name] == RANK
+
+                # mat-mul
+                row_local_total = tod.cache.create(f"{crosstalk_name}_row_local_total_{RANK}", np.float64, (n_samples,))
+                if n_local_dets > 0:
+                    row_local_weights = tod.cache.create(f"{crosstalk_name}_row_local_weights_{RANK}", np.float64, (n_local_dets,))
+                    local_det_idxs = tod.cache.create(f"{crosstalk_name}_local_det_idxs_{RANK}", np.int64, (n_local_dets,))
+                for i, name in enumerate(local_crosstalk_dets_set):
+                    local_det_idxs[i] = names.index(name)
+                # row-loop
+                # * potentially the tod can have more detectors than SimpleCrosstalkMatrix.names_str has
+                # * and they will be skipped
+                for name, row in zip(names, crosstalk_data):
+                    rank_owner = det_lut[name]
+                    if n_local_dets > 0:
+                        row_local_total[:] = 0.
+                        row_local_weights[:] = row[local_det_idxs]
+                        tods_list = [tod.cache.reference(f"{signal_name}_{names[local_det_idxs[i]]}") for i in range(n_local_dets)]
+                        fma(row_local_total, row_local_weights, *tods_list)
+                    if RANK == rank_owner:
+                        row_global_total = tod.cache.create(f"{crosstalk_name}_{name}", np.float64, (n_samples,))
+                        COMM.Reduce(row_local_total, row_global_total, root=rank_owner)
+                        # it is reduced into tod.cache and the python reference can be safely deleted
+                        del row_global_total
+                    else:
+                        COMM.Reduce(row_local_total, None, root=rank_owner)
+                del det_lut, row_local_total, name, row, rank_owner
+                tod.cache.destroy(f"{crosstalk_name}_row_local_total_{RANK}")
+                if n_local_dets > 0:
+                    del row_local_weights, local_det_idxs, tods_list
+                    tod.cache.destroy(f"{crosstalk_name}_row_local_weights_{RANK}")
+                    tod.cache.destroy(f"{crosstalk_name}_local_det_idxs_{RANK}")
+
+                for name in local_crosstalk_dets_set:
+                    # overwrite it in-place
+                    # not using tod.cache.put as that will destroy and create
+                    tod.cache.reference(f"{signal_name}_{name}")[:] = tod.cache.reference(f"{crosstalk_name}_{name}")
+                    tod.cache.destroy(f"{crosstalk_name}_{name}")
 
     def exec(
         self,
         data: toast.dist.Data,
         signal_name: str,
-        debug: bool = True,  # TODO
+        debug: bool = False,
     ):
-        self.exec_serial(data, signal_name, debug=debug) if self.is_serial else self.exec_mpi(data, signal_name, debug=debug)
+        self._exec_serial(data, signal_name, debug=debug) if IS_SERIAL else self._exec_mpi(data, signal_name, debug=debug)
