@@ -98,6 +98,7 @@ install(FILES
     noise.py
     noise_sim.py
     observation.py
+    observation_dist.py
     observation_data.py
     observation_view.py
     vis.py
