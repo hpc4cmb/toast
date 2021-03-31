@@ -22,6 +22,8 @@ from .sim_satellite import SimSatellite
 
 from .sim_tod_noise import SimNoise
 
+from .sim_tod_dipole import SimDipole
+
 from .noise_model import DefaultNoiseModel
 
 from .noise_weight import NoiseWeight

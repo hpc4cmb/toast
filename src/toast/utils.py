@@ -460,3 +460,8 @@ def dtype_to_aligned(dt):
         log.error(msg)
         raise ValueError(msg)
     return (storage_class, itemsize)
+
+
+def array_dot(u, v):
+    """Dot product of each row of two 2D arrays"""
+    return np.sum(u * v, axis=1).reshape((-1, 1))

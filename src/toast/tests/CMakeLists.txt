@@ -21,6 +21,7 @@ install(FILES
     weather.py
     ops_sim_satellite.py
     ops_sim_tod_noise.py
+    ops_sim_tod_dipole.py
     ops_mapmaker_utils.py
     ops_mapmaker_binning.py
     ops_mapmaker_solve.py

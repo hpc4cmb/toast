@@ -12,6 +12,7 @@ install(FILES
     memory_counter.py
     sim_hwp.py
     sim_tod_noise.py
+    sim_tod_dipole.py
     sim_satellite.py
     noise_model.py
     noise_weight.py
