@@ -8,6 +8,8 @@ from datetime import datetime
 
 import numpy as np
 
+import healpy as hp
+
 from astropy import units as u
 
 from ..mpi import Comm
@@ -201,6 +203,125 @@ def create_satellite_data(
     )
     sim_sat.apply(data)
 
+    return data
+
+
+def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
+    """Create a toast data object with one boresight sample per healpix pixel.
+
+    Use the specified MPI communicator to attempt to create 2 process groups,
+    each with some empty observations.  Use a space telescope for each observation.
+    Create fake boresight pointing that cycles through every healpix RING ordered
+    pixel one time.
+
+    Args:
+        mpicomm (MPI.Comm): the MPI communicator (or None).
+        obs_per_group (int): the number of observations assigned to each group.
+        nside (int): The NSIDE value to use.
+
+    Returns:
+        toast.Data: the distributed data with named observations.
+
+    """
+    nsamp = 12 * nside ** 2
+    rate = 10.0
+
+    toastcomm = create_comm(mpicomm)
+    data = Data(toastcomm)
+    for obs in range(obs_per_group):
+        oname = "test-{}-{}".format(toastcomm.group, obs)
+        oid = obs_per_group * toastcomm.group + obs
+        tele = create_space_telescope(toastcomm.group_size)
+        # FIXME: for full testing we should set detranks as approximately the sqrt
+        # of the grid size so that we test the row / col communicators.
+        ob = Observation(
+            tele, n_samples=nsamp, name=oname, uid=oid, comm=toastcomm.comm_group
+        )
+        # Create shared objects for timestamps, common flags, boresight, position,
+        # and velocity.
+        ob.shared.create(
+            "times",
+            shape=(ob.n_local_samples,),
+            dtype=np.float64,
+            comm=ob.comm_col,
+        )
+        ob.shared.create(
+            "flags",
+            shape=(ob.n_local_samples,),
+            dtype=np.uint8,
+            comm=ob.comm_col,
+        )
+        ob.shared.create(
+            "position",
+            shape=(ob.n_local_samples, 3),
+            dtype=np.float64,
+            comm=ob.comm_col,
+        )
+        ob.shared.create(
+            "velocity",
+            shape=(ob.n_local_samples, 3),
+            dtype=np.float64,
+            comm=ob.comm_col,
+        )
+        ob.shared.create(
+            "boresight_radec",
+            shape=(ob.n_local_samples, 4),
+            dtype=np.float64,
+            comm=ob.comm_col,
+        )
+        # Rank zero of each grid column creates the data
+        stamps = None
+        position = None
+        velocity = None
+        boresight = None
+        if ob.comm_col_rank == 0:
+            start_time = 0.0 + float(ob.local_index_offset) / rate
+            stop_time = start_time + float(ob.n_local_samples - 1) / rate
+            stamps = np.linspace(
+                start_time,
+                stop_time,
+                num=ob.n_local_samples,
+                endpoint=True,
+                dtype=np.float64,
+            )
+
+            # Get the motion of the site for these times.
+            position, velocity = tele.site.position_velocity(stamps)
+
+            pix = np.arange(nsamp, dtype=np.int64)
+
+            x, y, z = hp.pix2vec(nside, pix, nest=False)
+
+            # z axis is obviously normalized
+            zaxis = np.array([0, 0, 1], dtype=np.float64)
+            ztiled = np.tile(zaxis, x.shape[0]).reshape((-1, 3))
+
+            # ... so dir is already normalized
+            dir = np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
+
+            # get the rotation axis
+            v = np.cross(ztiled, dir)
+            v = v / np.sqrt(np.sum(v * v, axis=1)).reshape((-1, 1))
+
+            # this is the vector-wise dot product
+            zdot = np.sum(ztiled * dir, axis=1).reshape((-1, 1))
+            ang = 0.5 * np.arccos(zdot)
+
+            # angle element
+            s = np.cos(ang)
+
+            # axis
+            v *= np.sin(ang)
+
+            # build the normalized quaternion
+            boresight = qa.norm(np.concatenate((v, s), axis=1))
+
+        ob.shared["times"].set(stamps, offset=(0,), fromrank=0)
+        ob.shared["position"].set(position, offset=(0, 0), fromrank=0)
+        ob.shared["velocity"].set(velocity, offset=(0, 0), fromrank=0)
+        ob.shared["boresight_radec"].set(boresight, offset=(0, 0), fromrank=0)
+
+        data.obs.append(ob)
     return data
 
 

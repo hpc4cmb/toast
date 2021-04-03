@@ -8,6 +8,8 @@ import numpy as np
 
 from astropy import units as u
 
+import healpy as hp
+
 from .mpi import MPITestCase
 
 from ..vis import set_matplotlib_backend
@@ -20,7 +22,7 @@ from ..pixels_io import write_healpix_fits
 
 from ..dipole import dipole
 
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_healpix_ring_satellite
 
 
 class SimDipoleTest(MPITestCase):
@@ -42,10 +44,10 @@ class SimDipoleTest(MPITestCase):
 
         self.dip_check = 0.00335673
 
-        # self.dip_max_pix = hp.ang2pix(self.nside, gal_theta, gal_phi, nest=False)
-        # self.dip_min_pix = hp.ang2pix(
-        #     self.nside, (np.pi - gal_theta), (np.pi + gal_phi), nest=False
-        # )
+        self.dip_max_pix = hp.ang2pix(self.nside, gal_theta, gal_phi, nest=False)
+        self.dip_min_pix = hp.ang2pix(
+            self.nside, (np.pi - gal_theta), (np.pi + gal_phi), nest=False
+        )
 
     def test_dipole_func(self):
         # Verify that we get the right magnitude if we are pointed at the
@@ -86,8 +88,8 @@ class SimDipoleTest(MPITestCase):
         return
 
     def test_sim(self):
-        # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm)
+        # Create a fake scan strategy that hits every pixel once.
+        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
 
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -97,7 +99,7 @@ class SimDipoleTest(MPITestCase):
         pointing = ops.PointingHealpix(nside=self.nside, nest=False, mode="I")
 
         # Generate timestreams
-        sim_dipole = ops.SimDipole(mode="solar", coord="E")
+        sim_dipole = ops.SimDipole(mode="solar", coord="G")
         sim_dipole.exec(data)
 
         # Build the covariance and hits
@@ -124,40 +126,41 @@ class SimDipoleTest(MPITestCase):
 
         toast_hit_path = os.path.join(self.outdir, "toast_hits.fits")
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
-        write_healpix_fits(data[binner.binned], toast_bin_path, nest=True)
-        write_healpix_fits(data[cov_and_hits.hits], toast_hit_path, nest=True)
+        write_healpix_fits(data[binner.binned], toast_bin_path, nest=False)
+        write_healpix_fits(data[cov_and_hits.hits], toast_hit_path, nest=False)
 
-        # if rank == 0:
-        #     import matplotlib.pyplot as plt
-        #
-        #     mapfile = os.path.join(self.outdir, "hits.fits")
-        #     data = hp.read_map(mapfile, nest=False)
-        #     nt.assert_almost_equal(
-        #         data, self.data.comm.ngroups * self.ndet * np.ones_like(data)
-        #     )
-        #
-        #     outfile = "{}.png".format(mapfile)
-        #     hp.mollview(data, xsize=1600, nest=False)
-        #     plt.savefig(outfile)
-        #     plt.close()
-        #
-        #     mapfile = os.path.join(self.outdir, "binned.fits")
-        #     data = hp.read_map(mapfile, nest=False)
-        #
-        #     # verify that the extrema are in the correct location
-        #     # and have the correct value.
-        #
-        #     minmap = np.min(data)
-        #     maxmap = np.max(data)
-        #     nt.assert_almost_equal(maxmap, self.dip_check, decimal=5)
-        #     nt.assert_almost_equal(minmap, -self.dip_check, decimal=5)
-        #
-        #     minloc = np.argmin(data)
-        #     maxloc = np.argmax(data)
-        #     nt.assert_equal(minloc, self.dip_min_pix)
-        #     nt.assert_equal(maxloc, self.dip_max_pix)
-        #
-        #     outfile = "{}.png".format(mapfile)
-        #     hp.mollview(data, xsize=1600, nest=False)
-        #     plt.savefig(outfile)
-        #     plt.close()
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        if rank == 0:
+            import matplotlib.pyplot as plt
+
+            mapfile = os.path.join(self.outdir, "toast_hits.fits")
+            mdata = hp.read_map(mapfile, nest=False)
+
+            outfile = "{}.png".format(mapfile)
+            hp.mollview(mdata, xsize=1600, nest=False)
+            plt.savefig(outfile)
+            plt.close()
+
+            mapfile = os.path.join(self.outdir, "toast_bin.fits")
+            mdata = hp.read_map(mapfile, nest=False)
+
+            outfile = "{}.png".format(mapfile)
+            hp.mollview(mdata, xsize=1600, nest=False)
+            plt.savefig(outfile)
+            plt.close()
+
+            # verify that the extrema are in the correct location
+            # and have the correct value.
+
+            minmap = np.min(mdata)
+            maxmap = np.max(mdata)
+            np.testing.assert_almost_equal(maxmap, self.dip_check, decimal=5)
+            np.testing.assert_almost_equal(minmap, -self.dip_check, decimal=5)
+
+            minloc = np.argmin(mdata)
+            maxloc = np.argmax(mdata)
+            np.testing.assert_equal(minloc, self.dip_min_pix)
+            np.testing.assert_equal(maxloc, self.dip_max_pix)
