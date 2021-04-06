@@ -158,6 +158,12 @@ class Weather(object):
             time : POSIX timestamp.
 
         """
+        if (
+                self.site == site and
+                self.realization == realization and
+                self._time == time
+        ):
+            return
         self.site = site
         self.realization = realization
         if time is not None:

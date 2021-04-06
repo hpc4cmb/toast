@@ -567,12 +567,8 @@ def draw_weather(args, comm, data, mc=0, verbose=True):
 
         # Get the observation start and initialize the weather
         # object
-        times = tod.local_times()
-        if tod.mpicomm is not None:
-            t_min = tod.mpicomm.allreduce(times[0], op=MPI.MIN)
-        else:
-            t_min = times[0]
-        weather.set(site, mc, np.floor(t_min))
+        start_time = obs["start_time"]
+        weather.set(site, mc, start_time)
 
         # Check for optional overrides
         if args.weather_pwv is not None:
