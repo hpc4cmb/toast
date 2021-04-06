@@ -245,7 +245,7 @@ if __name__ == "__main__":
     except Exception:
         # We have an unhandled exception on at least one process.  Print a stack
         # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = get_world()
+        mpiworld, procs, rank = toast.get_world()
         if procs == 1:
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()

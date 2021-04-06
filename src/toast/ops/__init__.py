@@ -20,7 +20,7 @@ from .pipeline import Pipeline
 
 from .sim_satellite import SimSatellite
 
-from .sim_ground import SimGround
+# from .sim_ground import SimGround
 
 from .sim_tod_noise import SimNoise
 

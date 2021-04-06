@@ -300,44 +300,55 @@ def parse_config(
     defaults_tmpl_disabled = build_config(templates_disabled)
 
     # Add commandline overrides
-    add_config_args(
-        parser,
-        defaults_op_enabled,
-        "operators",
-        ignore=["API"],
-        disabled=False,
-        prefix=prefix,
-    )
-    add_config_args(
-        parser,
-        defaults_op_disabled,
-        "operators",
-        ignore=["API"],
-        disabled=True,
-        prefix=prefix,
-    )
-    add_config_args(
-        parser,
-        defaults_tmpl_enabled,
-        "templates",
-        ignore=["API"],
-        disabled=False,
-        prefix=prefix,
-    )
-    add_config_args(
-        parser,
-        defaults_tmpl_disabled,
-        "templates",
-        ignore=["API"],
-        disabled=True,
-        prefix=prefix,
-    )
+    if len(operators_enabled) > 0:
+        add_config_args(
+            parser,
+            defaults_op_enabled,
+            "operators",
+            ignore=["API"],
+            disabled=False,
+            prefix=prefix,
+        )
+    if len(operators_disabled) > 0:
+        add_config_args(
+            parser,
+            defaults_op_disabled,
+            "operators",
+            ignore=["API"],
+            disabled=True,
+            prefix=prefix,
+        )
+    if len(templates_enabled) > 0:
+        add_config_args(
+            parser,
+            defaults_tmpl_enabled,
+            "templates",
+            ignore=["API"],
+            disabled=False,
+            prefix=prefix,
+        )
+    if len(templates_disabled) > 0:
+        add_config_args(
+            parser,
+            defaults_tmpl_disabled,
+            "templates",
+            ignore=["API"],
+            disabled=True,
+            prefix=prefix,
+        )
 
     # Combine all the defaults
-    defaults = OrderedDict(defaults_op_enabled)
-    defaults["operators"].update(defaults_op_disabled["operators"])
-    defaults["templates"] = OrderedDict(defaults_tmpl_enabled["templates"])
-    defaults["templates"].update(defaults_tmpl_disabled["templates"])
+    defaults = OrderedDict()
+    defaults["operators"] = OrderedDict()
+    defaults["templates"] = OrderedDict()
+    if "operators" in defaults_op_enabled:
+        defaults["operators"].update(defaults_op_enabled["operators"])
+    if "operators" in defaults_op_disabled:
+        defaults["operators"].update(defaults_op_disabled["operators"])
+    if "templates" in defaults_tmpl_enabled:
+        defaults["templates"].update(defaults_tmpl_enabled["templates"])
+    if "templates" in defaults_tmpl_disabled:
+        defaults["templates"].update(defaults_tmpl_disabled["templates"])
 
     # Add an option to load one or more config files.  These should have compatible
     # names for the operators used in defaults.
@@ -594,7 +605,7 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
             val = "None"
             if value != "None":
                 val = table()
-                subindent = indent_size + 2
+                subindent = indent + 2
                 for k, v in value.items():
                     val.add(k, v)
                     val[k].indent(subindent)
