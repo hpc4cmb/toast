@@ -193,7 +193,9 @@ class SimGround(Operator):
             raise RuntimeError(
                 "The schedule attribute must be set before calling exec()"
             )
-        focalplane = self.schedule.telescope.focalplane
+        focalplane = self.telescope.focalplane
+        rate = focalplane.sample_rate.to_value(u.Hz)
+        site = self.telescope.site
         comm = data.comm
 
         # List of detectors in this pipeline
@@ -206,12 +208,48 @@ class SimGround(Operator):
                 if det in detectors:
                     pipedets.append(det)
 
+        # The global start is the beginning of the first scan
+
+        mission_start = self.schedule.scans[0].start
+
+        # There is no requirement that the sampling is contiguous from one observation
+        # to the next.  In fact, we expect that some observations will be separated by
+        # times during which the acquisition was restarted or other events happen.
+        # Here we assume that each scan is independent and that the first sample
+        # occurs at the start time of the scan.
+
+        scan_starts = list()
+        scan_stops = list()
+        scan_offsets = list()
+        scan_samples = list()
+
+        incr = 1.0 / rate
+        off = 0
+        for scan in self.schedule.scans:
+            ffirst = rate * (scan.start - mission_start).total_seconds()
+            first = int(ffirst)
+            if ffirst - first > 1.0e-3 * incr:
+                first += 1
+            start = first * incr + mission_start.timestamp()
+            ns = 1 + int(rate * (scan.stop.timestamp() - start))
+            stop = (ns - 1) * incr + mission_start.timestamp()
+            scan_starts.append(start)
+            scan_stops.append(stop)
+            scan_samples.append(ns)
+            scan_offsets.append(off)
+            off += ns
+
+        # Distribute the observations uniformly among groups.  We take each scan and
+        # weight it by the duration.
+
+        groupdist = distribute_discrete(scan_samples, comm.ngroups)
+
         # Distribute the observations among groups in a load balanced way based on
         # the duration of each CES.
 
-        num_obs = len(self.schedule.ceslist)
+        num_obs = len(self.schedule.scans)
         obs_sizes = np.array(
-            [int(x.stop_time - x.start_time) + 1 for x in self.schedule.ceslist]
+            [int(x.stop_time - x.start_time) + 1 for x in self.schedule.scans]
         )
 
         groupdist = distribute_discrete(obs_sizes, comm.ngroups)

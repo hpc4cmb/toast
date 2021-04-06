@@ -14,6 +14,7 @@ install(FILES
     sim_tod_noise.py
     sim_tod_dipole.py
     sim_satellite.py
+    sim_ground.py
     noise_model.py
     noise_weight.py
     pointing_healpix.py

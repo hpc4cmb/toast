@@ -51,7 +51,9 @@ def build_config(objects):
     return conf
 
 
-def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="."):
+def add_config_args(
+    parser, conf, section, ignore=list(), disabled=False, prefix="", separator="."
+):
     """Add arguments to an argparser for each parameter in a config dictionary.
 
     Using a previously created config dictionary, add a commandline argument for each
@@ -65,6 +67,7 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
         conf (dict):  The configuration dictionary.
         section (str):  Process objects in this section of the config.
         ignore (list):  List of object parameters to ignore when adding args.
+        disabled (bool):  If True, these objects are disabled by default.
         prefix (str):  Prepend this to the beginning of all options.
         separator (str):  Use this character between the class name and parameter.
 
@@ -81,16 +84,27 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                 raise RuntimeError(msg)
             parent = parent[p]
     for obj, props in parent.items():
-        # Add an option to disable the object, so that the calling workflow can take
+        # Add option to enable / disable the object, so calling workflow can take
         # actions to conditionally use some objects.  This does not affect the parsing
         # of options.
-        parser.add_argument(
-            "--{}disable_{}".format(prefix, obj),
-            required=False,
-            default=False,
-            action="store_true",
-            help="Disable use of {}".format(obj),
-        )
+        if disabled:
+            # add option enable
+            parser.add_argument(
+                "--{}enable_{}".format(prefix, obj),
+                required=False,
+                default=False,
+                action="store_true",
+                help="Enable use of {}".format(obj),
+            )
+        else:
+            # add option disable
+            parser.add_argument(
+                "--{}disable_{}".format(prefix, obj),
+                required=False,
+                default=False,
+                action="store_true",
+                help="Disable use of {}".format(obj),
+            )
         for name, info in props.items():
             # print("examine options for {} = {}".format(name, info))
             if name in ignore:
@@ -228,13 +242,26 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="."):
     return remain
 
 
-def parse_config(parser, operators=list(), templates=list(), prefix=""):
+def parse_config(
+    parser,
+    operators_enabled=list(),
+    operators_disabled=list(),
+    templates_enabled=list(),
+    templates_disabled=list(),
+    prefix="",
+):
     """Load command line arguments associated with object properties.
 
     This function:
 
         * Adds a "--config" option to the parser which accepts multiple config file
           paths to load.
+
+        * Adds "--default_toml" and "--default_json" options to dump the default config
+          options to files.
+
+        * Adds a option "--job_group_size" to provide the commonly used option for
+          setting the group size of the TOAST communicator.
 
         * Adds arguments for all object parameters in the defaults for the specified
           classes.
@@ -245,12 +272,19 @@ def parse_config(parser, operators=list(), templates=list(), prefix=""):
 
     Args:
         parser (ArgumentParser):  The argparse parser.
-        operators (list):  The operator instances to add to the commandline.  These
-            instances should have their "name" attribute set to something meaningful,
-            since that name is used to construct the commandline options.
-        templates (list):  The template instances to add to the commandline.  These
-            instances should have their "name" attribute set to something meaningful,
-            since that name is used to construct the commandline options.
+        operators_enabled (list):  The operator instances to configure from files or
+            commandline.  These instances should have their "name" attribute set to
+            something meaningful, since that name is used to construct the commandline
+            options.  These are enabled by default and a "--disable_*" option is
+            created for each.
+        operators_disabled (list):  Same as above, but the operators are disabled by
+            default and an "--enable_*" option is created for each.
+        templates_enabled (list):  The template instances to add to the commandline.
+            These instances should have their "name" attribute set to something
+            meaningful, since that name is used to construct the commandline options.
+            These are enabled by default and a "--disable_*" option is created for each.
+        templates_disabled (list):  Same as above, but the templates are disabled by
+            default and an "--enable_*" option is created for each.
         prefix (str):  Optional string to prefix all options by.
 
     Returns:
@@ -260,13 +294,50 @@ def parse_config(parser, operators=list(), templates=list(), prefix=""):
     """
 
     # The default configuration
-    objs = list(operators)
-    objs.extend(templates)
-    defaults = build_config(objs)
+    defaults_op_enabled = build_config(operators_enabled)
+    defaults_op_disabled = build_config(operators_disabled)
+    defaults_tmpl_enabled = build_config(templates_enabled)
+    defaults_tmpl_disabled = build_config(templates_disabled)
 
     # Add commandline overrides
-    add_config_args(parser, defaults, "operators", ignore=["API"], prefix=prefix)
-    add_config_args(parser, defaults, "templates", ignore=["API"], prefix=prefix)
+    add_config_args(
+        parser,
+        defaults_op_enabled,
+        "operators",
+        ignore=["API"],
+        disabled=False,
+        prefix=prefix,
+    )
+    add_config_args(
+        parser,
+        defaults_op_disabled,
+        "operators",
+        ignore=["API"],
+        disabled=True,
+        prefix=prefix,
+    )
+    add_config_args(
+        parser,
+        defaults_tmpl_enabled,
+        "templates",
+        ignore=["API"],
+        disabled=False,
+        prefix=prefix,
+    )
+    add_config_args(
+        parser,
+        defaults_tmpl_disabled,
+        "templates",
+        ignore=["API"],
+        disabled=True,
+        prefix=prefix,
+    )
+
+    # Combine all the defaults
+    defaults = OrderedDict(defaults_op_enabled)
+    defaults["operators"].update(defaults_op_disabled["operators"])
+    defaults["templates"] = OrderedDict(defaults_tmpl_enabled["templates"])
+    defaults["templates"].update(defaults_tmpl_disabled["templates"])
 
     # Add an option to load one or more config files.  These should have compatible
     # names for the operators used in defaults.

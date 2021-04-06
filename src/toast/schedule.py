@@ -195,7 +195,7 @@ class GroundSchedule(object):
     A schedule is a collection of scans, with some extra methods for doing I/O.
 
     Args:
-        scans (list):  A list of Scan instances or None.
+        scans (list):  A list of GroundScan instances or None.
 
     """
 
@@ -394,7 +394,7 @@ class SatelliteSchedule(object):
     A schedule is a collection of scans, with some extra methods for doing I/O.
 
     Args:
-        scans (list):  A list of Scan instances or None.
+        scans (list):  A list of SatelliteScan instances or None.
 
     """
 
