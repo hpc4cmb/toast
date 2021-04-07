@@ -3,9 +3,8 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import types
-
 import re
-
+import ast
 import copy
 
 from collections import OrderedDict
@@ -601,13 +600,19 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
             tbl.add(name, qval)
         elif typ in ["list", "set", "tuple"]:
             val = "None"
-            if value != "None" and value != "[]" and value != "()":
-                val = list(value)
+            if value != "None":
+                if isinstance(value, str):
+                    val = ast.literal_eval(value)
+                else:
+                    val = value
             tbl.add(name, val)
         elif typ == "dict":
             val = "None"
-            if value != "None" and value != "{}":
-                dval = dict(value)
+            if value != "None":
+                if isinstance(value, str):
+                    dval = ast.literal_eval(value)
+                else:
+                    dval = dict(value)
                 val = table()
                 subindent = indent + 2
                 for k, v in dval.items():

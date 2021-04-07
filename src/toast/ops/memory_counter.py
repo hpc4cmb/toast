@@ -29,7 +29,7 @@ class MemoryCounter(Operator):
 
     # Class traits
 
-    API = traitlets.Int(0, help="Internal interface version for this operator")
+    API = Int(0, help="Internal interface version for this operator")
 
     silent = Bool(
         False,

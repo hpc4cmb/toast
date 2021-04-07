@@ -13,9 +13,25 @@ from datetime import datetime
 import numpy as np
 import numpy.testing as nt
 
+from astropy import units as u
+
 from tomlkit import comment, document, nl, table, dumps, loads
 
 from ..utils import Environment
+
+from ..traits import (
+    trait_docs,
+    Int,
+    Unicode,
+    Float,
+    Bool,
+    Instance,
+    Quantity,
+    Dict,
+    List,
+    Set,
+    Tuple,
+)
 
 from ..config import load_config, dump_toml, build_config, create_from_config
 
@@ -23,13 +39,55 @@ from ..instrument import Telescope, Focalplane
 
 from ..schedule_sim_satellite import create_satellite_schedule
 
-from ..ops import SimSatellite, Pipeline, SimNoise, DefaultNoiseModel
+from ..ops import SimSatellite, Pipeline, SimNoise, DefaultNoiseModel, Operator
 
 from ..templates import Offset, SubHarmonic
 
 from ..data import Data
 
 from ._helpers import create_outdir, create_comm, create_space_telescope
+
+
+class FakeClass:
+    def __init__(self):
+        self.foo = "bar"
+
+
+@trait_docs
+class ConfigOperator(Operator):
+    """Dummy class to test all the different trait types."""
+
+    # Class traits
+    API = Int(0, help="Internal interface version for this operator")
+    unicode_test = Unicode("str", help="String trait")
+    int_test = Int(123456, help="Int trait")
+    float_test = Float(1.2345, help="Float trait")
+    bool_test = Bool(False, help="Bool trait")
+    quantity_test = Quantity(1.2345 * u.second, help="Quantity trait")
+    instance_test = Instance(allow_none=True, klass=FakeClass, help="Instance trait")
+    list_test = List(["foo", "bar", "blat"], help="List trait")
+    dict_test = Dict({"a": "1", "b": "2", "c": "3"}, help="Dict trait")
+    set_test = Set({"a", "b", "c"}, help="Set trait")
+    tuple_test = Tuple(["foo", "bar", "blat"], help="Tuple trait")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
+        comm = data.comm
+
+    def _finalize(self, data, **kwargs):
+        pass
+
+    def _requires(self):
+        return dict()
+
+    def _provides(self):
+        return dict()
+
+    def _accelerators(self):
+        return list()
 
 
 class ConfigTest(MPITestCase):
@@ -68,13 +126,34 @@ class ConfigTest(MPITestCase):
         if self.toastcomm.world_rank == 0:
             dump_toml(self.doc2_file, conf_pipe)
 
-    def test_load(self):
-        conf = None
+    def test_trait_types(self):
+        fake = ConfigOperator(name="fake")
+        fake.instance_test = FakeClass()
+
+        fakeconf = fake.get_config()
+
+        fakefile = os.path.join(self.outdir, "fake.toml")
         if self.toastcomm.world_rank == 0:
-            conf = load_config(self.doc1_file)
-            conf = load_config(self.doc2_file)
+            dump_toml(fakefile, fakeconf)
+
+        loadconf = None
+        if self.toastcomm.world_rank == 0:
+            loadconf = load_config(fakefile)
         if self.toastcomm.comm_world is not None:
-            conf = self.toastcomm.comm_world.bcast(conf, root=0)
+            loadconf = self.toastcomm.comm_world.bcast(loadconf, root=0)
+
+        run = create_from_config(loadconf)
+
+        self.assertTrue(run.operators.fake.instance_test is None)
+        self.assertTrue(fake.unicode_test == run.operators.fake.unicode_test)
+        self.assertTrue(fake.int_test == run.operators.fake.int_test)
+        self.assertTrue(fake.float_test == run.operators.fake.float_test)
+        self.assertTrue(fake.bool_test == run.operators.fake.bool_test)
+        self.assertTrue(fake.list_test == run.operators.fake.list_test)
+        self.assertTrue(fake.dict_test == run.operators.fake.dict_test)
+        self.assertTrue(fake.quantity_test == run.operators.fake.quantity_test)
+        self.assertTrue(fake.set_test == run.operators.fake.set_test)
+        self.assertTrue(fake.tuple_test == run.operators.fake.tuple_test)
 
     def test_roundtrip(self):
         conf = None

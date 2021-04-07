@@ -31,9 +31,9 @@ class DefaultNoiseModel(Operator):
 
     # Class traits
 
-    API = traitlets.Int(0, help="Internal interface version for this operator")
+    API = Int(0, help="Internal interface version for this operator")
 
-    noise_model = traitlets.Unicode(
+    noise_model = Unicode(
         "noise_model", help="The observation key for storing the noise model"
     )
 

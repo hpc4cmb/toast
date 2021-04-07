@@ -272,6 +272,12 @@ class TraitConfig(HasTraits):
             for v in tval:
                 vstr, _ = _format_item(conf, v)
                 retval.append(vstr)
+        if isinstance(trt, Instance) and not isinstance(tval, TraitConfig):
+            # Our trait is some other class not derived from TraitConfig.  This
+            # means that we cannot recursively dump it to the config and we also have
+            # no way (currently) of serializing this instance to the config.  We set it
+            # to None so that default actions can be taken by the constructor.
+            pass
         else:
             # Single object
             retval, unitstr = _format_item(conf, tval)
