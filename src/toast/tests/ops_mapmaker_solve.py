@@ -41,7 +41,9 @@ class MapmakerSolveTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise
-        sim_noise = ops.SimNoise(noise_model=default_model.noise_model, out="noise")
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data="noise"
+        )
         sim_noise.apply(data)
 
         # Pointing operator
@@ -59,7 +61,7 @@ class MapmakerSolveTest(MPITestCase):
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
-            det_data=sim_noise.out,
+            det_data=sim_noise.det_data,
             pointing=pointing,
             noise_model=default_model.noise_model,
             save_pointing=False,
@@ -84,7 +86,7 @@ class MapmakerSolveTest(MPITestCase):
         # below.
 
         rhs_calc = SolverRHS(
-            det_data=sim_noise.out,
+            det_data=sim_noise.det_data,
             overwrite=False,
             binning=binner,
             template_matrix=tmatrix,
@@ -102,7 +104,7 @@ class MapmakerSolveTest(MPITestCase):
 
         # Make the binned map in a different location
         binner.binned = "check"
-        binner.det_data = sim_noise.out
+        binner.det_data = sim_noise.det_data
         binner.apply(data)
 
         check_binned = data[binner.binned]
@@ -118,20 +120,22 @@ class MapmakerSolveTest(MPITestCase):
             pixels=pointing.pixels,
             weights=pointing.weights,
             map_key=binner.binned,
-            det_data=sim_noise.out,
+            det_data=sim_noise.det_data,
             subtract=True,
         )
         scan_map.apply(data)
 
         # Apply diagonal noise weight.
-        nw = ops.NoiseWeight(noise_model=binner.noise_model, det_data=sim_noise.out)
+        nw = ops.NoiseWeight(
+            noise_model=binner.noise_model, det_data=sim_noise.det_data
+        )
         nw.apply(data)
 
         # Project our timestreams to template amplitudes.  Store this in a different
         # data key that the RHS operator.
 
         tmatrix.amplitudes = "check_RHS"
-        tmatrix.det_data = sim_noise.out
+        tmatrix.det_data = sim_noise.det_data
         tmatrix.apply(data)
 
         # Verify that the output amplitudes agree

@@ -145,13 +145,19 @@ class Pipeline(Operator):
                             all_local_dets[det] = None
                     all_local_dets = list(all_local_dets.keys())
 
-                    # If we were given a more restrictive list, prune the global list
-                    selected_dets = all_local_dets
-                    if detectors is not None:
-                        selected_dets = list()
-                        for det in all_local_dets:
-                            if det in detectors:
-                                selected_dets.append(det)
+                    # If we have no detectors at all across all observations, it
+                    # means that one of our operators is going to create observations.
+                    # pass None for the list of detectors.
+                    selected_dets = None
+                    if len(all_local_dets) > 0:
+                        selected_dets = all_local_dets
+                        # If we were given a more restrictive list, prune the global
+                        # list
+                        if detectors is not None:
+                            selected_dets = list()
+                            for det in all_local_dets:
+                                if det in detectors:
+                                    selected_dets.append(det)
 
                     # Run the operators with this full list
                     for op in self.operators:

@@ -102,8 +102,6 @@ class ConfigTest(MPITestCase):
 
         run = create_from_config(conf)
 
-        print(run)
-
         data = Data(self.toastcomm)
 
         tele = create_space_telescope(self.toastcomm.group_size)
