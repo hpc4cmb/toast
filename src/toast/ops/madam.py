@@ -53,6 +53,10 @@ class Madam(Operator):
 
     params = Dict(dict(), help="Parameters to pass to madam")
 
+    paramfile = Unicode(
+        None, allow_none=True, help="Read madam parameters from this file"
+    )
+
     times = Unicode("times", help="Observation shared key for timestamps")
 
     det_data = Unicode("signal", help="Observation detdata key for the timestream data")
@@ -246,16 +250,53 @@ class Madam(Operator):
                 "You must set the pixels and weights before calling exec()"
             )
 
+        # Combine parameters from an external file and other parameters passed in
+
+        params = None
+        repeat_keys = ["detset", "detset_nopol", "survey"]
+
+        if self.paramfile is not None:
+            if data.comm.world_rank == 0:
+                params = dict()
+                line_pat = re.compile(r"(\S+)\s+=\s+(\S+)")
+                comment_pat = re.compile(r"^\s*\#.*")
+                with open(self.paramfile, "r") as f:
+                    for line in f:
+                        if comment_pat.match(line) is None:
+                            line_mat = line_pat.match(line)
+                            if line_mat is not None:
+                                k = line_mat.group(1)
+                                v = line_mat.group(2)
+                                if k in repeat_keys:
+                                    if k not in params:
+                                        params[k] = [v]
+                                    else:
+                                        params[k].append(v)
+                                else:
+                                    params[k] = v
+            if data.comm.world_comm is not None:
+                params = data.comm.world_comm.bcast(params, root=0)
+            for k, v in self.params.items():
+                if k in repeat_keys:
+                    if k not in params:
+                        params[k] = [v]
+                    else:
+                        params[k].append(v)
+                else:
+                    params[k] = v
+        else:
+            params = dict(self.params)
+
         # Set madam parameters that depend on our traits
         if self.mcmode:
-            self.params["mcmode"] = True
+            params["mcmode"] = True
         else:
-            self.params["mcmode"] = False
+            params["mcmode"] = False
 
         if self.det_out is not None:
-            self.params["write_tod"] = True
+            params["write_tod"] = True
         else:
-            self.params["write_tod"] = False
+            params["write_tod"] = False
 
         # Check input parameters and compute the sizes of Madam data objects
         if data.comm.world_rank == 0:
@@ -270,12 +311,13 @@ class Madam(Operator):
             interval_starts,
             psd_freqs,
             nside,
-        ) = self._prepare(data, detectors)
+        ) = self._prepare(params, data, detectors)
 
         if data.comm.world_rank == 0:
             msg = "{} Copying toast data to buffers".format(self._logprefix)
             log.info(msg)
         psdinfo, signal_dtype, pixels_dtype, weight_dtype = self._stage_data(
+            params,
             data,
             all_dets,
             nsamp,
@@ -290,12 +332,13 @@ class Madam(Operator):
         if data.comm.world_rank == 0:
             msg = "{} Destriping data".format(self._logprefix)
             log.info(msg)
-        self._destripe(data, all_dets, interval_starts, psdinfo)
+        self._destripe(params, data, all_dets, interval_starts, psdinfo)
 
         if data.comm.world_rank == 0:
             msg = "{} Copying buffers back to toast data".format(self._logprefix)
             log.info(msg)
         self._unstage_data(
+            params,
             data,
             all_dets,
             nsamp,
@@ -340,17 +383,17 @@ class Madam(Operator):
         return list()
 
     @function_timer
-    def _prepare(self, data, detectors):
+    def _prepare(self, params, data, detectors):
         """Examine the data and determine quantities needed to set up Madam buffers"""
         log = Logger.get()
         timer = Timer()
         timer.start()
 
-        if "nside_map" not in self.params:
+        if "nside_map" not in params:
             raise RuntimeError(
                 "Madam 'nside_map' must be set in the parameter dictionary"
             )
-        nside = int(self.params["nside_map"])
+        nside = int(params["nside_map"])
 
         # Madam requires a fixed set of detectors and pointing matrix non-zeros.
         # Here we find the superset of local detectors used, and also the number
@@ -471,7 +514,7 @@ class Madam(Operator):
 
         nnz = None
         nnz_stride = None
-        if "temperature_only" in self.params and self.params["temperature_only"] in [
+        if "temperature_only" in params and params["temperature_only"] in [
             "T",
             "True",
             "TRUE",
@@ -491,8 +534,8 @@ class Madam(Operator):
             nnz = nnz_full
             nnz_stride = 1
 
-        if data.comm.world_rank == 0 and "path_output" in self.params:
-            os.makedirs(self.params["path_output"], exist_ok=True)
+        if data.comm.world_rank == 0 and "path_output" in params:
+            os.makedirs(params["path_output"], exist_ok=True)
 
         # Inspect the valid intervals across all observations to
         # determine the number of samples per detector
@@ -519,6 +562,7 @@ class Madam(Operator):
     @function_timer
     def _stage_data(
         self,
+        params,
         data,
         all_dets,
         nsamp,
@@ -844,6 +888,7 @@ class Madam(Operator):
     @function_timer
     def _unstage_data(
         self,
+        params,
         data,
         all_dets,
         nsamp,
@@ -1024,7 +1069,7 @@ class Madam(Operator):
         return
 
     @function_timer
-    def _destripe(self, data, dets, interval_starts, psdinfo):
+    def _destripe(self, params, data, dets, interval_starts, psdinfo):
         """Destripe the buffered data"""
         log_time_memory(
             data,
@@ -1036,8 +1081,8 @@ class Madam(Operator):
         if self._cached:
             # destripe
             outpath = ""
-            if "path_output" in self.params:
-                outpath = self.params["path_output"]
+            if "path_output" in params:
+                outpath = params["path_output"]
             outpath = outpath.encode("ascii")
             madam.destripe_with_cache(
                 data.comm.comm_world,
@@ -1053,7 +1098,7 @@ class Madam(Operator):
             # destripe
             madam.destripe(
                 data.comm.comm_world,
-                self.params,
+                params,
                 dets,
                 detweights,
                 self._madam_timestamps,
