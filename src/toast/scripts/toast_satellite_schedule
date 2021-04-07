@@ -71,7 +71,7 @@ def main():
     parser.add_argument(
         "--prec_minutes",
         required=False,
-        default=10.0,
+        default=50.0,
         type=float,
         help="The precession period in minutes.",
     )
@@ -79,7 +79,7 @@ def main():
     parser.add_argument(
         "--spin_minutes",
         required=False,
-        default=2.0,
+        default=10.0,
         type=float,
         help="The spin period in minutes.",
     )

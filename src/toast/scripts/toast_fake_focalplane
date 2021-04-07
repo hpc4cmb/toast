@@ -192,7 +192,7 @@ def main():
     mpiworld, procs, rank = get_world()
     if rank == 0:
         fp.write(args.out)
-        plotfile = "{}.png".format(args.out)
+        plotfile = "{}.pdf".format(args.out)
         plot_focalplane(
             fp,
             args.fov_deg * u.degree,

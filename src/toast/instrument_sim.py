@@ -667,21 +667,21 @@ def plot_focalplane(
     width_deg = width.to_value(u.degree)
     height_deg = height.to_value(u.degree)
 
-    xfigsize = int(width_deg)
-    yfigsize = int(height_deg)
+    xfigsize = int(width_deg) + 1
+    yfigsize = int(height_deg) + 1
     figdpi = 100
 
     # Compute the font size to use for detector labels
-    fontpix = 0.2 * figdpi
+    fontpix = 0.05 * figdpi
     fontpt = int(0.75 * fontpix)
 
     fig = plt.figure(figsize=(xfigsize, yfigsize), dpi=figdpi)
     ax = fig.add_subplot(1, 1, 1)
 
-    half_width = 0.5 * width_deg
-    half_height = 0.5 * height_deg
-    ax.set_xlabel("Degrees", fontsize="large")
-    ax.set_ylabel("Degrees", fontsize="large")
+    half_width = 0.6 * width_deg
+    half_height = 0.6 * height_deg
+    ax.set_xlabel("Degrees", fontsize="medium")
+    ax.set_ylabel("Degrees", fontsize="medium")
     ax.set_xlim([-half_width, half_width])
     ax.set_ylim([-half_height, half_height])
 
@@ -727,6 +727,22 @@ def plot_focalplane(
         if pol_color is not None:
             detcolor = pol_color[d]
 
+        if show_labels:
+            xsgn = 1.0
+            if dx < 0.0:
+                xsgn = -1.0
+            labeloff = 0.05 * xsgn * fontpix * len(d) / figdpi
+            ax.text(
+                (xtail + 1.3 * dx + labeloff),
+                (ytail + 1.2 * dy),
+                d,
+                color="k",
+                fontsize=fontpt,
+                horizontalalignment="center",
+                verticalalignment="center",
+                bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
+            )
+
         ax.arrow(
             xtail,
             ytail,
@@ -740,25 +756,9 @@ def plot_focalplane(
             length_includes_head=True,
         )
 
-        if show_labels:
-            xsgn = 1.0
-            if dx < 0.0:
-                xsgn = -1.0
-            labeloff = 0.05 * xsgn * fontpix * len(d) / figdpi
-            ax.text(
-                (xtail + 1.1 * dx + labeloff),
-                (ytail + 1.1 * dy),
-                d,
-                color="k",
-                fontsize=fontpt,
-                horizontalalignment="center",
-                verticalalignment="center",
-                bbox=dict(fc="w", ec="none", pad=1, alpha=1.0),
-            )
-
     if outfile is None:
         plt.show()
     else:
-        plt.savefig(outfile, dpi=300, format="pdf")
+        plt.savefig(outfile, dpi=figdpi, bbox_inches="tight", format="pdf")
         plt.close()
     return fig

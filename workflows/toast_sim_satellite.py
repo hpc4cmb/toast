@@ -128,13 +128,13 @@ def main():
             n_pix=1,
             sample_rate=50.0 * u.Hz,
             psd_fmin=1.0e-5 * u.Hz,
-            psd_net=1.0 * u.K * np.sqrt(1 * u.second),
+            psd_net=0.001 * u.K * np.sqrt(1 * u.second),
             psd_fknee=(50.0 * u.Hz / 2000.0),
         )
     else:
         if rank == 0:
             log.info("Loading focalplane from {}".format(args.focalplane))
-            focalplane = Focalplane(file=args.focalplane)
+            focalplane = toast.instrument.Focalplane(file=args.focalplane)
         if world_comm is not None:
             focalplane = world_comm.bcast(focalplane, root=0)
 
