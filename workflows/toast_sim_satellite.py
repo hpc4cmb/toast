@@ -30,6 +30,8 @@ import sys
 import traceback
 import argparse
 
+import numpy as np
+
 from astropy import units as u
 
 import toast
@@ -56,14 +58,14 @@ def main():
     )
 
     parser.add_argument(
-        "--schedule", required=True, default=None, help="Input observing schedule"
+        "--schedule", required=False, default=None, help="Input observing schedule"
     )
 
     parser.add_argument(
         "--out_dir",
         required=False,
         type=str,
-        default="toast_satellite_sim_out",
+        default="toast_sim_satellite_out",
         help="The output directory",
     )
 
@@ -108,7 +110,9 @@ def main():
     # Log the config that was actually used at runtime.
     outlog = os.path.join(args.out_dir, "config_log.toml")
     if rank == 0:
-        dump_toml(outlog, config)
+        if not os.path.isdir(args.out_dir):
+            os.makedirs(args.out_dir)
+        toast.config.dump_toml(outlog, config)
 
     # Load or create the focalplane file.  NOTE:  again, this is just using the
     # built-in Focalplane class.  In a workflow for a specific experiment we would
@@ -123,9 +127,9 @@ def main():
         focalplane = toast.instrument_sim.fake_hexagon_focalplane(
             n_pix=1,
             sample_rate=50.0 * u.Hz,
-            f_min=1.0e-5 * u.Hz,
-            net=1.0,
-            f_knee=(50.0 * u.Hz / 2000.0),
+            psd_fmin=1.0e-5 * u.Hz,
+            psd_net=1.0 * u.K * np.sqrt(1 * u.second),
+            psd_fknee=(50.0 * u.Hz / 2000.0),
         )
     else:
         if rank == 0:
@@ -144,6 +148,9 @@ def main():
 
     # Load the schedule file
 
+    if args.schedule is None:
+        log.info("No schedule file specified- nothing to simulate")
+        return
     schedule = None
     if rank == 0:
         schedule = toast.schedule.SatelliteSchedule()
@@ -159,6 +166,7 @@ def main():
         jobargs,
         schedule=schedule,
         focalplane=focalplane,
+        full_pointing=args.enable_madam,
     )
 
     # Create the toast communicator
@@ -177,9 +185,9 @@ def main():
 
     # Simulate the telescope pointing
 
-    ops.sim_scanning.telescope = telescope
-    ops.sim_scanning.schedule = schedule
-    ops.sim_scanning.apply(data)
+    ops.sim_satellite.telescope = telescope
+    ops.sim_satellite.schedule = schedule
+    ops.sim_satellite.apply(data)
 
     # Construct a "perfect" noise model just from the focalplane parameters
 

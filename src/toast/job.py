@@ -2,6 +2,12 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import psutil
+
+import numpy as np
+
+from astropy import units as u
+
 from .mpi import MPI
 
 from .utils import Logger
@@ -35,7 +41,7 @@ def job_size(world_comm):
 
     procs_per_node = 1
     node_rank = 0
-    nodecomm = None
+    node_comm = None
     rank = 0
     procs = 1
 
@@ -43,8 +49,8 @@ def job_size(world_comm):
         rank = world_comm.rank
         procs = world_comm.size
         node_comm = world_comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
-        node_rank = nodecomm.rank
-        procs_per_node = nodecomm.size
+        node_rank = node_comm.rank
+        procs_per_node = node_comm.size
         min_per_node = world_comm.allreduce(procs_per_node, op=MPI.MIN)
         max_per_node = world_comm.allreduce(procs_per_node, op=MPI.MAX)
         if min_per_node != max_per_node:
@@ -54,7 +60,6 @@ def job_size(world_comm):
 
     # One process on each node gets available RAM and communicates it
     min_avail, max_avail = get_node_mem(world_comm, node_rank)
-    gb = 1024 ** 3
 
     return (n_node, procs_per_node, min_avail, max_avail)
 
@@ -91,6 +96,7 @@ def job_group_size(
 
     """
     log = Logger.get()
+    gb = 1024 ** 3
 
     rank = 0
     procs = 1
@@ -113,14 +119,14 @@ def job_group_size(
     rate = None
     if focalplane is not None:
         n_det = len(focalplane.detector_data)
-        rate = focalplane.sample_rate
+        rate = focalplane.sample_rate.to_value(u.Hz)
     else:
         if num_dets is None or sample_rate is None:
             msg = "specify either a focalplane or both the number of detectors and rate"
             log.error(msg)
             raise RuntimeError(msg)
         n_det = num_dets
-        rate = sample_rate
+        rate = sample_rate.to_value(u.Hz)
 
     obs_len = list()
     if schedule is not None:
@@ -137,11 +143,23 @@ def job_group_size(
 
     # Get memory available
 
-    n_node, procs_per_node, min_avail, max_avail = jobsize(world_comm)
+    n_node, procs_per_node, min_avail, max_avail = job_size(world_comm)
 
     node_mem = min_avail
     if job_args.node_mem is not None:
         node_mem = job_args.node_mem
+
+    def observation_mem(seconds, nodes):
+        m = 0
+        # Assume 2 copies of node-shared boresight pointing
+        m += 2 * 4 * 8 * rate * seconds * nodes
+        # Assume 8 byte floats per det sample
+        m += det_copies * n_det * 8 * rate * seconds
+        return m
+
+    group_nodes = 1
+    group_mem = group_nodes * node_mem
+    obs_mem = [observation_mem(x, group_nodes) for x in obs_len]
 
     if rank == 0:
         log.info(
@@ -169,18 +187,6 @@ def job_group_size(
                 int(obs_mem[-1] / 60), int(obs_mem[0] / 60)
             )
         )
-
-    def observation_mem(seconds, nodes):
-        m = 0
-        # Assume 2 copies of node-shared boresight pointing
-        m += 2 * 4 * 8 * rate * seconds * nodes
-        # Assume 8 byte floats per det sample
-        m += det_copies * n_det * 8 * rate * seconds
-        return m
-
-    group_nodes = 1
-    group_mem = group_nodes * node_mem
-    obs_mem = [observation_mem(x, group_nodes) for x in obs_len]
 
     if rank == 0:
         log.verbose(

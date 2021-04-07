@@ -169,7 +169,7 @@ def add_config_args(
     return
 
 
-def args_update_config(args, conf, defaults, section, prefix="", separator="."):
+def args_update_config(args, conf, defaults, section, prefix="", separator="\."):
     """Override options in a config dictionary from args namespace.
 
     Args:
@@ -202,29 +202,32 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="."):
             dparent = dparent[p]
     # Build the regex match of option names
     obj_pat = re.compile("{}(.*?){}(.*)".format(prefix, separator))
-    for arg in vars(args):
-        val = getattr(args, arg)
+    opt_no_pat = re.compile("no_(.*)")
+    for arg, val in vars(args).items():
         obj_mat = obj_pat.match(arg)
         if obj_mat is not None:
             name = obj_mat.group(1)
             optname = obj_mat.group(2)
-            if name not in parent:
-                msg = (
-                    "Parsing option '{}', config does not have object named {}".format(
-                        arg, name
-                    )
-                )
-                raise RuntimeError(msg)
-            if name not in dparent:
-                msg = "Parsing option '{}', defaults does not have object named {}".format(
-                    arg, name
-                )
-                raise RuntimeError(msg)
+            if name not in parent or name not in dparent:
+                # This command line option is not part of this section
+                continue
             # Only update config options which are different than the default.
             # Otherwise we would be overwriting values from any config files with the
             # defaults from argparse.
+
+            # See if our option matches the negated "--no_*" format for inverted bool
+            # arguments
+            opt_no_mat = opt_no_pat.match(optname)
+
             if val is None:
                 val = "None"
+            elif (val == "True" or val == "False") and opt_no_mat is not None:
+                # We have a boolean option with an inverted name.  Switch it.
+                optname = opt_no_mat.group(1)
+                if val == "True":
+                    val = "False"
+                else:
+                    val = "True"
             else:
                 if dparent[name][optname]["unit"] != "None":
                     # This option is a quantity
@@ -598,15 +601,16 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
             tbl.add(name, qval)
         elif typ in ["list", "set", "tuple"]:
             val = "None"
-            if value != "None":
+            if value != "None" and value != "[]" and value != "()":
                 val = list(value)
             tbl.add(name, val)
         elif typ == "dict":
             val = "None"
-            if value != "None":
+            if value != "None" and value != "{}":
+                dval = dict(value)
                 val = table()
                 subindent = indent + 2
-                for k, v in value.items():
+                for k, v in dval.items():
                     val.add(k, v)
                     val[k].indent(subindent)
             tbl.add(name, val)
@@ -909,7 +913,8 @@ def create_from_config(conf):
                                 parent[node_name][child_key][elem] = found
                         # print("PARSE child value {} is a list".format(child_val))
                     else:
-                        print("PARSE not modifying {}".format(child_val))
+                        # print("PARSE not modifying {}".format(child_val))
+                        pass
 
         # If this node is an object and all refs exist, then create it.  Otherwise
         # leave it alone.

@@ -432,6 +432,12 @@ class TraitConfig(HasTraits):
                         cv = True
                     elif cv == "False":
                         cv = False
+                    elif cv == "{}":
+                        cv = dict()
+                    elif cv == "()":
+                        cv = tuple()
+                    elif cv == "[]":
+                        cv = list()
                     kw[k] = pyt(cv)
             else:
                 # We have a Quantity.

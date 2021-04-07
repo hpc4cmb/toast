@@ -63,7 +63,8 @@ class Template(TraitConfig):
     @traitlets.observe("data")
     def initialize(self, change):
         newdata = change["new"]
-        self._initialize(newdata)
+        if newdata is not None:
+            self._initialize(newdata)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

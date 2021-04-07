@@ -5,6 +5,8 @@
 import os
 import sys
 
+from datetime import datetime
+
 import numpy as np
 
 from astropy import units as u
@@ -443,11 +445,13 @@ class SatelliteSchedule(object):
         """
         data = QTable.read(file, format="ascii.ecsv")
         for row in data:
+            tstart = datetime.fromisoformat(row["start"])
+            tstop = datetime.fromisoformat(row["stop"])
             self.scans.append(
                 SatelliteScan(
                     name=row["name"],
-                    start=row["start"],
-                    stop=row["stop"],
+                    start=tstart,
+                    stop=tstop,
                     prec_period=row["prec_period"],
                     spin_period=row["spin_period"],
                 )
