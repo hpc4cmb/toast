@@ -199,6 +199,8 @@ class TraitConfig(HasTraits):
 
     name = Unicode(None, allow_none=True, help="The 'name' of this class instance")
 
+    enabled = Bool(True, help="If True, this class instance is marked as enabled")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.name is None:

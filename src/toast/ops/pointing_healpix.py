@@ -252,15 +252,27 @@ class PointingHealpix(Operator):
                 # Nothing to do for this observation
                 continue
 
-            # Do we already have pointing for all detectors?
-            if (self.pixels in ob.detdata) and (
-                ob.detdata[self.pixels].detectors == dets
-            ):
-                if (self.weights in ob.detdata) and (
-                    ob.detdata[self.weights].detectors == dets
-                ):
-                    # Yes!  We are done.
-                    continue
+            # Do we already have pointing for all requested detectors?
+            done = False
+            if (self.pixels in ob.detdata) and (self.weights in ob.detdata):
+                done = True
+                pix_dets = ob.detdata[self.pixels].detectors
+                wt_dets = ob.detdata[self.weights].detectors
+                for d in dets:
+                    if d not in pix_dets:
+                        done = False
+                        break
+                    if d not in wt_dets:
+                        done = False
+                        break
+            if done:
+                # We already have pointing for all specified detectors
+                if data.comm.group_rank == 0:
+                    msg = "Group {}, ob {}, pointing already computed for {}".format(
+                        data.comm.group, ob.name, dets
+                    )
+                    log.verbose(msg)
+                continue
 
             # Create (or re-use) output data for the pixels, weights and optionally the
             # detector quaternions.

@@ -36,6 +36,8 @@ from .scan_map import ScanMap, ScanMask, ScanScale
 
 from .scan_healpix import ScanHealpix
 
+from .pointing import BuildPixelDistribution
+
 from .mapmaker_utils import (
     BuildHitMap,
     BuildInverseCovariance,

@@ -50,9 +50,7 @@ def build_config(objects):
     return conf
 
 
-def add_config_args(
-    parser, conf, section, ignore=list(), disabled=False, prefix="", separator="."
-):
+def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="."):
     """Add arguments to an argparser for each parameter in a config dictionary.
 
     Using a previously created config dictionary, add a commandline argument for each
@@ -66,7 +64,6 @@ def add_config_args(
         conf (dict):  The configuration dictionary.
         section (str):  Process objects in this section of the config.
         ignore (list):  List of object parameters to ignore when adding args.
-        disabled (bool):  If True, these objects are disabled by default.
         prefix (str):  Prepend this to the beginning of all options.
         separator (str):  Use this character between the class name and parameter.
 
@@ -83,27 +80,6 @@ def add_config_args(
                 raise RuntimeError(msg)
             parent = parent[p]
     for obj, props in parent.items():
-        # Add option to enable / disable the object, so calling workflow can take
-        # actions to conditionally use some objects.  This does not affect the parsing
-        # of options.
-        if disabled:
-            # add option enable
-            parser.add_argument(
-                "--{}enable_{}".format(prefix, obj),
-                required=False,
-                default=False,
-                action="store_true",
-                help="Enable use of {}".format(obj),
-            )
-        else:
-            # add option disable
-            parser.add_argument(
-                "--{}disable_{}".format(prefix, obj),
-                required=False,
-                default=False,
-                action="store_true",
-                help="Disable use of {}".format(obj),
-            )
         for name, info in props.items():
             # print("examine options for {} = {}".format(name, info))
             if name in ignore:
@@ -120,20 +96,45 @@ def add_config_args(
                 # print("  no type- skipping")
                 continue
             if info["type"] == "bool":
-                # special case for boolean
-                option = "--{}{}{}{}".format(prefix, obj, separator, name)
-                act = "store_true"
-                if info["value"] == "True":
-                    act = "store_false"
-                    option = "--{}{}{}no_{}".format(prefix, obj, separator, name)
-                # print("  add bool argument {}".format(option))
-                parser.add_argument(
-                    option,
-                    required=False,
-                    default=info["value"],
-                    action=act,
-                    help=info["help"],
-                )
+                # Special case for boolean
+                if name == "enabled":
+                    # Special handling of the TraitConfig "disabled" trait.  We provide
+                    # both an enable and disable option for every instance which later
+                    # toggles that trait.
+                    df = True
+                    if info["value"] == "False":
+                        df = False
+                    parser.add_argument(
+                        "--{}{}{}enable".format(prefix, obj, separator),
+                        required=False,
+                        default=df,
+                        action="store_true",
+                        help="Enable use of {}".format(obj),
+                    )
+                    parser.add_argument(
+                        "--{}{}{}disable".format(prefix, obj, separator),
+                        required=False,
+                        default=(not df),
+                        action="store_false",
+                        help="Disable use of {}".format(obj),
+                        dest="{}{}{}enable".format(prefix, obj, separator),
+                    )
+                else:
+                    # General bool option
+                    option = "--{}{}{}{}".format(prefix, obj, separator, name)
+                    act = "store_true"
+                    if info["value"] == "True":
+                        act = "store_false"
+                        option = "--{}{}{}no_{}".format(prefix, obj, separator, name)
+                    # print("  add bool argument {}".format(option))
+                    parser.add_argument(
+                        option,
+                        required=False,
+                        default=info["value"],
+                        action=act,
+                        help=info["help"],
+                        dest="{}{}{}{}".format(prefix, obj, separator, name),
+                    )
             else:
                 option = "--{}{}{}{}".format(prefix, obj, separator, name)
                 default = None
@@ -201,7 +202,6 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="\.")
             dparent = dparent[p]
     # Build the regex match of option names
     obj_pat = re.compile("{}(.*?){}(.*)".format(prefix, separator))
-    opt_no_pat = re.compile("no_(.*)")
     for arg, val in vars(args).items():
         obj_mat = obj_pat.match(arg)
         if obj_mat is not None:
@@ -214,19 +214,22 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="\.")
             # Otherwise we would be overwriting values from any config files with the
             # defaults from argparse.
 
-            # See if our option matches the negated "--no_*" format for inverted bool
-            # arguments
-            opt_no_mat = opt_no_pat.match(optname)
+            if optname == "enable":
+                # The actual trait name is "enabled"
+                optname = "enabled"
 
             if val is None:
                 val = "None"
-            elif (val == "True" or val == "False") and opt_no_mat is not None:
-                # We have a boolean option with an inverted name.  Switch it.
-                optname = opt_no_mat.group(1)
-                if val == "True":
-                    val = "False"
+            elif dparent[name][optname]["type"] == "bool":
+                if isinstance(val, bool):
+                    # Convert to str
+                    if val:
+                        val = "True"
+                    else:
+                        val = "False"
                 else:
-                    val = "True"
+                    # This is already a string...
+                    pass
             else:
                 if dparent[name][optname]["unit"] != "None":
                     # This option is a quantity
@@ -246,10 +249,8 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="\.")
 
 def parse_config(
     parser,
-    operators_enabled=list(),
-    operators_disabled=list(),
-    templates_enabled=list(),
-    templates_disabled=list(),
+    operators=list(),
+    templates=list(),
     prefix="",
 ):
     """Load command line arguments associated with object properties.
@@ -274,19 +275,16 @@ def parse_config(
 
     Args:
         parser (ArgumentParser):  The argparse parser.
-        operators_enabled (list):  The operator instances to configure from files or
+        operators (list):  The operator instances to configure from files or
             commandline.  These instances should have their "name" attribute set to
             something meaningful, since that name is used to construct the commandline
-            options.  These are enabled by default and a "--disable_*" option is
-            created for each.
-        operators_disabled (list):  Same as above, but the operators are disabled by
-            default and an "--enable_*" option is created for each.
-        templates_enabled (list):  The template instances to add to the commandline.
+            options.  An enable / disable option is created for each, which toggles the
+            TraitConfig base class "disabled" trait.
+        templates (list):  The template instances to add to the commandline.
             These instances should have their "name" attribute set to something
             meaningful, since that name is used to construct the commandline options.
-            These are enabled by default and a "--disable_*" option is created for each.
-        templates_disabled (list):  Same as above, but the templates are disabled by
-            default and an "--enable_*" option is created for each.
+            An enable / disable option is created for each, which toggles the
+            TraitConfig base class "disabled" trait.
         prefix (str):  Optional string to prefix all options by.
 
     Returns:
@@ -296,46 +294,24 @@ def parse_config(
     """
 
     # The default configuration
-    defaults_op_enabled = build_config(operators_enabled)
-    defaults_op_disabled = build_config(operators_disabled)
-    defaults_tmpl_enabled = build_config(templates_enabled)
-    defaults_tmpl_disabled = build_config(templates_disabled)
+    defaults_op = build_config(operators)
+    defaults_tmpl = build_config(templates)
 
     # Add commandline overrides
-    if len(operators_enabled) > 0:
+    if len(operators) > 0:
         add_config_args(
             parser,
-            defaults_op_enabled,
+            defaults_op,
             "operators",
             ignore=["API"],
-            disabled=False,
             prefix=prefix,
         )
-    if len(operators_disabled) > 0:
+    if len(templates) > 0:
         add_config_args(
             parser,
-            defaults_op_disabled,
-            "operators",
-            ignore=["API"],
-            disabled=True,
-            prefix=prefix,
-        )
-    if len(templates_enabled) > 0:
-        add_config_args(
-            parser,
-            defaults_tmpl_enabled,
+            defaults_tmpl,
             "templates",
             ignore=["API"],
-            disabled=False,
-            prefix=prefix,
-        )
-    if len(templates_disabled) > 0:
-        add_config_args(
-            parser,
-            defaults_tmpl_disabled,
-            "templates",
-            ignore=["API"],
-            disabled=True,
             prefix=prefix,
         )
 
@@ -343,14 +319,10 @@ def parse_config(
     defaults = OrderedDict()
     defaults["operators"] = OrderedDict()
     defaults["templates"] = OrderedDict()
-    if "operators" in defaults_op_enabled:
-        defaults["operators"].update(defaults_op_enabled["operators"])
-    if "operators" in defaults_op_disabled:
-        defaults["operators"].update(defaults_op_disabled["operators"])
-    if "templates" in defaults_tmpl_enabled:
-        defaults["templates"].update(defaults_tmpl_enabled["templates"])
-    if "templates" in defaults_tmpl_disabled:
-        defaults["templates"].update(defaults_tmpl_disabled["templates"])
+    if "operators" in defaults_op:
+        defaults["operators"].update(defaults_op["operators"])
+    if "templates" in defaults_tmpl:
+        defaults["templates"].update(defaults_tmpl["templates"])
 
     # Add an option to load one or more config files.  These should have compatible
     # names for the operators used in defaults.
@@ -364,14 +336,14 @@ def parse_config(
 
     # Add options to dump default values
     parser.add_argument(
-        "--default_toml",
+        "--defaults_toml",
         type=str,
         required=False,
         default=None,
         help="Dump default config values to a TOML file",
     )
     parser.add_argument(
-        "--default_json",
+        "--defaults_json",
         type=str,
         required=False,
         default=None,
@@ -398,10 +370,10 @@ def parse_config(
     args = parser.parse_args()
 
     # Dump default config values.
-    if args.default_toml is not None:
-        dump_toml(args.default_toml, defaults)
-    if args.default_json is not None:
-        dump_json(args.default_json, defaults)
+    if args.defaults_toml is not None:
+        dump_toml(args.defaults_toml, defaults)
+    if args.defaults_json is not None:
+        dump_json(args.defaults_json, defaults)
 
     # Parse job args
     jobargs = types.SimpleNamespace(
@@ -428,8 +400,8 @@ def parse_config(
 
     # Remove the options we created in this function
     del remaining.config
-    del remaining.default_toml
-    del remaining.default_json
+    del remaining.defaults_toml
+    del remaining.defaults_json
 
     return config, remaining, jobargs
 

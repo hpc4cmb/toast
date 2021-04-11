@@ -73,23 +73,22 @@ def main():
     # We will use other operators, but these are the ones that the user can configure.
     # The "name" of each operator instance controls what the commandline and config
     # file options will be called.
+    #
+    # We can also set some default values here for the traits.
 
-    # Enabled by default
-    operators_enabled = [
+    operators = [
         toast.ops.SimSatellite(name="sim_satellite"),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ScanHealpix(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
-        toast.ops.PointingHealpix(name="pointing"),
-        toast.ops.BinMap(name="binner"),
+        toast.ops.PointingHealpix(name="pointing", mode="IQU"),
+        toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
-    ]
-
-    # Disabled by default
-    operators_disabled = [
-        toast.ops.PointingHealpix(name="pointing_final"),
-        toast.ops.BinMap(name="binner_final"),
-        toast.ops.Madam(name="madam"),
+        toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
+        toast.ops.BinMap(
+            name="binner_final", enabled=False, pixel_dist="pix_dist_final"
+        ),
+        toast.ops.Madam(name="madam", enabled=False),
     ]
 
     # Templates we want to configure from the command line or a parameter file.
@@ -102,9 +101,8 @@ def main():
 
     config, args, jobargs = toast.parse_config(
         parser,
-        operators_enabled=operators_enabled,
-        operators_disabled=operators_disabled,
-        templates_enabled=templates,
+        operators=operators,
+        templates=templates,
     )
 
     # Log the config that was actually used at runtime.
@@ -118,25 +116,17 @@ def main():
     # built-in Focalplane class.  In a workflow for a specific experiment we would
     # have a custom class.
 
-    focalplane = None
     if args.focalplane is None:
         if rank == 0:
-            log.info(
-                "No focalplane specified.  Will use 2 fake detectors at the boresight"
-            )
-        focalplane = toast.instrument_sim.fake_hexagon_focalplane(
-            n_pix=1,
-            sample_rate=50.0 * u.Hz,
-            psd_fmin=1.0e-5 * u.Hz,
-            psd_net=0.001 * u.K * np.sqrt(1 * u.second),
-            psd_fknee=(50.0 * u.Hz / 2000.0),
-        )
-    else:
-        if rank == 0:
-            log.info("Loading focalplane from {}".format(args.focalplane))
-            focalplane = toast.instrument.Focalplane(file=args.focalplane)
-        if world_comm is not None:
-            focalplane = world_comm.bcast(focalplane, root=0)
+            log.info("No focalplane specified.  Nothing to do.")
+        return
+
+    focalplane = None
+    if rank == 0:
+        log.info("Loading focalplane from {}".format(args.focalplane))
+        focalplane = toast.instrument.Focalplane(file=args.focalplane)
+    if world_comm is not None:
+        focalplane = world_comm.bcast(focalplane, root=0)
 
     # Create a telescope for the simulation.  Again, for a specific experiment we
     # would use custom classes for the site.
@@ -149,7 +139,8 @@ def main():
     # Load the schedule file
 
     if args.schedule is None:
-        log.info("No schedule file specified- nothing to simulate")
+        if rank == 0:
+            log.info("No schedule file specified- nothing to simulate")
         return
     schedule = None
     if rank == 0:
@@ -157,6 +148,22 @@ def main():
         schedule.read(args.schedule)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
+
+    # Instantiate our objects that were configured from the command line / files
+
+    job = toast.create_from_config(config)
+    ops = job.operators
+    tmpls = job.templates
+
+    # Are we using full pointing?  We determine this from whether the binning operator
+    # used in the solve has full pointing enabled and also whether madam (which
+    # requires full pointing) is enabled.
+
+    full_pointing = False
+    if ops.madam.enabled:
+        full_pointing = True
+    if ops.binner.full_pointing:
+        full_pointing = True
 
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
@@ -166,7 +173,7 @@ def main():
         jobargs,
         schedule=schedule,
         focalplane=focalplane,
-        full_pointing=args.enable_madam,
+        full_pointing=full_pointing,
     )
 
     # Create the toast communicator
@@ -177,13 +184,13 @@ def main():
 
     data = toast.Data(comm=comm)
 
-    # Instantiate our objects that were configured from the command line / files
-
-    job = toast.create_from_config(config)
-    ops = job.operators
-    tmpls = job.templates
-
     # Simulate the telescope pointing
+
+    if not ops.sim_satellite.enabled:
+        msg = "Cannot disable the satellite scanning operator"
+        if rank == 0:
+            log.error(msg)
+        raise RuntimeError(msg)
 
     ops.sim_satellite.telescope = telescope
     ops.sim_satellite.schedule = schedule
@@ -193,28 +200,45 @@ def main():
 
     ops.default_model.apply(data)
 
-    # Simulate sky signal from a map.
+    # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
+    # if that is different from the solver pointing model.
 
-    if not args.disable_scan_map:
-        ops.scan_map.pointing = ops.pointing
+    if ops.scan_map.enabled:
+        pix_dist = toast.ops.BuildPixelDistribution()
+        if ops.binner_final.enabled and ops.pointing_final.enabled:
+            pix_dist.pixel_dist = ops.binner_final.pixel_dist
+            pix_dist.pointing = ops.pointing_final
+            pix_dist.shared_flags = ops.binner_final.shared_flags
+            pix_dist.shared_flag_mask = ops.binner_final.shared_flag_mask
+            pix_dist.save_pointing = ops.binner_final.full_pointing
+        else:
+            pix_dist.pixel_dist = ops.binner.pixel_dist
+            pix_dist.pointing = ops.pointing
+            pix_dist.shared_flags = ops.binner.shared_flags
+            pix_dist.shared_flag_mask = ops.binner.shared_flag_mask
+            pix_dist.save_pointing = ops.binner.full_pointing
+        pix_dist.apply(data)
+
+        ops.scan_map.pixel_dist = pix_dist.pixel_dist
+        ops.scan_map.pointing = pix_dist.pointing
         ops.scan_map.apply(data)
 
     # Simulate detector noise
 
-    if not args.disable_sim_noise:
+    if ops.sim_noise.enabled:
         ops.sim_noise.apply(data)
 
     # Build up our map-making operation from the pieces- both operators configured
     # from user options and other operators.
 
-    if not args.disable_mapmaker:
+    if ops.mapmaker.enabled:
         ops.binner.pointing = ops.pointing
         ops.binner.noise_model = ops.default_model.noise_model
 
         final_bin = None
-        if args.enable_binner_final:
+        if ops.binner_final.enabled:
             final_bin = ops.binner_final
-            if args.enable_pointing_final:
+            if ops.pointing_final.enabled:
                 final_bin.pointing = ops.pointing_final
             else:
                 final_bin.pointing = ops.pointing
@@ -223,7 +247,7 @@ def main():
         # Note that if an empty list of templates is passed to the mapmaker,
         # then a simple binned map will be made.
         tlist = list()
-        if not args.disable_baselines:
+        if tmpls.baselines.enabled:
             tlist.append(tmpls.baselines)
         tmatrix = toast.ops.TemplateMatrix(templates=tlist)
 
@@ -242,8 +266,8 @@ def main():
             file = os.path.join(args.out_dir, "{}.fits".format(dkey))
             toast.pixels_io.write_healpix_fits(data[dkey], file, nest=ops.pointing.nest)
 
-    # Optionally run Madam
-    if args.enable_madam:
+    # Run Madam
+    if ops.madam.enabled:
         ops.madam.apply(data)
 
 

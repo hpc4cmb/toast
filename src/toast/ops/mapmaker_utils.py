@@ -28,6 +28,8 @@ from .delete import Delete
 
 from .pipeline import Pipeline
 
+from .pointing import BuildPixelDistribution
+
 
 @trait_docs
 class BuildHitMap(Operator):
@@ -770,6 +772,13 @@ class CovarianceAndHits(Operator):
             raise traitlets.TraitError("Flag mask should be a positive integer")
         return check
 
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
+
     @traitlets.validate("sync_type")
     def _check_sync_type(self, proposal):
         check = proposal["value"]
@@ -797,53 +806,16 @@ class CovarianceAndHits(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        if self.pixel_dist is None:
-            raise RuntimeError(
-                "You must set the 'pixel_dist' trait before calling exec()"
-            )
+        # Construct the pointing distribution if it does not already exist
 
-        # Set outputs of the pointing operator
-
-        self.pointing.create_dist = None
-
-        # If we do not have a pixel distribution yet, we must make one pass through
-        # the pointing to build this first.
-
-        pointing_done = False
-
-        if self.pixel_dist not in data:
-            if detectors is not None:
-                msg = "A subset of detectors is specified, but the pixel distribution\n"
-                msg += "does not yet exist- and creating this requires all detectors.\n"
-                msg += "Either pre-create the pixel distribution with all detectors\n"
-                msg += "or run this operator with all detectors."
-                raise RuntimeError(msg)
-
-            msg = "Creating pixel distribution '{}' in Data".format(self.pixel_dist)
-            if data.comm.world_rank == 0:
-                log.debug(msg)
-
-            # Turn on creation of the pixel distribution
-            self.pointing.create_dist = self.pixel_dist
-
-            # Compute the pointing matrix
-
-            pixel_dist_pipe = None
-            if self.save_pointing:
-                # We are keeping the pointing, which means we need to run all detectors
-                # at once so they all end up in the detdata for all observations.
-                pixel_dist_pipe = Pipeline(detector_sets=["ALL"])
-                pointing_done = True
-            else:
-                # Run one detector a at time and discard.
-                pixel_dist_pipe = Pipeline(detector_sets=["SINGLE"])
-            pixel_dist_pipe.operators = [
-                self.pointing,
-            ]
-            pipe_out = pixel_dist_pipe.apply(data, detectors=detectors)
-
-            # Turn pixel distribution creation off again
-            self.pointing.create_dist = None
+        pix_dist = BuildPixelDistribution(
+            pixel_dist=self.pixel_dist,
+            pointing=self.pointing,
+            shared_flags=self.shared_flags,
+            shared_flag_mask=self.shared_flag_mask,
+            save_pointing=self.save_pointing,
+        )
+        pix_dist.apply(data)
 
         # Hit map operator
 
@@ -882,15 +854,10 @@ class CovarianceAndHits(Operator):
         if self.save_pointing:
             # Process all detectors at once
             accum = Pipeline(detector_sets=["ALL"])
-            if pointing_done:
-                # We already computed the pointing once and saved it.
-                accum.operators = [build_hits, build_invcov]
-            else:
-                accum.operators = [self.pointing, build_hits, build_invcov]
         else:
             # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
-            accum.operators = [self.pointing, build_hits, build_invcov]
+        accum.operators = [self.pointing, build_hits, build_invcov]
 
         pipe_out = accum.apply(data, detectors=detectors)
 
@@ -920,6 +887,8 @@ class CovarianceAndHits(Operator):
         req["meta"].append(self.noise_model)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
         return req
 
     def _provides(self):

@@ -59,15 +59,6 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
             errors += "Wrong NSide: {} has {}, expected {}\n" "".format(
                 path, nside_map, nside
             )
-        map_nested = False
-        if "order" in h[1].header and "NEST" in h[1].header["order"].upper():
-            map_nested = True
-        if "ordering" in h[1].header and "NEST" in h[1].header["ordering"].upper():
-            map_nested = True
-        if map_nested != nest:
-            errors += "Wrong ordering: {} has nest={}, expected nest={}\n" "".format(
-                path, map_nested, nest
-            )
         map_nnz = h[1].header["tfields"]
         if map_nnz != pix.n_value:
             errors += "Wrong number of columns: {} has {}, expected {}\n" "".format(
