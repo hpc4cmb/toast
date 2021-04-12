@@ -60,6 +60,6 @@ void init_pixels(py::module & m) {
             (tuple):  The (local submap, pixel within submap) for each global pixel.
 
     )");
-    m.def("global_to_local", &global_to_local <int32_t> );
-    m.def("global_to_local", &global_to_local <int16_t> );
+    m.def("global_to_local", &global_to_local <int32_t>);
+    m.def("global_to_local", &global_to_local <int16_t>);
 }
