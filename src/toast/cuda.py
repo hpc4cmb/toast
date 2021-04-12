@@ -27,8 +27,7 @@ if use_pycuda is None:
 
 
 class AcceleratorCuda(object):
-    """Class storing the device properties, context, and streams for one process.
-    """
+    """Class storing the device properties, context, and streams for one process."""
 
     def __init__(self, device_index):
         self._device_index = device_index
@@ -38,8 +37,7 @@ class AcceleratorCuda(object):
         self._streams = dict()
 
     def close(self):
-        """Explicitly shut down the context and streams.
-        """
+        """Explicitly shut down the context and streams."""
         if hasattr(self, "_streams") and self._streams is not None:
             for k, v in self._streams.items():
                 pass
@@ -53,26 +51,22 @@ class AcceleratorCuda(object):
 
     @property
     def device(self):
-        """The cuda.Device
-        """
+        """The cuda.Device"""
         return self._device
 
     @property
     def device_index(self):
-        """The cuda.Device index
-        """
+        """The cuda.Device index"""
         return self._device_index
 
     @property
     def device_attr(self):
-        """The cuda.Device attributes
-        """
+        """The cuda.Device attributes"""
         return self._device_attr
 
     @property
     def context(self):
-        """The Context on this device
-        """
+        """The Context on this device"""
         return self._context
 
     def get_stream(self, name):
