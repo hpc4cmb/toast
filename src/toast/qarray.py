@@ -319,6 +319,30 @@ def to_axisangle(q):
         return (ax.array().reshape((-1, 3)), ang.array())
 
 
+def from_axisangle(axis, angle):
+    """Convert axis / angle arrays to quaternions.
+
+    Args:
+        axis (array_like):  An array of input unit vectors.
+        angle (array_like):  The input rotation angles around each axis.
+
+    Returns:
+        (array):  The quaternion array results.
+
+    """
+    axin = ensure_buffer_f64(axis)
+    angin = ensure_buffer_f64(angle)
+    qout = AlignedF64(4 * len(angin))
+    qa_from_axisangle(axin, angin, qout)
+    if len(qout) == 4:
+        if object_ndim(axis) == 2:
+            return qout.array().reshape((1, 4))
+        else:
+            return qout.array()
+    else:
+        return qout.array().reshape((-1, 4))
+
+
 def to_rotmat(q):
     """Convert quaternions to rotation matrices.
 

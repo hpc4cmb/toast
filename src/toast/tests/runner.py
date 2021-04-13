@@ -34,6 +34,7 @@ from . import dist as test_dist
 from . import config as test_config
 
 from . import ops_sim_satellite as test_ops_sim_satellite
+from . import ops_sim_ground as test_ops_sim_ground
 from . import ops_memory_counter as test_ops_memory_counter
 from . import ops_pointing_healpix as test_ops_pointing_healpix
 from . import ops_sim_tod_noise as test_ops_sim_tod_noise
@@ -154,6 +155,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_config))
 
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_satellite))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_ground))
         suite.addTest(loader.loadTestsFromModule(test_ops_memory_counter))
         suite.addTest(loader.loadTestsFromModule(test_ops_pointing_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_noise))

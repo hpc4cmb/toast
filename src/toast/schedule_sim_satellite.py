@@ -10,6 +10,8 @@ import numpy as np
 
 from astropy import units as u
 
+from .utils import Logger
+
 from .schedule import SatelliteScan, SatelliteSchedule
 
 
@@ -21,6 +23,8 @@ def create_satellite_schedule(
     num_observations=1,
     prec_period=10 * u.minute,
     spin_period=2 * u.minute,
+    site_name="space",
+    telescope_name="satellite",
 ):
     """Generate a satellite observing schedule.
 
@@ -35,13 +39,21 @@ def create_satellite_schedule(
         num_observations (int):  The number of observations.
         prec_period (Quantity):  The time for one revolution about the precession axis.
         spin_period (Quantity):  The time for one revolution about the spin axis.
+        site_name (str):  The name of the site to include in the schedule.
+        telescope_name (str):  The name of the telescope to include in the schedule.
 
     Returns:
         (SatelliteSchedule):  The resulting schedule.
 
     """
+    log = Logger.get()
     if mission_start is None:
         raise RuntimeError("You must specify the mission start")
+
+    if mission_start.tzinfo is None:
+        msg = f"Mission start time '{mission_start}' is not timezone-aware.  Assuming UTC."
+        log.warning(msg)
+        mission_start = mission_start.replace(tzinfo=datetime.timezone.utc)
 
     obs = datetime.timedelta(seconds=observation_time.to_value(u.second))
     gap = datetime.timedelta(seconds=gap_time.to_value(u.second))
@@ -68,4 +80,6 @@ def create_satellite_schedule(
                 spin_period=spin_period,
             )
         )
-    return SatelliteSchedule(scans=scans)
+    return SatelliteSchedule(
+        scans=scans, site_name=site_name, telescope_name=telescope_name
+    )

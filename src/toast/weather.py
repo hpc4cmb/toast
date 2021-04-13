@@ -6,8 +6,6 @@ import os
 
 from collections import OrderedDict
 
-import astropy.io.fits as pf
-
 import datetime
 
 from pkg_resources import resource_filename

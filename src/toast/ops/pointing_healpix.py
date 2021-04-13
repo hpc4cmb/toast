@@ -49,6 +49,10 @@ class PointingHealpix(Operator):
     .. math::
         d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{2a+4w} + U \\sin{2a+4w}\\right]\\right]
 
+    If the view trait is not specified, then this operator will use the same data
+    view as the detector pointing operator when computing the pointing matrix pixels
+    and weights.
+
     """
 
     # Class traits
@@ -215,6 +219,13 @@ class PointingHealpix(Operator):
                 quats_name = self.detector_pointing.quats
             else:
                 quats_name = "quats"
+
+        view = self.view
+        if view is None:
+            # Use the same data view as detector pointing
+            view = self.detector_pointing.view
+
+        # Expand detector pointing
         self.detector_pointing.quats = quats_name
         self.detector_pointing.apply(data, detectors=detectors)
 
@@ -228,6 +239,22 @@ class PointingHealpix(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
+
+            # Check that our view is fully covered by detector pointing.  If the
+            # detector_pointing view is None, then it has all samples.  If our own
+            # view was None, then it would have been set to the detector_pointing
+            # view above.
+            if (view is not None) and (self.detector_pointing.view is not None):
+                if ob.intervals[view] != ob.intervals[self.detector_pointing.view]:
+                    # We need to check intersection
+                    intervals = ob.intervals[self.view]
+                    detector_intervals = ob.intervals[self.detector_pointing.view]
+                    intersection = detector_intervals & intervals
+                    if intersection != intervals:
+                        msg = "view {} is not fully covered by valid detector pointing".format(
+                            self.view
+                        )
+                        raise RuntimeError(msg)
 
             # Do we already have pointing for all requested detectors?
             if (self.pixels in ob.detdata) and (self.weights in ob.detdata):
@@ -283,22 +310,11 @@ class PointingHealpix(Operator):
                     detectors=dets,
                 )
 
-            # Check that the view in the detector pointing operator covers
-            # all the samples needed by this operator
-
-            if self.detector_pointing.view is not None:
-                if self.view is None:
-                    raise RuntimeError("Must set a view if detector pointing uses one")
-                detector_intervals = ob.intervals[self.detector_pointing.view]
-                healpix_intervals = ob.intervals[self.view]
-                joint_intervals = detector_intervals | healpix_intervals
-                if joint_intervals != detector_intervals:
-                    raise RuntimeError(
-                        "Healpix intervals cover more samples than detector intervals"
-                    )
+            # Focalplane for this observation
+            focalplane = ob.telescope.focalplane
 
             # Loop over views
-            views = ob.view[self.view]
+            views = ob.view[view]
             for vw in range(len(views)):
                 # Get the flags if needed.  Use the same flags as
                 # detector pointing.
@@ -313,9 +329,6 @@ class PointingHealpix(Operator):
                 hwp_angle = None
                 if self.hwp_angle is not None:
                     hwp_angle = views.shared[self.hwp_angle][vw]
-
-                # Focalplane for this observation
-                focalplane = ob.telescope.focalplane
 
                 # Optional calibration
                 cal = None

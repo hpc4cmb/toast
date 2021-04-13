@@ -132,14 +132,6 @@ def main():
     if world_comm is not None:
         focalplane = world_comm.bcast(focalplane, root=0)
 
-    # Create a telescope for the simulation.  Again, for a specific experiment we
-    # would use custom classes for the site.
-
-    site = toast.instrument.SpaceSite("space")
-    telescope = toast.instrument.Telescope(
-        "satellite", focalplane=focalplane, site=site
-    )
-
     # Load the schedule file
 
     if args.schedule is None:
@@ -152,6 +144,14 @@ def main():
         schedule.read(args.schedule)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
+
+    # Create a telescope for the simulation.  Again, for a specific experiment we
+    # would use custom classes for the site.
+
+    site = toast.instrument.SpaceSite(schedule.site_name)
+    telescope = toast.instrument.Telescope(
+        schedule.telescope_name, focalplane=focalplane, site=site
+    )
 
     # Instantiate our objects that were configured from the command line / files
 

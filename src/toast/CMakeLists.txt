@@ -95,6 +95,7 @@ install(FILES
     intervals.py
     instrument.py
     instrument_sim.py
+    coordinates.py
     noise.py
     dipole.py
     noise_sim.py
