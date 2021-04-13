@@ -47,7 +47,13 @@ class MapmakerSolveTest(MPITestCase):
         sim_noise.apply(data)
 
         # Pointing operator
-        pointing = ops.PointingHealpix(nside=64, mode="IQU", hwp_angle="hwp_angle")
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+        )
 
         # Build the covariance and hits
         cov_and_hits = ops.CovarianceAndHits(
@@ -192,7 +198,13 @@ class MapmakerSolveTest(MPITestCase):
         tmatrix.apply(data)
 
         # Pointing operator
-        pointing = ops.PointingHealpix(nside=64, mode="I", hwp_angle="hwp_angle")
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="I",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+        )
 
         # Build the covariance and hits
         cov_and_hits = ops.CovarianceAndHits(

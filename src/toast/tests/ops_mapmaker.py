@@ -48,9 +48,13 @@ class MapmakerTest(MPITestCase):
         )
 
         # Create some sky signal timestreams.
-
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", hwp_angle="hwp_angle", create_dist="pixel_dist"
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -137,13 +141,14 @@ class MapmakerTest(MPITestCase):
         )
 
         # Create some sky signal timestreams.
-
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
             nside=16,
             nest=True,
             mode="IQU",
             hwp_angle="hwp_angle",
             create_dist="pixel_dist",
+            detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -337,13 +342,14 @@ class MapmakerTest(MPITestCase):
         )
 
         # Create some sky signal timestreams.
-
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
             nside=16,
             nest=True,
             mode="IQU",
             hwp_angle="hwp_angle",
             create_dist="pixel_dist",
+            detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -548,13 +554,14 @@ class MapmakerTest(MPITestCase):
         )
 
         # Create some sky signal timestreams.
-
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
             nside=16,
             nest=True,
             mode="IQU",
             hwp_angle="hwp_angle",
             create_dist="pixel_dist",
+            detector_pointing=detpointing,
         )
         pointing.apply(data)
 

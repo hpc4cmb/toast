@@ -50,8 +50,13 @@ class MapmakerUtilsTest(MPITestCase):
         data = create_satellite_data(self.comm)
 
         # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", hwp_angle="hwp_angle", create_dist="pixel_dist"
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -91,8 +96,13 @@ class MapmakerUtilsTest(MPITestCase):
         data = create_satellite_data(self.comm)
 
         # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", hwp_angle="hwp_angle", create_dist="pixel_dist"
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -203,8 +213,13 @@ class MapmakerUtilsTest(MPITestCase):
         data = create_satellite_data(self.comm)
 
         # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", hwp_angle="hwp_angle", create_dist="pixel_dist"
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
         )
         pointing.apply(data)
 

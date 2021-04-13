@@ -225,7 +225,13 @@ class PointingHealpixTest(MPITestCase):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
-        pointing = ops.PointingHealpix(nside=64, mode="IQU", hwp_angle="hwp_angle")
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+        )
         pointing.apply(data)
 
         rank = 0
@@ -243,7 +249,10 @@ class PointingHealpixTest(MPITestCase):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
-        pointing = ops.PointingHealpix(nside=64, mode="IQU")
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=64, mode="IQU", detector_pointing=detpointing
+        )
         pointing.apply(data)
 
         rank = 0
