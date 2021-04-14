@@ -73,8 +73,6 @@ class PointingHealpix(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
-
     hwp_angle = Unicode(
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
@@ -107,18 +105,6 @@ class PointingHealpix(Operator):
         None,
         allow_none=True,
         help="The observation key with a dictionary of pointing weight calibration for each det",
-    )
-
-    coord_in = Unicode(
-        None,
-        allow_none=True,
-        help="The input boresight coordinate system ('C', 'E', 'G')",
-    )
-
-    coord_out = Unicode(
-        None,
-        allow_none=True,
-        help="The output boresight coordinate system ('C', 'E', 'G')",
     )
 
     @traitlets.validate("detector_pointing")
@@ -181,22 +167,6 @@ class PointingHealpix(Operator):
             raise traitlets.TraitError("Flag mask should be a positive integer")
         return check
 
-    @traitlets.validate("coord_in")
-    def _check_coord_in(self, proposal):
-        check = proposal["value"]
-        if check is not None:
-            if check not in ["E", "C", "G"]:
-                raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
-        return check
-
-    @traitlets.validate("coord_out")
-    def _check_coord_out(self, proposal):
-        check = proposal["value"]
-        if check is not None:
-            if check not in ["E", "C", "G"]:
-                raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
-        return check
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Check that healpix pixels are set up.  If the nside / mode are left as
@@ -246,17 +216,17 @@ class PointingHealpix(Operator):
             self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
 
         # Expand detector pointing
-        self.detector_pointing.view = self.view
-        self.detector_pointing.boresight = self.boresight
         if self.quats:
             quats_name = self.quats
             keep_quats = True
         else:
-            quats_name = "quats"
-            keep_quats = False
+            if self.detector_pointing.quats:
+                quats_name = self.detector_pointing.quats
+                keep_quats = True
+            else:
+                quats_name = "quats"
+                keep_quats = False
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.cood_in = self.coord_in
-        self.detector_pointing.cood_out = self.coord_out
         self.detector_pointing.apply(data, detectors=detectors)
 
         # We do the calculation over buffers of timestream samples to reduce memory
@@ -271,26 +241,21 @@ class PointingHealpix(Operator):
                 continue
 
             # Do we already have pointing for all requested detectors?
-            done = False
             if (self.pixels in ob.detdata) and (self.weights in ob.detdata):
-                done = True
                 pix_dets = ob.detdata[self.pixels].detectors
                 wt_dets = ob.detdata[self.weights].detectors
                 for d in dets:
                     if d not in pix_dets:
-                        done = False
                         break
                     if d not in wt_dets:
-                        done = False
                         break
-            if done:
-                # We already have pointing for all specified detectors
-                if data.comm.group_rank == 0:
-                    msg = "Group {}, ob {}, pointing already computed for {}".format(
-                        data.comm.group, ob.name, dets
-                    )
-                    log.verbose(msg)
-                continue
+                else:
+                    # We already have pointing for all specified detectors
+                    if data.comm.group_rank == 0:
+                        msg = f"Group {data.comm.group}, ob {ob.name}, pointing " \
+                            f"already computed for {dets}"
+                        log.verbose(msg)
+                    continue
 
             # Create (or re-use) output data for the pixels, weights and optionally the
             # detector quaternions.
@@ -315,6 +280,20 @@ class PointingHealpix(Operator):
                     dtype=np.float64,
                     detectors=dets,
                 )
+
+            # Check that the view in the detector pointing operator covers
+            # all the samples needed by this operator
+
+            if self.detector_pointing.view is not None:
+                if self.view is None:
+                    raise RuntimeError("Must set a view if detector pointing uses one")
+                detector_intervals = ob.intervals[self.detector_pointing.view]
+                healpix_intervals = ob.intervals[self.view]
+                joint_intervals = detector_intervals | healpix_intervals
+                if joint_intervals != detector_intervals:
+                    raise RuntimeError(
+                        "Healpix intervals cover more samples than detector intervals"
+                    )
 
             # Loop over views
             views = ob.view[self.view]
@@ -347,7 +326,7 @@ class PointingHealpix(Operator):
                         epsilon = props["pol_leakage"]
 
                     # Timestream of detector quaternions
-                    quats = views.detdata[quats_name][vw][det, :]
+                    quats = views.detdata[quats_name][vw][det]
                     view_samples = len(quats)
 
                     # Cal for this detector
@@ -438,14 +417,7 @@ class PointingHealpix(Operator):
         return
 
     def _requires(self):
-        req = {
-            "meta": list(),
-            "shared": [
-                self.boresight,
-            ],
-            "detdata": list(),
-            "intervals": list(),
-        }
+        req = self.detector_pointing.requires()
         if self.cal is not None:
             req["meta"].append(self.cal)
         if self.shared_flags is not None:

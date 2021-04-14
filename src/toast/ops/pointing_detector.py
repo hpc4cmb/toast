@@ -70,7 +70,6 @@ class PointingDetectorSimple(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        env = Environment.get()
         log = Logger.get()
 
         coord_rot = None
