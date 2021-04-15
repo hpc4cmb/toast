@@ -230,8 +230,12 @@ class SimConviqt(Operator):
         """Return True if libconviqt is found in the library search path."""
         return conviqt is not None and conviqt.available
 
+    hwp_angle = Unicode(
+        None, allow_none=True, help="Observation shared key for HWP angle"
+    )
+
     @traitlets.validate("hwp_angle")
-    def _check_for_hwp(self, proposal):
+    def _check_for_hwp_angle(self, proposal):
         # Check that there is no rotating HWP
         check = proposal["value"]
         if check is not None:
@@ -294,7 +298,7 @@ class SimConviqt(Operator):
             del pnt, detector, beam, sky
 
             if verbose:
-                timer.report_clear("conviqt process detector {}".format(det))
+                timer.report_clear(f"conviqt process detector {det}")
 
         return
 
@@ -321,7 +325,7 @@ class SimConviqt(Operator):
         dictionary.  The angle is relative to the Pxx basis.
         """
         if det not in focalplane:
-            raise RuntimeError("focalplane does not include {}".format(det))
+            raise RuntimeError(f"focalplane does not include {det}")
         props = focalplane[det]
         if "psi_pol" in props.colnames:
             psi_pol = props["pol_angle"].to_value(u.radian)
@@ -331,7 +335,7 @@ class SimConviqt(Operator):
             )
             psi_pol = props["pol_angle"].to_value(u.radian)
         else:
-            raise RuntimeError("focalplane[{}] does not include psi_pol".format(det))
+            raise RuntimeError(f"focalplane[{det}] does not include psi_pol")
         return psi_pol
 
     def _get_psi_uv(self, focalplane, det):
@@ -339,12 +343,12 @@ class SimConviqt(Operator):
         dictionary.  The angle is measured from Dxx to Pxx basis.
         """
         if det not in focalplane:
-            raise RuntimeError("focalplane does not include {}".format(det))
+            raise RuntimeError(f"focalplane does not include {det}")
         props = focalplane[det]
         if "psi_uv_deg" in props.colnames:
             psi_uv = props["psi_uv"].to_value(u.radian)
         else:
-            raise RuntimeError("focalplane[{}] does not include psi_uv".format(det))
+            raise RuntimeError(f"focalplane[{det}] does not include psi_uv")
         return psipol
 
     def _get_epsilon(self, focalplane, det):
@@ -352,7 +356,7 @@ class SimConviqt(Operator):
         object or dictionary.
         """
         if det not in focalplane:
-            raise RuntimeError("focalplane does not include {}".format(det))
+            raise RuntimeError(f"focalplane does not include {det}")
         props = focalplane[det]
         if "pol_leakage" in props.colnames:
             epsilon = focalplane[det]["pol_leakage"]
@@ -376,7 +380,7 @@ class SimConviqt(Operator):
         if self.remove_dipole:
             sky.remove_dipole()
         if verbose:
-            timer.report_clear("initialize sky for detector {}".format(det))
+            timer.report_clear(f"initialize sky for detector {det}")
         return sky
 
     def get_beam(self, beamfile, det, verbose):
@@ -386,7 +390,7 @@ class SimConviqt(Operator):
         if self.normalize_beam:
             beam.normalize()
         if verbose:
-            timer.report_clear("initialize beam for detector {}".format(det))
+            timer.report_clear(f"initialize beam for detector {det}")
         return beam
 
     def get_detector(self, det):
@@ -447,6 +451,9 @@ class SimConviqt(Operator):
                     psi_pol += self._get_psi_uv(focalplane, det)
                 psi -= psi_pol
                 psi_pol = np.ones(psi.size) * psi_pol
+                if self.hwp_angle is not None:
+                    hwp_angle = views.shared[self.hwp_angle][view]
+                    psi_pol += 2 * hwp_angle
                 all_theta.append(theta)
                 all_phi.append(phi)
                 all_psi.append(psi)
@@ -459,7 +466,7 @@ class SimConviqt(Operator):
             all_psi_pol = np.hstack(all_psi_pol)
 
         if verbose:
-            timer.report_clear("compute pointing angles for detector {}".format(det))
+            timer.report_clear(f"compute pointing angles for detector {det}")
         return all_theta, all_phi, all_psi, all_psi_pol
 
     def get_buffer(self, theta, phi, psi, det, verbose):
@@ -473,7 +480,7 @@ class SimConviqt(Operator):
             arr[:, 1] = theta
             arr[:, 2] = psi
         if verbose:
-            timer.report_clear("pack input array for detector {}".format(det))
+            timer.report_clear(f"pack input array for detector {det}")
         return pnt
 
     def convolve(self, sky, beam, detector, pnt, det, verbose):
@@ -492,7 +499,7 @@ class SimConviqt(Operator):
         )
         convolver.convolve(pnt)
         if verbose:
-            timer.report_clear("convolve detector {}".format(det))
+            timer.report_clear(f"convolve detector {det}")
 
         # The pointer to the data will have changed during
         # the convolution call ...
@@ -503,7 +510,7 @@ class SimConviqt(Operator):
         else:
             convolved_data = None
         if verbose:
-            timer.report_clear("extract convolved data for {}".format(det))
+            timer.report_clear(f"extract convolved data for {det}")
 
         del convolver
 
@@ -585,158 +592,102 @@ class SimConviqt(Operator):
 
 class SimWeightedConviqt(SimConviqt):
     """Operator which uses libconviqt to generate beam-convolved timestreams.
-    This operator should be used in presence of a spinning  HWP which  makes the beam time-dependent,
-    constantly mapping the co- and cross polar responses on to each other.  In OpSimConviqt we assume the  beam to be static.
-
-    This passes through each observation and loops over each detector.
-    For each detector, it produces the beam-convolved timestream.
-
-    Args:
-        comm (MPI.Comm) : MPI communicator to use for the convolution.
-            libConviqt does not work without MPI.
-        sky_file (dict or str) : File containing the sky a_lm expansion.
-            Tag {detector} will be replaced with the detector name
-            If sky_file is a dict, then each detector must have an entry.
-        beam_file (dict or str) : File containing the beam a_lm expansion.
-            Tag {detector} will be replaced with the detector name.
-            If beam_file is a dict, then each detector must have an entry.
-        lmax (int) : Maximum ell (and m).  Actual resolution in the
-            Healpix FITS file may differ.  If not set, will use the
-            maximum expansion order from file.
-        beammmax (int) : beam maximum m.  Actual resolution in the
-            Healpix FITS file may differ.  If not set, will use the
-            maximum expansion order from file.
-        pol (bool) : boolean to determine if polarized simulation is needed
-        fwhm (float) : width of a symmetric gaussian beam [in arcmin] already
-            present in the skyfile (will be deconvolved away).
-        order (int) : conviqt order parameter (expert mode)
-        calibrate (bool) : Calibrate intensity to 1.0, rather than
-            (1 + epsilon) / 2.  Calibrate has no effect if the beam is found
-            to be normalized rather than scaled with the leakage factor.
-        dxx (bool) : The beam frame is either Dxx or Pxx.  Pxx includes the
-            rotation to polarization sensitive basis, Dxx does not.  When
-            Dxx=True, detector orientation from attitude quaternions is
-            corrected for the polarization angle.
-        out (str): the name of the cache object (<name>_<detector>) to
-            use for output of the detector timestream.
-        mc (int): Monte Carlo index used in synthesizing the input file names.
-
+    This operator should be used in presence of a spinning  HWP which  makes
+    the beam time-dependent, constantly mapping the co- and cross polar
+    responses on to each other.  In OpSimConviqt we assume the beam to be static.
     """
 
-    """
-    def __init__(
-        self,
-        comm,
-        sky_file,
-        beam_file,
-        lmax=0,
-        beammmax=0,
-        pol=True,
-        fwhm=4.0,
-        order=13,
-        calibrate=True,
-        dxx=True,
-        out="conviqt",
-        quat_name=None,
-        flag_name=None,
-        flag_mask=255,
-        common_flag_name=None,
-        common_flag_mask=255,
-        apply_flags=False,
-        remove_monopole=False,
-        remove_dipole=False,
-        normalize_beam=False,
-        verbosity=0,
-        mc=None,
-    ):
-        # Call the parent class constructor
-        super(OpSimConviqt, self).__init__()
-
-        self._comm = comm
-        self._sky_file = sky_file
-        self._beam_file = beam_file
-        self._lmax = lmax
-        self._beammmax = beammmax
-        self._pol = pol
-        self._fwhm = fwhm
-        self._order = order
-        self._calibrate = calibrate
-        self._dxx = dxx
-        self._quat_name = quat_name
-        self._flag_name = flag_name
-        self._flag_mask = flag_mask
-        self._common_flag_name = common_flag_name
-        self._common_flag_mask = common_flag_mask
-        self._apply_flags = apply_flags
-        self._remove_monopole = remove_monopole
-        self._remove_dipole = remove_dipole
-        self._normalize_beam = normalize_beam
-        self._verbosity = verbosity
-        self._mc = mc
-
-        self._out = out
+    @traitlets.validate("hwp_angle")
+    def _check_for_hwp_angle(self, proposal):
+        # Check that there is no rotating HWP
+        check = proposal["value"]
+        if check is None:
+            raise RuntimeError(
+                "SimWeightedConviqt should be used with a HWP. Please use SimConviqt"
+            )
+        return check
 
     @function_timer
-    def exec(self, data):
+    def _exec(self, data, detectors=None, **kwargs):
         if not self.available:
             raise RuntimeError("libconviqt is not available")
+
+        log = Logger.get()
 
         timer = Timer()
         timer.start()
 
-        detectors = self._get_detectors(data)
+        # Expand detector pointing
+        if self.quats:
+            quats_name = self.quats
+            keep_quats = True
+        else:
+            quats_name = "quats"
+            keep_quats = False
+        self.detector_pointing.quats = quats_name
+        self.detector_pointing.apply(data, detectors=detectors)
 
-        for det in detectors:
-            verbose = self._comm.rank == 0 and self._verbosity > 0
+        all_detectors = self._get_all_detectors(data, detectors)
 
-            try:
-                sky_file = self._sky_file[det]
-            except TypeError:
-                sky_file = self._sky_file.format(detector=det, mc=self._mc)
+        for det in all_detectors:
+            verbose = self.comm.rank == 0 and self.verbosity > 0
+
+            if det in self.sky_file_dict:
+                sky_file = self.sky_file_dict[det]
+            else:
+                sky_file = self.sky_file.format(detector=det, mc=self.mc)
             sky = self.get_sky(sky_file, det, verbose)
 
-            try:
-                beam_file = self._beam_file[det]
-            except TypeError:
-                beam_file = self._beam_file.format(detector=det, mc=self._mc)
-                beam_file_i00 = beam_file.replace(".fits", "_I000.fits")
-                beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
-                beam_file_00i = beam_file.replace(".fits", "_00I0.fits")
+            if det in self.beam_file_dict:
+                beam_file = self.beam_file_dict[det]
+            else:
+                beam_file = self.beam_file.format(detector=det, mc=self.mc)
+            beam_file_i00 = beam_file.replace(".fits", "_I000.fits")
+            beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
+            beam_file_00i = beam_file.replace(".fits", "_00I0.fits")
 
             beamI00 = self.get_beam(beam_file_i00, det, verbose)
             beam0I0 = self.get_beam(beam_file_0i0, det, verbose)
             beam00I = self.get_beam(beam_file_00i, det, verbose)
+
             detector = self.get_detector(det)
 
-            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
+            theta, phi, psi, psi_pol = self.get_pointing(
+                data, det, verbose, detectors, quats_name
+            )
 
             # I-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data = self.convolve(sky, beamI00, detector, pnt, det, verbose)
+            del pnt
 
             # Q-beam convolution
-            del pnt
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.cos(2 * psi_pol) * self.convolve(
                 sky, beam0I0, detector, pnt, det, verbose
             )
+            del pnt
 
             # U-beam convolution
-            del pnt
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.sin(2 * psi_pol) * self.convolve(
                 sky, beam00I, detector, pnt, det, verbose
             )
             del theta, phi, psi
 
-            self.calibrate(data, det, beamI00, convolved_data, verbose)
-
-            self.cache(data, det, convolved_data, verbose)
+            self.calibrate_signal(
+                data,
+                det,
+                beamI00,
+                convolved_data,
+                verbose,
+                detectors,
+            )
+            self.cache(data, det, convolved_data, verbose, detectors)
 
             del pnt, detector, beamI00, beam0I0, beam00I, sky
 
             if verbose:
-                timer.report_clear("conviqt process detector {}".format(det))
+                timer.report_clear(f"conviqt process detector {det}")
 
         return
-"""

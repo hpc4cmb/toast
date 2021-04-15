@@ -394,6 +394,7 @@ def create_fake_beam_alm(
     fwhm_x=10 * u.degree,
     fwhm_y=5 * u.degree,
     pol=True,
+    separate_IQU=False,
 ):
     nside = 2
     while 2 * nside < lmax:
@@ -407,7 +408,18 @@ def create_fake_beam_alm(
     sigma_x = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
     beam_map = np.exp(-(x ** 2 / sigma_x ** 2 + y ** 2 / sigma_y ** 2))
-    if pol:
-        beam_map = np.vstack([beam_map, beam_map, beam_map * 0])
-    a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax, verbose=False)
+    empty = np.zeros_like(beam_map)
+    if pol and separate_IQU:
+        beam_map_I = np.vstack([beam_map, empty, empty])
+        beam_map_Q = np.vstack([empty, beam_map, empty])
+        beam_map_U = np.vstack([empty, empty, beam_map])
+        a_lm = [
+            hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False),
+            hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False),
+            hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False),
+        ]
+    else:
+        if pol:
+            beam_map = np.vstack([beam_map, beam_map, empty])
+        a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax, verbose=False)
     return a_lm
