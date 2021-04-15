@@ -113,6 +113,8 @@ class PointingHealpix(Operator):
             for trt in [
                 "view",
                 "boresight",
+                "shared_flags",
+                "shared_flag_mask",
                 "quats",
                 "coord_in",
                 "coord_out",
