@@ -29,6 +29,12 @@ class PointingDetectorSimple(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional flagging")
+
     boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
 
     quats = Unicode(
@@ -46,7 +52,7 @@ class PointingDetectorSimple(Operator):
     coord_out = Unicode(
         None,
         allow_none=True,
-        help="The output boresight coordinate system ('C', 'E', 'G')",
+        help="The output coordinate system ('C', 'E', 'G')",
     )
 
     @traitlets.validate("coord_in")
@@ -63,6 +69,13 @@ class PointingDetectorSimple(Operator):
         if check is not None:
             if check not in ["E", "C", "G"]:
                 raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
+        return check
+
+    @traitlets.validate("shared_flag_mask")
+    def _check_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
         return check
 
     def __init__(self, **kwargs):
@@ -110,7 +123,7 @@ class PointingDetectorSimple(Operator):
                 for d in dets:
                     if d not in quat_dets:
                         break
-                else:
+                else:  # no break
                     # We already have pointing for all specified detectors
                     if data.comm.group_rank == 0:
                         log.verbose(
@@ -131,6 +144,12 @@ class PointingDetectorSimple(Operator):
             # Loop over views
             views = ob.view[self.view]
             for vw in range(len(views)):
+                # Get the flags if needed
+                flags = None
+                if self.shared_flags is not None:
+                    flags = np.array(views.shared[self.shared_flags][vw])
+                    flags &= self.shared_flag_mask
+
                 # Boresight pointing quaternions
                 in_boresight = views.shared[self.boresight][vw]
 
@@ -144,14 +163,19 @@ class PointingDetectorSimple(Operator):
 
                 for det in dets:
                     # Detector quaternion offset from the boresight.
-                    # This could be time-dependent for experiments with
-                    # complicated pointing models or experiments performing
-                    # aberration correction.
+                    # Real experiments may require additional information
+                    # such as parameters of a physical pointing model or
+                    # observatory velocity vector (for aberration correction).
+                    # In such cases, the detector quaternion can depend on
+                    # time and the observing direction and a custom detector
+                    # pointing operator needs to be implemented.
                     detquat = focalplane[det]["quat"]
 
                     # Timestream of detector quaternions
                     quats = qa.mult(boresight, detquat)
-                    views.detdata[self.quats][vw][det, :] = quats
+                    if flags is not None:
+                        quats[flags != 0] = qa.null_quat
+                    views.detdata[self.quats][vw][det] = quats
 
         return
 
@@ -165,6 +189,8 @@ class PointingDetectorSimple(Operator):
             "detdata": list(),
             "intervals": list(),
         }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
         if self.view is not None:
             req["intervals"].append(self.view)
         return req

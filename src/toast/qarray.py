@@ -30,6 +30,9 @@ from ._libtoast import (
 )
 
 
+null_quat = np.array([0.0, 0.0, 0.0, 1.0])
+
+
 def inv(q):
     """Invert a quaternion array.
 

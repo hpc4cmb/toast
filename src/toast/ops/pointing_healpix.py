@@ -77,12 +77,6 @@ class PointingHealpix(Operator):
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
 
-    shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
-    )
-
-    shared_flag_mask = Int(0, help="Bit mask value for optional flagging")
-
     pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
 
     weights = Unicode("weights", help="Observation detdata key for output weights")
@@ -90,7 +84,7 @@ class PointingHealpix(Operator):
     quats = Unicode(
         None,
         allow_none=True,
-        help="Observation detdata key for output quaternions (for debugging)",
+        help="Observation detdata key for output quaternions",
     )
 
     create_dist = Unicode(
@@ -160,13 +154,6 @@ class PointingHealpix(Operator):
             raise traitlets.TraitError("Invalid mode (must be 'I' or 'IQU')")
         return check
 
-    @traitlets.validate("shared_flag_mask")
-    def _check_flag_mask(self, proposal):
-        check = proposal["value"]
-        if check < 0:
-            raise traitlets.TraitError("Flag mask should be a positive integer")
-        return check
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Check that healpix pixels are set up.  If the nside / mode are left as
@@ -218,14 +205,11 @@ class PointingHealpix(Operator):
         # Expand detector pointing
         if self.quats:
             quats_name = self.quats
-            keep_quats = True
         else:
             if self.detector_pointing.quats:
                 quats_name = self.detector_pointing.quats
-                keep_quats = True
             else:
                 quats_name = "quats"
-                keep_quats = False
         self.detector_pointing.quats = quats_name
         self.detector_pointing.apply(data, detectors=detectors)
 
@@ -249,11 +233,13 @@ class PointingHealpix(Operator):
                         break
                     if d not in wt_dets:
                         break
-                else:
+                else:  # no break
                     # We already have pointing for all specified detectors
                     if data.comm.group_rank == 0:
-                        msg = f"Group {data.comm.group}, ob {ob.name}, pointing " \
+                        msg = (
+                            f"Group {data.comm.group}, ob {ob.name}, pointing "
                             f"already computed for {dets}"
+                        )
                         log.verbose(msg)
                     continue
 
@@ -298,11 +284,14 @@ class PointingHealpix(Operator):
             # Loop over views
             views = ob.view[self.view]
             for vw in range(len(views)):
-                # Get the flags if needed
+                # Get the flags if needed.  Use the same flags as
+                # detector pointing.
                 flags = None
-                if self.shared_flags is not None:
-                    flags = np.array(views.shared[self.shared_flags][vw])
-                    flags &= self.shared_flag_mask
+                if self.detector_pointing.shared_flags is not None:
+                    flags = np.array(
+                        views.shared[self.detector_pointing.shared_flags][vw]
+                    )
+                    flags &= self.detector_pointing.shared_flag_mask
 
                 # HWP angle if needed
                 hwp_angle = None
@@ -394,11 +383,6 @@ class PointingHealpix(Operator):
                             views.detdata[self.pixels][vw][det] // self._n_pix_submap
                         ] = True
 
-        if not keep_quats:
-            del_quats = Delete()
-            del_quats.detdata = [quats_name]
-            del_quats.apply(data, detectors=detectors)
-
         return
 
     def _finalize(self, data, **kwargs):
@@ -420,8 +404,6 @@ class PointingHealpix(Operator):
         req = self.detector_pointing.requires()
         if self.cal is not None:
             req["meta"].append(self.cal)
-        if self.shared_flags is not None:
-            req["shared"].append(self.shared_flags)
         if self.hwp_angle is not None:
             req["shared"].append(self.hwp_angle)
         if self.view is not None:
