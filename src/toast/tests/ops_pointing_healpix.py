@@ -17,6 +17,8 @@ from ..healpix import HealpixPixels
 
 from .. import ops as ops
 
+from ..intervals import Interval, IntervalList
+
 from ._helpers import create_outdir, create_satellite_data
 
 
@@ -225,7 +227,13 @@ class PointingHealpixTest(MPITestCase):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
-        pointing = ops.PointingHealpix(nside=64, mode="IQU", hwp_angle="hwp_angle")
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+        )
         pointing.apply(data)
 
         rank = 0
@@ -239,11 +247,62 @@ class PointingHealpixTest(MPITestCase):
         if rank == 0:
             handle.close()
 
+    def test_hpix_interval(self):
+        data = create_satellite_data(self.comm)
+
+        full_intervals = "full_intervals"
+        half_intervals = "half_intervals"
+        for obs in data.obs:
+            times = obs.shared["times"]
+            nsample = len(times)
+            intervals1 = [
+                Interval(
+                    start=times[0],
+                    stop=times[-1],
+                    first=0,
+                    last=nsample - 1,
+                )
+            ]
+            intervals2 = [
+                Interval(
+                    start=times[0],
+                    stop=times[nsample // 2],
+                    first=0,
+                    last=nsample // 2,
+                )
+            ]
+            obs.intervals[full_intervals] = IntervalList(times, intervals=intervals1)
+            obs.intervals[half_intervals] = IntervalList(times, intervals=intervals2)
+
+        detpointing = ops.PointingDetectorSimple(view=half_intervals)
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+            view=full_intervals,
+        )
+        with self.assertRaises(RuntimeError):
+            pointing.apply(data)
+
+        detpointing = ops.PointingDetectorSimple(view=full_intervals)
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+            view=half_intervals,
+        )
+        pointing.apply(data)
+
     def test_hpix_hwpnull(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
-        pointing = ops.PointingHealpix(nside=64, mode="IQU")
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=64, mode="IQU", detector_pointing=detpointing
+        )
         pointing.apply(data)
 
         rank = 0

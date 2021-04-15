@@ -8,7 +8,7 @@ import numpy as np
 
 from ..utils import Environment, Logger
 
-from ..traits import trait_docs, Int, Unicode, Bool
+from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
 from ..healpix import HealpixPixels
 
@@ -21,6 +21,8 @@ from ..pixels import PixelDistribution
 from .._libtoast import pointing_matrix_healpix
 
 from .operator import Operator
+
+from .delete import Delete
 
 
 @trait_docs
@@ -53,6 +55,12 @@ class PointingHealpix(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    detector_pointing = Instance(
+        klass=Operator,
+        allow_none=False,
+        help="Operator that translates boresight pointing into detector frame",
+    )
+
     nside = Int(64, help="The NSIDE resolution")
 
     nside_submap = Int(16, help="The NSIDE of the submap resolution")
@@ -65,17 +73,9 @@ class PointingHealpix(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
-
     hwp_angle = Unicode(
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
-
-    shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
-    )
-
-    shared_flag_mask = Int(0, help="Bit mask value for optional flagging")
 
     pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
 
@@ -84,7 +84,7 @@ class PointingHealpix(Operator):
     quats = Unicode(
         None,
         allow_none=True,
-        help="Observation detdata key for output quaternions (for debugging)",
+        help="Observation detdata key for output quaternions",
     )
 
     create_dist = Unicode(
@@ -101,17 +101,28 @@ class PointingHealpix(Operator):
         help="The observation key with a dictionary of pointing weight calibration for each det",
     )
 
-    coord_in = Unicode(
-        None,
-        allow_none=True,
-        help="The input boresight coordinate system ('C', 'E', 'G')",
-    )
-
-    coord_out = Unicode(
-        None,
-        allow_none=True,
-        help="The output boresight coordinate system ('C', 'E', 'G')",
-    )
+    @traitlets.validate("detector_pointing")
+    def _check_detector_pointing(self, proposal):
+        detpointing = proposal["value"]
+        if detpointing is not None:
+            if not isinstance(detpointing, Operator):
+                raise traitlets.TraitError(
+                    "detector_pointing should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in [
+                "view",
+                "boresight",
+                "shared_flags",
+                "shared_flag_mask",
+                "quats",
+                "coord_in",
+                "coord_out",
+            ]:
+                if not detpointing.has_trait(trt):
+                    msg = f"detector_pointing operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return detpointing
 
     @traitlets.validate("nside")
     def _check_nside(self, proposal):
@@ -143,29 +154,6 @@ class PointingHealpix(Operator):
         check = proposal["value"]
         if check not in ["I", "IQU"]:
             raise traitlets.TraitError("Invalid mode (must be 'I' or 'IQU')")
-        return check
-
-    @traitlets.validate("shared_flag_mask")
-    def _check_flag_mask(self, proposal):
-        check = proposal["value"]
-        if check < 0:
-            raise traitlets.TraitError("Flag mask should be a positive integer")
-        return check
-
-    @traitlets.validate("coord_in")
-    def _check_coord_in(self, proposal):
-        check = proposal["value"]
-        if check is not None:
-            if check not in ["E", "C", "G"]:
-                raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
-        return check
-
-    @traitlets.validate("coord_out")
-    def _check_coord_out(self, proposal):
-        check = proposal["value"]
-        if check is not None:
-            if check not in ["E", "C", "G"]:
-                raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
         return check
 
     def __init__(self, **kwargs):
@@ -216,30 +204,16 @@ class PointingHealpix(Operator):
         if self._local_submaps is None and self.create_dist is not None:
             self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
 
-        coord_rot = None
-        if self.coord_in is None:
-            if self.coord_out is not None:
-                msg = "Input and output coordinate systems should both be None or valid"
-                raise RuntimeError(msg)
+        # Expand detector pointing
+        if self.quats:
+            quats_name = self.quats
         else:
-            if self.coord_out is None:
-                msg = "Input and output coordinate systems should both be None or valid"
-                raise RuntimeError(msg)
-            if self.coord_in == "C":
-                if self.coord_out == "E":
-                    coord_rot = qa.equ2ecl
-                elif self.coord_out == "G":
-                    coord_rot = qa.equ2gal
-            elif self.coord_in == "E":
-                if self.coord_out == "G":
-                    coord_rot = qa.ecl2gal
-                elif self.coord_out == "C":
-                    coord_rot = qa.inv(qa.equ2ecl)
-            elif self.coord_in == "G":
-                if self.coord_out == "C":
-                    coord_rot = qa.inv(qa.equ2gal)
-                if self.coord_out == "E":
-                    coord_rot = qa.inv(qa.ecl2gal)
+            if self.detector_pointing.quats:
+                quats_name = self.detector_pointing.quats
+            else:
+                quats_name = "quats"
+        self.detector_pointing.quats = quats_name
+        self.detector_pointing.apply(data, detectors=detectors)
 
         # We do the calculation over buffers of timestream samples to reduce memory
         # overhead from temporary arrays.
@@ -253,26 +227,23 @@ class PointingHealpix(Operator):
                 continue
 
             # Do we already have pointing for all requested detectors?
-            done = False
             if (self.pixels in ob.detdata) and (self.weights in ob.detdata):
-                done = True
                 pix_dets = ob.detdata[self.pixels].detectors
                 wt_dets = ob.detdata[self.weights].detectors
                 for d in dets:
                     if d not in pix_dets:
-                        done = False
                         break
                     if d not in wt_dets:
-                        done = False
                         break
-            if done:
-                # We already have pointing for all specified detectors
-                if data.comm.group_rank == 0:
-                    msg = "Group {}, ob {}, pointing already computed for {}".format(
-                        data.comm.group, ob.name, dets
-                    )
-                    log.verbose(msg)
-                continue
+                else:  # no break
+                    # We already have pointing for all specified detectors
+                    if data.comm.group_rank == 0:
+                        msg = (
+                            f"Group {data.comm.group}, ob {ob.name}, pointing "
+                            f"already computed for {dets}"
+                        )
+                        log.verbose(msg)
+                    continue
 
             # Create (or re-use) output data for the pixels, weights and optionally the
             # detector quaternions.
@@ -298,35 +269,36 @@ class PointingHealpix(Operator):
                     detectors=dets,
                 )
 
-            if self.quats is not None:
-                ob.detdata.ensure(
-                    self.quats,
-                    sample_shape=(4,),
-                    dtype=np.float64,
-                    detectors=dets,
-                )
+            # Check that the view in the detector pointing operator covers
+            # all the samples needed by this operator
+
+            if self.detector_pointing.view is not None:
+                if self.view is None:
+                    raise RuntimeError("Must set a view if detector pointing uses one")
+                detector_intervals = ob.intervals[self.detector_pointing.view]
+                healpix_intervals = ob.intervals[self.view]
+                joint_intervals = detector_intervals | healpix_intervals
+                if joint_intervals != detector_intervals:
+                    raise RuntimeError(
+                        "Healpix intervals cover more samples than detector intervals"
+                    )
 
             # Loop over views
             views = ob.view[self.view]
             for vw in range(len(views)):
-                # Get the flags if needed
+                # Get the flags if needed.  Use the same flags as
+                # detector pointing.
                 flags = None
-                if self.shared_flags is not None:
-                    flags = np.array(views.shared[self.shared_flags][vw])
-                    flags &= self.shared_flag_mask
+                if self.detector_pointing.shared_flags is not None:
+                    flags = np.array(
+                        views.shared[self.detector_pointing.shared_flags][vw]
+                    )
+                    flags &= self.detector_pointing.shared_flag_mask
 
                 # HWP angle if needed
                 hwp_angle = None
                 if self.hwp_angle is not None:
                     hwp_angle = views.shared[self.hwp_angle][vw]
-
-                # Boresight pointing quaternions
-                in_boresight = views.shared[self.boresight][vw]
-
-                # Coordinate transform if needed
-                boresight = in_boresight
-                if coord_rot is not None:
-                    boresight = qa.mult(coord_rot, in_boresight)
 
                 # Focalplane for this observation
                 focalplane = ob.telescope.focalplane
@@ -336,8 +308,6 @@ class PointingHealpix(Operator):
                 if self.cal is not None:
                     cal = ob[self.cal]
 
-                view_samples = len(boresight)
-
                 for det in dets:
                     props = focalplane[det]
 
@@ -346,13 +316,9 @@ class PointingHealpix(Operator):
                     if "pol_leakage" in props.colnames:
                         epsilon = props["pol_leakage"]
 
-                    # Detector quaternion offset from the boresight
-                    detquat = props["quat"]
-
                     # Timestream of detector quaternions
-                    quats = qa.mult(boresight, detquat)
-                    if self.quats is not None:
-                        views.detdata[self.quats][vw][det, :] = quats
+                    quats = views.detdata[quats_name][vw][det]
+                    view_samples = len(quats)
 
                     # Cal for this detector
                     dcal = 1.0
@@ -418,6 +384,7 @@ class PointingHealpix(Operator):
                         self._local_submaps[
                             views.detdata[self.pixels][vw][det] // self._n_pix_submap
                         ] = True
+
         return
 
     def _finalize(self, data, **kwargs):
@@ -436,18 +403,9 @@ class PointingHealpix(Operator):
         return
 
     def _requires(self):
-        req = {
-            "meta": list(),
-            "shared": [
-                self.boresight,
-            ],
-            "detdata": list(),
-            "intervals": list(),
-        }
+        req = self.detector_pointing.requires()
         if self.cal is not None:
             req["meta"].append(self.cal)
-        if self.shared_flags is not None:
-            req["shared"].append(self.shared_flags)
         if self.hwp_angle is not None:
             req["shared"].append(self.hwp_angle)
         if self.view is not None:

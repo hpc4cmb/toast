@@ -50,7 +50,13 @@ class MapmakerBinningTest(MPITestCase):
         sim_noise.apply(data)
 
         # Pointing operator
-        pointing = ops.PointingHealpix(nside=64, mode="IQU", hwp_angle="hwp_angle")
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+        )
 
         binmap = dict()
         for stype in ["allreduce", "alltoallv"]:
@@ -146,8 +152,13 @@ class MapmakerBinningTest(MPITestCase):
         sim_noise.apply(data)
 
         # Pointing operator
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", nest=True, hwp_angle="hwp_angle"
+            nside=64,
+            mode="IQU",
+            nest=True,
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
         )
 
         # Build the covariance and hits

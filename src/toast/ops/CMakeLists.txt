@@ -18,6 +18,7 @@ install(FILES
     noise_model.py
     noise_weight.py
     pointing.py
+    pointing_detector.py
     pointing_healpix.py
     scan_map.py
     scan_healpix.py

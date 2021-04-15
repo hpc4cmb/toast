@@ -86,12 +86,13 @@ class SimSatelliteTest(MPITestCase):
         sim_sat.apply(data)
 
         # Expand pointing and make a hit map.
-
+        detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
             nest=True,
             mode="IQU",
             hwp_angle="hwp_angle",
             create_dist="pixel_dist",
+            detector_pointing=detpointing,
         )
         pointing.nside_submap = 2
         pointing.nside = 8
