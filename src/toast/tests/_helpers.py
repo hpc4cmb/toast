@@ -365,3 +365,49 @@ def uniform_chunks(samples, nchunk=100):
     for r in range(remain):
         chunks[r] += 1
     return chunks
+
+
+def create_fake_sky_alm(lmax=128, fwhm=10 * u.degree, pol=True):
+    # Power spectrum
+    if pol:
+        cl = np.ones(4 * (lmax + 1)).reshape([4, -1])
+    else:
+        cl = np.ones(lmax + 1)
+    # Draw a_lm
+    nside = 2
+    while 4 * nside < lmax:
+        nside *= 2
+    _, a_lm = hp.synfast(
+        cl,
+        nside,
+        alm=True,
+        lmax=lmax,
+        fwhm=fwhm.to_value(u.radian),
+        verbose=False,
+    )
+    return a_lm
+
+
+def create_fake_beam_alm(
+    lmax=128,
+    mmax=10,
+    fwhm_x=10 * u.degree,
+    fwhm_y=5 * u.degree,
+    pol=True,
+):
+    nside = 2
+    while 2 * nside < lmax:
+        nside *= 2
+    npix = 12 * nside ** 2
+    pix = np.arange(npix)
+    vec = hp.pix2vec(nside, pix, nest=False)
+    theta, phi = hp.vec2dir(vec)
+    x = theta * np.cos(phi)
+    y = theta * np.sin(phi)
+    sigma_x = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
+    sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
+    beam_map = np.exp(-(x ** 2 / sigma_x ** 2 + y ** 2 / sigma_y ** 2))
+    if pol:
+        beam_map = np.vstack([beam_map, beam_map, beam_map * 0])
+    a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax, verbose=False)
+    return a_lm
