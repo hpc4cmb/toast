@@ -45,6 +45,7 @@ from . import ops_mapmaker as test_ops_mapmaker
 from . import ops_scan_map as test_ops_scan_map
 from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_madam as test_ops_madam
+from . import ops_gainscrambler as test_ops_grainscrambler
 
 
 from . import covariance as test_covariance
@@ -158,6 +159,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_map))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_madam))
+        suite.addTest(loader.loadTestsFromModule(test_ops_gainscrambler))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
