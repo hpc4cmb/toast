@@ -534,7 +534,7 @@ class SimConviqt(Operator):
             focalplane = obs.telescope.focalplane
             epsilon = self._get_epsilon(focalplane, det)
             # Make sure detector data output exists
-            obs.detdata.ensure(self.det_data, detectors=[det])
+            obs.detdata.ensure(self.det_data, detectors=detectors)
             # Loop over views
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:
@@ -555,7 +555,7 @@ class SimConviqt(Operator):
             if det not in dets:
                 continue
             # Make sure detector data output exists
-            obs.detdata.ensure(self.det_data, detectors=[det])
+            obs.detdata.ensure(self.det_data, detectors=detectors)
             # Loop over views
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:

@@ -18,7 +18,7 @@ from .. import qarray as qa
 
 from .. import ops as ops
 
-from ..dipole import dipole
+from ..pixels_io import write_healpix_fits
 
 from ._helpers import (
     create_outdir,
@@ -36,19 +36,26 @@ class SimConviqtTest(MPITestCase):
 
         self.nside = 64
         self.lmax = 128
-        self.mmax = 10
-        self.fwhm = 10 * u.degree
+        self.fwhm_sky = 10 * u.degree
+        self.fwhm_beam = 30 * u.degree
+        self.mmax = self.lmax
         self.fname_sky = os.path.join(self.outdir, "sky_alm.fits")
         self.fname_beam = os.path.join(self.outdir, "beam_alm.fits")
 
         # Synthetic sky and beam (a_lm expansions)
-        slm = create_fake_sky_alm(self.lmax, self.fwhm)
-        hp.write_alm(self.fname_sky, slm, lmax=self.lmax, overwrite=True)
+        self.slm = create_fake_sky_alm(self.lmax, self.fwhm_sky)
+        self.slm[1:] = 0  # No polarization
+        hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
 
-        blm = create_fake_beam_alm(self.lmax, self.mmax)
+        self.blm = create_fake_beam_alm(
+            self.lmax,
+            self.mmax,
+            fwhm_x=self.fwhm_beam,
+            fwhm_y=self.fwhm_beam,
+        )
         hp.write_alm(
             self.fname_beam,
-            blm,
+            self.blm,
             lmax=self.lmax,
             mmax_in=self.mmax,
             overwrite=True,
@@ -57,6 +64,8 @@ class SimConviqtTest(MPITestCase):
         blm_I, blm_Q, blm_U = create_fake_beam_alm(
             self.lmax,
             self.mmax,
+            fwhm_x=self.fwhm_beam,
+            fwhm_y=self.fwhm_beam,
             separate_IQU=True,
         )
         hp.write_alm(
@@ -87,18 +96,148 @@ class SimConviqtTest(MPITestCase):
         # Create a fake scan strategy that hits every pixel once.
         data = create_healpix_ring_satellite(self.comm, nside=self.nside)
 
-        # make a simple pointing matrix
+        # Generate timestreams
+
         detpointing = ops.PointingDetectorSimple()
 
-        # Generate timestreams
+        key = "conviqt_tod"
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
             beam_file=self.fname_beam,
             dxx=False,
+            det_data=key,
+            normalize_beam=True,
+            fwhm=self.fwhm_sky,
         )
         sim_conviqt.exec(data)
+
+        # Bin a map to study
+
+        pointing = ops.PointingHealpix(
+            nside=self.nside,
+            nest=False,
+            mode="I",
+            detector_pointing=detpointing,
+        )
+        pointing.apply(data)
+
+        default_model = ops.DefaultNoiseModel()
+        default_model.apply(data)
+
+        cov_and_hits = ops.CovarianceAndHits(
+            pixel_dist="pixel_dist",
+            pointing=pointing,
+            noise_model=default_model.noise_model,
+            rcond_threshold=1.0e-6,
+            sync_type="alltoallv",
+        )
+        cov_and_hits.apply(data)
+
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance=cov_and_hits.covariance,
+            det_data=key,
+            pointing=pointing,
+            noise_model=default_model.noise_model,
+            sync_type="alltoallv",
+        )
+        binner.apply(data)
+
+        # Study the map on the root process
+
+        toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
+        write_healpix_fits(data[binner.binned], toast_bin_path, nest=False)
+
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        fail = False
+
+        if rank == 0:
+            import matplotlib.pyplot as plt
+
+            mapfile = os.path.join(self.outdir, "toast_bin.fits")
+            mdata = hp.read_map(mapfile, nest=False)
+
+            deconv = 1 / hp.gauss_beam(
+                self.fwhm_sky.to_value(u.radian),
+                lmax=self.lmax,
+                pol=False,
+            )
+
+            smoothed = hp.alm2map(
+                hp.almxfl(self.slm[0], deconv),
+                self.nside,
+                lmax=self.lmax,
+                fwhm=self.fwhm_beam.to_value(u.radian),
+                verbose=False,
+                pixwin=False,
+            )
+
+            cl_out = hp.anafast(mdata, lmax=self.lmax)
+            cl_smoothed = hp.anafast(smoothed, lmax=self.lmax)
+
+            cl_in = hp.alm2cl(self.slm[0], lmax=self.lmax)
+            blsq = hp.alm2cl(self.blm[0], lmax=self.lmax, mmax=self.mmax)
+            blsq /= blsq[1]
+
+            gauss_blsq = hp.gauss_beam(
+                self.fwhm_beam.to_value(u.radian),
+                lmax=self.lmax,
+                pol=False,
+            )
+
+            sky = hp.alm2map(self.slm[0], self.nside, lmax=self.lmax, verbose=False)
+            beam = hp.alm2map(
+                self.blm[0], self.nside, lmax=self.lmax, mmax=self.mmax, verbose=False
+            )
+
+            fig = plt.figure(figsize=[12, 8])
+            nrow, ncol = 2, 3
+            hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
+            hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
+            hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
+            hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
+
+            ell = np.arange(self.lmax + 1)
+            ax = fig.add_subplot(nrow, ncol, 5)
+            ax.plot(ell[1:], cl_in[1:], label="input")
+            ax.plot(ell[1:], cl_smoothed[1:], label="smoothed")
+            ax.plot(ell[1:], blsq[1:], label="beam")
+            ax.plot(ell[1:], gauss_blsq[1:], label="gauss beam")
+            ax.plot(ell[1:], 1 / deconv[1:] ** 2, label="1 / deconv")
+            ax.plot(
+                ell[1:],
+                cl_in[1:] * blsq[1:] * deconv[1:] ** 2,
+                label="input x beam x deconv",
+            )
+            ax.plot(ell[1:], cl_out[1:], label="output")
+            ax.legend(loc="best")
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.set_ylim([1e-20, 1e1])
+
+            outfile = os.path.join(self.outdir, "cl_comparison.png")
+            fig.savefig(outfile)
+
+            compare = blsq > 1e-5
+            ref = cl_in[compare] * blsq[compare] * deconv[compare] ** 2
+            norm = np.mean(cl_out[compare] / ref)
+            if not np.allclose(
+                norm * ref,
+                cl_out[compare],
+                rtol=1e-5,
+                atol=1e-5,
+            ):
+                fail = True
+
+        if data.comm.comm_world is not None:
+            fail = data.comm.comm_world.bcast(fail, root=0)
+
+        self.assertFalse(fail)
 
         return
 

@@ -83,8 +83,8 @@ class BuildPixelDistribution(Operator):
         log = Logger.get()
 
         if self.pixel_dist in data:
-            # Already exists
-            return
+            msg = f"pixel distribution `{self.pixel_dist}` already exists"
+            raise RuntimeError(msg)
 
         if detectors is not None:
             msg = "A subset of detectors is specified, but the pixel distribution\n"

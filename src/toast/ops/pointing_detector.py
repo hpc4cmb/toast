@@ -128,7 +128,7 @@ class PointingDetectorSimple(Operator):
                     if data.comm.group_rank == 0:
                         log.verbose(
                             f"Group {data.comm.group}, ob {ob.name}, detector pointing "
-                            "already translated for {dets}"
+                            f"already translated for {dets}"
                         )
                     continue
 

@@ -392,7 +392,7 @@ def create_fake_beam_alm(
     lmax=128,
     mmax=10,
     fwhm_x=10 * u.degree,
-    fwhm_y=5 * u.degree,
+    fwhm_y=10 * u.degree,
     pol=True,
     separate_IQU=False,
 ):
@@ -407,7 +407,7 @@ def create_fake_beam_alm(
     y = theta * np.sin(phi)
     sigma_x = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    beam_map = np.exp(-(x ** 2 / sigma_x ** 2 + y ** 2 / sigma_y ** 2))
+    beam_map = np.exp(-0.5 * (x ** 2 / sigma_x ** 2 + y ** 2 / sigma_y ** 2))
     empty = np.zeros_like(beam_map)
     if pol and separate_IQU:
         beam_map_I = np.vstack([beam_map, empty, empty])
