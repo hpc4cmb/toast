@@ -93,6 +93,10 @@ class SimConviqtTest(MPITestCase):
         return
 
     def test_sim(self):
+        if not ops.conviqt.available():
+            print("libconviqt not available, skipping tests")
+            return
+
         # Create a fake scan strategy that hits every pixel once.
         data = create_healpix_ring_satellite(self.comm, nside=self.nside)
 
@@ -242,6 +246,10 @@ class SimConviqtTest(MPITestCase):
         return
 
     def test_sim_hwp(self):
+        if not ops.conviqt.available():
+            print("libconviqt not available, skipping tests")
+            return
+
         # Create a fake scan strategy that hits every pixel once.
         data = create_satellite_data(self.comm)
 
