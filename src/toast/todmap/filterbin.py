@@ -459,8 +459,9 @@ class OpFilterBin(Operator):
             row_stop = row_start + nrow_write
             obs_matrix_slice = self.obs_matrix[row_start : row_stop]
             nnz = obs_matrix_slice.nnz
-            nnz_tot = self.comm.allreduce(nnz)
-            if nnz_tot == 0:
+            if self.comm is not None:
+                nnz = self.comm.allreduce(nnz)
+            if nnz == 0:
                 if self.rank == 0:
                     print(f"Slice {islice+1:5} / {nslice}: {row_start:12} - {row_stop:12} "
                           f"is empty.  Skipping.", flush=True)
@@ -484,8 +485,6 @@ class OpFilterBin(Operator):
                     receive_from = self.rank + factor
                     if receive_from < self.ntask:
                         size_recv = self.comm.recv(source=receive_from, tag=factor)
-                        #if self.verbose:
-                        #    print(f"{self.rank:5} : {factor} : Receiving {size_recv} nonzero elements from # {receive_from} to add to {obs_matrix_slice.data.size} local elements", flush=True)
                         data_recv = np.zeros(size_recv, dtype=np.float64)
                         self.comm.Recv(
                             data_recv, source=receive_from, tag=factor + self.ntask
@@ -503,13 +502,9 @@ class OpFilterBin(Operator):
                             obs_matrix_slice.shape,
                         )
                         del data_recv, indices_recv, indptr_recv
-                        #if self.verbose:
-                        #    print(f"{self.rank:5} : {factor} : There are now {obs_matrix_slice.data.size} local elements", flush=True)
                 elif self.rank % (factor * 2) == factor:
                     # this task sends
                     send_to = self.rank - factor
-                   # if self.verbose:
-                   #     print(f"{self.rank:5} : {factor} : Sending {obs_matrix_slice.data.size} nonzero elements to # {send_to}", flush=True)
                     self.comm.send(obs_matrix_slice.data.size, dest=send_to, tag=factor)
                     self.comm.Send(obs_matrix_slice.data, dest=send_to, tag=factor + self.ntask)
                     self.comm.Send(
