@@ -35,7 +35,7 @@ bool toast::atm_verbose() {
         // First time we were called
         auto & env = toast::Environment::get();
         std::string logval = env.log_level();
-        if (strncmp(logval.c_str(), "DEBUG", 5) == 0) {
+        if (strncmp(logval.c_str(), "VERBOSE", 7) == 0) {
             verbose = true;
         }
         called = true;
