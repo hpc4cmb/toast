@@ -42,26 +42,15 @@ class SimConviqt(Operator):
 
     comm = Instance(
         klass=MPI.Comm,
-        allow_none=False,
+        allow_none=True,
         help="MPI communicator to use for the convolution. libConviqt does "
         "not work without MPI.",
     )
 
     detector_pointing = Instance(
         klass=Operator,
-        allow_none=False,
-        help="Operator that translates boresight pointing into detector frame",
-    )
-
-    times = Unicode(
-        "times",
-        allow_none=False,
-        help="Observation shared key for timestamps",
-    )
-    quats = Unicode(
-        None,
         allow_none=True,
-        help="Observation detdata key for quaternions to use",
+        help="Operator that translates boresight pointing into detector frame",
     )
 
     det_flags = Unicode(
@@ -118,8 +107,8 @@ class SimConviqt(Operator):
     @traitlets.validate("mc")
     def _check_mc(self, proposal):
         check = proposal["value"]
-        if check < 0:
-            raise traitlets.TraitError("MC index must be nonnegative")
+        if check is not None and check < 0:
+            raise traitlets.TraitError("MC index cannot be negative")
         return check
 
     beammmax = Int(
@@ -234,40 +223,29 @@ class SimConviqt(Operator):
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
 
-    @traitlets.validate("hwp_angle")
-    def _check_for_hwp_angle(self, proposal):
-        # Check that there is no rotating HWP
-        check = proposal["value"]
-        if check is not None:
-            raise RuntimeError(
-                "SimConviqt cannot handle a HWP. Please use SimWeightedConviqt"
-            )
-        return check
-
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         if not self.available:
             raise RuntimeError("libconviqt is not available")
+
+        if self.comm is None:
+            raise RuntimeError("libconviqt requires MPI")
+
+        if self.detector_pointing is None:
+            raise RuntimeError("detector_pointing cannot be None.")
 
         log = Logger.get()
 
         timer = Timer()
         timer.start()
 
-        # Expand detector pointing
-        if self.quats:
-            quats_name = self.quats
-            keep_quats = True
-        else:
-            quats_name = "quats"
-            keep_quats = False
-        self.detector_pointing.quats = quats_name
-        self.detector_pointing.apply(data, detectors=detectors)
-
         all_detectors = self._get_all_detectors(data, detectors)
 
         for det in all_detectors:
             verbose = self.comm.rank == 0 and self.verbosity > 0
+
+            # Expand detector pointing
+            self.detector_pointing.apply(data, detectors=[det])
 
             if det in self.sky_file_dict:
                 sky_file = self.sky_file_dict[det]
@@ -284,16 +262,14 @@ class SimConviqt(Operator):
 
             detector = self.get_detector(det)
 
-            theta, phi, psi, psi_pol = self.get_pointing(
-                data, det, verbose, detectors, quats_name
-            )
+            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             del theta, phi, psi
 
             convolved_data = self.convolve(sky, beam, detector, pnt, det, verbose)
 
-            self.calibrate_signal(data, det, beam, convolved_data, verbose, detectors)
-            self.cache(data, det, convolved_data, verbose, detectors)
+            self.calibrate_signal(data, det, beam, convolved_data, verbose)
+            self.save(data, det, convolved_data, verbose)
 
             del pnt, detector, beam, sky
 
@@ -312,6 +288,8 @@ class SimConviqt(Operator):
             obs_dets = obs.select_local_detectors(detectors)
             for det in obs_dets:
                 my_dets.add(det)
+            # Make sure detector data output exists
+            obs.detdata.ensure(self.det_data, detectors=detectors)
         all_dets = self.comm.gather(my_dets, root=0)
         if self.comm.rank == 0:
             for some_dets in all_dets:
@@ -400,7 +378,7 @@ class SimConviqt(Operator):
         detector = conviqt.Detector(name=det, epsilon=0)
         return detector
 
-    def get_pointing(self, data, det, verbose, detectors, quats_name):
+    def get_pointing(self, data, det, verbose):
         """Return the detector pointing as ZYZ Euler angles without the
         polarization sensitive angle.  These angles are to be compatible
         with Pxx or Dxx frame beam products
@@ -412,7 +390,7 @@ class SimConviqt(Operator):
         timer.start()
         all_theta, all_phi, all_psi, all_psi_pol = [], [], [], []
         for obs in data.obs:
-            if det not in obs.select_local_detectors(detectors):
+            if det not in obs.local_detectors:
                 continue
             focalplane = obs.telescope.focalplane
             # Loop over views
@@ -433,7 +411,7 @@ class SimConviqt(Operator):
                             flags = detflags
 
                 # Timestream of detector quaternions
-                quats = views.detdata[quats_name][view][det]
+                quats = views.detdata[self.detector_pointing.quats][view][det]
                 if verbose:
                     timer.report_clear(f"get detector pointing for {det}")
 
@@ -516,7 +494,7 @@ class SimConviqt(Operator):
 
         return convolved_data
 
-    def calibrate_signal(self, data, det, beam, convolved_data, verbose, detectors):
+    def calibrate_signal(self, data, det, beam, convolved_data, verbose):
         """By default, libConviqt results returns a signal that conforms to
         TOD = (1 + epsilon) / 2 * intensity + (1 - epsilon) / 2 * polarization.
 
@@ -529,12 +507,12 @@ class SimConviqt(Operator):
         timer.start()
         offset = 0
         for obs in data.obs:
-            if det not in obs.select_local_detectors(detectors):
+            if det not in obs.local_detectors:
                 continue
             focalplane = obs.telescope.focalplane
             epsilon = self._get_epsilon(focalplane, det)
             # Make sure detector data output exists
-            obs.detdata.ensure(self.det_data, detectors=detectors)
+            obs.detdata.ensure(self.det_data, detectors=[det])
             # Loop over views
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:
@@ -545,26 +523,22 @@ class SimConviqt(Operator):
             timer.report_clear(f"calibrate detector {det}")
         return
 
-    def cache(self, data, det, convolved_data, verbose, detectors):
-        """Inject the convolved data into the TOD cache."""
+    def save(self, data, det, convolved_data, verbose):
+        """Store the convolved data."""
         timer = Timer()
         timer.start()
         offset = 0
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors)
-            if det not in dets:
+            if det not in obs.local_detectors:
                 continue
-            # Make sure detector data output exists
-            obs.detdata.ensure(self.det_data, detectors=detectors)
             # Loop over views
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:
-                ref = view[det]
-                nsample = len(ref)
-                ref[:] += convolved_data[offset : offset + nsample]
+                nsample = len(view[det])
+                view[det] += convolved_data[offset : offset + nsample]
                 offset += nsample
         if verbose:
-            timer.report_clear(f"cache detector {det}")
+            timer.report_clear(f"save detector {det}")
         return
 
     def _finalize(self, data, **kwargs):
@@ -573,7 +547,7 @@ class SimConviqt(Operator):
     def _requires(self):
         req = self.detector_pointing.requires()
         req["meta"].extend([self.noise_model, self.pixel_dist, self.covariance])
-        req["shared"] = [self.times, self.boresight]
+        req["shared"] = [self.boresight]
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
@@ -583,7 +557,8 @@ class SimConviqt(Operator):
         return req
 
     def _provides(self):
-        prov = {"meta": list(), "shared": list(), "detdata": [self.det_data]}
+        prov = self.detector_pointing.provides()
+        prob["detdata"].append(self.det_data)
         return prov
 
     def _accelerators(self):
@@ -597,20 +572,16 @@ class SimWeightedConviqt(SimConviqt):
     responses on to each other.  In OpSimConviqt we assume the beam to be static.
     """
 
-    @traitlets.validate("hwp_angle")
-    def _check_for_hwp_angle(self, proposal):
-        # Check that there is no rotating HWP
-        check = proposal["value"]
-        if check is None:
-            raise RuntimeError(
-                "SimWeightedConviqt should be used with a HWP. Please use SimConviqt"
-            )
-        return check
-
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         if not self.available:
             raise RuntimeError("libconviqt is not available")
+
+        if self.comm is None:
+            raise RuntimeError("libconviqt requires MPI")
+
+        if self.detector_pointing is None:
+            raise RuntimeError("detector_pointing cannot be None.")
 
         log = Logger.get()
 
@@ -618,19 +589,15 @@ class SimWeightedConviqt(SimConviqt):
         timer.start()
 
         # Expand detector pointing
-        if self.quats:
-            quats_name = self.quats
-            keep_quats = True
-        else:
-            quats_name = "quats"
-            keep_quats = False
-        self.detector_pointing.quats = quats_name
         self.detector_pointing.apply(data, detectors=detectors)
 
         all_detectors = self._get_all_detectors(data, detectors)
 
         for det in all_detectors:
             verbose = self.comm.rank == 0 and self.verbosity > 0
+
+            # Expand detector pointing
+            self.detector_pointing.apply(data, detectors=[det])
 
             if det in self.sky_file_dict:
                 sky_file = self.sky_file_dict[det]
@@ -652,9 +619,7 @@ class SimWeightedConviqt(SimConviqt):
 
             detector = self.get_detector(det)
 
-            theta, phi, psi, psi_pol = self.get_pointing(
-                data, det, verbose, detectors, quats_name
-            )
+            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
 
             # I-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
@@ -681,9 +646,8 @@ class SimWeightedConviqt(SimConviqt):
                 beamI00,
                 convolved_data,
                 verbose,
-                detectors,
             )
-            self.cache(data, det, convolved_data, verbose, detectors)
+            self.save(data, det, convolved_data, verbose)
 
             del pnt, detector, beamI00, beam0I0, beam00I, sky
 
