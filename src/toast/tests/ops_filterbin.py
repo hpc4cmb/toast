@@ -16,7 +16,11 @@ import scipy.sparse
 from ..timing import gather_timers, GlobalTimers
 from ..timing import dump as dump_timing
 from ..tod import (
-    AnalyticNoise, OpSimNoise, Interval, OpCacheCopy, OpCacheInit,
+    AnalyticNoise,
+    OpSimNoise,
+    Interval,
+    OpCacheCopy,
+    OpCacheInit,
 )
 from ..map import DistPixels
 from ..todmap import (
@@ -215,7 +219,7 @@ class OpFilterBinTest(MPITestCase):
         self.lmax = 2 * self.sim_nside
         self.cl = np.ones([4, self.lmax + 1])
         self.cl[:, 0:2] = 0
-        #self.cl[1:] = 0  # DEBUG
+        # self.cl[1:] = 0  # DEBUG
         fwhm = np.radians(10)
         self.inmap = hp.synfast(
             self.cl,
@@ -392,7 +396,7 @@ class OpFilterBinTest(MPITestCase):
             hp.write_map(dpmap_file, tmap, nest=True)
         if self.comm is not None:
             self.comm.Barrier()
-            
+
         # Run FilterBin
 
         gt = GlobalTimers.get()

@@ -121,14 +121,14 @@ def uniform_chunks(samples, nchunk=100):
 
 
 def boresight_focalplane(
-        ndet,
-        samplerate=1.0,
-        epsilon=0.0,
-        net=1.0,
-        fmin=0.0,
-        alpha=1.0,
-        fknee=0.05,
-        pairs=False,
+    ndet,
+    samplerate=1.0,
+    epsilon=0.0,
+    net=1.0,
+    fmin=0.0,
+    alpha=1.0,
+    fknee=0.05,
+    pairs=False,
 ):
     """Create a set of detectors at the boresight.
 

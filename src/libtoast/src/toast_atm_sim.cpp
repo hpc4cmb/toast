@@ -728,6 +728,7 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
                 int ilower = -iupper;
                 if (atm_verbose()) {
                     cholmod_print_sparse(cov, "Covariance matrix", chol.chcommon);
+
                     // DEBUG begin
                     if (itry == ntry - 2) {
                         FILE * covfile = fopen("failed_covmat.mtx", "w");
@@ -735,6 +736,7 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
                                              chol.chcommon);
                         fclose(covfile);
                     }
+
                     // DEBUG end
                     o.str("");
                     o << rank
@@ -750,6 +752,7 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
                 }
                 if (atm_verbose()) {
                     cholmod_print_sparse(cov, "Covariance matrix", chol.chcommon);
+
                     // DEBUG begin
                     if (itry == ntry - 2) {
                         FILE * covfile = fopen("band_covmat.mtx", "w");
@@ -757,6 +760,7 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
                                              chol.chcommon);
                         fclose(covfile);
                     }
+
                     // DEBUG end
                 }
             } else throw std::runtime_error("cholmod_factorize failed.");

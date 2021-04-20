@@ -208,23 +208,25 @@ class OpFilterBin(Operator):
 
     @function_timer
     def _build_templates(
-            self,
-            times,
-            phase,
-            local_intervals,
-            good,
-            common_flags,
-            common_templates,
-            deprojection_map,
-            det,
-            pixels,
+        self,
+        times,
+        phase,
+        local_intervals,
+        good,
+        common_flags,
+        common_templates,
+        deprojection_map,
+        det,
+        pixels,
     ):
         nsample = times.size
         templates = list(common_templates)
 
         # add deprojection templates
-        if deprojection_map is not None and \
-           self._deproject_pattern.match(det) is not None:
+        if (
+            deprojection_map is not None
+            and self._deproject_pattern.match(det) is not None
+        ):
             # Normalize the deprojection templates for numerical stability
             norm = np.dot(common_templates[0], common_templates[0])
             submap, localpix = deprojection_map.global_to_local(pixels)
@@ -245,8 +247,11 @@ class OpFilterBin(Operator):
                 flush=True,
             )
         if rcond < 1e-6:
-            print(f"OpFilterBin: WARNING: template covariance matrix is poorly conditioned: "
-                  f"rcond = {rcond}", flush=True)
+            print(
+                f"OpFilterBin: WARNING: template covariance matrix is poorly conditioned: "
+                f"rcond = {rcond}",
+                flush=True,
+            )
         cov = np.linalg.inv(invcov)
         # np.save("invcov", invcov)  # DEBUG
         # np.save("cov", cov)  # DEBUG
@@ -316,12 +321,15 @@ class OpFilterBin(Operator):
                 mm_indices = np.load(fname_cache + ".indices.npy")
                 mm_indptr = np.load(fname_cache + ".indptr.npy")
                 local_obs_matrix = scipy.sparse.csr_matrix(
-                    (mm_data, mm_indices, mm_indptr), self.obs_matrix.shape,
+                    (mm_data, mm_indices, mm_indptr),
+                    self.obs_matrix.shape,
                 )
                 if self.grank == 0:
-                    print(f"{self.group:4} : OpFilterBin:     loaded cached matrix from "
-                          f"{fname_cache}* in {time() - t1:.3f}s",
-                          flush=True)
+                    print(
+                        f"{self.group:4} : OpFilterBin:     loaded cached matrix from "
+                        f"{fname_cache}* in {time() - t1:.3f}s",
+                        flush=True,
+                    )
             except:
                 local_obs_matrix = None
 
@@ -335,11 +343,19 @@ class OpFilterBin(Operator):
             # Temporarily compress pixels
             t1 = time()
             if self.grank == 0 or self.verbose > 1:
-                print(f"{self.group:4} : OpFilterBin:     Compressing pixels", flush=True)
-            c_pixels, c_npix, local_to_global = self._compress_pixels(pixels[good].copy())
+                print(
+                    f"{self.group:4} : OpFilterBin:     Compressing pixels", flush=True
+                )
+            c_pixels, c_npix, local_to_global = self._compress_pixels(
+                pixels[good].copy()
+            )
             if self.grank == 0:
-                print("{:4} : OpFilterBin: Compressed in {:.3f}s".format(
-                    self.group, time() - t1), flush=True)
+                print(
+                    "{:4} : OpFilterBin: Compressed in {:.3f}s".format(
+                        self.group, time() - t1
+                    ),
+                    flush=True,
+                )
             c_npixtot = c_npix * self._nnz
             c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
             t0 = time()
@@ -353,35 +369,57 @@ class OpFilterBin(Operator):
                 template_covariance,
             )
             if self.grank == 0:
-                print("{:4} : OpFilterBin:     Accumulated in {:.3f}s".format(
-                    self.group, time() - t0), flush=True)
+                print(
+                    "{:4} : OpFilterBin:     Accumulated in {:.3f}s".format(
+                        self.group, time() - t0
+                    ),
+                    flush=True,
+                )
             # expand to global pixel numbers
             t1 = time()
             if self.grank == 0 or self.verbose > 1:
-                print(f"{self.group:4} : OpFilterBin:     Expanding local to global", flush=True)
+                print(
+                    f"{self.group:4} : OpFilterBin:     Expanding local to global",
+                    flush=True,
+                )
             local_obs_matrix = self._expand_matrix(c_obs_matrix, local_to_global)
             if self.grank == 0:
-                print("{:4} : OpFilterBin:     Expanded in {:.3f}s".format(
-                    self.group, time() - t1), flush=True)
+                print(
+                    "{:4} : OpFilterBin:     Expanded in {:.3f}s".format(
+                        self.group, time() - t1
+                    ),
+                    flush=True,
+                )
 
             if fname_cache is not None:
                 t1 = time()
                 if self.grank == 0 or self.verbose > 1:
-                    print(f"{self.group:4} : OpFilterBin:     Caching to {fname_cache}*", flush=True)
+                    print(
+                        f"{self.group:4} : OpFilterBin:     Caching to {fname_cache}*",
+                        flush=True,
+                    )
                 np.save(fname_cache + ".data", local_obs_matrix)
                 np.save(fname_cache + ".indices", local_obs_matrix)
                 np.save(fname_cache + ".indptr", local_obs_matrix)
                 if self.grank == 0:
-                    print("{:4} : OpFilterBin:     cached in {:.3f}s".format(
-                        self.group, time() - t1), flush=True)
+                    print(
+                        "{:4} : OpFilterBin:     cached in {:.3f}s".format(
+                            self.group, time() - t1
+                        ),
+                        flush=True,
+                    )
 
         t1 = time()
         if self.grank == 0 or self.verbose > 1:
             print(f"{self.group:4} : OpFilterBin:     Adding to global", flush=True)
         self.obs_matrix += local_obs_matrix * detweight
         if self.grank == 0:
-            print("{:4} : OpFilterBin:     Added in {:.3f}s".format(
-                self.group, time() - t1), flush=True)
+            print(
+                "{:4} : OpFilterBin:     Added in {:.3f}s".format(
+                    self.group, time() - t1
+                ),
+                flush=True,
+            )
         return
 
     @function_timer
@@ -457,29 +495,37 @@ class OpFilterBin(Operator):
         nrow_write = nrow_tot // nslice
         for islice, row_start in enumerate(range(0, nrow_tot, nrow_write)):
             row_stop = row_start + nrow_write
-            obs_matrix_slice = self.obs_matrix[row_start : row_stop]
+            obs_matrix_slice = self.obs_matrix[row_start:row_stop]
             nnz = obs_matrix_slice.nnz
             if self.comm is not None:
                 nnz = self.comm.allreduce(nnz)
             if nnz == 0:
                 if self.rank == 0:
-                    print(f"Slice {islice+1:5} / {nslice}: {row_start:12} - {row_stop:12} "
-                          f"is empty.  Skipping.", flush=True)
+                    print(
+                        f"Slice {islice+1:5} / {nslice}: {row_start:12} - {row_stop:12} "
+                        f"is empty.  Skipping.",
+                        flush=True,
+                    )
                 continue
             if self.rank == 0:
-                print(f"Collecting slice {islice+1:5} / {nslice} : {row_start:12} - "
-                      f"{row_stop:12}", flush=True)
+                print(
+                    f"Collecting slice {islice+1:5} / {nslice} : {row_start:12} - "
+                    f"{row_stop:12}",
+                    flush=True,
+                )
 
             factor = 1
             while factor < self.ntask:
                 if self.rank == 0 or self.verbose > 1:
                     print(
-                        "OpFilterBin: Collecting {} / {}".format(2 * factor, self.ntask),
+                        "OpFilterBin: Collecting {} / {}".format(
+                            2 * factor, self.ntask
+                        ),
                         flush=True,
                     )
                     t1 = time()
-                #from ..utils import memreport  # DEBUG
-                #memreport(f"factor = {factor}", self.comm)  # DEBUG
+                # from ..utils import memreport  # DEBUG
+                # memreport(f"factor = {factor}", self.comm)  # DEBUG
                 if self.rank % (factor * 2) == 0:
                     # this task receives
                     receive_from = self.rank + factor
@@ -491,11 +537,17 @@ class OpFilterBin(Operator):
                         )
                         indices_recv = np.zeros(size_recv, dtype=np.int32)
                         self.comm.Recv(
-                            indices_recv, source=receive_from, tag=factor + 2 * self.ntask
+                            indices_recv,
+                            source=receive_from,
+                            tag=factor + 2 * self.ntask,
                         )
-                        indptr_recv = np.zeros(obs_matrix_slice.indptr.size, dtype=np.int32)
+                        indptr_recv = np.zeros(
+                            obs_matrix_slice.indptr.size, dtype=np.int32
+                        )
                         self.comm.Recv(
-                            indptr_recv, source=receive_from, tag=factor + 3 * self.ntask
+                            indptr_recv,
+                            source=receive_from,
+                            tag=factor + 3 * self.ntask,
                         )
                         obs_matrix_slice += scipy.sparse.csr_matrix(
                             (data_recv, indices_recv, indptr_recv),
@@ -506,12 +558,18 @@ class OpFilterBin(Operator):
                     # this task sends
                     send_to = self.rank - factor
                     self.comm.send(obs_matrix_slice.data.size, dest=send_to, tag=factor)
-                    self.comm.Send(obs_matrix_slice.data, dest=send_to, tag=factor + self.ntask)
                     self.comm.Send(
-                        obs_matrix_slice.indices, dest=send_to, tag=factor + 2 * self.ntask
+                        obs_matrix_slice.data, dest=send_to, tag=factor + self.ntask
                     )
                     self.comm.Send(
-                        obs_matrix_slice.indptr, dest=send_to, tag=factor + 3 * self.ntask
+                        obs_matrix_slice.indices,
+                        dest=send_to,
+                        tag=factor + 2 * self.ntask,
+                    )
+                    self.comm.Send(
+                        obs_matrix_slice.indptr,
+                        dest=send_to,
+                        tag=factor + 3 * self.ntask,
                     )
 
                 self.comm.Barrier()
@@ -715,8 +773,12 @@ class OpFilterBin(Operator):
 
         for iobs, obs in enumerate(data.obs):
             if self.grank == 0 or self.verbose > 1:
-                print("{:4} : OpFilterBin: Processing observation {} / {}".format(
-                    self.group, iobs + 1, len(data.obs)), flush=True)
+                print(
+                    "{:4} : OpFilterBin: Processing observation {} / {}".format(
+                        self.group, iobs + 1, len(data.obs)
+                    ),
+                    flush=True,
+                )
             tod = obs["tod"]
             if self._intervals in obs:
                 intervals = obs[self._intervals]
@@ -732,13 +794,21 @@ class OpFilterBin(Operator):
                 times, phase, local_intervals, common_flags
             )
             if self.grank == 0 or self.verbose > 1:
-                print("{:4} : OpFilterBin:   Built common templates in {:.3f} s".format(
-                    self.group, time() - t2), flush=True)
+                print(
+                    "{:4} : OpFilterBin:   Built common templates in {:.3f} s".format(
+                        self.group, time() - t2
+                    ),
+                    flush=True,
+                )
 
             for idet, det in enumerate(tod.local_dets):
                 if self.grank == 0 or self.verbose > 1:
-                    print("{:4} : OpFilterBin:   Processing detector # {} / {}".format(
-                        self.group, idet + 1, len(tod.local_dets)), flush=True)
+                    print(
+                        "{:4} : OpFilterBin:   Processing detector # {} / {}".format(
+                            self.group, idet + 1, len(tod.local_dets)
+                        ),
+                        flush=True,
+                    )
                 signal = tod.local_signal(det, self._name)
                 flags = tod.local_flags(det, self._flag_name)
                 good = np.logical_and(
@@ -766,13 +836,21 @@ class OpFilterBin(Operator):
                     pixels,
                 )
                 if self.grank == 0 or self.verbose > 1:
-                    print("{:4} : OpFilterBin:   Built templates in {:.3f} s".format(
-                        self.group, time() - t2), flush=True)
+                    print(
+                        "{:4} : OpFilterBin:   Built templates in {:.3f} s".format(
+                            self.group, time() - t2
+                        ),
+                        flush=True,
+                    )
                 t2 = time()
                 self._regress_templates(templates, template_covariance, signal, good)
                 if self.grank == 0 or self.verbose > 1:
-                    print("{:4} : OpFilterBin:   Regressed templates in {:.3f} s".format(
-                        self.group, time() - t2), flush=True)
+                    print(
+                        "{:4} : OpFilterBin:   Regressed templates in {:.3f} s".format(
+                            self.group, time() - t2
+                        ),
+                        flush=True,
+                    )
                 self._accumulate_observation_matrix(
                     obs["name"],
                     det,
@@ -789,7 +867,9 @@ class OpFilterBin(Operator):
         if self.grank == 0 or self.verbose > 1:
             print(
                 "{:4} : OpFilterBin: Filtered signal in {:.1f} s".format(
-                    self.group, time() - t1), flush=True,
+                    self.group, time() - t1
+                ),
+                flush=True,
             )
 
         if self.comm is not None:

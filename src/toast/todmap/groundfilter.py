@@ -168,7 +168,7 @@ class OpGroundFilter(Operator):
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
         proj = np.zeros(ntemplate)
-        
+
         bin_templates(ref, templates, good.astype(np.uint8), invcov, proj)
 
         if comm is not None:
@@ -186,8 +186,10 @@ class OpGroundFilter(Operator):
             coeff = np.dot(cov, proj)
         else:
             self.nsingular += 1
-            log.debug(f"Ground template matrix is poorly conditioned, "
-                  f"rcond = {rcond}, doing least squares fitting.")
+            log.debug(
+                f"Ground template matrix is poorly conditioned, "
+                f"rcond = {rcond}, doing least squares fitting."
+            )
             # np.linalg.lstsq will find a least squares minimum
             # even if the covariance matrix is not invertible
             coeff = np.linalg.lstsq(invcov, proj, rcond=1e-30)[0]
@@ -197,7 +199,7 @@ class OpGroundFilter(Operator):
         return coeff
 
     @function_timer
-    def subtract_templates(self, ref, good, coeff, legendre_trend,legendre_filter):
+    def subtract_templates(self, ref, good, coeff, legendre_trend, legendre_filter):
         # Trend
         if self._detrend:
             trend = np.zeros_like(ref)
@@ -242,10 +244,15 @@ class OpGroundFilter(Operator):
         # Each group loops over its own CES:es
         for iobs, obs in enumerate(data.obs):
             tod = obs["tod"]
-            if (self.rank == 0 and self.verbose) or (self.grank == 0 and self.verbose > 1):
-                print("{:4} : OpGroundFilter: Processing observation {} / {}".format(
-                    self.group, iobs + 1, len(data.obs)), flush=True)
-                
+            if (self.rank == 0 and self.verbose) or (
+                self.grank == 0 and self.verbose > 1
+            ):
+                print(
+                    "{:4} : OpGroundFilter: Processing observation {} / {}".format(
+                        self.group, iobs + 1, len(data.obs)
+                    ),
+                    flush=True,
+                )
 
             # Cache the output common flags
             common_ref = tod.local_common_flags(self._common_flag_name)
@@ -253,13 +260,21 @@ class OpGroundFilter(Operator):
             t1 = time()
             templates, legendre_trend, legendre_filter = self.build_templates(tod, obs)
             if self.grank == 0 and self.verbose > 1:
-                print("{:4} : OpGroundFilter: Built templates in {:.1f}s".format(
-                    self.group, time() - t1), flush=True)
+                print(
+                    "{:4} : OpGroundFilter: Built templates in {:.1f}s".format(
+                        self.group, time() - t1
+                    ),
+                    flush=True,
+                )
 
             for idet, det in enumerate(tod.local_dets):
                 if self.grank == 0 and self.verbose > 1:
-                    print("{:4} : OpGroundFilter:   Processing detector # {} / {}".format(
-                        self.group, idet + 1, len(tod.local_dets)), flush=True)
+                    print(
+                        "{:4} : OpGroundFilter:   Processing detector # {} / {}".format(
+                            self.group, idet + 1, len(tod.local_dets)
+                        ),
+                        flush=True,
+                    )
                 ref = tod.local_signal(det, self._name)
                 flag_ref = tod.local_flags(det, self._flag_name)
                 good = np.logical_and(
@@ -271,17 +286,27 @@ class OpGroundFilter(Operator):
                 t1 = time()
                 coeff = self.fit_templates(tod, det, templates, ref, good)
                 if self.grank == 0 and self.verbose > 1:
-                    print("{:4} : OpGroundFilter: Fit templates in {:.1f}s".format(
-                        self.group, time() - t1), flush=True)
-                
+                    print(
+                        "{:4} : OpGroundFilter: Fit templates in {:.1f}s".format(
+                            self.group, time() - t1
+                        ),
+                        flush=True,
+                    )
+
                 if coeff is None:
                     continue
 
                 t1 = time()
-                self.subtract_templates(ref, good, coeff, legendre_trend, legendre_filter)
+                self.subtract_templates(
+                    ref, good, coeff, legendre_trend, legendre_filter
+                )
                 if self.grank == 0 and self.verbose > 1:
-                    print("{:4} : OpGroundFilter: Subtract templates in {:.1f}s".format(
-                        self.group, time() - t1), flush=True)
+                    print(
+                        "{:4} : OpGroundFilter: Subtract templates in {:.1f}s".format(
+                            self.group, time() - t1
+                        ),
+                        flush=True,
+                    )
 
                 del ref
 
@@ -292,8 +317,11 @@ class OpGroundFilter(Operator):
             self.ngood = self.comm.allreduce(self.ngood)
             self.rcondsum = self.comm.allreduce(self.rcondsum)
         if self.rank == 0:
-            print("Applied ground filter in {:.1f} s.  Average rcond of template matrix was {}".format(
-                time() - t0, self.rcondsum / (self.nsingular + self.ngood)
-            ), flush=True)
+            print(
+                "Applied ground filter in {:.1f} s.  Average rcond of template matrix was {}".format(
+                    time() - t0, self.rcondsum / (self.nsingular + self.ngood)
+                ),
+                flush=True,
+            )
 
         return

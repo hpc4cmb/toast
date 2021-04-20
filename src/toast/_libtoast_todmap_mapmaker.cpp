@@ -159,14 +159,14 @@ void build_template_covariance(py::array_t <double,
 #pragma omp parallel for schedule(static, 1)
     for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
         size_t istart = 0;
-        for ( ; istart < nsample; ++istart) {
+        for (; istart < nsample; ++istart) {
             if ((fast_templates(itemplate,
                                 istart) != 0) && (fast_good[istart] != 0)) break;
         }
         starts[itemplate] = istart;
 
         size_t istop = nsample - 1;
-        for ( ; istop >= istart; --istop) {
+        for (; istop >= istart; --istop) {
             if ((fast_templates(itemplate,
                                 istop) != 0) && (fast_good[istop] != 0)) break;
         }
@@ -179,7 +179,7 @@ void build_template_covariance(py::array_t <double,
             double val = 0;
             size_t istart = std::max(starts[itemplate], starts[jtemplate]);
             size_t istop = std::min(stops[itemplate], stops[jtemplate]);
-            if (itemplate == jtemplate && istop - istart <= 1) val = 1;
+            if ((itemplate == jtemplate) && (istop - istart <= 1)) val = 1;
             for (size_t isample = istart; isample < istop; ++isample) {
                 val += fast_templates(itemplate, isample)
                        * fast_templates(jtemplate, isample)
@@ -245,42 +245,50 @@ void accumulate_observation_matrix(py::array_t <double,
         idthread = omp_get_thread_num();
 #endif // ifdef _OPENMP
 
-        //if (idthread == 0) std::cerr << "Accumulate loop, nsample = " << nsample << ".  nthreads = " << nthreads << std::endl;  // DEBUG
+        // if (idthread == 0) std::cerr << "Accumulate loop, nsample = " << nsample <<
+        // ".  nthreads = " << nthreads << std::endl;  // DEBUG
 
         for (size_t isample = 0; isample < nsample; ++isample) {
             const int64_t ipixel = fast_pixels(isample);
             if (ipixel % nthreads != idthread) continue;
             const double * ipointer = &fast_templates(isample, 0);
 
-            //std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+            // std::chrono::steady_clock::time_point tstart =
+            // std::chrono::steady_clock::now();
 
             for (size_t jsample = 0; jsample < nsample; ++jsample) {
                 const int64_t jpixel = fast_pixels(jsample);
                 double filter_matrix = 0;
                 const double * jpointer = &fast_templates(jsample, 0);
                 const double * pcov = &fast_covariance(0, 0);
+
                 // dense templates
-                for (size_t itemplate=0; itemplate < ndense; ++itemplate) {
+                for (size_t itemplate = 0; itemplate < ndense; ++itemplate) {
                     const double * covpointer = pcov + itemplate * ntemplate;
                     double dtemp = 0;
+
                     // dense X dense
-                    for (size_t jtemplate=0; jtemplate < ndense; ++jtemplate) {
+                    for (size_t jtemplate = 0; jtemplate < ndense; ++jtemplate) {
                         dtemp += jpointer[jtemplate] * covpointer[jtemplate];
                     }
+
                     // dense X sparse
                     for (const auto jtemplate : nonzeros[jsample]) {
                         dtemp += jpointer[jtemplate] * covpointer[jtemplate];
                     }
                     filter_matrix += dtemp * ipointer[itemplate];
                 }
+
                 // sparse templates
                 for (const auto itemplate : nonzeros[isample]) {
                     const double * covpointer = pcov + itemplate * ntemplate;
                     double dtemp = 0;
+
                     // sparse X dense
-                    for (size_t jtemplate=0; jtemplate < ndense; ++jtemplate) {
+                    for (size_t jtemplate = 0; jtemplate < ndense; ++jtemplate) {
                         dtemp += jpointer[jtemplate] * covpointer[jtemplate];
                     }
+
                     // sparse X sparse
                     for (const auto jtemplate : nonzeros[jsample]) {
                         dtemp += jpointer[jtemplate] * covpointer[jtemplate];
@@ -302,23 +310,26 @@ void accumulate_observation_matrix(py::array_t <double,
             }
 
             /*
-            std::chrono::steady_clock::time_point tstop = std::chrono::steady_clock::now();
+               std::chrono::steady_clock::time_point tstop =
+                  std::chrono::steady_clock::now();
 
-            std::cerr
-              << idthread
-              << " : Accumulate loop, isample = "
-              << isample
-              << " / "
-              << nsample
-              << ". ndense = "
-              << ndense
-              << ". nonzeros = "
-              << nonzeros[isample].size()
-              << ". Computed in "
-              <<  std::chrono::duration_cast<std::chrono::microseconds>(tstop-tstart).count() * 1e-6
-              << " s"
-              << std::endl;
-            */
+               std::cerr
+               << idthread
+               << " : Accumulate loop, isample = "
+               << isample
+               << " / "
+               << nsample
+               << ". ndense = "
+               << ndense
+               << ". nonzeros = "
+               << nonzeros[isample].size()
+               << ". Computed in "
+               <<
+                   std::chrono::duration_cast<std::chrono::microseconds>(tstop-tstart).count()
+                  * 1e-6
+               << " s"
+               << std::endl;
+             */
         }
     }
 }
