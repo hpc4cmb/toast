@@ -572,7 +572,8 @@ class OpFilterBin(Operator):
                         tag=factor + 3 * self.ntask,
                     )
 
-                self.comm.Barrier()
+                if self.comm is not None:
+                    self.comm.Barrier()
                 if self.rank == 0:
                     print(
                         "OpFilterBin: Collected in {:.1f} s".format(time() - t1),
@@ -905,7 +906,8 @@ class OpFilterBin(Operator):
 
             self._collect_obs_matrix()
 
-            self.comm.Barrier()
+            if self.comm is not None:
+                self.comm.Barrier()
 
             if self.rank == 0 or self.verbose > 1:
                 print(
