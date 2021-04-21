@@ -55,3 +55,5 @@ from .mapmaker_templates import TemplateMatrix
 from .mapmaker import MapMaker
 
 from .madam import Madam
+
+from .conviqt import SimConviqt, SimWeightedConviqt

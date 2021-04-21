@@ -237,6 +237,17 @@ class PointingHealpix(Operator):
                         break
                 else:  # no break
                     # We already have pointing for all specified detectors
+                    if self.create_dist is not None:
+                        # but the caller wants the pixel distribution
+                        for ob in data.obs:
+                            views = ob.view[self.view]
+                            for det in ob.select_local_detectors(detectors):
+                                for view in range(len(views)):
+                                    self._local_submaps[
+                                        views.detdata[self.pixels][view][det]
+                                        // self._n_pix_submap
+                                    ] = True
+
                     if data.comm.group_rank == 0:
                         msg = (
                             f"Group {data.comm.group}, ob {ob.name}, pointing "

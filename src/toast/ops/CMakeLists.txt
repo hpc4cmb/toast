@@ -30,5 +30,6 @@ install(FILES
     mapmaker.py
     madam.py
     madam_utils.py
+    conviqt.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
