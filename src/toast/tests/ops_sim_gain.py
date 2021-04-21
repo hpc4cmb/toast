@@ -46,21 +46,22 @@ class SimGainTest(MPITestCase):
         sim_dipole = ops.SimDipole(mode="solar", coord="G")
         sim_dipole.exec(data)
 
-        drifter  = ops.GainDrifter(fknee_drift=20, coord=)
+        drifter  = ops.GainDrifter()
         drifter.exec(data)
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
-
         if rank == 0:
             for ob in data.obs:
+                views = ob.view[drifter.view]
                 import pdb; pdb.set_trace()
-                #for vw in range(len(views)):
-                #    focalplane = ob.telescope.focalplane
-                #    for kdet , det in enumerate(dets):
+                for vw in range(len(views)):
+                    focalplane = ob.telescope.focalplane
 
-            import matplotlib.pyplot as plt
+                    for kdet , det in enumerate(focalplane.detectors):
+                        size= views.detdata["signal"][vw][det].size
 
-
+            #
+            #
             #np.testing.assert_almost_equal(maxmap, self.dip_check, decimal=5)
             #np.testing.assert_almost_equal(minmap, -self.dip_check, decimal=5)

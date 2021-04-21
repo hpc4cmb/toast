@@ -193,7 +193,7 @@ class GainDrifter(Operator):
                 #gain = self.make_gain_samples(size)
                 gain =self.make_gain_samples(
                         size=size,
-                        fsampl=   ob.telescope.focalplane.sample_rate.to_value(u.Hz),
+                        fsampl=   ob.telescope.focalplane.sample_rate ,
                     )
                 gaindrift =( 1+ gain_common) *( 1+  gain )
                 views.detdata[self.signalname][vw][det]  *= ( gaindrift )
