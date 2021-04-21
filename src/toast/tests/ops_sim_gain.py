@@ -6,22 +6,15 @@ import os
 
 import numpy as np
 
-from astropy import units as u
-
-import healpy as hp
-
 from .mpi import MPITestCase
 
 from ..vis import set_matplotlib_backend
 
-from .. import qarray as qa
-
 from .. import ops as ops
+from .. import rng
 
-from ..pixels_io import write_healpix_fits
 
-
-from ._helpers import create_outdir, create_healpix_ring_satellite
+from ._helpers import create_outdir, create_satellite_data
 
 
 class SimGainTest(MPITestCase):
@@ -29,39 +22,49 @@ class SimGainTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
 
-        self.nside = 16
 
-    def test_sim(self):
-        # Create a fake scan strategy that hits every pixel once.
-        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
+    def test_linear_drift(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm, )
 
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
+        # Simulate noise using this model
+        key = "my_signal"
+        sim_noise = ops.SimNoise(det_data=key)
+        sim_noise.apply(data)
+        old_data = []
+        for obs in data.obs:
+            old = {}
+            for det in obs.local_detectors:
+                ref = obs.detdata[key][det]
+                old[det] =  (ref).copy()
+            old_data.append(old )
 
-        # make a simple pointing matrix
-        pointing = ops.PointingHealpix(nside=self.nside, nest=False, mode="I")
-
-        # Generate timestreams
-        sim_dipole = ops.SimDipole(mode="solar", coord="G")
-        sim_dipole.exec(data)
-
-        drifter  = ops.GainDrifter()
+        drifter  = ops.GainDrifter(det_data=key, drift_mode="linear")
         drifter.exec(data)
-        rank = 0
-        if self.comm is not None:
-            rank = self.comm.rank
-        if rank == 0:
-            for ob in data.obs:
-                views = ob.view[drifter.view]
-                import pdb; pdb.set_trace()
-                for vw in range(len(views)):
-                    focalplane = ob.telescope.focalplane
+        for obs, old  in zip(data.obs, old_data):
+            telescope = obs.telescope.uid
+            focalplane = obs.telescope.focalplane
+            obsindx = obs.uid
 
-                    for kdet , det in enumerate(focalplane.detectors):
-                        size= views.detdata["signal"][vw][det].size
+            key1 = (drifter.realization * 4294967296 +
+                    telescope * 65536 + drifter.component )
+            counter1 = 0
+            counter2 = 0
+            for det in obs.local_detectors:
+                detindx = focalplane[det]["uid"]
+                key2 = obsindx * 4294967296 + detindx
+                rngdata = rng.random(
+                    1,
+                    sampler="gaussian",
+                    key=(key1, key2),
+                    counter=(counter1, counter2),
+                )
+                gf2 = 1 + rngdata[0] *  drifter.sigma_drift
 
-            #
-            #
-            #np.testing.assert_almost_equal(maxmap, self.dip_check, decimal=5)
-            #np.testing.assert_almost_equal(minmap, -self.dip_check, decimal=5)
+                gf1 = (obs.detdata[key][det]/ old[det] )[-1]
+                #assert whether the two values gf2 and gf1  are the same
+                #within 1sigma of the distribution
+                np.testing.assert_almost_equal(gf1,gf2 , decimal=np.log10(drifter.sigma_drift) -1 )

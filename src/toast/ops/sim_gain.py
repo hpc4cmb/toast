@@ -6,8 +6,6 @@ import traitlets
 
 import numpy as np
 
-from astropy import units as u
-
 from ..timing import function_timer
 
 from ..traits import trait_docs, Int,Float, Unicode, Bool, Quantity
@@ -15,6 +13,9 @@ from ..traits import trait_docs, Int,Float, Unicode, Bool, Quantity
 from .operator import Operator
 
 from ..utils import Environment, Logger
+from .. import rng
+
+from astropy import units as u
 
 @trait_docs
 class GainDrifter(Operator):
@@ -22,12 +23,8 @@ class GainDrifter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    signalname  = Unicode(
+    det_data  = Unicode(
         "signal", help="Observation detdata key to inject the gain drift"
-    )
-
-    view = Unicode(
-        None, allow_none=True, help="Use this view of the data in all observations"
     )
 
     include_common_mode = Bool(
@@ -51,8 +48,11 @@ class GainDrifter(Operator):
         1. ,
         help="spectral index  of the drift signal spectrum",
     )
-    mc_realization = Int(0, help="integer to set a different random seed ")
+    realization = Int(0, help="integer to set a different random seed ")
+    component = Int(0, allow_none=False, help="Component index for this simulation")
 
+    drift_mode= Unicode(
+        "linear", help="a string from [linear, thermaldrift, slowdrift ] to set the way the drift is modelled")
 
     def draw_noise(self, freq,alpha , fknee, sigmag, deltanu):
         """
@@ -143,25 +143,44 @@ class GainDrifter(Operator):
         """
         env = Environment.get()
         log = Logger.get()
-        comm = data.comm
-        rank= comm.group_rank
+
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
-
+            comm = ob.comm
+            rank= ob.comm_rank
             # Make sure detector data output exists
-            ob.detdata.ensure(self.signalname, detectors=dets)
+            ob.detdata.ensure(self.det_data, detectors=dets)
+            obsindx = ob.uid
+            telescope = ob.telescope.uid
+            focalplane = ob.telescope.focalplane
+            if self.drift_mode == "linear":
+                key1 = self.realization * 4294967296 + telescope * 65536 + self.component
+                counter1 = 0
+                counter2 = 0
 
-            # Loop over views
-            views = ob.view[self.view]
+                for det in dets:
+                    detindx = focalplane[det]["uid"]
+                    size= ob.detdata[self.det_data][det].size
 
-            for vw in range(len(views)):
-                # Focalplane for this observation
-                focalplane = ob.telescope.focalplane
-                for kdet , det in enumerate(focalplane.detectors):
+                    key2 = obsindx * 4294967296 + detindx
+
+                    rngdata = rng.random(
+                        1,
+                        sampler="gaussian",
+                        key=(key1, key2),
+                        counter=(counter1, counter2),
+                    )
+                    gf = 1 + rngdata[0] * self.sigma_drift
+                    gain = (gf-1) * np.linspace(0,1,size ) + 1
+
+                    ob.detdata[self.det_data][det] *= gain
+        return
+"""
+            for kdet , det in enumerate(dets):
                     size= views.detdata[self.signalname][vw][det].size
                     if self.include_common_mode:
                         if rank == 0:
@@ -197,5 +216,4 @@ class GainDrifter(Operator):
                     )
                 gaindrift =( 1+ gain_common) *( 1+  gain )
                 views.detdata[self.signalname][vw][det]  *= ( gaindrift )
-
-        return
+                """
