@@ -377,19 +377,17 @@ class SimTotalconvolve(Operator):
         timer.start()
         sky = self.load_alm(skyfile, self.lmax)
         fwhm = self.fwhm.to_value(u.radian)
-        # Hmm, healpy doesn't support un-smoothing via negative FWHM, so let's do it by hand ...
         if fwhm != 0:
-            sigma = fwhm / (2.0 * np.sqrt(2.0 * np.log(2.0)))
+            gauss = hp.sphtfunc.gauss_beam(fwhm, self.lmax, pol=True)
             for i in range(sky.shape[0]):
-                ell = np.arange(self.lmax + 1.0)
-                s = 2 if i >= 1 else 0
-                fact = np.exp(0.5 * (ell * (ell + 1) - s ** 2) * sigma ** 2)
-                sky[i] = hp.sphtfunc.almxfl(sky[i], fact, mmax=self.lmax, inplace=True)
+                sky[i] = hp.sphtfunc.almxfl(
+                    sky[i], 1.0 / gauss[:, i], mmax=self.lmax, inplace=True
+                )
         if self.remove_monopole:
-            sky[:, 0] = 0
+            sky[0, 0] = 0
         if self.remove_dipole:
-            sky[:, 1] = 0
-            sky[:, self.lmax + 1] = 0
+            sky[0, 1] = 0
+            sky[0, self.lmax + 1] = 0
         if verbose:
             timer.report_clear(f"initialize sky for detector {det}")
         return sky

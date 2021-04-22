@@ -1,4 +1,4 @@
-  
+
 # Install the python files
 
 install(FILES
@@ -23,6 +23,7 @@ install(FILES
     ops_sim_tod_noise.py
     ops_sim_tod_dipole.py
     ops_sim_tod_conviqt.py
+    ops_sim_tod_totalconvolve.py
     ops_mapmaker_utils.py
     ops_mapmaker_binning.py
     ops_mapmaker_solve.py
@@ -33,6 +34,7 @@ install(FILES
     ops_scan_map.py
     ops_scan_healpix.py
     ops_madam.py
+    ops_gainscrambler.py
     template_amplitudes.py
     template_offset.py
     template_fourier2d.py
