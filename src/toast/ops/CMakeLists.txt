@@ -17,6 +17,7 @@ install(FILES
     sim_ground.py
     noise_model.py
     noise_weight.py
+    gainscrambler.py
     pointing.py
     pointing_detector.py
     pointing_healpix.py
