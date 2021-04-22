@@ -113,7 +113,7 @@ class SimTotalconvolveTest(MPITestCase):
             dxx=False,
             det_data=key,
             normalize_beam=True,
-            fwhm=self.fwhm_sky,
+#            fwhm=self.fwhm_sky,
             lmax=self.lmax,
             beammmax=self.lmax,
         )

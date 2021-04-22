@@ -373,7 +373,7 @@ class SimTotalconvolve(Operator):
         timer.start()
         sky = self.load_alm(skyfile, self.lmax)
         fwhm = self.fwhm.to_value(u.radian)
-        if fwhm != 0:  # ugly hack, but I didn't 
+        if fwhm != 0:
             sky = hp.sphtfunc.smoothalm(sky, fwhm=fwhm,
                                         verbose=False, inplace=True, pol=(sky.shape[0]>1))
         if self.remove_monopole:
