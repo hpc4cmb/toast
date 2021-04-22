@@ -5,7 +5,7 @@
 import traitlets
 
 import numpy as np
-
+from astropy import units as u
 from ..timing import function_timer
 
 from ..traits import trait_docs, Int,Float, Unicode, Bool, Quantity
@@ -14,8 +14,9 @@ from .operator import Operator
 
 from ..utils import Environment, Logger
 from .. import rng
+from .sim_tod_noise  import sim_noise_timestream
 
-from astropy import units as u
+
 
 @trait_docs
 class GainDrifter(Operator):
@@ -36,9 +37,9 @@ class GainDrifter(Operator):
         20.0 * u.mHz,
         help="fknee of the drift signal",
     )
-    downsampled_freq = Quantity(
-            200.0 * u.mHz,
-            help="sampling frequency to simulate the drift (assumed < sampling rate)",
+    cutoff_freq = Quantity(
+            0.2 * u.mHz,
+            help="cutoff  frequency to simulate a slow  drift (assumed < sampling rate)",
         )
     sigma_drift = Float(
         1e-3 ,
@@ -52,78 +53,14 @@ class GainDrifter(Operator):
     component = Int(0, allow_none=False, help="Component index for this simulation")
 
     drift_mode= Unicode(
-        "linear", help="a string from [linear, thermaldrift, slowdrift ] to set the way the drift is modelled")
+        "linear", help="a string from [linear_drift, thermal_drift, slow_drift] to set the way the drift is modelled")
+    user_data  = Unicode(
+        "drift_signal", help="samples  encoding a gaindrift provided by the user"
+    )
 
-    def draw_noise(self, freq,alpha , fknee, sigmag, deltanu):
-        """
-        Draw an amplitude for frequency nu assuming frequency spacing dnu.
-        Assume Gaussian distributed noise with variance
-         (Pink(freq)**2 )  / (2 dnu).
+    def get_psd(self, f ):
+        return  self.sigma_drift**2 *(self.fknee_drift.to_value(u.Hz)/f)**self.alpha_drift
 
-        Args:
-            freq: frequency in Hz
-        """
-
-        pink = ( fknee  / np.absolute(freq)) ** self.alpha_drift * self.sigma_drift
-        total = np.sqrt(pink ** 2)
-        return np.random.normal(scale=np.sqrt(total ** 2 / (2.0 * deltanu )))
-
-    @function_timer
-    def make_gain_samples(self, size, fsampl ):
-        """
-        Generate gain drift samples given an input PSD.
-        Drifts are simulated up to a frequency cut off, hard coded to 0.5mHz, and sampled
-        with a lower sampling rate. Once they are simulated,  they are high sampled
-        to the  rate of time samples.
-        """
-        fd= self.downsampled_freq.to_value(u.Hz ) ,
-        fsampl=   fsampl.to_value(u.Hz),
-        fknee= self.fknee_drift.to_value(u.Hz ),
-
-        dt = 1 / fd
-        obstime = size / fsampl
-        # We artificially set the cut off frequency to 0.5 mHz
-        # to get rid of the unphysical fluctuations above this threshold
-        fcutoff = 0.5e-3
-
-        N = np.int_(obstime * fd)
-        t0 = 0.0
-
-        if N % 2 == 0:
-            N += 1
-
-        dnu = 1.0 / (obstime)
-
-        nu_array = np.fft.fftshift(np.fft.fftfreq(n=N, d=dt))
-
-        mask_cut = np.ma.masked_less_equal(abs(nu_array), fcutoff).mask
-        mask_neg = np.ma.masked_less((nu_array), 0).mask
-        mask = np.logical_and(mask_cut, mask_neg)
-        noise_spectrum = np.zeros(N, dtype="complex")
-        re = draw_drift(nu_array[mask], fknee, self.sigma_drift, self.alpha_drift,dnu )
-        im = draw_drift(nu_array[mask], fknee, self.sigma_drift, self.alpha_drift , dnu )
-        k_m = 2.0 * np.pi * np.fft.fftfreq(len(nu_array), d=dt)
-        noise_spectrum[mask] = (1.0 / np.sqrt(2.0)) * (re + 1j * im)
-        noise_spectrum[slice((N - 1) // 2 + 1, N, 1)] = np.conj(
-            np.flip(noise_spectrum[slice(N // 2)])
-        )
-        timestream = np.fft.ifft(
-            np.fft.ifftshift(noise_spectrum) * np.exp(1j * k_m * t0), n=(N)
-        ) / (dt)
-        t_array = np.linspace(0, obstime, N)
-
-        try:
-            assert abs(timestream.imag.max() / timestream.real.max()) < 1e-10
-        except AssertionError:
-            print(
-                "Simulated timestreams are complex(size %d).\nMax imag. part = %g, Max real part= %g"
-                % (N, timestream.imag.max(), timestream.real.max())
-            )
-
-        t_interp = np.linspace(0, obstime, size)
-        interpolated_timestream = np.interp(t_interp, xp=t_array, fp=timestream.real)
-
-        return interpolated_timestream
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -157,7 +94,7 @@ class GainDrifter(Operator):
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
-            if self.drift_mode == "linear":
+            if self.drift_mode == "linear_drift":
                 key1 = self.realization * 4294967296 + telescope * 65536 + self.component
                 counter1 = 0
                 counter2 = 0
@@ -178,6 +115,93 @@ class GainDrifter(Operator):
                     gain = (gf-1) * np.linspace(0,1,size ) + 1
 
                     ob.detdata[self.det_data][det] *= gain
+
+            elif self.drift_mode == "thermal_drift":
+                for det in dets:
+                    detindx = focalplane[det]["uid"]
+                    size= ob.detdata[self.det_data][det].size
+
+                    fsampl = ob.telescope.focalplane.sample_rate.to_value(u.Hz)
+
+                    fmin = fsampl / (4*size)
+                    #the factor of 4x the length of the sample vector  is
+                    # to avoid circular correlations
+
+                    freq= np.logspace(np.log10(fmin),
+                                    np.log10(fsampl/2.), 1000 )
+
+                    psd = self.get_psd(freq )
+                    # simulate a noise-like timestream
+                    gain  = sim_noise_timestream(
+                        realization=self.realization ,
+                        telescope=ob.telescope.uid,
+                        component=self.component ,
+                        obsindx=ob.uid,
+                        detindx=detindx,
+                        rate=fsampl,
+                        firstsamp=ob.local_index_offset,
+                        samples=ob.n_local_samples,
+                        freq=freq ,
+                        psd=psd ,
+                        py=False ,
+                    )
+                    ob.detdata[self.det_data][det] *= (1+ gain)
+
+            elif self.drift_mode == "slow_drift":
+                for det in dets:
+                    detindx = focalplane[det]["uid"]
+                    size= ob.detdata[self.det_data][det].size
+
+                    fsampl = ob.telescope.focalplane.sample_rate.to_value(u.Hz)
+
+                    fmin = fsampl / (4*size)
+                    #the factor of 4x the length of the sample vector  is
+                    # to avoid circular correlations
+
+                    freq= np.logspace(np.log10(fmin),
+                                    np.log10(fsampl/2.), 1000 )
+                    # making sure that the cut-off  frequency
+                    #is always above the  observation time scale .
+                    cutoff = np.max([self.cutoff_freq.to_value(u.Hz ), fsampl/size  ])
+                    argmin= np.argmin ( np.fabs( freq-cutoff )  )
+
+                    psd =np.concatenate([self.get_psd(freq[:argmin] ),
+                                             np.zeros_like(freq[argmin:])] )
+                    if self.include_common_mode :
+                        gain_common   = sim_noise_timestream(
+                            realization=self.realization ,
+                            telescope=ob.telescope.uid,
+                            component=self.component ,
+                            obsindx=ob.uid,
+                            detindx=0, # drift common to all detectors
+                            rate=fsampl,
+                            firstsamp=ob.local_index_offset,
+                            samples=ob.n_local_samples,
+                            freq=freq ,
+                            psd=psd ,
+                            py=False ,
+                        )
+                    else:
+                        gain_common=0. 
+
+                    # simulate a noise-like timestream
+
+                    gain  = sim_noise_timestream(
+                        realization=self.realization ,
+                        telescope=ob.telescope.uid,
+                        component=self.component ,
+                        obsindx=ob.uid,
+                        detindx=detindx,
+                        rate=fsampl,
+                        firstsamp=ob.local_index_offset,
+                        samples=ob.n_local_samples,
+                        freq=freq ,
+                        psd=psd ,
+                        py=False ,
+                    )
+                    ob.detdata[self.det_data][det] *= (1+ gain+gain_common)
+
+
         return
 """
             for kdet , det in enumerate(dets):
