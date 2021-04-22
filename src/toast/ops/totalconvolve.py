@@ -118,6 +118,12 @@ class SimTotalconvolve(Operator):
         "If not set, will use the maximum expansion order from file.",
     )
 
+    oversampling_factor = Float(
+        1.8,
+        allow_none=False,
+        help="Oversampling factor for total convolution (useful range is 1.5-2.0)",
+    )
+
     epsilon = Float(
         1e-5,
         allow_none=False,
@@ -366,9 +372,10 @@ class SimTotalconvolve(Operator):
         timer = Timer()
         timer.start()
         sky = self.load_alm(skyfile, self.lmax)
-#        for i in range(sky.shape[0]):
-        sky = hp.sphtfunc.smoothalm(sky[i,:], fwhm=self.fwhm.to_value(u.radian),
-                                    verbose=False, inplace=True, pol=sky.shape[0]>1))
+        fwhm = self.fwhm.to_value(u.radian)
+        if fwhm != 0:  # ugly hack, but I didn't 
+            sky = hp.sphtfunc.smoothalm(sky, fwhm=fwhm,
+                                        verbose=False, inplace=True, pol=(sky.shape[0]>1))
         if self.remove_monopole:
             sky[:,0] = 0
 #        if self.remove_dipole:
@@ -381,6 +388,8 @@ class SimTotalconvolve(Operator):
         timer = Timer()
         timer.start()
         beam = self.load_alm(beamfile, self.beammmax)
+        if self.normalize_beam:
+            beam *= 1./(2 * np.sqrt(np.pi) * beam[0,0])
         if verbose:
             timer.report_clear(f"initialize beam for detector {det}")
         return beam
@@ -461,7 +470,7 @@ class SimTotalconvolve(Operator):
         pnt = np.empty((len(theta),3))
         pnt[:, 0] = theta
         pnt[:, 1] = phi
-        pnt[:, 2] = psi
+        pnt[:, 2] = psi+np.pi  # FIXME: not clear yet why this is necessary
         if verbose:
             timer.report_clear(f"pack input array for detector {det}")
         return pnt
@@ -469,7 +478,7 @@ class SimTotalconvolve(Operator):
     def convolve(self, sky, beam, pnt, det, verbose):
         timer = Timer()
         timer.start()
-        convolver = totalconvolve.Interpolator(np.array(sky), np.array(beam), False, int(self.lmax), int(self.beammmax), epsilon=float(self.epsilon), ofactor=1.8, nthreads=int(self.nthreads))
+        convolver = totalconvolve.Interpolator(np.array(sky), np.array(beam), False, int(self.lmax), int(self.beammmax), epsilon=float(self.epsilon), ofactor=float(self.oversampling_factor), nthreads=int(self.nthreads))
         convolved_data = convolver.interpol(pnt).reshape((-1,))
 
         if verbose:
@@ -477,7 +486,7 @@ class SimTotalconvolve(Operator):
             timer.report_clear(f"extract convolved data for {det}")
 
         del convolver
-
+        convolved_data *= 0.5  # FIXME: not sure where this factor comes from
         return convolved_data
 
     def calibrate_signal(self, data, det, beam, convolved_data, verbose):

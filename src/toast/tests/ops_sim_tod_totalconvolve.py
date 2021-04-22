@@ -266,6 +266,8 @@ class SimTotalconvolveTest(MPITestCase):
             beam_file=self.fname_beam,
             dxx=False,
             hwp_angle="hwp_angle",
+            lmax=self.lmax,
+            beammmax=self.lmax,
         )
         sim_totalconvolve.exec(data)
 
