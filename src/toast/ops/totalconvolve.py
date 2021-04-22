@@ -352,18 +352,22 @@ class SimTotalconvolve(Operator):
 
     def load_alm(self, file, mmax):
         def read_comp(file, comp, out):
-            almX, mmaxX = hp.fitsfunc.read_alm(file, hdu=comp+1, return_mmax=True)
+            almX, mmaxX = hp.fitsfunc.read_alm(file, hdu=comp + 1, return_mmax=True)
             lmaxX = hp.sphtfunc.Alm.getlmax(almX.shape[0], mmaxX)
 
             ofs1, ofs2 = 0, 0
             mylmax = min(self.lmax, lmaxX)
-            for m in range(0, min(mmax, mmaxX)+1):
-                out[comp,ofs1:ofs1+mylmax-m+1] = almX[ofs2:ofs2+mylmax-m+1]
-                ofs1 += self.lmax-m+1
-                ofs2 += lmaxX-m+1
+            for m in range(0, min(mmax, mmaxX) + 1):
+                out[comp, ofs1 : ofs1 + mylmax - m + 1] = almX[
+                    ofs2 : ofs2 + mylmax - m + 1
+                ]
+                ofs1 += self.lmax - m + 1
+                ofs2 += lmaxX - m + 1
 
         ncomp = 3 if self.pol else 1
-        res = np.zeros((ncomp, hp.sphtfunc.Alm.getsize(self.lmax, mmax)), dtype=np.complex128)
+        res = np.zeros(
+            (ncomp, hp.sphtfunc.Alm.getsize(self.lmax, mmax)), dtype=np.complex128
+        )
         for i in range(ncomp):
             read_comp(file, i, res)
         return res
@@ -376,16 +380,16 @@ class SimTotalconvolve(Operator):
         # Hmm, healpy doesn't support un-smoothing via negative FWHM, so let's do it by hand ...
         if fwhm != 0:
             sigma = fwhm / (2.0 * np.sqrt(2.0 * np.log(2.0)))
-            for i in range(sky.shape[0]):            
+            for i in range(sky.shape[0]):
                 ell = np.arange(self.lmax + 1.0)
                 s = 2 if i >= 1 else 0
                 fact = np.exp(0.5 * (ell * (ell + 1) - s ** 2) * sigma ** 2)
                 sky[i] = hp.sphtfunc.almxfl(sky[i], fact, mmax=self.lmax, inplace=True)
         if self.remove_monopole:
-            sky[:,0] = 0
+            sky[:, 0] = 0
         if self.remove_dipole:
-            sky[:,1] = 0
-            sky[:,self.lmax+1] = 0
+            sky[:, 1] = 0
+            sky[:, self.lmax + 1] = 0
         if verbose:
             timer.report_clear(f"initialize sky for detector {det}")
         return sky
@@ -395,7 +399,7 @@ class SimTotalconvolve(Operator):
         timer.start()
         beam = self.load_alm(beamfile, self.beammmax)
         if self.normalize_beam:
-            beam *= 1./(2 * np.sqrt(np.pi) * beam[0,0])
+            beam *= 1.0 / (2 * np.sqrt(np.pi) * beam[0, 0])
         if verbose:
             timer.report_clear(f"initialize beam for detector {det}")
         return beam
@@ -473,10 +477,10 @@ class SimTotalconvolve(Operator):
         """Pack the pointing into the pointing array"""
         timer = Timer()
         timer.start()
-        pnt = np.empty((len(theta),3))
+        pnt = np.empty((len(theta), 3))
         pnt[:, 0] = theta
         pnt[:, 1] = phi
-        pnt[:, 2] = psi+np.pi  # FIXME: not clear yet why this is necessary
+        pnt[:, 2] = psi + np.pi  # FIXME: not clear yet why this is necessary
         if verbose:
             timer.report_clear(f"pack input array for detector {det}")
         return pnt
@@ -484,7 +488,16 @@ class SimTotalconvolve(Operator):
     def convolve(self, sky, beam, pnt, det, verbose):
         timer = Timer()
         timer.start()
-        convolver = totalconvolve.Interpolator(np.array(sky), np.array(beam), False, int(self.lmax), int(self.beammmax), epsilon=float(self.epsilon), ofactor=float(self.oversampling_factor), nthreads=int(self.nthreads))
+        convolver = totalconvolve.Interpolator(
+            np.array(sky),
+            np.array(beam),
+            False,
+            int(self.lmax),
+            int(self.beammmax),
+            epsilon=float(self.epsilon),
+            ofactor=float(self.oversampling_factor),
+            nthreads=int(self.nthreads),
+        )
         convolved_data = convolver.interpol(pnt).reshape((-1,))
 
         if verbose:
@@ -502,9 +515,9 @@ class SimTotalconvolve(Operator):
         When calibrate = True, we rescale the TOD to
         TOD = intensity + (1 - epsilon) / (1 + epsilon) * polarization
         """
-        if not self.calibrate: # or beam.normalized():
+        if not self.calibrate:  # or beam.normalized():
             return
-          
+
         timer = Timer()
         timer.start()
         offset = 0
