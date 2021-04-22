@@ -1,4 +1,4 @@
-
+  
 # Install the python files
 
 install(FILES
@@ -33,7 +33,6 @@ install(FILES
     ops_scan_map.py
     ops_scan_healpix.py
     ops_madam.py
-    ops_gainscrambler.py
     template_amplitudes.py
     template_offset.py
     template_fourier2d.py

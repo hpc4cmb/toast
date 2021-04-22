@@ -57,3 +57,4 @@ from .mapmaker import MapMaker
 from .madam import Madam
 
 from .conviqt import SimConviqt, SimWeightedConviqt
+from .totalconvolve import SimTotalconvolve, SimWeightedTotalconvolve
