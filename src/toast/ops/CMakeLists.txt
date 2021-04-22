@@ -31,5 +31,6 @@ install(FILES
     madam.py
     madam_utils.py
     conviqt.py
+    totalconvolve.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
