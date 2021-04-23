@@ -410,8 +410,9 @@ def create_fake_beam_alm(
     pol=True,
     separate_IQU=False,
 ):
+    # pick an nside >= lmax to be sure that the a_lm will be fairly accurate
     nside = 2
-    while 2 * nside < lmax:
+    while nside < lmax:
         nside *= 2
     npix = 12 * nside ** 2
     pix = np.arange(npix)
