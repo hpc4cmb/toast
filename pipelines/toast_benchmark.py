@@ -332,6 +332,8 @@ def job_config(mpicomm, cases):
         apply_gainscrambler = False
         gain_sigma = 0.01
         # Map maker
+        destripe = True
+        no_mapmaker = False
         mapmaker_prefix = "toast"
         mapmaker_mask = None
         mapmaker_weightmap = None
