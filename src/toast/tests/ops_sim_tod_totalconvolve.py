@@ -140,8 +140,6 @@ class SimTotalconvolveTest(MPITestCase):
             det_data=totalconvolve_key,
             normalize_beam=True,
             fwhm=self.fwhm_sky,
-            lmax=self.lmax,
-            beammmax=self.lmax,
         )
         sim_totalconvolve.exec(data)
 
@@ -155,8 +153,6 @@ class SimTotalconvolveTest(MPITestCase):
             det_data=conviqt_key,
             normalize_beam=True,
             fwhm=self.fwhm_sky,
-            lmax=self.lmax,
-            beammmax=self.lmax,
         )
         sim_conviqt.exec(data)
 
@@ -296,8 +292,6 @@ class SimTotalconvolveTest(MPITestCase):
             det_data=key,
             normalize_beam=True,
             fwhm=self.fwhm_sky,
-            lmax=self.lmax,
-            beammmax=self.lmax,
         )
         sim_totalconvolve.exec(data)
 
@@ -448,8 +442,6 @@ class SimTotalconvolveTest(MPITestCase):
             beam_file=self.fname_beam,
             dxx=False,
             hwp_angle="hwp_angle",
-            lmax=self.lmax,
-            beammmax=self.lmax,
         )
         sim_totalconvolve.exec(data)
 

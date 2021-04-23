@@ -260,20 +260,21 @@ class SimTotalconvolve(Operator):
                 sky_file = self.sky_file_dict[det]
             else:
                 sky_file = self.sky_file.format(detector=det, mc=self.mc)
-            sky = self.get_sky(sky_file, det, verbose)
 
             if det in self.beam_file_dict:
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
 
-            beam = self.get_beam(beam_file, det, verbose)
+            lmax, mmax = self.get_lmmax(sky_file, beam_file)
+            sky = self.get_sky(sky_file, lmax, det, verbose)
+            beam = self.get_beam(beam_file, lmax, mmax, det, verbose)
 
             theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             del theta, phi, psi
 
-            convolved_data = self.convolve(sky, beam, pnt, det, verbose)
+            convolved_data = self.convolve(sky, beam, lmax, mmax, pnt, det, verbose)
 
             self.calibrate_signal(data, det, beam, convolved_data, verbose)
             self.save(data, det, convolved_data, verbose)
@@ -350,52 +351,75 @@ class SimTotalconvolve(Operator):
             epsilon = 0
         return epsilon
 
-    def load_alm(self, file, mmax):
+    def get_lmmax(self, skyfile, beamfile):
+        ncomp = 3 if self.pol else 1
+        slmax, blmax, bmmax = -1, -1, -1
+        for i in range(ncomp):
+            alm_tmp, mmax_tmp = hp.fitsfunc.read_alm(
+                skyfile, hdu=i + 1, return_mmax=True
+            )
+            lmax_tmp = hp.sphtfunc.Alm.getlmax(alm_tmp.shape[0], mmax_tmp)
+            slmax = max(slmax, lmax_tmp)
+            alm_tmp, mmax_tmp = hp.fitsfunc.read_alm(
+                beamfile, hdu=i + 1, return_mmax=True
+            )
+            lmax_tmp = hp.sphtfunc.Alm.getlmax(alm_tmp.shape[0], mmax_tmp)
+            blmax = max(blmax, lmax_tmp)
+            bmmax = max(bmmax, mmax_tmp)
+        lmax_out = min(slmax, blmax)
+        mmax_out = bmmax
+        if self.lmax != -1:
+            lmax_out = min(lmax_out, self.lmax)
+        if self.beammmax != -1:
+            mmax_out = min(mmax_out, self.beammmax)
+        return lmax_out, mmax_out
+
+    def load_alm(self, file, lmax, mmax):
         def read_comp(file, comp, out):
             almX, mmaxX = hp.fitsfunc.read_alm(file, hdu=comp + 1, return_mmax=True)
             lmaxX = hp.sphtfunc.Alm.getlmax(almX.shape[0], mmaxX)
 
             ofs1, ofs2 = 0, 0
-            mylmax = min(self.lmax, lmaxX)
+            mylmax = min(lmax, lmaxX)
             for m in range(0, min(mmax, mmaxX) + 1):
                 out[comp, ofs1 : ofs1 + mylmax - m + 1] = almX[
                     ofs2 : ofs2 + mylmax - m + 1
                 ]
-                ofs1 += self.lmax - m + 1
+                ofs1 += lmax - m + 1
                 ofs2 += lmaxX - m + 1
 
         ncomp = 3 if self.pol else 1
         res = np.zeros(
-            (ncomp, hp.sphtfunc.Alm.getsize(self.lmax, mmax)), dtype=np.complex128
+            (ncomp, hp.sphtfunc.Alm.getsize(lmax, mmax)), dtype=np.complex128
         )
         for i in range(ncomp):
             read_comp(file, i, res)
         return res
 
-    def get_sky(self, skyfile, det, verbose):
+    def get_sky(self, skyfile, lmax, det, verbose):
         timer = Timer()
         timer.start()
-        sky = self.load_alm(skyfile, self.lmax)
+        sky = self.load_alm(skyfile, lmax, lmax)
         fwhm = self.fwhm.to_value(u.radian)
         if fwhm != 0:
-            gauss = hp.sphtfunc.gauss_beam(fwhm, self.lmax, pol=True)
+            gauss = hp.sphtfunc.gauss_beam(fwhm, lmax, pol=True)
             for i in range(sky.shape[0]):
                 sky[i] = hp.sphtfunc.almxfl(
-                    sky[i], 1.0 / gauss[:, i], mmax=self.lmax, inplace=True
+                    sky[i], 1.0 / gauss[:, i], mmax=lmax, inplace=True
                 )
         if self.remove_monopole:
             sky[0, 0] = 0
         if self.remove_dipole:
             sky[0, 1] = 0
-            sky[0, self.lmax + 1] = 0
+            sky[0, lmax + 1] = 0
         if verbose:
             timer.report_clear(f"initialize sky for detector {det}")
         return sky
 
-    def get_beam(self, beamfile, det, verbose):
+    def get_beam(self, beamfile, lmax, mmax, det, verbose):
         timer = Timer()
         timer.start()
-        beam = self.load_alm(beamfile, self.beammmax)
+        beam = self.load_alm(beamfile, lmax, mmax)
         if self.normalize_beam:
             beam *= 1.0 / (2 * np.sqrt(np.pi) * beam[0, 0])
         if verbose:
@@ -483,15 +507,15 @@ class SimTotalconvolve(Operator):
             timer.report_clear(f"pack input array for detector {det}")
         return pnt
 
-    def convolve(self, sky, beam, pnt, det, verbose):
+    def convolve(self, sky, beam, lmax, mmax, pnt, det, verbose):
         timer = Timer()
         timer.start()
         convolver = totalconvolve.Interpolator(
             np.array(sky),
             np.array(beam),
             False,
-            int(self.lmax),
-            int(self.beammmax),
+            int(lmax),
+            int(mmax),
             epsilon=float(self.epsilon),
             ofactor=float(self.oversampling_factor),
             nthreads=int(self.nthreads),
@@ -613,7 +637,6 @@ class SimWeightedTotalconvolve(SimTotalconvolve):
                 sky_file = self.sky_file_dict[det]
             else:
                 sky_file = self.sky_file.format(detector=det, mc=self.mc)
-            sky = self.get_sky(sky_file, det, verbose)
 
             if det in self.beam_file_dict:
                 beam_file = self.beam_file_dict[det]
@@ -623,28 +646,35 @@ class SimWeightedTotalconvolve(SimTotalconvolve):
             beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
             beam_file_00i = beam_file.replace(".fits", "_00I0.fits")
 
-            beamI00 = self.get_beam(beam_file_i00, det, verbose)
-            beam0I0 = self.get_beam(beam_file_0i0, det, verbose)
-            beam00I = self.get_beam(beam_file_00i, det, verbose)
+            lmax_i00, mmax_i00 = self.get_lmmax(sky_file, beam_file_i00)
+            lmax_0i0, mmax_0i0 = self.get_lmmax(sky_file, beam_file_0i0)
+            lmax_00i, mmax_00i = self.get_lmmax(sky_file, beam_file_00i)
+            lmax = max(lmax_i00, lmax_0i0, lmax_00i)
+            mmax = max(mmax_i00, mmax_0i0, mmax_00i)
+            sky = self.get_sky(sky_file, lmax, det, verbose)
+
+            beamI00 = self.get_beam(beam_file_i00, lmax, mmax, det, verbose)
+            beam0I0 = self.get_beam(beam_file_0i0, lmax, mmax, det, verbose)
+            beam00I = self.get_beam(beam_file_00i, lmax, mmax, det, verbose)
 
             theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
 
             # I-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data = self.convolve(sky, beamI00, pnt, det, verbose)
+            convolved_data = self.convolve(sky, beamI00, lmax, mmax, pnt, det, verbose)
             del pnt
 
             # Q-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.cos(2 * psi_pol) * self.convolve(
-                sky, beam0I0, pnt, det, verbose
+                sky, beam0I0, lmax, mmax, pnt, det, verbose
             )
             del pnt
 
             # U-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.sin(2 * psi_pol) * self.convolve(
-                sky, beam00I, pnt, det, verbose
+                sky, beam00I, lmax, mmax, pnt, det, verbose
             )
             del theta, phi, psi
 
