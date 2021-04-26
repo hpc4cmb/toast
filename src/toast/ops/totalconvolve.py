@@ -518,6 +518,7 @@ class SimTotalconvolve(Operator):
         timer.start()
 
         if self.hwp_angle is None:
+            # simply compute TT+EE+BB
             convolver = totalconvolve.Interpolator(
                 np.array(sky),
                 np.array(beam),
@@ -530,6 +531,7 @@ class SimTotalconvolve(Operator):
             )
             convolved_data = convolver.interpol(pnt).reshape((-1,))
         else:
+            # TT
             convolver = totalconvolve.Interpolator(
                 np.array([sky[0]]),
                 np.array([beam[0]]),
@@ -542,6 +544,7 @@ class SimTotalconvolve(Operator):
             )
             convolved_data = convolver.interpol(pnt).reshape((-1,))
             if self.pol:
+                # EE+BB
                 slm = np.array([sky[1], sky[2]])
                 blm = np.array([beam[1], beam[2]])
                 convolver = totalconvolve.Interpolator(
@@ -557,6 +560,7 @@ class SimTotalconvolve(Operator):
                 convolved_data += np.cos(4 * psi_pol) * convolver.interpol(pnt).reshape(
                     (-1,)
                 )
+                # -EB+BE
                 blm = np.array([-beam[2], beam[1]])
                 convolver = totalconvolve.Interpolator(
                     slm,
