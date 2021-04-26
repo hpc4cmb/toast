@@ -1053,17 +1053,28 @@ class AtmSim(object):
         if self._rank == 0:
             log = Logger.get()
 
-            hf = h5py.File(cachefile, "r")
-            # Read metadata
-            meta = hf.attrs
-            for k, tp in self._meta_keys():
-                # Copy the metadata value into a dictionary, casting to correct type
-                mdata[k] = tp(meta[k])
-            log.debug("Loaded metadata for {}".format(rname))
+            try:
+                hf = h5py.File(cachefile, "r")
+                # Read metadata
+                meta = hf.attrs
+                for k, tp in self._meta_keys():
+                    # Copy the metadata value into a dictionary, casting to correct type
+                    mdata[k] = tp(meta[k])
+                log.debug("Loaded metadata for {}".format(rname))
+            except Exception as e:
+                print(
+                    f"ERROR: failed to load cached atmosphere realization"
+                    f" from {cachefile}. Will simulate again.",
+                    flush=True,
+                )
+                mdata = None
 
         # Broadcast the metadata
         if self._comm is not None:
             mdata = self._comm.bcast(mdata, root=0)
+
+        if mdata is None:
+            return
 
         # Copy the metadata into class instance member variables
         for k, tp in self._meta_keys():
