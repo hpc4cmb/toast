@@ -20,11 +20,10 @@ from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 
 totalconvolve = None
 
-if use_mpi:
-    try:
-        import ducc0.totalconvolve as totalconvolve
-    except ImportError:
-        totalconvolve = None
+try:
+    import ducc0.totalconvolve as totalconvolve
+except ImportError:
+    totalconvolve = None
 
 
 def available():
@@ -128,12 +127,6 @@ class SimTotalconvolve(Operator):
         1e-5,
         allow_none=False,
         help="Relative accuracy of the interpolation step",
-    )
-
-    nthreads = Int(
-        1,
-        allow_none=False,
-        help="Number of threads used to perform total convolution/interpolation",
     )
 
     lmax = Int(
@@ -248,10 +241,15 @@ class SimTotalconvolve(Operator):
         timer = Timer()
         timer.start()
 
+        env = Environment.get()
+        nthreads = env.max_threads()
+
         all_detectors = self._get_all_detectors(data, detectors)
 
         for det in all_detectors:
-            verbose = self.comm.rank == 0 and self.verbosity > 0
+            verbose = self.verbosity > 0
+            if use_mpi:
+                verbose = verbose and self.comm.rank == 0
 
             # Expand detector pointing
             self.detector_pointing.apply(data, detectors=[det])
@@ -273,8 +271,13 @@ class SimTotalconvolve(Operator):
             theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             del theta, phi, psi
+            if self.hwp_angle is None:
+                psi_pol = None
 
-            convolved_data = self.convolve(sky, beam, lmax, mmax, pnt, det, verbose)
+            convolved_data = self.convolve(
+                sky, beam, lmax, mmax, pnt, psi_pol, det, nthreads, verbose
+            )
+            del psi_pol
 
             self.calibrate_signal(data, det, beam, convolved_data, verbose)
             self.save(data, det, convolved_data, verbose)
@@ -298,12 +301,15 @@ class SimTotalconvolve(Operator):
                 my_dets.add(det)
             # Make sure detector data output exists
             obs.detdata.ensure(self.det_data, detectors=detectors)
-        all_dets = self.comm.gather(my_dets, root=0)
-        if self.comm.rank == 0:
-            for some_dets in all_dets:
-                my_dets.update(some_dets)
-            my_dets = sorted(my_dets)
-        all_dets = self.comm.bcast(my_dets, root=0)
+        if use_mpi:
+            all_dets = self.comm.gather(my_dets, root=0)
+            if self.comm.rank == 0:
+                for some_dets in all_dets:
+                    my_dets.update(some_dets)
+                my_dets = sorted(my_dets)
+            all_dets = self.comm.bcast(my_dets, root=0)
+        else:
+            all_dets = my_dets
         return all_dets
 
     def _get_psi_pol(self, focalplane, det):
@@ -507,20 +513,63 @@ class SimTotalconvolve(Operator):
             timer.report_clear(f"pack input array for detector {det}")
         return pnt
 
-    def convolve(self, sky, beam, lmax, mmax, pnt, det, verbose):
+    def convolve(self, sky, beam, lmax, mmax, pnt, psi_pol, det, nthreads, verbose):
         timer = Timer()
         timer.start()
-        convolver = totalconvolve.Interpolator(
-            np.array(sky),
-            np.array(beam),
-            False,
-            int(lmax),
-            int(mmax),
-            epsilon=float(self.epsilon),
-            ofactor=float(self.oversampling_factor),
-            nthreads=int(self.nthreads),
-        )
-        convolved_data = convolver.interpol(pnt).reshape((-1,))
+
+        if self.hwp_angle is None:
+            convolver = totalconvolve.Interpolator(
+                np.array(sky),
+                np.array(beam),
+                False,
+                int(lmax),
+                int(mmax),
+                epsilon=float(self.epsilon),
+                ofactor=float(self.oversampling_factor),
+                nthreads=nthreads,
+            )
+            convolved_data = convolver.interpol(pnt).reshape((-1,))
+        else:
+            convolver = totalconvolve.Interpolator(
+                np.array(sky[0]),
+                np.array(beam[0]),
+                False,
+                int(lmax),
+                int(mmax),
+                epsilon=float(self.epsilon),
+                ofactor=float(self.oversampling_factor),
+                nthreads=nthreads,
+            )
+            convolved_data = convolver.interpol(pnt).reshape((-1,))
+            slm = np.array([sky[1], sky[2]])
+            blm = np.array([beam[1], beam[2]])
+            convolver = totalconvolve.Interpolator(
+                slm,
+                blm,
+                False,
+                int(lmax),
+                int(mmax),
+                epsilon=float(self.epsilon),
+                ofactor=float(self.oversampling_factor),
+                nthreads=nthreads,
+            )
+            convolved_data += np.cos(4 * psi_pol) * convolver.interpol(pnt).reshape(
+                (-1,)
+            )
+            blm = np.array([-beam[2], beam[1]])
+            convolver = totalconvolve.Interpolator(
+                slm,
+                blm,
+                False,
+                int(lmax),
+                int(mmax),
+                epsilon=float(self.epsilon),
+                ofactor=float(self.oversampling_factor),
+                nthreads=nthreads,
+            )
+            convolved_data += np.sin(4 * psi_pol) * convolver.interpol(pnt).reshape(
+                (-1,)
+            )
 
         if verbose:
             timer.report_clear(f"convolve detector {det}")
@@ -600,96 +649,3 @@ class SimTotalconvolve(Operator):
 
     def _accelerators(self):
         return list()
-
-
-class SimWeightedTotalconvolve(SimTotalconvolve):
-    """Operator which uses ducc0.totalconvolve to generate beam-convolved timestreams.
-    This operator should be used in presence of a spinning  HWP which  makes
-    the beam time-dependent, constantly mapping the co- and cross polar
-    responses on to each other.  In OpSimTotalconvolve we assume the beam to be static.
-    """
-
-    @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
-        if not self.available:
-            raise RuntimeError("ducc0.totalconvolve is not available")
-
-        if self.detector_pointing is None:
-            raise RuntimeError("detector_pointing cannot be None.")
-
-        log = Logger.get()
-
-        timer = Timer()
-        timer.start()
-
-        # Expand detector pointing
-        self.detector_pointing.apply(data, detectors=detectors)
-
-        all_detectors = self._get_all_detectors(data, detectors)
-
-        for det in all_detectors:
-            verbose = self.comm.rank == 0 and self.verbosity > 0
-
-            # Expand detector pointing
-            self.detector_pointing.apply(data, detectors=[det])
-
-            if det in self.sky_file_dict:
-                sky_file = self.sky_file_dict[det]
-            else:
-                sky_file = self.sky_file.format(detector=det, mc=self.mc)
-
-            if det in self.beam_file_dict:
-                beam_file = self.beam_file_dict[det]
-            else:
-                beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            beam_file_i00 = beam_file.replace(".fits", "_I000.fits")
-            beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
-            beam_file_00i = beam_file.replace(".fits", "_00I0.fits")
-
-            lmax_i00, mmax_i00 = self.get_lmmax(sky_file, beam_file_i00)
-            lmax_0i0, mmax_0i0 = self.get_lmmax(sky_file, beam_file_0i0)
-            lmax_00i, mmax_00i = self.get_lmmax(sky_file, beam_file_00i)
-            lmax = max(lmax_i00, lmax_0i0, lmax_00i)
-            mmax = max(mmax_i00, mmax_0i0, mmax_00i)
-            sky = self.get_sky(sky_file, lmax, det, verbose)
-
-            beamI00 = self.get_beam(beam_file_i00, lmax, mmax, det, verbose)
-            beam0I0 = self.get_beam(beam_file_0i0, lmax, mmax, det, verbose)
-            beam00I = self.get_beam(beam_file_00i, lmax, mmax, det, verbose)
-
-            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
-
-            # I-beam convolution
-            pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data = self.convolve(sky, beamI00, lmax, mmax, pnt, det, verbose)
-            del pnt
-
-            # Q-beam convolution
-            pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data += np.cos(2 * psi_pol) * self.convolve(
-                sky, beam0I0, lmax, mmax, pnt, det, verbose
-            )
-            del pnt
-
-            # U-beam convolution
-            pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data += np.sin(2 * psi_pol) * self.convolve(
-                sky, beam00I, lmax, mmax, pnt, det, verbose
-            )
-            del theta, phi, psi
-
-            self.calibrate_signal(
-                data,
-                det,
-                beamI00,
-                convolved_data,
-                verbose,
-            )
-            self.save(data, det, convolved_data, verbose)
-
-            del pnt, beamI00, beam0I0, beam00I, sky
-
-            if verbose:
-                timer.report_clear(f"totalconvolve process detector {det}")
-
-        return

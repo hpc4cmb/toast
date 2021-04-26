@@ -435,7 +435,7 @@ class SimTotalconvolveTest(MPITestCase):
         detpointing = ops.PointingDetectorSimple()
 
         # Generate timestreams
-        sim_totalconvolve = ops.SimWeightedTotalconvolve(
+        sim_totalconvolve = ops.SimTotalconvolve(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
