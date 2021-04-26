@@ -531,8 +531,8 @@ class SimTotalconvolve(Operator):
             convolved_data = convolver.interpol(pnt).reshape((-1,))
         else:
             convolver = totalconvolve.Interpolator(
-                np.array(sky[0]),
-                np.array(beam[0]),
+                np.array([sky[0]]),
+                np.array([beam[0]]),
                 False,
                 int(lmax),
                 int(mmax),
@@ -541,35 +541,36 @@ class SimTotalconvolve(Operator):
                 nthreads=nthreads,
             )
             convolved_data = convolver.interpol(pnt).reshape((-1,))
-            slm = np.array([sky[1], sky[2]])
-            blm = np.array([beam[1], beam[2]])
-            convolver = totalconvolve.Interpolator(
-                slm,
-                blm,
-                False,
-                int(lmax),
-                int(mmax),
-                epsilon=float(self.epsilon),
-                ofactor=float(self.oversampling_factor),
-                nthreads=nthreads,
-            )
-            convolved_data += np.cos(4 * psi_pol) * convolver.interpol(pnt).reshape(
-                (-1,)
-            )
-            blm = np.array([-beam[2], beam[1]])
-            convolver = totalconvolve.Interpolator(
-                slm,
-                blm,
-                False,
-                int(lmax),
-                int(mmax),
-                epsilon=float(self.epsilon),
-                ofactor=float(self.oversampling_factor),
-                nthreads=nthreads,
-            )
-            convolved_data += np.sin(4 * psi_pol) * convolver.interpol(pnt).reshape(
-                (-1,)
-            )
+            if self.pol:
+                slm = np.array([sky[1], sky[2]])
+                blm = np.array([beam[1], beam[2]])
+                convolver = totalconvolve.Interpolator(
+                    slm,
+                    blm,
+                    False,
+                    int(lmax),
+                    int(mmax),
+                    epsilon=float(self.epsilon),
+                    ofactor=float(self.oversampling_factor),
+                    nthreads=nthreads,
+                )
+                convolved_data += np.cos(4 * psi_pol) * convolver.interpol(pnt).reshape(
+                    (-1,)
+                )
+                blm = np.array([-beam[2], beam[1]])
+                convolver = totalconvolve.Interpolator(
+                    slm,
+                    blm,
+                    False,
+                    int(lmax),
+                    int(mmax),
+                    epsilon=float(self.epsilon),
+                    ofactor=float(self.oversampling_factor),
+                    nthreads=nthreads,
+                )
+                convolved_data += np.sin(4 * psi_pol) * convolver.interpol(pnt).reshape(
+                    (-1,)
+                )
 
         if verbose:
             timer.report_clear(f"convolve detector {det}")
