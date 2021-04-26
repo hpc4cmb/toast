@@ -722,8 +722,8 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
                 // Extract band diagonal of the matrix and try
                 // factorizing again
                 // int ndiag = ntry - itry - 1;
-                int ndiag = nelem - nelem * (itry + 1) / ntry;
-                if (ndiag < 3) ndiag = 3;
+                int ndiag = nelem - nelem * (itry + 1) / (ntry - 1);
+                if (ndiag < 1) ndiag = 1;
                 int iupper = ndiag - 1;
                 int ilower = -iupper;
                 if (atm_verbose()) {
@@ -749,6 +749,19 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
 
                 if (chol.chcommon->status != CHOLMOD_OK) {
                     throw std::runtime_error("cholmod_band_inplace failed.");
+                }
+                if (atm_verbose()) {
+                    cholmod_print_sparse(cov, "Covariance matrix", chol.chcommon);
+
+                    // DEBUG begin
+                    if (itry == ntry - 2) {
+                        FILE * covfile = fopen("band_covmat.mtx", "w");
+                        cholmod_write_sparse(covfile, cov, NULL, NULL,
+                                             chol.chcommon);
+                        fclose(covfile);
+                    }
+
+                    // DEBUG end
                 }
             } else throw std::runtime_error("cholmod_factorize failed.");
         } else {

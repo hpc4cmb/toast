@@ -242,6 +242,7 @@ def apply_filterbin(
             write_wcov_inv = args.write_wcov_inv and first_call
             write_wcov = args.write_wcov and first_call
             write_binned = args.write_binmap
+            write_obs_matrix = args.filterbin_write_obs_matrix and first_call
 
             if len(time_name.split("-")) == 3:
                 # Special rules for daily maps
@@ -288,7 +289,7 @@ def apply_filterbin(
                 ground_filter_order=args.filterbin_ground_order,
                 split_ground_template=args.filterbin_split_ground_template,
                 poly_filter_order=args.filterbin_poly_order,
-                write_obs_matrix=args.filterbin_write_obs_matrix,
+                write_obs_matrix=write_obs_matrix,
                 deproject_map=args.filterbin_deproject_map,
                 deproject_pattern=args.filterbin_deproject_pattern,
                 deproject_nnz=deproject_nnz,

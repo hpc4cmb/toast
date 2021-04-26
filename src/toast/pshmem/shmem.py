@@ -178,6 +178,9 @@ class MPIShared(object):
 
     def __del__(self):
         self.close()
+        # Free the node communicator
+        if self._nodecomm is not None:
+            self._nodecomm.Free()
 
     def __enter__(self):
         return self

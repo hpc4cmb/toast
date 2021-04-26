@@ -2,13 +2,13 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from time import time
+
 from ..mpi import MPI
 
 import numpy as np
 
-from numpy.polynomial.chebyshev import chebval
-
-from .._libtoast import bin_templates, add_templates, chebyshev
+from .._libtoast import bin_templates, add_templates, legendre
 
 from ..op import Operator
 
@@ -38,9 +38,9 @@ class OpGroundFilter(Operator):
            based on the detector flags.
         ground_flag_mask (byte):  Bitmask to use when adding flags based
            on ground filter failures.
-        trend_order (int):  Order of a Chebyshev polynomial to fit along
+        trend_order (int):  Order of a Legendre polynomial to fit along
             with the ground template
-        filter_order (int):  Order of a Chebyshev polynomial to fit as a
+        filter_order (int):  Order of a Legendre polynomial to fit as a
             function of azimuth
         detrend (bool):  Subtract the fitted trend along with the
              ground template
@@ -63,6 +63,7 @@ class OpGroundFilter(Operator):
         detrend=False,
         intervals="intervals",
         split_template=False,
+        verbose=True,
     ):
         self._name = name
         self._common_flag_name = common_flag_name
@@ -75,6 +76,7 @@ class OpGroundFilter(Operator):
         self._detrend = detrend
         self._intervals = intervals
         self._split_template = split_template
+        self.verbose = verbose
 
         # Call the parent class constructor.
         super().__init__()
@@ -96,9 +98,8 @@ class OpGroundFilter(Operator):
 
         # Do not include the offset in the trend.  It will be part of
         # of the ground template
-        # cheby_trend = chebval(x, np.eye(self._trend_order + 1), tensor=True)[1:]
-        cheby_trend = np.zeros([self._trend_order, x.size])
-        chebyshev(x, cheby_trend, 1, self._trend_order + 1)
+        legendre_trend = np.zeros([self._trend_order, x.size])
+        legendre(x, legendre_trend, 1, self._trend_order + 1)
 
         try:
             (azmin, azmax, _, _) = tod.scan_range
@@ -114,28 +115,27 @@ class OpGroundFilter(Operator):
 
         phase = (az - azmin) / (azmax - azmin) * 2 - 1
         nfilter = self._filter_order + 1
-        # cheby_templates = chebval(phase, np.eye(nfilter), tensor=True)
-        cheby_templates = np.zeros([nfilter, phase.size])
-        chebyshev(phase, cheby_templates, 0, nfilter)
+        legendre_templates = np.zeros([nfilter, phase.size])
+        legendre(phase, legendre_templates, 0, nfilter)
         if not self._split_template:
-            cheby_filter = cheby_templates
+            legendre_filter = legendre_templates
         else:
             # Create separate templates for alternating scans
             common_ref = tod.local_common_flags(self._common_flag_name)
-            cheby_filter = []
+            legendre_filter = []
             mask1 = common_ref & tod.LEFTRIGHT_SCAN == 0
             mask2 = common_ref & tod.RIGHTLEFT_SCAN == 0
-            for template in cheby_templates:
+            for template in legendre_templates:
                 for mask in mask1, mask2:
                     temp = template.copy()
                     temp[mask] = 0
-                    cheby_filter.append(temp)
+                    legendre_filter.append(temp)
             del common_ref
-            cheby_filter = np.vstack(cheby_filter)
+            legendre_filter = np.vstack(legendre_filter)
 
-        templates = np.vstack([cheby_trend, cheby_filter])
+        templates = np.vstack([legendre_trend, legendre_filter])
 
-        return templates, cheby_trend, cheby_filter
+        return templates, legendre_trend, legendre_filter
 
     @function_timer
     def bin_templates(self, ref, templates, good, invcov, proj):
@@ -157,69 +157,57 @@ class OpGroundFilter(Operator):
     @function_timer
     def fit_templates(self, tod, det, templates, ref, good):
         log = Logger.get()
-        comm = tod.mpicomm
-        rank = 0
+        # communicator for processes with the same detectors
+        comm = tod.grid_comm_row
+        ngood = np.sum(good)
         if comm is not None:
-            rank = comm.rank
-        detranks, sampranks = tod.grid_size
-
-        if good is not None:
-            ngood = np.sum(good)
-        else:
-            ngood = 0
-        ngood_tot = None
-        if comm is None:
-            ngood_tot = ngood
-        else:
-            ngood_tot = comm.allreduce(ngood)
-        if ngood_tot == 0:
+            ngood = comm.allreduce(ngood)
+        if ngood == 0:
             return None
 
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
         proj = np.zeros(ntemplate)
-        if ref is not None:
-            # self.bin_templates(ref, templates, good, invcov, proj)
-            bin_templates(ref, templates, good.astype(np.uint8), invcov, proj)
 
-        if sampranks > 1:
+        bin_templates(ref, templates, good.astype(np.uint8), invcov, proj)
+
+        if comm is not None:
             # Reduce the binned data.  The detector signals is
             # distributed across the group communicator.
             comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
             comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
 
         # Assemble the joint template
-        if ref is not None:
-            try:
-                cov = np.linalg.inv(invcov)
-                coeff = np.dot(cov, proj)
-            except np.linalg.LinAlgError as e:
-                msg = 'linalg.inv failed with "{}"'.format(e)
-                log.warning(msg)
-                # np.linalg.lstsq will find a least squares minimum
-                # even if the covariance matrix is not invertible
-                coeff = np.linalg.lstsq(invcov, proj, rcond=1e-30)[0]
-                if np.any(np.isnan(coeff)) or np.std(coeff) < 1e-30:
-                    raise RuntimeError("lstsq FAILED")
+        rcond = 1 / np.linalg.cond(invcov)
+        self.rcondsum += rcond
+        if rcond > 1e-6:
+            self.ngood += 1
+            cov = np.linalg.inv(invcov)
+            coeff = np.dot(cov, proj)
         else:
-            coeff = None
+            self.nsingular += 1
+            log.debug(
+                f"Ground template matrix is poorly conditioned, "
+                f"rcond = {rcond}, doing least squares fitting."
+            )
+            # np.linalg.lstsq will find a least squares minimum
+            # even if the covariance matrix is not invertible
+            coeff = np.linalg.lstsq(invcov, proj, rcond=1e-30)[0]
+            if np.any(np.isnan(coeff)) or np.std(coeff) < 1e-30:
+                raise RuntimeError("lstsq FAILED")
 
         return coeff
 
     @function_timer
-    def subtract_templates(self, ref, good, coeff, cheby_trend, cheby_filter):
+    def subtract_templates(self, ref, good, coeff, legendre_trend, legendre_filter):
         # Trend
         if self._detrend:
             trend = np.zeros_like(ref)
-            # for cc, template in zip(coeff[: self._trend_order], cheby_trend):
-            #    trend += cc * template
-            add_templates(trend, cheby_trend, coeff[: self._trend_order])
+            add_templates(trend, legendre_trend, coeff[: self._trend_order])
             ref[good] -= trend[good]
         # Ground template
         grtemplate = np.zeros_like(ref)
-        # for cc, template in zip(coeff[self._trend_order :], cheby_filter):
-        #    grtemplate += cc * template
-        add_templates(grtemplate, cheby_filter, coeff[self._trend_order :])
+        add_templates(grtemplate, legendre_filter, coeff[self._trend_order :])
         ref[good] -= grtemplate[good]
         ref[np.logical_not(good)] = 0
         return
@@ -232,34 +220,108 @@ class OpGroundFilter(Operator):
             data (toast.Data): The distributed data.
 
         """
+
+        t0 = time()
+
+        self.comm = data.comm.comm_world
+        if self.comm is None:
+            self.rank = 0
+            self.ntask = 1
+        else:
+            self.rank = self.comm.rank
+            self.ntask = self.comm.size
+        gcomm = data.comm.comm_group
+        self.group = data.comm.group
+        if gcomm is None:
+            self.grank = 0
+        else:
+            self.grank = gcomm.rank
+
+        self.nsingular = 0
+        self.ngood = 0
+        self.rcondsum = 0
+
         # Each group loops over its own CES:es
-        for obs in data.obs:
+        for iobs, obs in enumerate(data.obs):
             tod = obs["tod"]
+            if (self.rank == 0 and self.verbose) or (
+                self.grank == 0 and self.verbose > 1
+            ):
+                print(
+                    "{:4} : OpGroundFilter: Processing observation {} / {}".format(
+                        self.group, iobs + 1, len(data.obs)
+                    ),
+                    flush=True,
+                )
 
             # Cache the output common flags
             common_ref = tod.local_common_flags(self._common_flag_name)
 
-            templates, cheby_trend, cheby_filter = self.build_templates(tod, obs)
+            t1 = time()
+            templates, legendre_trend, legendre_filter = self.build_templates(tod, obs)
+            if self.grank == 0 and self.verbose > 1:
+                print(
+                    "{:4} : OpGroundFilter: Built templates in {:.1f}s".format(
+                        self.group, time() - t1
+                    ),
+                    flush=True,
+                )
 
-            for det in tod.detectors:
-                if det in tod.local_dets:
-                    ref = tod.local_signal(det, self._name)
-                    flag_ref = tod.local_flags(det, self._flag_name)
-                    good = np.logical_and(
-                        common_ref & self._common_flag_mask == 0,
-                        flag_ref & self._flag_mask == 0,
+            for idet, det in enumerate(tod.local_dets):
+                if self.grank == 0 and self.verbose > 1:
+                    print(
+                        "{:4} : OpGroundFilter:   Processing detector # {} / {}".format(
+                            self.group, idet + 1, len(tod.local_dets)
+                        ),
+                        flush=True,
                     )
-                    del flag_ref
-                else:
-                    ref = None
-                    good = None
+                ref = tod.local_signal(det, self._name)
+                flag_ref = tod.local_flags(det, self._flag_name)
+                good = np.logical_and(
+                    common_ref & self._common_flag_mask == 0,
+                    flag_ref & self._flag_mask == 0,
+                )
+                del flag_ref
 
+                t1 = time()
                 coeff = self.fit_templates(tod, det, templates, ref, good)
-                if coeff is not None:
-                    self.subtract_templates(ref, good, coeff, cheby_trend, cheby_filter)
+                if self.grank == 0 and self.verbose > 1:
+                    print(
+                        "{:4} : OpGroundFilter: Fit templates in {:.1f}s".format(
+                            self.group, time() - t1
+                        ),
+                        flush=True,
+                    )
+
+                if coeff is None:
+                    continue
+
+                t1 = time()
+                self.subtract_templates(
+                    ref, good, coeff, legendre_trend, legendre_filter
+                )
+                if self.grank == 0 and self.verbose > 1:
+                    print(
+                        "{:4} : OpGroundFilter: Subtract templates in {:.1f}s".format(
+                            self.group, time() - t1
+                        ),
+                        flush=True,
+                    )
 
                 del ref
 
             del common_ref
+
+        if self.comm is not None:
+            self.nsingular = self.comm.allreduce(self.nsingular)
+            self.ngood = self.comm.allreduce(self.ngood)
+            self.rcondsum = self.comm.allreduce(self.rcondsum)
+        if self.rank == 0:
+            print(
+                "Applied ground filter in {:.1f} s.  Average rcond of template matrix was {}".format(
+                    time() - t0, self.rcondsum / (self.nsingular + self.ngood)
+                ),
+                flush=True,
+            )
 
         return

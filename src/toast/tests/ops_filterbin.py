@@ -16,7 +16,11 @@ import scipy.sparse
 from ..timing import gather_timers, GlobalTimers
 from ..timing import dump as dump_timing
 from ..tod import (
-    AnalyticNoise, OpSimNoise, Interval, OpCacheCopy, OpCacheInit,
+    AnalyticNoise,
+    OpSimNoise,
+    Interval,
+    OpCacheCopy,
+    OpCacheInit,
 )
 from ..map import DistPixels
 from ..todmap import (
@@ -30,6 +34,54 @@ from ..todmap import (
 from .. import qarray as qa
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
+
+
+def combine_observation_matrix(rootname):
+    pattern = f"{rootname}.*.*.*.data.npy"
+    datafiles = sorted(glob.glob(pattern))
+    if len(datafiles) == 0:
+        raise RuntimeError(f"No observation matrix files match '{pattern}''")
+
+    all_data = []
+    all_indices = []
+    all_indptr = [0]
+
+    current_row = 0
+    current_offset = 0
+    shape = None
+
+    for datafile in datafiles:
+        parts = datafile.split(".")
+        row_start = int(parts[-5])
+        row_stop = int(parts[-4])
+        nrow_tot = int(parts[-3])
+        if shape is None:
+            shape = (nrow_tot, nrow_tot)
+        elif shape[0] != nrow_tot:
+            raise RuntimeError("Mismatch in shape")
+        if current_row != row_start:
+            all_indptr.append(np.zeros(row_start - current_row) + current_offset)
+            current_row = row_start
+        data = np.load(datafile)
+        indices = np.load(datafile.replace(".data.", ".indices."))
+        indptr = np.load(datafile.replace(".data.", ".indptr."))
+        all_data.append(data)
+        all_indices.append(indices)
+        indptr += current_offset
+        all_indptr.append(indptr[1:])
+        current_row = row_stop
+        current_offset = indptr[-1]
+
+    if current_row != nrow_tot:
+        all_indptr.append(np.zeros(nrow_tot - current_row) + current_offset)
+
+    all_data = np.hstack(all_data)
+    all_indices = np.hstack(all_indices)
+    all_indptr = np.hstack(all_indptr)
+    obs_matrix = scipy.sparse.csr_matrix((all_data, all_indices, all_indptr), shape)
+    scipy.sparse.save_npz(rootname, obs_matrix)
+
+    return
 
 
 class OpFilterBinTest(MPITestCase):
@@ -167,7 +219,7 @@ class OpFilterBinTest(MPITestCase):
         self.lmax = 2 * self.sim_nside
         self.cl = np.ones([4, self.lmax + 1])
         self.cl[:, 0:2] = 0
-        #self.cl[1:] = 0  # DEBUG
+        # self.cl[1:] = 0  # DEBUG
         fwhm = np.radians(10)
         self.inmap = hp.synfast(
             self.cl,
@@ -242,7 +294,9 @@ class OpFilterBinTest(MPITestCase):
             # Test that we can replicate the filtering by applying
             # the observation matrix to the input map
 
-            fname = os.path.join(self.outdir, outprefix + "obs_matrix.npz")
+            rootname = os.path.join(self.outdir, outprefix + "obs_matrix")
+            combine_observation_matrix(rootname)
+            fname = rootname + ".npz"
             obs_matrix = scipy.sparse.load_npz(fname)
 
             fname = os.path.join(self.outdir, outprefix + "filtered.fits.gz")
@@ -342,7 +396,7 @@ class OpFilterBinTest(MPITestCase):
             hp.write_map(dpmap_file, tmap, nest=True)
         if self.comm is not None:
             self.comm.Barrier()
-            
+
         # Run FilterBin
 
         gt = GlobalTimers.get()
@@ -377,7 +431,9 @@ class OpFilterBinTest(MPITestCase):
             # Test that we can replicate the filtering by applying
             # the observation matrix to the input map
 
-            fname = os.path.join(self.outdir, outprefix + "obs_matrix.npz")
+            rootname = os.path.join(self.outdir, outprefix + "obs_matrix")
+            combine_observation_matrix(rootname)
+            fname = rootname + ".npz"
             obs_matrix = scipy.sparse.load_npz(fname)
 
             fname = os.path.join(self.outdir, outprefix + "filtered.fits.gz")
