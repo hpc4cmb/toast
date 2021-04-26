@@ -250,6 +250,12 @@ class SimTotalconvolve(Operator):
             verbose = self.verbosity > 0
             if use_mpi:
                 verbose = verbose and self.comm.rank == 0
+                if self.comm.size > 1:
+                    log.warning(
+                        "communicator size>1: totalconvolve will work, "
+                        "but will waste CPU and memory. To be fixed in "
+                        "future releases."
+                    )
 
             # Expand detector pointing
             self.detector_pointing.apply(data, detectors=[det])
@@ -358,9 +364,13 @@ class SimTotalconvolve(Operator):
         return epsilon
 
     def get_lmmax(self, skyfile, beamfile):
+        """Determine the actual lmax and beammmax to use for the convolution
+        from class parameters and values in the files.
+        """
         ncomp = 3 if self.pol else 1
         slmax, blmax, bmmax = -1, -1, -1
         for i in range(ncomp):
+            # for sky and beam respectively, lmax is the max of all components
             alm_tmp, mmax_tmp = hp.fitsfunc.read_alm(
                 skyfile, hdu=i + 1, return_mmax=True
             )
@@ -371,9 +381,12 @@ class SimTotalconvolve(Operator):
             )
             lmax_tmp = hp.sphtfunc.Alm.getlmax(alm_tmp.shape[0], mmax_tmp)
             blmax = max(blmax, lmax_tmp)
+            # for the beam, determine also the largest mmax present
             bmmax = max(bmmax, mmax_tmp)
+        # no need to go higher than the lower of the lmax from sky and beam
         lmax_out = min(slmax, blmax)
         mmax_out = bmmax
+        # if parameters are lower than the detected values, reduce even further
         if self.lmax != -1:
             lmax_out = min(lmax_out, self.lmax)
         if self.beammmax != -1:
