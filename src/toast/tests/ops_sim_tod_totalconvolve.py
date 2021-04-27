@@ -118,6 +118,9 @@ class SimTotalconvolveTest(MPITestCase):
                 overwrite=True,
             )
 
+        if self.comm is not None:
+            self.comm.Barrier()
+
         return
 
     def test_conviqt(self):
@@ -228,27 +231,31 @@ class SimTotalconvolveTest(MPITestCase):
 
             map_totalconvolve = hp.read_map(path_totalconvolve)
             map_conviqt = hp.read_map(path_conviqt)
-            fig = plt.figure(figsize=[12, 8])
-            nrow, ncol = 2, 2
-            hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
-            hp.mollview(beam, title="beam", sub=[nrow, ncol, 2], rot=[0, 90])
-            amp = np.amax(map_totalconvolve) / 4
-            hp.mollview(
-                map_totalconvolve,
-                min=-amp,
-                max=amp,
-                title="totalconvolve",
-                sub=[nrow, ncol, 3],
-            )
-            hp.mollview(
-                map_conviqt,
-                min=-amp,
-                max=amp,
-                title="conviqt",
-                sub=[nrow, ncol, 4],
-            )
-            outfile = os.path.join(self.outdir, "map_comparison.png")
-            fig.savefig(outfile)
+            
+            # For some reason, matplotlib hangs with multiple tasks,
+            # even if only one writes.
+            if self.comm is None or self.comm.size == 1:
+                fig = plt.figure(figsize=[12, 8])
+                nrow, ncol = 2, 2
+                hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
+                hp.mollview(beam, title="beam", sub=[nrow, ncol, 2], rot=[0, 90])
+                amp = np.amax(map_totalconvolve) / 4
+                hp.mollview(
+                    map_totalconvolve,
+                    min=-amp,
+                    max=amp,
+                    title="totalconvolve",
+                    sub=[nrow, ncol, 3],
+                )
+                hp.mollview(
+                    map_conviqt,
+                    min=-amp,
+                    max=amp,
+                    title="conviqt",
+                    sub=[nrow, ncol, 4],
+                )
+                outfile = os.path.join(self.outdir, "map_comparison.png")
+                fig.savefig(outfile)
 
             for obs in data.obs:
                 for det in obs.local_detectors:
@@ -383,33 +390,39 @@ class SimTotalconvolveTest(MPITestCase):
                 self.blm[0], self.nside, lmax=self.lmax, mmax=self.mmax, verbose=False
             )
 
-            fig = plt.figure(figsize=[12, 8])
-            nrow, ncol = 2, 3
-            hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
-            hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
-            hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
-            hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
-
-            ell = np.arange(self.lmax + 1)
-            ax = fig.add_subplot(nrow, ncol, 5)
-            ax.plot(ell[1:], cl_in[1:], label="input")
-            ax.plot(ell[1:], cl_smoothed[1:], label="smoothed")
-            ax.plot(ell[1:], blsq[1:], label="beam")
-            ax.plot(ell[1:], gauss_blsq[1:], label="gauss beam")
-            ax.plot(ell[1:], 1 / deconv[1:] ** 2, label="1 / deconv")
-            ax.plot(
-                ell[1:],
-                cl_in[1:] * blsq[1:] * deconv[1:] ** 2,
-                label="input x beam x deconv",
-            )
-            ax.plot(ell[1:], cl_out[1:], label="output")
-            ax.legend(loc="best")
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-            ax.set_ylim([1e-20, 1e1])
-
-            outfile = os.path.join(self.outdir, "cl_comparison.png")
-            fig.savefig(outfile)
+            # For some reason, matplotlib hangs with multiple tasks,
+            # even if only one writes.
+            if self.comm is None or self.comm.size == 1:
+                fig = plt.figure(figsize=[12, 8])
+                nrow, ncol = 2, 3
+                hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
+                hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
+                hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
+                hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
+    
+                ell = np.arange(self.lmax + 1)
+                ax = fig.add_subplot(nrow, ncol, 5)
+                ax.plot(ell[1:], cl_in[1:], label="input")
+                ax.plot(ell[1:], cl_smoothed[1:], label="smoothed")
+                ax.plot(ell[1:], blsq[1:], label="beam")
+                ax.plot(ell[1:], gauss_blsq[1:], label="gauss beam")
+                ax.plot(ell[1:], 1 / deconv[1:] ** 2, label="1 / deconv")
+                ax.plot(
+                    ell[1:],
+                    cl_in[1:] * blsq[1:] * deconv[1:] ** 2,
+                    label="input x beam x deconv",
+                )
+                ax.plot(ell[1:], cl_out[1:], label="output")
+                ax.legend(loc="best")
+                ax.set_xscale("log")
+                ax.set_yscale("log")
+                ax.set_ylim([1e-20, 1e1])
+    
+                if self.comm is None or self.comm.size == 1:
+                    # For some reason, matplotlib hangs with multiple tasks,
+                    # even if only one writes.
+                    outfile = os.path.join(self.outdir, "cl_comparison.png")
+                    fig.savefig(outfile)
 
             compare = blsq > 1e-5
             ref = cl_in[compare] * blsq[compare] * deconv[compare] ** 2
