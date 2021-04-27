@@ -244,19 +244,20 @@ class SimTotalconvolve(Operator):
         env = Environment.get()
         nthreads = env.max_threads()
 
+        verbose = self.verbosity > 0
+        if use_mpi:
+            self.comm.barrier()
+            verbose = verbose and self.comm.rank == 0
+            if self.comm.size > 1 and self.comm.rank == 0:
+                log.warning(
+                    "communicator size>1: totalconvolve will work, "
+                    "but will waste CPU and memory. To be fixed in "
+                    "future releases."
+                )
+
         all_detectors = self._get_all_detectors(data, detectors)
 
         for det in all_detectors:
-            verbose = self.verbosity > 0
-            if use_mpi:
-                verbose = verbose and self.comm.rank == 0
-                if self.comm.size > 1:
-                    log.warning(
-                        "communicator size>1: totalconvolve will work, "
-                        "but will waste CPU and memory. To be fixed in "
-                        "future releases."
-                    )
-
             # Expand detector pointing
             self.detector_pointing.apply(data, detectors=[det])
 
@@ -521,10 +522,52 @@ class SimTotalconvolve(Operator):
         pnt = np.empty((len(theta), 3))
         pnt[:, 0] = theta
         pnt[:, 1] = phi
-        pnt[:, 2] = psi + np.pi  # FIXME: not clear yet why this is necessary
+        pnt[:, 2] = psi
+        pnt[:, 2] += np.pi  # FIXME: not clear yet why this is necessary
         if verbose:
             timer.report_clear(f"pack input array for detector {det}")
         return pnt
+
+    def conv_and_interpol(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
+        plan = totalconvolve.ConvolverPlan(
+            lmax=lmax,
+            kmax=mmax,
+            sigma=self.oversampling_factor,
+            epsilon=self.epsilon,
+            nthreads=nthreads,
+        )
+        myrank, nranks = (0, 1) if not use_mpi else (self.comm.rank, self.comm.size)
+        cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
+        cube[()] = 0
+
+        # convolution part
+        # the work in this nested loop can be distributed over skycomp.shape[0]*(mmax+1) tasks
+        for icomp in range(skycomp.shape[0]):
+            if (icomp * (mmax + 1)) % nranks == myrank:
+                plan.getPlane(skycomp[icomp, :], beamcomp[icomp, :], 0, cube[0:1])
+            for mbeam in range(1, mmax + 1):
+                if (icomp * (mmax + 1) + mbeam) % nranks == myrank:
+                    plan.getPlane(
+                        skycomp[icomp, :],
+                        beamcomp[icomp, :],
+                        mbeam,
+                        cube[2 * mbeam - 1 : 2 * mbeam + 1],
+                    )
+        if nranks > 1:  # broadcast the results
+            for icomp in range(skycomp.shape[0]):
+                cube[0:1] = self.comm.bcast(
+                    cube[0:1], root=(icomp * (mmax + 1)) % nranks
+                )
+            for mbeam in range(1, mmax + 1):
+                cube[2 * mbeam - 1 : 2 * mbeam + 1] = self.comm.bcast(
+                    cube[2 * mbeam - 1 : 2 * mbeam + 1],
+                    root=(icomp * (mmax + 1) + mbeam) % nranks,
+                )
+
+        plan.prepPsi(cube)
+        res = np.empty(pnt.shape[0], dtype=np.float64)
+        plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
+        return res
 
     def convolve(self, sky, beam, lmax, mmax, pnt, psi_pol, det, nthreads, verbose):
         timer = Timer()
@@ -532,68 +575,31 @@ class SimTotalconvolve(Operator):
 
         if self.hwp_angle is None:
             # simply compute TT+EE+BB
-            convolver = totalconvolve.Interpolator(
-                np.array(sky),
-                np.array(beam),
-                False,
-                int(lmax),
-                int(mmax),
-                epsilon=float(self.epsilon),
-                ofactor=float(self.oversampling_factor),
-                nthreads=nthreads,
+            convolved_data = self.conv_and_interpol(
+                np.array(sky), np.array(beam), lmax, mmax, pnt, nthreads
             )
-            convolved_data = convolver.interpol(pnt).reshape((-1,))
         else:
             # TT
-            convolver = totalconvolve.Interpolator(
-                np.array([sky[0]]),
-                np.array([beam[0]]),
-                False,
-                int(lmax),
-                int(mmax),
-                epsilon=float(self.epsilon),
-                ofactor=float(self.oversampling_factor),
-                nthreads=nthreads,
+            convolved_data = self.conv_and_interpol(
+                np.array([sky[0]]), np.array([beam[0]]), lmax, mmax, pnt, nthreads
             )
-            convolved_data = convolver.interpol(pnt).reshape((-1,))
             if self.pol:
                 # EE+BB
                 slm = np.array([sky[1], sky[2]])
                 blm = np.array([beam[1], beam[2]])
-                convolver = totalconvolve.Interpolator(
-                    slm,
-                    blm,
-                    False,
-                    int(lmax),
-                    int(mmax),
-                    epsilon=float(self.epsilon),
-                    ofactor=float(self.oversampling_factor),
-                    nthreads=nthreads,
-                )
-                convolved_data += np.cos(4 * psi_pol) * convolver.interpol(pnt).reshape(
-                    (-1,)
-                )
+                convolved_data += np.cos(4 * psi_pol) * self.conv_and_interpol(
+                    slm, blm, lmax, mmax, pnt, nthreads
+                ).reshape((-1,))
                 # -EB+BE
                 blm = np.array([-beam[2], beam[1]])
-                convolver = totalconvolve.Interpolator(
-                    slm,
-                    blm,
-                    False,
-                    int(lmax),
-                    int(mmax),
-                    epsilon=float(self.epsilon),
-                    ofactor=float(self.oversampling_factor),
-                    nthreads=nthreads,
-                )
-                convolved_data += np.sin(4 * psi_pol) * convolver.interpol(pnt).reshape(
-                    (-1,)
-                )
+                convolved_data += np.sin(4 * psi_pol) * self.conv_and_interpol(
+                    slm, blm, lmax, mmax, pnt, nthreads
+                ).reshape((-1,))
 
         if verbose:
             timer.report_clear(f"convolve detector {det}")
             timer.report_clear(f"extract convolved data for {det}")
 
-        del convolver
         convolved_data *= 0.5  # FIXME: not sure where this factor comes from
         return convolved_data
 
