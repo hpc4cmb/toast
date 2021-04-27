@@ -46,7 +46,7 @@ class SimGainTest(MPITestCase):
                 old[det] =  (ref).copy()
             old_data.append(old )
 
-        drifter  = ops.GainDrifter(det_data=key, drift_mode="linear")
+        drifter  = ops.GainDrifter(det_data=key, drift_mode="linear_drift")
         drifter.exec(data)
         for obs, old  in zip(data.obs, old_data):
             telescope = obs.telescope.uid
@@ -93,7 +93,7 @@ class SimGainTest(MPITestCase):
                 old[det] =  (ref).copy()
             old_data.append(old )
 
-        drifter  = ops.GainDrifter(det_data=key, drift_mode="thermaldrift")
+        drifter  = ops.GainDrifter(det_data=key, drift_mode="thermal_drift")
         drifter.exec(data)
 
 
@@ -117,7 +117,7 @@ class SimGainTest(MPITestCase):
                 old[det] =  (ref).copy()
             old_data.append(old )
 
-        drifter  = ops.GainDrifter(det_data=key, drift_mode="slowdrift")
+        drifter  = ops.GainDrifter(det_data=key, drift_mode="slow_drift")
         drifter.exec(data)
 
     def test_slow_drift_commonmode(self):
@@ -164,7 +164,7 @@ class SimGainTest(MPITestCase):
 
         oldmap = data[binner.binned][0].copy()
 
-        drifter  = ops.GainDrifter(det_data=key, sigma_drift=1e-1,drift_mode="slowdrift",
+        drifter  = ops.GainDrifter(det_data=key, drift_mode="slow_drift",
                                         include_common_mode=True )
         drifter.exec(data)
 
@@ -177,7 +177,6 @@ class SimGainTest(MPITestCase):
             sync_type="alltoallv",
         )
         binner2.apply(data)
-        import pdb; pdb.set_trace()
 
         newmap = data[binner2.binned][0].copy()
 
