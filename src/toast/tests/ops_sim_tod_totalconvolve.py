@@ -45,16 +45,17 @@ class SimTotalconvolveTest(MPITestCase):
         self.fname_beam_asym = os.path.join(self.outdir, "beam_alm.asym.fits")
         # Point source sky for Conviqt comparison
         self.fname_sky_ps = os.path.join(self.outdir, "sky_alm.ps.fits")
+        myrank = 0 if self.comm is None else self.comm.rank
 
         # Synthetic sky and beam (a_lm expansions)
         self.slm = create_fake_sky_alm(self.lmax, self.fwhm_sky)
         self.slm[1:] = 0  # No polarization
-        if self.comm.rank == 0:
+        if myrank == 0:
             hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
 
         self.slm_ps = create_fake_sky_alm(self.lmax, self.fwhm_sky, pointsources=True)
         self.slm_ps[1:] = 0  # No polarization
-        if self.comm.rank == 0:
+        if myrank == 0:
             hp.write_alm(self.fname_sky_ps, self.slm_ps, lmax=self.lmax, overwrite=True)
 
         self.blm = create_fake_beam_alm(
@@ -94,7 +95,7 @@ class SimTotalconvolveTest(MPITestCase):
             fwhm_y=self.fwhm_beam,
             separate_IQU=True,
         )
-        if self.comm.rank == 0:
+        if myrank == 0:
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_I000.fits"),
                 blm_I,
@@ -193,8 +194,7 @@ class SimTotalconvolveTest(MPITestCase):
         )
         binner.apply(data)
         path_totalconvolve = os.path.join(self.outdir, "toast_bin.totalconvolve.fits")
-        if self.comm.rank == 0:
-            write_healpix_fits(data[binner.binned], path_totalconvolve, nest=False)
+        write_healpix_fits(data[binner.binned], path_totalconvolve, nest=False)
 
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
@@ -206,8 +206,7 @@ class SimTotalconvolveTest(MPITestCase):
         )
         binner.apply(data)
         path_conviqt = os.path.join(self.outdir, "toast_bin.conviqt.fits")
-        if self.comm.rank == 0:
-            write_healpix_fits(data[binner.binned], path_conviqt, nest=False)
+        write_healpix_fits(data[binner.binned], path_conviqt, nest=False)
 
         rank = 0
         if self.comm is not None:
@@ -337,8 +336,7 @@ class SimTotalconvolveTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
-        if self.comm.rank == 0:
-            write_healpix_fits(data[binner.binned], toast_bin_path, nest=False)
+        write_healpix_fits(data[binner.binned], toast_bin_path, nest=False)
 
         rank = 0
         if self.comm is not None:

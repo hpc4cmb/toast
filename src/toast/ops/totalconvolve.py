@@ -555,12 +555,12 @@ class SimTotalconvolve(Operator):
                     )
         if nranks > 1:  # broadcast the results
             for icomp in range(skycomp.shape[0]):
-                cube[0:1] = self.comm.bcast(
-                    cube[0:1], root=(icomp * (mmax + 1)) % nranks
+                self.comm.Bcast(
+                    [cube[0:1], MPI.DOUBLE], root=(icomp * (mmax + 1)) % nranks
                 )
             for mbeam in range(1, mmax + 1):
-                cube[2 * mbeam - 1 : 2 * mbeam + 1] = self.comm.bcast(
-                    cube[2 * mbeam - 1 : 2 * mbeam + 1],
+                self.comm.Bcast(
+                    [cube[2 * mbeam - 1 : 2 * mbeam + 1], MPI.DOUBLE],
                     root=(icomp * (mmax + 1) + mbeam) % nranks,
                 )
 
