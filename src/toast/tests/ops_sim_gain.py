@@ -18,7 +18,7 @@ from ..pixels import PixelDistribution, PixelData
 from ..pixels_io import write_healpix_fits
 
 from ..covariance import covariance_apply
-from ._helpers import create_outdir, create_satellite_data, create_fake_sky
+from ._helpers import create_outdir, create_satellite_data,create_satellite_data_big, create_fake_sky
 
 
 class SimGainTest(MPITestCase):
@@ -76,7 +76,7 @@ class SimGainTest(MPITestCase):
 
     def test_thermal_drift(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm, )
+        data = create_satellite_data_big(self.comm, )
 
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -100,7 +100,7 @@ class SimGainTest(MPITestCase):
 
     def test_slow_drift(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm, )
+        data = create_satellite_data_big(self.comm, )
 
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -122,7 +122,7 @@ class SimGainTest(MPITestCase):
 
     def test_slow_drift_commonmode(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm, )
+        data = create_satellite_data_big(self.comm, )
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
@@ -165,7 +165,7 @@ class SimGainTest(MPITestCase):
         oldmap = data[binner.binned][0].copy()
 
         drifter  = ops.GainDrifter(det_data=key, drift_mode="slow_drift",
-                                        include_common_mode=True )
+                                        detector_mismatch=0. )
         drifter.exec(data)
 
         binner2 = ops.BinMap(
