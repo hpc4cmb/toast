@@ -201,7 +201,11 @@ class SimConviqtTest(MPITestCase):
             if self.comm is None or self.comm.size == 1:
                 sky = hp.alm2map(self.slm[0], self.nside, lmax=self.lmax, verbose=False)
                 beam = hp.alm2map(
-                    self.blm[0], self.nside, lmax=self.lmax, mmax=self.mmax, verbose=False
+                    self.blm[0],
+                    self.nside,
+                    lmax=self.lmax,
+                    mmax=self.mmax,
+                    verbose=False,
                 )
 
                 fig = plt.figure(figsize=[12, 8])
@@ -210,7 +214,7 @@ class SimConviqtTest(MPITestCase):
                 hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
                 hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
                 hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
-                
+
                 ell = np.arange(self.lmax + 1)
                 ax = fig.add_subplot(nrow, ncol, 5)
                 ax.plot(ell[1:], cl_in[1:], label="input")
@@ -228,7 +232,7 @@ class SimConviqtTest(MPITestCase):
                 ax.set_xscale("log")
                 ax.set_yscale("log")
                 ax.set_ylim([1e-20, 1e1])
-                
+
                 # For some reason, matplotlib hangs with multiple tasks,
                 # even if only one writes.
                 outfile = os.path.join(self.outdir, "cl_comparison.png")
@@ -249,7 +253,6 @@ class SimConviqtTest(MPITestCase):
             fail = self.comm.bcast(fail, root=0)
 
         self.assertFalse(fail)
-
 
         return
 

@@ -231,7 +231,7 @@ class SimTotalconvolveTest(MPITestCase):
 
             map_totalconvolve = hp.read_map(path_totalconvolve)
             map_conviqt = hp.read_map(path_conviqt)
-            
+
             # For some reason, matplotlib hangs with multiple tasks,
             # even if only one writes.
             if self.comm is None or self.comm.size == 1:
@@ -399,7 +399,7 @@ class SimTotalconvolveTest(MPITestCase):
                 hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
                 hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
                 hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
-    
+
                 ell = np.arange(self.lmax + 1)
                 ax = fig.add_subplot(nrow, ncol, 5)
                 ax.plot(ell[1:], cl_in[1:], label="input")
@@ -417,7 +417,7 @@ class SimTotalconvolveTest(MPITestCase):
                 ax.set_xscale("log")
                 ax.set_yscale("log")
                 ax.set_ylim([1e-20, 1e1])
-    
+
                 if self.comm is None or self.comm.size == 1:
                     # For some reason, matplotlib hangs with multiple tasks,
                     # even if only one writes.
