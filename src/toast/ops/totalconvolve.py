@@ -251,8 +251,7 @@ class SimTotalconvolve(Operator):
             if self.comm.size > 1 and self.comm.rank == 0:
                 log.warning(
                     "communicator size>1: totalconvolve will work, "
-                    "but will waste CPU and memory. To be fixed in "
-                    "future releases."
+                    "but will waste memory. To be fixed in future releases."
                 )
 
         all_detectors = self._get_all_detectors(data, detectors)
