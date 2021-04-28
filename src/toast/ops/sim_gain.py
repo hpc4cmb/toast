@@ -8,14 +8,13 @@ import numpy as np
 from astropy import units as u
 from ..timing import function_timer
 
-from ..traits import trait_docs, Int,Float, Unicode, Bool, Quantity
+from ..traits import trait_docs, Int, Float, Unicode, Bool, Quantity
 
 from .operator import Operator
 
 from ..utils import Environment, Logger
 from .. import rng
-from .sim_tod_noise  import sim_noise_timestream
-
+from .sim_tod_noise import sim_noise_timestream
 
 
 @trait_docs
@@ -24,7 +23,7 @@ class GainDrifter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data  = Unicode(
+    det_data = Unicode(
         "signal", help="Observation detdata key to inject the gain drift"
     )
 
@@ -32,44 +31,48 @@ class GainDrifter(Operator):
         False, help="If True, inject a common drift to all the local detector group "
     )
 
-
     fknee_drift = Quantity(
         20.0 * u.mHz,
         help="fknee of the drift signal",
     )
     cutoff_freq = Quantity(
-            0.2 * u.mHz,
-            help="cutoff  frequency to simulate a slow  drift (assumed < sampling rate)",
-        )
+        0.2 * u.mHz,
+        help="cutoff  frequency to simulate a slow  drift (assumed < sampling rate)",
+    )
     sigma_drift = Float(
-        1e-3 ,
+        1e-3,
         help="dimensionless amplitude  of the drift signal",
     )
     alpha_drift = Float(
-        1. ,
+        1.0,
         help="spectral index  of the drift signal spectrum",
     )
     detector_mismatch = Float(
-        1. ,
+        1.0,
         help="mismatch between detectors for `thermal_drift` and `slow_drift` ranging from 0 to 1. Default value implies no common mode injected",
     )
     thermal_fluctuation_amplitude = Float(
-        1e-2 ,
+        1e-2,
         help="Amplitude of thermal fluctuation for `thermal_drift`. ",
     )
     realization = Int(0, help="integer to set a different random seed ")
     component = Int(0, allow_none=False, help="Component index for this simulation")
 
-    drift_mode= Unicode(
-        "linear", help="a string from [linear_drift, thermal_drift, slow_drift] to set the way the drift is modelled")
-
-    focalplane_group  = Unicode(
-        "wafer", help='focalplane table column to use for grouping detectors: can be any string like "wafer", "pixel"'
+    drift_mode = Unicode(
+        "linear",
+        help="a string from [linear_drift, thermal_drift, slow_drift] to set the way the drift is modelled",
     )
 
-    def get_psd(self, f ):
-        return  self.sigma_drift**2 *(self.fknee_drift.to_value(u.Hz)/f)**self.alpha_drift
+    focalplane_group = Unicode(
+        "wafer",
+        help='focalplane table column to use for grouping detectors: can be any string like "wafer", "pixel"',
+    )
 
+    def get_psd(self, f):
+        return (
+            self.sigma_drift ** 2
+            * (self.fknee_drift.to_value(u.Hz) / f) ** self.alpha_drift
+        )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -97,7 +100,7 @@ class GainDrifter(Operator):
                 # Nothing to do for this observation
                 continue
             comm = ob.comm
-            rank= ob.comm_rank
+            rank = ob.comm_rank
             # Make sure detector data output exists
             ob.detdata.ensure(self.det_data, detectors=dets)
             obsindx = ob.uid
@@ -107,7 +110,9 @@ class GainDrifter(Operator):
             fsampl = focalplane.sample_rate.to_value(u.Hz)
 
             if self.drift_mode == "linear_drift":
-                key1 = self.realization * 4294967296 + telescope * 65536 + self.component
+                key1 = (
+                    self.realization * 4294967296 + telescope * 65536 + self.component
+                )
                 counter1 = 0
                 counter2 = 0
 
@@ -122,128 +127,135 @@ class GainDrifter(Operator):
                         counter=(counter1, counter2),
                     )
                     gf = 1 + rngdata[0] * self.sigma_drift
-                    gain = (gf-1) * np.linspace(0,1,size ) + 1
+                    gain = (gf - 1) * np.linspace(0, 1, size) + 1
 
                     ob.detdata[self.det_data][det] *= gain
 
             elif self.drift_mode == "thermal_drift":
-                fmin = fsampl / (4*size)
-                #the factor of 4x the length of the sample vector  is
+                fmin = fsampl / (4 * size)
+                # the factor of 4x the length of the sample vector  is
                 # to avoid circular correlations
-                freq= np.logspace(np.log10(fmin),
-                                np.log10(fsampl/2.), 1000 )
-                psd = self.get_psd(freq )
-                det_group= np.unique(focalplane.detector_data[self.focalplane_group])
-                thermal_fluct=[]
+                freq = np.logspace(np.log10(fmin), np.log10(fsampl / 2.0), 1000)
+                psd = self.get_psd(freq)
+                det_group = np.unique(focalplane.detector_data[self.focalplane_group])
+                thermal_fluct = []
                 for iw, w in enumerate(det_group):
                     # simulate a noise-like timestream
-                    gain  = sim_noise_timestream(
-                        realization=self.realization ,
+                    gain = sim_noise_timestream(
+                        realization=self.realization,
                         telescope=ob.telescope.uid,
-                        component=self.component ,
+                        component=self.component,
                         obsindx=ob.uid,
                         # we generate the same timestream for the
                         # detectors in the same group
-                        detindx=iw ,
+                        detindx=iw,
                         rate=fsampl,
                         firstsamp=ob.local_index_offset,
                         samples=ob.n_local_samples,
-                        freq=freq ,
-                        psd=psd ,
-                        py=False ,
+                        freq=freq,
+                        psd=psd,
+                        py=False,
                     )
-                    thermal_fluct.append(gain )
-                thermal_fluct= np.array(thermal_fluct)
+                    thermal_fluct.append(gain)
+                thermal_fluct = np.array(thermal_fluct)
 
                 for det in dets:
                     detindx = focalplane[det]["uid"]
-                    #we inject a detector mismatch in the thermal thermal_fluctuation
+                    # we inject a detector mismatch in the thermal thermal_fluctuation
                     # only if the mismatch !=0
-                    if self.detector_mismatch !=0 :
-                        key1 = self.realization * 429496123345 + telescope * 6512345 + self.component
+                    if self.detector_mismatch != 0:
+                        key1 = (
+                            self.realization * 429496123345
+                            + telescope * 6512345
+                            + self.component
+                        )
                         counter1 = 0
                         counter2 = 0
                         key2 = obsindx * 12345667296 + detindx
-                        rngdata =  rng.random(
-                                        1,
-                                        sampler="gaussian",
-                                        key=(key1, key2),
-                                        counter=(counter1, counter2),
-                                        )
-                        rngdata = (1+ rngdata[0] *self.detector_mismatch)
-                        thermal_factor= self.thermal_fluctuation_amplitude*rngdata
-                    else :
-                        thermal_factor= self.thermal_fluctuation_amplitude
+                        rngdata = rng.random(
+                            1,
+                            sampler="gaussian",
+                            key=(key1, key2),
+                            counter=(counter1, counter2),
+                        )
+                        rngdata = 1 + rngdata[0] * self.detector_mismatch
+                        thermal_factor = self.thermal_fluctuation_amplitude * rngdata
+                    else:
+                        thermal_factor = self.thermal_fluctuation_amplitude
 
-                    #identify to which group the detector belongs
-                    mask = focalplane[det][self.focalplane_group] ==det_group
-                    #assign the thermal fluct. simulated for that det. group
-                    ob.detdata[self.det_data][det] *= (1+ thermal_fluct[mask][0]*thermal_factor)
+                    # identify to which group the detector belongs
+                    mask = focalplane[det][self.focalplane_group] == det_group
+                    # assign the thermal fluct. simulated for that det. group
+                    ob.detdata[self.det_data][det] *= (
+                        1 + thermal_fluct[mask][0] * thermal_factor
+                    )
 
             elif self.drift_mode == "slow_drift":
-                fmin = fsampl / (4*size)
-                #the factor of 4x the length of the sample vector  is
+                fmin = fsampl / (4 * size)
+                # the factor of 4x the length of the sample vector  is
                 # to avoid circular correlations
-                freq= np.logspace(np.log10(fmin),
-                                np.log10(fsampl/2.), 1000 )
+                freq = np.logspace(np.log10(fmin), np.log10(fsampl / 2.0), 1000)
                 # making sure that the cut-off  frequency
-                #is always above the  observation time scale .
-                cutoff = np.max([self.cutoff_freq.to_value(u.Hz ), fsampl/size  ])
-                argmin= np.argmin ( np.fabs( freq-cutoff )  )
+                # is always above the  observation time scale .
+                cutoff = np.max([self.cutoff_freq.to_value(u.Hz), fsampl / size])
+                argmin = np.argmin(np.fabs(freq - cutoff))
 
-                psd =np.concatenate([self.get_psd(freq[:argmin] ),
-                                         np.zeros_like(freq[argmin:])] )
-                det_group= np.unique(focalplane.detector_data[self.focalplane_group])
+                psd = np.concatenate(
+                    [self.get_psd(freq[:argmin]), np.zeros_like(freq[argmin:])]
+                )
+                det_group = np.unique(focalplane.detector_data[self.focalplane_group])
 
-                #if the mismatch is maximum (i.e. =1 ) we don't
+                # if the mismatch is maximum (i.e. =1 ) we don't
                 # inject the common mode but only an indepedendent slow drift
 
-                if self.detector_mismatch == 1 :
-                    gain_common=np.zeros_like(det_group, dtype=np.float_)
+                if self.detector_mismatch == 1:
+                    gain_common = np.zeros_like(det_group, dtype=np.float_)
                 else:
-                    gain_common=[]
+                    gain_common = []
                     for iw, w in enumerate(det_group):
-                        gain_common .append( sim_noise_timestream(
-                            realization=self.realization ,
-                            telescope=ob.telescope.uid,
-                            component=self.component ,
-                            obsindx=ob.uid,
-                            detindx=iw, # drift common to all detectors
-                            rate=fsampl,
-                            firstsamp=ob.local_index_offset,
-                            samples=ob.n_local_samples,
-                            freq=freq ,
-                            psd=psd ,
-                            py=False ,
+                        gain_common.append(
+                            sim_noise_timestream(
+                                realization=self.realization,
+                                telescope=ob.telescope.uid,
+                                component=self.component,
+                                obsindx=ob.uid,
+                                detindx=iw,  # drift common to all detectors
+                                rate=fsampl,
+                                firstsamp=ob.local_index_offset,
+                                samples=ob.n_local_samples,
+                                freq=freq,
+                                psd=psd,
+                                py=False,
+                            )
                         )
-                    )
-                gain_common=np.array(gain_common)
-
+                gain_common = np.array(gain_common)
 
                 for det in dets:
                     detindx = focalplane[det]["uid"]
-                    size= ob.detdata[self.det_data][det].size
+                    size = ob.detdata[self.det_data][det].size
 
                     # simulate a noise-like timestream
 
-                    gain  = sim_noise_timestream(
-                        realization=self.realization ,
+                    gain = sim_noise_timestream(
+                        realization=self.realization,
                         telescope=ob.telescope.uid,
-                        component=self.component ,
+                        component=self.component,
                         obsindx=ob.uid,
                         detindx=detindx,
                         rate=fsampl,
                         firstsamp=ob.local_index_offset,
                         samples=ob.n_local_samples,
-                        freq=freq ,
-                        psd=psd ,
-                        py=False ,
+                        freq=freq,
+                        psd=psd,
+                        py=False,
                     )
-                    #identify to which group the detector belongs
-                    mask = focalplane[det][self.focalplane_group] ==det_group
-                    #assign the thermal fluct. simulated for that det. group
-                    ob.detdata[self.det_data][det] *= (1+ (self.detector_mismatch *gain)
-                                                        + (1-self.detector_mismatch )* gain_common[mask][0])
-
+                    # identify to which group the detector belongs
+                    mask = focalplane[det][self.focalplane_group] == det_group
+                    # assign the thermal fluct. simulated for that det. group
+                    ob.detdata[self.det_data][det] *= (
+                        1
+                        + (self.detector_mismatch * gain)
+                        + (1 - self.detector_mismatch) * gain_common[mask][0]
+                    )
 
         return
