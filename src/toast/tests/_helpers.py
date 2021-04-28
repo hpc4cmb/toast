@@ -89,11 +89,11 @@ def create_comm(mpicomm):
     return toastcomm
 
 
-def create_space_telescope(group_size, sample_rate=10.0 * u.Hz):
+def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1):
     """Create a fake satellite telescope with at least one detector per process."""
     npix = 1
     ring = 1
-    while 2 * npix < group_size:
+    while 2 * npix < group_size * pixel_per_process:
         npix += 6 * ring
         ring += 1
     fp = fake_hexagon_focalplane(
@@ -106,21 +106,6 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz):
 
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
-
-def create_space_telescope_big(group_size,pixel_per_process=1, sample_rate=10.0 * u.Hz):
-    """Create a fake satellite telescope with at least one detector per process."""
-    npix = group_size*pixel_per_process
-    fp = fake_hexagon_focalplane(
-        n_pix=npix,
-        sample_rate=sample_rate,
-        psd_fmin=1.0e-5 * u.Hz,
-        psd_net=0.05 * u.K * np.sqrt(1 * u.second),
-        psd_fknee=(sample_rate / 2000.0),
-    )
-
-    site = SpaceSite("L2")
-    return Telescope("test", focalplane=fp, site=site)
-
 
 
 # def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz):
@@ -222,7 +207,6 @@ def create_satellite_data(
     return data
 
 
-
 def create_satellite_data_big(
     mpicomm, obs_per_group=1, sample_rate=10.0 * u.Hz, obs_time=10.0 * u.minute
 ):
@@ -245,20 +229,25 @@ def create_satellite_data_big(
     toastcomm = create_comm(mpicomm)
     data = Data(toastcomm)
 
-    tele = create_space_telescope_big(group_size=toastcomm.group_size,pixel_per_process=7,  sample_rate=sample_rate)
+    tele = create_space_telescope(
+        group_size=toastcomm.group_size, pixel_per_process=7, sample_rate=sample_rate
+    )
     det_props = tele.focalplane.detector_data
     fov = tele.focalplane.field_of_view
     sample_rate = tele.focalplane.sample_rate
-    #(Add columns to det_props, which is an astropy QTable)
-    #divide the detector into two groups
-    det_props.add_column(Column(name='wafer',  data=[ f"W0{detindx%2}"  for detindx, x in enumerate(det_props)] ))
+    # (Add columns to det_props, which is an astropy QTable)
+    # divide the detector into two groups
+    det_props.add_column(
+        Column(
+            name="wafer", data=[f"W0{detindx%2}" for detindx, x in enumerate(det_props)]
+        )
+    )
     new_telescope = Telescope(
-        "Big Satellite",focalplane=Focalplane(
-            detector_data=det_props,
-            field_of_view=fov,
-            sample_rate=sample_rate
+        "Big Satellite",
+        focalplane=Focalplane(
+            detector_data=det_props, field_of_view=fov, sample_rate=sample_rate
         ),
-        site=tele.site
+        site=tele.site,
     )
     # Create a schedule
 
@@ -285,8 +274,6 @@ def create_satellite_data_big(
     sim_sat.apply(data)
 
     return data
-
-
 
 
 def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
