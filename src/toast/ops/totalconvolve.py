@@ -528,7 +528,10 @@ class SimTotalconvolve(Operator):
         return pnt
 
     # simple approach when there is only one task
-    def conv_and_interpol_serial(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
+    def conv_and_interpol_serial(
+        self, skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+    ):
+        t_conv.start()
         plan = totalconvolve.ConvolverPlan(
             lmax=lmax,
             kmax=mmax,
@@ -551,12 +554,18 @@ class SimTotalconvolve(Operator):
                 )
 
         plan.prepPsi(cube)
+        t_conv.stop()
+        t_inter.start()
         res = np.empty(pnt.shape[0], dtype=np.float64)
         plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
+        t_inter.stop()
         return res
 
     # MPI version storing the full data cube at every MPI task (wasteful)
-    def conv_and_interpol_mpi(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
+    def conv_and_interpol_mpi(
+        self, skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+    ):
+        t_conv.start()
         plan = totalconvolve.ConvolverPlan(
             lmax=lmax,
             kmax=mmax,
@@ -593,15 +602,21 @@ class SimTotalconvolve(Operator):
                 )
 
         plan.prepPsi(cube)
+        t_conv.stop()
+        t_inter.start()
         res = np.empty(pnt.shape[0], dtype=np.float64)
         plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
+        t_inter.stop()
         return res
 
     # MPI version with shared memory tricks, storing the full data cube only
     # once per node.
-    def conv_and_interpol_mpi_new(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
+    def conv_and_interpol_mpi_shmem(
+        self, skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+    ):
         from pshmem import MPIShared
 
+        t_conv.start()
         plan = totalconvolve.ConvolverPlan(
             lmax=lmax,
             kmax=mmax,
@@ -620,7 +635,10 @@ class SimTotalconvolve(Operator):
             # on every other task, intercomm will be MPI.COMM_NULL.
             color = 0 if intracomm.rank == 0 else MPI.UNDEFINED
             intercomm = self.comm.Split(color)
-            if intracomm.rank == 0:  # we are on the master task of intracomm
+            if intracomm.rank == 0:
+                # We are on the master task of intracomm and all other tasks on
+                # the node will be idle during the next computation step,
+                # so we can hijack all their threads.
                 nodeplan = totalconvolve.ConvolverPlan(
                     lmax=lmax,
                     kmax=mmax,
@@ -660,55 +678,74 @@ class SimTotalconvolve(Operator):
                 nodeplan.prepPsi(cube)
                 del nodeplan
 
+            t_conv.stop()
+            t_inter.start()
             # Interpolation part
             # No fancy communication is necessary here, since every task has
             # access to the full data cube.
             res = np.empty(pnt.shape[0], dtype=np.float64)
             plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
+            t_inter.stop()
             del plan
             del cube
         return res
 
-    def conv_and_interpol(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
+    def conv_and_interpol(
+        self, skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+    ):
         if (not use_mpi) or (self.comm.size == 1):
             return self.conv_and_interpol_serial(
-                skycomp, beamcomp, lmax, mmax, pnt, nthreads
+                skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
             )
         else:
-            return self.conv_and_interpol_mpi_new(
-                skycomp, beamcomp, lmax, mmax, pnt, nthreads
+            return self.conv_and_interpol_mpi_shmem(
+                skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
             )
 
     def convolve(self, sky, beam, lmax, mmax, pnt, psi_pol, det, nthreads, verbose):
-        timer = Timer()
-        timer.start()
+        t_conv = Timer()
+        t_inter = Timer()
 
         if self.hwp_angle is None:
             # simply compute TT+EE+BB
             convolved_data = self.conv_and_interpol(
-                np.array(sky), np.array(beam), lmax, mmax, pnt, nthreads
+                np.array(sky),
+                np.array(beam),
+                lmax,
+                mmax,
+                pnt,
+                nthreads,
+                t_conv,
+                t_inter,
             )
         else:
             # TT
             convolved_data = self.conv_and_interpol(
-                np.array([sky[0]]), np.array([beam[0]]), lmax, mmax, pnt, nthreads
+                np.array([sky[0]]),
+                np.array([beam[0]]),
+                lmax,
+                mmax,
+                pnt,
+                nthreads,
+                t_conv,
+                t_inter,
             )
             if self.pol:
                 # EE+BB
                 slm = np.array([sky[1], sky[2]])
                 blm = np.array([beam[1], beam[2]])
                 convolved_data += np.cos(4 * psi_pol) * self.conv_and_interpol(
-                    slm, blm, lmax, mmax, pnt, nthreads
+                    slm, blm, lmax, mmax, pnt, nthreads, t_conv, t_inter
                 ).reshape((-1,))
                 # -EB+BE
                 blm = np.array([-beam[2], beam[1]])
                 convolved_data += np.sin(4 * psi_pol) * self.conv_and_interpol(
-                    slm, blm, lmax, mmax, pnt, nthreads
+                    slm, blm, lmax, mmax, pnt, nthreads, t_conv, t_inter
                 ).reshape((-1,))
 
         if verbose:
-            timer.report_clear(f"convolve detector {det}")
-            timer.report_clear(f"extract convolved data for {det}")
+            t_conv.report_clear(f"convolve detector {det}")
+            t_inter.report_clear(f"extract convolved data for {det}")
 
         convolved_data *= 0.5  # FIXME: not sure where this factor comes from
         return convolved_data
