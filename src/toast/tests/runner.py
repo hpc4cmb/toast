@@ -163,7 +163,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_map))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_madam))
-        # suite.addTest(loader.loadTestsFromModule(test_ops_gainscrambler))
+        suite.addTest(loader.loadTestsFromModule(test_ops_gainscrambler))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
