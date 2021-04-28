@@ -53,7 +53,7 @@ class SimGainTest(MPITestCase):
             old_data.append(old)
 
         drifter = ops.GainDrifter(det_data=key, drift_mode="linear_drift")
-        drifter.exec(data)
+        drifter.apply(data)
         for obs, old in zip(data.obs, old_data):
             telescope = obs.telescope.uid
             focalplane = obs.telescope.focalplane
@@ -134,7 +134,7 @@ class SimGainTest(MPITestCase):
             drift_mode="thermal_drift",
             detector_mismatch=0.7,
         )
-        drifter.exec(data)
+        drifter.apply(data)
 
         binner2 = ops.BinMap(
             pixel_dist="pixel_dist",
@@ -214,7 +214,7 @@ class SimGainTest(MPITestCase):
             det_data=key,
             drift_mode="slow_drift",
         )
-        drifter.exec(data)
+        drifter.apply(data)
 
         binner2 = ops.BinMap(
             pixel_dist="pixel_dist",
@@ -288,7 +288,7 @@ class SimGainTest(MPITestCase):
         drifter = ops.GainDrifter(
             det_data=key, drift_mode="slow_drift", detector_mismatch=0.0
         )
-        drifter.exec(data)
+        drifter.apply(data)
 
         binner2 = ops.BinMap(
             pixel_dist="pixel_dist",

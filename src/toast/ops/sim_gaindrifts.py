@@ -259,3 +259,32 @@ class GainDrifter(Operator):
                     )
 
         return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": list(),
+            "shared": [
+                self.boresight,
+            ],
+            "detdata": list(),
+            "intervals": list(),
+        }
+        if self.view is not None:
+            req["intervals"].append(self.view)
+        return req
+
+    def _provides(self):
+        prov = {
+            "meta": list(),
+            "shared": list(),
+            "detdata": [
+                self.det_data,
+            ],
+        }
+        return prov
+
+    def _accelerators(self):
+        return list()

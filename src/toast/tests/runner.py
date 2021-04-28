@@ -48,7 +48,7 @@ from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_madam as test_ops_madam
 from . import ops_gainscrambler as test_ops_grainscrambler
 
-from . import ops_sim_gain as test_ops_sim_gain
+from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
 
 
 from . import covariance as test_covariance

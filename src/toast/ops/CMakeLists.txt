@@ -32,7 +32,7 @@ install(FILES
     madam_utils.py
 
     conviqt.py
-    sim_gain.py
+    sim_gaindrifts.py
 
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
