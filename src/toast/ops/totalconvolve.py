@@ -614,10 +614,13 @@ class SimTotalconvolve(Operator):
             (plan.Npsi(), plan.Ntheta(), plan.Nphi()), np.float64, self.comm
         ) as shm:
             cube = shm.data
-            # create a communicator "intercomm" with exactly one task per node
+            # Create a separate communicator on every node.
             intracomm = self.comm.Split_type(MPI.COMM_TYPE_SHARED)
-            intercomm = self.comm.Split(intracomm.rank == 0)
-            if intracomm.rank == 0:  # we are on the master node of intracomm
+            # Create a communicator with all master tasks of the intracomms;
+            # on every other task, intercomm will be MPI.COMM_NULL.
+            color = 0 if intracomm.rank == 0 else MPI.UNDEFINED
+            intercomm = self.comm.Split(color)
+            if intracomm.rank == 0:  # we are on the master task of intracomm
                 nodeplan = totalconvolve.ConvolverPlan(
                     lmax=lmax,
                     kmax=mmax,
@@ -625,37 +628,41 @@ class SimTotalconvolve(Operator):
                     epsilon=self.epsilon,
                     nthreads=intracomm.size * nthreads,
                 )
-                myrank, nranks = intercomm.rank, intercomm.size
+                mynode, nnodes = intercomm.rank, intercomm.size
                 cube[()] = 0.0
 
-                # convolution part
-                # the work in this nested loop can be distributed over skycomp.shape[0]*(mmax+1) nodes
+                # Convolution part
+                # The skycomp.shape[0]*(mmax+1) work items in this nested loop
+                # are distributed among the nodes in a round-robin fashion.
                 for icomp in range(skycomp.shape[0]):
-                    if (icomp * (mmax + 1)) % nranks == myrank:
+                    if (icomp * (mmax + 1)) % nnodes == mynode:
                         nodeplan.getPlane(
                             skycomp[icomp, :], beamcomp[icomp, :], 0, cube[0:1]
                         )
                     for mbeam in range(1, mmax + 1):
-                        if (icomp * (mmax + 1) + mbeam) % nranks == myrank:
+                        if (icomp * (mmax + 1) + mbeam) % nnodes == mynode:
                             nodeplan.getPlane(
                                 skycomp[icomp, :],
                                 beamcomp[icomp, :],
                                 mbeam,
                                 cube[2 * mbeam - 1 : 2 * mbeam + 1],
                             )
-                if nranks > 1:  # broadcast the results
+                if nnodes > 1:  # results must be broadcast to all nodes
                     for icomp in range(skycomp.shape[0]):
                         intercomm.Bcast(
-                            [cube[0:1], MPI.DOUBLE], root=(icomp * (mmax + 1)) % nranks
+                            [cube[0:1], MPI.DOUBLE], root=(icomp * (mmax + 1)) % nnodes
                         )
                     for mbeam in range(1, mmax + 1):
                         intercomm.Bcast(
                             [cube[2 * mbeam - 1 : 2 * mbeam + 1], MPI.DOUBLE],
-                            root=(icomp * (mmax + 1) + mbeam) % nranks,
+                            root=(icomp * (mmax + 1) + mbeam) % nnodes,
                         )
                 nodeplan.prepPsi(cube)
                 del nodeplan
 
+            # Interpolation part
+            # No fancy communication is necessary here, since every task has
+            # access to the full data cube.
             res = np.empty(pnt.shape[0], dtype=np.float64)
             plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
             del plan
