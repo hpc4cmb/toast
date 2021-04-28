@@ -6,6 +6,10 @@ import os
 
 use_mpi = None
 MPI = None
+# traitlets require the MPI communicator type to be an actual class,
+# even if None is a valid value
+class MPI_Comm:
+    pass
 
 if use_mpi is None:
     # See if the user has explicitly disabled MPI.
@@ -26,6 +30,7 @@ if use_mpi is None:
                 import mpi4py.MPI as MPI
 
                 use_mpi = True
+                MPI_Comm = MPI.Comm
             except:
                 # There could be many possible exceptions raised...
                 from ._libtoast import Logger

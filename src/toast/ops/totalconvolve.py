@@ -8,33 +8,33 @@ import warnings
 from astropy import units as u
 import numpy as np
 import traitlets
+import healpy as hp
 
 from ..mpi import MPI, MPI_Comm, use_mpi, Comm
 from .operator import Operator
 from .. import qarray as qa
 from ..timing import function_timer
-from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
+from ..traits import trait_docs, Int, Float, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 
 
-conviqt = None
+totalconvolve = None
 
-if use_mpi:
-    try:
-        import libconviqt_wrapper as conviqt
-    except ImportError:
-        conviqt = None
+try:
+    import ducc0.totalconvolve as totalconvolve
+except ImportError:
+    totalconvolve = None
 
 
 def available():
-    """(bool): True if libconviqt is found in the library search path."""
-    global conviqt
-    return (conviqt is not None) and conviqt.available
+    """(bool): True if ducc0.totalconvolve is found in the library search path."""
+    global totalconvolve
+    return totalconvolve is not None
 
 
 @trait_docs
-class SimConviqt(Operator):
-    """Operator which uses libconviqt to generate beam-convolved timestreams."""
+class SimTotalconvolve(Operator):
+    """Operator which uses ducc0.totalconvolve to generate beam-convolved timestreams."""
 
     # Class traits
 
@@ -43,8 +43,7 @@ class SimConviqt(Operator):
     comm = Instance(
         klass=MPI_Comm,
         allow_none=True,
-        help="MPI communicator to use for the convolution. libConviqt does "
-        "not work without MPI.",
+        help="MPI communicator to use for the convolution.",
     )
 
     detector_pointing = Instance(
@@ -118,17 +117,23 @@ class SimConviqt(Operator):
         "If not set, will use the maximum expansion order from file.",
     )
 
+    oversampling_factor = Float(
+        1.8,
+        allow_none=False,
+        help="Oversampling factor for total convolution (useful range is 1.5-2.0)",
+    )
+
+    epsilon = Float(
+        1e-5,
+        allow_none=False,
+        help="Relative accuracy of the interpolation step",
+    )
+
     lmax = Int(
         -1,
         allow_none=False,
         help="Maximum ell (and m).  Actual resolution in the Healpix FITS file may "
         "differ.  If not set, will use the maximum expansion order from file.",
-    )
-
-    order = Int(
-        13,
-        allow_none=False,
-        help="Conviqt order parameter (expert mode)",
     )
 
     verbosity = Int(
@@ -216,8 +221,8 @@ class SimConviqt(Operator):
 
     @property
     def available(self):
-        """Return True if libconviqt is found in the library search path."""
-        return conviqt is not None and conviqt.available
+        """Return True if ducc0.totalconvolve is found in the library search path."""
+        return totalconvolve is not None
 
     hwp_angle = Unicode(
         None, allow_none=True, help="Observation shared key for HWP angle"
@@ -226,10 +231,7 @@ class SimConviqt(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         if not self.available:
-            raise RuntimeError("libconviqt is not available")
-
-        if self.comm is None:
-            raise RuntimeError("libconviqt requires MPI")
+            raise RuntimeError("ducc0.totalconvolve is not available")
 
         if self.detector_pointing is None:
             raise RuntimeError("detector_pointing cannot be None.")
@@ -239,11 +241,22 @@ class SimConviqt(Operator):
         timer = Timer()
         timer.start()
 
+        env = Environment.get()
+        nthreads = env.max_threads()
+
+        verbose = self.verbosity > 0
+        if use_mpi:
+            self.comm.barrier()
+            verbose = verbose and self.comm.rank == 0
+            if self.comm.size > 1 and self.comm.rank == 0:
+                log.warning(
+                    "communicator size>1: totalconvolve will work, "
+                    "but will waste memory. To be fixed in future releases."
+                )
+
         all_detectors = self._get_all_detectors(data, detectors)
 
         for det in all_detectors:
-            verbose = self.comm.rank == 0 and self.verbosity > 0
-
             # Expand detector pointing
             self.detector_pointing.apply(data, detectors=[det])
 
@@ -251,30 +264,34 @@ class SimConviqt(Operator):
                 sky_file = self.sky_file_dict[det]
             else:
                 sky_file = self.sky_file.format(detector=det, mc=self.mc)
-            sky = self.get_sky(sky_file, det, verbose)
 
             if det in self.beam_file_dict:
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
 
-            beam = self.get_beam(beam_file, det, verbose)
-
-            detector = self.get_detector(det)
+            lmax, mmax = self.get_lmmax(sky_file, beam_file)
+            sky = self.get_sky(sky_file, lmax, det, verbose)
+            beam = self.get_beam(beam_file, lmax, mmax, det, verbose)
 
             theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             del theta, phi, psi
+            if self.hwp_angle is None:
+                psi_pol = None
 
-            convolved_data = self.convolve(sky, beam, detector, pnt, det, verbose)
+            convolved_data = self.convolve(
+                sky, beam, lmax, mmax, pnt, psi_pol, det, nthreads, verbose
+            )
+            del psi_pol
 
             self.calibrate_signal(data, det, beam, convolved_data, verbose)
             self.save(data, det, convolved_data, verbose)
 
-            del pnt, detector, beam, sky
+            del pnt, beam, sky
 
             if verbose:
-                timer.report_clear(f"conviqt process detector {det}")
+                timer.report_clear(f"totalconvolve process detector {det}")
 
         return
 
@@ -290,12 +307,15 @@ class SimConviqt(Operator):
                 my_dets.add(det)
             # Make sure detector data output exists
             obs.detdata.ensure(self.det_data, detectors=detectors)
-        all_dets = self.comm.gather(my_dets, root=0)
-        if self.comm.rank == 0:
-            for some_dets in all_dets:
-                my_dets.update(some_dets)
-            my_dets = sorted(my_dets)
-        all_dets = self.comm.bcast(my_dets, root=0)
+        if use_mpi:
+            all_dets = self.comm.gather(my_dets, root=0)
+            if self.comm.rank == 0:
+                for some_dets in all_dets:
+                    my_dets.update(some_dets)
+                my_dets = sorted(my_dets)
+            all_dets = self.comm.bcast(my_dets, root=0)
+        else:
+            all_dets = my_dets
         return all_dets
 
     def _get_psi_pol(self, focalplane, det):
@@ -343,40 +363,87 @@ class SimConviqt(Operator):
             epsilon = 0
         return epsilon
 
-    def get_sky(self, skyfile, det, verbose):
+    def get_lmmax(self, skyfile, beamfile):
+        """Determine the actual lmax and beammmax to use for the convolution
+        from class parameters and values in the files.
+        """
+        ncomp = 3 if self.pol else 1
+        slmax, blmax, bmmax = -1, -1, -1
+        for i in range(ncomp):
+            # for sky and beam respectively, lmax is the max of all components
+            alm_tmp, mmax_tmp = hp.fitsfunc.read_alm(
+                skyfile, hdu=i + 1, return_mmax=True
+            )
+            lmax_tmp = hp.sphtfunc.Alm.getlmax(alm_tmp.shape[0], mmax_tmp)
+            slmax = max(slmax, lmax_tmp)
+            alm_tmp, mmax_tmp = hp.fitsfunc.read_alm(
+                beamfile, hdu=i + 1, return_mmax=True
+            )
+            lmax_tmp = hp.sphtfunc.Alm.getlmax(alm_tmp.shape[0], mmax_tmp)
+            blmax = max(blmax, lmax_tmp)
+            # for the beam, determine also the largest mmax present
+            bmmax = max(bmmax, mmax_tmp)
+        # no need to go higher than the lower of the lmax from sky and beam
+        lmax_out = min(slmax, blmax)
+        mmax_out = bmmax
+        # if parameters are lower than the detected values, reduce even further
+        if self.lmax != -1:
+            lmax_out = min(lmax_out, self.lmax)
+        if self.beammmax != -1:
+            mmax_out = min(mmax_out, self.beammmax)
+        return lmax_out, mmax_out
+
+    def load_alm(self, file, lmax, mmax):
+        def read_comp(file, comp, out):
+            almX, mmaxX = hp.fitsfunc.read_alm(file, hdu=comp + 1, return_mmax=True)
+            lmaxX = hp.sphtfunc.Alm.getlmax(almX.shape[0], mmaxX)
+
+            ofs1, ofs2 = 0, 0
+            mylmax = min(lmax, lmaxX)
+            for m in range(0, min(mmax, mmaxX) + 1):
+                out[comp, ofs1 : ofs1 + mylmax - m + 1] = almX[
+                    ofs2 : ofs2 + mylmax - m + 1
+                ]
+                ofs1 += lmax - m + 1
+                ofs2 += lmaxX - m + 1
+
+        ncomp = 3 if self.pol else 1
+        res = np.zeros(
+            (ncomp, hp.sphtfunc.Alm.getsize(lmax, mmax)), dtype=np.complex128
+        )
+        for i in range(ncomp):
+            read_comp(file, i, res)
+        return res
+
+    def get_sky(self, skyfile, lmax, det, verbose):
         timer = Timer()
         timer.start()
-        sky = conviqt.Sky(
-            self.lmax,
-            self.pol,
-            skyfile,
-            self.fwhm.to_value(u.arcmin),
-            self.comm,
-        )
+        sky = self.load_alm(skyfile, lmax, lmax)
+        fwhm = self.fwhm.to_value(u.radian)
+        if fwhm != 0:
+            gauss = hp.sphtfunc.gauss_beam(fwhm, lmax, pol=True)
+            for i in range(sky.shape[0]):
+                sky[i] = hp.sphtfunc.almxfl(
+                    sky[i], 1.0 / gauss[:, i], mmax=lmax, inplace=True
+                )
         if self.remove_monopole:
-            sky.remove_monopole()
+            sky[0, 0] = 0
         if self.remove_dipole:
-            sky.remove_dipole()
+            sky[0, 1] = 0
+            sky[0, lmax + 1] = 0
         if verbose:
             timer.report_clear(f"initialize sky for detector {det}")
         return sky
 
-    def get_beam(self, beamfile, det, verbose):
+    def get_beam(self, beamfile, lmax, mmax, det, verbose):
         timer = Timer()
         timer.start()
-        beam = conviqt.Beam(self.lmax, self.beammmax, self.pol, beamfile, self.comm)
+        beam = self.load_alm(beamfile, lmax, mmax)
         if self.normalize_beam:
-            beam.normalize()
+            beam *= 1.0 / (2 * np.sqrt(np.pi) * beam[0, 0])
         if verbose:
             timer.report_clear(f"initialize beam for detector {det}")
         return beam
-
-    def get_detector(self, det):
-        """We always create the detector with zero leakage and scale
-        the returned TOD ourselves
-        """
-        detector = conviqt.Detector(name=det, epsilon=0)
-        return detector
 
     def get_pointing(self, data, det, verbose):
         """Return the detector pointing as ZYZ Euler angles without the
@@ -448,50 +515,239 @@ class SimConviqt(Operator):
         return all_theta, all_phi, all_psi, all_psi_pol
 
     def get_buffer(self, theta, phi, psi, det, verbose):
-        """Pack the pointing into the conviqt pointing array"""
+        """Pack the pointing into the pointing array"""
         timer = Timer()
         timer.start()
-        pnt = conviqt.Pointing(len(theta))
-        if pnt._nrow > 0:
-            arr = pnt.data()
-            arr[:, 0] = phi
-            arr[:, 1] = theta
-            arr[:, 2] = psi
+        pnt = np.empty((len(theta), 3))
+        pnt[:, 0] = theta
+        pnt[:, 1] = phi
+        pnt[:, 2] = psi
+        pnt[:, 2] += np.pi  # FIXME: not clear yet why this is necessary
         if verbose:
             timer.report_clear(f"pack input array for detector {det}")
         return pnt
 
-    def convolve(self, sky, beam, detector, pnt, det, verbose):
-        timer = Timer()
-        timer.start()
-        convolver = conviqt.Convolver(
-            sky,
-            beam,
-            detector,
-            self.pol,
-            self.lmax,
-            self.beammmax,
-            self.order,
-            self.verbosity,
-            self.comm,
+    # simple approach when there is only one task
+    def conv_and_interpol_serial(
+        self, skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+    ):
+        t_conv.start()
+        plan = totalconvolve.ConvolverPlan(
+            lmax=lmax,
+            kmax=mmax,
+            sigma=self.oversampling_factor,
+            epsilon=self.epsilon,
+            nthreads=nthreads,
         )
-        convolver.convolve(pnt)
-        if verbose:
-            timer.report_clear(f"convolve detector {det}")
+        cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
+        cube[()] = 0
 
-        # The pointer to the data will have changed during
-        # the convolution call ...
+        # convolution part
+        for icomp in range(skycomp.shape[0]):
+            plan.getPlane(skycomp[icomp, :], beamcomp[icomp, :], 0, cube[0:1])
+            for mbeam in range(1, mmax + 1):
+                plan.getPlane(
+                    skycomp[icomp, :],
+                    beamcomp[icomp, :],
+                    mbeam,
+                    cube[2 * mbeam - 1 : 2 * mbeam + 1],
+                )
 
-        if pnt._nrow > 0:
-            arr = pnt.data()
-            convolved_data = arr[:, 3].astype(np.float64)
+        plan.prepPsi(cube)
+        t_conv.stop()
+        t_inter.start()
+        res = np.empty(pnt.shape[0], dtype=np.float64)
+        plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
+        t_inter.stop()
+        return res
+
+    # MPI version storing the full data cube at every MPI task (wasteful)
+    def conv_and_interpol_mpi(
+        self, skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+    ):
+        t_conv.start()
+        plan = totalconvolve.ConvolverPlan(
+            lmax=lmax,
+            kmax=mmax,
+            sigma=self.oversampling_factor,
+            epsilon=self.epsilon,
+            nthreads=nthreads,
+        )
+        myrank, nranks = self.comm.rank, self.comm.size
+        cube = np.empty((plan.Npsi(), plan.Ntheta(), plan.Nphi()), dtype=np.float64)
+        cube[()] = 0
+
+        # convolution part
+        # the work in this nested loop can be distributed over skycomp.shape[0]*(mmax+1) tasks
+        for icomp in range(skycomp.shape[0]):
+            if (icomp * (mmax + 1)) % nranks == myrank:
+                plan.getPlane(skycomp[icomp, :], beamcomp[icomp, :], 0, cube[0:1])
+            for mbeam in range(1, mmax + 1):
+                if (icomp * (mmax + 1) + mbeam) % nranks == myrank:
+                    plan.getPlane(
+                        skycomp[icomp, :],
+                        beamcomp[icomp, :],
+                        mbeam,
+                        cube[2 * mbeam - 1 : 2 * mbeam + 1],
+                    )
+        if nranks > 1:  # broadcast the results
+            for icomp in range(skycomp.shape[0]):
+                self.comm.Bcast(
+                    [cube[0:1], MPI.DOUBLE], root=(icomp * (mmax + 1)) % nranks
+                )
+            for mbeam in range(1, mmax + 1):
+                self.comm.Bcast(
+                    [cube[2 * mbeam - 1 : 2 * mbeam + 1], MPI.DOUBLE],
+                    root=(icomp * (mmax + 1) + mbeam) % nranks,
+                )
+
+        plan.prepPsi(cube)
+        t_conv.stop()
+        t_inter.start()
+        res = np.empty(pnt.shape[0], dtype=np.float64)
+        plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
+        t_inter.stop()
+        return res
+
+    # MPI version with shared memory tricks, storing the full data cube only
+    # once per node.
+    def conv_and_interpol_mpi_shmem(
+        self, skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+    ):
+        from pshmem import MPIShared
+
+        t_conv.start()
+        plan = totalconvolve.ConvolverPlan(
+            lmax=lmax,
+            kmax=mmax,
+            sigma=self.oversampling_factor,
+            epsilon=self.epsilon,
+            nthreads=nthreads,
+        )
+
+        with MPIShared(
+            (plan.Npsi(), plan.Ntheta(), plan.Nphi()), np.float64, self.comm
+        ) as shm:
+            cube = shm.data
+            # Create a separate communicator on every node.
+            intracomm = self.comm.Split_type(MPI.COMM_TYPE_SHARED)
+            # Create a communicator with all master tasks of the intracomms;
+            # on every other task, intercomm will be MPI.COMM_NULL.
+            color = 0 if intracomm.rank == 0 else MPI.UNDEFINED
+            intercomm = self.comm.Split(color)
+            if intracomm.rank == 0:
+                # We are on the master task of intracomm and all other tasks on
+                # the node will be idle during the next computation step,
+                # so we can hijack all their threads.
+                nodeplan = totalconvolve.ConvolverPlan(
+                    lmax=lmax,
+                    kmax=mmax,
+                    sigma=self.oversampling_factor,
+                    epsilon=self.epsilon,
+                    nthreads=intracomm.size * nthreads,
+                )
+                mynode, nnodes = intercomm.rank, intercomm.size
+                cube[()] = 0.0
+
+                # Convolution part
+                # The skycomp.shape[0]*(mmax+1) work items in this nested loop
+                # are distributed among the nodes in a round-robin fashion.
+                for icomp in range(skycomp.shape[0]):
+                    if (icomp * (mmax + 1)) % nnodes == mynode:
+                        nodeplan.getPlane(
+                            skycomp[icomp, :], beamcomp[icomp, :], 0, cube[0:1]
+                        )
+                    for mbeam in range(1, mmax + 1):
+                        if (icomp * (mmax + 1) + mbeam) % nnodes == mynode:
+                            nodeplan.getPlane(
+                                skycomp[icomp, :],
+                                beamcomp[icomp, :],
+                                mbeam,
+                                cube[2 * mbeam - 1 : 2 * mbeam + 1],
+                            )
+                if nnodes > 1:  # results must be broadcast to all nodes
+                    for icomp in range(skycomp.shape[0]):
+                        intercomm.Bcast(
+                            [cube[0:1], MPI.DOUBLE], root=(icomp * (mmax + 1)) % nnodes
+                        )
+                    for mbeam in range(1, mmax + 1):
+                        intercomm.Bcast(
+                            [cube[2 * mbeam - 1 : 2 * mbeam + 1], MPI.DOUBLE],
+                            root=(icomp * (mmax + 1) + mbeam) % nnodes,
+                        )
+                nodeplan.prepPsi(cube)
+                del nodeplan
+
+            t_conv.stop()
+            t_inter.start()
+            # Interpolation part
+            # No fancy communication is necessary here, since every task has
+            # access to the full data cube.
+            res = np.empty(pnt.shape[0], dtype=np.float64)
+            plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
+            t_inter.stop()
+            del plan
+            del cube
+        return res
+
+    def conv_and_interpol(
+        self, skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+    ):
+        if (not use_mpi) or (self.comm.size == 1):
+            return self.conv_and_interpol_serial(
+                skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+            )
         else:
-            convolved_data = None
+            return self.conv_and_interpol_mpi_shmem(
+                skycomp, beamcomp, lmax, mmax, pnt, nthreads, t_conv, t_inter
+            )
+
+    def convolve(self, sky, beam, lmax, mmax, pnt, psi_pol, det, nthreads, verbose):
+        t_conv = Timer()
+        t_inter = Timer()
+
+        if self.hwp_angle is None:
+            # simply compute TT+EE+BB
+            convolved_data = self.conv_and_interpol(
+                np.array(sky),
+                np.array(beam),
+                lmax,
+                mmax,
+                pnt,
+                nthreads,
+                t_conv,
+                t_inter,
+            )
+        else:
+            # TT
+            convolved_data = self.conv_and_interpol(
+                np.array([sky[0]]),
+                np.array([beam[0]]),
+                lmax,
+                mmax,
+                pnt,
+                nthreads,
+                t_conv,
+                t_inter,
+            )
+            if self.pol:
+                # EE+BB
+                slm = np.array([sky[1], sky[2]])
+                blm = np.array([beam[1], beam[2]])
+                convolved_data += np.cos(4 * psi_pol) * self.conv_and_interpol(
+                    slm, blm, lmax, mmax, pnt, nthreads, t_conv, t_inter
+                ).reshape((-1,))
+                # -EB+BE
+                blm = np.array([-beam[2], beam[1]])
+                convolved_data += np.sin(4 * psi_pol) * self.conv_and_interpol(
+                    slm, blm, lmax, mmax, pnt, nthreads, t_conv, t_inter
+                ).reshape((-1,))
+
         if verbose:
-            timer.report_clear(f"extract convolved data for {det}")
+            t_conv.report_clear(f"convolve detector {det}")
+            t_inter.report_clear(f"extract convolved data for {det}")
 
-        del convolver
-
+        convolved_data *= 0.5  # FIXME: not sure where this factor comes from
         return convolved_data
 
     def calibrate_signal(self, data, det, beam, convolved_data, verbose):
@@ -501,8 +757,9 @@ class SimConviqt(Operator):
         When calibrate = True, we rescale the TOD to
         TOD = intensity + (1 - epsilon) / (1 + epsilon) * polarization
         """
-        if not self.calibrate or beam.normalized():
+        if not self.calibrate:  # or beam.normalized():
             return
+
         timer = Timer()
         timer.start()
         offset = 0
@@ -563,95 +820,3 @@ class SimConviqt(Operator):
 
     def _accelerators(self):
         return list()
-
-
-class SimWeightedConviqt(SimConviqt):
-    """Operator which uses libconviqt to generate beam-convolved timestreams.
-    This operator should be used in presence of a spinning  HWP which  makes
-    the beam time-dependent, constantly mapping the co- and cross polar
-    responses on to each other.  In OpSimConviqt we assume the beam to be static.
-    """
-
-    @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
-        if not self.available:
-            raise RuntimeError("libconviqt is not available")
-
-        if self.comm is None:
-            raise RuntimeError("libconviqt requires MPI")
-
-        if self.detector_pointing is None:
-            raise RuntimeError("detector_pointing cannot be None.")
-
-        log = Logger.get()
-
-        timer = Timer()
-        timer.start()
-
-        # Expand detector pointing
-        self.detector_pointing.apply(data, detectors=detectors)
-
-        all_detectors = self._get_all_detectors(data, detectors)
-
-        for det in all_detectors:
-            verbose = self.comm.rank == 0 and self.verbosity > 0
-
-            # Expand detector pointing
-            self.detector_pointing.apply(data, detectors=[det])
-
-            if det in self.sky_file_dict:
-                sky_file = self.sky_file_dict[det]
-            else:
-                sky_file = self.sky_file.format(detector=det, mc=self.mc)
-            sky = self.get_sky(sky_file, det, verbose)
-
-            if det in self.beam_file_dict:
-                beam_file = self.beam_file_dict[det]
-            else:
-                beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            beam_file_i00 = beam_file.replace(".fits", "_I000.fits")
-            beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
-            beam_file_00i = beam_file.replace(".fits", "_00I0.fits")
-
-            beamI00 = self.get_beam(beam_file_i00, det, verbose)
-            beam0I0 = self.get_beam(beam_file_0i0, det, verbose)
-            beam00I = self.get_beam(beam_file_00i, det, verbose)
-
-            detector = self.get_detector(det)
-
-            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
-
-            # I-beam convolution
-            pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data = self.convolve(sky, beamI00, detector, pnt, det, verbose)
-            del pnt
-
-            # Q-beam convolution
-            pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data += np.cos(2 * psi_pol) * self.convolve(
-                sky, beam0I0, detector, pnt, det, verbose
-            )
-            del pnt
-
-            # U-beam convolution
-            pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data += np.sin(2 * psi_pol) * self.convolve(
-                sky, beam00I, detector, pnt, det, verbose
-            )
-            del theta, phi, psi
-
-            self.calibrate_signal(
-                data,
-                det,
-                beamI00,
-                convolved_data,
-                verbose,
-            )
-            self.save(data, det, convolved_data, verbose)
-
-            del pnt, detector, beamI00, beam0I0, beam00I, sky
-
-            if verbose:
-                timer.report_clear(f"conviqt process detector {det}")
-
-        return
