@@ -30,6 +30,7 @@ from ..pixels import PixelData
 
 from .. import ops as ops
 
+from astropy.table import QTable, Column
 
 ZAXIS = np.array([0.0, 0.0, 1.0])
 
@@ -105,6 +106,21 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz):
 
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
+
+def create_space_telescope_big(group_size,pixel_per_process=1, sample_rate=10.0 * u.Hz):
+    """Create a fake satellite telescope with at least one detector per process."""
+    npix = group_size*pixel_per_process
+    fp = fake_hexagon_focalplane(
+        n_pix=npix,
+        sample_rate=sample_rate,
+        psd_fmin=1.0e-5 * u.Hz,
+        psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+        psd_fknee=(sample_rate / 2000.0),
+    )
+
+    site = SpaceSite("L2")
+    return Telescope("test", focalplane=fp, site=site)
+
 
 
 # def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz):
@@ -204,6 +220,73 @@ def create_satellite_data(
     sim_sat.apply(data)
 
     return data
+
+
+
+def create_satellite_data_big(
+    mpicomm, obs_per_group=1, sample_rate=10.0 * u.Hz, obs_time=10.0 * u.minute
+):
+    """Create a data object with a simple satellite sim.
+
+    Use the specified MPI communicator to attempt to create 2 process groups.  Create
+    a fake telescope and run the satellite sim to make some observations for each
+    group.  This is useful for testing many operators that need some pre-existing
+    observations with boresight pointing.
+
+    Args:
+        mpicomm (MPI.Comm): the MPI communicator (or None).
+        obs_per_group (int): the number of observations assigned to each group.
+        samples (int): number of samples per observation.
+
+    Returns:
+        toast.Data: the distributed data with named observations.
+
+    """
+    toastcomm = create_comm(mpicomm)
+    data = Data(toastcomm)
+
+    tele = create_space_telescope_big(group_size=toastcomm.group_size,pixel_per_process=7,  sample_rate=sample_rate)
+    det_props = tele.focalplane.detector_data
+    fov = tele.focalplane.field_of_view
+    sample_rate = tele.focalplane.sample_rate
+    #(Add columns to det_props, which is an astropy QTable)
+    #divide the detector into two groups
+    det_props.add_column(Column(name='wafer',  data=[ f"W0{detindx%2}"  for detindx, x in enumerate(det_props)] ))
+    new_telescope = Telescope(
+        "Big Satellite",focalplane=Focalplane(
+            detector_data=det_props,
+            field_of_view=fov,
+            sample_rate=sample_rate
+        ),
+        site=tele.site
+    )
+    # Create a schedule
+
+    sch = create_satellite_schedule(
+        prefix="test_",
+        mission_start=datetime(2023, 2, 23),
+        observation_time=obs_time,
+        gap_time=0 * u.minute,
+        num_observations=(toastcomm.ngroups * obs_per_group),
+        prec_period=10 * u.minute,
+        spin_period=1 * u.minute,
+    )
+
+    # Scan fast enough to cover some sky in a short amount of time.  Reduce the
+    # angles to achieve a more compact hit map.
+    sim_sat = ops.SimSatellite(
+        name="sim_sat",
+        telescope=tele,
+        schedule=sch,
+        hwp_rpm=10.0,
+        spin_angle=5.0 * u.degree,
+        prec_angle=10.0 * u.degree,
+    )
+    sim_sat.apply(data)
+
+    return data
+
+
 
 
 def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
