@@ -64,7 +64,7 @@ class SimTotalconvolveTest(MPITestCase):
             fwhm_x=self.fwhm_beam,
             fwhm_y=self.fwhm_beam,
         )
-        if self.comm.rank == 0:
+        if myrank == 0:
             hp.write_alm(
                 self.fname_beam,
                 self.blm,
@@ -79,7 +79,7 @@ class SimTotalconvolveTest(MPITestCase):
             fwhm_x=self.fwhm_beam * 0.5,
             fwhm_y=self.fwhm_beam,
         )
-        if self.comm.rank == 0:
+        if myrank == 0:
             hp.write_alm(
                 self.fname_beam_asym,
                 self.blm_asym,

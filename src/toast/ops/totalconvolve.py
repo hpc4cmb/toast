@@ -10,7 +10,7 @@ import numpy as np
 import traitlets
 import healpy as hp
 
-from ..mpi import MPI, use_mpi, Comm
+from ..mpi import MPI, MPI_Comm, use_mpi, Comm
 from .operator import Operator
 from .. import qarray as qa
 from ..timing import function_timer
@@ -41,7 +41,7 @@ class SimTotalconvolve(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     comm = Instance(
-        klass=MPI.Comm,
+        klass=MPI_Comm,
         allow_none=True,
         help="MPI communicator to use for the convolution.",
     )
