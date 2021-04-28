@@ -528,7 +528,7 @@ class SimTotalconvolve(Operator):
         return pnt
 
     # simple approach when there is only one task
-    def conv_and_interpol_scalar(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
+    def conv_and_interpol_serial(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
         plan = totalconvolve.ConvolverPlan(
             lmax=lmax,
             kmax=mmax,
@@ -600,60 +600,8 @@ class SimTotalconvolve(Operator):
     # MPI version with shared memory tricks, storing the full data cube only
     # once per node.
     def conv_and_interpol_mpi_new(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
-        from multiprocessing import shared_memory
+        from pshmem import MPIShared
 
-        # create a communicator "intercomm" with exactly one task per node
-        intracomm = self.comm.Split_type(MPI.COMM_TYPE_SHARED)
-        intercomm = self.comm.Split(intracomm.rank == 0)
-        if intracomm.rank == 0:  # we are on the master node of intracomm
-            plan = totalconvolve.ConvolverPlan(
-                lmax=lmax,
-                kmax=mmax,
-                sigma=self.oversampling_factor,
-                epsilon=self.epsilon,
-                nthreads=intracomm.size * nthreads,
-            )
-            myrank, nranks = intercomm.rank, intercomm.size
-
-            # get shared memory for the data cube
-            shm = shared_memory.SharedMemory(
-                create=True, size=8 * plan.Npsi() * plan.Ntheta() * plan.Nphi()
-            )
-            # create data cube inside shared memory
-            cube = np.ndarray(
-                (plan.Npsi(), plan.Ntheta(), plan.Nphi()),
-                dtype=np.float64,
-                buffer=shm.buf,
-            )
-            cube[()] = 0.0
-
-            # convolution part
-            # the work in this nested loop can be distributed over skycomp.shape[0]*(mmax+1) nodes
-            for icomp in range(skycomp.shape[0]):
-                if (icomp * (mmax + 1)) % nranks == myrank:
-                    plan.getPlane(skycomp[icomp, :], beamcomp[icomp, :], 0, cube[0:1])
-                for mbeam in range(1, mmax + 1):
-                    if (icomp * (mmax + 1) + mbeam) % nranks == myrank:
-                        plan.getPlane(
-                            skycomp[icomp, :],
-                            beamcomp[icomp, :],
-                            mbeam,
-                            cube[2 * mbeam - 1 : 2 * mbeam + 1],
-                        )
-            if nranks > 1:  # broadcast the results
-                for icomp in range(skycomp.shape[0]):
-                    intercomm.Bcast(
-                        [cube[0:1], MPI.DOUBLE], root=(icomp * (mmax + 1)) % nranks
-                    )
-                for mbeam in range(1, mmax + 1):
-                    intercomm.Bcast(
-                        [cube[2 * mbeam - 1 : 2 * mbeam + 1], MPI.DOUBLE],
-                        root=(icomp * (mmax + 1) + mbeam) % nranks,
-                    )
-            plan.prepPsi(cube)
-            del plan
-
-        shmname = intracomm.bcast(shm.name if intracomm.rank == 0 else None, root=0)
         plan = totalconvolve.ConvolverPlan(
             lmax=lmax,
             kmax=mmax,
@@ -661,29 +609,62 @@ class SimTotalconvolve(Operator):
             epsilon=self.epsilon,
             nthreads=nthreads,
         )
-        # make cube visible on the other tasks of intracomm
-        if intracomm.rank != 0:
-            shm = shared_memory.SharedMemory(name=shmname)
-            cube = np.ndarray(
-                (plan.Npsi(), plan.Ntheta(), plan.Nphi()),
-                dtype=np.float64,
-                buffer=shm.buf,
-            )
-        res = np.empty(pnt.shape[0], dtype=np.float64)
-        plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
-        del plan
-        del cube
-        shm.close()
-        intracomm.Barrier()
-        if intracomm.rank == 0:
-            shm.unlink()
-        intercomm.Free()
-        intracomm.Free()
+
+        with MPIShared(
+            (plan.Npsi(), plan.Ntheta(), plan.Nphi()), np.float64, self.comm
+        ) as shm:
+            cube = shm.data
+            # create a communicator "intercomm" with exactly one task per node
+            intracomm = self.comm.Split_type(MPI.COMM_TYPE_SHARED)
+            intercomm = self.comm.Split(intracomm.rank == 0)
+            if intracomm.rank == 0:  # we are on the master node of intracomm
+                nodeplan = totalconvolve.ConvolverPlan(
+                    lmax=lmax,
+                    kmax=mmax,
+                    sigma=self.oversampling_factor,
+                    epsilon=self.epsilon,
+                    nthreads=intracomm.size * nthreads,
+                )
+                myrank, nranks = intercomm.rank, intercomm.size
+                cube[()] = 0.0
+
+                # convolution part
+                # the work in this nested loop can be distributed over skycomp.shape[0]*(mmax+1) nodes
+                for icomp in range(skycomp.shape[0]):
+                    if (icomp * (mmax + 1)) % nranks == myrank:
+                        nodeplan.getPlane(
+                            skycomp[icomp, :], beamcomp[icomp, :], 0, cube[0:1]
+                        )
+                    for mbeam in range(1, mmax + 1):
+                        if (icomp * (mmax + 1) + mbeam) % nranks == myrank:
+                            nodeplan.getPlane(
+                                skycomp[icomp, :],
+                                beamcomp[icomp, :],
+                                mbeam,
+                                cube[2 * mbeam - 1 : 2 * mbeam + 1],
+                            )
+                if nranks > 1:  # broadcast the results
+                    for icomp in range(skycomp.shape[0]):
+                        intercomm.Bcast(
+                            [cube[0:1], MPI.DOUBLE], root=(icomp * (mmax + 1)) % nranks
+                        )
+                    for mbeam in range(1, mmax + 1):
+                        intercomm.Bcast(
+                            [cube[2 * mbeam - 1 : 2 * mbeam + 1], MPI.DOUBLE],
+                            root=(icomp * (mmax + 1) + mbeam) % nranks,
+                        )
+                nodeplan.prepPsi(cube)
+                del nodeplan
+
+            res = np.empty(pnt.shape[0], dtype=np.float64)
+            plan.interpol(cube, 0, 0, pnt[:, 0], pnt[:, 1], pnt[:, 2], res)
+            del plan
+            del cube
         return res
 
     def conv_and_interpol(self, skycomp, beamcomp, lmax, mmax, pnt, nthreads):
         if (not use_mpi) or (self.comm.size == 1):
-            return self.conv_and_interpol_scalar(
+            return self.conv_and_interpol_serial(
                 skycomp, beamcomp, lmax, mmax, pnt, nthreads
             )
         else:
