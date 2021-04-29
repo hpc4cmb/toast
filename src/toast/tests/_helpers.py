@@ -428,13 +428,24 @@ def create_fake_beam_alm(
         beam_map_I = np.vstack([beam_map, empty, empty])
         beam_map_Q = np.vstack([empty, beam_map, empty])
         beam_map_U = np.vstack([empty, empty, beam_map])
-        a_lm = [
-            hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False),
-            hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False),
-            hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False),
-        ]
+        try:
+            a_lm = [
+                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False),
+                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False),
+                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False),
+            ]
+        except TypeError:
+            # older healpy which does not have verbose keyword
+            a_lm = [
+                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax),
+                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax),
+                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax),
+            ]
     else:
         if pol:
             beam_map = np.vstack([beam_map, beam_map, empty])
-        a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax, verbose=False)
+        try:
+            a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax, verbose=False)
+        except TypeError:
+            a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
     return a_lm
