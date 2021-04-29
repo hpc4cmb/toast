@@ -81,6 +81,7 @@ def main():
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ScanHealpix(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
+        toast.ops.PointingDetectorSimple(name="det_pointing"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
@@ -199,6 +200,11 @@ def main():
     # Construct a "perfect" noise model just from the focalplane parameters
 
     ops.default_model.apply(data)
+
+    # Set the pointing matrix operators to use the detector pointing
+
+    ops.pointing.detector_pointing = ops.det_pointing
+    ops.pointing_final.detector_pointing = ops.det_pointing
 
     # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
     # if that is different from the solver pointing model.
