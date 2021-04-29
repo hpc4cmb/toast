@@ -19,7 +19,21 @@ from .sim_tod_noise import sim_noise_timestream
 
 @trait_docs
 class GainDrifter(Operator):
-    # Class traits
+    """Operator which injects gain drifts to the signal.
+
+    The drift can be injected into 3 different ways:
+    - `linear_drift`: inject a linear drift   with a random slope  for each detector
+    - `slow_drift`: inject a drift signal with a `1/f` PSD, simulated up to
+    the  frequencies<`cutoff_freq`, in case `cutoff_freq< (1/t_obs)`, `cutoff_freq=1/t_obs`.
+    - `thermal_drift`: inject a drift encoding frequencies up to the sampling rate, to simulate
+    the thermal fluctuations in the focalplane.
+    Both `slow_drift` and `thermal_drift` modes encode the possibility to inject a common mode drifts
+    to all the detectors belonging to a group of detectors identified the string `focalplane_group` ( can
+    be any string set by the user used to identify the groups in the detector table).
+    The amount of common mode contribution is set by setting detector_mismatch to a value `<1`, (with
+    0 being the case with only injecting common mode signal).
+
+    """
 
     API = Int(0, help="Internal interface version for this operator")
 
