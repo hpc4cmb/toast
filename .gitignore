@@ -36,3 +36,10 @@ src/libtoast/src/version.cpp
 # Jupyter notebooks
 .ipynb_checkpoints
 __pycache__
+
+# Clion config and build directories
+.idea
+cmake-*
+
+# VScode config files
+*.vscode
