@@ -808,14 +808,15 @@ class CovarianceAndHits(Operator):
 
         # Construct the pointing distribution if it does not already exist
 
-        pix_dist = BuildPixelDistribution(
-            pixel_dist=self.pixel_dist,
-            pointing=self.pointing,
-            shared_flags=self.shared_flags,
-            shared_flag_mask=self.shared_flag_mask,
-            save_pointing=self.save_pointing,
-        )
-        pix_dist.apply(data)
+        if self.pixel_dist not in data:
+            pix_dist = BuildPixelDistribution(
+                pixel_dist=self.pixel_dist,
+                pointing=self.pointing,
+                shared_flags=self.shared_flags,
+                shared_flag_mask=self.shared_flag_mask,
+                save_pointing=self.save_pointing,
+            )
+            pix_dist.apply(data)
 
         # Hit map operator
 

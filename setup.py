@@ -242,7 +242,10 @@ conf["install_requires"] = [
     "healpy",
     "ephem",
 ]
-conf["extras_require"] = {"mpi": ["mpi4py>=3.0"]}
+conf["extras_require"] = {
+    "mpi": ["mpi4py>=3.0"],
+    "totalconvolve": ["ducc0"],
+}
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
 conf["ext_modules"] = ext_modules
@@ -264,9 +267,9 @@ conf["classifiers"] = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX",
-    "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 

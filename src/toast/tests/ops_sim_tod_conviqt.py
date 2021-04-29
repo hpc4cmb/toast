@@ -42,53 +42,62 @@ class SimConviqtTest(MPITestCase):
         self.fname_sky = os.path.join(self.outdir, "sky_alm.fits")
         self.fname_beam = os.path.join(self.outdir, "beam_alm.fits")
 
-        # Synthetic sky and beam (a_lm expansions)
-        self.slm = create_fake_sky_alm(self.lmax, self.fwhm_sky)
-        self.slm[1:] = 0  # No polarization
-        hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
 
-        self.blm = create_fake_beam_alm(
-            self.lmax,
-            self.mmax,
-            fwhm_x=self.fwhm_beam,
-            fwhm_y=self.fwhm_beam,
-        )
-        hp.write_alm(
-            self.fname_beam,
-            self.blm,
-            lmax=self.lmax,
-            mmax_in=self.mmax,
-            overwrite=True,
-        )
+        self.rank = 0
+        if self.comm is not None:
+            self.rank = self.comm.rank
 
-        blm_I, blm_Q, blm_U = create_fake_beam_alm(
-            self.lmax,
-            self.mmax,
-            fwhm_x=self.fwhm_beam,
-            fwhm_y=self.fwhm_beam,
-            separate_IQU=True,
-        )
-        hp.write_alm(
-            self.fname_beam.replace(".fits", "_I000.fits"),
-            blm_I,
-            lmax=self.lmax,
-            mmax_in=self.mmax,
-            overwrite=True,
-        )
-        hp.write_alm(
-            self.fname_beam.replace(".fits", "_0I00.fits"),
-            blm_Q,
-            lmax=self.lmax,
-            mmax_in=self.mmax,
-            overwrite=True,
-        )
-        hp.write_alm(
-            self.fname_beam.replace(".fits", "_00I0.fits"),
-            blm_U,
-            lmax=self.lmax,
-            mmax_in=self.mmax,
-            overwrite=True,
-        )
+        if self.rank == 0:
+            # Synthetic sky and beam (a_lm expansions)
+            self.slm = create_fake_sky_alm(self.lmax, self.fwhm_sky)
+            self.slm[1:] = 0  # No polarization
+            hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
+
+            self.blm = create_fake_beam_alm(
+                self.lmax,
+                self.mmax,
+                fwhm_x=self.fwhm_beam,
+                fwhm_y=self.fwhm_beam,
+            )
+            hp.write_alm(
+                self.fname_beam,
+                self.blm,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
+
+            blm_I, blm_Q, blm_U = create_fake_beam_alm(
+                self.lmax,
+                self.mmax,
+                fwhm_x=self.fwhm_beam,
+                fwhm_y=self.fwhm_beam,
+                separate_IQU=True,
+            )
+            hp.write_alm(
+                self.fname_beam.replace(".fits", "_I000.fits"),
+                blm_I,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
+            hp.write_alm(
+                self.fname_beam.replace(".fits", "_0I00.fits"),
+                blm_Q,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
+            hp.write_alm(
+                self.fname_beam.replace(".fits", "_00I0.fits"),
+                blm_U,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
+
+        if self.comm is not None:
+            self.comm.Barrier()
 
         return
 
@@ -154,13 +163,11 @@ class SimConviqtTest(MPITestCase):
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
         write_healpix_fits(data[binner.binned], toast_bin_path, nest=False)
 
-        rank = 0
-        if self.comm is not None:
-            rank = self.comm.rank
 
         fail = False
 
-        if rank == 0:
+        if self.rank == 0:
+
             import matplotlib.pyplot as plt
 
             mapfile = os.path.join(self.outdir, "toast_bin.fits")
@@ -194,38 +201,46 @@ class SimConviqtTest(MPITestCase):
                 pol=False,
             )
 
-            sky = hp.alm2map(self.slm[0], self.nside, lmax=self.lmax, verbose=False)
-            beam = hp.alm2map(
-                self.blm[0], self.nside, lmax=self.lmax, mmax=self.mmax, verbose=False
-            )
+            if self.comm is None or self.comm.size == 1:
+                sky = hp.alm2map(self.slm[0], self.nside, lmax=self.lmax, verbose=False)
+                beam = hp.alm2map(
+                    self.blm[0],
+                    self.nside,
+                    lmax=self.lmax,
+                    mmax=self.mmax,
+                    verbose=False,
+                )
 
-            fig = plt.figure(figsize=[12, 8])
-            nrow, ncol = 2, 3
-            hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
-            hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
-            hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
-            hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
+                fig = plt.figure(figsize=[12, 8])
+                nrow, ncol = 2, 3
+                hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
+                hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
+                hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
+                hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
 
-            ell = np.arange(self.lmax + 1)
-            ax = fig.add_subplot(nrow, ncol, 5)
-            ax.plot(ell[1:], cl_in[1:], label="input")
-            ax.plot(ell[1:], cl_smoothed[1:], label="smoothed")
-            ax.plot(ell[1:], blsq[1:], label="beam")
-            ax.plot(ell[1:], gauss_blsq[1:], label="gauss beam")
-            ax.plot(ell[1:], 1 / deconv[1:] ** 2, label="1 / deconv")
-            ax.plot(
-                ell[1:],
-                cl_in[1:] * blsq[1:] * deconv[1:] ** 2,
-                label="input x beam x deconv",
-            )
-            ax.plot(ell[1:], cl_out[1:], label="output")
-            ax.legend(loc="best")
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-            ax.set_ylim([1e-20, 1e1])
+                ell = np.arange(self.lmax + 1)
+                ax = fig.add_subplot(nrow, ncol, 5)
+                ax.plot(ell[1:], cl_in[1:], label="input")
+                ax.plot(ell[1:], cl_smoothed[1:], label="smoothed")
+                ax.plot(ell[1:], blsq[1:], label="beam")
+                ax.plot(ell[1:], gauss_blsq[1:], label="gauss beam")
+                ax.plot(ell[1:], 1 / deconv[1:] ** 2, label="1 / deconv")
+                ax.plot(
+                    ell[1:],
+                    cl_in[1:] * blsq[1:] * deconv[1:] ** 2,
+                    label="input x beam x deconv",
+                )
+                ax.plot(ell[1:], cl_out[1:], label="output")
+                ax.legend(loc="best")
+                ax.set_xscale("log")
+                ax.set_yscale("log")
+                ax.set_ylim([1e-20, 1e1])
 
-            outfile = os.path.join(self.outdir, "cl_comparison.png")
-            fig.savefig(outfile)
+                # For some reason, matplotlib hangs with multiple tasks,
+                # even if only one writes.
+                outfile = os.path.join(self.outdir, "cl_comparison.png")
+                fig.savefig(outfile)
+
 
             compare = blsq > 1e-5
             ref = cl_in[compare] * blsq[compare] * deconv[compare] ** 2
@@ -238,12 +253,17 @@ class SimConviqtTest(MPITestCase):
             ):
                 fail = True
 
-        if data.comm.comm_world is not None:
-            fail = data.comm.comm_world.bcast(fail, root=0)
+
+        if self.comm is not None:
+            fail = self.comm.bcast(fail, root=0)
+
 
         self.assertFalse(fail)
 
         return
+
+
+    """
 
     def test_sim_hwp(self):
         if not ops.conviqt.available():
@@ -268,3 +288,6 @@ class SimConviqtTest(MPITestCase):
         sim_conviqt.exec(data)
 
         return
+
+    """
+

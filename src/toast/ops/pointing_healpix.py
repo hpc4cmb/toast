@@ -57,7 +57,7 @@ class PointingHealpix(Operator):
 
     detector_pointing = Instance(
         klass=Operator,
-        allow_none=False,
+        allow_none=True,
         help="Operator that translates boresight pointing into detector frame",
     )
 
@@ -200,6 +200,9 @@ class PointingHealpix(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
+
+        if self.detector_pointing is None:
+            raise RuntimeError("The detector_pointing trait must be set")
 
         if self._local_submaps is None and self.create_dist is not None:
             self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
