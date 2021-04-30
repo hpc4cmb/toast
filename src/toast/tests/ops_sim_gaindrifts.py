@@ -159,9 +159,10 @@ class SimGainTest(MPITestCase):
                 oldmap[mask], newmap[mask], decimal=np.log10(drifter.sigma_drift)
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
-            assert np.log10(rel_res.std()) <= np.log10(
-                drifter.thermal_fluctuation_amplitude * drifter.sigma_drift
-            )
+            dT = (drifter.thermal_fluctuation_amplitude * drifter.sigma_drift).to(
+                drifter.focalplane_Tbath.unit
+            ) / drifter.focalplane_Tbath
+            assert np.log10(rel_res.std()) <= np.log10(dT)
 
     def test_slow_drift(self):
         # Create a fake satellite data set for testing
@@ -311,3 +312,37 @@ class SimGainTest(MPITestCase):
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
+
+
+    def test_responsivity_function(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data_big(
+            self.comm,
+        )
+        # Create a noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel()
+        default_model.apply(data)
+        # make a simple pointing matrix
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=16,
+            nest=False,
+            mode="I",
+            detector_pointing=detpointing,
+        )
+        # Generate timestreams
+        key = "signal"
+        sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
+        sim_dipole.apply(data)
+
+
+        # inject gain drift
+        responsivity = lambda x: -2 *x**3 +5*x**2 - 4*x + 3
+        drifter = ops.GainDrifter(
+            det_data=key,
+            drift_mode="thermal_drift",
+            detector_mismatch=0.7,
+            sigma_drift=1e-6 ,
+            responsivity_function=responsivity 
+        )
+        drifter.apply(data)
