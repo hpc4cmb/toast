@@ -8,7 +8,8 @@ import numpy as np
 from astropy import units as u
 from ..timing import function_timer
 
-from ..traits import trait_docs, Int, Float, Unicode, Bool, Quantity
+from ..traits import trait_docs, Int, Float, Unicode, Bool, Quantity, Callable
+
 
 from .operator import Operator
 
@@ -55,20 +56,30 @@ class GainDrifter(Operator):
     )
     sigma_drift = Float(
         1e-3,
-        help="dimensionless amplitude  of the drift signal",
+        help="dimensionless amplitude  of the drift signal, (for `thermal_drift` corresponds to the thermal fluctuation level in K units)",
     )
     alpha_drift = Float(
         1.0,
         help="spectral index  of the drift signal spectrum",
     )
+
     detector_mismatch = Float(
         1.0,
         help="mismatch between detectors for `thermal_drift` and `slow_drift` ranging from 0 to 1. Default value implies no common mode injected",
     )
-    thermal_fluctuation_amplitude = Float(
-        1e-2,
-        help="Amplitude of thermal fluctuation for `thermal_drift`. ",
+    thermal_fluctuation_amplitude = Quantity(
+        1 * u.K,
+        help="Amplitude of thermal fluctuation for `thermal_drift` in  Kelvin units ",
     )
+    focalplane_Tbath = Quantity(
+        100 * u.mK,
+        help="temperature of the focalplane for `thermal_drift` ",
+    )
+    responsivity_function = Callable(
+        lambda dT: dT,
+        help="Responsivity function takes as input  the thermal  fluctuations,`dT` defined as `dT=Tdrift/Tbath + 1 `. Default we assume the identity function ",
+    )
+
     realization = Int(0, help="integer to set a different random seed ")
     component = Int(0, allow_none=False, help="Component index for this simulation")
 
@@ -200,9 +211,16 @@ class GainDrifter(Operator):
                     # identify to which group the detector belongs
                     mask = focalplane[det][self.focalplane_group] == det_group
                     # assign the thermal fluct. simulated for that det. group
-                    ob.detdata[self.det_data][det] *= (
-                        1 + thermal_fluct[mask][0] * thermal_factor
+                    # making sure that  Tdrift is in the same units as Tbath
+                    Tdrift = (thermal_factor * thermal_fluct[mask][0]).to(
+                        self.focalplane_Tbath.unit
                     )
+                    # we make dT an array of floats (from an array of dimensionless Quantity),
+                    # this will avoid unit errors when multiplied to the det_data.
+
+                    dT = (Tdrift / self.focalplane_Tbath + 1).to_value()
+
+                    ob.detdata[self.det_data][det] *= self.responsivity_function(dT)
 
             elif self.drift_mode == "slow_drift":
                 fmin = fsampl / (4 * size)
