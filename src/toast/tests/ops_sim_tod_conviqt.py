@@ -42,7 +42,6 @@ class SimConviqtTest(MPITestCase):
         self.fname_sky = os.path.join(self.outdir, "sky_alm.fits")
         self.fname_beam = os.path.join(self.outdir, "beam_alm.fits")
 
-
         self.rank = 0
         if self.comm is not None:
             self.rank = self.comm.rank
@@ -163,7 +162,6 @@ class SimConviqtTest(MPITestCase):
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
         write_healpix_fits(data[binner.binned], toast_bin_path, nest=False)
 
-
         fail = False
 
         if self.rank == 0:
@@ -241,7 +239,6 @@ class SimConviqtTest(MPITestCase):
                 outfile = os.path.join(self.outdir, "cl_comparison.png")
                 fig.savefig(outfile)
 
-
             compare = blsq > 1e-5
             ref = cl_in[compare] * blsq[compare] * deconv[compare] ** 2
             norm = np.mean(cl_out[compare] / ref)
@@ -253,15 +250,12 @@ class SimConviqtTest(MPITestCase):
             ):
                 fail = True
 
-
         if self.comm is not None:
             fail = self.comm.bcast(fail, root=0)
-
 
         self.assertFalse(fail)
 
         return
-
 
     """
 
@@ -290,4 +284,3 @@ class SimConviqtTest(MPITestCase):
         return
 
     """
-

@@ -437,7 +437,6 @@ def uniform_chunks(samples, nchunk=100):
     return chunks
 
 
-
 def create_fake_sky_alm(lmax=128, fwhm=10 * u.degree, pol=True, pointsources=False):
     if pointsources:
         nside = 512

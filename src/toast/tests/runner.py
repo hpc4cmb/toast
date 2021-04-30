@@ -54,7 +54,6 @@ from . import ops_gainscrambler as test_ops_grainscrambler
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
 
 
-
 from . import covariance as test_covariance
 
 from . import template_amplitudes as test_template_amplitudes
