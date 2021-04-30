@@ -50,7 +50,7 @@ from . import ops_scan_map as test_ops_scan_map
 from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_madam as test_ops_madam
 
-from . import ops_gainscrambler as test_ops_grainscrambler
+from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
 
 
