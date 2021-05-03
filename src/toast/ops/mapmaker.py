@@ -221,9 +221,10 @@ class MapMaker(Operator):
             raise RuntimeError("You must set the det_data trait before calling exec()")
 
         # Check map binning
+        map_binning = self.map_binning
         if self.map_binning is None:
             # Use the same binning used in the solver.
-            self.map_binning = self.binning
+            map_binning = self.binning
 
         # We use the input binning operator to define the flags that the user has
         # specified.  We will save the name / bit mask for these and restore them later.
@@ -519,19 +520,19 @@ class MapMaker(Operator):
         # Now construct the noise covariance, hits, and condition number mask for the
         # final binned map.
 
-        self.map_binning.covariance = self.cov_name
+        map_binning.covariance = self.cov_name
 
         if self.mc_mode:
             # Verify that our covariance and other products exist.
-            if self.map_binning.pixel_dist not in data:
+            if map_binning.pixel_dist not in data:
                 msg = "MC mode, pixel distribution '{}' does not exist".format(
-                    self.map_binning.pixel_dist
+                    map_binning.pixel_dist
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
-            if self.map_binning.covariance not in data:
+            if map_binning.covariance not in data:
                 msg = "MC mode, covariance '{}' does not exist".format(
-                    self.map_binning.covariance
+                    map_binning.covariance
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
@@ -540,19 +541,19 @@ class MapMaker(Operator):
             self._log_info(comm, rank, "begin build of final binning covariance")
 
             final_cov = CovarianceAndHits(
-                pixel_dist=self.map_binning.pixel_dist,
-                covariance=self.map_binning.covariance,
+                pixel_dist=map_binning.pixel_dist,
+                covariance=map_binning.covariance,
                 hits=self.hits_name,
                 rcond=self.rcond_name,
-                det_flags=self.map_binning.det_flags,
-                det_flag_mask=self.map_binning.det_flag_mask,
-                shared_flags=self.map_binning.shared_flags,
-                shared_flag_mask=self.map_binning.shared_flag_mask,
-                pointing=self.map_binning.pointing,
-                noise_model=self.map_binning.noise_model,
+                det_flags=map_binning.det_flags,
+                det_flag_mask=map_binning.det_flag_mask,
+                shared_flags=map_binning.shared_flags,
+                shared_flag_mask=map_binning.shared_flag_mask,
+                pointing=map_binning.pointing,
+                noise_model=map_binning.noise_model,
                 rcond_threshold=self.map_rcond_threshold,
-                sync_type=self.map_binning.sync_type,
-                save_pointing=self.map_binning.full_pointing,
+                sync_type=map_binning.sync_type,
+                save_pointing=map_binning.full_pointing,
             )
 
             final_cov.apply(data, detectors=detectors)
@@ -567,7 +568,7 @@ class MapMaker(Operator):
         self._log_info(comm, rank, "begin final map binning")
 
         pre_pipe = None
-        self.map_binning.binned = self.map_name
+        map_binning.binned = self.map_name
 
         if len(self.template_matrix.templates) > 0:
             # We have some templates to subtract
@@ -579,13 +580,13 @@ class MapMaker(Operator):
             self.template_matrix.amplitudes = self.solver_result
 
             # Binning the cleaned data
-            self.map_binning.det_data = self.clean_name
+            map_binning.det_data = self.clean_name
 
             # Operator to copy the input data to the cleaned location
             copy_input = Copy(detdata=[(self.det_data, self.clean_name)])
 
             pre_pipe_dets = ["SINGLE"]
-            if self.map_binning.full_pointing:
+            if map_binning.full_pointing:
                 pre_pipe_dets = ["ALL"]
             if self.save_cleaned:
                 # We are going to be saving a full copy of the template-subtracted data
@@ -627,12 +628,12 @@ class MapMaker(Operator):
         else:
             # We have no templates.  This means we are just making a binned map of the
             # input timestreams.
-            self.map_binning.det_data = self.det_data
+            map_binning.det_data = self.det_data
 
         # Do the final binning
-        self.map_binning.pre_process = pre_pipe
-        self.map_binning.apply(data, detectors=detectors)
-        self.map_binning.pre_process = None
+        map_binning.pre_process = pre_pipe
+        map_binning.apply(data, detectors=detectors)
+        map_binning.pre_process = None
 
         self._log_info(comm, rank, "  finished final binning in", timer=timer)
 
@@ -642,7 +643,7 @@ class MapMaker(Operator):
         return
 
     def _requires(self):
-        # This operator require everything that its sub-operators needs.
+        # This operator requires everything that its sub-operators needs.
         req = self.binning.requires()
         req.update(self.template_matrix.requires())
         if self.map_binning is not None:

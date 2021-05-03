@@ -208,10 +208,10 @@ class PointingHealpix(Operator):
             self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
 
         # Expand detector pointing
-        if self.quats:
+        if self.quats is not None:
             quats_name = self.quats
         else:
-            if self.detector_pointing.quats:
+            if self.detector_pointing.quats is not None:
                 quats_name = self.detector_pointing.quats
             else:
                 quats_name = "quats"
