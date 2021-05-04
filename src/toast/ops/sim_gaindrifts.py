@@ -196,7 +196,7 @@ class GainDrifter(Operator):
                         )
                         counter1 = 0
                         counter2 = 0
-                        key2 = obsindx * 12345667296 + detindx
+                        key2 = obsindx * 12345676 + detindx
                         rngdata = rng.random(
                             1,
                             sampler="gaussian",

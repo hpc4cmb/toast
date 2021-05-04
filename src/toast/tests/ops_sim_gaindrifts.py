@@ -74,7 +74,6 @@ class SimGainTest(MPITestCase):
                     counter=(counter1, counter2),
                 )
                 gf2 = 1 + rngdata[0] * drifter.sigma_drift
-
                 gf1 = (obs.detdata[key][det] / old[det])[-1]
                 # assert whether the two values gf2 and gf1  are the same
                 # within 1sigma of the distribution
@@ -82,10 +81,11 @@ class SimGainTest(MPITestCase):
                     gf1, gf2, decimal=np.log10(drifter.sigma_drift) - 1
                 )
 
+
     def test_thermal_drift(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data_big(
-            self.comm,
+            self.comm,pixel_per_process=7
         )
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -135,7 +135,6 @@ class SimGainTest(MPITestCase):
             detector_mismatch=0.7,
         )
         drifter.apply(data)
-
         binner2 = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
@@ -162,12 +161,13 @@ class SimGainTest(MPITestCase):
             dT = (drifter.thermal_fluctuation_amplitude * drifter.sigma_drift).to(
                 drifter.focalplane_Tbath.unit
             ) / drifter.focalplane_Tbath
+
             assert np.log10(rel_res.std()) <= np.log10(dT)
 
     def test_slow_drift(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data_big(
-            self.comm,
+            self.comm,pixel_per_process=7
         )
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -228,7 +228,6 @@ class SimGainTest(MPITestCase):
         binner2.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
         write_healpix_fits(data[binner2.binned], map2_path, nest=False)
-
         if data.comm.world_rank == 0:
             oldmap = hp.read_map(map1_path, field=None, nest=False)
             newmap = hp.read_map(map2_path, field=None, nest=False)
@@ -238,11 +237,22 @@ class SimGainTest(MPITestCase):
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
+        """oldmap = hp.read_map(map1_path, field=None, nest=False)
+        newmap = hp.read_map(map2_path, field=None, nest=False)
+        mask = oldmap != 0
+        rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
+        if  (np.log10(rel_res.std()) > np.log10(drifter.sigma_drift)) :
+            fail= True
+        if self.comm is not None:
+            fail = self.comm.bcast(fail, root=0)
+
+        self.assertFalse(fail)"""
+
 
     def test_slow_drift_commonmode(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data_big(
-            self.comm,
+            self.comm,pixel_per_process=7
         )
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -317,7 +327,7 @@ class SimGainTest(MPITestCase):
     def test_responsivity_function(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data_big(
-            self.comm,
+            self.comm
         )
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -343,6 +353,6 @@ class SimGainTest(MPITestCase):
             drift_mode="thermal_drift",
             detector_mismatch=0.7,
             sigma_drift=1e-6 ,
-            responsivity_function=responsivity 
+            responsivity_function=responsivity
         )
         drifter.apply(data)
