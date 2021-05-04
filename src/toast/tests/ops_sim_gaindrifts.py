@@ -237,16 +237,6 @@ class SimGainTest(MPITestCase):
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
-        """oldmap = hp.read_map(map1_path, field=None, nest=False)
-        newmap = hp.read_map(map2_path, field=None, nest=False)
-        mask = oldmap != 0
-        rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
-        if  (np.log10(rel_res.std()) > np.log10(drifter.sigma_drift)) :
-            fail= True
-        if self.comm is not None:
-            fail = self.comm.bcast(fail, root=0)
-
-        self.assertFalse(fail)"""
 
 
     def test_slow_drift_commonmode(self):

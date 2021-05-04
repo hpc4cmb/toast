@@ -131,7 +131,7 @@ class GainDrifter(Operator):
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
-            size = ob.detdata[self.det_data][focalplane.detector_data[0]["name"]].size
+            size = ob.detdata[self.det_data][dets[0]].size
             fsampl = focalplane.sample_rate.to_value(u.Hz)
 
             if self.drift_mode == "linear_drift":
