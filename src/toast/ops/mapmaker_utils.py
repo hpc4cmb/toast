@@ -120,8 +120,6 @@ class BuildHitMap(Operator):
                 "Building hit map with pixel_distribution {}".format(self.pixel_dist)
             )
 
-        pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
-
         hits = None
         if self.hits in data:
             # We have an existing map from a previous call.  Verify
@@ -554,8 +552,6 @@ class BuildNoiseWeighted(Operator):
 
         zmap = None
         weight_nnz = None
-
-        pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
         # This operator requires that all detectors in all observations have the same
         # number of non-zeros in the pointing matrix.
