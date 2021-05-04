@@ -313,6 +313,36 @@ class BuildInverseCovariance(Operator):
         weight_nnz = None
         cov_nnz = None
 
+        # We will store the lower triangle of the covariance.  This operator requires
+        # that all detectors in all observations have the same number of non-zeros
+        # in the pointing matrix.
+
+        if self.inverse_covariance in data:
+            # We have an existing map from a previous call.  Verify
+            # the distribution.
+            if data[self.inverse_covariance].distribution != dist:
+                msg = "Existing inv cov '{}' has different data distribution".format(
+                    self.inverse_covariance
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            invcov = data[self.inverse_covariance]
+            cov_nnz = invcov.n_value
+            weight_nnz = int((np.sqrt(1 + 8 * cov_nnz) - 1) // 2)
+        else:
+            # The first global process checks its data shape and broadcasts
+            if data.comm.world_rank == 0:
+                first_detwt = data.obs[0].detdata[self.weights][0]
+                if len(first_detwt.shape) == 1:
+                    weight_nnz = 1
+                else:
+                    weight_nnz = first_detwt.shape[1]
+            if data.comm.comm_world is not None:
+                weight_nnz = data.comm.comm_world.bcast(weight_nnz, root=0)
+            cov_nnz = int(weight_nnz * (weight_nnz + 1) // 2)
+            data[self.inverse_covariance] = PixelData(dist, np.float64, n_value=cov_nnz)
+            invcov = data[self.inverse_covariance]
+
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
@@ -341,49 +371,18 @@ class BuildInverseCovariance(Operator):
                 for det in dets:
                     # We require that the pointing matrix has the same number of
                     # non-zero elements for every detector and every observation.
-                    # We check that here, and if this is the first observation and
-                    # detector we have worked with we create the PixelData object.
-                    if invcov is None:
-                        # We will store the lower triangle of the covariance.
-                        if len(wview.detector_shape) == 1:
-                            weight_nnz = 1
-                        else:
-                            weight_nnz = wview.detector_shape[1]
-                        cov_nnz = weight_nnz * (weight_nnz + 1) // 2
-                        if self.inverse_covariance in data:
-                            # We have an existing map from a previous call.  Verify
-                            # the distribution and nnz.
-                            if data[self.inverse_covariance].distribution != dist:
-                                msg = "Existing inv cov '{}' has different data distribution".format(
-                                    self.inverse_covariance
-                                )
-                                log.error(msg)
-                                raise RuntimeError(msg)
-                            if data[self.inverse_covariance].n_value != cov_nnz:
-                                msg = "Existing inv cov '{}' has {} nnz, but pointing implies {}".format(
-                                    self.inverse_covariance,
-                                    data[self.inverse_covariance].n_value,
-                                    cov_nnz,
-                                )
-                                log.error(msg)
-                                raise RuntimeError(msg)
-                            invcov = data[self.inverse_covariance]
-                        else:
-                            data[self.inverse_covariance] = PixelData(
-                                dist, np.float64, n_value=cov_nnz
-                            )
-                            invcov = data[self.inverse_covariance]
+                    # We check that here.
+
+                    check_nnz = None
+                    if len(wview.detector_shape) == 1:
+                        check_nnz = 1
                     else:
-                        check_nnz = None
-                        if len(wview.detector_shape) == 1:
-                            check_nnz = 1
-                        else:
-                            check_nnz = wview.detector_shape[1]
-                        if check_nnz != weight_nnz:
-                            msg = "observation '{}', detector '{}', pointing weights '{}' has {} nnz, not {}".format(
-                                ob.name, det, self.weights, check_nnz, weight_nnz
-                            )
-                            raise RuntimeError(msg)
+                        check_nnz = wview.detector_shape[1]
+                    if check_nnz != weight_nnz:
+                        msg = "observation '{}', detector '{}', pointing weights '{}' has {} nnz, not {}".format(
+                            ob.name, det, self.weights, check_nnz, weight_nnz
+                        )
+                        raise RuntimeError(msg)
 
                     # Get local submap and pixels
                     local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
@@ -554,6 +553,33 @@ class BuildNoiseWeighted(Operator):
         zmap = None
         weight_nnz = None
 
+        # This operator requires that all detectors in all observations have the same
+        # number of non-zeros in the pointing matrix.
+
+        if self.zmap in data:
+            # We have an existing map from a previous call.  Verify
+            # the distribution.
+            if data[self.zmap].distribution != dist:
+                msg = "Existing zmap '{}' has different data distribution".format(
+                    self.zmap
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            zmap = data[self.zmap]
+            weight_nnz = zmap.n_value
+        else:
+            # The first global process checks its data shape and broadcasts
+            if data.comm.world_rank == 0:
+                first_detwt = data.obs[0].detdata[self.weights][0]
+                if len(first_detwt.shape) == 1:
+                    weight_nnz = 1
+                else:
+                    weight_nnz = first_detwt.shape[1]
+            if data.comm.comm_world is not None:
+                weight_nnz = data.comm.comm_world.bcast(weight_nnz, root=0)
+            data[self.zmap] = PixelData(dist, np.float64, n_value=weight_nnz)
+            zmap = data[self.zmap]
+
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
@@ -586,46 +612,18 @@ class BuildNoiseWeighted(Operator):
 
                     # We require that the pointing matrix has the same number of
                     # non-zero elements for every detector and every observation.
-                    # We check that here, and if this is the first observation and
-                    # detector we have worked with we create the PixelData object
-                    # if needed.
-                    if zmap is None:
-                        if len(wview.detector_shape) == 1:
-                            weight_nnz = 1
-                        else:
-                            weight_nnz = wview.detector_shape[1]
-                        if self.zmap in data:
-                            # We have an existing map from a previous call.  Verify
-                            # the distribution and nnz.
-                            if data[self.zmap].distribution != dist:
-                                msg = "Existing ZMap '{}' has different data distribution".format(
-                                    self.zmap
-                                )
-                                log.error(msg)
-                                raise RuntimeError(msg)
-                            if data[self.zmap].n_value != weight_nnz:
-                                msg = "Existing ZMap '{}' has {} nnz, but pointing has {}".format(
-                                    self.zmap, data[self.zmap].n_value, weight_nnz
-                                )
-                                log.error(msg)
-                                raise RuntimeError(msg)
-                            zmap = data[self.zmap]
-                        else:
-                            data[self.zmap] = PixelData(
-                                dist, np.float64, n_value=weight_nnz
-                            )
-                            zmap = data[self.zmap]
+                    # We check that here.
+
+                    check_nnz = None
+                    if len(wview.detector_shape) == 1:
+                        check_nnz = 1
                     else:
-                        check_nnz = None
-                        if len(wview.detector_shape) == 1:
-                            check_nnz = 1
-                        else:
-                            check_nnz = wview.detector_shape[1]
-                        if check_nnz != weight_nnz:
-                            msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
-                                ob.name, det, self.weights
-                            )
-                            raise RuntimeError(msg)
+                        check_nnz = wview.detector_shape[1]
+                    if check_nnz != weight_nnz:
+                        msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
+                            ob.name, det, self.weights
+                        )
+                        raise RuntimeError(msg)
 
                     # Get local submap and pixels
                     local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
@@ -654,7 +652,6 @@ class BuildNoiseWeighted(Operator):
                         ddata,
                         zmap.raw,
                     )
-                    zm = zmap.raw.array()
         return
 
     def _finalize(self, data, **kwargs):

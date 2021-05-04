@@ -97,6 +97,8 @@ class Pipeline(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
+
         acc = self.accelerators()
 
         if "CUDA" in acc:
@@ -161,8 +163,8 @@ class Pipeline(Operator):
 
                     # Run the operators with this full list
                     for op in self.operators:
-                        msg = "Pipeline calling operator '{}' exec() with ALL dets".format(
-                            op.name
+                        msg = "{} Pipeline calling operator '{}' exec() with ALL dets".format(
+                            pstr, op.name
                         )
                         log.verbose(msg)
                         op.exec(ds, detectors=selected_dets)
@@ -190,11 +192,11 @@ class Pipeline(Operator):
                                 selected_dets.append(det)
 
                     for det in selected_dets:
-                        msg = "Pipeline SINGLE detector {}".format(det)
+                        msg = "{} Pipeline SINGLE detector {}".format(pstr, det)
                         log.verbose(msg)
                         for op in self.operators:
-                            msg = "Pipeline   calling operator '{}' exec()".format(
-                                op.name
+                            msg = "{} Pipeline   calling operator '{}' exec()".format(
+                                pstr, op.name
                             )
                             log.verbose(msg)
                             op.exec(ds, detectors=[det])
@@ -207,10 +209,12 @@ class Pipeline(Operator):
                         for det in det_set:
                             if det in detectors:
                                 selected_set.append(det)
-                    msg = "Pipeline detector set {}".format(selected_set)
+                    msg = "{} Pipeline detector set {}".format(pstr, selected_set)
                     log.verbose(msg)
                     for op in self.operators:
-                        msg = "Pipeline   calling operator '{}' exec()".format(op.name)
+                        msg = "{} Pipeline   calling operator '{}' exec()".format(
+                            pstr, op.name
+                        )
                         log.verbose(msg)
                         op.exec(ds, detectors=selected_set)
 
@@ -221,9 +225,10 @@ class Pipeline(Operator):
     def _finalize(self, data, **kwargs):
         log = Logger.get()
         result = list()
+        pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
         if self.operators is not None:
             for op in self.operators:
-                msg = "Pipeline calling operator '{}' finalize()".format(op.name)
+                msg = f"{pstr} Pipeline calling operator '{op.name}' finalize()"
                 log.verbose(msg)
                 result.append(op.finalize(data))
         return result

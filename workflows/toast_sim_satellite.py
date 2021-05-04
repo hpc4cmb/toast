@@ -76,6 +76,8 @@ def main():
     #
     # We can also set some default values here for the traits.
 
+    madam_available = toast.ops.madam.available()
+
     operators = [
         toast.ops.SimSatellite(name="sim_satellite"),
         toast.ops.DefaultNoiseModel(name="default_model"),
@@ -89,8 +91,9 @@ def main():
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
-        toast.ops.Madam(name="madam", enabled=False),
     ]
+    if madam_available:
+        operators.append(toast.ops.Madam(name="madam", enabled=False))
 
     # Templates we want to configure from the command line or a parameter file.
 
@@ -161,7 +164,7 @@ def main():
     # requires full pointing) is enabled.
 
     full_pointing = False
-    if ops.madam.enabled:
+    if madam_available and ops.madam.enabled:
         full_pointing = True
     if ops.binner.full_pointing:
         full_pointing = True
@@ -222,7 +225,7 @@ def main():
             pix_dist.pointing = ops.pointing
             pix_dist.shared_flags = ops.binner.shared_flags
             pix_dist.shared_flag_mask = ops.binner.shared_flag_mask
-            pix_dist.save_pointing = ops.binner.full_pointing
+            pix_dist.save_pointing = full_pointing
         pix_dist.apply(data)
 
         ops.scan_map.pixel_dist = pix_dist.pixel_dist
@@ -273,7 +276,7 @@ def main():
             toast.pixels_io.write_healpix_fits(data[dkey], file, nest=ops.pointing.nest)
 
     # Run Madam
-    if ops.madam.enabled:
+    if madam_available and ops.madam.enabled:
         ops.madam.apply(data)
 
 

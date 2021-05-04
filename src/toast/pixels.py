@@ -96,8 +96,6 @@ class PixelDistribution(object):
             comp = MPI.Comm.Compare(self._comm, other._comm)
             if comp not in (MPI.IDENT, MPI.CONGRUENT):
                 local_eq = False
-        if self._comm is not None:
-            local_eq = self._comm.allreduce(local_eq, op=MPI.LAND)
         return local_eq
 
     def __ne__(self, other):

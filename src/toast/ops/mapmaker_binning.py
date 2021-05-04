@@ -161,7 +161,7 @@ class BinMap(Operator):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
-            data[self.binned].raw[:] = 0.0
+            data[self.binned].raw[:] = 0
 
         # Noise weighted map.  We output this to the final binned map location,
         # since we will multiply by the covariance in-place.
