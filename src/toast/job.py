@@ -184,7 +184,7 @@ def job_group_size(
             )
         log.info(
             "Job observation lengths = {} minutes / {} minutes (min / max)".format(
-                int(obs_mem[-1] / 60), int(obs_mem[0] / 60)
+                int(obs_len[-1] / 60), int(obs_len[0] / 60)
             )
         )
 
