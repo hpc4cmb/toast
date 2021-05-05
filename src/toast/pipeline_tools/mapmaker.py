@@ -94,7 +94,7 @@ def add_mapmaker_args(parser):
         required=False,
         help="Fit gain template with Legendre Polynomials",
         dest="mapmaker_gain_poly_order",
-        type=np.int
+        type=np.int,
     )
     parser.add_argument(
         "--mapmaker-calibration",
@@ -323,30 +323,33 @@ def apply_mapmaker(
             if len(file_root) > 0 and not file_root.endswith("_"):
                 file_root += "_"
             prefix = "{}telescope_{}_time_{}_".format(file_root, tele_name, time_name)
-            if args.mapmaker_calibration :
+            if args.mapmaker_calibration:
                 if gain_templatename is None:
-                    raise ValueError("Can't calibrate if the template signal is not specified")
+                    raise ValueError(
+                        "Can't calibrate if the template signal is not specified"
+                    )
                 calibrator = OpMapMaker(
                     nside=args.nside,
                     nnz=3,
                     name=cache_name,
                     outdir=outpath,
                     outprefix=prefix,
-                    write_hits=False ,
+                    write_hits=False,
                     write_wcov_inv=False,
                     write_wcov=False,
                     write_binned=False,
                     write_destriped=False,
                     write_rcond=False,
                     rcond_limit=1e-3,
-                    baseline_length=args.obs_time_h *3600, ## we calibrate for the whole observation length
+                    baseline_length=args.obs_time_h
+                    * 3600,  ## we calibrate for the whole observation length
                     maskfile=args.mapmaker_mask,
                     weightmapfile=args.mapmaker_weightmap,
                     common_flag_mask=args.common_flag_mask,
                     flag_mask=1,
                     intervals="intervals",
-                    gain_templatename=gain_templatename  ,
-                    gain_poly_order= args.mapmaker_gain_poly_order,
+                    gain_templatename=gain_templatename,
+                    gain_poly_order=args.mapmaker_gain_poly_order,
                     iter_min=3,
                     iter_max=args.mapmaker_iter_max,
                     use_noise_prior=False,
@@ -354,7 +357,6 @@ def apply_mapmaker(
                 )
 
                 calibrator.exec(tele_data, time_comm)
-
 
             mapmaker = OpMapMaker(
                 nside=args.nside,

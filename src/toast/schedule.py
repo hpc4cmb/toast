@@ -503,6 +503,7 @@ class CoolerCyclePatch(Patch):
 
 class HorizontalPatch(Patch):
     elevations = None
+
     def __init__(self, name, weight, azmin, azmax, el, scantime):
         self.name = name
         self.weight = weight
