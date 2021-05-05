@@ -72,9 +72,7 @@ def get_node_mem(mpicomm, node_rank):
     return int(avail)
 
 
-def sample_distribution(
-    rank, procs_per_node, bytes_per_node, total_samples, sample_rate
-):
+def sample_distribution(rank, procs_per_node, bytes_per_node, total_samples, sample_rate):
     # For this benchmark, we start by ramping up to a realistic number of detectors for
     # one day of data. Then we extend the timespan to achieve the desired number of
     # samples.
@@ -513,18 +511,13 @@ def job_config(mpicomm, cases):
             f.write("TOAST max threads = {}\n".format(env.max_threads()))
             f.write("MPI Processes = {}\n".format(procs))
             f.write("MPI Processes per node = {}\n".format(procs_per_node))
-            f.write(
-                "Memory per node = {:0.2f} GB\n".format(avail_node_bytes / (1024 ** 3))
-            )
+            f.write("Memory per node = {:0.2f} GB\n".format(avail_node_bytes / (1024 ** 3)))
             f.write("Number of groups = {}\n".format(n_group))
             f.write("Group nodes = {}\n".format(group_nodes))
             f.write("Group MPI Processes = {}\n".format(group_procs))
             f.write("Case selected = {}\n".format(selected_case))
             f.write("Case number of detectors = {}\n".format(n_detector))
-            f.write(
-                "Case total samples = {}\n".format(
-                    n_group * group_time_samples * n_detector
-                )
+            f.write("Case total samples = {}\n".format(n_group * group_time_samples * n_detector)
             )
             f.write(
                 "Case samples per group = {}\n".format(group_time_samples * n_detector)
