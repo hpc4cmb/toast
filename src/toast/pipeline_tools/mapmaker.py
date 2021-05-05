@@ -89,6 +89,27 @@ def add_mapmaker_args(parser):
         help="Do not fit linear modes along with Fourier templates",
         dest="mapmaker_fourier2D_subharmonics",
     )
+    parser.add_argument(
+        "--mapmaker-gain-poly-order",
+        required=False,
+        help="Fit gain template with Legendre Polynomials",
+        dest="mapmaker_gain_poly_order",
+        type=np.int,
+    )
+    parser.add_argument(
+        "--mapmaker-calibration",
+        required=False,
+        action="store_true",
+        help="Calibrate for the fitted gain amplitudes before destriping",
+        dest="mapmaker_calibration",
+    )
+    parser.add_argument(
+        "--no-mapmaker-calibration",
+        required=False,
+        action="store_false",
+        help="Do not calibrate for the fitted gain amplitudes before destriping",
+        dest="mapmaker_calibration",
+    )
     parser.set_defaults(mapmaker_fourier2D_subharmonics=False)
     parser.add_argument(
         "--mapmaker-noisefilter",
@@ -263,6 +284,7 @@ def apply_mapmaker(
     extra_prefix=None,
     verbose=True,
     bin_only=False,
+    gain_templatename=None,
 ):
     if args.no_mapmaker:
         return
@@ -341,6 +363,40 @@ def apply_mapmaker(
             if len(file_root) > 0 and not file_root.endswith("_"):
                 file_root += "_"
             prefix = "{}telescope_{}_time_{}_".format(file_root, tele_name, time_name)
+            if args.mapmaker_calibration:
+                if gain_templatename is None:
+                    raise ValueError(
+                        "Can't calibrate if the template signal is not specified"
+                    )
+                calibrator = OpMapMaker(
+                    nside=args.nside,
+                    nnz=3,
+                    name=cache_name,
+                    outdir=outpath,
+                    outprefix=prefix,
+                    write_hits=False,
+                    write_wcov_inv=False,
+                    write_wcov=False,
+                    write_binned=False,
+                    write_destriped=False,
+                    write_rcond=False,
+                    rcond_limit=1e-3,
+                    baseline_length=args.obs_time_h
+                    * 3600,  ## we calibrate for the whole observation length
+                    maskfile=args.mapmaker_mask,
+                    weightmapfile=args.mapmaker_weightmap,
+                    common_flag_mask=args.common_flag_mask,
+                    flag_mask=1,
+                    intervals="intervals",
+                    gain_templatename=gain_templatename,
+                    gain_poly_order=args.mapmaker_gain_poly_order,
+                    iter_min=3,
+                    iter_max=args.mapmaker_iter_max,
+                    use_noise_prior=False,
+                    pixels="pixels",
+                )
+
+                calibrator.exec(tele_data, time_comm)
 
             mapmaker = OpMapMaker(
                 nside=args.nside,

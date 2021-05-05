@@ -100,6 +100,12 @@ class TODTemplate:
         """a' = M^{-1}.a"""
         raise NotImplementedError("Derived class must implement apply_precond()")
 
+    def calibrate(self, signal, amplitudes):
+        """ Empty method for derived classes """
+        # Not all TODTemplates implement  this method
+
+        return
+
 
 class SubharmonicTemplate(TODTemplate):
     """This class represents sub-harmonic noise fluctuations.
@@ -244,6 +250,184 @@ class SubharmonicTemplate(TODTemplate):
                         preconditioner, subharmonic_amplitudes_in[ind]
                     )
         return
+
+
+class GainTemplate(TODTemplate):
+    """This class aims at estimating the amplitudes of gain fluctuations
+    by means of templates within the TOAST mapmaker."""
+
+    name = "Gain"
+
+    def __init__(
+        self,
+        data,
+        detweights,
+        order=1,
+        common_flags=None,
+        common_flag_mask=1,
+        flags=None,
+        flag_mask=1,
+        templatename=None,
+    ):
+        self.data = data
+        self.comm = data.comm.comm_group
+        if self.comm is not None:
+            # For the time being, we do not support splitting the
+            # observation in the sample direction
+            for obs in data.obs:
+                tod = obs["tod"]
+                if tod.grid_ranks[1] > 1:
+                    raise RuntimeError(
+                        "GainTemplate does not support splitting in the time direction."
+                    )
+            self.comm = None
+        self.order = order
+        self.norder = order + 1
+        self.detweights = detweights
+        self.common_flags = common_flags
+        self.common_flag_mask = common_flag_mask
+        self.flags = flags
+        self.flag_mask = flag_mask
+        self.template_name = templatename
+        self._estimate_offsets()
+        self.namplitude = self.norder + self.list_of_offsets[-1][-1]
+        self._estimate_preconditioner()
+        return
+
+    def _estimate_offsets(self):
+        """ Precompute the amplitude offsets """
+
+        offset = 0
+        self.list_of_offsets = []
+        for obs in self.data.obs:
+            tod = obs["tod"]
+            tmplist = []
+            for det in tod.local_dets:
+                tmplist.append(offset)
+                offset += self.norder
+            self.list_of_offsets.append(tmplist)
+
+    def _get_polynomials(self, N, local_offset, local_N):
+        x = 2 * np.arange(N) / (N - 1) - 1
+        todslice = slice(local_offset, local_offset + local_N)
+        L = np.zeros((local_N, self.norder))
+        for i in range(self.norder):
+            L[:, i] = scipy.special.legendre(i)(x)
+        return L
+
+    @function_timer
+    def _estimate_preconditioner(self):
+        self.preconditioners = []
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            L = self._get_polynomials(nsample, local_offset, local_nsample)
+
+            tmplist = []
+            for idet, det in enumerate(tod.local_dets):
+                detweight = self.detweights[iobs][det]
+                T = tod.local_signal(det, self.template_name)
+                LT = L.T.copy()
+                for row in LT:
+                    row *= T * np.sqrt(detweight)
+                M = LT.dot(LT.T)
+                # try:
+                tmplist.append(np.linalg.inv(M))
+                # except LinAlgError :
+                ## TODO: what if linalg.inv fails??
+
+            self.preconditioners.append(tmplist)
+
+    @function_timer
+    def add_to_signal(self, signal, amplitudes):
+        """signal += F.a"""
+        poly_amplitudes = amplitudes[self.name]
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            legendre_poly = self._get_polynomials(nsample, local_offset, local_nsample)
+            todslice = slice(local_offset, local_offset + local_nsample)
+            for idet, det in enumerate(tod.local_dets):
+                ind = self.list_of_offsets[iobs][idet]
+                amplitude_slice = slice(ind, ind + self.norder)
+                poly_amps = poly_amplitudes[amplitude_slice]
+                delta_gain = legendre_poly.dot(poly_amps)
+                signal_estimate = tod.local_signal(det, self.template_name)
+                gain_fluctuation = signal_estimate * delta_gain
+                signal[iobs, det, todslice] += gain_fluctuation
+        return
+
+    @function_timer
+    def project_signal(self, signal, amplitudes):
+        """a += F^T.signal"""
+
+        poly_amplitudes = amplitudes[self.name]
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            legendre_poly = self._get_polynomials(nsample, local_offset, local_nsample)
+            todslice = slice(local_offset, local_offset + local_nsample)
+            for idet, det in enumerate(tod.local_dets):
+                ind = self.list_of_offsets[iobs][idet]
+                amplitude_slice = slice(ind, ind + self.norder)
+                signal_estimate = tod.local_signal(det, self.template_name)
+                LT = legendre_poly.T.copy()
+                for row in LT:
+                    row *= signal_estimate
+                poly_amplitudes[amplitude_slice] += np.dot(
+                    LT, signal[iobs, det, todslice]
+                )
+        return
+
+    def write_gain_fluctuation(self, amplitudes, filename):
+        ### # WARNING: need to communicate the amplitudes across
+        ### the processors to save them into disc ,
+        # the way this is implemented so far  if nprocs>1  every processor writes to disc
+        # the amplitudes into the very same file...
+        np.savez(filename, amplitudes=amplitudes[self.name])
+        # raise RuntimeError("Saving gain fluctuation not implemented")
+        return
+
+    def apply_precond(self, amplitudes_in, amplitudes_out):
+        """a' = M^{-1}.b """
+        b = amplitudes_in[self.name]
+        a = amplitudes_out[self.name]
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+
+            for idet, det in enumerate(tod.local_dets):
+                ind = self.list_of_offsets[iobs][idet]
+                amplitude_slice = slice(ind, ind + self.norder)
+                M = self.preconditioners[iobs][idet]
+                a[amplitude_slice] = M.dot(b[amplitude_slice])
+        return
+
+    def calibrate(self, signal, amplitudes):
+        """
+        Estimate the optimal gain fluctuations from the amplitudes estimated
+        at   PCG convergence .
+        """
+        poly_amplitudes = amplitudes[self.name]
+        for iobs, obs in enumerate(self.data.obs):
+            tod = obs["tod"]
+            nsample = tod.total_samples
+            # For each observation, sample indices start from 0
+            local_offset, local_nsample = tod.local_samples
+            legendre_poly = self._get_polynomials(nsample, local_offset, local_nsample)
+            todslice = slice(local_offset, local_offset + local_nsample)
+            for idet, det in enumerate(tod.local_dets):
+                ind = self.list_of_offsets[iobs][idet]
+                amplitude_slice = slice(ind, ind + self.norder)
+                poly_amps = poly_amplitudes[amplitude_slice]
+                signal[iobs, det, todslice] /= legendre_poly.dot(poly_amps)
+
+        return signal
 
 
 class Fourier2DTemplate(TODTemplate):
@@ -833,7 +1017,7 @@ class TemplateMatrix(TOASTMatrix):
         """Initialize the template matrix with a given baseline length"""
         self.data = data
         self.comm = comm
-        self.templates = []
+        self.templates = OrderedDict()
         for template in templates:
             self.register_template(template)
         return
@@ -841,13 +1025,13 @@ class TemplateMatrix(TOASTMatrix):
     @function_timer
     def register_template(self, template):
         """Add template to the list of templates to fit"""
-        self.templates.append(template)
+        self.templates[template.name] = template
 
     @function_timer
     def apply(self, amplitudes):
         """Compute and return y = F.a"""
         new_signal = self.zero_signal()
-        for template in self.templates:
+        for template in self.templates.values():
             template.add_to_signal(new_signal, amplitudes)
         return new_signal
 
@@ -855,14 +1039,14 @@ class TemplateMatrix(TOASTMatrix):
     def apply_transpose(self, signal):
         """Compute and return a = F^T.y"""
         new_amplitudes = self.zero_amplitudes()
-        for template in self.templates:
+        for template in self.templates.values():
             template.project_signal(signal, new_amplitudes)
         return new_amplitudes
 
     @function_timer
     def add_prior(self, amplitudes, new_amplitudes):
         """Compute a' += C_a^{-1}.a"""
-        for template in self.templates:
+        for template in self.templates.values():
             template.add_prior(amplitudes, new_amplitudes)
         return
 
@@ -870,7 +1054,7 @@ class TemplateMatrix(TOASTMatrix):
     def apply_precond(self, amplitudes):
         """Compute a' = M^{-1}.a"""
         new_amplitudes = self.zero_amplitudes()
-        for template in self.templates:
+        for template in self.templates.values():
             template.apply_precond(amplitudes, new_amplitudes)
         return new_amplitudes
 
@@ -927,6 +1111,22 @@ class TemplateMatrix(TOASTMatrix):
         # DEBUG end
         return outsignal
 
+    @function_timer
+    def calibrate_signal(self, signal, amplitudes, in_place=True):
+        """Apply the estimate gain fluctuation to the distributed signal  vector by dividing
+        the templates multiplied by the given amplitudes.
+        """
+
+        if in_place:
+            outsignal = signal
+        else:
+            outsignal = signal.copy()
+        for template in self.templates.values():
+            tmp = template.calibrate(outsignal, amplitudes)
+            if tmp is not None:
+                outsignal = tmp
+        return outsignal
+
 
 class TemplateAmplitudes(TOASTVector):
     """TemplateAmplitudes objects hold local and shared template amplitudes"""
@@ -935,7 +1135,7 @@ class TemplateAmplitudes(TOASTVector):
         self.comm = comm
         self.amplitudes = OrderedDict()
         self.comms = OrderedDict()
-        for template in templates:
+        for template in templates.values():
             self.amplitudes[template.name] = np.zeros(template.namplitude)
             self.comms[template.name] = template.comm
         return
@@ -970,7 +1170,7 @@ class TemplateAmplitudes(TOASTVector):
 
     @function_timer
     def copy(self):
-        new_amplitudes = TemplateAmplitudes([], self.comm)
+        new_amplitudes = TemplateAmplitudes(OrderedDict(), self.comm)
         for name, values in self.amplitudes.items():
             new_amplitudes.amplitudes[name] = self.amplitudes[name].copy()
             new_amplitudes.comms[name] = self.comms[name]
@@ -1374,6 +1574,8 @@ class OpMapMaker(Operator):
         subharmonic_order=None,
         fourier2D_order=None,
         fourier2D_subharmonics=False,
+        gain_templatename=None,
+        gain_poly_order=None,
         iter_min=3,
         iter_max=100,
         use_noise_prior=True,
@@ -1405,6 +1607,8 @@ class OpMapMaker(Operator):
         self.subharmonic_order = subharmonic_order
         self.fourier2D_order = fourier2D_order
         self.fourier2D_subharmonics = fourier2D_subharmonics
+        self.gain_poly_order = gain_poly_order
+        self.gain_templatename = gain_templatename
         self.iter_min = iter_min
         self.iter_max = iter_max
         self.use_noise_prior = use_noise_prior
@@ -1451,6 +1655,7 @@ class OpMapMaker(Operator):
                             ("OffsetTemplate.project_signal", None),
                             ("SubharmonicTemplate.project_signal", None),
                             ("fourier2DTemplate.project_signal", None),
+                            ("GainTemplate.project_signal", None),
                         ]
                     ),
                 ),
@@ -1512,6 +1717,7 @@ class OpMapMaker(Operator):
                             ("OffsetTemplate.add_to_signal", None),
                             ("SubharmonicTemplate.add_to_signal", None),
                             ("fourier2DTemplate.add_to_signal", None),
+                            ("GainTemplate.add_to_signal", None),
                         ]
                     ),
                 ),
@@ -1639,6 +1845,21 @@ class OpMapMaker(Operator):
                     flag_mask=(self.flag_mask | self.mask_bit),
                 )
             )
+        if self.gain_templatename is not None:
+            if self.rank == 0:
+                log.info(
+                    f"Initializing Gain template, with Legendre polynomials,  order = {self.gain_poly_order} and {self.gain_templatename} as signal template."
+                )
+            templatelist.append(
+                GainTemplate(
+                    data,
+                    detweights=self.detweights,
+                    order=self.gain_poly_order,
+                    common_flag_mask=(self.common_flag_mask | self.gap_bit),
+                    flag_mask=(self.flag_mask | self.mask_bit),
+                    templatename=self.gain_templatename,
+                )
+            )
         if len(templatelist) == 0:
             if self.rank == 0:
                 log.info("No templates to fit, no destriping done.")
@@ -1745,10 +1966,19 @@ class OpMapMaker(Operator):
         if self.rank == 0:
             timer.report_clear("Solve amplitudes")
 
-        # Clean TOD
-        templates.clean_signal(signal, amplitudes)
-        if self.rank == 0:
-            timer.report_clear("Clean TOD")
+        # To  mitigate calibration errors, we apply the estimated gains
+        if self.gain_templatename is not None:
+            templates.calibrate_signal(signal, amplitudes)
+            if self.rank == 0:
+                timer.report_clear("Calibrate TOD")
+                templates.templates["Gain"].write_gain_fluctuation(
+                    filename="gain_amplitudes.npz", amplitudes=amplitudes
+                )
+        else:
+            # Clean TOD
+            templates.clean_signal(signal, amplitudes)
+            if self.rank == 0:
+                timer.report_clear("Clean TOD")
 
         if self.write_destriped:
             self.bin_map(data, "destriped")
