@@ -8,7 +8,9 @@
 This script runs a simple satellite simulation and makes a map.
 The workflow is tailored to the size of the communicator.
 
-TODO introduce log0 function that take a com and prints only if the com is none or rank is 0
+total_sample = num_obs * obs_minutes * sample_rate * n_detector
+TODO ensure that a dry run is trully dry and does not run stuff
+TODO compute science metric
 """
 
 import os
@@ -23,10 +25,20 @@ from toast.mpi import MPI
 from toast.instrument_sim import fake_hexagon_focalplane
 from toast.schedule_sim_satellite import create_satellite_schedule
 
+# TODO suggest adding it properly to logger ?
+def infoMPI(self, com, message):
+    """ 
+    like `info` but only called if we are in sequential mode on in the rank1 node
+    """
+    if (com is None) or (com.rank == 0):
+        self.info(message)
+# adds `infoMPI` member function to the logger class
+toast._libtoast.Logger.infoMPI = infoMPI
+
 def parse_arguments():
     """
     Defines and parses the arguments for the script.
-    """
+    """        
     # defines the parameters of the script
     parser = argparse.ArgumentParser(description="Run a TOAST satellite workflow scaled appropriately to the MPI communicator size and available memory.")
     parser.add_argument(
@@ -81,6 +93,17 @@ def parse_arguments():
     # generates config
     config, args, jobargs = toast.parse_config(parser, operators=operators, templates=templates)
 
+    # hardcoded arguments
+    # focal plane
+    args.sample_rate = 100 # sample_rate is nb sample per second, we do (60 * obs_minutes * sample_rate) sample for one observation of one detector in a minute
+    args.max_detector = 2054 # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
+    args.obs_minutes = 60
+    args.psd_net = 50.0e-6
+    args.psd_fmin = 1.0e-5
+    # schedule
+    args.prec_period = 50.0
+    args.spin_period = 10.0
+
     # Log the config
     if rank == 0:
         if not os.path.isdir(args.out_dir):
@@ -97,20 +120,19 @@ def get_mpi_settings(args):
     """
     # gets actual MPI information
     world_comm, procs, rank = toast.get_world()
-    if rank == 0:
-        log.info("TOAST version = {}".format(env.version()))
-        log.info("Using a maximum of {} threads per process".format(env.max_threads()))
-        if world_comm is None:
-            log.info("Running serially with one process at {}".format(str(datetime.now())))
-        else:
-            log.info("Running with {} processes at {}".format(procs, str(datetime.now())))
+    log.infoMPI(world_comm, "TOAST version = {}".format(env.version()))
+    log.infoMPI(world_comm, "Using a maximum of {} threads per process".format(env.max_threads()))
+    if world_comm is None:
+        log.infoMPI(world_comm, "Running serially with one process at {}".format(str(datetime.now())))
+    else:
+        log.infoMPI(world_comm, "Running with {} processes at {}".format(procs, str(datetime.now())))
 
     # is this a dry run that does not use MPI
     if args.dry_run is not None:
         procs, procs_per_node = args.dry_run.split(",")
         procs = int(procs)
         procs_per_node = int(procs_per_node)
-        if rank == 0: log.info("DRY RUN simulating {} total processes with {} per node".format(procs, procs_per_node))
+        log.infoMPI(world_comm, "DRY RUN simulating {} total processes with {} per node".format(procs, procs_per_node))
         # We are simulating the distribution
         avail_node_bytes = get_node_mem(world_comm, 0) # TODO
     else:
@@ -118,19 +140,16 @@ def get_mpi_settings(args):
         procs_per_node, avail_node_bytes = job_size(mpicomm) # TODO
 
     # sets per node memory
-    if rank == 0: 
-        log.info("Minimum detected per-node memory available is {:0.2f} GB".format(avail_node_bytes / (1024 ** 3)))
+    log.infoMPI(world_com, "Minimum detected per-node memory available is {:0.2f} GB".format(avail_node_bytes / (1024 ** 3)))
     if args.node_mem_gb is not None:
         avail_node_bytes = int((1024 ** 3) * args.node_mem_gb)
-        if rank == 0:
-            log.info("Setting per-node available memory to {:0.2f} GB as requested".format(avail_node_bytes / (1024 ** 3)))
+        log.infoMPI(world_com, "Setting per-node available memory to {:0.2f} GB as requested".format(avail_node_bytes / (1024 ** 3)))
 
     # computes the total number of nodes
     n_nodes = procs // procs_per_node
-    if rank == 0:
-        log.info("Job has {} total nodes".format(n_nodes))
+    log.infoMPI(world_com, "Job has {} total nodes".format(n_nodes))
 
-    return world_comm, procs, rank, n_nodes
+    return world_comm, procs, rank, n_nodes, avail_node_bytes
 
 def select_case(args, n_nodes):
     """ 
@@ -149,66 +168,58 @@ def select_case(args, n_nodes):
     # finds or detects the case to be used
     case = args.case
     if args.case == 'auto':
-        # rank, procs_per_node, avail_node_bytes, case_samples, args.sample_rate
-        case = 'tiny' # TODO
+        args.case = 'tiny' # TODO select the case as a fucntion of the memory available
+        # memory use per node as a function of mn samples
+        # how many samples can we fit with our current memory
+        # what is the corresponding case?
 
-    group_seconds = 0 # TODO
-    n_group = 0 # TODO
-    n_detector = 16 # TODO
+    args.total_samples = cases_samples[case]
+    # Minimum time span (one day)
+    min_time_samples = int(24 * 3600 * args.sample_rate)
+    # For the minimum time span, scale up the number of detectors to reach the requested total sample size.
+    args.n_detector = min(args.max_detector, args.total_samples // min_time_samples)
+    # TODO we might do that later, where we need it?
+    args.num_obs = max(1, (args.obs_minutes * args.sample_rate * args.n_detector) // total_sample)
 
-    return group_seconds, n_group, n_detector
-
-def make_focalplane(n_detector, world_comm, log):
+def make_focalplane(args, world_comm, log):
     """
     Creates a fake focalplane
     """
     # computes the number of pixels to be used
     # TODO could we generate an approximate number of pixels instead of n_detector or are those the same thing?    
-    # TODO direct formula (might overshoot ring by 1):
-    #      ring = math.ceil(math.sqrt((n_detector-2)/6))) if n_detector > 2 else 0
-    #      n_pixel = 1 + 3 * ring * (ring + 1)
     n_pixel = 1
     ring = 1
-    while 2 * n_pixel < n_detector:
+    while 2 * n_pixel < args.n_detector:
         n_pixel += 6 * ring
         ring += 1
+    log.infoMPI(world_com, "Using {} hexagon-packed pixels.".format(n_pixel))
     # creates the focalplane
     focalplane = None
-    if world_comm.rank == 0:
-        msg = "Using {} hexagon-packed pixels.".format(n_pixel)
-        log.info(msg)
-        # TODO we use some non-default parameters from fake, should we use the defaults instead?
+    if (world_comm is None) or (world_comm.rank == 0):
         focalplane = fake_hexagon_focalplane(
                             n_pix=n_pixel,
-                            sample_rate=50.0 * u.Hz,
-                            psd_net=50.0e-6 * u.K * np.sqrt(1 * u.second),
-                            psd_fmin=1.0e-5 * u.Hz)
+                            sample_rate=args.sample_rate * u.Hz,
+                            psd_net=args.psd_net * u.K * np.sqrt(1 * u.second),
+                            psd_fmin=args.psd_fmin * u.Hz)
     if world_comm is not None:
         focalplane = world_comm.bcast(focalplane, root=0)
     return focalplane
 
-def make_schedule(group_seconds, n_group, world_comm):
+def make_schedule(args, world_comm):
     """
     Creates a satellite schedule
     """
-    # computes the number of observation to be used
-    obs_minutes = 60 # TODO hardcoded, where should be store it?
-    # TODO could we produce something better than (group_seconds,n_group) maybe directly a number of observations?
-    num_obs = (2 * obs_minutes * (group_seconds * n_group)) // 60
-    num_obs = max(1, num_obs)
+    log.infoMPI(world_com, "Using {} observations produced at {} observation/minute.".format(num_obs, obs_minutes))
     # builds the schedule
     schedule = None
-    if world_comm.rank == 0:
-        # TODO we use some non-default parameters from fake, should we use the defaults instead?
-        log.info("Using {} observations produced at {} observation/minute.".format(num_obs, obs_minutes))
+    if (world_comm is None) or (world_comm.rank == 0):
         schedule = create_satellite_schedule(
             prefix="",
             mission_start=datetime.now(),
-            observation_time=obs_minutes * u.minute,
-            num_observations=num_obs,
-            prec_period=50.0 * u.minute,
-            spin_period=10.0 * u.minute,
-        )
+            observation_time=args.obs_minutes * u.minute,
+            num_observations=args.num_obs,
+            prec_period=args.prec_period * u.minute,
+            spin_period=args.spin_period * u.minute)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
     return schedule
@@ -283,20 +294,20 @@ def main():
     config, args, jobargs = parse_arguments()
 
     # gets the MPI parameters
-    world_comm, procs, rank, n_nodes = get_mpi_settings(args)
+    world_comm, procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(args)
 
     # selects appropriate case size
-    group_seconds, n_group, n_detector = select_case(args)
+    select_case(args)
 
     # Creates the focalplane file.
-    focalplane = make_focalplane(n_detector, rank, world_comm, log)
+    focalplane = make_focalplane(args, world_comm, log)
 
     # Create a telescope for the simulation.
     site = toast.instrument.SpaceSite("space")
     telescope = toast.instrument.Telescope("satellite", focalplane=focalplane, site=site)
 
     # Load the schedule file
-    schedule = make_schedule(group_seconds, n_group, rank, world_comm)
+    schedule = make_schedule(num_obs, rank, world_comm)
 
     # Instantiate our objects that were configured from the command line / files
     job = toast.create_from_config(config)

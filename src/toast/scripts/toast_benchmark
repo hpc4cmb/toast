@@ -517,11 +517,8 @@ def job_config(mpicomm, cases):
             f.write("Group MPI Processes = {}\n".format(group_procs))
             f.write("Case selected = {}\n".format(selected_case))
             f.write("Case number of detectors = {}\n".format(n_detector))
-            f.write("Case total samples = {}\n".format(n_group * group_time_samples * n_detector)
-            )
-            f.write(
-                "Case samples per group = {}\n".format(group_time_samples * n_detector)
-            )
+            f.write("Case total samples = {}\n".format(n_group * group_time_samples * n_detector))
+            f.write("Case samples per group = {}\n".format(group_time_samples * n_detector))
             f.write("Case data seconds per group = {}\n".format(group_seconds))
             f.write("Parameters:\n")
             for k, v in vars(args).items():
