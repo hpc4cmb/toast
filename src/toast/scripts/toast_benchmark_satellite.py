@@ -9,8 +9,6 @@ This script runs a simple satellite simulation and makes a map.
 The workflow is tailored to the size of the communicator.
 
 total_sample = num_obs * obs_minutes * sample_rate * n_detector
-TODO ensure that a dry run is trully dry and does not run stuff
-TODO compute science metric
 """
 
 import os
@@ -23,10 +21,11 @@ import numpy as np
 from astropy import units as u
 import toast
 from toast.mpi import MPI
+from toast.timing import gather_timers, dump
 from toast.instrument_sim import fake_hexagon_focalplane
 from toast.schedule_sim_satellite import create_satellite_schedule
 
-# TODO suggest adding it properly to logger ?
+# TODO suggest adding this properly to logger ?
 def infoMPI(self, com, message):
     """ 
     like `info` but only called if we are in sequential mode on in the rank1 node
@@ -63,11 +62,11 @@ def parse_arguments():
         type=str,
         help="Comma-separated total_procs,node_procs to simulate.",
     )
-    # TODO possible to enforce that it is in the list of possible options ?
     parser.add_argument(
         "--case",
         required=False,
         default='auto',
+        choices=['auto', 'tiny', 'xsmall', 'small', 'medium', 'large', 'xlarge', 'heroic'],
         type=str,
         help="Size of the worflow to be run: 'tiny' (1GB), 'xsmall' (10GB), 'small' (100GB), 'medium' (1TB), 'large' (10TB), 'xlarge' (100TB), 'heroic' (1000TB) or 'auto' (deduced from MPI parameters).",
     )
@@ -174,42 +173,61 @@ def get_mpi_settings(args, log, env):
     n_nodes = procs // procs_per_node
     log.infoMPI(world_comm, "Job has {} total nodes".format(n_nodes))
 
-    return world_comm, procs, rank, n_nodes, avail_node_bytes
+    return world_comm, rank, n_nodes, avail_node_bytes
 
-def select_case(args, n_nodes):
+def select_case(args, n_nodes, avail_node_bytes, world_comm, log):
     """ 
-    Selects the most appropriate case size given the MPI parameters
-    sets total_samples and n_detector
+    Selects the most appropriate case size given the memory available and number of nodes
+    sets total_samples and n_detector in args
     """
     # availaibles sizes
     cases_samples = {
-        "tiny": 5000000,  # O(1) GB RAM
-        "xsmall": 50000000,  # O(10) GB RAM
-        "small": 500000000,  # O(100) GB RAM
-        "medium": 5000000000,  # O(1) TB RAM
-        "large": 50000000000,  # O(10) TB RAM
-        "xlarge": 500000000000,  # O(100) TB RAM
         "heroic": 5000000000000,  # O(1000) TB RAM
+        "xlarge": 500000000000,  # O(100) TB RAM
+        "large" : 50000000000,  # O(10) TB RAM
+        "medium": 5000000000,  # O(1) TB RAM
+        "small" : 500000000,  # O(100) GB RAM
+        "xsmall": 50000000,  # O(10) GB RAM
+        "tiny"  : 5000000,  # O(1) GB RAM
     }
-    # finds or detects the case to be used
-    if args.case == 'auto':
-        args.case = 'tiny' # TODO select the case as a fucntion of the memory available
-        # memory use per node as a function of mn samples
-        # how many samples can we fit with our current memory
-        # what is the corresponding case?
-    args.total_samples = cases_samples[args.case]
+    if args.case != 'auto':
+        cases_samples = {args.case : cases_samples[args.case]}
 
-    # Minimum time span (one day)
-    min_time_samples = int(24 * 3600 * args.sample_rate)
-    # For the minimum time span, scale up the number of detectors to reach the requested total sample size.
-    args.n_detector = min(args.max_detector, args.total_samples // min_time_samples)
+    # computes the memory that is currently available
+    available_memory_bytes = n_nodes * avail_node_bytes
+
+    # tries the workflow sizes from largest to smalest, until we find one that fits
+    for (name, total_samples) in cases_samples.items():
+        # sets number of samples
+        args.case = name
+        args.total_samples = total_samples
+        # Minimum time span (one day)
+        min_time_samples = int(24 * 3600 * args.sample_rate)
+        # For the minimum time span, scale up the number of detectors to reach the requested total sample size.
+        args.n_detector = min(args.max_detector, total_samples // min_time_samples)
+
+        det_bytes_per_sample = 2 * (  # At most 2 detector data copies.
+            8  # 64 bit float / ints used
+            * (1 + 4)  # detector timestream  # pixel index and 3 IQU weights
+            + 1  # one byte per sample for flags
+        )
+        common_bytes_per_sample = (
+            8 * (4)  # 64 bit floats  # One quaternion per sample
+            + 1  # one byte per sample for common flag
+        )
+        group_nodes = n_nodes # TODO is that it here?
+        bytes_per_samp = (args.n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample)
+        # TODO compute total memory used and compare it to available memory
+        memory_used_bytes = bytes_per_samp * total_samples
+
+        if available_memory_bytes >= memory_used_bytes: break
+    log.infoMPI(world_comm, "Distribution using {} total samples and {} detectors ('{}' workflow size)".format(args.total_samples, args.n_detector, args.case))
 
 def make_focalplane(args, world_comm, log):
     """
     Creates a fake focalplane
     """
     # computes the number of pixels to be used
-    # TODO could we generate an approximate number of pixels instead of n_detector or are those the same thing?    
     n_pixel = 1
     ring = 1
     while 2 * n_pixel < args.n_detector:
@@ -308,6 +326,41 @@ def run_mapmaker(ops, args, tmpls, data):
         file = os.path.join(args.out_dir, "{}.fits".format(dkey))
         toast.pixels_io.write_healpix_fits(data[dkey], file, nest=ops.pointing.nest)
 
+def compute_science_metric(args, global_timer, n_nodes, rank, log):
+    """ 
+    Computes the science metric and stores it.
+    The metric represents the efficiency of the job in a way that is normalized,
+    taking the job size into account
+    """
+    runtime = global_timer.seconds("toast_benchmark_satellite (science work)")
+    prefactor = 1.0e-3
+    kilo_samples = 1.0e-3 * args.total_samples
+    sample_factor = 1.2
+    det_factor = 2.0
+    metric = (
+        prefactor
+        * args.n_detector ** det_factor
+        * kilo_samples ** sample_factor
+        / (n_nodes * runtime)
+    )
+    if rank == 0:
+        msg = "Science Metric: {:0.1e} * ({:d}**{:0.2f}) * ({:0.3e}**{:0.3f}) / ({:0.1f} * {}) = {:0.2f}".format(
+            prefactor,
+            args.n_detector,
+            det_factor,
+            kilo_samples,
+            sample_factor,
+            runtime,
+            n_nodes,
+            metric,
+        )
+        log.info("")
+        log.info(msg)
+        log.info("")
+        with open(os.path.join(args.out_dir, "log"), "a") as f:
+            f.write(msg)
+            f.write("\n\n")
+
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()
@@ -319,7 +372,7 @@ def main():
 
     # gets the MPI parameters
     # TODO most of those info do not seem to be used
-    world_comm, procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(args, log, env)
+    world_comm, rank, n_nodes, avail_node_bytes = get_mpi_settings(args, log, env)
 
     # Log the config
     if rank == 0:
@@ -329,10 +382,17 @@ def main():
         toast.config.dump_toml(outlog, config)
 
     # selects appropriate case size
-    select_case(args, n_nodes)
+    select_case(args, n_nodes, avail_node_bytes, world_comm, log)
 
     # Creates the focalplane file.
     focalplane = make_focalplane(args, world_comm, log)
+
+    # from here on, we start the actual work (unless this is a dry run)
+    global_timer.start("toast_benchmark_satellite (science work)")
+    if args.dry_run is not None:
+        log.infoMPI(world_comm, "Exit from dry run")
+        # We are done!
+        sys.exit(0)
 
     # Create a telescope for the simulation.
     site = toast.instrument.SpaceSite("space")
@@ -387,8 +447,26 @@ def main():
     if ops.mapmaker.enabled:
         run_mapmaker(ops, args, job.templates, data)
 
-    # TODO compute science metric
+    # end of the computations, sync and computes efficiency
+    global_timer.stop_all()
+    log.infoMPI(world_comm, "Gathering benchmarking metrics.")
+    if world_comm is not None:
+        world_comm.barrier()
+    compute_science_metric(args, global_timer, n_nodes, rank, log)
 
+    # dumps all the timing information
+    timer = toast.timing.GlobalTimers.get()
+    timer.start("toast_benchmark_satellite (gathering and dumping timing info)")
+    alltimers = gather_timers(comm=world_comm)
+    if comm.world_rank == 0:
+        out = os.path.join(args.out_dir, "timing")
+        dump(alltimers, out)
+        with open(os.path.join(args.out_dir, "log"), "a") as f:
+            f.write("Copy of Global Timers:\n")
+            with open("{}.csv".format(out), "r") as t:
+                f.write(t.read())
+        timer.stop("toast_benchmark_satellite (gathering and dumping timing info)")
+        timer.report()
 
 if __name__ == "__main__":
     try:
