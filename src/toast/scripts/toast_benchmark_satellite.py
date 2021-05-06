@@ -215,13 +215,26 @@ def select_case(args, n_nodes, avail_node_bytes, world_comm, log):
             8 * (4)  # 64 bit floats  # One quaternion per sample
             + 1  # one byte per sample for common flag
         )
-        group_nodes = n_nodes # TODO is that it here?
-        bytes_per_samp = (args.n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample)
-        # TODO compute total memory used and compare it to available memory
+
+        # group_nodes is the number of nodes in each group, 1 minimum
+        # can we fit this case in memory while using the minimum number of groups?
+        # group_nodes will be grown later if the minimum fits in memory
+        group_nodes = 1
+        bytes_per_samp = args.n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
         memory_used_bytes = bytes_per_samp * total_samples
 
-        if available_memory_bytes >= memory_used_bytes: break
-    log.infoMPI(world_comm, "Distribution using {} total samples and {} detectors ('{}' workflow size)".format(args.total_samples, args.n_detector, args.case))
+        if available_memory_bytes >= memory_used_bytes:
+            # search for maximum group node possible
+            # it should fit in memory and be a diviser of the number of nodes
+            group_nodes += 1
+            while (available_memory_bytes >= memory_used_bytes) and (group_nodes < n_nodes):
+                while not (n_nodes % group_nodes == 0): group_nodes += 1
+                bytes_per_samp = args.n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
+                memory_used_bytes = bytes_per_samp * total_samples
+            group_nodes -= 1
+            break
+
+    log.infoMPI(world_comm, "Distribution using {} total samples, spread over {} groups, and {} detectors ('{}' workflow size)".format(args.total_samples, group_nodes, args.n_detector, args.case))
 
 def make_focalplane(args, world_comm, log):
     """
