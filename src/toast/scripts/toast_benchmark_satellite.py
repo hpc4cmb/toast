@@ -17,6 +17,7 @@ import os
 import sys
 import traceback
 import argparse
+import psutil
 from datetime import datetime
 import numpy as np
 from astropy import units as u
@@ -104,16 +105,40 @@ def parse_arguments():
     args.prec_period = 50.0
     args.spin_period = 10.0
 
-    # Log the config
-    if rank == 0:
-        if not os.path.isdir(args.out_dir):
-            os.makedirs(args.out_dir)
-        outlog = os.path.join(args.out_dir, "config_log.toml")
-        toast.config.dump_toml(outlog, config)
-
     return config, args, jobargs
 
-def get_mpi_settings(args):
+def get_node_mem(world_comm, node_rank):
+    avail = 2 ** 62
+    if node_rank == 0:
+        vmem = psutil.virtual_memory()._asdict()
+        avail = vmem["available"]
+    if world_comm is not None:
+        avail = world_comm.allreduce(avail, op=MPI.MIN)
+    return int(avail)
+
+def job_size(world_comm, log):
+    procs_per_node = 1
+    node_rank = 0
+    nodecomm = None
+    rank = 0
+    procs = 1
+    if world_comm is not None:
+        rank = world_comm.rank
+        procs = world_comm.size
+        nodecomm = world_comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+        node_rank = nodecomm.rank
+        procs_per_node = nodecomm.size
+        min_per_node = world_comm.allreduce(procs_per_node, op=MPI.MIN)
+        max_per_node = world_comm.allreduce(procs_per_node, op=MPI.MAX)
+        if min_per_node != max_per_node:
+            raise RuntimeError("Nodes have inconsistent numbers of MPI ranks")
+    # One process on each node gets available RAM and communicates it
+    avail = get_node_mem(world_comm, node_rank)
+    n_node = procs // procs_per_node
+    log.infoMPI(world_comm, "Job running on {} nodes each with {} processes ({} total)".format(n_node, procs_per_node, procs))
+    return (procs_per_node, avail)
+
+def get_mpi_settings(args, log, env):
     """ 
     Getting the MPI settings
     taking the dry_run parameter into account
@@ -134,26 +159,27 @@ def get_mpi_settings(args):
         procs_per_node = int(procs_per_node)
         log.infoMPI(world_comm, "DRY RUN simulating {} total processes with {} per node".format(procs, procs_per_node))
         # We are simulating the distribution
-        avail_node_bytes = get_node_mem(world_comm, 0) # TODO
+        avail_node_bytes = get_node_mem(world_comm, 0)
     else:
         # Get information about the actual job size
-        procs_per_node, avail_node_bytes = job_size(mpicomm) # TODO
+        procs_per_node, avail_node_bytes = job_size(world_comm, log)
 
     # sets per node memory
-    log.infoMPI(world_com, "Minimum detected per-node memory available is {:0.2f} GB".format(avail_node_bytes / (1024 ** 3)))
+    log.infoMPI(world_comm, "Minimum detected per-node memory available is {:0.2f} GB".format(avail_node_bytes / (1024 ** 3)))
     if args.node_mem_gb is not None:
         avail_node_bytes = int((1024 ** 3) * args.node_mem_gb)
-        log.infoMPI(world_com, "Setting per-node available memory to {:0.2f} GB as requested".format(avail_node_bytes / (1024 ** 3)))
+        log.infoMPI(world_comm, "Setting per-node available memory to {:0.2f} GB as requested".format(avail_node_bytes / (1024 ** 3)))
 
     # computes the total number of nodes
     n_nodes = procs // procs_per_node
-    log.infoMPI(world_com, "Job has {} total nodes".format(n_nodes))
+    log.infoMPI(world_comm, "Job has {} total nodes".format(n_nodes))
 
     return world_comm, procs, rank, n_nodes, avail_node_bytes
 
 def select_case(args, n_nodes):
     """ 
     Selects the most appropriate case size given the MPI parameters
+    sets total_samples and n_detector
     """
     # availaibles sizes
     cases_samples = {
@@ -166,20 +192,17 @@ def select_case(args, n_nodes):
         "heroic": 5000000000000,  # O(1000) TB RAM
     }
     # finds or detects the case to be used
-    case = args.case
     if args.case == 'auto':
         args.case = 'tiny' # TODO select the case as a fucntion of the memory available
         # memory use per node as a function of mn samples
         # how many samples can we fit with our current memory
         # what is the corresponding case?
+    args.total_samples = cases_samples[args.case]
 
-    args.total_samples = cases_samples[case]
     # Minimum time span (one day)
     min_time_samples = int(24 * 3600 * args.sample_rate)
     # For the minimum time span, scale up the number of detectors to reach the requested total sample size.
     args.n_detector = min(args.max_detector, args.total_samples // min_time_samples)
-    # TODO we might do that later, where we need it?
-    args.num_obs = max(1, (args.obs_minutes * args.sample_rate * args.n_detector) // total_sample)
 
 def make_focalplane(args, world_comm, log):
     """
@@ -192,7 +215,7 @@ def make_focalplane(args, world_comm, log):
     while 2 * n_pixel < args.n_detector:
         n_pixel += 6 * ring
         ring += 1
-    log.infoMPI(world_com, "Using {} hexagon-packed pixels.".format(n_pixel))
+    log.infoMPI(world_comm, "Using {} hexagon-packed pixels.".format(n_pixel))
     # creates the focalplane
     focalplane = None
     if (world_comm is None) or (world_comm.rank == 0):
@@ -205,11 +228,12 @@ def make_focalplane(args, world_comm, log):
         focalplane = world_comm.bcast(focalplane, root=0)
     return focalplane
 
-def make_schedule(args, world_comm):
+def make_schedule(args, world_comm, log):
     """
     Creates a satellite schedule
     """
-    log.infoMPI(world_com, "Using {} observations produced at {} observation/minute.".format(num_obs, obs_minutes))
+    num_obs = max(1, (args.obs_minutes * args.sample_rate * args.n_detector) // args.total_samples)
+    log.infoMPI(world_comm, "Using {} observations produced at {} observation/minute.".format(num_obs, args.obs_minutes))
     # builds the schedule
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
@@ -217,7 +241,7 @@ def make_schedule(args, world_comm):
             prefix="",
             mission_start=datetime.now(),
             observation_time=args.obs_minutes * u.minute,
-            num_observations=args.num_obs,
+            num_observations=num_obs,
             prec_period=args.prec_period * u.minute,
             spin_period=args.spin_period * u.minute)
     if world_comm is not None:
@@ -294,10 +318,18 @@ def main():
     config, args, jobargs = parse_arguments()
 
     # gets the MPI parameters
-    world_comm, procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(args)
+    # TODO most of those info do not seem to be used
+    world_comm, procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(args, log, env)
+
+    # Log the config
+    if rank == 0:
+        if not os.path.isdir(args.out_dir):
+            os.makedirs(args.out_dir)
+        outlog = os.path.join(args.out_dir, "config_log.toml")
+        toast.config.dump_toml(outlog, config)
 
     # selects appropriate case size
-    select_case(args)
+    select_case(args, n_nodes)
 
     # Creates the focalplane file.
     focalplane = make_focalplane(args, world_comm, log)
@@ -307,7 +339,7 @@ def main():
     telescope = toast.instrument.Telescope("satellite", focalplane=focalplane, site=site)
 
     # Load the schedule file
-    schedule = make_schedule(num_obs, rank, world_comm)
+    schedule = make_schedule(args, world_comm, log)
 
     # Instantiate our objects that were configured from the command line / files
     job = toast.create_from_config(config)
