@@ -8,7 +8,7 @@ import hashlib
 
 import numpy as np
 
-from ._libtoast import Environment, Timer, GlobalTimers, Logger
+from ._libtoast import Environment, Timer, GlobalTimers
 
 from ._libtoast import (
     AlignedI8,
@@ -38,6 +38,17 @@ from ._libtoast import (
 )
 
 from .mpi import MPI, use_mpi
+
+from ._libtoast import Logger
+
+def _info_rank0(self, message, comm):
+    """ 
+    Behaves like `info` exept that it will only activate if rank==0 or comm is None.
+    """
+    if (comm is None) or (comm.rank == 0):
+        self.info(message)
+# adds the `info_MPI` member function to the Logger class
+Logger.info_rank0 = _info_rank0
 
 # This function sets the numba threading layer to (hopefully) be compatible with TOAST.
 # The TOAST threading concurrency is used to attempt to set the numba threading.  We

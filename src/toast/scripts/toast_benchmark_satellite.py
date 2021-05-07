@@ -9,6 +9,11 @@ This script runs a simple satellite simulation and makes a map.
 The workflow is tailored to the size of the communicator.
 
 total_sample = num_obs * obs_minutes * sample_rate * n_detector
+
+TODO generate ScanHealpix for scanmap
+https://github.com/hpc4cmb/toast/blob/cb5eb5416aa9f31d307075b41151724ea910d5c6/src/toast/pixels.py#L374
+see broadcast map function
+see create_input_maps from old bench code
 """
 
 import os
@@ -16,6 +21,7 @@ import sys
 import traceback
 import argparse
 import psutil
+import math
 from datetime import datetime
 import numpy as np
 from astropy import units as u
@@ -25,16 +31,6 @@ from toast.job import job_size, get_node_mem
 from toast.timing import gather_timers, dump
 from toast.instrument_sim import fake_hexagon_focalplane
 from toast.schedule_sim_satellite import create_satellite_schedule
-
-# TODO suggest adding this properly to logger ?
-def infoMPI(self, com, message):
-    """ 
-    like `info` but only called if we are in sequential mode on in the rank1 node
-    """
-    if (com is None) or (com.rank == 0):
-        self.info(message)
-# adds `infoMPI` member function to the logger class
-toast._libtoast.Logger.infoMPI = infoMPI
 
 def parse_arguments():
     """
@@ -98,6 +94,7 @@ def parse_arguments():
     # focal plane
     args.sample_rate = 100 # sample_rate is nb sample per second, we do (60 * obs_minutes * sample_rate) sample for one observation of one detector in a minute
     args.max_detector = 2054 # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
+    args.width = 10
     args.obs_minutes = 60
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
@@ -107,14 +104,6 @@ def parse_arguments():
 
     return config, args, jobargs
 
-    avail = 2 ** 62
-    if node_rank == 0:
-        vmem = psutil.virtual_memory()._asdict()
-        avail = vmem["available"]
-    if world_comm is not None:
-        avail = world_comm.allreduce(avail, op=MPI.MIN)
-    return int(avail)
-
 def get_mpi_settings(args, log, env):
     """ 
     Getting the MPI settings
@@ -122,19 +111,19 @@ def get_mpi_settings(args, log, env):
     """
     # gets actual MPI information
     world_comm, procs, rank = toast.get_world()
-    log.infoMPI(world_comm, "TOAST version = {}".format(env.version()))
-    log.infoMPI(world_comm, "Using a maximum of {} threads per process".format(env.max_threads()))
+    log.info_rank0(f"TOAST version = {env.version()}", world_comm)
+    log.info_rank0(f"Using a maximum of {env.max_threads()} threads per process", world_comm)
     if world_comm is None:
-        log.infoMPI(world_comm, "Running serially with one process at {}".format(str(datetime.now())))
+        log.info_rank0(f"Running serially with one process at {str(datetime.now())}", world_comm)
     else:
-        log.infoMPI(world_comm, "Running with {} processes at {}".format(procs, str(datetime.now())))
+        log.info_rank0(f"Running with {procs} processes at {str(datetime.now())}", world_comm)
 
     # is this a dry run that does not use MPI
     if args.dry_run is not None:
         procs, procs_per_node = args.dry_run.split(",")
         procs = int(procs)
         procs_per_node = int(procs_per_node)
-        log.infoMPI(world_comm, "DRY RUN simulating {} total processes with {} per node".format(procs, procs_per_node))
+        log.info_rank0(f"DRY RUN simulating {procs} total processes with {procs_per_node} per node", world_comm)
         # We are simulating the distribution 
         min_avail, max_avail = get_node_mem(world_comm, 0)
         avail_node_bytes = max_avail
@@ -144,22 +133,62 @@ def get_mpi_settings(args, log, env):
         avail_node_bytes = max_avail
 
     # sets per node memory
-    log.infoMPI(world_comm, "Minimum detected per-node memory available is {:0.2f} GB".format(avail_node_bytes / (1024 ** 3)))
+    log.info_rank0(f"Minimum detected per-node memory available is {avail_node_bytes / (1024 ** 3) :0.2f} GB", world_comm)
     if args.node_mem_gb is not None:
         avail_node_bytes = int((1024 ** 3) * args.node_mem_gb)
-        log.infoMPI(world_comm, "Setting per-node available memory to {:0.2f} GB as requested".format(avail_node_bytes / (1024 ** 3)))
+        log.info_rank0(f"Setting per-node available memory to {avail_node_bytes / (1024 ** 3) :0.2f} GB as requested", world_comm)
 
     # computes the total number of nodes
     n_nodes = procs // procs_per_node
-    log.infoMPI(world_comm, "Job has {} total nodes".format(n_nodes))
+    log.info_rank0(f"Job has {n_nodes} total nodes", world_comm)
 
-    return world_comm, rank, n_nodes, avail_node_bytes
+    return world_comm, procs, rank, n_nodes, avail_node_bytes
 
-def select_case(args, n_nodes, avail_node_bytes, world_comm, log):
+def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing):
+    """ 
+    Given a number of samples and some problems parameters,
+    returns (group_nodes, n_detector, memory_used_bytes)
+    such that memory_used_bytes is minimized.
+    """
+    # memory usage of the samples
+    detector_timestream_cost = (1 + 4) if full_pointing else 1
+    det_bytes_per_sample = 2 * (  # At most 2 detector data copies.
+        8  # 64 bit float / ints used
+        * detector_timestream_cost  # detector timestream  # pixel index and 3 IQU weights
+        + 1  # one byte per sample for flags
+    )
+    common_bytes_per_sample = (
+        8 * (4)  # 64 bit floats  # One quaternion per sample
+        + 1  # one byte per sample for common flag
+    )
+    # Minimum time span (one day)
+    min_time_samples = int(24 * 3600 * args.sample_rate)
+    # group_nodes is the number of nodes in each group, it should be a divisor of n_nodes
+    group_nodes_best = 1
+    n_detector_best = 1
+    memory_used_bytes_best = np.inf
+    # what is the minimum memory we can use for that number of samples?
+    for group_nodes in range(1,n_nodes+1):
+        if n_nodes % group_nodes == 0:
+            # For the minimum time span, scale up the number of detectors to reach the requested total sample size.
+            n_detector = np.clip(total_samples // min_time_samples, a_min=n_procs // group_nodes, a_max=args.max_detector)
+            bytes_per_samp = n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
+            memory_used_bytes = bytes_per_samp * total_samples
+            if memory_used_bytes < memory_used_bytes_best:
+                group_nodes_best = group_nodes
+                n_detector_best = n_detector
+                memory_used_bytes_best = memory_used_bytes
+    # returns the group_nodes and n_detector that minimize memory usage
+    return (group_nodes_best, n_detector_best, memory_used_bytes_best)
+
+def select_case(args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_comm, log):
     """ 
     Selects the most appropriate case size given the memory available and number of nodes
     sets total_samples and n_detector in args
     """
+    # computes the memory that is currently available
+    available_memory_bytes = n_nodes * avail_node_bytes
+
     # availaibles sizes
     cases_samples = {
         "heroic": 5000000000000,  # O(1000) TB RAM
@@ -170,69 +199,44 @@ def select_case(args, n_nodes, avail_node_bytes, world_comm, log):
         "xsmall": 50000000,  # O(10) GB RAM
         "tiny"  : 5000000,  # O(1) GB RAM
     }
+
     if args.case != 'auto':
-        cases_samples = {args.case : cases_samples[args.case]}
-
-    # computes the memory that is currently available
-    available_memory_bytes = n_nodes * avail_node_bytes
-
-    # tries the workflow sizes from largest to smalest, until we find one that fits
-    for (name, total_samples) in cases_samples.items():
-        # sets number of samples
-        args.case = name
-        args.total_samples = total_samples
-        # Minimum time span (one day)
-        min_time_samples = int(24 * 3600 * args.sample_rate)
-        # For the minimum time span, scale up the number of detectors to reach the requested total sample size.
-        args.n_detector = min(args.max_detector, total_samples // min_time_samples)
-
-        det_bytes_per_sample = 2 * (  # At most 2 detector data copies.
-            8  # 64 bit float / ints used
-            * (1 + 4)  # detector timestream  # pixel index and 3 IQU weights
-            + 1  # one byte per sample for flags
-        )
-        common_bytes_per_sample = (
-            8 * (4)  # 64 bit floats  # One quaternion per sample
-            + 1  # one byte per sample for common flag
-        )
-
-        # group_nodes is the number of nodes in each group, 1 minimum
-        # can we fit this case in memory while using the minimum number of groups?
-        # group_nodes will be grown later if the minimum fits in memory
-        group_nodes = 1
-        bytes_per_samp = args.n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
-        memory_used_bytes = bytes_per_samp * total_samples
-
-        if available_memory_bytes >= memory_used_bytes:
-            # search for maximum group node possible
-            # it should fit in memory and be a diviser of the number of nodes
-            group_nodes += 1
-            while (available_memory_bytes >= memory_used_bytes) and (group_nodes < n_nodes):
-                while not (n_nodes % group_nodes == 0): group_nodes += 1
-                bytes_per_samp = args.n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
-                memory_used_bytes = bytes_per_samp * total_samples
-            group_nodes -= 1
-            args.group_nodes = group_nodes
-            break
-
-    log.infoMPI(world_comm, "Distribution using {} total samples, spread over {} groups, and {} detectors ('{}' workflow size)".format(args.total_samples, group_nodes, args.n_detector, args.case))
+        # force use the case size suggested by the user
+        args.total_samples = cases_samples[args.case]
+        # finds the parameters that minimize memory use
+        (group_nodes, n_detector, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, args.total_samples, full_pointing)
+        args.n_detector = n_detector
+        log.info_rank0(f"Distribution using {args.total_samples} total samples, spread over {group_nodes} groups of {n_nodes//group_nodes} nodes, and {args.n_detector} detectors ('{args.case}' workflow size)", world_comm)
+        if (memory_used_bytes >= available_memory_bytes) and ((world_comm is None) or (world_comm.rank == 0)):
+            log.warning(f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes} bytes).")
+    else:
+        # tries the workflow sizes from largest to smalest, until we find one that fits
+        for (name, total_samples) in cases_samples.items():
+            # finds the parameters that minimize memory use
+            (group_nodes, n_detector, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
+            # if the parameters fit in memory, we are done
+            if memory_used_bytes < available_memory_bytes:
+                args.case = name
+                args.total_samples = total_samples
+                args.n_detector = n_detector
+                log.info_rank0(f"Distribution using {args.total_samples} total samples, spread over {group_nodes} groups of {n_nodes//group_nodes} nodes, and {args.n_detector} detectors ('{args.case}' workflow size)", world_comm)
+                return
+        raise Exception("Error: Unable to fit a case size in memory!")
 
 def make_focalplane(args, world_comm, log):
     """
     Creates a fake focalplane
     """
     # computes the number of pixels to be used
-    n_pixel = 1
-    ring = 1
-    while 2 * n_pixel < args.n_detector:
-        n_pixel += 6 * ring
-        ring += 1
-    log.infoMPI(world_comm, "Using {} hexagon-packed pixels.".format(n_pixel))
+    ring = math.ceil(math.sqrt((args.n_detector-2) / 6)) if args.n_detector > 2 else 0
+    n_pixel = 1 + 3 * ring * (ring + 1)
+    log.info_rank0(f"Using {n_pixel} hexagon-packed pixels.", world_comm)
     # creates the focalplane
     focalplane = None
     if (world_comm is None) or (world_comm.rank == 0):
         focalplane = fake_hexagon_focalplane(
                             n_pix=n_pixel,
+                            width=args.width * u.degree,
                             sample_rate=args.sample_rate * u.Hz,
                             psd_net=args.psd_net * u.K * np.sqrt(1 * u.second),
                             psd_fmin=args.psd_fmin * u.Hz)
@@ -245,7 +249,7 @@ def make_schedule(args, world_comm, log):
     Creates a satellite schedule
     """
     num_obs = max(1, (args.obs_minutes * args.sample_rate * args.n_detector) // args.total_samples)
-    log.infoMPI(world_comm, "Using {} observations produced at {} observation/minute.".format(num_obs, args.obs_minutes))
+    log.info_rank0(f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute.", world_comm)
     # builds the schedule
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
@@ -279,9 +283,11 @@ def scan_map(ops, data):
         pix_dist.shared_flag_mask = ops.binner.shared_flag_mask
         pix_dist.save_pointing = ops.binner.full_pointing
     pix_dist.apply(data)
+    # TODO now there is a pixel distribution object in data
 
     ops.scan_map.pixel_dist = pix_dist.pixel_dist
     ops.scan_map.pointing = pix_dist.pointing
+    # TODO set trait called file with the path to the file made with the old bench script
     ops.scan_map.apply(data)
 
 def run_mapmaker(ops, args, tmpls, data):
@@ -316,8 +322,8 @@ def run_mapmaker(ops, args, tmpls, data):
 
     # Write the outputs
     for prod in ["map", "hits", "cov", "rcond"]:
-        dkey = "{}_{}".format(ops.mapmaker.name, prod)
-        file = os.path.join(args.out_dir, "{}.fits".format(dkey))
+        dkey = f"{ops.mapmaker.name}_{prod}"
+        file = os.path.join(args.out_dir, f"{dkey}.fits")
         toast.pixels_io.write_healpix_fits(data[dkey], file, nest=ops.pointing.nest)
 
 def compute_science_metric(args, global_timer, n_nodes, rank, log):
@@ -338,16 +344,7 @@ def compute_science_metric(args, global_timer, n_nodes, rank, log):
         / (n_nodes * runtime)
     )
     if rank == 0:
-        msg = "Science Metric: {:0.1e} * ({:d}**{:0.2f}) * ({:0.3e}**{:0.3f}) / ({:0.1f} * {}) = {:0.2f}".format(
-            prefactor,
-            args.n_detector,
-            det_factor,
-            kilo_samples,
-            sample_factor,
-            runtime,
-            n_nodes,
-            metric,
-        )
+        msg = f"Science Metric: {prefactor:0.1e} * ({args.n_detector:d}**{det_factor:0.2f}) * ({kilo_samples:0.3e}**{sample_factor:0.3f}) / ({runtime:0.1f} * {n_nodes}) = {metric:0.2f}"
         log.info("")
         log.info(msg)
         log.info("")
@@ -364,9 +361,12 @@ def main():
     # defines and gets the arguments for the script
     config, args, jobargs = parse_arguments()
 
+    # Instantiate our objects that were configured from the command line / files
+    job = toast.create_from_config(config)
+    ops = job.operators
+
     # gets the MPI parameters
-    # TODO most of those info do not seem to be used
-    world_comm, rank, n_nodes, avail_node_bytes = get_mpi_settings(args, log, env)
+    world_comm, n_procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(args, log, env)
 
     # Log the config
     if rank == 0:
@@ -376,7 +376,7 @@ def main():
         toast.config.dump_toml(outlog, config)
 
     # selects appropriate case size
-    select_case(args, n_nodes, avail_node_bytes, world_comm, log)
+    select_case(args, n_procs, n_nodes, avail_node_bytes, ops.binner.full_pointing, world_comm, log)
 
     # Creates the focalplane file.
     focalplane = make_focalplane(args, world_comm, log)
@@ -384,7 +384,7 @@ def main():
     # from here on, we start the actual work (unless this is a dry run)
     global_timer.start("toast_benchmark_satellite (science work)")
     if args.dry_run is not None:
-        log.infoMPI(world_comm, "Exit from dry run")
+        log.info_rank0("Exit from dry run.", world_comm)
         # We are done!
         sys.exit(0)
 
@@ -395,10 +395,6 @@ def main():
     # Load the schedule file
     schedule = make_schedule(args, world_comm, log)
 
-    # Instantiate our objects that were configured from the command line / files
-    job = toast.create_from_config(config)
-    ops = job.operators
-
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
     group_size = toast.job_group_size(
@@ -408,8 +404,6 @@ def main():
         focalplane=focalplane,
         full_pointing=ops.binner.full_pointing,
     )
-    # TODO debug to check wether the hand computed value is in accord with the official value
-    log.infoMPI(world_comm, f"ACTUAL group_size: {group_size}")
 
     # Create the toast communicator
     comm = toast.Comm(world=world_comm, groupsize=group_size)
@@ -445,7 +439,7 @@ def main():
 
     # end of the computations, sync and computes efficiency
     global_timer.stop_all()
-    log.infoMPI(world_comm, "Gathering benchmarking metrics.")
+    log.info_rank0("Gathering benchmarking metrics.", world_comm)
     if world_comm is not None:
         world_comm.barrier()
     compute_science_metric(args, global_timer, n_nodes, rank, log)
@@ -459,7 +453,7 @@ def main():
         dump(alltimers, out)
         with open(os.path.join(args.out_dir, "log"), "a") as f:
             f.write("Copy of Global Timers:\n")
-            with open("{}.csv".format(out), "r") as t:
+            with open(f"{out}.csv", "r") as t:
                 f.write(t.read())
         timer.stop("toast_benchmark_satellite (gathering and dumping timing info)")
         timer.report()
@@ -475,7 +469,7 @@ if __name__ == "__main__":
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = ["Proc {}: {}".format(rank, x) for x in lines]
+        lines = [f"Proc {rank}: {x}" for x in lines]
         print("".join(lines), flush=True)
         if mpiworld is not None:
             mpiworld.Abort()
