@@ -9,11 +9,6 @@ This script runs a simple satellite simulation and makes a map.
 The workflow is tailored to the size of the communicator.
 
 total_sample = num_obs * obs_minutes * sample_rate * n_detector
-
-TODO generate ScanHealpix for scanmap
-https://github.com/hpc4cmb/toast/blob/cb5eb5416aa9f31d307075b41151724ea910d5c6/src/toast/pixels.py#L374
-see broadcast map function
-see create_input_maps from old bench code
 """
 
 import os
@@ -23,7 +18,9 @@ import argparse
 import psutil
 import math
 from datetime import datetime
+import healpy
 import numpy as np
+import matplotlib.pyplot as plt
 from astropy import units as u
 import toast
 from toast.mpi import MPI
@@ -77,7 +74,7 @@ def parse_arguments():
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU"),
+        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=1024),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
@@ -101,6 +98,8 @@ def parse_arguments():
     # schedule
     args.prec_period = 50.0
     args.spin_period = 10.0
+    # scan map
+    args.input_map = 'fake_input_sky.fits'
 
     return config, args, jobargs
 
@@ -264,7 +263,52 @@ def make_schedule(args, world_comm, log):
         schedule = world_comm.bcast(schedule, root=0)
     return schedule
 
-def scan_map(ops, data):
+def create_input_maps(input_map_path, nside, rank, log):
+    """ 
+    Creates a *completely* fake map for scan_map
+    (just to have something on the sky besides zeros)
+    puts it at input_map_path
+    """
+    if os.path.isfile(input_map_path) or (rank != 0): return
+    log.info(f"Generating input map {input_map_path}")
+
+    ell = np.arange(3 * nside - 1, dtype=np.float64)
+
+    sig = 50.0
+    numer = ell - 30.0
+    tspec = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(-0.5 * numer ** 2 / sig ** 2)
+    tspec *= 2000.0
+
+    sig = 100.0
+    numer = ell - 500.0
+    espec = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(-0.5 * numer ** 2 / sig ** 2)
+    espec *= 1.0
+
+    cls = (tspec, espec, 
+           np.zeros(3 * nside - 1, dtype=np.float32),
+           np.zeros(3 * nside - 1, dtype=np.float32) )
+    maps = healpy.synfast(
+        cls,
+        nside,
+        pol=True,
+        pixwin=False,
+        sigma=None,
+        new=True,
+        fwhm=np.radians(3.0 / 60.0),
+        verbose=False,
+    )
+    healpy.write_map(input_map_path, maps, nest=True, fits_IDL=False, dtype=np.float32)
+
+    # displays the map as a picture on file
+    healpy.mollview(maps[0])
+    plt.savefig(f"{input_map_path}_fake-T.png")
+    plt.close()
+
+    healpy.mollview(maps[1])
+    plt.savefig(f"{input_map_path}_fake-E.png")
+    plt.close()
+
+def scan_map(args, rank, ops, data, log):
     """ 
     Simulate sky signal from a map.
     We scan the sky with the "final" pointing model if that is different from the solver pointing model.
@@ -283,12 +327,13 @@ def scan_map(ops, data):
         pix_dist.shared_flag_mask = ops.binner.shared_flag_mask
         pix_dist.save_pointing = ops.binner.full_pointing
     pix_dist.apply(data)
-    # TODO now there is a pixel distribution object in data
 
-    ops.scan_map.pixel_dist = pix_dist.pixel_dist
-    ops.scan_map.pointing = pix_dist.pointing
-    # TODO set trait called file with the path to the file made with the old bench script
-    ops.scan_map.apply(data)
+    # creates a map and puts it in args.input_map
+    create_input_maps(args.input_map, ops.pointing.nside, rank, log)
+
+    # adds the scan map operator
+    scan_map = toast.ops.ScanHealpix(pixel_dist=pix_dist.pixel_dist, pointing=pix_dist.pointing, file=args.input_map)
+    scan_map.apply(data)
 
 def run_mapmaker(ops, args, tmpls, data):
     """ 
@@ -424,10 +469,7 @@ def main():
     ops.pointing_final.detector_pointing = ops.det_pointing
 
     # Simulate sky signal from a map.
-    # TODO reenable by directly instantiating a toast.ops.ScanHealpix class
-    # https://github.com/hpc4cmb/toast/blob/fa63ecaec7039377e8c800dd9971170123b47b65/src/toast/unported/pipelines/toast_benchmark.py#L628
-    #if ops.scan_map.enabled:
-    #    scan_map(ops, data)
+    scan_map(args, rank, ops, data, log)
 
     # Simulate detector noise
     if ops.sim_noise.enabled:
