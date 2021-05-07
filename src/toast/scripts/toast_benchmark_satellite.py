@@ -21,6 +21,7 @@ import numpy as np
 from astropy import units as u
 import toast
 from toast.mpi import MPI
+from toast.job import job_size, get_node_mem
 from toast.timing import gather_timers, dump
 from toast.instrument_sim import fake_hexagon_focalplane
 from toast.schedule_sim_satellite import create_satellite_schedule
@@ -106,7 +107,6 @@ def parse_arguments():
 
     return config, args, jobargs
 
-def get_node_mem(world_comm, node_rank):
     avail = 2 ** 62
     if node_rank == 0:
         vmem = psutil.virtual_memory()._asdict()
@@ -114,28 +114,6 @@ def get_node_mem(world_comm, node_rank):
     if world_comm is not None:
         avail = world_comm.allreduce(avail, op=MPI.MIN)
     return int(avail)
-
-def job_size(world_comm, log):
-    procs_per_node = 1
-    node_rank = 0
-    nodecomm = None
-    rank = 0
-    procs = 1
-    if world_comm is not None:
-        rank = world_comm.rank
-        procs = world_comm.size
-        nodecomm = world_comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
-        node_rank = nodecomm.rank
-        procs_per_node = nodecomm.size
-        min_per_node = world_comm.allreduce(procs_per_node, op=MPI.MIN)
-        max_per_node = world_comm.allreduce(procs_per_node, op=MPI.MAX)
-        if min_per_node != max_per_node:
-            raise RuntimeError("Nodes have inconsistent numbers of MPI ranks")
-    # One process on each node gets available RAM and communicates it
-    avail = get_node_mem(world_comm, node_rank)
-    n_node = procs // procs_per_node
-    log.infoMPI(world_comm, "Job running on {} nodes each with {} processes ({} total)".format(n_node, procs_per_node, procs))
-    return (procs_per_node, avail)
 
 def get_mpi_settings(args, log, env):
     """ 
@@ -157,11 +135,13 @@ def get_mpi_settings(args, log, env):
         procs = int(procs)
         procs_per_node = int(procs_per_node)
         log.infoMPI(world_comm, "DRY RUN simulating {} total processes with {} per node".format(procs, procs_per_node))
-        # We are simulating the distribution
-        avail_node_bytes = get_node_mem(world_comm, 0)
+        # We are simulating the distribution 
+        min_avail, max_avail = get_node_mem(world_comm, 0)
+        avail_node_bytes = max_avail
     else:
         # Get information about the actual job size
-        procs_per_node, avail_node_bytes = job_size(world_comm, log)
+        (n_node, procs_per_node, min_avail, max_avail) = job_size(world_comm)
+        avail_node_bytes = max_avail
 
     # sets per node memory
     log.infoMPI(world_comm, "Minimum detected per-node memory available is {:0.2f} GB".format(avail_node_bytes / (1024 ** 3)))
@@ -232,6 +212,7 @@ def select_case(args, n_nodes, avail_node_bytes, world_comm, log):
                 bytes_per_samp = args.n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
                 memory_used_bytes = bytes_per_samp * total_samples
             group_nodes -= 1
+            args.group_nodes = group_nodes
             break
 
     log.infoMPI(world_comm, "Distribution using {} total samples, spread over {} groups, and {} detectors ('{}' workflow size)".format(args.total_samples, group_nodes, args.n_detector, args.case))
@@ -427,6 +408,8 @@ def main():
         focalplane=focalplane,
         full_pointing=ops.binner.full_pointing,
     )
+    # TODO debug to check wether the hand computed value is in accord with the official value
+    log.infoMPI(world_comm, f"ACTUAL group_size: {group_size}")
 
     # Create the toast communicator
     comm = toast.Comm(world=world_comm, groupsize=group_size)
