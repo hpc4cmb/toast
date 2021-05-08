@@ -207,7 +207,7 @@ def select_case(args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_c
         args.n_detector = n_detector
         log.info_rank0(f"Distribution using {args.total_samples} total samples, spread over {group_nodes} groups of {n_nodes//group_nodes} nodes, and {args.n_detector} detectors ('{args.case}' workflow size)", world_comm)
         if (memory_used_bytes >= available_memory_bytes) and ((world_comm is None) or (world_comm.rank == 0)):
-            log.warning(f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes} bytes).")
+            log.warning(f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes // 1e9} GB).")
     else:
         # tries the workflow sizes from largest to smalest, until we find one that fits
         for (name, total_samples) in cases_samples.items():
