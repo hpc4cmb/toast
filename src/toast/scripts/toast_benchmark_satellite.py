@@ -165,20 +165,24 @@ def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
     # group_nodes is the number of nodes in each group, it should be a divisor of n_nodes
     group_nodes_best = 1
     n_detector_best = 1
+    num_obs_best = 1
     memory_used_bytes_best = np.inf
     # what is the minimum memory we can use for that number of samples?
     for group_nodes in range(1,n_nodes+1):
         if n_nodes % group_nodes == 0:
             # For the minimum time span, scale up the number of detectors to reach the requested total sample size.
             n_detector = np.clip(total_samples // min_time_samples, a_min=n_procs // group_nodes, a_max=args.max_detector)
+            num_obs = max(1, (args.obs_minutes * args.sample_rate * n_detector) // total_samples)
             bytes_per_samp = n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
             memory_used_bytes = bytes_per_samp * total_samples
-            if memory_used_bytes < memory_used_bytes_best:
+            # needs to fit in memory and be able to split observations evenly between groups
+            if (memory_used_bytes < memory_used_bytes_best) and (num_obs % group_nodes == 0):
                 group_nodes_best = group_nodes
                 n_detector_best = n_detector
+                num_obs_best = num_obs
                 memory_used_bytes_best = memory_used_bytes
     # returns the group_nodes and n_detector that minimize memory usage
-    return (group_nodes_best, n_detector_best, memory_used_bytes_best)
+    return (group_nodes_best, n_detector_best, num_obs_best, memory_used_bytes_best)
 
 def select_case(args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_comm, log):
     """ 
@@ -203,22 +207,26 @@ def select_case(args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_c
         # force use the case size suggested by the user
         args.total_samples = cases_samples[args.case]
         # finds the parameters that minimize memory use
-        (group_nodes, n_detector, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, args.total_samples, full_pointing)
+        (group_nodes, n_detector, num_obs, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, args.total_samples, full_pointing)
         args.n_detector = n_detector
-        log.info_rank0(f"Distribution using {args.total_samples} total samples, spread over {group_nodes} groups of {n_nodes//group_nodes} nodes, and {args.n_detector} detectors ('{args.case}' workflow size)", world_comm)
+        args.num_obs = num_obs
+        log.info_rank0(f"Distribution using {args.total_samples} total samples, spread over {group_nodes} groups of {n_nodes//group_nodes} nodes, that have {n_procs} processors each ('{args.case}' workflow size)", world_comm)
+        log.info_rank0(f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute.", world_comm)
         if (memory_used_bytes >= available_memory_bytes) and ((world_comm is None) or (world_comm.rank == 0)):
             log.warning(f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes // 1e9} GB).")
     else:
         # tries the workflow sizes from largest to smalest, until we find one that fits
         for (name, total_samples) in cases_samples.items():
             # finds the parameters that minimize memory use
-            (group_nodes, n_detector, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
+            (group_nodes, n_detector, num_obs, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
             # if the parameters fit in memory, we are done
             if memory_used_bytes < available_memory_bytes:
                 args.case = name
                 args.total_samples = total_samples
                 args.n_detector = n_detector
-                log.info_rank0(f"Distribution using {args.total_samples} total samples, spread over {group_nodes} groups of {n_nodes//group_nodes} nodes, and {args.n_detector} detectors ('{args.case}' workflow size)", world_comm)
+                args.num_obs = num_obs
+                log.info_rank0(f"Distribution using {args.total_samples} total samples, spread over {group_nodes} groups of {n_nodes//group_nodes} nodes, that have {n_procs} processors each ('{args.case}' workflow size)", world_comm)
+                log.info_rank0(f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute.", world_comm)
                 return
         raise Exception("Error: Unable to fit a case size in memory!")
 
@@ -247,16 +255,13 @@ def make_schedule(args, world_comm, log):
     """
     Creates a satellite schedule
     """
-    num_obs = max(1, (args.obs_minutes * args.sample_rate * args.n_detector) // args.total_samples)
-    log.info_rank0(f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute.", world_comm)
-    # builds the schedule
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
         schedule = create_satellite_schedule(
             prefix="",
             mission_start=datetime.now(),
             observation_time=args.obs_minutes * u.minute,
-            num_observations=num_obs,
+            num_observations=args.num_obs,
             prec_period=args.prec_period * u.minute,
             spin_period=args.spin_period * u.minute)
     if world_comm is not None:
