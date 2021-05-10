@@ -200,7 +200,8 @@ def job_group_size(
         (group_mem < obs_mem[0]) or (n_group > len(obs_len))
     ):
         # The group size cannot fit the largest observation
-        try_group = group_nodes
+        # Increase to the next valid value.
+        try_group = group_nodes + 1
         while (try_group < n_node) and (n_node % try_group != 0):
             try_group += 1
         group_nodes = try_group
