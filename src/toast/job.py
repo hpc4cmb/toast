@@ -158,6 +158,7 @@ def job_group_size(
         return m
 
     group_nodes = 1
+    n_group = n_node // group_nodes
     group_mem = group_nodes * node_mem
     obs_mem = [observation_mem(x, group_nodes) for x in obs_len]
 
@@ -195,12 +196,15 @@ def job_group_size(
             )
         )
 
-    while (group_nodes < n_node) and (group_mem < obs_mem[0]):
+    while (group_nodes < n_node) and (
+        (group_mem < obs_mem[0]) or (n_group > len(obs_len))
+    ):
         # The group size cannot fit the largest observation
         try_group = group_nodes
-        while (try_group <= n_node) and (n_node % try_group != 0):
+        while (try_group < n_node) and (n_node % try_group != 0):
             try_group += 1
         group_nodes = try_group
+        n_group = n_node // group_nodes
         group_mem = group_nodes * node_mem
         obs_mem = [observation_mem(x, group_nodes) for x in obs_len]
         if rank == 0:
