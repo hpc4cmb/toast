@@ -419,10 +419,9 @@ class SSOPatch(Patch):
         Calculate the relative position of the SSO at a given time
         """
         self.body.compute(observer)
-        ra, dec = self.body.ra, self.body.dec
-        # Synthesize 8 corners around the center
-        phi = ra
-        theta = dec
+        # Synthesize 8 corners around the astrometric center
+        phi = self.body.a_ra
+        theta = self.body.a_dec
         r = self.radius
         ncorner = 8
         angstep = 2 * np.pi / ncorner
