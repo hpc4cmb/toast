@@ -45,10 +45,10 @@ class MoonTooClose(TooClose):
 
 class Patch(object):
 
-    hits = 0
+    hits = 1
     partial_hits = 0
-    rising_hits = 0
-    setting_hits = 0
+    rising_hits = 1
+    setting_hits = 1
     time = 0
     rising_time = 0
     setting_time = 0
@@ -723,6 +723,7 @@ def attempt_scan(
     fout_fmt,
     ods,
     boresight_angle,
+    patches,
 ):
     """Attempt scanning the visible patches in order until success."""
     log = Logger.get()
@@ -799,6 +800,16 @@ def attempt_scan(
                             partial_scan=allow_partial_scans,
                         )
                         patch.step_azel()
+                        if not allow_partial_scans:
+                            # increment the hit counter on all sub patches
+                            for candidate in patches:
+                                if patch.name != candidate.name and \
+                                   patch.name in candidate.name:
+                                    candidate.hits += 1
+                            if rising:
+                                candidate.rising_hits += 1
+                            else:
+                                candidate.setting_hits += 1
                         break
                     except TooClose:
                         success = False
@@ -883,6 +894,7 @@ def attempt_scan_pole(
     fout_fmt,
     ods,
     boresight_angle,
+    patches,
 ):
     """Attempt scanning the visible patches in order until success."""
     if args.one_scan_per_day and stop_timestamp > tstop_cooler:
@@ -961,6 +973,13 @@ def attempt_scan_pole(
                     success = False
                     pole_success = False
         if success:
+            # increment the hit counter on all sub patches
+            for candidate in patches:
+                if patch.name != candidate.name and \
+                   patch.name in candidate.name:
+                    candidate.hits += 1
+                    candidate.rising_hits += 1
+                    candidate.setting_hits += 1
             break
     tstop = t
     if args.one_scan_per_day:
@@ -2005,6 +2024,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
+                patches,
             )
         else:
             success, t = attempt_scan(
@@ -2023,6 +2043,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
+                patches,
             )
 
         if args.operational_days and len(ods) > args.operational_days:
