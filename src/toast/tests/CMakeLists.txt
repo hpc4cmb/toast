@@ -45,6 +45,7 @@ install(FILES
     template_offset.py
     template_fourier2d.py
     template_subharmonic.py
+    template_gain.py
     ops_sim_gaindrifts.py
     ops_sim_crosstalk.py
     ops_polyfilter.py
