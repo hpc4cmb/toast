@@ -279,6 +279,11 @@ def main():
     if madam_available and ops.madam.enabled:
         ops.madam.apply(data)
 
+    alltimers = toast.timing.gather_timers(comm=comm.comm_world)
+    if comm.world_rank == 0:
+        out = os.path.join(args.out_dir, "timing")
+        toast.timing.dump(alltimers, out)
+
 
 if __name__ == "__main__":
     try:

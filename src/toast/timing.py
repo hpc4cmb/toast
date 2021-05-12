@@ -2,6 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+import re
+
 import inspect
 
 from functools import wraps
@@ -17,20 +20,29 @@ from ._libtoast import Timer, GlobalTimers
 from .utils import Environment
 
 
+stack_toast_file_pat = re.compile(r".*(toast.*)\.py")
+
+
 def function_timer(f):
     env = Environment.get()
     ft = env.function_timers()
     if ft:
-        nm = None
-        if inspect.ismethod(f):
-            nm = f.__self__.__name__
-        else:
-            nm = f.__qualname__
-        tnm = "{} (function_timer)".format(nm)
+        _, srcline = inspect.getsourcelines(f)
+        src = inspect.getfile(f)
+        match = stack_toast_file_pat.match(src)
+        nm = f"{match.group(1)}:{f.__name__}({srcline})"
 
         @wraps(f)
         def df(*args, **kwargs):
             gt = GlobalTimers.get()
+            # Build a name from the current function and the call trace.
+            tnm = "(function) "
+            for frm in reversed(inspect.stack()[:]):
+                mat = stack_toast_file_pat.match(frm.filename)
+                if mat is not None:
+                    if (frm.function != "df") and (frm.function != "<module>"):
+                        tnm += f"{mat.group(1)}:{frm.function}({frm.lineno})|"
+            tnm += f"{nm}"
             gt.start(tnm)
             result = f(*args, **kwargs)
             gt.stop(tnm)
@@ -151,7 +163,8 @@ def dump(results, path):
     with open(outpath, "w", newline="") as f:
         w = csv.writer(f, delimiter=",", quotechar="'")
         w.writerow(cols.keys())
-        for nm, props in results.items():
+        for nm in sorted(results.keys()):
+            props = results[nm]
             row = [nm]
             for k, v in cols.items():
                 if k == "Timer":
