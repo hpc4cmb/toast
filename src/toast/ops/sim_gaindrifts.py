@@ -138,12 +138,12 @@ class GainDrifter(Operator):
                 key1 = (
                     self.realization * 4294967296 + telescope * 65536 + self.component
                 )
-                counter1 = 0
                 counter2 = 0
 
                 for det in dets:
                     detindx = focalplane[det]["uid"]
-                    key2 = obsindx * 4294967296 + detindx
+                    key2 = obsindx
+                    counter1 = detindx
 
                     rngdata = rng.random(
                         1,
@@ -194,9 +194,9 @@ class GainDrifter(Operator):
                             + telescope * 6512345
                             + self.component
                         )
-                        counter1 = 0
+                        counter1 = detindx
                         counter2 = 0
-                        key2 = obsindx * 12345676 + detindx
+                        key2 = obsindx
                         rngdata = rng.random(
                             1,
                             sampler="gaussian",

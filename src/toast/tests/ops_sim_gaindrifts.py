@@ -62,11 +62,11 @@ class SimGainTest(MPITestCase):
             key1 = (
                 drifter.realization * 4294967296 + telescope * 65536 + drifter.component
             )
-            counter1 = 0
             counter2 = 0
             for det in obs.local_detectors:
                 detindx = focalplane[det]["uid"]
-                key2 = obsindx * 4294967296 + detindx
+                key2 = obsindx
+                counter1 = detindx
                 rngdata = rng.random(
                     1,
                     sampler="gaussian",
@@ -81,12 +81,9 @@ class SimGainTest(MPITestCase):
                     gf1, gf2, decimal=np.log10(drifter.sigma_drift) - 1
                 )
 
-
     def test_thermal_drift(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data_big(
-            self.comm,pixel_per_process=7
-        )
+        data = create_satellite_data_big(self.comm, pixel_per_process=7)
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
@@ -135,17 +132,10 @@ class SimGainTest(MPITestCase):
             detector_mismatch=0.7,
         )
         drifter.apply(data)
-        binner2 = ops.BinMap(
-            pixel_dist="pixel_dist",
-            covariance=cov_and_hits.covariance,
-            det_data=key,
-            pointing=pointing,
-            noise_model=default_model.noise_model,
-            sync_type="alltoallv",
-        )
-        binner2.apply(data)
+
+        binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        write_healpix_fits(data[binner2.binned], map2_path, nest=False)
+        write_healpix_fits(data[binner1.binned], map2_path, nest=False)
 
         if data.comm.world_rank == 0:
             # import pdb; pdb.set_trace()
@@ -166,9 +156,7 @@ class SimGainTest(MPITestCase):
 
     def test_slow_drift(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data_big(
-            self.comm,pixel_per_process=7
-        )
+        data = create_satellite_data_big(self.comm, pixel_per_process=7)
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
@@ -217,17 +205,9 @@ class SimGainTest(MPITestCase):
         )
         drifter.apply(data)
 
-        binner2 = ops.BinMap(
-            pixel_dist="pixel_dist",
-            covariance=cov_and_hits.covariance,
-            det_data=key,
-            pointing=pointing,
-            noise_model=default_model.noise_model,
-            sync_type="alltoallv",
-        )
-        binner2.apply(data)
+        binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        write_healpix_fits(data[binner2.binned], map2_path, nest=False)
+        write_healpix_fits(data[binner1.binned], map2_path, nest=False)
         if data.comm.world_rank == 0:
             oldmap = hp.read_map(map1_path, field=None, nest=False)
             newmap = hp.read_map(map2_path, field=None, nest=False)
@@ -238,12 +218,9 @@ class SimGainTest(MPITestCase):
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
 
-
     def test_slow_drift_commonmode(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data_big(
-            self.comm,pixel_per_process=7
-        )
+        data = create_satellite_data_big(self.comm, pixel_per_process=7)
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
@@ -291,17 +268,9 @@ class SimGainTest(MPITestCase):
         )
         drifter.apply(data)
 
-        binner2 = ops.BinMap(
-            pixel_dist="pixel_dist",
-            covariance=cov_and_hits.covariance,
-            det_data=key,
-            pointing=pointing,
-            noise_model=default_model.noise_model,
-            sync_type="alltoallv",
-        )
-        binner2.apply(data)
+        binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        write_healpix_fits(data[binner2.binned], map2_path, nest=False)
+        write_healpix_fits(data[binner1.binned], map2_path, nest=False)
 
         if data.comm.world_rank == 0:
             oldmap = hp.read_map(map1_path, field=None, nest=False)
@@ -313,12 +282,9 @@ class SimGainTest(MPITestCase):
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
 
-
     def test_responsivity_function(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data_big(
-            self.comm
-        )
+        data = create_satellite_data_big(self.comm)
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
@@ -335,14 +301,13 @@ class SimGainTest(MPITestCase):
         sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
         sim_dipole.apply(data)
 
-
         # inject gain drift
-        responsivity = lambda x: -2 *x**3 +5*x**2 - 4*x + 3
+        responsivity = lambda x: -2 * x ** 3 + 5 * x ** 2 - 4 * x + 3
         drifter = ops.GainDrifter(
             det_data=key,
             drift_mode="thermal_drift",
             detector_mismatch=0.7,
-            sigma_drift=1e-6 ,
-            responsivity_function=responsivity
+            sigma_drift=1e-6,
+            responsivity_function=responsivity,
         )
         drifter.apply(data)

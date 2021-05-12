@@ -208,7 +208,11 @@ def create_satellite_data(
 
 
 def create_satellite_data_big(
-    mpicomm, obs_per_group=1, sample_rate=10.0 * u.Hz, obs_time=10.0 * u.minute, pixel_per_process=8
+    mpicomm,
+    obs_per_group=1,
+    sample_rate=10.0 * u.Hz,
+    obs_time=10.0 * u.minute,
+    pixel_per_process=8,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -230,7 +234,9 @@ def create_satellite_data_big(
     data = Data(toastcomm)
 
     tele = create_space_telescope(
-        group_size=toastcomm.group_size, pixel_per_process=pixel_per_process, sample_rate=sample_rate
+        group_size=toastcomm.group_size,
+        pixel_per_process=pixel_per_process,
+        sample_rate=sample_rate,
     )
     det_props = tele.focalplane.detector_data
     fov = tele.focalplane.field_of_view
