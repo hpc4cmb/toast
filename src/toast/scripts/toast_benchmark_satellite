@@ -406,6 +406,7 @@ def compute_science_metric(args, global_timer, n_nodes, rank, log):
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()
+    env.enable_function_timers()
     global_timer = toast.timing.GlobalTimers.get()
     global_timer.start("toast_benchmark_satellite (total)")
 
@@ -499,10 +500,6 @@ def main():
     if comm.world_rank == 0:
         out = os.path.join(args.out_dir, "timing")
         dump(alltimers, out)
-        with open(os.path.join(args.out_dir, "log"), "a") as f:
-            f.write("Copy of Global Timers:\n")
-            with open(f"{out}.csv", "r") as t:
-                f.write(t.read())
         timer.stop("toast_benchmark_satellite (gathering and dumping timing info)")
         timer.report()
 
