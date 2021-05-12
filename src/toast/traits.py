@@ -25,6 +25,7 @@ from traitlets import (
     Instance,
     Int,
     Float,
+    Callable,
 )
 
 from astropy import units as u

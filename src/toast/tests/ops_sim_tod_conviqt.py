@@ -165,6 +165,7 @@ class SimConviqtTest(MPITestCase):
         fail = False
 
         if self.rank == 0:
+
             import matplotlib.pyplot as plt
 
             mapfile = os.path.join(self.outdir, "toast_bin.fits")

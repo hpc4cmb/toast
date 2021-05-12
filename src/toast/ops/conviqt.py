@@ -10,6 +10,7 @@ import numpy as np
 import traitlets
 
 from ..mpi import MPI, MPI_Comm, use_mpi, Comm
+
 from .operator import Operator
 from .. import qarray as qa
 from ..timing import function_timer

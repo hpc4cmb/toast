@@ -11,6 +11,7 @@ MPI = None
 class MPI_Comm:
     pass
 
+
 if use_mpi is None:
     # See if the user has explicitly disabled MPI.
     if "MPI_DISABLE" in os.environ:
