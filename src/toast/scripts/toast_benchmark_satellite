@@ -213,13 +213,13 @@ def select_case(args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_c
         log.info_rank0(f"Distribution using {args.total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{args.case}' workflow size)", world_comm)
         log.info_rank0(f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute.", world_comm)
         if (memory_used_bytes >= available_memory_bytes) and ((world_comm is None) or (world_comm.rank == 0)):
-            log.warning(f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes // 1e9} GB).")
+            log.warning(f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB).")
     else:
         # tries the workflow sizes from largest to smalest, until we find one that fits
         for (case, total_samples) in cases_samples.items():
             # finds the parameters that minimize memory use
             (group_nodes, n_detector, num_obs, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
-            #log.info_rank0(f"DEBUG: Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{case}' workflow size), (we predict a usage of about {memory_used_bytes // 1e9} GB)", world_comm)
+            #log.info_rank0(f"DEBUG: Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{case}' workflow size), (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB)", world_comm)
             # if the parameters fit in memory, we are done
             if memory_used_bytes < available_memory_bytes:
                 args.case = case
@@ -227,7 +227,7 @@ def select_case(args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_c
                 args.n_detector = n_detector
                 args.num_obs = num_obs
                 log.info_rank0(f"Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{case}' workflow size)", world_comm)
-                log.info_rank0(f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute (we predict a usage of about {memory_used_bytes // 1e9} GB).", world_comm)
+                log.info_rank0(f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB which should be below the available {available_memory_bytes / (1024 ** 3) :0.2f} GB).", world_comm)
                 return
         raise Exception("Error: Unable to fit a case size in memory!")
 
