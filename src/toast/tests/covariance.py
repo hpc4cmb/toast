@@ -190,10 +190,7 @@ class CovarianceTest(MPITestCase):
                     if npp.data[sm, spix, 0] == 0:
                         continue
                     if not np.allclose(
-                        sig.data[sm, spix],
-                        check.data[sm, spix],
-                        rtol=1e-5,
-                        atol=1e-8,
+                        sig.data[sm, spix], check.data[sm, spix], rtol=1e-5, atol=1e-8,
                     ):
                         failed = True
             if comm is not None:
@@ -242,10 +239,7 @@ class CovarianceTest(MPITestCase):
             for sm in range(invnpp.distribution.n_local_submap):
                 for spix in range(invnpp.distribution.n_pix_submap):
                     if not np.allclose(
-                        sig.data[sm, spix],
-                        prod.data[sm, spix],
-                        rtol=1e-5,
-                        atol=1e-8,
+                        sig.data[sm, spix], prod.data[sm, spix], rtol=1e-5, atol=1e-8,
                     ):
                         failed = True
             if comm is not None:

@@ -222,11 +222,7 @@ class SimDipole(Operator):
 
                     # Compute the dipole timestream for this view and detector
                     dipole_tod = dipole(
-                        quats,
-                        vel=vel,
-                        solar=sol,
-                        cmb=self.cmb,
-                        freq=self.freq,
+                        quats, vel=vel, solar=sol, cmb=self.cmb, freq=self.freq,
                     )
 
                     # Add contribution to output
@@ -253,9 +249,7 @@ class SimDipole(Operator):
     def _requires(self):
         req = {
             "meta": list(),
-            "shared": [
-                self.boresight,
-            ],
+            "shared": [self.boresight,],
             "detdata": list(),
             "intervals": list(),
         }
@@ -267,9 +261,7 @@ class SimDipole(Operator):
         prov = {
             "meta": list(),
             "shared": list(),
-            "detdata": [
-                self.det_data,
-            ],
+            "detdata": [self.det_data,],
         }
         return prov
 

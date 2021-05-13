@@ -59,7 +59,7 @@ void init_math_fft(py::module & m) {
              int64_t len = self.length();
              double * raw = self.tdata(
                  indx);
-             py::array_t <double> ret({len}, {sizeof(double)},
+             py::array_t <double> ret({ len }, {sizeof(double)},
                                       raw,
                                       py::cast(
                                           self));
@@ -79,7 +79,7 @@ void init_math_fft(py::module & m) {
              int64_t len = self.length();
              double * raw = self.fdata(
                  indx);
-             py::array_t <double> ret({len}, {sizeof(double)},
+             py::array_t <double> ret({ len }, {sizeof(double)},
                                       raw,
                                       py::cast(
                                           self));

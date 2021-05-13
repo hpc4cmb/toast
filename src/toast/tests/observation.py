@@ -108,10 +108,7 @@ class ObservationTest(MPITestCase):
             else:
                 obs.shared["det_A"][None] = None
             obs.shared.create(
-                "all_A",
-                shape=all_common.shape,
-                dtype=all_common.dtype,
-                comm=obs.comm,
+                "all_A", shape=all_common.shape, dtype=all_common.dtype, comm=obs.comm,
             )
             if obs.comm_rank == 0:
                 obs.shared["all_A"][:, :, :] = all_common
@@ -407,11 +404,7 @@ class ObservationTest(MPITestCase):
             for sh in ["boresight_azel", "boresight_radec"]:
                 dummy = None
                 if ob.comm_col_rank == 0:
-                    dummy = np.array(
-                        [
-                            [5.0, 5.0, 5.0, 5.0],
-                        ]
-                    )
+                    dummy = np.array([[5.0, 5.0, 5.0, 5.0],])
                 ob.shared[sh][-1, :] = dummy
 
             for dd in ["signal", "flags"]:

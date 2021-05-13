@@ -59,11 +59,7 @@ class ScanHealpixTest(MPITestCase):
 
         # Run the scanning from the file
 
-        scan_hpix = ops.ScanHealpix(
-            file=hpix_file,
-            det_data="test",
-            pointing=pointing,
-        )
+        scan_hpix = ops.ScanHealpix(file=hpix_file, det_data="test", pointing=pointing,)
         scan_hpix.apply(data)
 
         # Check that the sets of timestreams match.

@@ -44,9 +44,7 @@ class ScanMap(Operator):
     weights = Unicode("weights", help="Observation detdata key for Stokes weights")
 
     map_key = Unicode(
-        None,
-        allow_none=True,
-        help="The Data key where the map is located",
+        None, allow_none=True, help="The Data key where the map is located",
     )
 
     subtract = Bool(
@@ -222,9 +220,7 @@ class ScanMask(Operator):
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
 
     mask_key = Unicode(
-        None,
-        allow_none=True,
-        help="The Data key where the mask is located",
+        None, allow_none=True, help="The Data key where the mask is located",
     )
 
     mask_bits = Int(
@@ -331,9 +327,7 @@ class ScanScale(Operator):
     weights = Unicode("weights", help="Observation detdata key for Stokes weights")
 
     map_key = Unicode(
-        None,
-        allow_none=True,
-        help="The Data key where the weight map is located",
+        None, allow_none=True, help="The Data key where the weight map is located",
     )
 
     def __init__(self, **kwargs):

@@ -391,13 +391,7 @@ class Patch(object):
 
 class SSOPatch(Patch):
     def __init__(
-        self,
-        name,
-        weight,
-        radius,
-        el_min=0,
-        el_max=np.pi / 2,
-        elevations=None,
+        self, name, weight, radius, el_min=0, el_max=np.pi / 2, elevations=None,
     ):
         self.name = name
         self.weight = weight

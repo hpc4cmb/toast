@@ -48,7 +48,7 @@ void register_aligned(py::module & m, char const * name) {
              return (int64_t)((void *)self.data());
          })
     .def("array", [](C & self) -> py::array_t <typename C::value_type> {
-             py::array_t <typename C::value_type> ret({self.size()},
+             py::array_t <typename C::value_type> ret({ self.size() },
                                                       {sizeof(typename C::value_type)},
                                                       self.data(), py::cast(self));
              return ret;

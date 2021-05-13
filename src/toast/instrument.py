@@ -440,10 +440,8 @@ class Focalplane(object):
             try:
                 for k, v in value.items():
                     if k not in self.detector_data.colnames:
-                        msg = (
-                            "assignment value element '{}' is not a det column".format(
-                                k
-                            )
+                        msg = "assignment value element '{}' is not a det column".format(
+                            k
                         )
                         raise ValueError(msg)
                     self.detector_data[indx][k] = v

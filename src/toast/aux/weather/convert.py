@@ -30,10 +30,7 @@ for mn in range(12):
     meta.create("SOURCE", head["SOURCE"])
 
     for datname in dat.dtype.names:
-        ds = grp.create_dataset(
-            datname,
-            data=dat[datname].astype(np.float32),
-        )
+        ds = grp.create_dataset(datname, data=dat[datname].astype(np.float32),)
 
 hf.flush()
 hf.close()

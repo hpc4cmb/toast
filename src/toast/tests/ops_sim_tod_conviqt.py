@@ -53,10 +53,7 @@ class SimConviqtTest(MPITestCase):
             hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
 
             self.blm = create_fake_beam_alm(
-                self.lmax,
-                self.mmax,
-                fwhm_x=self.fwhm_beam,
-                fwhm_y=self.fwhm_beam,
+                self.lmax, self.mmax, fwhm_x=self.fwhm_beam, fwhm_y=self.fwhm_beam,
             )
             hp.write_alm(
                 self.fname_beam,
@@ -128,10 +125,7 @@ class SimConviqtTest(MPITestCase):
         # Bin a map to study
 
         pointing = ops.PointingHealpix(
-            nside=self.nside,
-            nest=False,
-            mode="I",
-            detector_pointing=detpointing,
+            nside=self.nside, nest=False, mode="I", detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -172,9 +166,7 @@ class SimConviqtTest(MPITestCase):
             mdata = hp.read_map(mapfile, nest=False)
 
             deconv = 1 / hp.gauss_beam(
-                self.fwhm_sky.to_value(u.radian),
-                lmax=self.lmax,
-                pol=False,
+                self.fwhm_sky.to_value(u.radian), lmax=self.lmax, pol=False,
             )
 
             smoothed = hp.alm2map(
@@ -194,9 +186,7 @@ class SimConviqtTest(MPITestCase):
             blsq /= blsq[1]
 
             gauss_blsq = hp.gauss_beam(
-                self.fwhm_beam.to_value(u.radian),
-                lmax=self.lmax,
-                pol=False,
+                self.fwhm_beam.to_value(u.radian), lmax=self.lmax, pol=False,
             )
 
             if self.comm is None or self.comm.size == 1:
@@ -242,12 +232,7 @@ class SimConviqtTest(MPITestCase):
             compare = blsq > 1e-5
             ref = cl_in[compare] * blsq[compare] * deconv[compare] ** 2
             norm = np.mean(cl_out[compare] / ref)
-            if not np.allclose(
-                norm * ref,
-                cl_out[compare],
-                rtol=1e-5,
-                atol=1e-5,
-            ):
+            if not np.allclose(norm * ref, cl_out[compare], rtol=1e-5, atol=1e-5,):
                 fail = True
 
         if self.comm is not None:
