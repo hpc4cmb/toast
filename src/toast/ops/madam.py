@@ -104,13 +104,11 @@ class Madam(Operator):
     )
 
     restore_det_data = Bool(
-        False,
-        help="If True, restore detector data to observations on completion",
+        False, help="If True, restore detector data to observations on completion",
     )
 
     restore_pointing = Bool(
-        False,
-        help="If True, restore detector pointing to observations on completion",
+        False, help="If True, restore detector pointing to observations on completion",
     )
 
     mcmode = Bool(
@@ -359,9 +357,7 @@ class Madam(Operator):
     def _requires(self):
         req = {
             "meta": [self.noise_model],
-            "shared": [
-                self.times,
-            ],
+            "shared": [self.times,],
             "detdata": [self.det_data, self.pixels, self.weights],
             "intervals": list(),
         }
@@ -422,10 +418,8 @@ class Madam(Operator):
 
             # Check that the timestamps exist.
             if self.times not in ob.shared:
-                msg = (
-                    "Shared timestamps '{}' does not exist in observation '{}'".format(
-                        self.times, ob.name
-                    )
+                msg = "Shared timestamps '{}' does not exist in observation '{}'".format(
+                    self.times, ob.name
                 )
                 raise RuntimeError(msg)
 
@@ -875,10 +869,7 @@ class Madam(Operator):
             psdinfo = (detweights, npsd, psdstarts, psd_freqs, psdvals)
 
             log_time_memory(
-                data,
-                timer=timer,
-                timer_msg="Collect PSD info",
-                prefix=self._logprefix,
+                data, timer=timer, timer_msg="Collect PSD info", prefix=self._logprefix,
             )
         timer.stop()
         del nodecomm

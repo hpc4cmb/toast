@@ -92,11 +92,7 @@ class SimConviqt(Operator):
         "angle.",
     )
 
-    pol = Bool(
-        True,
-        allow_none=False,
-        help="Toggle simulated signal polarization",
-    )
+    pol = Bool(True, allow_none=False, help="Toggle simulated signal polarization",)
 
     mc = Int(
         None,
@@ -125,17 +121,9 @@ class SimConviqt(Operator):
         "differ.  If not set, will use the maximum expansion order from file.",
     )
 
-    order = Int(
-        13,
-        allow_none=False,
-        help="Conviqt order parameter (expert mode)",
-    )
+    order = Int(13, allow_none=False, help="Conviqt order parameter (expert mode)",)
 
-    verbosity = Int(
-        0,
-        allow_none=False,
-        help="",
-    )
+    verbosity = Int(0, allow_none=False, help="",)
 
     normalize_beam = Bool(
         False,
@@ -144,21 +132,15 @@ class SimConviqt(Operator):
     )
 
     remove_dipole = Bool(
-        False,
-        allow_none=False,
-        help="Suppress the temperature dipole in sky_file.",
+        False, allow_none=False, help="Suppress the temperature dipole in sky_file.",
     )
 
     remove_monopole = Bool(
-        False,
-        allow_none=False,
-        help="Suppress the temperature monopole in sky_file.",
+        False, allow_none=False, help="Suppress the temperature monopole in sky_file.",
     )
 
     apply_flags = Bool(
-        False,
-        allow_none=False,
-        help="Only synthesize signal for unflagged samples.",
+        False, allow_none=False, help="Only synthesize signal for unflagged samples.",
     )
 
     fwhm = Quantity(
@@ -347,11 +329,7 @@ class SimConviqt(Operator):
         timer = Timer()
         timer.start()
         sky = conviqt.Sky(
-            self.lmax,
-            self.pol,
-            skyfile,
-            self.fwhm.to_value(u.arcmin),
-            self.comm,
+            self.lmax, self.pol, skyfile, self.fwhm.to_value(u.arcmin), self.comm,
         )
         if self.remove_monopole:
             sky.remove_monopole()
@@ -641,11 +619,7 @@ class SimWeightedConviqt(SimConviqt):
             del theta, phi, psi
 
             self.calibrate_signal(
-                data,
-                det,
-                beamI00,
-                convolved_data,
-                verbose,
+                data, det, beamI00, convolved_data, verbose,
             )
             self.save(data, det, convolved_data, verbose)
 

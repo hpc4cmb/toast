@@ -192,8 +192,7 @@ class MapmakerUtilsTest(MPITestCase):
                 for px in range(invnpp[stype].distribution.n_pix_submap):
                     if invnpp[stype].data[sm, px, 0] != 0:
                         if not np.allclose(
-                            invnpp[stype].data[sm, px],
-                            check_invnpp.data[sm, px],
+                            invnpp[stype].data[sm, px], check_invnpp.data[sm, px],
                         ):
                             failed = True
                     if invnpp_corr[stype].data[sm, px, 0] != 0:
@@ -308,14 +307,12 @@ class MapmakerUtilsTest(MPITestCase):
                 for px in range(zmap[stype].distribution.n_pix_submap):
                     if zmap[stype].data[sm, px, 0] != 0:
                         if not np.allclose(
-                            zmap[stype].data[sm, px],
-                            check_zmap.data[sm, px],
+                            zmap[stype].data[sm, px], check_zmap.data[sm, px],
                         ):
                             failed = True
                     if zmap_corr[stype].data[sm, px, 0] != 0:
                         if not np.allclose(
-                            zmap_corr[stype].data[sm, px],
-                            check_zmap_corr.data[sm, px],
+                            zmap_corr[stype].data[sm, px], check_zmap_corr.data[sm, px],
                         ):
                             failed = True
             if comm is not None:

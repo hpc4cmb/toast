@@ -98,10 +98,7 @@ class SimDipoleTest(MPITestCase):
         # make a simple pointing matrix
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=self.nside,
-            nest=False,
-            mode="I",
-            detector_pointing=detpointing,
+            nside=self.nside, nest=False, mode="I", detector_pointing=detpointing,
         )
 
         # Generate timestreams

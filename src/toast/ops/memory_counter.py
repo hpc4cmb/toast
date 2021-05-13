@@ -32,8 +32,7 @@ class MemoryCounter(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     silent = Bool(
-        False,
-        help="If True, return the memory used but do not log the result",
+        False, help="If True, return the memory used but do not log the result",
     )
 
     def __init__(self, **kwargs):

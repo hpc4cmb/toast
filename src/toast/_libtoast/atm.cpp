@@ -49,7 +49,7 @@ void init_atm(py::module & m) {
                                                double freqmin, double freqmax,
                                                size_t nfreq) {
               py::array_t <double> ret;
-              ret.resize({nfreq});
+              ret.resize({ nfreq });
               py::buffer_info info = ret.request();
               double * raw = static_cast <double *> (info.ptr);
               auto blah = toast::atm_get_absorption_coefficient_vec(
@@ -78,7 +78,7 @@ void init_atm(py::module & m) {
                                             double pressure, double pwv, double freqmin,
                                             double freqmax, size_t nfreq) {
               py::array_t <double> ret;
-              ret.resize({nfreq});
+              ret.resize({ nfreq });
               py::buffer_info info = ret.request();
               double * raw = static_cast <double *> (info.ptr);
               auto blah = toast::atm_get_atmospheric_loading_vec(
@@ -450,9 +450,9 @@ void init_atm(py::module & m) {
               int rank
               ) {
               py::array_t <double> kolmo_x;
-              kolmo_x.resize({nr});
+              kolmo_x.resize({ nr });
               py::array_t <double> kolmo_y;
-              kolmo_y.resize({nr});
+              kolmo_y.resize({ nr });
               py::buffer_info info_kolmo_x = kolmo_x.request();
               double * raw_kolmo_x = static_cast <double *> (info_kolmo_x.ptr);
               py::buffer_info info_kolmo_y = kolmo_y.request();

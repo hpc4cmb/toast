@@ -26,10 +26,7 @@ def add_mapmaker_args(parser):
         dest="mapmaker_prefix",
     )
     parser.add_argument(
-        "--mapmaker-mask",
-        required=False,
-        help="Destriping mask",
-        dest="mapmaker_mask",
+        "--mapmaker-mask", required=False, help="Destriping mask", dest="mapmaker_mask",
     )
     parser.add_argument(
         "--mapmaker-weightmap",

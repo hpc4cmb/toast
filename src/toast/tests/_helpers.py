@@ -240,16 +240,10 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         # Create shared objects for timestamps, common flags, boresight, position,
         # and velocity.
         ob.shared.create(
-            "times",
-            shape=(ob.n_local_samples,),
-            dtype=np.float64,
-            comm=ob.comm_col,
+            "times", shape=(ob.n_local_samples,), dtype=np.float64, comm=ob.comm_col,
         )
         ob.shared.create(
-            "flags",
-            shape=(ob.n_local_samples,),
-            dtype=np.uint8,
-            comm=ob.comm_col,
+            "flags", shape=(ob.n_local_samples,), dtype=np.uint8, comm=ob.comm_col,
         )
         ob.shared.create(
             "position",
@@ -392,12 +386,7 @@ def create_fake_sky_alm(lmax=128, fwhm=10 * u.degree, pol=True, pointsources=Fal
         while 4 * nside < lmax:
             nside *= 2
         _, a_lm = hp.synfast(
-            cl,
-            nside,
-            alm=True,
-            lmax=lmax,
-            fwhm=fwhm.to_value(u.radian),
-            verbose=False,
+            cl, nside, alm=True, lmax=lmax, fwhm=fwhm.to_value(u.radian), verbose=False,
         )
     return a_lm
 

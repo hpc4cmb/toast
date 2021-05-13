@@ -80,10 +80,7 @@ def add_madam_args(parser):
         "--madam-parfile", required=False, default=None, help="Madam parameter file"
     )
     parser.add_argument(
-        "--madam-mask",
-        required=False,
-        help="Destriping mask",
-        dest="mapmaker_mask",
+        "--madam-mask", required=False, help="Destriping mask", dest="mapmaker_mask",
     )
 
     parser.add_argument(
