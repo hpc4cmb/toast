@@ -29,6 +29,7 @@ from toast.timing import gather_timers, dump
 from toast.instrument_sim import fake_hexagon_focalplane
 from toast.schedule_sim_satellite import create_satellite_schedule
 
+
 def parse_arguments():
     """
     Defines and parses the arguments for the script.
@@ -494,14 +495,16 @@ def main():
     compute_science_metric(args, global_timer, n_nodes, rank, log)
 
     # dumps all the timing information
-    timer = toast.timing.GlobalTimers.get()
-    timer.start("toast_benchmark_satellite (gathering and dumping timing info)")
+    timer = toast.timing.Timer()
+    timer.start()
     alltimers = gather_timers(comm=world_comm)
     if comm.world_rank == 0:
         out = os.path.join(args.out_dir, "timing")
         dump(alltimers, out)
-        timer.stop("toast_benchmark_satellite (gathering and dumping timing info)")
-        timer.report()
+        timer.stop()
+        timer.report("toast_benchmark_satellite (gathering and dumping timing info)")
+    else:
+        timer.stop()
 
 if __name__ == "__main__":
     try:

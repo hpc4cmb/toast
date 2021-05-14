@@ -16,6 +16,22 @@ from ._libtoast import (
 from .pixels import PixelData
 
 
+# These are just wrappers to time the libtoast calls
+@function_timer
+def libtoast_cov_mult_diag(*args):
+    cov_mult_diag(*args)
+
+
+@function_timer
+def libtoast_cov_apply_diag(*args):
+    cov_apply_diag(*args)
+
+
+@function_timer
+def libtoast_cov_eigendecompose_diag(*args):
+    cov_eigendecompose_diag(*args)
+
+
 def create_local_invert(n_pix_submap, mapnnz, threshold, rcond, invert=False):
     """Generate a function for inverting locally owned submaps of a covariance.
 
@@ -30,6 +46,7 @@ def create_local_invert(n_pix_submap, mapnnz, threshold, rcond, invert=False):
 
     """
 
+    @function_timer
     def local_invert(n_submap_value, receive_locations, receive, reduce_buf):
         # Locally invert owned submaps
         for sm, locs in receive_locations.items():
@@ -43,7 +60,7 @@ def create_local_invert(n_pix_submap, mapnnz, threshold, rcond, invert=False):
             else:
                 rcond.reduce_buf[:] = 0.0
                 rdata = rcond.reduce_buf
-            cov_eigendecompose_diag(
+            libtoast_cov_eigendecompose_diag(
                 1,
                 n_pix_submap,
                 mapnnz,
@@ -110,7 +127,7 @@ def covariance_invert(npp, threshold, rcond=None, use_alltoallv=False):
             rdata = np.empty(shape=0, dtype=np.float64)
         else:
             rdata = rcond.raw
-        cov_eigendecompose_diag(
+        libtoast_cov_eigendecompose_diag(
             npp.distribution.n_local_submap,
             npp.distribution.n_pix_submap,
             mapnnz,
@@ -136,6 +153,7 @@ def create_local_multiply(n_pix_submap, mapnnz, other):
 
     """
 
+    @function_timer
     def local_multiply(n_submap_value, receive_locations, receive, reduce_buf):
         for sm, locs in receive_locations.items():
             # We have multiple copies of submap data- we will multiply just the first
@@ -144,7 +162,7 @@ def create_local_multiply(n_pix_submap, mapnnz, other):
             reduce_buf[:] = receive[locs[0] : locs[0] + n_submap_value]
             other_buf = other.reduce_buf
             other_buf[:] = other.receive[locs[0] : locs[0] + n_submap_value]
-            cov_mult_diag(1, n_pix_submap, mapnnz, reduce_buf, other_buf)
+            libtoast_cov_mult_diag(1, n_pix_submap, mapnnz, reduce_buf, other_buf)
             for lc in locs:
                 receive[lc : lc + n_submap_value] = reduce_buf
 
@@ -182,7 +200,7 @@ def covariance_multiply(npp1, npp2, use_alltoallv=False):
         lmultiply = create_local_multiply(npp1.distribution.n_pix_submap, mapnnz, npp2)
         npp1.sync_alltoallv(local_func=lmultiply)
     else:
-        cov_mult_diag(
+        libtoast_cov_mult_diag(
             npp1.distribution.n_local_submap,
             npp1.distribution.n_pix_submap,
             mapnnz,
@@ -206,6 +224,7 @@ def create_local_apply(n_pix_submap, mapnnz, cov):
 
     """
 
+    @function_timer
     def local_apply(n_submap_value, receive_locations, receive, reduce_buf):
         for sm, locs in receive_locations.items():
             # We have multiple copies of submap data- we will multiply just the first
@@ -221,7 +240,7 @@ def create_local_apply(n_pix_submap, mapnnz, cov):
                 cov_locs[0] : cov_locs[0] + (n_pix_submap * cov.n_value)
             ]
 
-            cov_apply_diag(1, n_pix_submap, mapnnz, cov_buf, reduce_buf)
+            libtoast_cov_apply_diag(1, n_pix_submap, mapnnz, cov_buf, reduce_buf)
 
             for lc in locs:
                 receive[lc : lc + n_submap_value] = reduce_buf
@@ -263,7 +282,7 @@ def covariance_apply(npp, m, use_alltoallv=False):
     else:
         nppdata = npp.raw
         mdata = m.raw
-        cov_apply_diag(
+        libtoast_cov_apply_diag(
             npp.distribution.n_local_submap,
             npp.distribution.n_pix_submap,
             mapnnz,

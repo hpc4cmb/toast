@@ -22,27 +22,53 @@ from .utils import Environment
 
 stack_toast_file_pat = re.compile(r".*(toast.*)\.py")
 
+stack_toast_skip = [
+    "df",
+    "<module>",
+    "apply",
+    "exec",
+    "add_to_signal",
+    "project_signal",
+    "add_prior",
+    "apply_precond",
+]
+
 
 def function_timer(f):
     env = Environment.get()
     ft = env.function_timers()
     if ft:
-        _, srcline = inspect.getsourcelines(f)
-        src = inspect.getfile(f)
-        match = stack_toast_file_pat.match(src)
-        nm = f"{match.group(1)}:{f.__name__}({srcline})"
+        nm = f"{f.__qualname__}"
 
         @wraps(f)
         def df(*args, **kwargs):
             gt = GlobalTimers.get()
             # Build a name from the current function and the call trace.
             tnm = "(function) "
-            for frm in reversed(inspect.stack()[:]):
-                mat = stack_toast_file_pat.match(frm.filename)
+            fnmlist = list()
+            frm = inspect.currentframe().f_back
+            while frm:
+                mat = stack_toast_file_pat.match(frm.f_code.co_filename)
                 if mat is not None:
-                    if (frm.function != "df") and (frm.function != "<module>"):
-                        tnm += f"{mat.group(1)}:{frm.function}({frm.lineno})|"
-            tnm += f"{nm}"
+                    # This is a stack frame that we care about
+                    if frm.f_code.co_name not in stack_toast_skip:
+                        funcname = None
+                        if "self" in frm.f_locals:
+                            # this is inside a class instance
+                            funcname = f"{frm.f_locals['self'].__class__.__name__}.{frm.f_code.co_name}"
+                        else:
+                            # this is just a function call
+                            funcname = frm.f_code.co_name
+                        fnmlist.append(funcname)
+                frm = frm.f_back
+
+            if len(fnmlist) > 0:
+                tnm += "|".join(reversed(fnmlist))
+                tnm += "|"
+
+            # Make sure the final frame handle is released
+            del frm
+            tnm += nm
             gt.start(tnm)
             result = f(*args, **kwargs)
             gt.stop(tnm)

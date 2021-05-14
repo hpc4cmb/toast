@@ -256,7 +256,8 @@ conf["entry_points"] = {
         "toast_fake_focalplane = toast.scripts.toast_fake_focalplane:main",
         "toast_ground_schedule = toast.scripts.toast_ground_schedule:main",
         "toast_satellite_schedule = toast.scripts.toast_satellite_schedule:main",
-        "toast_benchmark = toast.scripts.toast_benchmark:main",
+        "toast_benchmark_satellite = toast.scripts.toast_benchmark_satellite:main",
+        "toast_timing_plot = toast.scripts.toast_timing_plot:main",
     ]
 }
 conf["cmdclass"] = {"build_ext": CMakeBuild}

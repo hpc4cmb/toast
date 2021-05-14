@@ -7,5 +7,6 @@ install(PROGRAMS
     toast_ground_schedule
     toast_satellite_schedule
     toast_benchmark_satellite
+    toast_timing_plot
     DESTINATION bin
 )
