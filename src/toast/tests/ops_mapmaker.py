@@ -108,7 +108,10 @@ class MapmakerTest(MPITestCase):
 
         # Map maker
         mapper = ops.MapMaker(
-            name="test1", det_data="signal", binning=binner, template_matrix=tmatrix,
+            name="test1",
+            det_data="signal",
+            binning=binner,
+            template_matrix=tmatrix,
         )
 
         # Make the map

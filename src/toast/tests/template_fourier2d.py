@@ -39,7 +39,9 @@ class TemplateFourier2DTest(MPITestCase):
             ob.detdata.create("signal", dtype=np.float64)
 
         tmpl = Fourier2D(
-            det_data="signal", times="times", noise_model=noise_model.noise_model,
+            det_data="signal",
+            times="times",
+            noise_model=noise_model.noise_model,
         )
 
         # Set the data

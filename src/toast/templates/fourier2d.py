@@ -379,7 +379,9 @@ class Fourier2D(Template):
                 for mode in range(self._nmode):
                     scale = self._filter_scale[mode]
                     out_view[:, mode] += scipy.signal.convolve(
-                        in_view[:, mode], self._filters[iob][ivw] * scale, mode="same",
+                        in_view[:, mode],
+                        self._filters[iob][ivw] * scale,
+                        mode="same",
                     )
 
     def _apply_precond(self, amplitudes_in, amplitudes_out):

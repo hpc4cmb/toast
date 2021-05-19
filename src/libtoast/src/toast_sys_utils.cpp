@@ -94,8 +94,8 @@ double toast::Timer::seconds() const {
 }
 
 double toast::Timer::elapsed_seconds() const {
-    /* Return the current reading on the timer without incrementing
-       the calls_ counter or stopping the timer
+    /* Return the current reading on the timer without incrementing the calls_ counter
+       or stopping the timer
      */
     if (not running_) {
         auto here = TOAST_HERE();

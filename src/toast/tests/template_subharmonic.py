@@ -39,7 +39,9 @@ class TemplateSubHarmonicTest(MPITestCase):
             ob.detdata.create("signal", dtype=np.float64)
 
         tmpl = SubHarmonic(
-            det_data="signal", times="times", noise_model=noise_model.noise_model,
+            det_data="signal",
+            times="times",
+            noise_model=noise_model.noise_model,
         )
 
         # Set the data

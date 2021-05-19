@@ -39,7 +39,8 @@ class BinMap(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     pixel_dist = Unicode(
-        "pixel_dist", help="The Data key where the PixelDist object should be stored",
+        "pixel_dist",
+        help="The Data key where the PixelDist object should be stored",
     )
 
     covariance = Unicode(
@@ -48,7 +49,8 @@ class BinMap(Operator):
     )
 
     binned = Unicode(
-        "binned", help="The Data key where the binned map should be stored",
+        "binned",
+        help="The Data key where the binned map should be stored",
     )
 
     det_data = Unicode("signal", help="Observation detdata key for the timestream data")

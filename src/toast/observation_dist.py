@@ -129,8 +129,10 @@ class DistDetSamp(object):
                 test += len(ds)
                 for d in ds:
                     if d not in self.detectors:
-                        msg = "Detector {} in detector_sets but not in detectors".format(
-                            d
+                        msg = (
+                            "Detector {} in detector_sets but not in detectors".format(
+                                d
+                            )
                         )
                         log.error(msg)
                         raise RuntimeError(msg)
@@ -149,8 +151,10 @@ class DistDetSamp(object):
             for st in self.sample_sets:
                 test += np.sum(st)
             if samples != test:
-                msg = "Sum of sample_sizes ({}) does not equal total samples ({})".format(
-                    test, samples
+                msg = (
+                    "Sum of sample_sizes ({}) does not equal total samples ({})".format(
+                        test, samples
+                    )
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
@@ -199,7 +203,7 @@ def compute_1d_offsets(off, n, new_dist):
 
 
 def compute_det_sample_offsets(all_dets, old_dist, new_dist):
-    """"""
+    """ """
     det_order = {y: x for x, y in enumerate(all_dets)}
 
     old_dets = list()
@@ -365,7 +369,8 @@ def redistribute(self, process_rows, times=None):
     # Create the new detdata manager
 
     newdetdata = DetDataMgr(
-        newdist.dets[newdist.comm_col_rank], newdist.samps[newdist.comm_row_rank][1],
+        newdist.dets[newdist.comm_col_rank],
+        newdist.samps[newdist.comm_row_rank][1],
     )
 
     # Redistribute detector data.  For purposes of redistribution, we require
@@ -437,7 +442,12 @@ def redistribute(self, process_rows, times=None):
                 self._send_displ,
                 mpitype,
             ],
-            [newdetdata[field].flatdata, self._recv_counts, self._recv_displ, mpitype,],
+            [
+                newdetdata[field].flatdata,
+                self._recv_counts,
+                self._recv_displ,
+                mpitype,
+            ],
         )
 
         del self.detdata[field]

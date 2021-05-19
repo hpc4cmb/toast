@@ -49,7 +49,10 @@ class MapmakerSolveTest(MPITestCase):
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", hwp_angle="hwp_angle", detector_pointing=detpointing,
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
         )
 
         # Build the covariance and hits
@@ -197,7 +200,10 @@ class MapmakerSolveTest(MPITestCase):
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="I", hwp_angle="hwp_angle", detector_pointing=detpointing,
+            nside=64,
+            mode="I",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
         )
 
         # Build the covariance and hits
@@ -223,7 +229,10 @@ class MapmakerSolveTest(MPITestCase):
         tmatrix.amplitudes = "amplitudes_check"
         binner.binned = "rhs_binned"
         rhs_calc = SolverRHS(
-            det_data="signal", overwrite=True, binning=binner, template_matrix=tmatrix,
+            det_data="signal",
+            overwrite=True,
+            binning=binner,
+            template_matrix=tmatrix,
         )
         rhs_calc.apply(data)
 
@@ -238,13 +247,17 @@ class MapmakerSolveTest(MPITestCase):
         data[out_amps] = data["amplitudes"].duplicate()
 
         lhs_calc = SolverLHS(
-            det_temp="signal", binning=binner, template_matrix=tmatrix, out=out_amps,
+            det_temp="signal",
+            binning=binner,
+            template_matrix=tmatrix,
+            out=out_amps,
         )
         lhs_calc.apply(data)
 
         # Verify that the output amplitudes agree
         np.testing.assert_equal(
-            data[out_amps][tmpl.name].local, data["amplitudes_check"][tmpl.name].local,
+            data[out_amps][tmpl.name].local,
+            data["amplitudes_check"][tmpl.name].local,
         )
 
         del data

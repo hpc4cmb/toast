@@ -43,7 +43,7 @@ from ._libtoast import Logger
 
 
 def _info_rank0(self, message, comm):
-    """ 
+    """
     Behaves like `info` exept that it will only activate if rank==0 or comm is None.
     """
     if (comm is None) or (comm.rank == 0):

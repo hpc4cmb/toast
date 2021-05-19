@@ -229,7 +229,10 @@ class PointingHealpixTest(MPITestCase):
 
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", hwp_angle="hwp_angle", detector_pointing=detpointing,
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -253,7 +256,12 @@ class PointingHealpixTest(MPITestCase):
             times = obs.shared["times"]
             nsample = len(times)
             intervals1 = [
-                Interval(start=times[0], stop=times[-1], first=0, last=nsample - 1,)
+                Interval(
+                    start=times[0],
+                    stop=times[-1],
+                    first=0,
+                    last=nsample - 1,
+                )
             ]
             intervals2 = [
                 Interval(

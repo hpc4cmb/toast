@@ -152,7 +152,11 @@ class Observation(MutableMapping):
         # Set up the data managers
         self.detdata = DetDataMgr(self.local_detectors, self.n_local_samples)
 
-        self.shared = SharedDataMgr(self._comm, self.dist.comm_row, self.dist.comm_col,)
+        self.shared = SharedDataMgr(
+            self._comm,
+            self.dist.comm_row,
+            self.dist.comm_col,
+        )
 
         self.intervals = IntervalMgr(self._comm, self.dist.comm_row, self.dist.comm_col)
 

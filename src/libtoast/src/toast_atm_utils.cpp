@@ -87,8 +87,7 @@ double toast::atm_get_absorption_coefficient(double altitude,
                                              double pwv,
                                              double freq) {
     /*
-       Return the dimensionless absorption coefficient for a zenith
-       line of sight.
+       Return the dimensionless absorption coefficient for a zenith line of sight.
 
        Args:
           altitude : Observation altitude in meters.
@@ -112,8 +111,7 @@ int toast::atm_get_absorption_coefficient_vec(double altitude,
                                               size_t nfreq,
                                               double * absorption) {
     /*
-       Return the dimensionless absorption coefficient for a zenith
-       line of sight.
+       Return the dimensionless absorption coefficient for a zenith line of sight.
 
        Args:
           altitude : Observation altitude in meters.
