@@ -74,6 +74,7 @@ class GainScrambler(Operator):
 
             # key1 = realization * 2^32 + telescope * 2^16 + component
             key1 = self.realization * 4294967296 + telescope * 65536 + self.component
+            key2 = obsindx
             counter1 = 0
             counter2 = 0
 
@@ -83,9 +84,7 @@ class GainScrambler(Operator):
                     continue
 
                 detindx = focalplane[det]["uid"]
-
-                # key2 = obsindx * 2^32 + detindx
-                key2 = obsindx * 4294967296 + detindx
+                counter1 = detindx
 
                 rngdata = rng.random(
                     1,
