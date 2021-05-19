@@ -16,8 +16,6 @@ from astropy import time as atime
 from astropy import coordinates as acoord
 from astropy import units as u
 
-from astropy.coordinates.erfa_astrom import erfa_astrom, ErfaAstromInterpolator
-
 from .timing import function_timer
 
 from .healpix import ang2vec
