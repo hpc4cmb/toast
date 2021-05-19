@@ -10,50 +10,50 @@
 
 template <>
 std::vector <char> align_format <int8_t> () {
-    return std::vector <char> ({ 'b' });
+    return std::vector <char> ({'b'});
 }
 
 template <>
 std::vector <char> align_format <int16_t> () {
-    return std::vector <char> ({ 'h' });
+    return std::vector <char> ({'h'});
 }
 
 template <>
 std::vector <char> align_format <int32_t> () {
-    return std::vector <char> ({ 'i' });
+    return std::vector <char> ({'i'});
 }
 
 template <>
 std::vector <char> align_format <int64_t> () {
-    return std::vector <char> ({ 'q', 'l' });
+    return std::vector <char> ({'q', 'l'});
 }
 
 template <>
 std::vector <char> align_format <uint8_t> () {
-    return std::vector <char> ({ 'B' });
+    return std::vector <char> ({'B'});
 }
 
 template <>
 std::vector <char> align_format <uint16_t> () {
-    return std::vector <char> ({ 'H' });
+    return std::vector <char> ({'H'});
 }
 
 template <>
 std::vector <char> align_format <uint32_t> () {
-    return std::vector <char> ({ 'I' });
+    return std::vector <char> ({'I'});
 }
 
 template <>
 std::vector <char> align_format <uint64_t> () {
-    return std::vector <char> ({ 'Q', 'L' });
+    return std::vector <char> ({'Q', 'L'});
 }
 
 template <>
 std::vector <char> align_format <float> () {
-    return std::vector <char> ({ 'f' });
+    return std::vector <char> ({'f'});
 }
 
 template <>
 std::vector <char> align_format <double> () {
-    return std::vector <char> ({ 'd' });
+    return std::vector <char> ({'d'});
 }

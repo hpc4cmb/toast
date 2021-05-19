@@ -19,42 +19,38 @@ void toast::tod_sim_noise_timestream(
     /*
        Generate a noise timestream, given a starting RNG state.
 
-       Use the RNG parameters to generate unit-variance Gaussian samples
-       and then modify the Fourier domain amplitudes to match the desired
-       PSD.
+       Use the RNG parameters to generate unit-variance Gaussian samples and then modify
+          the Fourier domain amplitudes to match the desired PSD.
 
        The RNG (Threefry2x64 from Random123) takes a "key" and a "counter"
-       which each consist of two unsigned 64bit integers.  These four
-       numbers together uniquely identify a single sample.  We construct
-       those four numbers in the following way:
+       which each consist of two unsigned 64bit integers.  These four numbers together
+          uniquely identify a single sample.  We construct those four numbers in the
+          following way:
 
-       key1 = realization * 2^32 + telescope * 2^16 + component
-       key2 = obsindx * 2^32 + detindx
-       counter1 = currently unused (0)
-       counter2 = sample in stream
+       key1 = realization * 2^32 + telescope * 2^16 + component key2 = obsindx * 2^32 +
+          detindx counter1 = currently unused (0) counter2 = sample in stream
 
-       counter2 is incremented internally by the RNG function as it calls
-       the underlying Random123 library for each sample.
+       counter2 is incremented internally by the RNG function as it calls the underlying
+          Random123 library for each sample.
 
        Args:
         realization (int): the Monte Carlo realization.
         telescope (int): a unique index assigned to a telescope.
-        component (int): a number representing the type of timestream
-            we are generating (detector noise, common mode noise,
-            atmosphere, etc).
+        component (int): a number representing the type of timestream we are generating
+           (detector noise, common mode noise, atmosphere, etc).
         obsindx (int): the global index of this observation.
         detindx (int): the global index of this detector.
         rate (float): the sample rate.
         firstsamp (int): the start sample in the stream.
         samples (int): the number of samples to generate.
-        oversample (int): the factor by which to expand the FFT length
-            beyond the number of samples.
+        oversample (int): the factor by which to expand the FFT length beyond the number
+           of samples.
         freq (array): the frequency points of the PSD.
         psd (array): the PSD values.
 
        Returns (tuple):
-        the timestream array, the interpolated PSD frequencies, and
-            the interpolated PSD values.
+        the timestream array, the interpolated PSD frequencies, and the interpolated PSD
+           values.
      */
 
     int64_t fftlen = 2;

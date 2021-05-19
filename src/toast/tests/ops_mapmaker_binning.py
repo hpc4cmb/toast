@@ -52,7 +52,10 @@ class MapmakerBinningTest(MPITestCase):
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", hwp_angle="hwp_angle", detector_pointing=detpointing,
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
         )
 
         binmap = dict()

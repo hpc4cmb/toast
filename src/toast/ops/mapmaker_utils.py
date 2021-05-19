@@ -53,7 +53,9 @@ class BuildHitMap(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     pixel_dist = Unicode(
-        None, allow_none=True, help="The Data key containing the submap distribution",
+        None,
+        allow_none=True,
+        help="The Data key containing the submap distribution",
     )
 
     hits = Unicode("hits", help="The Data key for the output hit map")
@@ -230,7 +232,9 @@ class BuildInverseCovariance(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     pixel_dist = Unicode(
-        None, allow_none=True, help="The Data key containing the submap distribution",
+        None,
+        allow_none=True,
+        help="The Data key containing the submap distribution",
     )
 
     inverse_covariance = Unicode(
@@ -463,7 +467,9 @@ class BuildNoiseWeighted(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     pixel_dist = Unicode(
-        None, allow_none=True, help="The Data key containing the submap distribution",
+        None,
+        allow_none=True,
+        help="The Data key containing the submap distribution",
     )
 
     zmap = Unicode("zmap", help="The Data key for the output noise weighted map")
@@ -703,14 +709,19 @@ class CovarianceAndHits(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     pixel_dist = Unicode(
-        "pixel_dist", help="The Data key where the PixelDist object should be stored",
+        "pixel_dist",
+        help="The Data key where the PixelDist object should be stored",
     )
 
     covariance = Unicode(
-        "covariance", help="The Data key where the covariance should be stored",
+        "covariance",
+        help="The Data key where the covariance should be stored",
     )
 
-    hits = Unicode("hits", help="The Data key where the hit map should be stored",)
+    hits = Unicode(
+        "hits",
+        help="The Data key where the hit map should be stored",
+    )
 
     rcond = Unicode(
         "rcond",

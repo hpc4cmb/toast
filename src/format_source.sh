@@ -39,7 +39,7 @@ blkrun="-l 88"
 blktest="--check"
 
 # Directories to process
-cppdirs="libtoast libtoast_mpi toast"
+cppdirs="libtoast toast"
 pydirs="toast ../workflows"
 
 # Test

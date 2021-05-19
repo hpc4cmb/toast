@@ -20,7 +20,7 @@ void init_sys(py::module & m) {
         )")
     .def("get", []() {
              return std::unique_ptr <toast::Environment, py::nodelete>
-             (
+                    (
                  &toast::Environment::get());
          }, R"(
             Get a handle to the global environment class.
@@ -271,7 +271,7 @@ void init_sys(py::module & m) {
         )")
     .def("get", []() {
              return std::unique_ptr <toast::GlobalTimers, py::nodelete>
-                 (&toast::GlobalTimers::get());
+                        (&toast::GlobalTimers::get());
          }, R"(
             Get a handle to the singleton class.
         )")
@@ -374,7 +374,7 @@ void init_sys(py::module & m) {
         )")
     .def("get", []() {
              return std::unique_ptr <toast::Logger, py::nodelete>
-                 (&toast::Logger::get());
+                        (&toast::Logger::get());
          }, R"(
             Get a handle to the global logger.
         )")

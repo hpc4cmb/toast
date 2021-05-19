@@ -66,7 +66,8 @@ class Offset(Template):
     )
 
     use_noise_prior = Bool(
-        False, help="Use detector PSDs to build the noise prior and preconditioner",
+        False,
+        help="Use detector PSDs to build the noise prior and preconditioner",
     )
 
     precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
