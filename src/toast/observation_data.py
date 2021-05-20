@@ -8,6 +8,8 @@ from collections.abc import MutableMapping, Mapping
 
 import numpy as np
 
+from astropy import units as u
+
 from pshmem import MPIShared
 
 from .mpi import MPI
@@ -67,12 +69,15 @@ class DetectorData(object):
             data.  The only supported types are 1, 2, 4, and 8 byte signed and unsigned
             integers, 4 and 8 byte floating point numbers, and 4 and 8 byte complex
             numbers.
+        unit (Unit):  Optional scalar unit associated with this data.
         view_data (array):  (Internal use only) This makes it possible to create
             DetectorData instances that act as a view on an existing array.
 
     """
 
-    def __init__(self, detectors, shape, dtype, view_data=None):
+    def __init__(
+        self, detectors, shape, dtype, unit=u.dimensionless_unscaled, view_data=None
+    ):
         log = Logger.get()
 
         self._set_detectors(detectors)

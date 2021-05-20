@@ -40,7 +40,7 @@ class PointingDetectorSimple(Operator):
     quats = Unicode(
         None,
         allow_none=True,
-        help="Observation detdata key for output quaternions (for debugging)",
+        help="Observation detdata key for output quaternions",
     )
 
     coord_in = Unicode(

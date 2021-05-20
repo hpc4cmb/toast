@@ -10,11 +10,6 @@ pushd $(dirname $(dirname $0)) >/dev/null 2>&1
 toastdir=$(pwd -P)
 popd >/dev/null 2>&1
 
-# FIXME:  remove this after the next release of cmbenv which includes
-# these packages.
-python3 -m pip install pshmem tomlkit pyyaml
-python3 -m pip install --upgrade traitlets>=5.0
-
 mkdir build
 pushd build >/dev/null 2>&1
 

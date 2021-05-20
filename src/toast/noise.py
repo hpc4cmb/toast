@@ -2,20 +2,24 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from typing import Type
 import numpy as np
+
+from astropy import units as u
 
 
 class Noise(object):
     """Noise objects act as containers for noise PSDs.
 
     Noise is a base class for an object that describes the noise properties of all
-    detectors for a single observation.
+    detectors for a single observation.  The PSDs in the input dictionary should be
+    arrays with units (Quantities).
 
     Args:
         detectors (list): Names of detectors.
         freqs (dict): Dictionary of arrays of frequencies for `psds`.
-        psds (dict): Dictionary of arrays which contain the PSD values for each
-            detector or `mixmatrix` key.
+        psds (dict): Dictionary of array Quantities which contain the PSD values for
+            each detector or `mixmatrix` key.
         mixmatrix (dict): Mixing matrix describing how the PSDs should be combined for
             each detector noise model.  If provided, must contain entries for every
             detector, and every key specified for a detector must be defined in `freqs`
@@ -66,6 +70,13 @@ class Noise(object):
         for key in self._keys:
             if psds[key].shape[0] != freqs[key].shape[0]:
                 raise ValueError("PSD length must match the number of frequencies")
+            if not isinstance(psds[key], u.Quantity):
+                raise TypeError("Each PSD array must be a Quantity")
+            # Ensure that the PSDs are convertible to expected units
+            try:
+                test_convert = psds[key].to_value(u.K ** 2 * u.second)
+            except Exception:
+                raise ValueError("Each PSD must be convertible to K**2 * s")
             self._freqs[key] = np.copy(freqs[key])
             self._psds[key] = np.copy(psds[key])
             # last frequency point should be Nyquist
@@ -162,7 +173,7 @@ class Noise(object):
                 psd = self.psd(k)
                 rate = self.rate(k)
                 ind = np.logical_and(freq > rate * 0.2, freq < rate * 0.4)
-                noisevar = np.median(psd[ind])
+                noisevar = np.median(psd[ind].to_value(u.K ** 2 * u.second))
                 for det in self.detectors:
                     wt = self.weight(det, k)
                     if wt != 0.0:

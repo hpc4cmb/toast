@@ -20,6 +20,7 @@ install(FILES
     pixels.py
     weather.py
     ops_sim_satellite.py
+    ops_sim_ground.py
     ops_sim_tod_noise.py
     ops_sim_tod_dipole.py
     ops_sim_tod_conviqt.py

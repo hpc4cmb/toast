@@ -8,11 +8,13 @@ import numpy as np
 
 from scipy import interpolate
 
+from astropy import units as u
+
 from .. import rng
 
 from ..timing import function_timer
 
-from ..traits import trait_docs, Int, Unicode
+from ..traits import trait_docs, Int, Unicode, Quantity
 
 from ..fft import FFTPlanReal1DStore
 
@@ -223,6 +225,10 @@ class SimNoise(Operator):
         "signal", help="Observation detdata key for accumulating noise timestreams"
     )
 
+    det_data_units = Quantity(
+        None, allow_none=True, help="Desired output units of the timestream"
+    )
+
     @traitlets.validate("realization")
     def _check_realization(self, proposal):
         check = proposal["value"]
@@ -294,6 +300,15 @@ class SimNoise(Operator):
                 if weight == 0:
                     continue
 
+                # Output units
+
+                sim_units = None
+                psd_units = nse.psd(key).unit
+                if self.det_data_units is not None:
+                    sim_units = self.det_data_units ** 2 * u.second
+                else:
+                    sim_units = psd_units
+
                 # Simulate the noise matching this key
                 nsedata = sim_noise_timestream(
                     realization=self.realization,
@@ -305,8 +320,8 @@ class SimNoise(Operator):
                     firstsamp=ob.local_index_offset,
                     samples=ob.n_local_samples,
                     oversample=self._oversample,
-                    freq=nse.freq(key),
-                    psd=nse.psd(key),
+                    freq=nse.freq(key).to_value(u.Hz),
+                    psd=nse.psd(key).to_value(sim_units),
                     py=False,
                 )
 

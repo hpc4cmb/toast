@@ -119,12 +119,17 @@ class GroundSite(Site):
 
     def __init__(self, name, lat, lon, alt, uid=None, weather=None):
         super().__init__(name, uid)
-        self._earthloc = coord.EarthLocation.from_geodetic(lon, lat, height=alt)
+        self.earthloc = coord.EarthLocation.from_geodetic(lon, lat, height=alt)
         self.weather = weather
 
     def __repr__(self):
         value = "<GroundSite '{}' : uid = {}, lon = {}, lat = {}, alt = {} m, weather = {}>".format(
-            self.name, self.uid, self.lon, self.lat, self.alt, self.weather
+            self.name,
+            self.uid,
+            self.earthloc.lon,
+            self.earthloc.lat,
+            self.earthloc.height,
+            self.weather,
         )
         return value
 
@@ -152,7 +157,7 @@ class GroundSite(Site):
             atime = astime.Time(t, format="unix")
             p, v = coord.get_body_barycentric_posvel("earth", atime)
             # FIXME:  apply translation from earth center to earth location.
-            # itrs = self._earthloc.get_itrs(obstime)
+            # itrs = self.earthloc.get_itrs(obstime)
             pm = p.xyz.to_value(u.kilometer)
             vm = v.xyz.to_value(u.kilometer / u.second)
             pos_x[i] = pm[0]

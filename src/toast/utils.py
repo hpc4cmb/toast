@@ -5,6 +5,9 @@
 import os
 import gc
 import hashlib
+import warnings
+
+import datetime
 
 import numpy as np
 
@@ -176,6 +179,68 @@ def set_numba_threading():
         # Numba not available at all
         if rank == 0:
             log.debug("Cannot import numba- ignoring threading layer.")
+
+
+def astropy_control(max_future=None, offline=False, node_local=False):
+    """This function attempts to trigger any astropy downloads.
+
+    The astropy package will automatically download external data files on demand.
+    This can be a problem if multiple processes on a distributed system are using the
+    same astropy installation.  This function will trigger IERS downloads in a
+    controlled way on one process (or one per node if astropy is node-local).
+
+    When requesting Alt / Az coordinate system transforms, times outside of the IERS
+    data range will produce a warning on every process.  If the max_future time is set,
+    we check if that will trigger a warning, print the warning once, and then disable
+    it to avoid spewing the warning on every process of a parallel job.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    """
+    from astropy.utils import iers
+
+    log = Logger.get()
+
+    rank = 0
+    if use_mpi:
+        rank = MPI.COMM_WORLD.rank
+
+    # If auto_download is False, the bundled IERS-B table is always used, even if a
+    # previously downloaded IERS-A table exists.
+    if offline:
+        iers.conf.auto_download = False
+        log.warning(
+            "Disabling downloaded astropy IERS- coordinate transforms will be less accurate"
+        )
+    else:
+        iers.conf.auto_download = True
+
+    # Check future time range
+
+    now_time = datetime.datetime.now(tz=datetime.timezone.utc)
+    if max_future is not None:
+        if max_future > now_time + datetime.timedelta(days=365):
+            msg = f"Maximum future time {max_future} is more than one year in future.\n"
+            msg += f"Coordinate transforms using IERS will be less accurate."
+            if rank == 0:
+                log.warning(msg)
+
+    # Disable future warnings
+    # log.info("Disabling astropy IERSRangeError warnings")
+    # warnings.filterwarnings("ignore", category=iers.IERSRangeError, module=iers)
+
+    if node_local:
+        # Every node has a local astropy installation (i.e. it is not installed to a
+        # network / shared filesystem).  In this case one process per node does the
+        # trigger.
+        pass
+    else:
+        # Only one global process triggers
+        pass
 
 
 try:

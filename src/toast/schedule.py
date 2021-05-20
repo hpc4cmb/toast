@@ -7,6 +7,8 @@ import sys
 
 from datetime import datetime
 
+import dateutil
+
 import numpy as np
 
 from astropy import units as u
@@ -198,16 +200,41 @@ class GroundSchedule(object):
 
     Args:
         scans (list):  A list of GroundScan instances or None.
-
+        site_name (str):  The name of the site for this schedule.
+        telescope_name (str):  The name of the telescope for this schedule.
+        site_lat (Quantity):  The site latitude.
+        site_lon (Quantity):  The site longitude.
+        site_alt (Quantity):  The site altitude.
     """
 
-    def __init__(self, scans=None):
+    def __init__(
+        self,
+        scans=None,
+        site_name="Unknown",
+        telescope_name="Unknown",
+        site_lat=0 * u.degree,
+        site_lon=0 * u.degree,
+        site_alt=0 * u.meter,
+    ):
         self.scans = scans
         if scans is None:
             self.scans = list()
+        else:
+            for sc in self.scans:
+                if not isinstance(sc, GroundScan):
+                    raise RuntimeError("only GroundScan instances are supported")
+        self.site_name = site_name
+        self.telescope_name = telescope_name
+        self.site_lat = site_lat
+        self.site_lon = site_lon
+        self.site_alt = site_alt
 
     def __repr__(self):
-        val = "<GroundSchedule with "
+        val = "<GroundSchedule "
+        val += f"site={self.site_name} at "
+        val += f"{self.site_lat}, {self.site_lon}, {self.site_alt} "
+        val += f"telescope {self.telescope_name} "
+        val += "with "
         if self.scans is None:
             val += "0 scans>"
             return val
@@ -226,7 +253,7 @@ class GroundSchedule(object):
         return val
 
     @function_timer
-    def read(self, file, file_split=False, sort=False):
+    def read(self, file, file_split=None, sort=False):
         """Load a ground observing schedule from a file.
 
         This loads scans from a file and appends them to the internal list of scans.
@@ -352,6 +379,11 @@ class GroundSchedule(object):
                     site_lon,
                     site_alt,
                 ) = line.split()
+                self.site_name = site_name
+                self.telescope_name = telescope_name
+                self.site_lat = float(site_lat) * u.degree
+                self.site_lon = float(site_lon) * u.degree
+                self.site_alt = float(site_alt) * u.meter
                 break
             last_name = None
             for line in f:
@@ -397,10 +429,17 @@ class SatelliteSchedule(object):
 
     Args:
         scans (list):  A list of SatelliteScan instances or None.
+        site_name (str):  The name of the site for this schedule.
+        telescope_name (str):  The name of the telescope for this schedule.
 
     """
 
-    def __init__(self, scans=None):
+    def __init__(
+        self,
+        scans=None,
+        site_name="Unknown",
+        telescope_name="Unknown",
+    ):
         self.scans = scans
         if scans is None:
             self.scans = list()
@@ -408,9 +447,14 @@ class SatelliteSchedule(object):
             for sc in self.scans:
                 if not isinstance(sc, SatelliteScan):
                     raise RuntimeError("only SatelliteScan instances are supported")
+        self.site_name = site_name
+        self.telescope_name = telescope_name
 
     def __repr__(self):
-        val = "<SatelliteSchedule with "
+        val = "<SatelliteSchedule "
+        val += f"site={self.site_name} "
+        val += f"telescope={self.telescope_name} "
+        val += "with "
         if self.scans is None:
             val += "0 scans>"
             return val
@@ -444,6 +488,8 @@ class SatelliteSchedule(object):
 
         """
         data = QTable.read(file, format="ascii.ecsv")
+        self.telescope_name = data.meta["telescope_name"]
+        self.site_name = data.meta["site_name"]
         for row in data:
             tstart = datetime.fromisoformat(row["start"])
             tstop = datetime.fromisoformat(row["stop"])
@@ -494,5 +540,7 @@ class SatelliteSchedule(object):
                 ),
             ]
         )
+        out.meta["telescope_name"] = self.telescope_name
+        out.meta["site_name"] = self.site_name
 
         out.write(file, format="ascii.ecsv", overwrite=True)

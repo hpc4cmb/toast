@@ -5,7 +5,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 """
-This script runs a simple satellite simulation and makes a map.
+This script runs a simple ground simulation and makes a map.
 
 NOTE:  This script is an example.  If you are doing a simulation for a specific
 experiment, you should use a custom Focalplane class rather that the simple base class
@@ -13,11 +13,11 @@ used here.
 
 You can see the automatically generated command line options with:
 
-    toast_sim_satellite.py --help
+    toast_sim_ground.py --help
 
 Or you can dump a config file with all the default values with:
 
-    toast_sim_satellite.py --default_toml config.toml
+    toast_sim_ground.py --default_toml config.toml
 
 This script contains just comments about what is going on.  For details about all the
 options for a specific Operator, see the documentation or use the help() function from
@@ -37,19 +37,20 @@ from astropy import units as u
 import toast
 
 from toast.mpi import MPI
+from toast.ops.elevation_noise import ElevationNoise
 
 
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()
     gt = toast.timing.GlobalTimers.get()
-    gt.start("toast_satellite_sim (total)")
+    gt.start("toast_ground_sim (total)")
 
     # Get optional MPI parameters
     world_comm, procs, rank = toast.get_world()
 
     # Argument parsing
-    parser = argparse.ArgumentParser(description="Satellite Simulation Example.")
+    parser = argparse.ArgumentParser(description="Ground Simulation Example.")
 
     # Arguments specific to this script
 
@@ -65,7 +66,7 @@ def main():
         "--out_dir",
         required=False,
         type=str,
-        default="toast_sim_satellite_out",
+        default="toast_sim_ground_out",
         help="The output directory",
     )
 
@@ -78,11 +79,19 @@ def main():
 
     madam_available = toast.ops.madam.available()
 
+    # FIXME:  This example workflow will eventually include other operators for
+    # atmosphere simulation, filtering, other types of map-making, etc.
+
     operators = [
-        toast.ops.SimSatellite(name="sim_satellite"),
-        toast.ops.DefaultNoiseModel(name="default_model"),
+        toast.ops.SimGround(name="sim_ground"),
+        toast.ops.DefaultNoiseModel(name="default_model", noise_model="default_model"),
+        toast.ops.ElevationNoise(
+            name="elevation_model",
+            noise_model="default_model",
+            out_model="el_weighted_model",
+        ),
         toast.ops.ScanHealpix(name="scan_map"),
-        toast.ops.SimNoise(name="sim_noise"),
+        toast.ops.SimNoise(name="sim_noise", noise_model="el_weighted_model"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
@@ -140,18 +149,10 @@ def main():
         return
     schedule = None
     if rank == 0:
-        schedule = toast.schedule.SatelliteSchedule()
+        schedule = toast.schedule.GroundSchedule()
         schedule.read(args.schedule)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
-
-    # Create a telescope for the simulation.  Again, for a specific experiment we
-    # would use custom classes for the site.
-
-    site = toast.instrument.SpaceSite(schedule.site_name)
-    telescope = toast.instrument.Telescope(
-        schedule.telescope_name, focalplane=focalplane, site=site
-    )
 
     # Instantiate our objects that were configured from the command line / files
 
@@ -188,21 +189,37 @@ def main():
 
     data = toast.Data(comm=comm)
 
+    # Create a telescope for the simulation.  Again, for a specific experiment we
+    # would use custom classes for the site.
+
+    site = toast.instrument.GroundSite(
+        schedule.site_name, schedule.site_lat, schedule.site_lon, schedule.site_alt
+    )
+    telescope = toast.instrument.Telescope(
+        schedule.telescope_name, focalplane=focalplane, site=site
+    )
+
     # Simulate the telescope pointing
 
-    if not ops.sim_satellite.enabled:
+    if not ops.sim_ground.enabled:
         msg = "Cannot disable the satellite scanning operator"
         if rank == 0:
             log.error(msg)
         raise RuntimeError(msg)
 
-    ops.sim_satellite.telescope = telescope
-    ops.sim_satellite.schedule = schedule
-    ops.sim_satellite.apply(data)
+    ops.sim_ground.telescope = telescope
+    ops.sim_ground.schedule = schedule
+    ops.sim_ground.apply(data)
 
     # Construct a "perfect" noise model just from the focalplane parameters
 
     ops.default_model.apply(data)
+
+    # Create the Elevation modulated noise model
+
+    ops.elevation_model.detector_pointing = ops.det_pointing
+    ops.elevation_model.view = ops.det_pointing.view
+    ops.elevation_model.apply(data)
 
     # Set the pointing matrix operators to use the detector pointing
 
@@ -236,6 +253,10 @@ def main():
 
     if ops.sim_noise.enabled:
         ops.sim_noise.apply(data)
+
+    # FIXME:  There are many operators still to add to this example, including
+    # atmosphere simulation, optional filters, and other types of mapmaking.  Those
+    # will be added as the code is ported.
 
     # Build up our map-making operation from the pieces- both operators configured
     # from user options and other operators.

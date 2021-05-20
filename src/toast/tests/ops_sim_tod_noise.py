@@ -102,9 +102,9 @@ class SimNoiseTest(MPITestCase):
             for det in ob.local_detectors:
                 # Verify that the white noise level of the PSD is correctly normalized.
                 # Only check the high frequency part of the spectrum to avoid 1/f.
-                fsamp = nse.rate(det)
+                fsamp = nse.rate(det).to_value(u.Hz)
                 cutoff = 0.95 * (fsamp / 2.0)
-                indx = np.where(nse.freq(det) > cutoff)
+                indx = np.where(nse.freq(det).to_value(u.Hz) > cutoff)
                 net = nse.NET(det)
                 avg = np.mean(nse.psd(det)[indx])
                 netsq = net * net
@@ -129,8 +129,8 @@ class SimNoiseTest(MPITestCase):
                     fig = plt.figure(figsize=(12, 8), dpi=72)
                     ax = fig.add_subplot(1, 1, 1, aspect="auto")
                     ax.loglog(
-                        nse.freq(det),
-                        nse.psd(det),
+                        nse.freq(det).to_value(u.Hz),
+                        nse.psd(det).to_value(u.K ** 2 * u.second),
                         marker="o",
                         c="red",
                         label="{}: rate={:0.1f} NET={:0.1f} fknee={:0.4f}, "
@@ -144,7 +144,13 @@ class SimNoiseTest(MPITestCase):
                     )
 
                     cur_ylim = ax.get_ylim()
-                    ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
+                    ax.set_ylim(
+                        [
+                            0.001
+                            * (nse.NET(det).to_value(u.K * np.sqrt(1 * u.second)) ** 2),
+                            10.0 * cur_ylim[1],
+                        ]
+                    )
                     ax.legend(loc=1)
                     plt.title("Simulated PSD from toast.AnalyticNoise")
 
@@ -166,19 +172,19 @@ class SimNoiseTest(MPITestCase):
                 fftlen *= 2
 
             for idet, det in enumerate(ob.local_detectors):
-                dfreq = nse.rate(det) / float(fftlen)
+                dfreq = nse.rate(det).to_value(u.Hz) / float(fftlen)
                 (pytod, freqs[det], psds[det]) = sim_noise_timestream(
                     realization=0,
                     telescope=ob.telescope.uid,
                     component=0,
                     obsindx=ob.uid,
                     detindx=idet,
-                    rate=nse.rate(det),
+                    rate=nse.rate(det).to_value(u.Hz),
                     firstsamp=ob.local_index_offset,
                     samples=ob.n_local_samples,
                     oversample=self.oversample,
-                    freq=nse.freq(det),
-                    psd=nse.psd(det),
+                    freq=nse.freq(det).to_value(u.Hz),
+                    psd=nse.psd(det).to_value(u.K ** 2 * u.second),
                     py=True,
                 )
 
@@ -216,7 +222,13 @@ class SimNoiseTest(MPITestCase):
                     )
 
                     cur_ylim = ax.get_ylim()
-                    ax.set_ylim([0.001 * (nse.NET(det) ** 2), 10.0 * cur_ylim[1]])
+                    ax.set_ylim(
+                        [
+                            0.001
+                            * (nse.NET(det).to_value(u.K * np.sqrt(1 * u.second)) ** 2),
+                            10.0 * cur_ylim[1],
+                        ]
+                    )
                     ax.legend(loc=1)
                     plt.title(
                         "Interpolated PSD with High-pass from {:0.1f} "
@@ -290,19 +302,19 @@ class SimNoiseTest(MPITestCase):
             while fftlen <= (self.oversample * ob.n_local_samples):
                 fftlen *= 2
             for idet, det in enumerate(ob.local_detectors):
-                dfreq = nse.rate(det) / float(fftlen)
+                dfreq = nse.rate(det).to_value(u.Hz) / float(fftlen)
                 (pytod, freqs[det], psds[det]) = sim_noise_timestream(
                     realization=0,
                     telescope=ob.telescope.uid,
                     component=0,
                     obsindx=ob.uid,
                     detindx=idet,
-                    rate=nse.rate(det),
+                    rate=nse.rate(det).to_value(u.Hz),
                     firstsamp=ob.local_index_offset,
                     samples=ob.n_local_samples,
                     oversample=self.oversample,
-                    freq=nse.freq(det),
-                    psd=nse.psd(det),
+                    freq=nse.freq(det).to_value(u.Hz),
+                    psd=nse.psd(det).to_value(u.K ** 2 * u.second),
                     py=True,
                 )
                 # Factor of 2 comes from the negative frequency values.
@@ -466,7 +478,7 @@ class SimNoiseTest(MPITestCase):
                 # Just check that the mean is "close enough" to the truth.
                 errest = np.absolute(np.mean((meanpsd - tpsd) / tpsd))
                 # print("Det {} avg rel error = {}".format(det, errest), flush=True)
-                if nse.fknee(det) < 0.1:
+                if nse.fknee(det).to_value(u.Hz) < 0.1:
                     self.assertTrue(errest < 0.1)
 
         # Verify that Parseval's theorem holds- that the variance of the TOD equals the
@@ -480,7 +492,7 @@ class SimNoiseTest(MPITestCase):
             over3sig = np.where(np.absolute(todvar[det] - psd_norm[det]) > 3.0 * sig)[0]
             overfrac = float(len(over3sig)) / self.nmc
             # print(det, " : ", overfrac, flush=True)
-            if nse.fknee(det) < 0.1:
+            if nse.fknee(det).to_value(u.Hz) < 0.1:
                 self.assertTrue(overfrac < 0.1)
 
         del data
