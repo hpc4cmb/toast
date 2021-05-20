@@ -80,11 +80,11 @@ class AnalyticNoise(Noise):
                 mtemp = np.power(fmin_hz, self._alpha[d])
                 temp = np.power(freqs[d].to_value(u.Hz), self._alpha[d])
                 psds[d] = (temp + ktemp) / (temp + mtemp)
-                psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second)))**2
+                psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second))) ** 2
             else:
                 psds[d] = np.ones_like(freqs[d].to_value(u.Hz))
-                psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second)))**2
-            psds[d] *= (self._NET[d].unit)**2
+                psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second))) ** 2
+            psds[d] *= (self._NET[d].unit) ** 2
 
         # call the parent class constructor to store the psds
         super().__init__(detectors=detectors, freqs=freqs, psds=psds, indices=indices)
@@ -106,4 +106,4 @@ class AnalyticNoise(Noise):
         return self._NET[det]
 
     def _detector_weight(self, det):
-        return 1.0 / (self._NET[det] ** 2).to_value(u.K**2 * u.second)
+        return 1.0 / (self._NET[det] ** 2).to_value(u.K ** 2 * u.second)

@@ -184,7 +184,7 @@ class SimNoiseTest(MPITestCase):
                     samples=ob.n_local_samples,
                     oversample=self.oversample,
                     freq=nse.freq(det).to_value(u.Hz),
-                    psd=nse.psd(det).to_value(u.K**2 * u.second),
+                    psd=nse.psd(det).to_value(u.K ** 2 * u.second),
                     py=True,
                 )
 
@@ -314,7 +314,7 @@ class SimNoiseTest(MPITestCase):
                     samples=ob.n_local_samples,
                     oversample=self.oversample,
                     freq=nse.freq(det).to_value(u.Hz),
-                    psd=nse.psd(det).to_value(u.K**2 * u.second),
+                    psd=nse.psd(det).to_value(u.K ** 2 * u.second),
                     py=True,
                 )
                 # Factor of 2 comes from the negative frequency values.

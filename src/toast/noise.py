@@ -74,9 +74,9 @@ class Noise(object):
                 raise TypeError("Each PSD array must be a Quantity")
             # Ensure that the PSDs are convertible to expected units
             try:
-                test_convert = psds[key].to_value(u.K**2 * u.second)
+                test_convert = psds[key].to_value(u.K ** 2 * u.second)
             except Exception:
-                raise ValueError("Each PSD must be convertible to K**2 * s") 
+                raise ValueError("Each PSD must be convertible to K**2 * s")
             self._freqs[key] = np.copy(freqs[key])
             self._psds[key] = np.copy(psds[key])
             # last frequency point should be Nyquist
@@ -173,7 +173,7 @@ class Noise(object):
                 psd = self.psd(k)
                 rate = self.rate(k)
                 ind = np.logical_and(freq > rate * 0.2, freq < rate * 0.4)
-                noisevar = np.median(psd[ind].to_value(u.K**2 * u.second))
+                noisevar = np.median(psd[ind].to_value(u.K ** 2 * u.second))
                 for det in self.detectors:
                     wt = self.weight(det, k)
                     if wt != 0.0:

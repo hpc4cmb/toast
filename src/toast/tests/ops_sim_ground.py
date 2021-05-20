@@ -105,6 +105,34 @@ class SimGroundTest(MPITestCase):
         )
         sim_ground.apply(data)
 
+        # Pointing
+
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=512,
+            mode="IQU",
+            hwp_angle=sim_ground.hwp_angle,
+            detector_pointing=detpointing,
+        )
+
+        # Test modifying the noise model
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Make an elevation-dependent noise model
+        el_model = ops.ElevationNoise(
+            noise_model="noise_model",
+            out_model="el_weighted",
+            detector_pointing=detpointing,
+        )
+        el_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(noise_model=el_model.out_model, det_data="signal")
+        sim_noise.apply(data)
+
         # Expand pointing and make a hit map.
 
         detpointing = ops.PointingDetectorSimple()

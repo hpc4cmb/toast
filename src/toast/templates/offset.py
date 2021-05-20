@@ -432,7 +432,7 @@ class Offset(Template):
     def _get_offset_psd(self, noise, freq, step_time, det):
         """Compute the PSD of the baseline offsets."""
         psdfreq = noise.freq(det).to_value(u.Hz)
-        psd = noise.psd(det).to_value(u.K**2 * u.second)
+        psd = noise.psd(det).to_value(u.K ** 2 * u.second)
         rate = noise.rate(det).to_value(u.Hz)
 
         # Remove the white noise component from the PSD

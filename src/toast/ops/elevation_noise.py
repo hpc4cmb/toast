@@ -30,17 +30,10 @@ class ElevationNoise(Operator):
     This adjusts the detector PSDs in a noise model based on the median elevation of
     each detector in each observation.
 
-    The new NET value is given by:
+    The PSD value scaled by:
 
     .. math::
-        NET_{new} = (a / sin(el) + b)
-
-    The Full PSD is then scaled by
-
-    .. math::
-        PSD *= NET_{new}^2 / NET_{old}^2
-
-    Where the old NET is estimated from the high frequency samples of the PSD.
+        PSD_{new} = PSD_{old} * (a / sin(el) + c)^2
 
     NOTE: since this operator generates a new noise model for all detectors, you
     should specify all detectors you intend to use downstream when calling exec().
@@ -75,14 +68,16 @@ class ElevationNoise(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    noise_a = Quantity(
-        0.0 * u.K * np.sqrt(1 * u.second),
-        help="Parameter 'a' in (a / sin(el) + b)",
+    noise_a = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'a' in (a / sin(el) + c)",
     )
 
-    noise_b = Float(
-        0.0 * u.K * np.sqrt(1 * u.second),
-        help="Parameter 'b' in (a / sin(el) + b)",
+    noise_c = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'c' in (a / sin(el) + c)",
     )
 
     @traitlets.validate("detector_pointing")
@@ -134,7 +129,7 @@ class ElevationNoise(Operator):
                 raise RuntimeError(msg)
 
             # If both the A and B values are unset, the noise model is not modified.
-            if self.noise_a.value == 0 and self.noise_b.value == 0:
+            if self.noise_a is None and self.noise_c is None:
                 ob[self.out_model] = ob[self.noise_model]
                 continue
 
@@ -158,18 +153,12 @@ class ElevationNoise(Operator):
 
             noise = ob[self.noise_model]
 
-            noise_dets = list(noise.detectors)
-            noise_keys = list(noise.keys)
-
             out_noise = None
             if self.out_model is None:
                 out_noise = noise
             else:
                 ob[self.out_model] = copy.deepcopy(noise)
                 out_noise = ob[self.out_model]
-
-            # Focalplane for this observation
-            focalplane = ob.telescope.focalplane
 
             # We are building up a data product (a noise model) which has values for
             # all detectors.  For each detector we need to expand the detector pointing.
@@ -210,20 +199,8 @@ class ElevationNoise(Operator):
                 el = np.median(np.concatenate(el_view))
 
                 # Scale the PSD
-
-                # The PSD in a fixed set of units
-                psd_ksq = noise.psd(det).to_value(u.K ** 2 * u.second)
-
-                # Use the high-frequency part of the PSD to estimate the NET^2
-                old_net_sq = np.median(psd_ksq[-10:])
-
-                # Compute the new NET in the same units.
-                new_net = self.noise_a.to_value(u.K * (1.0 * u.second)) / np.sin(
-                    el
-                ) + self.noise_b.to_value(u.K * (1.0 * u.second))
-
-                # Apply scaling
-                psd[:] *= new_net ** 2 / old_net_sq
+                el_factor = self.noise_a / np.sin(el) + self.noise_c
+                psd[:] *= el_factor ** 2
         return
 
     def _finalize(self, data, **kwargs):
