@@ -94,7 +94,7 @@ class SimGround(Operator):
     )
 
     scan_accel_az = Quantity(
-        0.1 * u.degree / u.second ** 2,
+        1.0 * u.degree / u.second ** 2,
         help="Mount scanning rate acceleration for turnarounds",
     )
 
@@ -281,8 +281,9 @@ class SimGround(Operator):
             scan_offsets.append(off)
             off += ns
 
-        # Ensure that astropy IERS is downloaded
-        astropy_control(max_future=self.schedule.scans[-1].stop)
+        # FIXME:  Re-enable this when using astropy for coordinate transforms.
+        # # Ensure that astropy IERS is downloaded
+        # astropy_control(max_future=self.schedule.scans[-1].stop)
 
         # Distribute the observations uniformly among groups.  We take each scan and
         # weight it by the duration in samples.

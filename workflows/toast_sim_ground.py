@@ -215,7 +215,7 @@ def main():
 
     ops.default_model.apply(data)
 
-    # Create the Elevation-weighted noise model
+    # Create the Elevation modulated noise model
 
     ops.elevation_model.detector_pointing = ops.det_pointing
     ops.elevation_model.view = ops.det_pointing.view
@@ -253,6 +253,10 @@ def main():
 
     if ops.sim_noise.enabled:
         ops.sim_noise.apply(data)
+
+    # FIXME:  There are many operators still to add to this example, including
+    # atmosphere simulation, optional filters, and other types of mapmaking.  Those
+    # will be added as the code is ported.
 
     # Build up our map-making operation from the pieces- both operators configured
     # from user options and other operators.

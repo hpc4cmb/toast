@@ -209,13 +209,20 @@ class ElevationNoise(Operator):
 
                 el = np.median(np.concatenate(el_view))
 
-                # PSD
+                # Scale the PSD
+
+                # The PSD in a fixed set of units
                 psd_ksq = noise.psd(det).to_value(u.K ** 2 * u.second)
-                rate = noise.rate(det)
+
+                # Use the high-frequency part of the PSD to estimate the NET^2
                 old_net_sq = np.median(psd_ksq[-10:])
+
+                # Compute the new NET in the same units.
                 new_net = self.noise_a.to_value(u.K * (1.0 * u.second)) / np.sin(
                     el
                 ) + self.noise_b.to_value(u.K * (1.0 * u.second))
+
+                # Apply scaling
                 psd[:] *= new_net ** 2 / old_net_sq
         return
 
