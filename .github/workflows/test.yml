@@ -52,23 +52,23 @@ jobs:
         run: docker run -e MPI_DISABLE=1 test_runner:py38 python -c 'import toast.tests; toast.tests.run()'
       - name: Run MPI Tests
         run: docker run test_runner:py38 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
-  # py39:
-  #   name: Python 3.9
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Cancel Previous Runs
-  #       uses: styfle/cancel-workflow-action@0.4.0
-  #       with:
-  #         access_token: ${{ github.token }}
-  #     - name: Checkout
-  #       uses: actions/checkout@v2
-  #     - name: Pull Dependency Image
-  #       run: docker pull hpc4cmb/toast-deps-py39:latest
-  #     - name: Compile
-  #       run: docker run -v "$(pwd)":/home/toast --name="test_py39" hpc4cmb/toast-deps-py39:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py39 test_runner:py39
-  #     - name: Test Documentation Build
-  #       run: docker run -v "$(pwd)":/home/toast test_runner:py39 /home/toast/docs/build_docs.sh
-  #     - name: Run Serial Tests
-  #       run: docker run -e MPI_DISABLE=1 test_runner:py39 python -c 'import toast.tests; toast.tests.run()'
-  #     - name: Run MPI Tests
-  #       run: docker run test_runner:py39 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+  py39:
+    name: Python 3.9
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.4.0
+        with:
+          access_token: ${{ github.token }}
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Pull Dependency Image
+        run: docker pull hpc4cmb/toast-deps-py39:latest
+      - name: Compile
+        run: docker run -v "$(pwd)":/home/toast --name="test_py39" hpc4cmb/toast-deps-py39:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py39 test_runner:py39
+      - name: Test Documentation Build
+        run: docker run -v "$(pwd)":/home/toast test_runner:py39 /home/toast/docs/build_docs.sh
+      - name: Run Serial Tests
+        run: docker run -e MPI_DISABLE=1 test_runner:py39 python -c 'import toast.tests; toast.tests.run()'
+      - name: Run MPI Tests
+        run: docker run test_runner:py39 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
