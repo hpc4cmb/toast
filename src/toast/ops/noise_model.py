@@ -65,11 +65,11 @@ class DefaultNoiseModel(Operator):
             NET = {}
             rates = {}
             for d in dets:
-                rates[d] = focalplane.sample_rate.to_value(u.Hz)
-                fmin[d] = focalplane[d]["psd_fmin"].to_value(u.Hz)
-                fknee[d] = focalplane[d]["psd_fknee"].to_value(u.Hz)
+                rates[d] = focalplane.sample_rate
+                fmin[d] = focalplane[d]["psd_fmin"]
+                fknee[d] = focalplane[d]["psd_fknee"]
                 alpha[d] = focalplane[d]["psd_alpha"]
-                NET[d] = focalplane[d]["psd_net"].to_value(u.K * np.sqrt(1 * u.second))
+                NET[d] = focalplane[d]["psd_net"]
 
             noise = AnalyticNoise(
                 rate=rates, fmin=fmin, detectors=dets, fknee=fknee, alpha=alpha, NET=NET

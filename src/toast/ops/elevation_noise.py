@@ -6,6 +6,8 @@ import copy
 
 import numpy as np
 
+from astropy import units as u
+
 import traitlets
 
 from ..utils import Environment, Logger
@@ -25,13 +27,18 @@ from .operator import Operator
 class ElevationNoise(Operator):
     """Modify detector noise model based on elevation.
 
-    This adjusts the detector NET in a noise model based on the median elevation of
+    This adjusts the detector PSDs in a noise model based on the median elevation of
     each detector in each observation.
 
-    The new NET value is computed as:
+    The new NET value is given by:
 
     .. math::
-        NET_{new} =  1.0e-12 x f_{sample} x (a / sin(el) + b)^2 / NET_{old}
+        NET_{new} = (a / sin(el) + b)
+
+    The Full PSD is then scaled by
+
+    .. math::
+        PSD *= NET_{new}^2 / NET_{old}^2
 
     Where the old NET is estimated from the high frequency samples of the PSD.
 
@@ -68,16 +75,14 @@ class ElevationNoise(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    noise_a = Float(
-        None,
-        allow_none=True,
-        help="Evaluate noise PSD as (a / sin(el) + b) ** 2 * fsample * 1e-12",
+    noise_a = Quantity(
+        0.0 * u.K * np.sqrt(1 * u.second),
+        help="Parameter 'a' in (a / sin(el) + b)",
     )
 
     noise_b = Float(
-        None,
-        allow_none=True,
-        help="Evaluate noise PSD as (a / sin(el) + b) ** 2 * fsample * 1e-12",
+        0.0 * u.K * np.sqrt(1 * u.second),
+        help="Parameter 'b' in (a / sin(el) + b)",
     )
 
     @traitlets.validate("detector_pointing")
@@ -129,7 +134,7 @@ class ElevationNoise(Operator):
                 raise RuntimeError(msg)
 
             # If both the A and B values are unset, the noise model is not modified.
-            if self.noise_a is None and self.noise_b is None:
+            if self.noise_a.value == 0 and self.noise_b.value == 0:
                 ob[self.out_model] = ob[self.noise_model]
                 continue
 
@@ -205,11 +210,13 @@ class ElevationNoise(Operator):
                 el = np.median(np.concatenate(el_view))
 
                 # PSD
-                psd = noise.psd(det)
+                psd_ksq = noise.psd(det).to_value(u.K ** 2 * u.second)
                 rate = noise.rate(det)
-                old_net = np.median(psd[-10:])
-                new_net = (self.noise_a / np.sin(el) + self.noise_b) ** 2 * rate * 1e-12
-                psd[:] *= new_net / old_net
+                old_net_sq = np.median(psd_ksq[-10:])
+                new_net = self.noise_a.to_value(u.K * (1.0 * u.second)) / np.sin(
+                    el
+                ) + self.noise_b.to_value(u.K * (1.0 * u.second))
+                psd[:] *= new_net ** 2 / old_net_sq
         return
 
     def _finalize(self, data, **kwargs):

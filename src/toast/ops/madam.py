@@ -10,6 +10,8 @@ import traitlets
 
 import numpy as np
 
+from astropy import units as u
+
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 
 from ..traits import trait_docs, Int, Unicode, Bool, Dict
@@ -455,10 +457,10 @@ class Madam(Operator):
                 raise RuntimeError(msg)
             if psd_freqs is None:
                 psd_freqs = np.array(
-                    ob[self.noise_model].freq(ob.local_detectors[0]), dtype=np.float64
+                    ob[self.noise_model].freq(ob.local_detectors[0]).to_value(u.Hz), dtype=np.float64
                 )
             else:
-                check_freqs = ob[self.noise_model].freq(ob.local_detectors[0])
+                check_freqs = ob[self.noise_model].freq(ob.local_detectors[0]).to_value(u.Hz)
                 if not np.allclose(psd_freqs, check_freqs):
                     raise RuntimeError(
                         "All PSDs passed to Madam must have the same frequency binning."
@@ -642,7 +644,7 @@ class Madam(Operator):
                 for det in all_dets:
                     if det not in ob.local_detectors:
                         continue
-                    psd = nse.psd(det) * nse_scale ** 2
+                    psd = nse.psd(det).to_value(u.K**2 * u.second) * nse_scale ** 2
                     detw = nse.detector_weight(det)
                     if det not in psds:
                         psds[det] = [(0.0, psd, detw)]

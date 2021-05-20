@@ -79,6 +79,9 @@ def main():
 
     madam_available = toast.ops.madam.available()
 
+    # FIXME:  This example workflow will eventually include other operators for
+    # atmosphere simulation, filtering, other types of map-making, etc.
+
     operators = [
         toast.ops.SimGround(name="sim_ground"),
         toast.ops.DefaultNoiseModel(name="default_model", noise_model="default_model"),

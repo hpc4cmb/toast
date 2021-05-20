@@ -4,19 +4,21 @@
 
 import numpy as np
 
+from astropy import units as u
+
 from .noise import Noise
 
 
 class AnalyticNoise(Noise):
     """Class representing an analytic noise model.
 
-    This generates an analytic PSD for a set of detectors, given
-    input values for the knee frequency, NET, exponent, sample rate,
-    minimum frequency, etc.
+    This generates an analytic PSD for a set of detectors, given input values for the
+    knee frequency, NET, exponent, sample rate, minimum frequency, etc.  The rate,
+    fmin, fknee, and NET parameters should all be Quantities with units.
 
     Args:
         detectors (list): List of detectors.
-        rate (dict): Dictionary of sample rates in Hertz.
+        rate (dict): Dictionary of sample rates.
         fmin (dict): Dictionary of minimum frequencies for high pass
         fknee (dict): Dictionary of knee frequencies.
         alpha (dict): Dictionary of alpha exponents (positive, not negative!).
@@ -44,12 +46,15 @@ class AnalyticNoise(Noise):
         last_nyquist = None
 
         for d in detectors:
-            if (self._fknee[d] > 0.0) and (self._fknee[d] < self._fmin[d]):
+            fmin_hz = self._fmin[d].to_value(u.Hz)
+            fknee_hz = self._fknee[d].to_value(u.Hz)
+            rate_hz = self._rate[d].to_value(u.Hz)
+            if (fknee_hz > 0.0) and (fknee_hz < fmin_hz):
                 raise RuntimeError(
                     "If knee frequency is non-zero, it must be greater than f_min"
                 )
 
-            nyquist = self._rate[d] / 2.0
+            nyquist = rate_hz / 2.0
             if nyquist != last_nyquist:
                 tempfreq = []
 
@@ -68,27 +73,28 @@ class AnalyticNoise(Noise):
                 tempfreq = np.array(tempfreq, dtype=np.float64)
                 last_nyquist = nyquist
 
-            freqs[d] = tempfreq
+            freqs[d] = tempfreq * u.Hz
 
-            if self._fknee[d] > 0.0:
-                ktemp = np.power(self._fknee[d], self._alpha[d])
-                mtemp = np.power(self._fmin[d], self._alpha[d])
-                temp = np.power(freqs[d], self._alpha[d])
+            if fknee_hz > 0.0:
+                ktemp = np.power(fknee_hz, self._alpha[d])
+                mtemp = np.power(fmin_hz, self._alpha[d])
+                temp = np.power(freqs[d].to_value(u.Hz), self._alpha[d])
                 psds[d] = (temp + ktemp) / (temp + mtemp)
-                psds[d] *= self._NET[d] * self._NET[d]
+                psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second)))**2
             else:
-                psds[d] = np.ones_like(freqs[d])
-                psds[d] *= self._NET[d] * self._NET[d]
+                psds[d] = np.ones_like(freqs[d].to_value(u.Hz))
+                psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second)))**2
+            psds[d] *= (self._NET[d].unit)**2
 
         # call the parent class constructor to store the psds
         super().__init__(detectors=detectors, freqs=freqs, psds=psds, indices=indices)
 
     def fmin(self, det):
-        """(float): the minimum frequency in Hz, used as a high pass."""
+        """(float): the minimum frequency, used as a high pass."""
         return self._fmin[det]
 
     def fknee(self, det):
-        """(float): the knee frequency in Hz."""
+        """(float): the knee frequency."""
         return self._fknee[det]
 
     def alpha(self, det):
@@ -100,4 +106,4 @@ class AnalyticNoise(Noise):
         return self._NET[det]
 
     def _detector_weight(self, det):
-        return 1.0 / (self._NET[det] ** 2)
+        return 1.0 / (self._NET[det] ** 2).to_value(u.K**2 * u.second)
