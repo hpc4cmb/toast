@@ -9,12 +9,51 @@ import numpy as np
 from toast.timing import function_timer, Timer
 from toast.utils import Logger, Environment
 
-from ..tod import OpPolyFilter, OpPolyFilter2D
+from ..tod import OpPolyFilter, OpPolyFilter2D, OpCommonModeFilter
 from ..todmap import OpGroundFilter
 
 #
 # Polynomial filter
 #
+
+
+def add_common_mode_filter_args(parser):
+    """Add the common mode filter arguments to argparser"""
+    parser.add_argument(
+        "--common-mode-filter",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Apply common mode filter",
+        dest="apply_common_mode_filter",
+    )
+    parser.add_argument(
+        "--no-common-mode-filter",
+        required=False,
+        action="store_false",
+        help="Do not apply common mode filter",
+        dest="apply_common_mode_filter",
+    )
+    parser.set_defaults(apply_common_mode_filter=False)
+
+    parser.add_argument(
+        "--common-mode-filter-key",
+        required=False,
+        help="Focalplane key ('telescope', 'band', 'tube', 'wafer') "
+        "to match in common mode filter",
+    )
+    # Common flag mask may already be added
+    try:
+        parser.add_argument(
+            "--common-flag-mask",
+            required=False,
+            default=1,
+            type=np.uint8,
+            help="Common flag mask",
+        )
+    except argparse.ArgumentError:
+        pass
+    return
 
 
 def add_polyfilter2D_args(parser):
@@ -94,6 +133,27 @@ def add_polyfilter_args(parser):
         )
     except argparse.ArgumentError:
         pass
+    return
+
+
+@function_timer
+def apply_common_mode_filter(args, comm, data, cache_name=None, verbose=True):
+    """Apply the common mode filter to data under `cache_name`."""
+    if not args.apply_common_mode_filter:
+        return
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+    if comm.world_rank == 0 and verbose:
+        log.info("Common mode filtering signal")
+    commonfilter = OpCommonModeFilter(
+        name=cache_name,
+        common_flag_mask=args.common_flag_mask,
+        focalplane_key=args.common_mode_filter_key,
+    )
+    commonfilter.exec(data)
+    if comm.world_rank == 0 and verbose:
+        timer.report_clear("Common mode filtering")
     return
 
 

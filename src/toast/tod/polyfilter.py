@@ -23,6 +23,124 @@ from .. import qarray as qa
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
+class OpCommonModeFilter(Operator):
+    """Operator to regress out common mode at each time stamp.
+
+    This is equivalent to 0th order 2D polynomial filter but the
+    implementation is more streamlined.
+
+    Args:
+    pattern (str):  Regex pattern to match against detector names.
+        Only detectors that match the pattern are filtered.
+    name (str):  Name of the output signal cache object will be
+        <name_in>_<detector>.  If the object exists, it is used as
+        input.  Otherwise signal is read using the tod read method.
+    common_flag_name (str):  Cache name of the output common flags.
+        If it already exists, it is used.  Otherwise flags
+        are read from the tod object and stored in the cache under
+        common_flag_name.
+    common_flag_mask (byte):  Bitmask to use when flagging data
+       based on the common flags.
+    flag_name (str):  Cache name of the output detector flags will
+        be <flag_name>_<detector>.  If the object exists, it is
+        used.  Otherwise flags are read from the tod object.
+    flag_mask (byte):  Bitmask to use when flagging data
+       based on the detector flags.
+    """
+
+    def __init__(
+        self,
+        pattern=r".*",
+        name=None,
+        common_flag_name=None,
+        common_flag_mask=255,
+        flag_name=None,
+        flag_mask=255,
+        focalplane_key=None,
+    ):
+        self._pattern = pattern
+        self._name = name
+        self._common_flag_name = common_flag_name
+        self._common_flag_mask = common_flag_mask
+        self._flag_name = flag_name
+        self._flag_mask = flag_mask
+        self._focalplane_key = focalplane_key
+
+        # Call the parent class constructor.
+        super().__init__()
+
+    @function_timer
+    def exec(self, data):
+        """Apply the common mode filter to the signal.
+
+        Args:
+            data (toast.Data): The distributed data.
+
+        """
+        world_comm = data.comm.comm_world
+        if world_comm is None:
+            world_rank = 0
+        else:
+            world_rank = world_comm.rank
+
+        for obs in data.obs:
+            focalplane = obs["focalplane"]
+            tod = obs["tod"]
+            times = tod.local_times()
+            # communicator for processes with the same sample range
+            comm = tod.grid_comm_col
+            if comm is None:
+                comm_rank = 0
+                comm_size = 1
+            else:
+                comm_rank = comm.rank
+                comm_size = comm.size
+
+            detectors = tod.detectors
+            if self._focalplane_key is None:
+                values = [None]
+            else:
+                values = set()
+                for det in detectors:
+                    values.add(focalplane[det][self._focalplane_key])
+                values = sorted(values)
+
+            pat = re.compile(self._pattern)
+
+            for value in values:
+                local_dets = []
+                for det in tod.local_dets:
+                    if pat.match(det) is None:
+                        continue
+                    if value is not None and \
+                       focalplane[det][self._focalplane_key] != value:
+                        continue
+                    local_dets.append(det)
+
+                template = np.zeros(times.size)
+                hits = np.zeros(times.size)
+                common_flg = tod.local_common_flags(self._common_flag_name) & self._common_flag_mask
+                for det in local_dets:
+                    ref = tod.local_signal(det, self._name)
+                    flg = tod.local_flags(det, self._flag_name) & self._flag_mask
+                    mask = (flg | common_flg) == 0
+                    template[mask] += ref[mask]
+                    hits[mask] += 1
+
+                if comm is not None:
+                    comm.Barrier()
+                    comm.Allreduce(MPI.IN_PLACE, template, op=MPI.SUM)
+                    comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
+
+                good = hits != 0
+                template[good] /= hits[good]
+
+                for det in local_dets:
+                    ref = tod.local_signal(det, self._name)
+                    ref -= template
+        return
+
+
 class OpPolyFilter2D(Operator):
     """Operator to regress out 2D polynomials across the focal plane.
 
