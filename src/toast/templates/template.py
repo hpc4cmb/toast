@@ -6,6 +6,8 @@ import numpy as np
 
 import traitlets
 
+from toast.timing import function_timer_stackskip
+
 from ..utils import Logger
 
 from ..traits import TraitConfig, Instance, Unicode, Int
@@ -113,6 +115,7 @@ class Template(TraitConfig):
     def _add_to_signal(self, detector, amplitudes):
         raise NotImplementedError("Derived class must implement _add_to_signal()")
 
+    @function_timer_stackskip
     def add_to_signal(self, detector, amplitudes):
         """Accumulate the projected amplitudes to a timestream.
 
@@ -138,6 +141,7 @@ class Template(TraitConfig):
     def _project_signal(self, detector, amplitudes):
         raise NotImplementedError("Derived class must implement _project_signal()")
 
+    @function_timer_stackskip
     def project_signal(self, detector, amplitudes):
         """Project a timestream into template amplitudes.
 
@@ -164,6 +168,7 @@ class Template(TraitConfig):
         # Not all Templates implement the prior
         return
 
+    @function_timer_stackskip
     def add_prior(self, amplitudes_in, amplitudes_out):
         """Apply the inverse amplitude covariance as a prior.
 
@@ -187,6 +192,7 @@ class Template(TraitConfig):
     def _apply_precond(self, amplitudes_in, amplitudes_out):
         raise NotImplementedError("Derived class must implement _apply_precond()")
 
+    @function_timer_stackskip
     def apply_precond(self, amplitudes_in, amplitudes_out):
         """Apply the template preconditioner.
 

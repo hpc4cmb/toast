@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
+from toast.timing import function_timer_stackskip
 from ..utils import Logger
 
 from ..traits import TraitConfig
@@ -22,6 +23,7 @@ class Operator(TraitConfig):
     def _exec(self, data, detectors=None, **kwargs):
         raise NotImplementedError("Fell through to Operator base class")
 
+    @function_timer_stackskip
     def exec(self, data, detectors=None, **kwargs):
         """Perform operations on a Data object.
 
@@ -42,6 +44,7 @@ class Operator(TraitConfig):
     def _finalize(self, data, **kwargs):
         raise NotImplementedError("Fell through to Operator base class")
 
+    @function_timer_stackskip
     def finalize(self, data, **kwargs):
         """Perform any final operations / communication.
 
@@ -58,6 +61,7 @@ class Operator(TraitConfig):
         """
         return self._finalize(data, **kwargs)
 
+    @function_timer_stackskip
     def apply(self, data, detectors=None, **kwargs):
         """Run exec() and finalize().
 
