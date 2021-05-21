@@ -1270,6 +1270,10 @@ class TODGround(TOD):
         """ Simulate oscillating elevation """
 
         tt = times - times[0]
+        # Shift the starting time by a random phase
+        np.random.seed(int(times[0] % 2 ** 32))
+        tt += np.random.rand() / self._el_mod_rate
+
         if self._el_mod_sine:
             # elevation is modulated along a sine wave
             angular_rate = 2 * np.pi * self._el_mod_rate
