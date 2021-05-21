@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2021-2021 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
+# a BSD-style license that can be found in the LICENSE file.
+
+"""Plot global timing results
+"""
+
+from pprint import PrettyPrinter
+import sys
+import argparse
+import re
+
+import csv
+
+import numpy as np
+
+import pandas as pd
+
+import plotly.express as px
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Plot a timing dump.")
+
+    parser.add_argument(
+        "--file",
+        required=True,
+        help="Name of input CSV file",
+    )
+
+    parser.add_argument(
+        "--out",
+        required=False,
+        default="timing.pdf",
+        help="Name of output file",
+    )
+
+    args = parser.parse_args()
+
+    print(f"Reading input timing from {args.file}")
+
+    raw = list()
+    values = list()
+
+    n_column = 0
+    n_rows = 0
+
+    with open(args.file, "r") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            name = row[0]
+            mat = re.match(r"\(function\) (.*)", name)
+            if mat is not None:
+                # this is a function timer
+                trace = mat.group(1)
+                med = float(row[7])
+                levels = trace.split("|")
+                raw.append(levels)
+                values.append(med)
+                n_column = max(n_column, len(levels))
+                n_rows += 1
+
+    lnames = [f"level{x}" for x in range(n_column)]
+    data = list()
+
+    for row, val in zip(raw, values):
+        n_cols = len(row)
+        rlist = list()
+        for i in range(n_cols):
+            rlist.append(row[i])
+        if n_cols < n_column:
+            rlist.append("Other")
+            for i in range(n_cols + 1, n_column):
+                rlist.append(None)
+        rlist.append(val)
+        data.append(rlist)
+
+    cnames = list(lnames)
+    cnames.append("value")
+    df = pd.DataFrame(data=data, columns=cnames)
+
+    fig = px.sunburst(
+        data_frame=df,
+        path=lnames,
+        values="value",
+        title="TOAST Timing",
+        height=700,
+        template="plotly",
+        branchvalues="total",
+    )
+    fig.write_image(args.out)
+
+
+if __name__ == "__main__":
+    main()

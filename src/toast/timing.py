@@ -2,6 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+import re
+
 import inspect
 
 from functools import wraps
@@ -17,24 +20,91 @@ from ._libtoast import Timer, GlobalTimers
 from .utils import Environment
 
 
+stack_toast_file_pat = re.compile(r".*(toast.*)\.py")
+
+# Global list of functions to ignore in our simplified timing stacktrace.
+# This can be updated by decorating functions with the function_timer_stackskip
+# below.
+
+stack_toast_skip = {
+    "df",
+    "<module>",
+}
+
+
 def function_timer(f):
     env = Environment.get()
     ft = env.function_timers()
     if ft:
-        nm = None
-        if inspect.ismethod(f):
-            nm = f.__self__.__name__
-        else:
-            nm = f.__qualname__
-        tnm = "{} (function_timer)".format(nm)
+        fname = f"{f.__qualname__}"
 
         @wraps(f)
         def df(*args, **kwargs):
+            global stack_toast_skip
             gt = GlobalTimers.get()
+            # Build a name from the current function and the call trace.
+            tnm = "(function) "
+            fnmlist = list()
+            frm = inspect.currentframe().f_back
+            while frm:
+                mat = stack_toast_file_pat.match(frm.f_code.co_filename)
+                if mat is not None:
+                    # This is a stack frame that we care about
+                    if "self" in frm.f_locals:
+                        # this is inside a class instance
+                        funcname = f"{frm.f_locals['self'].__class__.__name__}.{frm.f_code.co_name}"
+                        if funcname not in stack_toast_skip:
+                            found = False
+                            for base in frm.f_locals["self"].__class__.__bases__:
+                                basename = f"{base.__name__}.{frm.f_code.co_name}"
+                                if basename in stack_toast_skip:
+                                    found = True
+                                    break
+                            if not found:
+                                fnmlist.append(funcname)
+                    else:
+                        # this is just a function call
+                        if frm.f_code.co_name not in stack_toast_skip:
+                            fnmlist.append(frm.f_code.co_name)
+                frm = frm.f_back
+
+            if len(fnmlist) > 0:
+                tnm += "|".join(reversed(fnmlist))
+                tnm += "|"
+
+            # Make sure the final frame handle is released
+            del frm
+            tnm += fname
             gt.start(tnm)
             result = f(*args, **kwargs)
             gt.stop(tnm)
             return result
+
+    else:
+
+        @wraps(f)
+        def df(*args, **kwargs):
+            return f(*args, **kwargs)
+
+    return df
+
+
+def function_timer_stackskip(f):
+    env = Environment.get()
+    ft = env.function_timers()
+    if ft:
+
+        @wraps(f)
+        def df(*args, **kwargs):
+            global stack_toast_skip
+            funcname = None
+            if inspect.ismethod(f):
+                funcname = f.__self__.__name__
+            else:
+                funcname = f.__qualname__
+            if funcname not in stack_toast_skip:
+                stack_toast_skip.add(funcname)
+            return f(*args, **kwargs)
 
     else:
 
@@ -151,7 +221,8 @@ def dump(results, path):
     with open(outpath, "w", newline="") as f:
         w = csv.writer(f, delimiter=",", quotechar="'")
         w.writerow(cols.keys())
-        for nm, props in results.items():
+        for nm in sorted(results.keys()):
+            props = results[nm]
             row = [nm]
             for k, v in cols.items():
                 if k == "Timer":
