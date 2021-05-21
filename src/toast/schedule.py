@@ -2720,7 +2720,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
 
         log.debug(
             "Highest possible observing elevation: {:.2f} degrees."
-            " Sky fraction = {:.4f}".format(patches[-1].el_max0 / degree, patch._area)
+            " Sky fraction = {}".format(patches[-1].el_max0 / degree, patch._area)
         )
 
     if args.debug:
