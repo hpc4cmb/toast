@@ -331,7 +331,11 @@ class Patch(object):
         self.step += 1
         self.el_min = self.el_min0
         self.el_max = self.el_max0
-        self.elevations = self.elevations0
+        try:
+            self.elevations = self.elevations0
+        except AttributeError:
+            # Not all patches maintain a list of elevations
+            pass
         self.az_min = 0
         if self.alternate:
             self.az_max = np.pi
