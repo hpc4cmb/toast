@@ -7,22 +7,15 @@
 """
 This script runs a simple ground simulation and makes a map.
 The workflow is tailored to the size of the communicator.
-
-total_sample = num_obs * obs_minutes * sample_rate * n_detector
-
-TODO:
-- remove satelite specific parameters (see satelite scheduler)
 """
 
 import os
 import sys
 import traceback
 import argparse
-from datetime import datetime
 from astropy import units as u
 import toast
 from toast.timing import gather_timers, dump
-from toast.schedule_sim_satellite import create_satellite_schedule
 from benchmarking_utilities import get_mpi_settings, select_case, make_focalplane, scan_map, run_mapmaker, compute_science_metric
 
 def parse_arguments():
@@ -30,11 +23,11 @@ def parse_arguments():
     Defines and parses the arguments for the script.
     """        
     # defines the parameters of the script
-    parser = argparse.ArgumentParser(description="Run a TOAST satellite workflow scaled appropriately to the MPI communicator size and available memory.")
+    parser = argparse.ArgumentParser(description="Run a TOAST ground workflow scaled appropriately to the MPI communicator size and available memory.")
     parser.add_argument(
         "--out_dir",
         required=False,
-        default="toast_benchmark_satellite_out",
+        default="toast_benchmark_ground_out",
         type=str,
         help="The output directory",
     )
@@ -66,11 +59,13 @@ def parse_arguments():
     # The "name" of each operator instance controls what the commandline and config
     # file options will be called.
     operators = [
-        toast.ops.SimSatellite(name="sim_satellite"),
-        toast.ops.DefaultNoiseModel(name="default_model"),
-        toast.ops.SimNoise(name="sim_noise"),
+        toast.ops.SimGround(name="sim_ground"),
+        toast.ops.DefaultNoiseModel(name="default_model", noise_model="default_model"),
+        toast.ops.ElevationNoise(name="elevation_model", noise_model="default_model", out_model="el_weighted_model"),
+        toast.ops.ScanHealpix(name="scan_map"),
+        toast.ops.SimNoise(name="sim_noise", noise_model="el_weighted_model"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=1024),
+        toast.ops.PointingHealpix(name="pointing", mode="IQU"),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
@@ -91,32 +86,40 @@ def parse_arguments():
     args.obs_minutes = 60
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
-    # schedule
-    args.prec_period = 50.0
-    args.spin_period = 10.0
+    # schedule, site and telescope parameters
+    # TODO keep those parameters?
+    args.telescope_name = "telescope"
+    args.site_name = "Atacama"
+    args.site_lon = "-67:47:10"
+    args.site_lat = "-22:57:30"
+    args.site_alt = 5200.0 * u.meter
+    args.schedule_patch = "small_patch,1,40,-40,44,-44"
+    args.schedule_start = "2020-01-01 00:00:00"
+    args.schedule_stop = "2020-01-01 12:00:00"
     # scan map
     args.input_map = 'fake_input_sky.fits'
 
     return config, args, jobargs
 
-def make_schedule(args, world_comm, log):
+def make_schedule(args, world_comm, site, telescope):
     """
     Creates a ground schedule
     """
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
-        run_scheduler(
-                opts=["--site-name", site.name,
-                      "--telescope", tele.name,
-                      "--site-lon", "{}".format(site.earthloc.lon.to_value(u.degree)),
-                      "--site-lat", "{}".format(site.earthloc.lat.to_value(u.degree)),
-                      "--site-alt", "{}".format(site.earthloc.height.to_value(u.meter)),
-                      "--patch", "small_patch,1,40,-40,44,-44",
-                      "--start", "2020-01-01 00:00:00",
-                      "--stop", "2020-01-01 12:00:00",
-                      "--out", sch_file])
-        schedule = GroundSchedule()
-        schedule.read(sch_file)
+        schedule_file = os.path.join(args.out_dir, "ground_bench_schedule.txt")
+        toast.schedule_sim_ground.run_scheduler(
+                opts=["--site-name", args.site_name,
+                      "--telescope", args.telescope_name,
+                      "--site-lon", args.site_lon,
+                      "--site-lat", args.site_lat,
+                      "--site-alt", args.site_alt,
+                      "--patch", args.schedule_patch,
+                      "--start", args.schedule_start,
+                      "--stop", args.schedule_stop,
+                      "--out", schedule_file])
+        schedule = toast.schedule.GroundSchedule()
+        schedule.read(schedule_file)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
     return schedule
@@ -126,7 +129,7 @@ def main():
     log = toast.utils.Logger.get()
     env.enable_function_timers()
     global_timer = toast.timing.GlobalTimers.get()
-    global_timer.start("toast_benchmark_satellite (total)")
+    global_timer.start("toast_benchmark_ground (total)")
 
     # defines and gets the arguments for the script
     config, args, jobargs = parse_arguments()
@@ -152,18 +155,18 @@ def main():
     focalplane = make_focalplane(args, world_comm, log)
 
     # from here on, we start the actual work (unless this is a dry run)
-    global_timer.start("toast_benchmark_satellite (science work)")
+    global_timer.start("toast_benchmark_ground (science work)")
     if args.dry_run is not None:
         log.info_rank0("Exit from dry run.", world_comm)
         # We are done!
         sys.exit(0)
 
     # Create a telescope for the simulation.
-    site = toast.instrument.SpaceSite("space")
-    telescope = toast.instrument.Telescope("satellite", focalplane=focalplane, site=site)
+    site = toast.instrument.GroundSite(args.site_name, args.site_lat, args.site_lon, args.site_alt)
+    telescope = toast.instrument.Telescope(args.telescope_name, focalplane=focalplane, site=site)
 
     # Load the schedule file
-    schedule = make_schedule(args, world_comm, log)
+    schedule = make_schedule(args, world_comm, site, telescope)
 
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
@@ -182,12 +185,17 @@ def main():
     data = toast.Data(comm=comm)
 
     # Simulate the telescope pointing
-    ops.sim_satellite.telescope = telescope
-    ops.sim_satellite.schedule = schedule
-    ops.sim_satellite.apply(data)
+    ops.sim_ground.telescope = telescope
+    ops.sim_ground.schedule = schedule
+    ops.sim_ground.apply(data)
 
     # Construct a "perfect" noise model just from the focalplane parameters
     ops.default_model.apply(data)
+
+    # Create the Elevation modulated noise model
+    ops.elevation_model.detector_pointing = ops.det_pointing
+    ops.elevation_model.view = ops.det_pointing.view
+    ops.elevation_model.apply(data)
 
     # Set the pointing matrix operators to use the detector pointing
     ops.pointing.detector_pointing = ops.det_pointing
@@ -219,7 +227,7 @@ def main():
         out = os.path.join(args.out_dir, "timing")
         dump(alltimers, out)
         timer.stop()
-        timer.report("toast_benchmark_satellite (gathering and dumping timing info)")
+        timer.report("toast_benchmark_ground (gathering and dumping timing info)")
     else:
         timer.stop()
 

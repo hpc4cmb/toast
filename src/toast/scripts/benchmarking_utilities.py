@@ -4,6 +4,8 @@
 
 """
 Functions common to all benchmarking scripts.
+
+total_sample = num_obs * obs_minutes * sample_rate * n_detector
 """
 
 import math
@@ -165,7 +167,6 @@ def make_focalplane(args, world_comm, log):
     if world_comm is not None:
         focalplane = world_comm.bcast(focalplane, root=0)
     return focalplane
-
 
 def create_input_maps(input_map_path, nside, rank, log):
     """ 

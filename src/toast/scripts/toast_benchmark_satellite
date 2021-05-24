@@ -96,7 +96,7 @@ def parse_arguments():
 
     return config, args, jobargs
 
-def make_schedule(args, world_comm, log):
+def make_schedule(args, world_comm):
     """
     Creates a satellite schedule
     """
@@ -155,7 +155,7 @@ def main():
     telescope = toast.instrument.Telescope("satellite", focalplane=focalplane, site=site)
 
     # Load the schedule file
-    schedule = make_schedule(args, world_comm, log)
+    schedule = make_schedule(args, world_comm)
 
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
