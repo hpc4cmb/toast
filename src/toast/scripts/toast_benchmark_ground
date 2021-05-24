@@ -15,6 +15,7 @@ import traceback
 import argparse
 from astropy import units as u
 import toast
+from toast.schedule_sim_ground import run_scheduler
 from toast.timing import gather_timers, dump
 from benchmarking_utilities import get_mpi_settings, select_case, make_focalplane, scan_map, run_mapmaker, compute_science_metric
 
@@ -101,19 +102,19 @@ def parse_arguments():
 
     return config, args, jobargs
 
-def make_schedule(args, world_comm, site, telescope):
+def make_schedule(args, world_comm, site):
     """
     Creates a ground schedule
     """
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
         schedule_file = os.path.join(args.out_dir, "ground_bench_schedule.txt")
-        toast.schedule_sim_ground.run_scheduler(
+        run_scheduler(
                 opts=["--site-name", args.site_name,
                       "--telescope", args.telescope_name,
-                      "--site-lon", args.site_lon,
-                      "--site-lat", args.site_lat,
-                      "--site-alt", args.site_alt,
+                      "--site-lon", "{}".format(site.earthloc.lon.to_value(u.degree)),
+                      "--site-lat",  "{}".format(site.earthloc.lat.to_value(u.degree)),
+                      "--site-alt", "{}".format(site.earthloc.height.to_value(u.meter)),
                       "--patch", args.schedule_patch,
                       "--start", args.schedule_start,
                       "--stop", args.schedule_stop,
@@ -166,7 +167,7 @@ def main():
     telescope = toast.instrument.Telescope(args.telescope_name, focalplane=focalplane, site=site)
 
     # Load the schedule file
-    schedule = make_schedule(args, world_comm, site, telescope)
+    schedule = make_schedule(args, world_comm, site)
 
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
