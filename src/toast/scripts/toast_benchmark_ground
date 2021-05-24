@@ -5,10 +5,13 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 """
-This script runs a simple satellite simulation and makes a map.
+This script runs a simple ground simulation and makes a map.
 The workflow is tailored to the size of the communicator.
 
 total_sample = num_obs * obs_minutes * sample_rate * n_detector
+
+TODO:
+- remove satelite specific parameters (see satelite scheduler)
 """
 
 import os
@@ -98,17 +101,22 @@ def parse_arguments():
 
 def make_schedule(args, world_comm, log):
     """
-    Creates a satellite schedule
+    Creates a ground schedule
     """
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
-        schedule = create_satellite_schedule(
-            prefix="",
-            mission_start=datetime.now(),
-            observation_time=args.obs_minutes * u.minute,
-            num_observations=args.num_obs,
-            prec_period=args.prec_period * u.minute,
-            spin_period=args.spin_period * u.minute)
+        run_scheduler(
+                opts=["--site-name", site.name,
+                      "--telescope", tele.name,
+                      "--site-lon", "{}".format(site.earthloc.lon.to_value(u.degree)),
+                      "--site-lat", "{}".format(site.earthloc.lat.to_value(u.degree)),
+                      "--site-alt", "{}".format(site.earthloc.height.to_value(u.meter)),
+                      "--patch", "small_patch,1,40,-40,44,-44",
+                      "--start", "2020-01-01 00:00:00",
+                      "--stop", "2020-01-01 12:00:00",
+                      "--out", sch_file])
+        schedule = GroundSchedule()
+        schedule.read(sch_file)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
     return schedule

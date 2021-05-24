@@ -6,7 +6,9 @@ install(PROGRAMS
     toast_fake_focalplane
     toast_ground_schedule
     toast_satellite_schedule
-    toast_benchmark_satellite
     toast_timing_plot
+    toast_benchmark_satellite
+    toast_benchmark_ground
+    benchmarking_utilities.py
     DESTINATION bin
 )
