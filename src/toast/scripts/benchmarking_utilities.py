@@ -276,13 +276,12 @@ def run_mapmaker(ops, args, tmpls, data):
         file = os.path.join(args.out_dir, f"{dkey}.fits")
         toast.pixels_io.write_healpix_fits(data[dkey], file, nest=ops.pointing.nest)
 
-def compute_science_metric(args, global_timer, n_nodes, rank, log):
+def compute_science_metric(args, runtime, n_nodes, rank, log):
     """ 
     Computes the science metric and stores it.
     The metric represents the efficiency of the job in a way that is normalized,
     taking the job size into account
     """
-    runtime = global_timer.seconds("toast_benchmark_satellite (science work)")
     prefactor = 1.0e-3
     kilo_samples = 1.0e-3 * args.total_samples
     sample_factor = 1.2

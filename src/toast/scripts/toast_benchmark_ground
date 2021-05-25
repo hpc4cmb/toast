@@ -218,7 +218,8 @@ def main():
     log.info_rank0("Gathering benchmarking metrics.", world_comm)
     if world_comm is not None:
         world_comm.barrier()
-    compute_science_metric(args, global_timer, n_nodes, rank, log)
+    runtime = global_timer.seconds("toast_benchmark_ground (science work)")
+    compute_science_metric(args, runtime, n_nodes, rank, log)
 
     # dumps all the timing information
     timer = toast.timing.Timer()
