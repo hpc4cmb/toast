@@ -88,13 +88,12 @@ def parse_arguments():
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
     # schedule, site and telescope parameters
-    # TODO keep those parameters?
     args.telescope_name = "telescope"
     args.site_name = "Atacama"
     args.site_lon = " -67:47:10"
     args.site_lat = " -22:57:30"
     args.site_alt = 5200.0 * u.meter
-    args.schedule_patch = "small_patch,1,40,-40,44,-44"
+    args.schedule_patch = "tile000,1,40,0,60,-40"
     args.schedule_start = "2020-01-01 00:00:00"
     args.schedule_stop = "2020-01-01 12:00:00"
     # scan map
