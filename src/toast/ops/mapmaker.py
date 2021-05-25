@@ -16,6 +16,8 @@ from ..timing import function_timer, Timer
 
 from ..pixels import PixelDistribution, PixelData
 
+from ..pixels_io import write_healpix_fits
+
 from .operator import Operator
 
 from .pipeline import Pipeline
@@ -131,6 +133,12 @@ class MapMaker(Operator):
 
     overwrite_cleaned = Bool(
         False, help="If True and save_cleaned is True, overwrite the input data"
+    )
+
+    output_dir = Unicode(
+        None,
+        allow_none=True,
+        help="If specified, write output data products to this directory",
     )
 
     @traitlets.validate("binning")
@@ -636,6 +644,18 @@ class MapMaker(Operator):
         map_binning.pre_process = None
 
         self._log_info(comm, rank, "  finished final binning in", timer=timer)
+
+        # Write the outputs
+        # FIXME:  This all assumes the pointing operator is an instance of the
+        # PointingHealpix class.  We need to generalize distributed pixel data
+        # formats and associate them with the pointing operator.
+        if self.output_dir is not None:
+            for prod in ["map", "hits", "cov", "rcond"]:
+                dkey = "{}_{}".format(self.name, prod)
+                file = os.path.join(self.output_dir, "{}.fits".format(dkey))
+                write_healpix_fits(data[dkey], file, nest=self.pointing.nest)
+
+        self._log_info(comm, rank, "  finished output write in", timer=timer)
 
         return
 

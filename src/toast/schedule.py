@@ -253,7 +253,7 @@ class GroundSchedule(object):
         return val
 
     @function_timer
-    def read(self, file, file_split=None, sort=False):
+    def read(self, file, file_split=None, comm=None, sort=False):
         """Load a ground observing schedule from a file.
 
         This loads scans from a file and appends them to the internal list of scans.
@@ -264,12 +264,14 @@ class GroundSchedule(object):
             file_split (tuple):  If not None, only use a subset of the schedule file.
                 The arguments are (isplit, nsplit) and only observations that satisfy
                 'scan index modulo nsplit == isplit' are included.
+            comm (MPI.Comm):  Optional communicator to broadcast the schedule across.
             sort (bool):  If True, sort the combined scan list by name.
 
         Returns:
             None
 
         """
+        log = Logger.get()
 
         def _parse_line(line):
             """Parse one line of the schedule file"""
@@ -361,59 +363,63 @@ class GroundSchedule(object):
                 subscan,
             )
 
-        isplit = None
-        nsplit = None
-        if file_split is not None:
-            isplit, nsplit = file_split
-        scan_counters = dict()
+        if comm is None or comm.rank == 0:
+            log.info("Loading schedule from {}".format(file))
+            isplit = None
+            nsplit = None
+            if file_split is not None:
+                isplit, nsplit = file_split
+            scan_counters = dict()
 
-        with open(file, "r") as f:
-            while True:
-                line = f.readline()
-                if line.startswith("#"):
-                    continue
-                (
-                    site_name,
-                    telescope_name,
-                    site_lat,
-                    site_lon,
-                    site_alt,
-                ) = line.split()
-                self.site_name = site_name
-                self.telescope_name = telescope_name
-                self.site_lat = float(site_lat) * u.degree
-                self.site_lon = float(site_lon) * u.degree
-                self.site_alt = float(site_alt) * u.meter
-                break
-            last_name = None
-            for line in f:
-                if line.startswith("#"):
-                    continue
-                gscan = _parse_line(line)
-                if nsplit is not None:
-                    # Only accept 1 / `nsplit` of the rising and setting
-                    # scans in patch `name`.  Selection is performed
-                    # during the first subscan.
-                    if name != last_name:
-                        if name not in scan_counters:
-                            scan_counters[name] = dict()
-                        counter = scan_counters[name]
-                        # Separate counters for rising and setting scans
-                        ckey = "S"
-                        if gscan.rising:
-                            ckey = "R"
-                        if ckey not in counter:
-                            counter[ckey] = 0
-                        else:
-                            counter[ckey] += 1
-                        iscan = counter[ckey]
-                    last_name = name
-                    if iscan % nsplit != isplit:
+            with open(file, "r") as f:
+                while True:
+                    line = f.readline()
+                    if line.startswith("#"):
                         continue
-                self.scans.append(gscan)
-        if sort:
-            sortedscans = sorted(self.scans, key=lambda scn: scn.name)
-            self.scans = sortedscans
+                    (
+                        site_name,
+                        telescope_name,
+                        site_lat,
+                        site_lon,
+                        site_alt,
+                    ) = line.split()
+                    self.site_name = site_name
+                    self.telescope_name = telescope_name
+                    self.site_lat = float(site_lat) * u.degree
+                    self.site_lon = float(site_lon) * u.degree
+                    self.site_alt = float(site_alt) * u.meter
+                    break
+                last_name = None
+                for line in f:
+                    if line.startswith("#"):
+                        continue
+                    gscan = _parse_line(line)
+                    if nsplit is not None:
+                        # Only accept 1 / `nsplit` of the rising and setting
+                        # scans in patch `name`.  Selection is performed
+                        # during the first subscan.
+                        if name != last_name:
+                            if name not in scan_counters:
+                                scan_counters[name] = dict()
+                            counter = scan_counters[name]
+                            # Separate counters for rising and setting scans
+                            ckey = "S"
+                            if gscan.rising:
+                                ckey = "R"
+                            if ckey not in counter:
+                                counter[ckey] = 0
+                            else:
+                                counter[ckey] += 1
+                            iscan = counter[ckey]
+                        last_name = name
+                        if iscan % nsplit != isplit:
+                            continue
+                    self.scans.append(gscan)
+            if sort:
+                sortedscans = sorted(self.scans, key=lambda scn: scn.name)
+                self.scans = sortedscans
+        if comm is not None:
+            self.scans = comm.bcast(self.scans, root=0)
 
     @function_timer
     def write(self, file):
@@ -473,7 +479,7 @@ class SatelliteSchedule(object):
         return val
 
     @function_timer
-    def read(self, file, sort=False):
+    def read(self, file, comm=None, sort=False):
         """Load a satellite observing schedule from a file.
 
         This loads scans from a file and appends them to the internal list of scans.
@@ -481,30 +487,36 @@ class SatelliteSchedule(object):
 
         Args:
             file (str):  The file to load.
+            comm (MPI.Comm):  Optional communicator to broadcast the schedule across.
             sort (bool):  If True, sort the combined scan list by name.
 
         Returns:
             None
 
         """
-        data = QTable.read(file, format="ascii.ecsv")
-        self.telescope_name = data.meta["telescope_name"]
-        self.site_name = data.meta["site_name"]
-        for row in data:
-            tstart = datetime.fromisoformat(row["start"])
-            tstop = datetime.fromisoformat(row["stop"])
-            self.scans.append(
-                SatelliteScan(
-                    name=row["name"],
-                    start=tstart,
-                    stop=tstop,
-                    prec_period=row["prec_period"],
-                    spin_period=row["spin_period"],
+        log = Logger.get()
+        if comm is None or comm.rank == 0:
+            log.info("Loading schedule from {}".format(file))
+            data = QTable.read(file, format="ascii.ecsv")
+            self.telescope_name = data.meta["telescope_name"]
+            self.site_name = data.meta["site_name"]
+            for row in data:
+                tstart = datetime.fromisoformat(row["start"])
+                tstop = datetime.fromisoformat(row["stop"])
+                self.scans.append(
+                    SatelliteScan(
+                        name=row["name"],
+                        start=tstart,
+                        stop=tstop,
+                        prec_period=row["prec_period"],
+                        spin_period=row["spin_period"],
+                    )
                 )
-            )
-        if sort:
-            sortedscans = sorted(self.scans, key=lambda scn: scn.name)
-            self.scans = sortedscans
+            if sort:
+                sortedscans = sorted(self.scans, key=lambda scn: scn.name)
+                self.scans = sortedscans
+        if comm is not None:
+            self.scans = comm.bcast(self.scans, root=0)
 
     @function_timer
     def write(self, file):

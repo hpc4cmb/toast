@@ -301,20 +301,27 @@ class Focalplane(object):
             etc.  Will be calculated from the detector offsets by default.
         sample_rate (Quantity):  The common (nominal) sample rate for all detectors.
         file (str):  Load the focalplane from this file.
+        comm (MPI.Comm):  If loading from a file, optional communicator to broadcast
+            across.
 
     """
 
     XAXIS, YAXIS, ZAXIS = np.eye(3)
 
     def __init__(
-        self, detector_data=None, field_of_view=None, sample_rate=None, file=None
+        self,
+        detector_data=None,
+        field_of_view=None,
+        sample_rate=None,
+        file=None,
+        comm=None,
     ):
         self.detector_data = None
         self.field_of_view = None
         self.sample_rate = None
 
         if file is not None:
-            self.read(file)
+            self.read(file, comm=comm)
         else:
             self.detector_data = detector_data
             self.field_of_view = field_of_view
@@ -474,20 +481,30 @@ class Focalplane(object):
         value += "]>"
         return value
 
-    def read(self, file):
-        self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
-        self.sample_rate = self.detector_data.meta["sample_rate"]
-        if "field_of_view" in self.detector_data.meta:
-            self.field_of_view = self.detector_data.meta["field_of_view"]
-        else:
-            self._compute_fov()
+    def read(self, file, comm=None):
+        if comm is None or comm.rank == 0:
+            self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
+            self.sample_rate = self.detector_data.meta["sample_rate"]
+            if "field_of_view" in self.detector_data.meta:
+                self.field_of_view = self.detector_data.meta["field_of_view"]
+            else:
+                self._compute_fov()
+        if comm is not None:
+            self.detector_data = comm.bcast(self.detector_data, root=0)
+            self.sample_rate = comm.bcast(self.sample_rate, root=0)
+            self.field_of_view = comm.bcast(self.field_of_view, root=0)
 
-    def write(self, file):
-        self.detector_data.meta["sample_rate"] = self.sample_rate
-        self.detector_data.meta["field_of_view"] = self.field_of_view
-        self.detector_data.write(
-            file, format="hdf5", path="focalplane", serialize_meta=True, overwrite=True
-        )
+    def write(self, file, comm=None):
+        if comm is None or comm.rank == 0:
+            self.detector_data.meta["sample_rate"] = self.sample_rate
+            self.detector_data.meta["field_of_view"] = self.field_of_view
+            self.detector_data.write(
+                file,
+                format="hdf5",
+                path="focalplane",
+                serialize_meta=True,
+                overwrite=True,
+            )
 
 
 class Telescope(object):

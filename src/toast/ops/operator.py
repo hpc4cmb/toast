@@ -39,7 +39,13 @@ class Operator(TraitConfig):
             None
 
         """
-        self._exec(data, detectors=detectors, **kwargs)
+        log = Logger.get()
+        if self.enabled:
+            self._exec(data, detectors=detectors, **kwargs)
+        else:
+            if data.comm.world_rank == 0:
+                msg = f"Operator {self.name} is disabled, skipping call to exec()"
+                log.debug(msg)
 
     def _finalize(self, data, **kwargs):
         raise NotImplementedError("Fell through to Operator base class")
@@ -59,7 +65,13 @@ class Operator(TraitConfig):
             (value):  None or an Operator-dependent result.
 
         """
-        return self._finalize(data, **kwargs)
+        log = Logger.get()
+        if self.enabled:
+            return self._finalize(data, **kwargs)
+        else:
+            if data.comm.world_rank == 0:
+                msg = f"Operator {self.name} is disabled, skipping call to finalize()"
+                log.debug(msg)
 
     @function_timer_stackskip
     def apply(self, data, detectors=None, **kwargs):

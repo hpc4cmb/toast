@@ -76,6 +76,20 @@ class Template(TraitConfig):
         # computing the number of amplitudes) whenever the data changes.
         raise NotImplementedError("Derived class must implement _initialize()")
 
+    def _check_enabled(self):
+        if self.data is None:
+            raise RuntimeError(
+                "You must set the data trait before calling template methods"
+            )
+        if self.enabled:
+            return True
+        else:
+            log = Logger.get()
+            if self.data.comm.world_rank == 0:
+                msg = f"Template {self.name} is disabled, skipping calls to all methods"
+                log.debug(msg)
+            return False
+
     def _detectors(self):
         # Derived classes should return the list of detectors they support.
         raise NotImplementedError("Derived class must implement _detectors()")
@@ -90,9 +104,8 @@ class Template(TraitConfig):
             (list):  The detectors with local amplitudes across all observations.
 
         """
-        if self.data is None:
-            raise RuntimeError("You must set the data trait before calling detectors()")
-        return self._detectors()
+        if self._check_enabled():
+            return self._detectors()
 
     def _zeros(self):
         raise NotImplementedError("Derived class must implement _zeros()")
@@ -108,9 +121,8 @@ class Template(TraitConfig):
             (Amplitudes):  Zero amplitudes.
 
         """
-        if self.data is None:
-            raise RuntimeError("You must set the data trait before using a template")
-        return self._zeros()
+        if self._check_enabled():
+            return self._zeros()
 
     def _add_to_signal(self, detector, amplitudes):
         raise NotImplementedError("Derived class must implement _add_to_signal()")
@@ -134,9 +146,8 @@ class Template(TraitConfig):
             None
 
         """
-        if self.data is None:
-            raise RuntimeError("You must set the data trait before using a template")
-        return self._add_to_signal(detector, amplitudes)
+        if self._check_enabled():
+            return self._add_to_signal(detector, amplitudes)
 
     def _project_signal(self, detector, amplitudes):
         raise NotImplementedError("Derived class must implement _project_signal()")
@@ -160,9 +171,8 @@ class Template(TraitConfig):
             None
 
         """
-        if self.data is None:
-            raise RuntimeError("You must set the data trait before using a template")
-        self._project_signal(detector, amplitudes)
+        if self._check_enabled():
+            return self._project_signal(detector, amplitudes)
 
     def _add_prior(self, amplitudes_in, amplitudes_out):
         # Not all Templates implement the prior
@@ -185,9 +195,8 @@ class Template(TraitConfig):
             None
 
         """
-        if self.data is None:
-            raise RuntimeError("You must set the data trait before using a template")
-        self._add_prior(amplitudes_in, amplitudes_out)
+        if self._check_enabled():
+            return self._add_prior(amplitudes_in, amplitudes_out)
 
     def _apply_precond(self, amplitudes_in, amplitudes_out):
         raise NotImplementedError("Derived class must implement _apply_precond()")
@@ -211,9 +220,8 @@ class Template(TraitConfig):
             None
 
         """
-        if self.data is None:
-            raise RuntimeError("You must set the data trait before using a template")
-        self._apply_precond(amplitudes_in, amplitudes_out)
+        if self._check_enabled():
+            return self._apply_precond(amplitudes_in, amplitudes_out)
 
     def _accelerators(self):
         # Do not force descendent classes to implement this.  If it is not

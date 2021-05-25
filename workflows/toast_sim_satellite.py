@@ -54,11 +54,11 @@ def main():
     # Arguments specific to this script
 
     parser.add_argument(
-        "--focalplane", required=False, default=None, help="Input fake focalplane"
+        "--focalplane", required=True, default=None, help="Input fake focalplane"
     )
 
     parser.add_argument(
-        "--schedule", required=False, default=None, help="Input observing schedule"
+        "--schedule", required=True, default=None, help="Input observing schedule"
     )
 
     parser.add_argument(
@@ -109,41 +109,25 @@ def main():
         templates=templates,
     )
 
-    # Log the config that was actually used at runtime.
-    outlog = os.path.join(args.out_dir, "config_log.toml")
+    # Create our output directory
     if rank == 0:
         if not os.path.isdir(args.out_dir):
             os.makedirs(args.out_dir)
-        toast.config.dump_toml(outlog, config)
 
-    # Load or create the focalplane file.  NOTE:  again, this is just using the
+    # Log the config that was actually used at runtime.
+    outlog = os.path.join(args.out_dir, "config_log.toml")
+    toast.config.dump_toml(outlog, config, comm=world_comm)
+
+    # Load the focalplane file.  NOTE:  again, this is just using the
     # built-in Focalplane class.  In a workflow for a specific experiment we would
     # have a custom class.
 
-    if args.focalplane is None:
-        if rank == 0:
-            log.info("No focalplane specified.  Nothing to do.")
-        return
-
-    focalplane = None
-    if rank == 0:
-        log.info("Loading focalplane from {}".format(args.focalplane))
-        focalplane = toast.instrument.Focalplane(file=args.focalplane)
-    if world_comm is not None:
-        focalplane = world_comm.bcast(focalplane, root=0)
+    focalplane = toast.instrument.Focalplane(file=args.focalplane, comm=world_comm)
 
     # Load the schedule file
 
-    if args.schedule is None:
-        if rank == 0:
-            log.info("No schedule file specified- nothing to simulate")
-        return
-    schedule = None
-    if rank == 0:
-        schedule = toast.schedule.SatelliteSchedule()
-        schedule.read(args.schedule)
-    if world_comm is not None:
-        schedule = world_comm.bcast(schedule, root=0)
+    schedule = toast.schedule.SatelliteSchedule()
+    schedule.read(args.schedule, comm=world_comm)
 
     # Create a telescope for the simulation.  Again, for a specific experiment we
     # would use custom classes for the site.
@@ -190,12 +174,6 @@ def main():
 
     # Simulate the telescope pointing
 
-    if not ops.sim_satellite.enabled:
-        msg = "Cannot disable the satellite scanning operator"
-        if rank == 0:
-            log.error(msg)
-        raise RuntimeError(msg)
-
     ops.sim_satellite.telescope = telescope
     ops.sim_satellite.schedule = schedule
     ops.sim_satellite.apply(data)
@@ -204,79 +182,50 @@ def main():
 
     ops.default_model.apply(data)
 
-    # Set the pointing matrix operators to use the detector pointing
+    # Set up the pointing.  Each pointing matrix operator requires a detector pointing
+    # operator, and each binning operator requires a pointing matrix operator.
 
     ops.pointing.detector_pointing = ops.det_pointing
     ops.pointing_final.detector_pointing = ops.det_pointing
 
+    ops.binner.pointing = ops.pointing
+    ops.binner_final.pointing = ops.pointing_final
+
+    # Are we using different pointing and binning operators for our final binning?
+    # If not, we set those to be the same operators used for the solve.
+
+    if not (ops.binner_final.enabled and ops.pointing_final.enabled):
+        ops.binner_final = ops.binner
+        ops.pointing_final = ops.pointing
+
     # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
-    # if that is different from the solver pointing model.
+    # in case that is different from the solver pointing model.
 
-    if ops.scan_map.enabled:
-        pix_dist = toast.ops.BuildPixelDistribution()
-        if ops.binner_final.enabled and ops.pointing_final.enabled:
-            pix_dist.pixel_dist = ops.binner_final.pixel_dist
-            pix_dist.pointing = ops.pointing_final
-            pix_dist.shared_flags = ops.binner_final.shared_flags
-            pix_dist.shared_flag_mask = ops.binner_final.shared_flag_mask
-            pix_dist.save_pointing = ops.binner_final.full_pointing
-        else:
-            pix_dist.pixel_dist = ops.binner.pixel_dist
-            pix_dist.pointing = ops.pointing
-            pix_dist.shared_flags = ops.binner.shared_flags
-            pix_dist.shared_flag_mask = ops.binner.shared_flag_mask
-            pix_dist.save_pointing = full_pointing
-        pix_dist.apply(data)
-
-        ops.scan_map.pixel_dist = pix_dist.pixel_dist
-        ops.scan_map.pointing = pix_dist.pointing
-        ops.scan_map.apply(data)
+    ops.scan_map.pixel_dist = ops.binner_final.pixel_dist
+    ops.scan_map.pointing = ops.pointing_final
+    ops.scan_map.save_pointing = full_pointing
+    ops.scan_map.apply(data)
 
     # Simulate detector noise
 
-    if ops.sim_noise.enabled:
-        ops.sim_noise.apply(data)
+    ops.sim_noise.apply(data)
 
-    # Build up our map-making operation from the pieces- both operators configured
-    # from user options and other operators.
+    # The map maker requires the the binning operators used for the solve and final,
+    # the templates, and the noise model.
 
-    if ops.mapmaker.enabled:
-        ops.binner.pointing = ops.pointing
-        ops.binner.noise_model = ops.default_model.noise_model
+    ops.binner.noise_model = ops.default_model.noise_model
+    ops.binner_final.noise_model = ops.default_model.noise_model
 
-        final_bin = None
-        if ops.binner_final.enabled:
-            final_bin = ops.binner_final
-            if ops.pointing_final.enabled:
-                final_bin.pointing = ops.pointing_final
-            else:
-                final_bin.pointing = ops.pointing
-            final_bin.noise_model = ops.default_model.noise_model
+    ops.mapmaker.binning = ops.binner
+    ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
+    ops.mapmaker.map_binning = ops.binner_final
+    ops.mapmaker.det_data = ops.sim_noise.det_data
+    ops.mapmaker.output_dir = args.out_dir
 
-        # Note that if an empty list of templates is passed to the mapmaker,
-        # then a simple binned map will be made.
-        tlist = list()
-        if tmpls.baselines.enabled:
-            tlist.append(tmpls.baselines)
-        tmatrix = toast.ops.TemplateMatrix(templates=tlist)
-
-        ops.mapmaker.binning = ops.binner
-        ops.mapmaker.template_matrix = tmatrix
-        ops.mapmaker.map_binning = final_bin
-        ops.mapmaker.det_data = ops.sim_noise.det_data
-
-        # Run the map making
-
-        ops.mapmaker.apply(data)
-
-        # Write the outputs
-        for prod in ["map", "hits", "cov", "rcond"]:
-            dkey = "{}_{}".format(ops.mapmaker.name, prod)
-            file = os.path.join(args.out_dir, "{}.fits".format(dkey))
-            toast.pixels_io.write_healpix_fits(data[dkey], file, nest=ops.pointing.nest)
+    ops.mapmaker.apply(data)
 
     # Run Madam
-    if madam_available and ops.madam.enabled:
+    if madam_available:
         ops.madam.apply(data)
 
     alltimers = toast.timing.gather_timers(comm=comm.comm_world)
