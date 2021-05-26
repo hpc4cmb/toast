@@ -68,7 +68,7 @@ def parse_arguments():
         toast.ops.PointingDetectorSimple(name="det_pointing"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=1024),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
-        toast.ops.MapMaker(name="mapmaker"),
+        toast.ops.MapMaker(name="mapmaker", solve_rcond_threshold=1e-3),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
         toast.ops.BinMap(name="binner_final", enabled=False, pixel_dist="pix_dist_final"),
     ]
