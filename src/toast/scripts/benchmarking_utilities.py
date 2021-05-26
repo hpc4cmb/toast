@@ -21,7 +21,7 @@ from toast.instrument_sim import fake_hexagon_focalplane
 
 
 def get_mpi_settings(args, log, env):
-    """ 
+    """
     Getting the MPI settings
     taking the dry_run parameter into account
     """
@@ -77,7 +77,7 @@ def get_mpi_settings(args, log, env):
 
 
 def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing):
-    """ 
+    """
     Given a number of samples and some problems parameters,
     returns (group_nodes, n_detector, memory_used_bytes)
     such that memory_used_bytes is minimized.
@@ -132,7 +132,7 @@ def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
 def select_case(
     args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_comm, log
 ):
-    """ 
+    """
     Selects the most appropriate case size given the memory available and number of nodes
     sets total_samples and n_detector in args
     """
@@ -228,7 +228,7 @@ def make_focalplane(args, world_comm, log):
 
 
 def create_input_maps(input_map_path, nside, rank, log):
-    """ 
+    """
     Creates a *completely* fake map for scan_map
     (just to have something on the sky besides zeros)
     puts it at input_map_path
@@ -278,7 +278,7 @@ def create_input_maps(input_map_path, nside, rank, log):
 
 
 def scan_map(args, rank, ops, data, log):
-    """ 
+    """
     Simulate sky signal from a map.
     We scan the sky with the "final" pointing model if that is different from the solver pointing model.
     """
@@ -308,7 +308,7 @@ def scan_map(args, rank, ops, data, log):
 
 
 def run_mapmaker(ops, args, tmpls, data):
-    """ 
+    """
     Build up our map-making operation from the pieces- both operators configured from user options and other operators.
     """
     ops.binner.pointing = ops.pointing
@@ -345,7 +345,7 @@ def run_mapmaker(ops, args, tmpls, data):
 
 
 def compute_science_metric(args, runtime, n_nodes, rank, log):
-    """ 
+    """
     Computes the science metric and stores it.
     The metric represents the efficiency of the job in a way that is normalized,
     taking the job size into account

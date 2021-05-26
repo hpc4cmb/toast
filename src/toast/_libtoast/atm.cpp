@@ -49,7 +49,7 @@ void init_atm(py::module & m) {
                                                double freqmin, double freqmax,
                                                size_t nfreq) {
               py::array_t <double> ret;
-              ret.resize({ nfreq });
+              ret.resize({nfreq});
               py::buffer_info info = ret.request();
               double * raw = static_cast <double *> (info.ptr);
               auto blah = toast::atm_get_absorption_coefficient_vec(
@@ -78,7 +78,7 @@ void init_atm(py::module & m) {
                                             double pressure, double pwv, double freqmin,
                                             double freqmax, size_t nfreq) {
               py::array_t <double> ret;
-              ret.resize({ nfreq });
+              ret.resize({nfreq});
               py::buffer_info info = ret.request();
               double * raw = static_cast <double *> (info.ptr);
               auto blah = toast::atm_get_atmospheric_loading_vec(
@@ -241,7 +241,7 @@ void init_atm(py::module & m) {
               py::buffer compressed_index,
               py::buffer full_index,
               py::buffer realization
-              ) {
+          ) {
               pybuffer_check_1D <double> (times);
               pybuffer_check_1D <double> (az);
               pybuffer_check_1D <double> (el);
@@ -356,7 +356,7 @@ void init_atm(py::module & m) {
               double maxdist,
               double cosel0,
               double sinel0
-              ) {
+          ) {
               pybuffer_check_1D <uint8_t> (hit);
               py::buffer_info info_hit = hit.request();
               int64_t nn = info_hit.size;
@@ -406,7 +406,7 @@ void init_atm(py::module & m) {
               int64_t xstride,
               int64_t ystride,
               int64_t zstride
-              ) {
+          ) {
               pybuffer_check_1D <uint8_t> (hit);
               pybuffer_check_1D <uint8_t> (hit2);
               py::buffer_info info_hit = hit.request();
@@ -448,11 +448,11 @@ void init_atm(py::module & m) {
               double lmax,
               int ntask,
               int rank
-              ) {
+          ) {
               py::array_t <double> kolmo_x;
-              kolmo_x.resize({ nr });
+              kolmo_x.resize({nr});
               py::array_t <double> kolmo_y;
-              kolmo_y.resize({ nr });
+              kolmo_y.resize({nr});
               py::buffer_info info_kolmo_x = kolmo_x.request();
               double * raw_kolmo_x = static_cast <double *> (info_kolmo_x.ptr);
               py::buffer_info info_kolmo_y = kolmo_y.request();

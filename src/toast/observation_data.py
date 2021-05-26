@@ -100,8 +100,10 @@ class DetectorData(object):
         else:
             # We are provided the data
             if self._shape != view_data.shape:
-                msg = "view data shape ({}) does not match constructor shape ({})".format(
-                    view_data.shape, self._shape
+                msg = (
+                    "view data shape ({}) does not match constructor shape ({})".format(
+                        view_data.shape, self._shape
+                    )
                 )
                 log.error(msg)
                 raise RuntimeError(msg)

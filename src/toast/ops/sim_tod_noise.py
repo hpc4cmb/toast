@@ -353,12 +353,20 @@ class SimNoise(Operator):
 
     def _requires(self):
         return {
-            "meta": [self.noise_model,],
-            "shared": [self.times,],
+            "meta": [
+                self.noise_model,
+            ],
+            "shared": [
+                self.times,
+            ],
         }
 
     def _provides(self):
-        return {"detdata": [self.det_data,]}
+        return {
+            "detdata": [
+                self.det_data,
+            ]
+        }
 
     def _accelerators(self):
         return list()

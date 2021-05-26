@@ -1267,7 +1267,7 @@ class TODGround(TOD):
 
     @function_timer
     def oscillate_el(self, times, az, el):
-        """ Simulate oscillating elevation """
+        """Simulate oscillating elevation"""
 
         tt = times - times[0]
         if self._el_mod_sine:
@@ -1313,7 +1313,8 @@ class TODGround(TOD):
                 raise RuntimeError(
                     "Elevation oscillation requires {:.2f} > {:.2f} deg/s "
                     "scan rate".format(
-                        np.degrees(scanrate), np.degrees(self._scanrate_el),
+                        np.degrees(scanrate),
+                        np.degrees(self._scanrate_el),
                     )
                 )
 
@@ -1368,7 +1369,7 @@ class TODGround(TOD):
 
     @function_timer
     def step_el(self, times, az, el):
-        """ Simulate elevation steps after each scan pair """
+        """Simulate elevation steps after each scan pair"""
 
         sign = np.sign(self._el_mod_step)
         el_step = np.abs(self._el_mod_step)

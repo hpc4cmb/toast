@@ -160,7 +160,11 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                         )
                 # print("  add argument {}".format(option))
                 parser.add_argument(
-                    option, required=False, default=default, type=typ, help=hlp,
+                    option,
+                    required=False,
+                    default=default,
+                    type=typ,
+                    help=hlp,
                 )
     return
 
@@ -244,7 +248,10 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="\.")
 
 
 def parse_config(
-    parser, operators=list(), templates=list(), prefix="",
+    parser,
+    operators=list(),
+    templates=list(),
+    prefix="",
 ):
     """Load command line arguments associated with object properties.
 
@@ -293,11 +300,19 @@ def parse_config(
     # Add commandline overrides
     if len(operators) > 0:
         add_config_args(
-            parser, defaults_op, "operators", ignore=["API"], prefix=prefix,
+            parser,
+            defaults_op,
+            "operators",
+            ignore=["API"],
+            prefix=prefix,
         )
     if len(templates) > 0:
         add_config_args(
-            parser, defaults_tmpl, "templates", ignore=["API"], prefix=prefix,
+            parser,
+            defaults_tmpl,
+            "templates",
+            ignore=["API"],
+            prefix=prefix,
         )
 
     # Combine all the defaults
@@ -362,7 +377,8 @@ def parse_config(
 
     # Parse job args
     jobargs = types.SimpleNamespace(
-        node_mem=args.job_node_mem, group_size=args.job_group_size,
+        node_mem=args.job_node_mem,
+        group_size=args.job_group_size,
     )
     del args.job_node_mem
     del args.job_group_size

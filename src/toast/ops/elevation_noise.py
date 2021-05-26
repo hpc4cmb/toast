@@ -68,9 +68,17 @@ class ElevationNoise(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    noise_a = Float(None, allow_none=True, help="Parameter 'a' in (a / sin(el) + c)",)
+    noise_a = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'a' in (a / sin(el) + c)",
+    )
 
-    noise_c = Float(None, allow_none=True, help="Parameter 'c' in (a / sin(el) + c)",)
+    noise_c = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'c' in (a / sin(el) + c)",
+    )
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):

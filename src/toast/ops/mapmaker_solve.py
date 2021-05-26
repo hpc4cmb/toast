@@ -175,7 +175,11 @@ class SolverRHS(Operator):
         # Optionally Copy data to a temporary location to avoid overwriting the input.
         copy_det = None
         if not self.overwrite:
-            copy_det = Copy(detdata=[(self.det_data, det_temp),])
+            copy_det = Copy(
+                detdata=[
+                    (self.det_data, det_temp),
+                ]
+            )
 
         # The detdata name we will use (either the original or the temp one)
         detdata_name = self.det_data
@@ -215,7 +219,11 @@ class SolverRHS(Operator):
             if not self.overwrite:
                 oplist.append(copy_det)
             oplist.extend(
-                [scan_map, noise_weight, self.template_matrix,]
+                [
+                    scan_map,
+                    noise_weight,
+                    self.template_matrix,
+                ]
             )
             proj_pipe.operators = oplist
         else:
@@ -225,7 +233,12 @@ class SolverRHS(Operator):
             if not self.overwrite:
                 oplist.append(copy_det)
             oplist.extend(
-                [pointing, scan_map, noise_weight, self.template_matrix,]
+                [
+                    pointing,
+                    scan_map,
+                    noise_weight,
+                    self.template_matrix,
+                ]
             )
             proj_pipe.operators = oplist
 
@@ -571,13 +584,17 @@ def solve(
             raise RuntimeError("starting guess must have same keys as RHS")
         for k, v in result.items():
             if v.n_global != rhs[k].n_global:
-                msg = "starting guess['{}'] has different n_global than rhs['{}']".format(
-                    k, k
+                msg = (
+                    "starting guess['{}'] has different n_global than rhs['{}']".format(
+                        k, k
+                    )
                 )
                 raise RuntimeError(msg)
             if v.n_local != rhs[k].n_local:
-                msg = "starting guess['{}'] has different n_global than rhs['{}']".format(
-                    k, k
+                msg = (
+                    "starting guess['{}'] has different n_global than rhs['{}']".format(
+                        k, k
+                    )
                 )
                 raise RuntimeError(msg)
 

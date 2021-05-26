@@ -104,7 +104,11 @@ class TemplateTest(MPITestCase):
 
         for cbytes in [500, 1000000]:
             amps = Amplitudes(
-                comm, n_global, n_local, local_ranges=lranges, dtype=np.int32,
+                comm,
+                n_global,
+                n_local,
+                local_ranges=lranges,
+                dtype=np.int32,
             )
             amps.local[:] = 1
             amps.sync(comm_bytes=cbytes)
@@ -124,7 +128,8 @@ class TemplateTest(MPITestCase):
             dup = amps.duplicate()
             cdot = dup.dot(amps, comm_bytes=cbytes)
             np.testing.assert_equal(
-                cdot, (check_even ** 2 + check_odd ** 2) * n_global / 2,
+                cdot,
+                (check_even ** 2 + check_odd ** 2) * n_global / 2,
             )
 
     def test_amplitudes_indexed(self):
@@ -142,7 +147,11 @@ class TemplateTest(MPITestCase):
 
         for cbytes in [500, 1000000]:
             amps = Amplitudes(
-                comm, n_global, n_local, local_indices=local_indices, dtype=np.int32,
+                comm,
+                n_global,
+                n_local,
+                local_indices=local_indices,
+                dtype=np.int32,
             )
             amps.local[:] = 1
             amps.sync(comm_bytes=cbytes)
@@ -218,5 +227,6 @@ class TemplateTest(MPITestCase):
             dup = amps.duplicate()
             cdot = dup.dot(amps, comm_bytes=cbytes)
             np.testing.assert_equal(
-                cdot, (check_even ** 2 + check_odd ** 2) * n_global / 2,
+                cdot,
+                (check_even ** 2 + check_odd ** 2) * n_global / 2,
             )

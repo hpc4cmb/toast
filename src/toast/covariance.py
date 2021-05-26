@@ -61,7 +61,13 @@ def create_local_invert(n_pix_submap, mapnnz, threshold, rcond, invert=False):
                 rcond.reduce_buf[:] = 0.0
                 rdata = rcond.reduce_buf
             libtoast_cov_eigendecompose_diag(
-                1, n_pix_submap, mapnnz, reduce_buf, rdata, threshold, invert,
+                1,
+                n_pix_submap,
+                mapnnz,
+                reduce_buf,
+                rdata,
+                threshold,
+                invert,
             )
             for lc in locs:
                 receive[lc : lc + n_submap_value] = reduce_buf

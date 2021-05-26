@@ -53,7 +53,10 @@ class SimSatelliteTest(MPITestCase):
 
     def test_exec(self):
         # Slow sampling
-        fp = fake_hexagon_focalplane(n_pix=self.npix, sample_rate=(1.0 / 60.0) * u.Hz,)
+        fp = fake_hexagon_focalplane(
+            n_pix=self.npix,
+            sample_rate=(1.0 / 60.0) * u.Hz,
+        )
         site = SpaceSite("L2")
 
         sch = create_satellite_schedule(

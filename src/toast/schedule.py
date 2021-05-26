@@ -435,7 +435,10 @@ class SatelliteSchedule(object):
     """
 
     def __init__(
-        self, scans=None, site_name="Unknown", telescope_name="Unknown",
+        self,
+        scans=None,
+        site_name="Unknown",
+        telescope_name="Unknown",
     ):
         self.scans = scans
         if scans is None:

@@ -33,7 +33,9 @@ class SimGainTest(MPITestCase):
 
     def test_linear_drift(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm,)
+        data = create_satellite_data(
+            self.comm,
+        )
 
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -88,7 +90,10 @@ class SimGainTest(MPITestCase):
         # make a simple pointing matrix
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=16, nest=False, mode="I", detector_pointing=detpointing,
+            nside=16,
+            nest=False,
+            mode="I",
+            detector_pointing=detpointing,
         )
         # Generate timestreams
         key = "signal"
@@ -122,7 +127,9 @@ class SimGainTest(MPITestCase):
         # inject gain drift  w/ common mode
 
         drifter = ops.GainDrifter(
-            det_data=key, drift_mode="thermal_drift", detector_mismatch=0.7,
+            det_data=key,
+            drift_mode="thermal_drift",
+            detector_mismatch=0.7,
         )
         drifter.apply(data)
 
@@ -156,7 +163,10 @@ class SimGainTest(MPITestCase):
         # make a simple pointing matrix
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=16, nest=False, mode="I", detector_pointing=detpointing,
+            nside=16,
+            nest=False,
+            mode="I",
+            detector_pointing=detpointing,
         )
         # Generate timestreams
         key = "signal"
@@ -189,7 +199,10 @@ class SimGainTest(MPITestCase):
 
         # inject gain drift  w/ common mode
 
-        drifter = ops.GainDrifter(det_data=key, drift_mode="slow_drift",)
+        drifter = ops.GainDrifter(
+            det_data=key,
+            drift_mode="slow_drift",
+        )
         drifter.apply(data)
 
         binner1.apply(data)
@@ -214,7 +227,10 @@ class SimGainTest(MPITestCase):
         # make a simple pointing matrix
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=16, nest=False, mode="I", detector_pointing=detpointing,
+            nside=16,
+            nest=False,
+            mode="I",
+            detector_pointing=detpointing,
         )
         # Generate timestreams
         key = "signal"
@@ -275,7 +291,10 @@ class SimGainTest(MPITestCase):
         # make a simple pointing matrix
         detpointing = ops.PointingDetectorSimple()
         pointing = ops.PointingHealpix(
-            nside=16, nest=False, mode="I", detector_pointing=detpointing,
+            nside=16,
+            nest=False,
+            mode="I",
+            detector_pointing=detpointing,
         )
         # Generate timestreams
         key = "signal"

@@ -55,7 +55,10 @@ class SimGroundTest(MPITestCase):
 
     def test_exec(self):
         # Slow sampling
-        fp = fake_hexagon_focalplane(n_pix=self.npix, sample_rate=10.0 * u.Hz,)
+        fp = fake_hexagon_focalplane(
+            n_pix=self.npix,
+            sample_rate=10.0 * u.Hz,
+        )
 
         site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
 
@@ -95,7 +98,10 @@ class SimGroundTest(MPITestCase):
         data = Data(self.toastcomm)
 
         sim_ground = ops.SimGround(
-            name="sim_ground", telescope=tele, schedule=schedule, hwp_rpm=1.0,
+            name="sim_ground",
+            telescope=tele,
+            schedule=schedule,
+            hwp_rpm=1.0,
         )
         sim_ground.apply(data)
 

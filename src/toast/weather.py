@@ -132,7 +132,9 @@ def read_weather(file):
             month_data[k] = v
         # Build the index of the distribution
         month_data["prob"] = np.linspace(
-            month_data["PROBSTRT"], month_data["PROBSTOP"], month_data["NSTEP"],
+            month_data["PROBSTRT"],
+            month_data["PROBSTOP"],
+            month_data["NSTEP"],
         )
         # Iterate over datasets, copying to regular numpy arrays
         month_data["data"] = OrderedDict()
