@@ -59,10 +59,7 @@ class SimTotalconvolveTest(MPITestCase):
             hp.write_alm(self.fname_sky_ps, self.slm_ps, lmax=self.lmax, overwrite=True)
 
         self.blm = create_fake_beam_alm(
-            self.lmax,
-            self.mmax,
-            fwhm_x=self.fwhm_beam,
-            fwhm_y=self.fwhm_beam,
+            self.lmax, self.mmax, fwhm_x=self.fwhm_beam, fwhm_y=self.fwhm_beam,
         )
         if myrank == 0:
             hp.write_alm(
@@ -74,10 +71,7 @@ class SimTotalconvolveTest(MPITestCase):
             )
 
         self.blm_asym = create_fake_beam_alm(
-            self.lmax,
-            self.mmax,
-            fwhm_x=self.fwhm_beam * 0.5,
-            fwhm_y=self.fwhm_beam,
+            self.lmax, self.mmax, fwhm_x=self.fwhm_beam * 0.5, fwhm_y=self.fwhm_beam,
         )
         if myrank == 0:
             hp.write_alm(
@@ -168,10 +162,7 @@ class SimTotalconvolveTest(MPITestCase):
         # Bin both signals into maps
 
         pointing = ops.PointingHealpix(
-            nside=self.nside,
-            nest=False,
-            mode="I",
-            detector_pointing=detpointing,
+            nside=self.nside, nest=False, mode="I", detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -262,10 +253,7 @@ class SimTotalconvolveTest(MPITestCase):
                     tod_totalconvolve = obs.detdata[totalconvolve_key][det]
                     tod_conviqt = obs.detdata[conviqt_key][det]
                     if not np.allclose(
-                        tod_totalconvolve,
-                        tod_conviqt,
-                        rtol=1e-3,
-                        atol=1e-3,
+                        tod_totalconvolve, tod_conviqt, rtol=1e-3, atol=1e-3,
                     ):
                         import matplotlib.pyplot as plt
                         import pdb
@@ -311,10 +299,7 @@ class SimTotalconvolveTest(MPITestCase):
         # Bin a map to study
 
         pointing = ops.PointingHealpix(
-            nside=self.nside,
-            nest=False,
-            mode="I",
-            detector_pointing=detpointing,
+            nside=self.nside, nest=False, mode="I", detector_pointing=detpointing,
         )
         pointing.apply(data)
 
@@ -358,9 +343,7 @@ class SimTotalconvolveTest(MPITestCase):
             mdata = hp.read_map(mapfile, nest=False)
 
             deconv = 1 / hp.gauss_beam(
-                self.fwhm_sky.to_value(u.radian),
-                lmax=self.lmax,
-                pol=False,
+                self.fwhm_sky.to_value(u.radian), lmax=self.lmax, pol=False,
             )
 
             smoothed = hp.alm2map(
@@ -380,9 +363,7 @@ class SimTotalconvolveTest(MPITestCase):
             blsq /= blsq[1]
 
             gauss_blsq = hp.gauss_beam(
-                self.fwhm_beam.to_value(u.radian),
-                lmax=self.lmax,
-                pol=False,
+                self.fwhm_beam.to_value(u.radian), lmax=self.lmax, pol=False,
             )
 
             sky = hp.alm2map(self.slm[0], self.nside, lmax=self.lmax, verbose=False)
@@ -427,12 +408,7 @@ class SimTotalconvolveTest(MPITestCase):
             compare = blsq > 1e-5
             ref = cl_in[compare] * blsq[compare] * deconv[compare] ** 2
             norm = np.mean(cl_out[compare] / ref)
-            if not np.allclose(
-                norm * ref,
-                cl_out[compare],
-                rtol=1e-5,
-                atol=1e-5,
-            ):
+            if not np.allclose(norm * ref, cl_out[compare], rtol=1e-5, atol=1e-5,):
                 fail = True
 
         if data.comm.comm_world is not None:

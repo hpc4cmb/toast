@@ -251,8 +251,7 @@ def oscillate_el(
             raise RuntimeError(
                 "Cannot perform {:.2f} deg elevation oscillation in {:.2f} s "
                 "with {:.2f} deg/s^2 acceleration".format(
-                    np.degrees(el_mod_amplitude * 2),
-                    np.degrees(el_accel),
+                    np.degrees(el_mod_amplitude * 2), np.degrees(el_accel),
                 )
             )
         root1 = (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
@@ -266,10 +265,7 @@ def oscillate_el(
         if scanrate > el_rate:
             raise RuntimeError(
                 "Elevation oscillation requires {:.2f} > {:.2f} deg/s "
-                "scan rate".format(
-                    np.degrees(scanrate),
-                    np.degrees(el_rate),
-                )
+                "scan rate".format(np.degrees(scanrate), np.degrees(el_rate),)
             )
 
         # simulate a high resolution scan to interpolate
@@ -323,15 +319,7 @@ def oscillate_el(
 
 @function_timer
 def step_el(
-    times,
-    az,
-    el,
-    el_rate,
-    el_accel,
-    scan_min_el,
-    scan_max_el,
-    el_mod_step,
-    n=1000,
+    times, az, el, el_rate, el_accel, scan_min_el, scan_max_el, el_mod_step, n=1000,
 ):
     """Simulate elevation steps after each scan pair"""
 
@@ -550,13 +538,7 @@ def simulate_ces_scan(
     samples = int((t_stop - t_start) * rate) + 1
     t_stop = t_start + ((samples - 1) / rate)
 
-    times = np.linspace(
-        t_start,
-        t_stop,
-        num=samples,
-        endpoint=True,
-        dtype=np.float64,
-    )
+    times = np.linspace(t_start, t_stop, num=samples, endpoint=True, dtype=np.float64,)
 
     tmin, tmax = tvec[0], tvec[-1]
     tdelta = tmax - tmin

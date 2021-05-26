@@ -595,10 +595,7 @@ class MapMaker(Operator):
                     sub_cleaned = Subtract(first=self.det_data, second=temp_project)
                     pre_pipe = Pipeline(
                         detector_sets=pre_pipe_dets,
-                        operators=[
-                            self.template_matrix,
-                            sub_cleaned,
-                        ],
+                        operators=[self.template_matrix, sub_cleaned,],
                     )
                 else:
                     # We need to create a new full set of timestreams.  Do this now
@@ -608,10 +605,7 @@ class MapMaker(Operator):
                     sub_cleaned = Subtract(first=self.clean_name, second=temp_project)
                     pre_pipe = Pipeline(
                         detector_sets=pre_pipe_dets,
-                        operators=[
-                            self.template_matrix,
-                            sub_cleaned,
-                        ],
+                        operators=[self.template_matrix, sub_cleaned,],
                     )
             else:
                 # Not saving cleaned timestreams.  Use a preprocessing pipeline that
@@ -619,11 +613,7 @@ class MapMaker(Operator):
                 sub_cleaned = Subtract(first=self.clean_name, second=temp_project)
                 pre_pipe = Pipeline(
                     detector_sets=pre_pipe_dets,
-                    operators=[
-                        self.template_matrix,
-                        copy_input,
-                        sub_cleaned,
-                    ],
+                    operators=[self.template_matrix, copy_input, sub_cleaned,],
                 )
         else:
             # We have no templates.  This means we are just making a binned map of the

@@ -86,9 +86,7 @@ class PointingHealpix(Operator):
     weights = Unicode("weights", help="Observation detdata key for output weights")
 
     quats = Unicode(
-        None,
-        allow_none=True,
-        help="Observation detdata key for output quaternions",
+        None, allow_none=True, help="Observation detdata key for output quaternions",
     )
 
     create_dist = Unicode(
@@ -443,10 +441,7 @@ class PointingHealpix(Operator):
         prov = {
             "meta": list(),
             "shared": list(),
-            "detdata": [
-                self.pixels,
-                self.weights,
-            ],
+            "detdata": [self.pixels, self.weights,],
         }
         if self.create_dist is not None:
             prov["meta"].append(self.create_dist)

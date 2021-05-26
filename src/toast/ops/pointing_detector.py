@@ -38,9 +38,7 @@ class PointingDetectorSimple(Operator):
     boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
 
     quats = Unicode(
-        None,
-        allow_none=True,
-        help="Observation detdata key for output quaternions",
+        None, allow_none=True, help="Observation detdata key for output quaternions",
     )
 
     coord_in = Unicode(
@@ -50,9 +48,7 @@ class PointingDetectorSimple(Operator):
     )
 
     coord_out = Unicode(
-        None,
-        allow_none=True,
-        help="The output coordinate system ('C', 'E', 'G')",
+        None, allow_none=True, help="The output coordinate system ('C', 'E', 'G')",
     )
 
     @traitlets.validate("coord_in")
@@ -135,10 +131,7 @@ class PointingDetectorSimple(Operator):
             # Create (or re-use) output data for the detector quaternions.
 
             ob.detdata.ensure(
-                self.quats,
-                sample_shape=(4,),
-                dtype=np.float64,
-                detectors=dets,
+                self.quats, sample_shape=(4,), dtype=np.float64, detectors=dets,
             )
 
             # Loop over views

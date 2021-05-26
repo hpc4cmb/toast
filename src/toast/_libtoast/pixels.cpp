@@ -23,8 +23,8 @@ py::tuple global_to_local(
     // Allocate output arrays.
     auto local_submaps = py::array_t <T> ();
     auto local_pixels = py::array_t <T> ();
-    local_submaps.resize({nsamp});
-    local_pixels.resize({nsamp});
+    local_submaps.resize({ nsamp });
+    local_pixels.resize({ nsamp });
 
     // Get raw pointers to outputs
     py::buffer_info lsinfo = local_submaps.request();
@@ -60,6 +60,6 @@ void init_pixels(py::module & m) {
             (tuple):  The (local submap, pixel within submap) for each global pixel.
 
     )");
-    m.def("global_to_local", &global_to_local <int32_t>);
-    m.def("global_to_local", &global_to_local <int16_t>);
+    m.def("global_to_local", &global_to_local <int32_t> );
+    m.def("global_to_local", &global_to_local <int16_t> );
 }

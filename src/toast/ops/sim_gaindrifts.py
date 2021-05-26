@@ -46,10 +46,7 @@ class GainDrifter(Operator):
         False, help="If True, inject a common drift to all the local detector group "
     )
 
-    fknee_drift = Quantity(
-        20.0 * u.mHz,
-        help="fknee of the drift signal",
-    )
+    fknee_drift = Quantity(20.0 * u.mHz, help="fknee of the drift signal",)
     cutoff_freq = Quantity(
         0.2 * u.mHz,
         help="cutoff  frequency to simulate a slow  drift (assumed < sampling rate)",
@@ -58,10 +55,7 @@ class GainDrifter(Operator):
         1e-3,
         help="dimensionless amplitude  of the drift signal, (for `thermal_drift` corresponds to the thermal fluctuation level in K units)",
     )
-    alpha_drift = Float(
-        1.0,
-        help="spectral index  of the drift signal spectrum",
-    )
+    alpha_drift = Float(1.0, help="spectral index  of the drift signal spectrum",)
 
     detector_mismatch = Float(
         1.0,
@@ -72,8 +66,7 @@ class GainDrifter(Operator):
         help="Amplitude of thermal fluctuation for `thermal_drift` in  Kelvin units ",
     )
     focalplane_Tbath = Quantity(
-        100 * u.mK,
-        help="temperature of the focalplane for `thermal_drift` ",
+        100 * u.mK, help="temperature of the focalplane for `thermal_drift` ",
     )
     responsivity_function = Callable(
         lambda dT: dT,
@@ -298,9 +291,7 @@ class GainDrifter(Operator):
     def _requires(self):
         req = {
             "meta": list(),
-            "shared": [
-                self.boresight,
-            ],
+            "shared": [self.boresight,],
             "detdata": list(),
             "intervals": list(),
         }
@@ -312,9 +303,7 @@ class GainDrifter(Operator):
         prov = {
             "meta": list(),
             "shared": list(),
-            "detdata": [
-                self.det_data,
-            ],
+            "detdata": [self.det_data,],
         }
         return prov
 

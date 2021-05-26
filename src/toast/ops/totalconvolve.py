@@ -91,11 +91,7 @@ class SimTotalconvolve(Operator):
         "angle.",
     )
 
-    pol = Bool(
-        True,
-        allow_none=False,
-        help="Toggle simulated signal polarization",
-    )
+    pol = Bool(True, allow_none=False, help="Toggle simulated signal polarization",)
 
     mc = Int(
         None,
@@ -124,9 +120,7 @@ class SimTotalconvolve(Operator):
     )
 
     epsilon = Float(
-        1e-5,
-        allow_none=False,
-        help="Relative accuracy of the interpolation step",
+        1e-5, allow_none=False, help="Relative accuracy of the interpolation step",
     )
 
     lmax = Int(
@@ -136,11 +130,7 @@ class SimTotalconvolve(Operator):
         "differ.  If not set, will use the maximum expansion order from file.",
     )
 
-    verbosity = Int(
-        0,
-        allow_none=False,
-        help="",
-    )
+    verbosity = Int(0, allow_none=False, help="",)
 
     normalize_beam = Bool(
         False,
@@ -149,21 +139,15 @@ class SimTotalconvolve(Operator):
     )
 
     remove_dipole = Bool(
-        False,
-        allow_none=False,
-        help="Suppress the temperature dipole in sky_file.",
+        False, allow_none=False, help="Suppress the temperature dipole in sky_file.",
     )
 
     remove_monopole = Bool(
-        False,
-        allow_none=False,
-        help="Suppress the temperature monopole in sky_file.",
+        False, allow_none=False, help="Suppress the temperature monopole in sky_file.",
     )
 
     apply_flags = Bool(
-        False,
-        allow_none=False,
-        help="Only synthesize signal for unflagged samples.",
+        False, allow_none=False, help="Only synthesize signal for unflagged samples.",
     )
 
     fwhm = Quantity(

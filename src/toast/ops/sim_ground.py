@@ -583,10 +583,7 @@ class SimGround(Operator):
                 # Remember that the azimuth is measured clockwise and the
                 # longitude counter-clockwise.
                 bore_azel = qa.from_angles(
-                    np.pi / 2 - el_data,
-                    -(az_data),
-                    np.zeros_like(el_data),
-                    IAU=False,
+                    np.pi / 2 - el_data, -(az_data), np.zeros_like(el_data), IAU=False,
                 )
                 if scan.boresight_angle.to_value(u.radian) != 0:
                     zaxis = np.array([0, 0, 1.0])

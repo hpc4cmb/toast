@@ -113,9 +113,7 @@ def main():
     # individually specified parameter overrides.
 
     config, args, jobargs = toast.parse_config(
-        parser,
-        operators=operators,
-        templates=templates,
+        parser, operators=operators, templates=templates,
     )
 
     # Log the config that was actually used at runtime.

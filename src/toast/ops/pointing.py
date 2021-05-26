@@ -42,8 +42,7 @@ class BuildPixelDistribution(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     pixel_dist = Unicode(
-        "pixel_dist",
-        help="The Data key where the PixelDist object should be stored",
+        "pixel_dist", help="The Data key where the PixelDist object should be stored",
     )
 
     shared_flags = Unicode(
