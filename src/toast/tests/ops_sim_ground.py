@@ -81,7 +81,7 @@ class SimGroundTest(MPITestCase):
                     "--site-alt",
                     "{}".format(site.earthloc.height.to_value(u.meter)),
                     "--patch",
-                    "tile000,1,40,0,60,-40",
+                    "small_patch,1,40,-40,44,-44",
                     "--start",
                     "2020-01-01 00:00:00",
                     "--stop",
