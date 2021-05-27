@@ -134,7 +134,7 @@ def maximize_nb_samples(args, n_nodes, n_procs, full_pointing, available_memory_
     """
     # returns true if a number of samples can fit in memory
     def fits_in_memory(nb_samples):
-        (group_nodes, n_detector, num_obs, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, nb_samples, full_pointing)
+        (_, _, _, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, nb_samples, full_pointing)
         return memory_used_bytes < available_memory_bytes
     # finds an upper-bound on the number of samples that can fit in memory
     max_samples = 2
@@ -214,7 +214,7 @@ def select_case(
         args.n_detector = n_detector
         args.num_obs = num_obs
         log.info_rank0(
-            f"Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{case}' workflow size)",
+            f"Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('auto' workflow size)",
             world_comm,
         )
         log.info_rank0(
