@@ -75,7 +75,6 @@ def get_mpi_settings(args, log, env):
 
     return world_comm, procs, rank, n_nodes, avail_node_bytes
 
-
 def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing):
     """
     Given a number of samples and some problems parameters,
@@ -128,6 +127,31 @@ def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
     # returns the group_nodes and n_detector that minimize memory usage
     return (group_nodes_best, n_detector_best, num_obs_best, memory_used_bytes_best)
 
+def maximize_nb_samples(args, n_nodes, n_procs, full_pointing, available_memory_bytes):
+    """
+    Finds the largest number of samples that can fit in the available memory.
+    Returns 1 if not number of sample fits in memory.
+    """
+    # returns true if a number of samples can fit in memory
+    def fits_in_memory(nb_samples):
+        (group_nodes, n_detector, num_obs, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, nb_samples, full_pointing)
+        return memory_used_bytes < available_memory_bytes
+    # finds an upper-bound on the number of samples that can fit in memory
+    max_samples = 2
+    while fits_in_memory(max_samples):
+        max_samples *= 2
+    min_samples = max_samples // 2
+    # finds the largest number of samples that *does* fit in memory
+    # using a binary search between min_samples (that fits in memory)
+    # and max_samples (that does not fit in memory)
+    mid_samples = (min_samples + max_samples) // 2
+    while mid_samples != min_samples:
+        if fits_in_memory(mid_samples):
+            min_samples = mid_samples
+        else:
+            max_samples = mid_samples
+        mid_samples = (min_samples + max_samples) // 2
+    return mid_samples
 
 def select_case(
     args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_comm, log
@@ -139,18 +163,17 @@ def select_case(
     # computes the memory that is currently available
     available_memory_bytes = n_nodes * avail_node_bytes
 
-    # availaibles sizes
-    cases_samples = {
-        "heroic": 5000000000000,  # O(1000) TB RAM
-        "xlarge": 500000000000,  # O(100) TB RAM
-        "large": 50000000000,  # O(10) TB RAM
-        "medium": 5000000000,  # O(1) TB RAM
-        "small": 500000000,  # O(100) GB RAM
-        "xsmall": 50000000,  # O(10) GB RAM
-        "tiny": 5000000,  # O(1) GB RAM
-    }
-
     if args.case != "auto":
+        # availaibles sizes
+        cases_samples = {
+            "heroic": 5000000000000,  # O(1000) TB RAM
+            "xlarge": 500000000000,  # O(100) TB RAM
+            "large": 50000000000,  # O(10) TB RAM
+            "medium": 5000000000,  # O(1) TB RAM
+            "small": 500000000,  # O(100) GB RAM
+            "xsmall": 50000000,  # O(10) GB RAM
+            "tiny": 5000000,  # O(1) GB RAM
+        }
         # force use the case size suggested by the user
         args.total_samples = cases_samples[args.case]
         # finds the parameters that minimize memory use
@@ -174,34 +197,30 @@ def select_case(
                 f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB)."
             )
     else:
-        # tries the workflow sizes from largest to smalest, until we find one that fits
-        for (case, total_samples) in cases_samples.items():
-            # finds the parameters that minimize memory use
-            (
-                group_nodes,
-                n_detector,
-                num_obs,
-                memory_used_bytes,
-            ) = get_minimum_memory_use(
-                args, n_nodes, n_procs, total_samples, full_pointing
-            )
-            # log.info_rank0(f"DEBUG: Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{case}' workflow size), (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB)", world_comm)
-            # if the parameters fit in memory, we are done
-            if memory_used_bytes < available_memory_bytes:
-                args.case = case
-                args.total_samples = total_samples
-                args.n_detector = n_detector
-                args.num_obs = num_obs
-                log.info_rank0(
-                    f"Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{case}' workflow size)",
-                    world_comm,
-                )
-                log.info_rank0(
-                    f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB which should be below the available {available_memory_bytes / (1024 ** 3) :0.2f} GB).",
-                    world_comm,
-                )
-                return
-        raise Exception("Error: Unable to fit a case size in memory!")
+        log.info_rank0(f"Using automatic workflow size selection (case='auto').", world_comm)
+        # finds the number of samples that gets us closest to the available memory
+        total_samples = maximize_nb_samples(args, n_nodes, n_procs, full_pointing, available_memory_bytes)
+        # finds the associated parameters
+        (
+            group_nodes,
+            n_detector,
+            num_obs,
+            memory_used_bytes,
+        ) = get_minimum_memory_use(
+            args, n_nodes, n_procs, total_samples, full_pointing
+        )
+        # stores the parameters and displays the information
+        args.total_samples = total_samples
+        args.n_detector = n_detector
+        args.num_obs = num_obs
+        log.info_rank0(
+            f"Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{case}' workflow size)",
+            world_comm,
+        )
+        log.info_rank0(
+            f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB which should be below the available {available_memory_bytes / (1024 ** 3) :0.2f} GB).",
+            world_comm,
+        )
 
 
 def make_focalplane(args, world_comm, log):
