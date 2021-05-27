@@ -359,7 +359,11 @@ def main():
     # Monte Carlo indices, but the operator would need to be invoked within
     # the Monte Carlo loop.
     skyname = pipeline_tools.apply_conviqt(
-        args, comm, data, "signal", mc=args.MC_start,
+        args,
+        comm,
+        data,
+        "signal",
+        mc=args.MC_start,
     )
     if skyname is not None:
         signalname = skyname

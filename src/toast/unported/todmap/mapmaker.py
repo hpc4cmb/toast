@@ -460,7 +460,9 @@ class Fourier2DTemplate(TODTemplate):
                 for mode in range(self.nmode):
                     scale = self.filter_scale[mode]
                     obs_amplitudes_out[:, mode] += scipy.signal.convolve(
-                        obs_amplitudes_in[:, mode], noisefilter * scale, mode="same",
+                        obs_amplitudes_in[:, mode],
+                        noisefilter * scale,
+                        mode="same",
                     )
                 amplitude_offset += nsample * self.nmode
         return
@@ -1621,7 +1623,8 @@ class OpMapMaker(Operator):
         if self.fourier2D_order is not None:
             log.info(
                 "Initializing fourier2D template, order = {}, subharmonics = {}".format(
-                    self.fourier2D_order, self.fourier2D_subharmonics,
+                    self.fourier2D_order,
+                    self.fourier2D_subharmonics,
                 )
             )
             templatelist.append(
