@@ -36,5 +36,6 @@ install(FILES
     conviqt.py
     sim_gaindrifts.py
     totalconvolve.py
+    sim_cosmic_rays.py 
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
