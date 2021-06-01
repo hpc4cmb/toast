@@ -333,14 +333,14 @@ class Patch(object):
         self.el_max = self.el_max0
         try:
             self.elevations = self.elevations0
+            self.az_min = 0
+            if self.alternate:
+                self.az_max = np.pi
+            else:
+                self.az_max = 2 * np.pi
         except AttributeError:
-            # Not all patches maintain a list of elevations
+            # HorizontalPatch does not maintain a list of elevations
             pass
-        self.az_min = 0
-        if self.alternate:
-            self.az_max = np.pi
-        else:
-            self.az_max = 2 * np.pi
         return
 
     def visible(
