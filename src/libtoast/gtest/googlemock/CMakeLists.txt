@@ -43,7 +43,7 @@ if (POLICY CMP0048)
 endif (POLICY CMP0048)
 
 project(gmock CXX C)
-cmake_minimum_required(VERSION 2.6.2)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 if (COMMAND set_up_hermetic_build)
   set_up_hermetic_build()

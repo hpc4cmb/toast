@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 2.6.2)
+# NOTE:  Changed for consistency with the toast requirements
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 if (POLICY CMP0048)
   cmake_policy(SET CMP0048 NEW)
