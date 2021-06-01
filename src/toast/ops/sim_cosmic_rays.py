@@ -170,7 +170,6 @@ class InjectCosmicRays(Operator):
                     key=(key1, key2),
                     counter=(counter1, counter2),
                 )
-                import pdb; pdb.set_trace()
                 filename = self.crfile.replace("detector", f"det{kk}")
                 data_dic = self.load_cosmic_ray_data(filename)
                 lownoise_params = data_dic["low_noise"]
@@ -215,15 +214,16 @@ class InjectCosmicRays(Operator):
                         counter=(detid_common, counter2),
                     )
 
-                    cr_common_mode = rngdata_common * np.sqrt(var_corr) + data_common["low_noise"][0]
+                    cr_common_mode = np.sqrt(var_corr) * rngdata_common   + data_common["low_noise"][0]
 
-                    lownoise_hits = lownoise_params[0] + rngdata *lownoise_params[1]
+                    lownoise_hits = lownoise_params[1] * rngdata + lownoise_params[0]
                     tmparray = lownoise_hits + cr_common_mode
 
                 if self.inject_direct_hits:
                     glitches_param_distr = data_dic["direct_hits"]
-                    fsampl_sims = data_dic["sampling_rate"][0]
-                    glitch_seconds = 0.15  # seconds, i.e. ~ 3samples at 19Hz
+                    fsampl_sims = (data_dic["sampling_rate"][0] *u.Hz).value
+
+                    glitch_seconds = 0.15    # seconds, i.e. ~ 3samples at 19Hz
                     # we approximate the number of samples to the closest integer
                     nsamples_high = np.int_(np.around(glitch_seconds * fsampl_sims))
                     nsamples_low = np.int_(np.around(glitch_seconds * samplerate))
@@ -240,7 +240,6 @@ class InjectCosmicRays(Operator):
                     time_stamp_glitches = np.int_(np.around(time_glitches * samplerate))
                     # we measure the glitch and the bestfit timeconstant in millisec
                     tglitch = np.linspace(0, glitch_seconds * 1e3, nsamples_high)
-                    # import pdb; pdb.set_trace()
                     glitch_func = lambda t, C1, C2, tau: C1 + (C2 * np.exp(-t / tau))
                     for i in range(n_events):
                         tmphit = glitch_func(tglitch, *params[i])
