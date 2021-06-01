@@ -132,7 +132,7 @@ def maximize_nb_samples(args, n_nodes, n_procs, full_pointing, available_memory_
     Finds the largest number of samples that can fit in the available memory.
     Returns 1 if not number of sample fits in memory.
     One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number of bytes 
-    that will be consummed by each process independently of the number of samples.
+    that will be consummed by each process, independently of the number of samples.
     """
     # returns true if a number of samples can fit in memory
     def fits_in_memory(nb_samples):
@@ -144,8 +144,8 @@ def maximize_nb_samples(args, n_nodes, n_procs, full_pointing, available_memory_
         max_samples *= 2
     min_samples = max_samples // 2
     # finds the largest number of samples that *does* fit in memory
-    # using a binary search between min_samples (that fits in memory)
-    # and max_samples (that does not fit in memory)
+    # using a binary search between min_samples (fits in memory)
+    # and max_samples (does not fit in memory)
     mid_samples = (min_samples + max_samples) // 2
     while mid_samples != min_samples:
         if fits_in_memory(mid_samples):
