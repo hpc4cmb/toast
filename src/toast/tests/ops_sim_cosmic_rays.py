@@ -81,6 +81,8 @@ class SimCosmicRayTest(MPITestCase):
         data = create_satellite_data(
             self.comm,
         )
+        crfile=f"{self.outdir}/cosmic_ray_glitches_detector.npz"
+        self.make_mock_cosmic_ray_data( data, crfile )
 
         crfile = f"{self.outdir}/cosmic_ray_glitches_detector.npz"
         self.make_mock_cosmic_ray_data(data, crfile)
