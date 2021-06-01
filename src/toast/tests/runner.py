@@ -182,6 +182,8 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
 
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
+
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
         suite.addTest(loader.loadTestsFromModule(test_template_amplitudes))
