@@ -41,5 +41,6 @@ install(FILES
     polyfilter.py
     groundfilter.py
     statistics.py
+    sim_cosmic_rays.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
