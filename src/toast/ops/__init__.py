@@ -65,6 +65,7 @@ from .madam import Madam
 from .conviqt import SimConviqt, SimWeightedConviqt
 
 from .sim_gaindrifts import GainDrifter
+from .sim_cosmic_rays import InjectCosmicRays
 
 from .totalconvolve import SimTotalconvolve
 
