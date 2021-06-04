@@ -9,9 +9,10 @@ import h5py
 import numpy as np
 import toast
 from numba import jit
-from toast.mpi import get_world
-from toast.op import Operator
-from toast.utils import Logger
+
+from ..mpi import get_world
+from ..op import Operator
+from ..utils import Logger
 
 if TYPE_CHECKING:
     from typing import Optional, List
