@@ -11,7 +11,7 @@ from ..tod import TODCache
 from ..mpi import get_world
 from ..utils import Logger
 from ..tod.crosstalk import SimpleCrosstalkMatrix, OpCrosstalk
-from .mpi import MPITestCase
+from . import mpi as mpi_test
 # from ._helpers import create_outdir, create_satellite_data
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ class FakeData:
     obs: List[dict]
 
 
-class OpCrosstalkTest(MPITestCase):
+class OpCrosstalkTest(mpi_test.MPITestCase):
 
     # def setUp(self):
     #     fixture_name = os.path.splitext(os.path.basename(__file__))[0]
