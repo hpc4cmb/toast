@@ -89,11 +89,15 @@ class InjectCosmicRays(Operator):
         super().__init__(**kwargs)
 
     def load_cosmic_ray_data(self, filename):
-        data_dic = np.load(filename)
+        data_dic = np.load(filename  )
 
         return data_dic
 
+<<<<<<< HEAD
     def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter):
+=======
+    def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter ):
+>>>>>>> fixed the bug when running on multiple processes, consistency by using rng.uniform
 
         resampled = np.zeros((Nresamples, arr.shape[1]))
 
@@ -114,12 +118,21 @@ class InjectCosmicRays(Operator):
             CDF = np.cumsum(binned) / binned.sum()
 
             pinv = interpolate.interp1d(CDF, xb, fill_value="extrapolate")
+<<<<<<< HEAD
             # r = np.random.rand(Nresamples)
             r = rng.random(
                 Nresamples,
                 sampler="uniform_01",
                 key=key,
                 counter=counter,
+=======
+            #r = np.random.rand(Nresamples)
+            r =  rng.random(
+                Nresamples,
+                sampler="uniform_01",
+                key=key ,
+                counter=counter ,
+>>>>>>> fixed the bug when running on multiple processes, consistency by using rng.uniform
             )
 
             resampled[:, ii] = pinv(r)
@@ -194,7 +207,11 @@ class InjectCosmicRays(Operator):
                         log.warning(
                             "Correlation matrix not provided for common mode, assuming 50% correlation "
                         )
+<<<<<<< HEAD
                         corr_frac = 0.5
+=======
+                        corr_frac  = 0.5
+>>>>>>> fixed the bug when running on multiple processes, consistency by using rng.uniform
                     var_corr = corr_frac * data_common["low_noise"][1] ** 2
                     var0 = var_tot - var_corr
 
@@ -220,6 +237,7 @@ class InjectCosmicRays(Operator):
                     # we approximate the number of samples to the closest integer
                     nsamples_high = np.int_(np.around(glitch_seconds * fsampl_sims))
                     nsamples_low = np.int_(np.around(glitch_seconds * samplerate))
+<<<<<<< HEAD
                     # import pdb; pdb.set_trace()
                     # np.random.seed( obsindx//1e3  +detindx//1e3 )
                     n_events = np.random.poisson(n_events_expected)
@@ -228,11 +246,20 @@ class InjectCosmicRays(Operator):
                         Nresamples=n_events,
                         key=(key1, key2),
                         counter=(counter1, counter2),
+=======
+                    #import pdb; pdb.set_trace()
+                    #np.random.seed( obsindx//1e3  +detindx//1e3 )
+                    n_events = np.random.poisson(n_events_expected)
+                    params = self.resample_cosmic_ray_statistics(
+                        glitches_param_distr, Nresamples=n_events, key=(key1,key2),
+                        counter=(counter1,counter2 )
+>>>>>>> fixed the bug when running on multiple processes, consistency by using rng.uniform
                     )
                     counter2 += n_events
                     # draw n_events uniformly from a continuous distribution
                     # you want the events to happen during one observation
                     # we also make sure that the glitch is injected at most
+<<<<<<< HEAD
                     # `glitch_seconds` before the end of the observation ,
                     # otherwise we've problems in downsampling
                     rngunif = rng.random(
@@ -246,6 +273,21 @@ class InjectCosmicRays(Operator):
                     time_glitches = (obstime_seconds - glitch_seconds) * rngunif
                     assert time_glitches.max() < obstime_seconds
 
+=======
+                    #`glitch_seconds` before the end of the observation ,
+                    # otherwise we've problems in downsampling
+                    rngunif=  rng.random(
+                        n_events,
+                        sampler="uniform_01",
+                        key=(key1, key2),
+                        counter=(counter1 , counter2),
+                    )
+
+                    time_glitches = (obstime_seconds - glitch_seconds) *rngunif
+                    assert time_glitches.max() < obstime_seconds
+
+
+>>>>>>> fixed the bug when running on multiple processes, consistency by using rng.uniform
                     # estimate the timestamps rounding off the events in seconds
                     time_stamp_glitches = np.int_(np.around(time_glitches * samplerate))
                     # we measure the glitch and the bestfit timeconstant in millisec
