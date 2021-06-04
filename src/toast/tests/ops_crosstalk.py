@@ -7,12 +7,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.random import default_rng
 
-import toast
-from toast.mpi import get_world
-from toast.utils import Logger
-
-from .mpi import MPITestCase
+from ..tod import TODCache
+from ..mpi import get_world
+from ..utils import Logger
 from ..tod.crosstalk import SimpleCrosstalkMatrix, OpCrosstalk
+from .mpi import MPITestCase
 # from ._helpers import create_outdir, create_satellite_data
 
 if TYPE_CHECKING:
@@ -71,7 +70,7 @@ class OpCrosstalkTest(MPITestCase):
             crosstalk_matrices = []
         op_crosstalk = OpCrosstalk(1, crosstalk_matrices)
 
-        tod = toast.tod.TODCache(mpiworld, names_str, n_samples, detranks=detranks)
+        tod = TODCache(mpiworld, names_str, n_samples, detranks=detranks)
 
         # write local detectors
         start, length = tod.local_samples
@@ -130,7 +129,7 @@ class OpCrosstalkTest(MPITestCase):
         crosstalk_matrices = [SimpleCrosstalkMatrix(names[i], crosstalk_datas[i]) for i in idxs_per_rank]
         op_crosstalk = OpCrosstalk(n_crosstalk_matrices, crosstalk_matrices)
 
-        tod = toast.tod.TODCache(mpiworld, sum(names_strs, []), n_samples, detranks=detranks)
+        tod = TODCache(mpiworld, sum(names_strs, []), n_samples, detranks=detranks)
 
         # write local detectors
         start, length = tod.local_samples
