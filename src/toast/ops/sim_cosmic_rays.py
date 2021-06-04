@@ -100,11 +100,11 @@ class InjectCosmicRays(Operator):
 
 
     def load_cosmic_ray_data(self, filename):
-        data_dic = np.load(filename)
+        data_dic = np.load(filename  )
 
         return data_dic
 
-    def resample_cosmic_ray_statistics(self, arr, Nresamples):
+    def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter ):
 
         resampled = np.zeros((Nresamples, arr.shape[1]))
 
@@ -125,7 +125,14 @@ class InjectCosmicRays(Operator):
             CDF = np.cumsum(binned) / binned.sum()
 
             pinv = interpolate.interp1d(CDF, xb, fill_value="extrapolate")
-            r = np.random.rand(Nresamples)
+            #r = np.random.rand(Nresamples)
+            r =  rng.random(
+                Nresamples,
+                sampler="uniform_01",
+                key=key ,
+                counter=counter ,
+            )
+
             resampled[:, ii] = pinv(r)
 
         return resampled
@@ -192,18 +199,13 @@ class InjectCosmicRays(Operator):
                     data_common = self.load_cosmic_ray_data(filename_common)
                     try:
                         corr_matr = data_common["correlation_matrix"]
+                        corr_frac = corr_matr[kk, kkcol]
+
                     except KeyError:
-                        Ndet = len(dets)
                         log.warning(
                             "Correlation matrix not provided for common mode, assuming 50% correlation "
                         )
-                        corr_matr = np.eye(Ndet, Ndet)
-                        # setting all the off-diagonal elements to 0.5
-                        off_diag = np.triu_indices(Ndet, 1)
-                        corr_matr[off_diag[0], off_diag[1]] = 0.5
-                        corr_matr[off_diag[1], off_diag[0]] = 0.5
-
-                    corr_frac = corr_matr[kk, kkcol]
+                        corr_frac  = 0.5
                     var_corr = corr_frac * data_common["low_noise"][1] ** 2
                     var0 = var_tot - var_corr
 
@@ -227,15 +229,29 @@ class InjectCosmicRays(Operator):
                     # we approximate the number of samples to the closest integer
                     nsamples_high = np.int_(np.around(glitch_seconds * fsampl_sims))
                     nsamples_low = np.int_(np.around(glitch_seconds * samplerate))
-
+                    #import pdb; pdb.set_trace()
+                    #np.random.seed( obsindx//1e3  +detindx//1e3 )
                     n_events = np.random.poisson(n_events_expected)
                     params = self.resample_cosmic_ray_statistics(
-                        glitches_param_distr, Nresamples=n_events
+                        glitches_param_distr, Nresamples=n_events, key=(key1,key2),
+                        counter=(counter1,counter2 )
                     )
                     # draw n_events uniformly from a continuous distribution
-                    time_glitches = np.random.uniform(
-                        low=0, high=obstime_seconds - glitch_seconds, size=n_events
+                    # you want the events to happen during one observation
+                    # we also make sure that the glitch is injected at most
+                    #`glitch_seconds` before the end of the observation ,
+                    # otherwise we've problems in downsampling
+                    rngunif=  rng.random(
+                        n_events,
+                        sampler="uniform_01",
+                        key=(key1, key2),
+                        counter=(counter1 , counter2),
                     )
+
+                    time_glitches = (obstime_seconds - glitch_seconds) *rngunif
+                    assert time_glitches.max() < obstime_seconds
+
+
                     # estimate the timestamps rounding off the events in seconds
                     time_stamp_glitches = np.int_(np.around(time_glitches * samplerate))
                     # we measure the glitch and the bestfit timeconstant in millisec
