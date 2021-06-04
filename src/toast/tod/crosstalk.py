@@ -14,14 +14,14 @@ from toast.op import Operator
 from toast.utils import Logger
 
 if TYPE_CHECKING:
-    from typing import List
+    from typing import Optional, List
 
-COMM: toast.mpi.Comm
+COMM: Optional[toast.mpi.Comm]
 PROCS: int
 RANK: int
 COMM, PROCS, RANK = get_world()
 LOGGER = Logger.get()
-IS_SERIAL = COMM is None
+IS_SERIAL = PROCS == 1
 
 H5_CREATE_KW = {
     'compression': 'gzip',
@@ -196,13 +196,13 @@ class OpCrosstalk(Operator):
                     raise ValueError(f"Crosstalk: tod {tod} only include some detectors from the crosstalk matrix with these detectors: {names}.")
                 del detectors_set
 
-                n_samples = tod.total_samples
+                n_samples = tod.local_samples[1]
 
                 # mat-mul
                 # This follows the _exec_mpi mat-mul algorithm
                 # but not put them in a contiguous array and use real mat-mul @
                 # The advantage is to reduce memory use
-                # (if creating an intermediate contiguous array that would requires one more copy of tod then needed below)
+                # (if creating an intermediate contiguous array that would requires one more copy of tod than needed below)
                 # and perhaps served as a easier-to-understand version of _exec_mpi below
                 for name, row in zip(names, crosstalk_data):
                     row_global_total = tod.cache.create(f"{crosstalk_name}_{name}", np.float64, (n_samples,))
@@ -231,6 +231,10 @@ class OpCrosstalk(Operator):
             n = crosstalk_data.shape[0]
             for obs in data.obs:
                 tod = obs["tod"]
+                comm = tod.grid_comm_col
+                procs = tod.grid_size[0]
+                rank = tod.grid_ranks[0]
+
                 # TODO: should we only check this only `if debug`?
                 # all ranks need to check this as they need to perform the same action
                 detectors_set = set(tod.detectors)
@@ -241,7 +245,7 @@ class OpCrosstalk(Operator):
                     raise ValueError(f"Crosstalk: tod {tod} only include some detectors from the crosstalk matrix with these detectors: {names}.")
                 del detectors_set
 
-                n_samples = tod.total_samples
+                n_samples = tod.local_samples[1]
                 local_crosstalk_dets_set = set(tod.local_dets) & names_set
                 n_local_dets = len(local_crosstalk_dets_set)
 
@@ -257,38 +261,38 @@ class OpCrosstalk(Operator):
                 # log.debug(f'dets LUT: {dets_lut}')
 
                 # construct det_lut, a LUT to know which rank holds a detector
-                local_has_det = tod.cache.create(f"{crosstalk_name}_local_has_det_{RANK}", np.uint8, (n,)).view(np.bool_)
+                local_has_det = tod.cache.create(f"{crosstalk_name}_local_has_det_{rank}", np.uint8, (n,)).view(np.bool_)
                 for i, name in enumerate(names):
                     if name in local_crosstalk_dets_set:
                         local_has_det[i] = True
 
-                global_has_det = tod.cache.create(f"{crosstalk_name}_global_has_det_{RANK}", np.uint8, (PROCS, n)).view(np.bool_)
-                COMM.Allgather(local_has_det, global_has_det)
+                global_has_det = tod.cache.create(f"{crosstalk_name}_global_has_det_{rank}", np.uint8, (procs, n)).view(np.bool_)
+                comm.Allgather(local_has_det, global_has_det)
 
                 if debug:
-                    np.testing.assert_array_equal(local_has_det, global_has_det[RANK])
+                    np.testing.assert_array_equal(local_has_det, global_has_det[rank])
                 del local_has_det
-                tod.cache.destroy(f"{crosstalk_name}_local_has_det_{RANK}")
+                tod.cache.destroy(f"{crosstalk_name}_local_has_det_{rank}")
 
                 det_lut = {}
-                for i in range(PROCS):
+                for i in range(procs):
                     for j in range(n):
                         if global_has_det[i, j]:
                             det_lut[names[j]] = i
                 del global_has_det, i, j
-                tod.cache.destroy(f"{crosstalk_name}_global_has_det_{RANK}")
+                tod.cache.destroy(f"{crosstalk_name}_global_has_det_{rank}")
 
-                LOGGER.debug(f'Rank {RANK} has detectors LUT: {det_lut}')
+                LOGGER.debug(f'Rank {rank} has detectors LUT: {det_lut}')
 
                 if debug:
                     for name in local_crosstalk_dets_set:
-                        assert det_lut[name] == RANK
+                        assert det_lut[name] == rank
 
                 # mat-mul
-                row_local_total = tod.cache.create(f"{crosstalk_name}_row_local_total_{RANK}", np.float64, (n_samples,))
+                row_local_total = tod.cache.create(f"{crosstalk_name}_row_local_total_{rank}", np.float64, (n_samples,))
                 if n_local_dets > 0:
-                    row_local_weights = tod.cache.create(f"{crosstalk_name}_row_local_weights_{RANK}", np.float64, (n_local_dets,))
-                    local_det_idxs = tod.cache.create(f"{crosstalk_name}_local_det_idxs_{RANK}", np.int64, (n_local_dets,))
+                    row_local_weights = tod.cache.create(f"{crosstalk_name}_row_local_weights_{rank}", np.float64, (n_local_dets,))
+                    local_det_idxs = tod.cache.create(f"{crosstalk_name}_local_det_idxs_{rank}", np.int64, (n_local_dets,))
                 for i, name in enumerate(local_crosstalk_dets_set):
                     local_det_idxs[i] = names.index(name)
                 # row-loop
@@ -301,19 +305,19 @@ class OpCrosstalk(Operator):
                         row_local_weights[:] = row[local_det_idxs]
                         tods_list = [tod.cache.reference(f"{signal_name}_{names[local_det_idxs[i]]}") for i in range(n_local_dets)]
                         fma(row_local_total, row_local_weights, *tods_list)
-                    if RANK == rank_owner:
+                    if rank == rank_owner:
                         row_global_total = tod.cache.create(f"{crosstalk_name}_{name}", np.float64, (n_samples,))
-                        COMM.Reduce(row_local_total, row_global_total, root=rank_owner)
+                        comm.Reduce(row_local_total, row_global_total, root=rank_owner)
                         # it is reduced into tod.cache and the python reference can be safely deleted
                         del row_global_total
                     else:
-                        COMM.Reduce(row_local_total, None, root=rank_owner)
+                        comm.Reduce(row_local_total, None, root=rank_owner)
                 del det_lut, row_local_total, name, row, rank_owner
-                tod.cache.destroy(f"{crosstalk_name}_row_local_total_{RANK}")
+                tod.cache.destroy(f"{crosstalk_name}_row_local_total_{rank}")
                 if n_local_dets > 0:
                     del row_local_weights, local_det_idxs, tods_list
-                    tod.cache.destroy(f"{crosstalk_name}_row_local_weights_{RANK}")
-                    tod.cache.destroy(f"{crosstalk_name}_local_det_idxs_{RANK}")
+                    tod.cache.destroy(f"{crosstalk_name}_row_local_weights_{rank}")
+                    tod.cache.destroy(f"{crosstalk_name}_local_det_idxs_{rank}")
 
                 for name in local_crosstalk_dets_set:
                     # overwrite it in-place
