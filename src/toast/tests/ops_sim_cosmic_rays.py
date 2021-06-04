@@ -37,6 +37,7 @@ class SimCosmicRayTest(MPITestCase):
         for obs  in  (data.obs ):
             for kk, det in enumerate(obs.local_detectors) :
                 direct_hits =np.zeros((400,3 ))
+                #import pdb; pdb.set_trace()
 
                 direct_hits [:,0]= 5e-17* np.random.randn(400) + 3e-17 #C1, Watts
                 direct_hits [:,1]=1e-15* np.random.randn(400) + 2e-15 #C2, watts
@@ -54,7 +55,7 @@ class SimCosmicRayTest(MPITestCase):
         )
         crfile=f"{self.outdir}/cosmic_ray_glitches_detector.npz"
         self.make_mock_cosmic_ray_data( data, crfile )
-
+        self.comm.Barrier() 
         # Simulate noise using this model
         key = "my_signal"
         sim_cosmic_rays = ops.InjectCosmicRays(det_data=key,
@@ -81,7 +82,8 @@ class SimCosmicRayTest(MPITestCase):
         # Simulate noise using this model
         key = "my_signal"
         sim_cosmic_rays = ops.InjectCosmicRays(det_data=key,
-                        crfile=crfile ,inject_direct_hits=True
+                        crfile=crfile ,inject_direct_hits=True,
+                        eventrate=0.1 #we increase the eventrate artificially for testing
                     )
         sim_cosmic_rays.apply(data)
         for obs  in  (data.obs ):
