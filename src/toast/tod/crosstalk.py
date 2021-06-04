@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import toast
-from numba import jit
+
+try:
+    from numba import jit
+except ImportError:
+    jit = None
 
 from ..mpi import get_world
 from ..op import Operator
@@ -35,7 +39,6 @@ H5_CREATE_KW = {
 }
 
 
-@jit(nopython=True, nogil=True, cache=False)
 def fma(out: np.ndarray[np.float64], ws: np.ndarray[np.float64], *arrays: np.ndarray[np.float64]):
     """Simple FMA, compiled to avoid Python memory implications.
 
@@ -49,6 +52,12 @@ def fma(out: np.ndarray[np.float64], ws: np.ndarray[np.float64], *arrays: np.nda
     """
     for w, array in zip(ws, arrays):
         out += w * array
+
+
+if jit is None:
+    LOGGER.warning('Numba not present. fma in crosstalk will have more intermediate Numpy array objects created that uses more memory.')
+else:
+    fma = jit(fma, nopython=True, nogil=True, cache=False)
 
 
 def add_crosstalk_args(parser: argparse.ArgumentParser):
