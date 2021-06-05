@@ -1,4 +1,5 @@
-from __future__ import annotations
+# py36
+# from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
@@ -21,9 +22,10 @@ from ..utils import Logger
 if TYPE_CHECKING:
     from typing import Optional, List
 
-COMM: Optional[toast.mpi.Comm]
-PROCS: int
-RANK: int
+# py36
+# COMM: Optional[toast.mpi.Comm]
+# PROCS: int
+# RANK: int
 COMM, PROCS, RANK = get_world()
 LOGGER = Logger.get()
 IS_SERIAL = PROCS == 1
@@ -39,7 +41,7 @@ H5_CREATE_KW = {
 }
 
 
-def fma(out: np.ndarray[np.float64], ws: np.ndarray[np.float64], *arrays: np.ndarray[np.float64]):
+def fma(out: 'np.ndarray[np.float64]', ws: 'np.ndarray[np.float64]', *arrays: 'np.ndarray[np.float64]'):
     """Simple FMA, compiled to avoid Python memory implications.
 
     :param out: must be zero array in the same shape of each array in `arrays`
@@ -60,7 +62,7 @@ else:
     fma = jit(fma, nopython=True, nogil=True, cache=False)
 
 
-def add_crosstalk_args(parser: argparse.ArgumentParser):
+def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
     parser.add_argument(
         "--crosstalk-matrix",
         type=Path,
@@ -76,22 +78,22 @@ class SimpleCrosstalkMatrix:
 
     For feature-rich crosstalk matrix class, see `coscon.toast_helper.CrosstalkMatrix`.
     """
-    names: np.ndarray['S']
-    data: np.ndarray[np.float64]
+    names: "np.ndarray['S']"
+    data: 'np.ndarray[np.float64]'
 
     @property
-    def names_str(self) -> List[str]:
+    def names_str(self) -> 'List[str]':
         """names in list of str"""
         return [name.decode() for name in self.names]
 
     @classmethod
-    def load(cls, path: Path):
+    def load(cls, path: 'Path'):
         with h5py.File(path, 'r') as f:
             names = f["names"][:]
             data = f["data"][:]
         return cls(names, data)
 
-    def dump(self, path: Path, compress_level: int = 9):
+    def dump(self, path: 'Path', compress_level: 'int' = 9):
         with h5py.File(path, 'w', libver='latest') as f:
             f.create_dataset(
                 'names',
@@ -112,14 +114,14 @@ class OpCrosstalk(Operator):
     """Operator that apply crosstalk matrix to detector ToDs.
     """
     # total no. of crosstalk matrices
-    n_crosstalk_matrices: int
+    n_crosstalk_matrices: 'int'
     # in MPI case, this holds only those matrices owned by a rank
     # dictate by the condition i % PROCS == RANK
-    crosstalk_matrices: List[SimpleCrosstalkMatrix]
+    crosstalk_matrices: 'List[SimpleCrosstalkMatrix]'
     # this name is used to save data in tod.cache, so better be unique from other cache
-    name: str = "crosstalk"
+    name: 'str' = "crosstalk"
 
-    def _get_crosstalk_matrix(self, i: int) -> SimpleCrosstalkMatrix:
+    def _get_crosstalk_matrix(self, i: 'int') -> 'SimpleCrosstalkMatrix':
         """Get the i-th crosstalk matrix, used this with MPI only.
         """
         rank_owner = i % PROCS
@@ -163,11 +165,11 @@ class OpCrosstalk(Operator):
             return SimpleCrosstalkMatrix(names, data)
 
     @staticmethod
-    def _read_serial(paths: List[Path]) -> List[SimpleCrosstalkMatrix]:
+    def _read_serial(paths: 'List[Path]') -> 'List[SimpleCrosstalkMatrix]':
         return [SimpleCrosstalkMatrix.load(path) for path in paths]
 
     @staticmethod
-    def _read_mpi(paths: List[Path]) -> List[SimpleCrosstalkMatrix]:
+    def _read_mpi(paths: 'List[Path]') -> 'List[SimpleCrosstalkMatrix]':
         N = len(paths)
         path_idxs_per_rank = range(RANK, N, PROCS)
         return [SimpleCrosstalkMatrix.load(paths[i]) for i in path_idxs_per_rank]
@@ -175,18 +177,18 @@ class OpCrosstalk(Operator):
     @classmethod
     def read(
         cls,
-        args: argparse.Namespace,
-        name: str = "crosstalk",
-    ) -> OpCrosstalk:
+        args: 'argparse.Namespace',
+        name: 'str' = "crosstalk",
+    ) -> 'OpCrosstalk':
         paths = args.crosstalk_matrix
         crosstalk_matrices = cls._read_serial(paths) if IS_SERIAL else cls._read_mpi(paths)
         return cls(len(paths), crosstalk_matrices, name=name)
 
     def _exec_serial(
         self,
-        data: toast.dist.Data,
-        signal_name: str,
-        debug: bool = False,
+        data: 'toast.dist.Data',
+        signal_name: 'str',
+        debug: 'bool' = False,
     ):
         crosstalk_name = self.name
 
@@ -226,9 +228,9 @@ class OpCrosstalk(Operator):
 
     def _exec_mpi(
         self,
-        data: toast.dist.Data,
-        signal_name: str,
-        debug: bool = False,
+        data: 'toast.dist.Data',
+        signal_name: 'str',
+        debug: 'bool' = False,
     ):
         crosstalk_name = self.name
 
@@ -337,8 +339,8 @@ class OpCrosstalk(Operator):
 
     def exec(
         self,
-        data: toast.dist.Data,
-        signal_name: str,
-        debug: bool = False,
+        data: 'toast.dist.Data',
+        signal_name: 'str',
+        debug: 'bool' = False,
     ):
         self._exec_serial(data, signal_name, debug=debug) if IS_SERIAL else self._exec_mpi(data, signal_name, debug=debug)

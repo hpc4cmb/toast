@@ -1,4 +1,5 @@
-from __future__ import annotations
+# py36
+# from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -48,7 +49,7 @@ tod_crosstalked_random = crosstalk_data_2 @ tod_array_random
 
 @dataclass
 class FakeData:
-    obs: List[dict]
+    obs: 'List[dict]'
 
 
 class OpCrosstalkTest(mpi_test.MPITestCase):
@@ -59,10 +60,10 @@ class OpCrosstalkTest(mpi_test.MPITestCase):
 
     @staticmethod
     def _tset_op_crosstalk(
-        tod_array: np.ndarray[np.float64],
-        crosstalk_data: np.ndarray[np.float64],
-        tod_crosstalked: np.ndarray[np.float64],
-        detranks: int,
+        tod_array: 'np.ndarray[np.float64]',
+        crosstalk_data: 'np.ndarray[np.float64]',
+        tod_crosstalked: 'np.ndarray[np.float64]',
+        detranks: 'int',
     ):
         if rank == 0:
             crosstalk_matrices = [SimpleCrosstalkMatrix(names, crosstalk_data)]
@@ -117,12 +118,12 @@ class OpCrosstalkTest(mpi_test.MPITestCase):
 
     @staticmethod
     def _tset_op_crosstalk_multiple_matrices(
-        names: List[np.ndarray['S']],
-        names_strs: List[List[str]],
-        tods_array: List[np.ndarray[np.float64]],
-        crosstalk_datas: List[np.ndarray[np.float64]],
-        tods_crosstalked: List[np.ndarray[np.float64]],
-        detranks: int,
+        names: "List[np.ndarray['S']]",
+        names_strs: 'List[List[str]]',
+        tods_array: 'List[np.ndarray[np.float64]]',
+        crosstalk_datas: 'List[np.ndarray[np.float64]]',
+        tods_crosstalked: 'List[np.ndarray[np.float64]]',
+        detranks: 'int',
     ):
         n_crosstalk_matrices = len(names)
         idxs_per_rank = range(rank, n_crosstalk_matrices, procs)
