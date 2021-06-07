@@ -495,7 +495,7 @@ def _load_toml_traits(tbl):
     return result
 
 
-def load_toml(file, input=None):
+def load_toml(file, input=None, comm=None):
     """Load a TOML config file.
 
     This loads the document into a config dictionary.  If input is specified, the file
@@ -504,14 +504,18 @@ def load_toml(file, input=None):
     Args:
         file (str):  The file to load.
         input (dict):  Append to this dictionary.
+        comm (MPI.Comm):  Optional communicator to broadcast across.
 
     Returns:
         (dict):  The result.
 
     """
     raw = None
-    with open(file, "r") as f:
-        raw = loads(f.read())
+    if comm is None or comm.rank == 0:
+        with open(file, "r") as f:
+            raw = loads(f.read())
+    if comm is not None:
+        raw = comm.bcast(raw, root=0)
 
     # Convert this TOML document into a dictionary
 
@@ -609,7 +613,7 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
         tbl[name].indent(indent)
 
 
-def dump_toml(file, conf):
+def dump_toml(file, conf, comm=None):
     """Dump a configuration to a TOML file.
 
     This writes a config dictionary to a TOML file.
@@ -617,76 +621,62 @@ def dump_toml(file, conf):
     Args:
         file (str):  The file to write.
         conf (dict):  The configuration to dump.
+        comm (MPI.Comm):  Optional communicator to control which process writes.
 
     Returns:
         None
 
     """
-    env = Environment.get()
-    doc = document()
+    if comm is None or comm.rank == 0:
+        env = Environment.get()
+        doc = document()
 
-    doc.add(comment("TOAST config"))
-    doc.add(comment("Generated with version {}".format(env.version())))
+        doc.add(comment("TOAST config"))
+        doc.add(comment("Generated with version {}".format(env.version())))
 
-    def convert_node(conf_root, table_root, indent_size):
-        """Helper function to recursively convert dictionaries to tables"""
-        if isinstance(conf_root, (dict, OrderedDict)):
-            # print("{}found dict".format(" " * indent_size))
-            for k in list(conf_root.keys()):
-                # print("{}  examine key {}".format(" " * indent_size, k))
-                if isinstance(conf_root[k], (dict, OrderedDict)):
-                    # print("{}  key is a dict".format(" " * indent_size))
-                    if "value" in conf_root[k] and "type" in conf_root[k]:
-                        # print(
-                        #    "{}  found value and type subkeys".format(" " * indent_size)
-                        # )
-                        # this is a trait
-                        unit = None
-                        if "unit" in conf_root[k]:
-                            unit = conf_root[k]["unit"]
-                        help = None
-                        if "help" in conf_root[k]:
-                            help = conf_root[k]["help"]
-                        # print(
-                        #     "{}  dumping trait {}, {}, {}".format(
-                        #         " " * indent_size,
-                        #         k,
-                        #         conf_root[k]["value"],
-                        #         conf_root[k]["type"],
-                        #     )
-                        # )
-                        _dump_toml_trait(
-                            table_root,
-                            indent_size,
-                            k,
-                            conf_root[k]["value"],
-                            unit,
-                            conf_root[k]["type"],
-                            help,
-                        )
+        def convert_node(conf_root, table_root, indent_size):
+            """Helper function to recursively convert dictionaries to tables"""
+            if isinstance(conf_root, (dict, OrderedDict)):
+                # print("{}found dict".format(" " * indent_size))
+                for k in list(conf_root.keys()):
+                    # print("{}  examine key {}".format(" " * indent_size, k))
+                    if isinstance(conf_root[k], (dict, OrderedDict)):
+                        # print("{}  key is a dict".format(" " * indent_size))
+                        if "value" in conf_root[k] and "type" in conf_root[k]:
+                            # this is a trait
+                            unit = None
+                            if "unit" in conf_root[k]:
+                                unit = conf_root[k]["unit"]
+                            help = None
+                            if "help" in conf_root[k]:
+                                help = conf_root[k]["help"]
+                            _dump_toml_trait(
+                                table_root,
+                                indent_size,
+                                k,
+                                conf_root[k]["value"],
+                                unit,
+                                conf_root[k]["type"],
+                                help,
+                            )
+                        else:
+                            # descend tree
+                            table_root[k] = table()
+                            convert_node(conf_root[k], table_root[k], indent_size + 2)
                     else:
-                        # print("{}  not a trait- descending".format(" " * indent_size))
-                        # descend tree
-                        table_root[k] = table()
-                        convert_node(conf_root[k], table_root[k], indent_size + 2)
-                else:
-                    # print("{}  value = {}".format(" " * indent_size, conf_root[k]))
-                    # print(
-                    #     "{}  key is not a dict, add to table".format(" " * indent_size)
-                    # )
-                    table_root.add(k, conf_root[k])
-                    table_root[k].indent(indent_size)
-        else:
-            raise RuntimeError("Cannot convert config node {}".format(conf_root))
+                        table_root.add(k, conf_root[k])
+                        table_root[k].indent(indent_size)
+            else:
+                raise RuntimeError("Cannot convert config node {}".format(conf_root))
 
-    # Convert all top-level sections from the config dictionary into a TOML table.
-    convert_node(conf, doc, 0)
+        # Convert all top-level sections from the config dictionary into a TOML table.
+        convert_node(conf, doc, 0)
 
-    with open(file, "w") as f:
-        f.write(dumps(doc))
+        with open(file, "w") as f:
+            f.write(dumps(doc))
 
 
-def load_json(file, input=None):
+def load_json(file, input=None, comm=None):
     """Load a JSON config file.
 
     This loads the document into a config dictionary.  If input is specified, the file
@@ -695,14 +685,18 @@ def load_json(file, input=None):
     Args:
         file (str):  The file to load.
         input (dict):  Append to this dictionary.
+        comm (MPI.Comm):  Optional communicator to broadcast across.
 
     Returns:
         (dict):  The result.
 
     """
     raw = None
-    with open(file, "r") as f:
-        raw = json.load(f)
+    if comm is None or comm.rank == 0:
+        with open(file, "r") as f:
+            raw = json.load(f)
+    if comm is not None:
+        raw = comm.bcast(raw, root=0)
 
     if input is None:
         return raw
@@ -713,7 +707,7 @@ def load_json(file, input=None):
     return input
 
 
-def dump_json(file, conf):
+def dump_json(file, conf, comm=None):
     """Dump a configuration to a JSON file.
 
     This writes a config dictionary to a JSON file.
@@ -721,21 +715,23 @@ def dump_json(file, conf):
     Args:
         file (str):  The file to write.
         conf (dict):  The configuration to dump.
+        comm (MPI.Comm):  Optional communicator to control which process writes.
 
     Returns:
         None
 
     """
-    env = Environment.get()
-    versioned = OrderedDict()
-    versioned["version"] = env.version()
-    versioned.update(conf)
+    if comm is None or comm.rank == 0:
+        env = Environment.get()
+        versioned = OrderedDict()
+        versioned["version"] = env.version()
+        versioned.update(conf)
 
-    with open(file, "w") as f:
-        json.dump(versioned, f, indent=2)
+        with open(file, "w") as f:
+            json.dump(versioned, f, indent=2)
 
 
-def load_config(file, input=None):
+def load_config(file, input=None, comm=None):
     """Load a config file in a supported format.
 
     This loads the document into a config dictionary.  If input is specified, the file
@@ -751,9 +747,9 @@ def load_config(file, input=None):
     """
     ret = None
     try:
-        ret = load_json(file, input=input)
+        ret = load_json(file, input=input, comm=comm)
     except Exception:
-        ret = load_toml(file, input=input)
+        ret = load_toml(file, input=input, comm=comm)
     return ret
 
 

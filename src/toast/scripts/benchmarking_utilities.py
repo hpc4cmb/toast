@@ -337,27 +337,15 @@ def scan_map(args, rank, ops, data, log):
     Simulate sky signal from a map.
     We scan the sky with the "final" pointing model if that is different from the solver pointing model.
     """
-    pix_dist = toast.ops.BuildPixelDistribution()
-    if ops.binner_final.enabled and ops.pointing_final.enabled:
-        pix_dist.pixel_dist = ops.binner_final.pixel_dist
-        pix_dist.pointing = ops.pointing_final
-        pix_dist.shared_flags = ops.binner_final.shared_flags
-        pix_dist.shared_flag_mask = ops.binner_final.shared_flag_mask
-        pix_dist.save_pointing = ops.binner_final.full_pointing
-    else:
-        pix_dist.pixel_dist = ops.binner.pixel_dist
-        pix_dist.pointing = ops.pointing
-        pix_dist.shared_flags = ops.binner.shared_flags
-        pix_dist.shared_flag_mask = ops.binner.shared_flag_mask
-        pix_dist.save_pointing = ops.binner.full_pointing
-    pix_dist.apply(data)
-
     # creates a map and puts it in args.input_map
     create_input_maps(args.input_map, ops.pointing.nside, rank, log)
 
     # adds the scan map operator
     scan_map = toast.ops.ScanHealpix(
-        pixel_dist=pix_dist.pixel_dist, pointing=pix_dist.pointing, file=args.input_map
+        pixel_dist=ops.binner_final.pixel_dist, 
+        pointing=ops.pointing_final,
+        save_pointing=ops.binner_final.full_pointing,
+        file=args.input_map
     )
     scan_map.apply(data)
 
@@ -366,37 +354,18 @@ def run_mapmaker(ops, args, tmpls, data):
     """
     Build up our map-making operation from the pieces- both operators configured from user options and other operators.
     """
-    ops.binner.pointing = ops.pointing
+
     ops.binner.noise_model = ops.default_model.noise_model
-
-    final_bin = None
-    if ops.binner_final.enabled:
-        final_bin = ops.binner_final
-        if ops.pointing_final.enabled:
-            final_bin.pointing = ops.pointing_final
-        else:
-            final_bin.pointing = ops.pointing
-        final_bin.noise_model = ops.default_model.noise_model
-
-    # A simple binned map will be made if an empty list of templates is passed to the mapmaker.
-    tlist = list()
-    if tmpls.baselines.enabled:
-        tlist.append(tmpls.baselines)
-    tmatrix = toast.ops.TemplateMatrix(templates=tlist)
+    ops.binner_final.noise_model = ops.default_model.noise_model
 
     ops.mapmaker.binning = ops.binner
-    ops.mapmaker.template_matrix = tmatrix
-    ops.mapmaker.map_binning = final_bin
+    ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
+    ops.mapmaker.map_binning = ops.binner_final
     ops.mapmaker.det_data = ops.sim_noise.det_data
+    ops.mapmaker.output_dir = args.out_dir
 
     # Run the map making
     ops.mapmaker.apply(data)
-
-    # Write the outputs
-    for prod in ["map", "hits", "cov", "rcond"]:
-        dkey = f"{ops.mapmaker.name}_{prod}"
-        file = os.path.join(args.out_dir, f"{dkey}.fits")
-        toast.pixels_io.write_healpix_fits(data[dkey], file, nest=ops.pointing.nest)
 
 
 def compute_science_metric(args, runtime, n_nodes, rank, log):

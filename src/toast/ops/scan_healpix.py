@@ -20,6 +20,8 @@ from .operator import Operator
 
 from .scan_map import ScanMap
 
+from .pointing import BuildPixelDistribution
+
 from .pipeline import Pipeline
 
 
@@ -60,6 +62,11 @@ class ScanHealpix(Operator):
 
     save_map = Bool(False, help="If True, do not delete map during finalize")
 
+    save_pointing = Bool(
+        False,
+        help="If True, do not clear detector pointing matrices if we generate the pixel distribution",
+    )
+
     @traitlets.validate("pointing")
     def _check_pointing(self, proposal):
         pntg = proposal["value"]
@@ -84,6 +91,16 @@ class ScanHealpix(Operator):
         # Check that the file is set
         if self.file is None:
             raise RuntimeError("You must set the file trait before calling exec()")
+
+        # Construct the pointing distribution if it does not already exist
+
+        if self.pixel_dist not in data:
+            pix_dist = BuildPixelDistribution(
+                pixel_dist=self.pixel_dist,
+                pointing=self.pointing,
+                save_pointing=self.save_pointing,
+            )
+            pix_dist.apply(data)
 
         dist = data[self.pixel_dist]
         if not isinstance(dist, PixelDistribution):

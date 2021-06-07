@@ -37,30 +37,28 @@ from astropy import units as u
 import toast
 
 from toast.mpi import MPI
-from toast.ops.elevation_noise import ElevationNoise
 
 
-def main():
-    env = toast.utils.Environment.get()
-    log = toast.utils.Logger.get()
-    gt = toast.timing.GlobalTimers.get()
-    gt.start("toast_ground_sim (total)")
+def parse_config(operators, templates, comm):
+    """Parse command line arguments and load any config files.
 
-    # Get optional MPI parameters
-    world_comm, procs, rank = toast.get_world()
+    Return the final config, remaining args, and job size args.
 
+    """
     # Argument parsing
     parser = argparse.ArgumentParser(description="Ground Simulation Example.")
 
     # Arguments specific to this script
 
     parser.add_argument(
-        "--focalplane", required=False, default=None, help="Input fake focalplane"
+        "--focalplane", required=True, default=None, help="Input fake focalplane"
     )
 
     parser.add_argument(
-        "--schedule", required=False, default=None, help="Input observing schedule"
+        "--schedule", required=True, default=None, help="Input observing schedule"
     )
+
+    # FIXME: Add weather name / path here
 
     parser.add_argument(
         "--out_dir",
@@ -70,14 +68,179 @@ def main():
         help="The output directory",
     )
 
+    # Build a config dictionary starting from the operator defaults, overriding with any
+    # config files specified with the '--config' commandline option, followed by any
+    # individually specified parameter overrides.
+
+    config, args, jobargs = toast.parse_config(
+        parser,
+        operators=operators,
+        templates=templates,
+    )
+
+    # Create our output directory
+    if comm is None or comm.rank == 0:
+        if not os.path.isdir(args.out_dir):
+            os.makedirs(args.out_dir)
+
+    # Log the config that was actually used at runtime.
+    outlog = os.path.join(args.out_dir, "config_log.toml")
+    toast.config.dump_toml(outlog, config, comm=comm)
+
+    return config, args, jobargs
+
+
+def load_instrument_and_schedule(args, comm):
+    # Load a generic focalplane file.  NOTE:  again, this is just using the
+    # built-in Focalplane class.  In a workflow for a specific experiment we would
+    # have a custom class.
+    focalplane = toast.instrument.Focalplane(file=args.focalplane, comm=comm)
+
+    # Load the schedule file
+    schedule = toast.schedule.GroundSchedule()
+    schedule.read(args.schedule, comm=comm)
+
+    # Create a telescope for the simulation.  Again, for a specific experiment we
+    # would use custom classes for the site.
+    site = toast.instrument.GroundSite(
+        schedule.site_name,
+        schedule.site_lat,
+        schedule.site_lon,
+        schedule.site_alt,
+        weather=None,
+    )
+    telescope = toast.instrument.Telescope(
+        schedule.telescope_name, focalplane=focalplane, site=site
+    )
+    return telescope, schedule
+
+
+def use_full_pointing(job):
+    # Are we using full pointing?  We determine this from whether the binning operator
+    # used in the solve has full pointing enabled and also whether madam (which
+    # requires full pointing) is enabled.
+    full_pointing = False
+    if toast.ops.madam.available() and job.operators.madam.enabled:
+        full_pointing = True
+    if job.operators.binner.full_pointing:
+        full_pointing = True
+    return full_pointing
+
+
+def job_create(config, jobargs, telescope, schedule, comm):
+    # Instantiate our objects that were configured from the command line / files
+    job = toast.create_from_config(config)
+
+    # Find the group size for this job, either from command-line overrides or
+    # by estimating the data volume.
+    full_pointing = use_full_pointing(job)
+    group_size = toast.job_group_size(
+        comm,
+        jobargs,
+        schedule=schedule,
+        focalplane=telescope.focalplane,
+        full_pointing=full_pointing,
+    )
+    return job, group_size, full_pointing
+
+
+def simulate_data(job, toast_comm, telescope, schedule):
+    ops = job.operators
+    tmpls = job.templates
+
+    # Create the (initially empty) data
+
+    data = toast.Data(comm=toast_comm)
+
+    # Simulate the telescope pointing
+
+    ops.sim_ground.telescope = telescope
+    ops.sim_ground.schedule = schedule
+    ops.sim_ground.apply(data)
+
+    # Construct a "perfect" noise model just from the focalplane parameters
+
+    ops.default_model.apply(data)
+
+    # Create the Elevation modulated noise model
+
+    ops.elevation_model.detector_pointing = ops.det_pointing
+    ops.elevation_model.view = ops.det_pointing.view
+    ops.elevation_model.apply(data)
+
+    # Set up the pointing.  Each pointing matrix operator requires a detector pointing
+    # operator, and each binning operator requires a pointing matrix operator.
+    ops.pointing.detector_pointing = ops.det_pointing
+    ops.pointing_final.detector_pointing = ops.det_pointing
+
+    ops.binner.pointing = ops.pointing
+
+    # If we are not using a different pointing matrix for our final binning, then
+    # use the same one as the solve.
+    if not ops.pointing_final.enabled:
+        ops.pointing_final = ops.pointing
+    
+    ops.binner_final.pointing = ops.pointing_final
+
+    # If we are not using a different binner for our final binning, use the same one
+    # as the solve.
+    if not ops.binner_final.enabled:
+        ops.binner_final = ops.binner
+
+    # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
+    # in case that is different from the solver pointing model.
+
+    ops.scan_map.pixel_dist = ops.binner_final.pixel_dist
+    ops.scan_map.pointing = ops.pointing_final
+    ops.scan_map.save_pointing = use_full_pointing(job)
+    ops.scan_map.apply(data)
+
+    # Simulate detector noise
+
+    ops.sim_noise.apply(data)
+
+    return data
+
+
+def reduce_data(job, args, data):
+    ops = job.operators
+    tmpls = job.templates
+
+    # The map maker requires the the binning operators used for the solve and final,
+    # the templates, and the noise model.
+
+    ops.binner.noise_model = ops.default_model.noise_model
+    ops.binner_final.noise_model = ops.default_model.noise_model
+
+    ops.mapmaker.binning = ops.binner
+    ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
+    ops.mapmaker.map_binning = ops.binner_final
+    ops.mapmaker.det_data = ops.sim_noise.det_data
+    ops.mapmaker.output_dir = args.out_dir
+
+    ops.mapmaker.apply(data)
+
+    # Optionally run Madam
+    if toast.ops.madam.available():
+        ops.madam.apply(data)
+
+
+def main():
+    env = toast.utils.Environment.get()
+    log = toast.utils.Logger.get()
+    gt = toast.timing.GlobalTimers.get()
+    gt.start("toast_ground_sim (total)")
+
+    # Get optional MPI parameters
+    comm, procs, rank = toast.get_world()
+
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
     # The "name" of each operator instance controls what the commandline and config
     # file options will be called.
     #
-    # We can also set some default values here for the traits.
-
-    madam_available = toast.ops.madam.available()
+    # We can also set some default values here for the traits, including whether an
+    # operator is disabled by default.
 
     # FIXME:  This example workflow will eventually include other operators for
     # atmosphere simulation, filtering, other types of map-making, etc.
@@ -101,204 +264,37 @@ def main():
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
     ]
-    if madam_available:
+    if toast.ops.madam.available():
         operators.append(toast.ops.Madam(name="madam", enabled=False))
 
     # Templates we want to configure from the command line or a parameter file.
-
     templates = [toast.templates.Offset(name="baselines")]
 
-    # Build a config dictionary starting from the operator defaults, overriding with any
-    # config files specified with the '--config' commandline option, followed by any
-    # individually specified parameter overrides.
+    # Parse options
+    config, args, jobargs = parse_config(operators, templates, comm)
 
-    config, args, jobargs = toast.parse_config(
-        parser,
-        operators=operators,
-        templates=templates,
-    )
+    # Load our instrument model and observing schedule
+    telescope, schedule = load_instrument_and_schedule(args, comm)
 
-    # Log the config that was actually used at runtime.
-    outlog = os.path.join(args.out_dir, "config_log.toml")
-    if rank == 0:
-        if not os.path.isdir(args.out_dir):
-            os.makedirs(args.out_dir)
-        toast.config.dump_toml(outlog, config)
-
-    # Load or create the focalplane file.  NOTE:  again, this is just using the
-    # built-in Focalplane class.  In a workflow for a specific experiment we would
-    # have a custom class.
-
-    if args.focalplane is None:
-        if rank == 0:
-            log.info("No focalplane specified.  Nothing to do.")
-        return
-
-    focalplane = None
-    if rank == 0:
-        log.info("Loading focalplane from {}".format(args.focalplane))
-        focalplane = toast.instrument.Focalplane(file=args.focalplane)
-    if world_comm is not None:
-        focalplane = world_comm.bcast(focalplane, root=0)
-
-    # Load the schedule file
-
-    if args.schedule is None:
-        if rank == 0:
-            log.info("No schedule file specified- nothing to simulate")
-        return
-    schedule = None
-    if rank == 0:
-        schedule = toast.schedule.GroundSchedule()
-        schedule.read(args.schedule)
-    if world_comm is not None:
-        schedule = world_comm.bcast(schedule, root=0)
-
-    # Instantiate our objects that were configured from the command line / files
-
-    job = toast.create_from_config(config)
-    ops = job.operators
-    tmpls = job.templates
-
-    # Are we using full pointing?  We determine this from whether the binning operator
-    # used in the solve has full pointing enabled and also whether madam (which
-    # requires full pointing) is enabled.
-
-    full_pointing = False
-    if madam_available and ops.madam.enabled:
-        full_pointing = True
-    if ops.binner.full_pointing:
-        full_pointing = True
-
-    # Find the group size for this job, either from command-line overrides or
-    # by estimating the data volume.
-
-    group_size = toast.job_group_size(
-        world_comm,
-        jobargs,
-        schedule=schedule,
-        focalplane=focalplane,
-        full_pointing=full_pointing,
+    # Instantiate our operators and get the size of the process groups
+    job, group_size, full_pointing = job_create(
+        config, jobargs, telescope, schedule, comm
     )
 
     # Create the toast communicator
+    toast_comm = toast.Comm(world=comm, groupsize=group_size)
 
-    comm = toast.Comm(world=world_comm, groupsize=group_size)
+    # Create simulated data
+    data = simulate_data(job, toast_comm, telescope, schedule)
 
-    # Create the (initially empty) data
-
-    data = toast.Data(comm=comm)
-
-    # Create a telescope for the simulation.  Again, for a specific experiment we
-    # would use custom classes for the site.
-
-    site = toast.instrument.GroundSite(
-        schedule.site_name, schedule.site_lat, schedule.site_lon, schedule.site_alt
-    )
-    telescope = toast.instrument.Telescope(
-        schedule.telescope_name, focalplane=focalplane, site=site
-    )
-
-    # Simulate the telescope pointing
-
-    if not ops.sim_ground.enabled:
-        msg = "Cannot disable the satellite scanning operator"
-        if rank == 0:
-            log.error(msg)
-        raise RuntimeError(msg)
-
-    ops.sim_ground.telescope = telescope
-    ops.sim_ground.schedule = schedule
-    ops.sim_ground.apply(data)
-
-    # Construct a "perfect" noise model just from the focalplane parameters
-
-    ops.default_model.apply(data)
-
-    # Create the Elevation modulated noise model
-
-    ops.elevation_model.detector_pointing = ops.det_pointing
-    ops.elevation_model.view = ops.det_pointing.view
-    ops.elevation_model.apply(data)
-
-    # Set the pointing matrix operators to use the detector pointing
-
-    ops.pointing.detector_pointing = ops.det_pointing
-    ops.pointing_final.detector_pointing = ops.det_pointing
-
-    # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
-    # if that is different from the solver pointing model.
-
-    if ops.scan_map.enabled:
-        pix_dist = toast.ops.BuildPixelDistribution()
-        if ops.binner_final.enabled and ops.pointing_final.enabled:
-            pix_dist.pixel_dist = ops.binner_final.pixel_dist
-            pix_dist.pointing = ops.pointing_final
-            pix_dist.shared_flags = ops.binner_final.shared_flags
-            pix_dist.shared_flag_mask = ops.binner_final.shared_flag_mask
-            pix_dist.save_pointing = ops.binner_final.full_pointing
-        else:
-            pix_dist.pixel_dist = ops.binner.pixel_dist
-            pix_dist.pointing = ops.pointing
-            pix_dist.shared_flags = ops.binner.shared_flags
-            pix_dist.shared_flag_mask = ops.binner.shared_flag_mask
-            pix_dist.save_pointing = full_pointing
-        pix_dist.apply(data)
-
-        ops.scan_map.pixel_dist = pix_dist.pixel_dist
-        ops.scan_map.pointing = pix_dist.pointing
-        ops.scan_map.apply(data)
-
-    # Simulate detector noise
-
-    if ops.sim_noise.enabled:
-        ops.sim_noise.apply(data)
-
-    # FIXME:  There are many operators still to add to this example, including
-    # atmosphere simulation, optional filters, and other types of mapmaking.  Those
-    # will be added as the code is ported.
-
-    # Build up our map-making operation from the pieces- both operators configured
-    # from user options and other operators.
-
-    if ops.mapmaker.enabled:
-        ops.binner.pointing = ops.pointing
-        ops.binner.noise_model = ops.default_model.noise_model
-
-        final_bin = None
-        if ops.binner_final.enabled:
-            final_bin = ops.binner_final
-            if ops.pointing_final.enabled:
-                final_bin.pointing = ops.pointing_final
-            else:
-                final_bin.pointing = ops.pointing
-            final_bin.noise_model = ops.default_model.noise_model
-
-        # Note that if an empty list of templates is passed to the mapmaker,
-        # then a simple binned map will be made.
-        tlist = list()
-        if tmpls.baselines.enabled:
-            tlist.append(tmpls.baselines)
-        tmatrix = toast.ops.TemplateMatrix(templates=tlist)
-
-        ops.mapmaker.binning = ops.binner
-        ops.mapmaker.template_matrix = tmatrix
-        ops.mapmaker.map_binning = final_bin
-        ops.mapmaker.det_data = ops.sim_noise.det_data
-
-        # Run the map making
-
-        ops.mapmaker.apply(data)
-
-        # Write the outputs
-        for prod in ["map", "hits", "cov", "rcond"]:
-            dkey = "{}_{}".format(ops.mapmaker.name, prod)
-            file = os.path.join(args.out_dir, "{}.fits".format(dkey))
-            toast.pixels_io.write_healpix_fits(data[dkey], file, nest=ops.pointing.nest)
-
-    # Run Madam
-    if madam_available and ops.madam.enabled:
-        ops.madam.apply(data)
+    # Reduce the data
+    reduce_data(job, args, data)
+    
+    # Collect optional timing information
+    alltimers = toast.timing.gather_timers(comm=toast_comm.comm_world)
+    if toast_comm.world_rank == 0:
+        out = os.path.join(args.out_dir, "timing")
+        toast.timing.dump(alltimers, out)
 
 
 if __name__ == "__main__":
