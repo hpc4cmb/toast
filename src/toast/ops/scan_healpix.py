@@ -20,6 +20,8 @@ from .operator import Operator
 
 from .scan_map import ScanMap
 
+from .pointing import BuildPixelDistribution
+
 from .pipeline import Pipeline
 
 

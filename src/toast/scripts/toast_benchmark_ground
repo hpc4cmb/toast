@@ -201,16 +201,26 @@ def main():
     ops.pointing.detector_pointing = ops.det_pointing
     ops.pointing_final.detector_pointing = ops.det_pointing
 
+    # If we are not using a different pointing matrix for our final binning, then
+    # use the same one as the solve.
+    ops.binner.pointing = ops.pointing
+    if not ops.pointing_final.enabled:
+        ops.pointing_final = ops.pointing
+    
+    # If we are not using a different binner for our final binning, use the same one
+    # as the solve.
+    ops.binner_final.pointing = ops.pointing_final
+    if not ops.binner_final.enabled:
+        ops.binner_final = ops.binner
+
     # Simulate sky signal from a map.
     scan_map(args, rank, ops, data, log)
 
     # Simulate detector noise
-    if ops.sim_noise.enabled:
-        ops.sim_noise.apply(data)
+    ops.sim_noise.apply(data)
 
     # Build up our map-making operation.
-    if ops.mapmaker.enabled:
-        run_mapmaker(ops, args, job.templates, data)
+    run_mapmaker(ops, args, job.templates, data)
 
     # end of the computations, sync and computes efficiency
     global_timer.stop_all()

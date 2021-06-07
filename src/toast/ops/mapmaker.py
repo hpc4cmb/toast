@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+
 import traitlets
 
 import numpy as np
@@ -230,7 +232,7 @@ class MapMaker(Operator):
 
         # Check map binning
         map_binning = self.map_binning
-        if self.map_binning is None:
+        if self.map_binning is None or not self.map_binning.enabled:
             # Use the same binning used in the solver.
             map_binning = self.binning
 
@@ -653,7 +655,7 @@ class MapMaker(Operator):
             for prod in ["map", "hits", "cov", "rcond"]:
                 dkey = "{}_{}".format(self.name, prod)
                 file = os.path.join(self.output_dir, "{}.fits".format(dkey))
-                write_healpix_fits(data[dkey], file, nest=self.pointing.nest)
+                write_healpix_fits(data[dkey], file, nest=map_binning.pointing.nest)
 
         self._log_info(comm, rank, "  finished output write in", timer=timer)
 

@@ -39,7 +39,7 @@ import toast
 from toast.mpi import MPI
 
 
-def job_config(operators, templates, comm):
+def parse_config(operators, templates, comm):
     """Parse command line arguments and load any config files.
 
     Return the final config, remaining args, and job size args.
@@ -112,9 +112,9 @@ def use_full_pointing(job):
     # used in the solve has full pointing enabled and also whether madam (which
     # requires full pointing) is enabled.
     full_pointing = False
-    if madam_available and job.ops.madam.enabled:
+    if toast.ops.madam.available() and job.operators.madam.enabled:
         full_pointing = True
-    if job.ops.binner.full_pointing:
+    if job.operators.binner.full_pointing:
         full_pointing = True
     return full_pointing
 
@@ -125,14 +125,15 @@ def job_create(config, jobargs, telescope, schedule, comm):
 
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
+    full_pointing = use_full_pointing(job)
     group_size = toast.job_group_size(
         comm,
         jobargs,
         schedule=schedule,
         focalplane=telescope.focalplane,
-        full_pointing=use_full_pointing(job),
+        full_pointing=full_pointing,
     )
-    return job, group_size
+    return job, group_size, full_pointing
 
 
 def simulate_data(job, toast_comm, telescope, schedule):
@@ -155,19 +156,22 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
-
     ops.pointing.detector_pointing = ops.det_pointing
     ops.pointing_final.detector_pointing = ops.det_pointing
 
     ops.binner.pointing = ops.pointing
+
+    # If we are not using a different pointing matrix for our final binning, then
+    # use the same one as the solve.
+    if not ops.pointing_final.enabled:
+        ops.pointing_final = ops.pointing
+    
     ops.binner_final.pointing = ops.pointing_final
 
-    # Are we using different pointing and binning operators for our final binning?
-    # If not, we set those to be the same operators used for the solve.
-
-    if not (ops.binner_final.enabled and ops.pointing_final.enabled):
+    # If we are not using a different binner for our final binning, use the same one
+    # as the solve.
+    if not ops.binner_final.enabled:
         ops.binner_final = ops.binner
-        ops.pointing_final = ops.pointing
 
     # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
     # in case that is different from the solver pointing model.
@@ -180,6 +184,8 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Simulate detector noise
 
     ops.sim_noise.apply(data)
+
+    return data
 
 
 def reduce_data(job, args, data):
@@ -201,7 +207,7 @@ def reduce_data(job, args, data):
     ops.mapmaker.apply(data)
 
     # Optionally run Madam
-    if madam_available:
+    if toast.ops.madam.available():
         ops.madam.apply(data)
 
 
@@ -222,8 +228,6 @@ def main():
     # We can also set some default values here for the traits, including whether an
     # operator is disabled by default.
 
-    madam_available = toast.ops.madam.available()
-
     operators = [
         toast.ops.SimSatellite(name="sim_satellite"),
         toast.ops.DefaultNoiseModel(name="default_model"),
@@ -238,14 +242,14 @@ def main():
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
     ]
-    if madam_available:
+    if toast.ops.madam.available():
         operators.append(toast.ops.Madam(name="madam", enabled=False))
 
     # Templates we want to configure from the command line or a parameter file.
     templates = [toast.templates.Offset(name="baselines")]
 
     # Parse options
-    config, args, jobargs = job_config(operators, templates, comm)
+    config, args, jobargs = parse_config(operators, templates, comm)
 
     # Load our instrument model and observing schedule
     telescope, schedule = load_instrument_and_schedule(args, comm)
@@ -264,9 +268,9 @@ def main():
     # Reduce the data
     reduce_data(job, args, data)
     
-    # Collection optional timing information
-    alltimers = toast.timing.gather_timers(comm=comm.comm_world)
-    if comm.world_rank == 0:
+    # Collect optional timing information
+    alltimers = toast.timing.gather_timers(comm=toast_comm.comm_world)
+    if toast_comm.world_rank == 0:
         out = os.path.join(args.out_dir, "timing")
         toast.timing.dump(alltimers, out)
 
