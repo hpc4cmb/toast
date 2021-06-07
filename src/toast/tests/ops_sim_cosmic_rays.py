@@ -56,7 +56,7 @@ class SimCosmicRayTest(MPITestCase):
         crfile=f"{self.outdir}/cosmic_ray_glitches_detector.npz"
         self.make_mock_cosmic_ray_data( data, crfile )
         if self.comm is not None :
-            self.comm.Barrier() 
+            self.comm.Barrier()
         # Simulate noise using this model
         key = "my_signal"
         sim_cosmic_rays = ops.InjectCosmicRays(det_data=key,
@@ -77,9 +77,11 @@ class SimCosmicRayTest(MPITestCase):
         data = create_satellite_data(
             self.comm,
         )
+
         crfile=f"{self.outdir}/cosmic_ray_glitches_detector.npz"
         self.make_mock_cosmic_ray_data( data, crfile )
-
+        if self.comm is not None :
+            self.comm.Barrier()
         # Simulate noise using this model
         key = "my_signal"
         sim_cosmic_rays = ops.InjectCosmicRays(det_data=key,
@@ -103,7 +105,8 @@ class SimCosmicRayTest(MPITestCase):
         )
         crfile=f"{self.outdir}/cosmic_ray_glitches_detector.npz"
         self.make_mock_cosmic_ray_data( data, crfile )
-
+        if self.comm is not None :
+            self.comm.Barrier() 
         # Simulate noise using this model
         key = "my_signal"
         sim_cosmic_rays = ops.InjectCosmicRays(det_data=key,
