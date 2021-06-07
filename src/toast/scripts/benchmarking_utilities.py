@@ -75,6 +75,7 @@ def get_mpi_settings(args, log, env):
 
     return world_comm, procs, rank, n_nodes, avail_node_bytes
 
+
 def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing):
     """
     Given a number of samples and some problems parameters,
@@ -127,17 +128,31 @@ def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
     # returns the group_nodes and n_detector that minimize memory usage
     return (group_nodes_best, n_detector_best, num_obs_best, memory_used_bytes_best)
 
-def maximize_nb_samples(args, n_nodes, n_procs, full_pointing, available_memory_bytes, per_process_overhead_bytes=1024 ** 3):
+
+def maximize_nb_samples(
+    args,
+    n_nodes,
+    n_procs,
+    full_pointing,
+    available_memory_bytes,
+    per_process_overhead_bytes=1024 ** 3,
+):
     """
     Finds the largest number of samples that can fit in the available memory.
     Returns 1 if not number of sample fits in memory.
-    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number of bytes 
+    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number of bytes
     that will be consummed by each process, independently of the number of samples.
     """
     # returns true if a number of samples can fit in memory
     def fits_in_memory(nb_samples):
-        (_, _, _, memory_used_bytes) = get_minimum_memory_use(args, n_nodes, n_procs, nb_samples, full_pointing)
-        return memory_used_bytes + n_procs * per_process_overhead_bytes < available_memory_bytes
+        (_, _, _, memory_used_bytes) = get_minimum_memory_use(
+            args, n_nodes, n_procs, nb_samples, full_pointing
+        )
+        return (
+            memory_used_bytes + n_procs * per_process_overhead_bytes
+            < available_memory_bytes
+        )
+
     # finds an upper-bound on the number of samples that can fit in memory
     max_samples = 2
     while fits_in_memory(max_samples):
@@ -155,14 +170,22 @@ def maximize_nb_samples(args, n_nodes, n_procs, full_pointing, available_memory_
         mid_samples = (min_samples + max_samples) // 2
     return mid_samples
 
+
 def select_case(
-    args, n_procs, n_nodes, avail_node_bytes, full_pointing, world_comm, log, per_process_overhead_bytes=1024 ** 3
+    args,
+    n_procs,
+    n_nodes,
+    avail_node_bytes,
+    full_pointing,
+    world_comm,
+    log,
+    per_process_overhead_bytes=1024 ** 3,
 ):
     """
     Selects the most appropriate case size given the memory available and number of nodes
     sets total_samples and n_detector in args
-    
-    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number of bytes 
+
+    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number of bytes
     that will be consummed by each process, independently of the number of samples, when using case=`auto`.
     """
     # computes the memory that is currently available
@@ -202,18 +225,26 @@ def select_case(
                 f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB)."
             )
     else:
-        log.info_rank0(f"Using automatic workflow size selection (case='auto') with {(per_process_overhead_bytes) / (1024 ** 3) :0.2f} GB reserved for per process overhead.", world_comm)
+        log.info_rank0(
+            f"Using automatic workflow size selection (case='auto') with {(per_process_overhead_bytes) / (1024 ** 3) :0.2f} GB reserved for per process overhead.",
+            world_comm,
+        )
         # finds the number of samples that gets us closest to the available memory
-        total_samples = maximize_nb_samples(args, n_nodes, n_procs, full_pointing, available_memory_bytes, per_process_overhead_bytes)
+        total_samples = maximize_nb_samples(
+            args,
+            n_nodes,
+            n_procs,
+            full_pointing,
+            available_memory_bytes,
+            per_process_overhead_bytes,
+        )
         # finds the associated parameters
         (
             group_nodes,
             n_detector,
             num_obs,
             memory_used_bytes,
-        ) = get_minimum_memory_use(
-            args, n_nodes, n_procs, total_samples, full_pointing
-        )
+        ) = get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
         # stores the parameters and displays the information
         args.total_samples = total_samples
         args.n_detector = n_detector
