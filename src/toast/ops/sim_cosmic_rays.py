@@ -21,7 +21,6 @@ from ..utils import Environment, Logger
 from .. import rng
 
 
-
 class InjectCosmicRays(Operator):
     """
     Inject the cosmic rays  signal into the TOD. So far we inject two kinds of cosmic ray noise:
@@ -71,24 +70,18 @@ class InjectCosmicRays(Operator):
     det_data = Unicode(
         "signal", help="Observation detdata key to inject the gain drift"
     )
-    crfile = Unicode(
-        None , help="Path to the *.npz file encoding cosmic ray infos"
-    )
-    crdata_units = Quantity(
-        1*u.W , help="set the unities of the input amplitudes "
-    )
+    crfile = Unicode(None, help="Path to the *.npz file encoding cosmic ray infos")
+    crdata_units = Quantity(1 * u.W, help="set the unities of the input amplitudes ")
 
     realization = Int(0, help="integer to set a different random seed ")
 
-    eventrate  = Float(
+    eventrate = Float(
         0.0015,
         help="the expected event rate of hits in a detector",
     )
-    inject_direct_hits = Bool(
-        False, help="inject  direct hits as glitches in the TODs"
-    )
-    conversion_factor  = Quantity(
-        1 * u.K/u.W,
+    inject_direct_hits = Bool(False, help="inject  direct hits as glitches in the TODs")
+    conversion_factor = Quantity(
+        1 * u.K / u.W,
         help="factor to convert the cosmic ray signal (usually Watts) into temperature units",
     )
     include_common_mode = Bool(
@@ -98,13 +91,12 @@ class InjectCosmicRays(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-
     def load_cosmic_ray_data(self, filename):
-        data_dic = np.load(filename  )
+        data_dic = np.load(filename)
 
         return data_dic
 
-    def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter ):
+    def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter):
 
         resampled = np.zeros((Nresamples, arr.shape[1]))
 
@@ -125,12 +117,12 @@ class InjectCosmicRays(Operator):
             CDF = np.cumsum(binned) / binned.sum()
 
             pinv = interpolate.interp1d(CDF, xb, fill_value="extrapolate")
-            #r = np.random.rand(Nresamples)
-            r =  rng.random(
+            # r = np.random.rand(Nresamples)
+            r = rng.random(
                 Nresamples,
                 sampler="uniform_01",
-                key=key ,
-                counter=counter ,
+                key=key,
+                counter=counter,
             )
 
             resampled[:, ii] = pinv(r)
@@ -141,8 +133,10 @@ class InjectCosmicRays(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
-        if self.crfile is   None :
-            raise AttributeError("OpInjectCosmicRays cannot run if you don't provide cosmic ray data.")
+        if self.crfile is None:
+            raise AttributeError(
+                "OpInjectCosmicRays cannot run if you don't provide cosmic ray data."
+            )
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
@@ -157,13 +151,11 @@ class InjectCosmicRays(Operator):
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
             size = ob.detdata[self.det_data][dets[0]].size
-            samplerate  = focalplane.sample_rate.to_value(u.Hz)
+            samplerate = focalplane.sample_rate.to_value(u.Hz)
 
             obstime_seconds = size / samplerate
             n_events_expected = self.eventrate * obstime_seconds
-            key1 = (
-                self.realization * 4294967296 + telescope * 65536
-            )
+            key1 = self.realization * 4294967296 + telescope * 65536
             counter2 = 0
 
             for kk, det in enumerate(dets):
@@ -182,7 +174,7 @@ class InjectCosmicRays(Operator):
                 lownoise_params = data_dic["low_noise"]
                 var_tot = lownoise_params[1] ** 2
                 if not self.include_common_mode:
-                    lownoise_hits =  lownoise_params[1]*rngdata + lownoise_params[0]
+                    lownoise_hits = lownoise_params[1] * rngdata + lownoise_params[0]
                     tmparray = lownoise_hits
                 else:
                     if kk % 2 != 0:  # if kk is odd
@@ -191,7 +183,6 @@ class InjectCosmicRays(Operator):
                     else:  # kk even
                         detid_common = kk
                         kkcol = kk + 1
-
 
                     filename_common = self.crfile.replace(
                         "detector", f"det{detid_common}"
@@ -205,52 +196,55 @@ class InjectCosmicRays(Operator):
                         log.warning(
                             "Correlation matrix not provided for common mode, assuming 50% correlation "
                         )
-                        corr_frac  = 0.5
+                        corr_frac = 0.5
                     var_corr = corr_frac * data_common["low_noise"][1] ** 2
                     var0 = var_tot - var_corr
 
-                    rngdata_common  = rng.random(
+                    rngdata_common = rng.random(
                         size,
                         sampler="gaussian",
                         key=(key1, key2),
                         counter=(detid_common, counter2),
                     )
 
-                    cr_common_mode = np.sqrt(var_corr) * rngdata_common   + data_common["low_noise"][0]
+                    cr_common_mode = (
+                        np.sqrt(var_corr) * rngdata_common + data_common["low_noise"][0]
+                    )
 
                     lownoise_hits = lownoise_params[1] * rngdata + lownoise_params[0]
                     tmparray = lownoise_hits + cr_common_mode
 
                 if self.inject_direct_hits:
                     glitches_param_distr = data_dic["direct_hits"]
-                    fsampl_sims = (data_dic["sampling_rate"][0] *u.Hz).value
+                    fsampl_sims = (data_dic["sampling_rate"][0] * u.Hz).value
 
-                    glitch_seconds = 0.15    # seconds, i.e. ~ 3samples at 19Hz
+                    glitch_seconds = 0.15  # seconds, i.e. ~ 3samples at 19Hz
                     # we approximate the number of samples to the closest integer
                     nsamples_high = np.int_(np.around(glitch_seconds * fsampl_sims))
                     nsamples_low = np.int_(np.around(glitch_seconds * samplerate))
-                    #import pdb; pdb.set_trace()
-                    #np.random.seed( obsindx//1e3  +detindx//1e3 )
+                    # import pdb; pdb.set_trace()
+                    # np.random.seed( obsindx//1e3  +detindx//1e3 )
                     n_events = np.random.poisson(n_events_expected)
                     params = self.resample_cosmic_ray_statistics(
-                        glitches_param_distr, Nresamples=n_events, key=(key1,key2),
-                        counter=(counter1,counter2 )
+                        glitches_param_distr,
+                        Nresamples=n_events,
+                        key=(key1, key2),
+                        counter=(counter1, counter2),
                     )
                     # draw n_events uniformly from a continuous distribution
                     # you want the events to happen during one observation
                     # we also make sure that the glitch is injected at most
-                    #`glitch_seconds` before the end of the observation ,
+                    # `glitch_seconds` before the end of the observation ,
                     # otherwise we've problems in downsampling
-                    rngunif=  rng.random(
+                    rngunif = rng.random(
                         n_events,
                         sampler="uniform_01",
                         key=(key1, key2),
-                        counter=(counter1 , counter2),
+                        counter=(counter1, counter2),
                     )
 
-                    time_glitches = (obstime_seconds - glitch_seconds) *rngunif
+                    time_glitches = (obstime_seconds - glitch_seconds) * rngunif
                     assert time_glitches.max() < obstime_seconds
-
 
                     # estimate the timestamps rounding off the events in seconds
                     time_stamp_glitches = np.int_(np.around(time_glitches * samplerate))
@@ -263,9 +257,10 @@ class InjectCosmicRays(Operator):
                             time_stamp_glitches[i] : time_stamp_glitches[i]
                             + nsamples_low
                         ] = signal.resample(tmphit, num=nsamples_low, t=tglitch)[0]
-                tmparray =tmparray * self.crdata_units
-                ob.detdata[self.det_data][det] += (self.conversion_factor * tmparray).value
-
+                tmparray = tmparray * self.crdata_units
+                ob.detdata[self.det_data][det] += (
+                    self.conversion_factor * tmparray
+                ).value
 
         return
 
