@@ -4,6 +4,7 @@
 install(FILES
     __init__.py
     applygain.py
+    crosstalk.py
     gainscrambler.py
     interval.py
     memorycounter.py
