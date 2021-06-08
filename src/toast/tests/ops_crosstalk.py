@@ -26,8 +26,11 @@ log = Logger.get()
 n_detectors = 4 * procs + 3
 n_samples = 100
 signal_name = 'signal'
-# test against multiple detranks only if mpi
-detrankses = (1,) if procs == 1 else (1, 2, 4)
+detrankses = [1]
+for i in range(2, procs + 1):
+    if procs % i == 0:
+        detrankses.append(i)
+log.info(f'Testing OpCrosstalk against detranks {", ".join(map(str, detrankses))}.')
 
 names_str = [f'A{i}' for i in range(n_detectors)]
 names = np.array(names_str, dtype='S')
