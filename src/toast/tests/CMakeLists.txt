@@ -18,6 +18,7 @@ install(FILES
     intervals.py
     tod_satellite.py
     ops_applygain.py
+    ops_crosstalk.py
     ops_simnoise.py
     cov.py
     ops_pmat.py
