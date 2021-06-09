@@ -25,6 +25,7 @@ from astropy import units as u
 import toast
 
 from toast.mpi import MPI
+from toast.ops import noise_model
 
 
 def main():
@@ -73,24 +74,6 @@ def main():
     # Create the (initially empty) data
     data = toast.Data(comm=toast_comm)
 
-    # Set up some operators that we are going to use later in both
-    # Simulation and Reduction.
-    #---------------------------------------------------------------
-
-    # Construct a "perfect" noise model just from the focalplane parameters
-    default_model = toast.ops.DefaultNoiseModel()
-
-    # Set up detector pointing.  This just uses the focalplane offsets.
-    det_pointing = toast.ops.PointingDetectorSimple()
-
-    # Set up the pointing matrix.  We will use the same pointing matrix for the
-    # template solve and the final binning.
-    pointing = toast.ops.PointingHealpix(
-        nside=512, 
-        mode="IQU",
-        detector_pointing=det_pointing
-    )
-
     # Simulate data
     #---------------------------------------------------------------
 
@@ -101,8 +84,20 @@ def main():
     )
     sim_satellite.apply(data)
 
-    # Create a default noise model from focalplane parameters
+    # Construct a "perfect" noise model just from the focalplane parameters
+    default_model = toast.ops.DefaultNoiseModel()
     default_model.apply(data)
+
+    # Set up detector pointing.  This just uses the focalplane offsets.
+    det_pointing = toast.ops.PointingDetectorSimple(boresight=sim_satellite.boresight)
+
+    # Set up the pointing matrix.  We will use the same pointing matrix for the
+    # template solve and the final binning.
+    pointing = toast.ops.PointingHealpix(
+        nside=512, 
+        mode="IQU",
+        detector_pointing=det_pointing
+    )
 
     # Simulate sky signal from a map and accumulate.
     # scan_map = toast.ops.ScanHealpix(
@@ -112,7 +107,7 @@ def main():
     # scan_map.apply(data)
 
     # Simulate detector noise and accumulate.
-    sim_noise = toast.ops.SimNoise()
+    sim_noise = toast.ops.SimNoise(noise_model=default_model.noise_model)
     sim_noise.apply(data)
 
     # Reduce data

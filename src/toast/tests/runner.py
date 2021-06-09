@@ -39,6 +39,7 @@ from . import ops_memory_counter as test_ops_memory_counter
 from . import ops_pointing_healpix as test_ops_pointing_healpix
 from . import ops_sim_tod_noise as test_ops_sim_tod_noise
 from . import ops_sim_tod_dipole as test_ops_sim_tod_dipole
+from . import ops_sim_tod_atm as test_ops_sim_tod_atm
 from . import ops_sim_tod_conviqt as test_ops_sim_tod_conviqt
 
 from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
@@ -160,6 +161,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_pointing_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_noise))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_dipole))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_atm))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_conviqt))
 
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_totalconvolve))

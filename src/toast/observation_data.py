@@ -167,6 +167,8 @@ class DetectorData(object):
 
     @property
     def data(self):
+        if not hasattr(self, "_data"):
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         return self._data
 
     @property
@@ -288,6 +290,8 @@ class DetectorData(object):
             return view
 
     def __getitem__(self, key):
+        if not hasattr(self, "_data"):
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         view = self._get_view(key)
         return self._data[view]
 
@@ -296,6 +300,8 @@ class DetectorData(object):
         return
 
     def __setitem__(self, key, value):
+        if not hasattr(self, "_data"):
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         view = self._get_view(key)
         self._data[view] = value
 
@@ -310,6 +316,8 @@ class DetectorData(object):
             (DetectorData):  A new instance whose data is a view of the current object.
 
         """
+        if not hasattr(self, "_data"):
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         full_view = self._get_view(key)
         view_dets = self.detectors[full_view[0]]
         return DetectorData(

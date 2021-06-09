@@ -79,32 +79,6 @@ def main():
     # Create the (initially empty) data
     data = toast.Data(comm=toast_comm)
 
-    # Set up some operators that we are going to use later in both
-    # Simulation and Reduction.
-    #---------------------------------------------------------------
-
-    # Construct a "perfect" noise model just from the focalplane parameters
-    default_model = toast.ops.DefaultNoiseModel()
-
-    # Set up detector pointing.  This just uses the focalplane offsets.
-    det_pointing = toast.ops.PointingDetectorSimple()
-
-    # Elevation-modulated noise model.
-    elevation_model = toast.ops.ElevationNoise(
-        noise_model=default_model.noise_model,
-        out_model="el_weighted_model",
-        detector_pointing=det_pointing,
-        view=det_pointing.view
-    )
-
-    # Set up the pointing matrix.  We will use the same pointing matrix for the
-    # template solve and the final binning.
-    pointing = toast.ops.PointingHealpix(
-        nside=2048, 
-        mode="IQU",
-        detector_pointing=det_pointing
-    )
-
     # Simulate data
     #---------------------------------------------------------------
 
@@ -115,11 +89,36 @@ def main():
     )
     sim_ground.apply(data)
 
-    # Create a default noise model from focalplane parameters
+    # Construct a "perfect" noise model just from the focalplane parameters
+    default_model = toast.ops.DefaultNoiseModel()
     default_model.apply(data)
 
-    # Modulate the noise model by the elevation
+    # Set up detector pointing.  This just uses the focalplane offsets.
+    det_pointing_azel = toast.ops.PointingDetectorSimple(
+        boresight=sim_ground.boresight_azel,
+        quats="quats_azel"
+    )
+    det_pointing_radec = toast.ops.PointingDetectorSimple(
+        boresight=sim_ground.boresight_radec,
+        quats="quats_radec"
+    )
+
+    # Elevation-modulated noise model.
+    elevation_model = toast.ops.ElevationNoise(
+        noise_model=default_model.noise_model,
+        out_model="el_weighted_model",
+        detector_pointing=det_pointing_azel,
+        view=det_pointing_azel.view
+    )
     elevation_model.apply(data)
+
+    # Set up the pointing matrix.  We will use the same pointing matrix for the
+    # template solve and the final binning.
+    pointing = toast.ops.PointingHealpix(
+        nside=2048, 
+        mode="IQU",
+        detector_pointing=det_pointing_radec
+    )
 
     # Simulate sky signal from a map and accumulate.
     # scan_map = toast.ops.ScanHealpix(
@@ -128,11 +127,15 @@ def main():
     # )
     # scan_map.apply(data)
 
-    # FIXME:  Add atmosphere, ground pickup, etc here.
-
     # Simulate detector noise and accumulate.
-    sim_noise = toast.ops.SimNoise()
+    sim_noise = toast.ops.SimNoise(noise_model=elevation_model.out_model)
     sim_noise.apply(data)
+
+    # Simulate atmosphere signal
+    sim_atm = toast.ops.SimAtmosphere(
+        detector_pointing=det_pointing_azel
+    )
+    sim_atm.apply(data)
 
     # Reduce data
     #---------------------------------------------------------------

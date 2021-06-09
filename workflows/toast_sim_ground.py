@@ -162,16 +162,22 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     ops.default_model.apply(data)
 
+    # Set up detector pointing in both Az/El and RA/DEC
+
+    ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
+    ops.det_pointing_radec.boresight = ops.sim_ground.boresight_radec
+
     # Create the Elevation modulated noise model
 
-    ops.elevation_model.detector_pointing = ops.det_pointing
-    ops.elevation_model.view = ops.det_pointing.view
+    ops.elevation_model.noise_model = ops.default_model.noise_model
+    ops.elevation_model.detector_pointing = ops.det_pointing_azel
+    ops.elevation_model.view = ops.det_pointing_azel.view
     ops.elevation_model.apply(data)
 
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
-    ops.pointing.detector_pointing = ops.det_pointing
-    ops.pointing_final.detector_pointing = ops.det_pointing
+    ops.pointing.detector_pointing = ops.det_pointing_radec
+    ops.pointing_final.detector_pointing = ops.det_pointing_radec
 
     ops.binner.pointing = ops.pointing
 
@@ -197,7 +203,13 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     # Simulate detector noise
 
+    ops.sim_noise.noise_model = ops.elevation_model.out_model
     ops.sim_noise.apply(data)
+
+    # Simulate atmosphere
+
+    ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
+    ops.sim_atmosphere.apply(data)
 
     return data
 
@@ -209,8 +221,8 @@ def reduce_data(job, args, data):
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
 
-    ops.binner.noise_model = ops.default_model.noise_model
-    ops.binner_final.noise_model = ops.default_model.noise_model
+    ops.binner.noise_model = ops.elevation_model.out_model
+    ops.binner_final.noise_model = ops.elevation_model.out_model
 
     ops.mapmaker.binning = ops.binner
     ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
@@ -247,15 +259,21 @@ def main():
 
     operators = [
         toast.ops.SimGround(name="sim_ground"),
-        toast.ops.DefaultNoiseModel(name="default_model", noise_model="default_model"),
+        toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(
             name="elevation_model",
-            noise_model="default_model",
-            out_model="el_weighted_model",
         ),
+        toast.ops.PointingDetectorSimple(
+            name="det_pointing_azel",
+            quats="quats_azel"
+        )
+        toast.ops.PointingDetectorSimple(
+            name="det_pointing_radec",
+            quats="quats_radec"
+        )
         toast.ops.ScanHealpix(name="scan_map"),
-        toast.ops.SimNoise(name="sim_noise", noise_model="el_weighted_model"),
-        toast.ops.PointingDetectorSimple(name="det_pointing"),
+        toast.ops.SimNoise(name="sim_noise"),
+        toast.ops.SimAtmosphere(name="sim_atmosphere"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),

@@ -123,7 +123,7 @@ class GroundSite(Site):
         self.weather = weather
 
     def __repr__(self):
-        value = "<GroundSite '{}' : uid = {}, lon = {}, lat = {}, alt = {} m, weather = {}>".format(
+        value = "<GroundSite '{}' : uid = {}, lon = {}, lat = {}, alt = {}, weather = {}>".format(
             self.name,
             self.uid,
             self.earthloc.lon,

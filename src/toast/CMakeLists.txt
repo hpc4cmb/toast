@@ -97,6 +97,7 @@ install(FILES
     instrument_sim.py
     coordinates.py
     noise.py
+    atm.py
     dipole.py
     noise_sim.py
     observation.py

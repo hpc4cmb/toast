@@ -154,6 +154,10 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     ops.default_model.apply(data)
 
+    # Set up detector pointing
+
+    ops.det_pointing.boresight = ops.sim_satellite.boresight
+
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
     ops.pointing.detector_pointing = ops.det_pointing
@@ -183,6 +187,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     # Simulate detector noise
 
+    ops.sim_noise.noise_model = ops.default_model.noise_model
     ops.sim_noise.apply(data)
 
     return data

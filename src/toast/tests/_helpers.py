@@ -6,6 +6,10 @@ import os
 
 from datetime import datetime
 
+import tempfile
+
+import shutil
+
 import numpy as np
 
 import healpy as hp
@@ -22,7 +26,11 @@ from ..instrument import Focalplane, Telescope, GroundSite, SpaceSite
 
 from ..instrument_sim import fake_hexagon_focalplane
 
+from ..schedule import GroundSchedule
+
 from ..schedule_sim_satellite import create_satellite_schedule
+
+from ..schedule_sim_ground import run_scheduler
 
 from ..observation import DetectorData, Observation
 
@@ -108,22 +116,23 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
     return Telescope("test", focalplane=fp, site=site)
 
 
-# def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz):
-#     """Create a fake ground telescope with at least one detector per process."""
-#     npix = 1
-#     ring = 1
-#     while 2 * npix < group_size:
-#         npix += 6 * ring
-#         ring += 1
-#     fp = fake_hexagon_focalplane(
-#         n_pix=npix,
-#         sample_rate=sample_rate,
-#         f_min=1.0e-5 * u.Hz,
-#         # net=1.0,
-#         net=0.5,
-#         f_knee=(sample_rate / 2000.0),
-#     )
-#     return Telescope("test", focalplane=fp)
+def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1):
+    """Create a fake ground telescope with at least one detector per process."""
+    npix = 1
+    ring = 1
+    while 2 * npix < group_size * pixel_per_process:
+        npix += 6 * ring
+        ring += 1
+    fp = fake_hexagon_focalplane(
+        n_pix=npix,
+        sample_rate=sample_rate,
+        psd_fmin=1.0e-5 * u.Hz,
+        psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+        psd_fknee=(sample_rate / 2000.0),
+    )
+
+    site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
+    return Telescope("telescope", focalplane=fp, site=site)
 
 
 def create_satellite_empty(mpicomm, obs_per_group=1, samples=10):
@@ -169,7 +178,8 @@ def create_satellite_data(
     Args:
         mpicomm (MPI.Comm): the MPI communicator (or None).
         obs_per_group (int): the number of observations assigned to each group.
-        samples (int): number of samples per observation.
+        sample_rate (Quantity): the sample rate.
+        obs_time (Quantity): the time length of one observation.
 
     Returns:
         toast.Data: the distributed data with named observations.
@@ -556,3 +566,79 @@ def fake_flags(data, shared_name="flags", shared_val=1, det_name="flags", det_va
         for det in ob.local_detectors:
             ob.detdata[det_name][det, :half] = det_val
 
+
+def create_ground_data(
+    mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None
+):
+    """Create a data object with a simple ground sim.
+
+    Use the specified MPI communicator to attempt to create 2 process groups.  Create
+    a fake telescope and run the ground sim to make some observations for each
+    group.  This is useful for testing many operators that need some pre-existing
+    observations with boresight pointing.
+
+    Args:
+        mpicomm (MPI.Comm): the MPI communicator (or None).
+        sample_rate (Quantity): the sample rate.
+
+    Returns:
+        toast.Data: the distributed data with named observations.
+
+    """
+    toastcomm = create_comm(mpicomm)
+    data = Data(toastcomm)
+
+    tele = create_ground_telescope(toastcomm.group_size, sample_rate=sample_rate)
+
+    # Create a schedule.
+
+    # FIXME: change this once the ground scheduler supports in-memory creation of the 
+    # schedule.
+
+    schedule = None
+
+    if mpicomm is None or mpicomm.rank == 0:
+        tdir = temp_dir
+        if tdir is None:
+            tdir = tempfile.mkdtemp()
+
+        sch_file = os.path.join(tdir, "ground_schedule.txt")
+        run_scheduler(
+            opts=[
+                "--site-name",
+                tele.site.name,
+                "--telescope",
+                tele.name,
+                "--site-lon",
+                "{}".format(tele.site.earthloc.lon.to_value(u.degree)),
+                "--site-lat",
+                "{}".format(tele.site.earthloc.lat.to_value(u.degree)),
+                "--site-alt",
+                "{}".format(tele.site.earthloc.height.to_value(u.meter)),
+                "--patch",
+                "small_patch,1,40,-40,44,-44",
+                "--start",
+                "2020-01-01 00:00:00",
+                "--stop",
+                "2020-01-01 06:00:00",
+                "--out",
+                sch_file,
+            ]
+        )
+        schedule = GroundSchedule()
+        schedule.read(sch_file)
+        if temp_dir is None:
+            shutil.rmtree(tdir)
+    if mpicomm is not None:
+        schedule = mpicomm.bcast(schedule, root=0)
+
+    sim_ground = ops.SimGround(
+        name="sim_ground",
+        telescope=tele,
+        schedule=schedule,
+        hwp_rpm=1.0,
+        weather="atacama",
+    )
+    sim_ground.apply(data)
+
+    return data

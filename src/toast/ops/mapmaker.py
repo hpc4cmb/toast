@@ -84,7 +84,7 @@ class MapMaker(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
+        "signal", help="Observation detdata key for the timestream data"
     )
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
@@ -226,10 +226,6 @@ class MapMaker(Operator):
         if comm is not None:
             rank = comm.rank
 
-        # Check that the detector data is set
-        if self.det_data is None:
-            raise RuntimeError("You must set the det_data trait before calling exec()")
-
         # Check map binning
         map_binning = self.map_binning
         if self.map_binning is None or not self.map_binning.enabled:
@@ -273,7 +269,7 @@ class MapMaker(Operator):
 
         timer.start()
 
-        if len(self.template_matrix.templates) > 0:
+        if self.template_matrix is not None and len(self.template_matrix.templates) > 0:
             # We are solving for template amplitudes
 
             self.binning.covariance = self.solver_cov_name
@@ -580,7 +576,7 @@ class MapMaker(Operator):
         pre_pipe = None
         map_binning.binned = self.map_name
 
-        if len(self.template_matrix.templates) > 0:
+        if self.template_matrix is not None and len(self.template_matrix.templates) > 0:
             # We have some templates to subtract
             temp_project = "{}_temp_project".format(self.name)
 
@@ -667,7 +663,8 @@ class MapMaker(Operator):
     def _requires(self):
         # This operator requires everything that its sub-operators needs.
         req = self.binning.requires()
-        req.update(self.template_matrix.requires())
+        if self.template_matrix is not None:
+            req.update(self.template_matrix.requires())
         if self.map_binning is not None:
             req.update(self.map_binning.requires())
         req["detdata"].append(self.det_data)
