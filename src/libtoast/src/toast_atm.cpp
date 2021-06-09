@@ -20,6 +20,7 @@
 #include <functional>
 #include <cmath>
 #include <algorithm>
+#include <cholmod_gpu.h>
 
 
 #ifdef HAVE_CHOLMOD
@@ -51,7 +52,22 @@ toast::CholmodCommon & toast::CholmodCommon::get() {
 toast::CholmodCommon::CholmodCommon() {
     // Initialize cholmod
     chcommon = &cholcommon;
-    cholmod_start(chcommon);
+    cholmod_l_start(chcommon);
+
+    // TODO activate gpu
+    chcommon->useGPU = true;
+    // see page 13 of the SPQR user guide
+    /*size_t total_mem, available_mem;
+    cholmod_l_gpu_memorysize(&total_mem, &available_mem, chcommon);
+    chcommon->gpuMemorySize = available_mem;
+    if (chcommon->gpuMemorySize <= 1)
+    {
+        throw std::runtime_error("CholmodCommon no GPU available.");
+    }
+    else
+    {
+        std::cout << "CholmodCommon memory available: " << available_mem << std::endl;
+    }*/
 
     if (atm_verbose()) {
         // TK: What is the cost of this level?  Do we need another more verbose switch?
@@ -65,7 +81,7 @@ toast::CholmodCommon::CholmodCommon() {
 }
 
 toast::CholmodCommon::~CholmodCommon() {
-    cholmod_finish(chcommon);
+    cholmod_l_finish(chcommon);
 }
 
 // This function is passing arguments by reference and is using precomputed values
