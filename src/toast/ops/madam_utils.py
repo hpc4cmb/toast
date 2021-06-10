@@ -85,25 +85,27 @@ def stage_local(
             if shared_flags is not None:
                 flags |= ob.view[view].shared[shared_flags] & shared_mask
 
-            for idet, det in enumerate(dets):
+            toast_idet = -1
+            for madam_idet, det in enumerate(dets):
                 if det not in ob.local_detectors:
                     continue
+                toast_idet += 1
                 slc = slice(
-                    (idet * nsamp + offset) * nnz,
-                    (idet * nsamp + offset + len(vw[idet])) * nnz,
+                    (madam_idet * nsamp + offset) * nnz,
+                    (madam_idet * nsamp + offset + len(vw[toast_idet])) * nnz,
                     1,
                 )
                 if nnz > 1:
-                    madam_buffer[slc] = vw[idet].flatten()[::nnz_stride]
+                    madam_buffer[slc] = vw[toast_idet].flatten()[::nnz_stride]
                 else:
-                    madam_buffer[slc] = vw[idet].flatten()
+                    madam_buffer[slc] = vw[toast_idet].flatten()
                 detflags = None
                 if do_flags:
                     if det_flags is None:
                         detflags = flags
                     else:
                         detflags = np.copy(flags)
-                        detflags |= ob.view[view].detdata[det_flags][idet] & det_mask
+                        detflags |= ob.view[view].detdata[det_flags][toast_idet] & det_mask
                     madam_buffer[slc][detflags != 0] = -1
             interval += 1
         if do_purge:
@@ -181,30 +183,32 @@ def restore_local(
             ob.detdata.create(detdata_name, dtype=detdata_dtype, sample_shape=(nnz,))
         for vw in ob.view[view].detdata[detdata_name]:
             offset = interval_starts[interval]
-            for idet, det in enumerate(dets):
+            toast_idet = -1
+            for madam_idet, det in enumerate(dets):
                 if det not in ob.local_detectors:
                     continue
+                toast_idet += 1
                 slc = slice(
-                    (idet * nsamp + offset) * nnz,
-                    (idet * nsamp + offset + len(vw[idet])) * nnz,
+                    (madam_idet * nsamp + offset) * nnz,
+                    (madam_idet * nsamp + offset + len(vw[toast_idet])) * nnz,
                     1,
                 )
                 if nnz > 1:
-                    vw[idet] = madam_buffer[slc].reshape((-1, nnz))
+                    vw[toast_idet] = madam_buffer[slc].reshape((-1, nnz))
                 else:
                     # If this is the pointing pixel indices, AND if the original was
                     # in RING ordering, then make a temporary array to do the conversion
                     if nside > 0 and not nest:
-                        temp_pixels = -1 * np.ones(len(vw[idet]), dtype=detdata_dtype)
+                        temp_pixels = -1 * np.ones(len(vw[toast_idet]), dtype=detdata_dtype)
                         npix = 12 * nside ** 2
                         good = np.logical_and(
                             madam_buffer[slc] >= 0, madam_buffer[slc] < npix
                         )
                         temp_pixels[good] = madam_buffer[slc][good]
                         temp_pixels[good] = hp.nest2ring(nside, temp_pixels[good])
-                        vw[idet] = temp_pixels
+                        vw[toast_idet] = temp_pixels
                     else:
-                        vw[idet] = madam_buffer[slc]
+                        vw[toast_idet] = madam_buffer[slc]
             interval += 1
     return
 
