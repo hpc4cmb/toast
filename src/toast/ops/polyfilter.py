@@ -20,7 +20,8 @@ from .. import qarray as qa
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
-class OpPolyFilter2D(Operator):
+@trait_docs
+class PolyFilter2D(Operator):
     """Operator to regress out 2D polynomials across the focal plane."""
 
     def __init__(
@@ -248,8 +249,8 @@ class OpPolyFilter2D(Operator):
 
         return
 
-
-class OpPolyFilter(Operator):
+@trait_docs
+class PolyFilter(Operator):
     """Operator which applies polynomial filtering to the TOD.
 
     This applies polynomial filtering to the valid intervals of each TOD.
@@ -278,57 +279,91 @@ class OpPolyFilter(Operator):
 
     """
 
-    def __init__(
-        self,
-        order=1,
-        pattern=r".*",
-        name=None,
-        common_flag_name=None,
-        common_flag_mask=255,
-        flag_name=None,
-        flag_mask=255,
-        poly_flag_mask=1,
-        intervals="intervals",
-    ):
-        self._order = order
-        self._pattern = pattern
-        self._name = name
-        self._common_flag_name = common_flag_name
-        self._common_flag_mask = common_flag_mask
-        self._flag_name = flag_name
-        self._flag_mask = flag_mask
-        self._poly_flag_mask = poly_flag_mask
-        self._intervals = intervals
+    API = Int(0, help="Internal interface version for this operator")
 
-        # Call the parent class constructor.
-        super().__init__()
+    det_data = Unicode("signal", help="Observation detdata key apply the gain error to")
+
+    pattern = Unicode(
+        f".*",
+        allow_none=True,
+        help="Regex pattern to match against detector names. Only detectors that "
+        "match the pattern are scrambled.",
+    )
+    
+    order = Int(1, allow_none=False, help="Polynomial order")
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to use"
+    )
+
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        return
 
     @function_timer
-    def exec(self, data):
-        """Apply the polynomial filter to the signal.
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
 
-        Args:
-            data (toast.Data): The distributed data.
+        if self.pattern is None:
+            pat = None
+        else:
+            pat = re.compile(self.pattern)
 
-        """
         for obs in data.obs:
-            tod = obs["tod"]
-            if self._intervals in obs:
-                intervals = obs[self._intervals]
-            else:
-                intervals = None
-            local_intervals = tod.local_intervals(intervals)
-            if len(local_intervals) == 0:
-                # No intervals to filter
+            # Get the detectors we are using for this observation
+            dets = obs.select_local_detectors(detectors)
+            if len(dets) == 0:
+                # Nothing to do for this observation
                 continue
-            common_ref = tod.local_common_flags(self._common_flag_name)
 
-            pat = re.compile(self._pattern)
+            if self.view is not None:
+                if self.view not in ob.intervals:
+                    msg = "View '{}' does not exist in observation {}".format(
+                        self.view, ob.name
+                    )
+                    raise RuntimeError(msg)
+            intervals = ob.intervals[self.view]:
 
-            for det in tod.local_dets:
-                # Test the detector pattern
-                if pat.match(det) is None:
-                    continue
+            shared_flags = ob.view[self.view].shared[self.shared_flags] & self.shared_flag_mask
+
+            for view in obs.view[self.view].detdata[self.detdata_name]:
+                shared_flags = ob.view[self.view].shared[self.shared_flags] & self.shared_flag_mask
+ 
+ 
+                for idet, det in enumerate(dets):
+                    # Test the detector pattern
+                    if pat.match(det) is None:
+                        continue
+
+                    detflags |= ob.view[self.view].detdata[self.det_flags][idet] & self.det_flag_mask
 
                 ref = tod.local_signal(det, self._name)
                 flag_ref = tod.local_flags(det, self._flag_name)
