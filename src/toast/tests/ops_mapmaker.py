@@ -28,6 +28,20 @@ from ..pixels_io import write_healpix_fits
 from ._helpers import create_outdir, create_satellite_data, create_fake_sky
 
 
+def add_flags(data):
+    """ Add some flagging """
+    shared_flags = "flags"
+    det_flags = "flags"
+    for obs in data.obs:
+        common_flags = obs.shared[shared_flags]
+        common_flags[::3] |= 255
+        obs.detdata.ensure(det_flags, dtype=np.uint8)
+        for idet, det in enumerate(obs.select_local_detectors()):
+            flags = obs.detdata[det_flags][idet]
+            flags[::2] |= 255
+    return shared_flags, det_flags
+
+
 class MapmakerTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -70,6 +84,8 @@ class MapmakerTest(MPITestCase):
         )
         scanner.apply(data)
 
+        shared_flags, det_flags = add_flags(data)
+
         # Now clear the pointing and reset things for use with the mapmaking test later
         delete_pointing = ops.Delete(detdata=[pointing.pixels, pointing.weights])
         delete_pointing.apply(data)
@@ -88,6 +104,8 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            shared_flags=shared_flags,
+            det_flags=det_flags,
             pointing=pointing,
             noise_model=default_model.noise_model,
         )
@@ -110,6 +128,8 @@ class MapmakerTest(MPITestCase):
         mapper = ops.MapMaker(
             name="test1",
             det_data="signal",
+            shared_flags=shared_flags,
+            det_flags=det_flags,
             binning=binner,
             template_matrix=tmatrix,
         )
@@ -126,12 +146,8 @@ class MapmakerTest(MPITestCase):
         del data
         return
 
-    def test_compare_madam_noprior(self):
-        if not ops.madam.available():
-            print("libmadam not available, skipping destriping comparison")
-            return
-
-        testdir = os.path.join(self.outdir, "compare_madam_noprior")
+    def test_flagging(self):
+        testdir = os.path.join(self.outdir, "compare_flagging")
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
 
@@ -180,8 +196,173 @@ class MapmakerTest(MPITestCase):
         sim_noise.apply(data)
 
         # Set up binning operator for solving
+        unflagged_binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            pointing=pointing,
+            noise_model=default_model.noise_model,
+        )
+
+        # Set up template matrix with just an offset template.
+
+        # Use 1/10 of an observation as the baseline length.  Make it not evenly
+        # divisible in order to test handling of the final amplitude.
+        ob_time = data.obs[0].shared["times"][-1] - data.obs[0].shared["times"][0]
+        # step_seconds = float(int(ob_time / 10.0))
+        step_seconds = 5.0
+        tmpl = templates.Offset(
+            times="times",
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+        )
+
+        tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        # Map maker
+        unflagged_mapper = ops.MapMaker(
+            name="unflagged_toastmap",
+            det_data="signal",
+            binning=unflagged_binner,
+            template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-6,
+            map_rcond_threshold=1.0e-6,
+            iter_max=10,
+        )
+
+        # Make the map
+        unflagged_mapper.apply(data)
+
+        # Add flags
+        shared_flags, det_flags = add_flags(data)
+
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            shared_flags=shared_flags,
+            det_flags=det_flags,
+            pointing=pointing,
+            noise_model=default_model.noise_model,
+        )
+        mapper = ops.MapMaker(
+            name="flagged_toastmap",
+            det_data="signal",
+            shared_flags=shared_flags,
+            det_flags=det_flags,
+            binning=binner,
+            template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-6,
+            map_rcond_threshold=1.0e-6,
+            iter_max=10,
+        )
+
+        # Make the map
+        mapper.apply(data)
+
+        # Outputs
+        unflagged_hits = "unflagged_toastmap_hits"
+        flagged_hits = "flagged_toastmap_hits"
+
+        # Write map to disk so we can load the whole thing on one process.
+
+        unflagged_hit_path = os.path.join(testdir, "unflagged_hits.fits")
+        flagged_hit_path = os.path.join(testdir, "flagged_hits.fits")
+        write_healpix_fits(data[unflagged_hits], unflagged_hit_path, nest=True)
+        write_healpix_fits(data[flagged_hits], flagged_hit_path, nest=True)
+
+        fail = False
+
+        if data.comm.world_rank == 0:
+            set_matplotlib_backend()
+            import matplotlib.pyplot as plt
+
+            # Compare hit maps
+
+            unflagged_hits = hp.read_map(unflagged_hit_path, field=None, nest=True)
+            flagged_hits = hp.read_map(flagged_hit_path, field=None, nest=True)
+            diff_hits = unflagged_hits - flagged_hits
+
+            outfile = os.path.join(testdir, "unflagged_hits.png")
+            hp.mollview(unflagged_hits, xsize=1600, nest=True)
+            plt.savefig(outfile)
+            plt.close()
+            outfile = os.path.join(testdir, "flagged_hits.png")
+            hp.mollview(flagged_hits, xsize=1600, nest=True)
+            plt.savefig(outfile)
+            plt.close()
+            outfile = os.path.join(testdir, "diff_hits.png")
+            hp.mollview(diff_hits, xsize=1600, nest=True)
+            plt.savefig(outfile)
+            plt.close()
+
+            if np.sum(unflagged_hits) == np.sum(flagged_hits):
+                fail = True
+
+        if data.comm.comm_world is not None:
+            fail = data.comm.comm_world.bcast(fail, root=0)
+
+        self.assertFalse(fail)
+
+        del data
+        return
+
+    def test_compare_madam_noprior(self):
+        if not ops.madam.available():
+            print("libmadam not available, skipping destriping comparison")
+            return
+
+        testdir = os.path.join(self.outdir, "compare_madam_noprior")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(
+            self.comm, obs_per_group=self.obs_per_group, obs_time=10.0 * u.minute
+        )
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=16,
+            nest=True,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pointing.apply(data)
+
+        # Create fake polarized sky pixel values locally
+        create_fake_sky(data, "pixel_dist", "fake_map")
+
+        # Scan map into timestreams
+        scanner = ops.ScanMap(
+            det_data="signal",
+            pixels=pointing.pixels,
+            weights=pointing.weights,
+            map_key="fake_map",
+        )
+        scanner.apply(data)
+
+        shared_flags, det_flags = add_flags(data)
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(detdata=[pointing.pixels, pointing.weights])
+        delete_pointing.apply(data)
+        pointing.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data="signal"
+        )
+        sim_noise.apply(data)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            shared_flags=shared_flags,
+            det_flags=det_flags,
             pointing=pointing,
             noise_model=default_model.noise_model,
         )
@@ -205,6 +386,8 @@ class MapmakerTest(MPITestCase):
         mapper = ops.MapMaker(
             name="toastmap",
             det_data="signal",
+            shared_flags=shared_flags,
+            det_flags=det_flags,
             binning=binner,
             template_matrix=tmatrix,
             solve_rcond_threshold=1.0e-6,
@@ -253,6 +436,8 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data="signal",
+            shared_flags=shared_flags,
+            det_flags=det_flags,
             pixels=pointing.pixels,
             weights=pointing.weights,
             pixels_nested=pointing.nest,

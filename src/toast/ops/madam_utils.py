@@ -76,14 +76,21 @@ def stage_local(
                 "Internal error on madam copy.  Only pixel indices should be flagged."
             )
     for ob in data.obs:
-        for vw in ob.view[view].detdata[detdata_name]:
+        views = ob.view[view]
+        for iview in range(len(views)):
+            view_samples = None
+            if views[iview].start is None:
+                # There is one view of the whole obs
+                nsamples_view = ob.n_local_samples
+            else:
+                nsamples_view = views[iview].stop - views[iview].start
             offset = interval_starts[interval]
             flags = None
             if do_flags:
                 # Using flags
-                flags = np.zeros(len(vw), dtype=np.uint8)
+                flags = np.zeros(nsamples_view, dtype=np.uint8)
             if shared_flags is not None:
-                flags |= ob.view[view].shared[shared_flags] & shared_mask
+                flags |= views.shared[shared_flags][iview] & shared_mask
 
             toast_idet = -1
             for madam_idet, det in enumerate(dets):
@@ -92,20 +99,21 @@ def stage_local(
                 toast_idet += 1
                 slc = slice(
                     (madam_idet * nsamp + offset) * nnz,
-                    (madam_idet * nsamp + offset + len(vw[toast_idet])) * nnz,
+                    (madam_idet * nsamp + offset + nsamples_view) * nnz,
                     1,
                 )
+                signal = views.detdata[detdata_name][iview][toast_idet]
                 if nnz > 1:
-                    madam_buffer[slc] = vw[toast_idet].flatten()[::nnz_stride]
+                    madam_buffer[slc] = signal.flatten()[::nnz_stride]
                 else:
-                    madam_buffer[slc] = vw[toast_idet].flatten()
+                    madam_buffer[slc] = signal.flatten()
                 detflags = None
                 if do_flags:
                     if det_flags is None:
                         detflags = flags
                     else:
                         detflags = np.copy(flags)
-                        detflags |= ob.view[view].detdata[det_flags][toast_idet] & det_mask
+                        detflags |= views.detdata[det_flags][iview][toast_idet] & det_mask
                     madam_buffer[slc][detflags != 0] = -1
             interval += 1
         if do_purge:
