@@ -237,7 +237,9 @@ class MapmakerTest(MPITestCase):
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
             shared_flags=shared_flags,
+            shared_flags_mask=255,
             det_flags=det_flags,
+            det_flag_mask=255,
             pointing=pointing,
             noise_model=default_model.noise_model,
         )
