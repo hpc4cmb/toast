@@ -6,6 +6,8 @@ import os
 
 import numpy as np
 
+import healpy as hp
+
 from ..utils import Logger, Timer, GlobalTimers, dtype_to_aligned
 
 from ..timing import function_timer
@@ -76,35 +78,45 @@ def stage_local(
                 "Internal error on madam copy.  Only pixel indices should be flagged."
             )
     for ob in data.obs:
-        for vw in ob.view[view].detdata[detdata_name]:
+        # Loop over views
+        views = ob.view[view]
+        for ivw, vw in enumerate(views):
+            view_samples = None
+            if vw.start is None:
+                # This is a view of the whole obs
+                view_samples = ob.n_local_samples
+            else:
+                view_samples = vw.stop - vw.start
             offset = interval_starts[interval]
             flags = None
             if do_flags:
                 # Using flags
-                flags = np.zeros(len(vw), dtype=np.uint8)
+                flags = np.zeros(view_samples, dtype=np.uint8)
             if shared_flags is not None:
-                flags |= ob.view[view].shared[shared_flags] & shared_mask
+                flags |= views.shared[shared_flags][ivw] & shared_mask
 
+            ldet = 0
             for idet, det in enumerate(dets):
                 if det not in ob.local_detectors:
                     continue
                 slc = slice(
                     (idet * nsamp + offset) * nnz,
-                    (idet * nsamp + offset + len(vw[idet])) * nnz,
+                    (idet * nsamp + offset + view_samples) * nnz,
                     1,
                 )
                 if nnz > 1:
-                    madam_buffer[slc] = vw[idet].flatten()[::nnz_stride]
+                    madam_buffer[slc] = views.detdata[detdata_name][ivw][ldet].flatten()[::nnz_stride]
                 else:
-                    madam_buffer[slc] = vw[idet].flatten()
+                    madam_buffer[slc] = views.detdata[detdata_name][ivw][ldet].flatten()
                 detflags = None
                 if do_flags:
                     if det_flags is None:
                         detflags = flags
                     else:
                         detflags = np.copy(flags)
-                        detflags |= ob.view[view].detdata[det_flags][idet] & det_mask
+                        detflags |= views.detdata[det_flags][ivw][ldet] & det_mask
                     madam_buffer[slc][detflags != 0] = -1
+                ldet += 1
             interval += 1
         if do_purge:
             del ob.detdata[detdata_name]
@@ -179,32 +191,42 @@ def restore_local(
             ob.detdata.create(detdata_name, dtype=detdata_dtype)
         else:
             ob.detdata.create(detdata_name, dtype=detdata_dtype, sample_shape=(nnz,))
-        for vw in ob.view[view].detdata[detdata_name]:
+        # Loop over views
+        views = ob.view[view]
+        for ivw, vw in enumerate(views):
+            view_samples = None
+            if vw.start is None:
+                # This is a view of the whole obs
+                view_samples = ob.n_local_samples
+            else:
+                view_samples = vw.stop - vw.start
             offset = interval_starts[interval]
+            ldet = 0
             for idet, det in enumerate(dets):
                 if det not in ob.local_detectors:
                     continue
                 slc = slice(
                     (idet * nsamp + offset) * nnz,
-                    (idet * nsamp + offset + len(vw[idet])) * nnz,
+                    (idet * nsamp + offset + view_samples) * nnz,
                     1,
                 )
                 if nnz > 1:
-                    vw[idet] = madam_buffer[slc].reshape((-1, nnz))
+                    views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc].reshape((-1, nnz))
                 else:
                     # If this is the pointing pixel indices, AND if the original was
                     # in RING ordering, then make a temporary array to do the conversion
                     if nside > 0 and not nest:
-                        temp_pixels = -1 * np.ones(len(vw[idet]), dtype=detdata_dtype)
+                        temp_pixels = -1 * np.ones(view_samples, dtype=detdata_dtype)
                         npix = 12 * nside ** 2
                         good = np.logical_and(
                             madam_buffer[slc] >= 0, madam_buffer[slc] < npix
                         )
                         temp_pixels[good] = madam_buffer[slc][good]
                         temp_pixels[good] = hp.nest2ring(nside, temp_pixels[good])
-                        vw[idet] = temp_pixels
+                        views.detdata[detdata_name][ivw][ldet] = temp_pixels
                     else:
-                        vw[idet] = madam_buffer[slc]
+                        views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc]
+                ldet += 1
             interval += 1
     return
 

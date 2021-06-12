@@ -19,7 +19,7 @@ from ..vis import set_matplotlib_backend
 
 from ..pixels import PixelDistribution, PixelData
 
-from ._helpers import create_outdir, create_satellite_data, create_fake_sky
+from ._helpers import create_outdir, create_satellite_data, create_fake_sky, fake_flags
 
 
 class MadamTest(MPITestCase):
@@ -95,6 +95,9 @@ class MadamTest(MPITestCase):
         sim_noise = ops.SimNoise(noise_model="noise_model", out="signal")
         sim_noise.apply(data)
 
+        # Make fake flags
+        fake_flags(data)
+
         # if data.comm.world_rank == 0:
         #     set_matplotlib_backend()
         #     import matplotlib.pyplot as plt
@@ -129,9 +132,12 @@ class MadamTest(MPITestCase):
         for ob in data.obs:
             rms[ob.name] = dict()
             for det in ob.local_detectors:
+                flags = np.array(ob.shared["flags"])
+                flags |= ob.detdata["flags"][det]
+                good = (flags == 0)
                 # Add an offset to the data
                 ob.detdata["signal"][det] += 500.0
-                rms[ob.name][det] = np.std(ob.detdata["signal"][det])
+                rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
 
         # if data.comm.world_rank == 0:
         #     set_matplotlib_backend()
@@ -196,6 +202,12 @@ class MadamTest(MPITestCase):
             copy_groups=2,
             purge_det_data=False,
             purge_pointing=True,
+            restore_det_data=False,
+            restore_pointing=True,
+            shared_flags="flags",
+            shared_flag_mask=1,
+            det_flags="flags",
+            det_flag_mask=1,
         )
         madam.apply(data)
 
@@ -229,7 +241,11 @@ class MadamTest(MPITestCase):
 
         for ob in data.obs:
             for det in ob.local_detectors:
-                check_rms = np.std(ob.detdata["destriped"][det])
+                flags = np.array(ob.shared["flags"])
+                flags |= ob.detdata["flags"][det]
+                good = (flags == 0)
+                check_rms = np.std(ob.detdata["destriped"][det][good])
+                # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(0.9 * check_rms < rms[ob.name][det])
 
         del data
