@@ -349,7 +349,7 @@ class MapMaker(Operator):
                                     > 0,
                                     1,
                                     0,
-                                )
+                                ).astype(views.detdata[self.flag_name][vw].dtype)
 
                 # Now scan any input mask to this same flag field.  We use the second
                 # bit (== 2) for these mask flags.  For the input mask bit we check the

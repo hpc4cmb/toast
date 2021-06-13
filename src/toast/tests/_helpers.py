@@ -530,3 +530,29 @@ def create_fake_beam_alm(
             a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
 
     return a_lm
+
+
+def fake_flags(data, shared_name="flags", shared_val=1, det_name="flags", det_val=1):
+    """Create fake flags.
+
+    This will flag the first half of each detector's data for all observations.
+    """
+
+    for ob in data.obs:
+        ob.detdata.ensure(det_name, sample_shape=(), dtype=np.uint8)
+        if shared_name not in ob.shared:
+            ob.shared.create(
+                shared_name,
+                shape=(ob.n_local_samples,),
+                dtype=np.uint8,
+                comm=ob.comm_col,
+            )
+        half = ob.n_local_samples // 2
+        fshared = None
+        if ob.comm_col_rank == 0:
+            fshared = np.zeros(ob.n_local_samples, dtype=np.uint8)
+            fshared[::100] = shared_val
+        ob.shared[shared_name].set(fshared, offset=(0,), fromrank=0)
+        for det in ob.local_detectors:
+            ob.detdata[det_name][det, :half] = det_val
+

@@ -10,6 +10,8 @@ import traitlets
 
 import numpy as np
 
+import healpy as hp
+
 from astropy import units as u
 
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
@@ -1022,7 +1024,7 @@ class Madam(Operator):
                     self.view,
                     all_dets,
                     self.weights,
-                    weigths_dtype,
+                    weight_dtype,
                     self._madam_pixweights,
                     self._madam_pixweights_raw,
                     interval_starts,
