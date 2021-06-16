@@ -40,7 +40,7 @@ class PolyFilter2D(Operator):
         f".*",
         allow_none=True,
         help="Regex pattern to match against detector names. Only detectors that "
-        "match the pattern are scrambled.",
+        "match the pattern are filtered.",
     )
 
     order = Int(1, allow_none=False, help="Polynomial order")
@@ -295,7 +295,7 @@ class PolyFilter(Operator):
         f".*",
         allow_none=True,
         help="Regex pattern to match against detector names. Only detectors that "
-        "match the pattern are scrambled.",
+        "match the pattern are filtered.",
     )
 
     order = Int(1, allow_none=False, help="Polynomial order")
@@ -383,6 +383,143 @@ class PolyFilter(Operator):
 
                     obs.detdata[self.det_flags][idet][flags] & self.poly_flag_mask
 
+        return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": list(),
+            "shared": [self.shared_flags],
+            "detdata": [self.det_data, self.det_flags],
+            "intervals": [self.view],
+        }
+        return req
+
+    def _provides(self):
+        prov = {
+            "meta": list(),
+            "shared": list(),
+            "detdata": list(),
+        }
+        return prov
+
+    def _accelerators(self):
+        return list()
+
+
+class CommonModeFilter(Operator):
+    """Operator to regress out common mode at each time stamp."""
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    det_data = Unicode("signal", help="Observation detdata key apply the gain error to")
+
+    pattern = Unicode(
+        f".*",
+        allow_none=True,
+        help="Regex pattern to match against detector names. Only detectors that "
+        "match the pattern are filtered.",
+    )
+
+    order = Int(1, allow_none=False, help="Polynomial order")
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to use"
+    )
+
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+
+    focalplane_key = Unicode(None, allow_none=True, help="Which focalplane key to match")
+
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        return
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        """Apply the common mode filter to the signal.
+
+        Args:
+            data (toast.Data): The distributed data.
+
+        """
+        if detectors is not None:
+            raise RuntimeError("CommonModeFilter cannot be run in batch mode")
+
+        pat = re.compile(self.pattern)
+
+        for obs in data.obs:
+            focalplane = obs.telescope.focalplane
+            # communicator for processes with the same sample range
+            comm = obs.comm_col
+
+            detectors = obs.all_detectors
+            if self.focalplane_key is None:
+                values = [None]
+            else:
+                values = set()
+                for det in detectors:
+                    values.add(focalplane[det][self.focalplane_key])
+                values = sorted(values)
+
+            nsample = obs.n_local_samples
+
+            for value in values:
+                local_dets = []
+                for idet, det in enumerate(obs.local_detectors):
+                    if pat.match(det) is None:
+                        continue
+                    if value is not None and \
+                       focalplane[det][self.focalplane_key] != value:
+                        continue
+                    local_dets.append((idet, det))
+
+                template = np.zeros(nsample)
+                hits = np.zeros(nsample)
+                shared_flags = obs.shared[self.shared_flags].data
+                shared_mask = (shared_flags & self.shared_flag_mask) == 0
+                for idet, det in local_dets:
+                    signal = obs.detdata[self.det_data][idet]
+                    det_flags = obs.detdata[self.det_flags][idet]
+                    det_mask = (det_flags & self.det_flag_mask) == 0
+                    mask = np.logical_and(shared_mask, det_mask)
+                    template[mask] += signal[mask]
+                    hits[mask] += 1
+
+                if comm is not None:
+                    comm.Barrier()
+                    comm.Allreduce(MPI.IN_PLACE, template, op=MPI.SUM)
+                    comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
+
+                good = hits != 0
+                template[good] /= hits[good]
+
+                for idet, det in local_dets:
+                    obs.detdata[self.det_data][idet] -= template
         return
 
     def _finalize(self, data, **kwargs):

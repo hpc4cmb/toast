@@ -170,3 +170,71 @@ class PolyFilterTest(MPITestCase):
 
         del data
         return
+
+    def test_common_mode_filter(self):
+
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pointing.apply(data)
+
+        # Create fake polarized sky pixel values locally
+        create_fake_sky(data, "pixel_dist", "fake_map")
+
+        # Scan map into timestreams
+        scanner = ops.ScanMap(
+            det_data="signal",
+            pixels=pointing.pixels,
+            weights=pointing.weights,
+            map_key="fake_map",
+        )
+        scanner.apply(data)
+
+        # Make fake flags
+        fake_flags(data)
+
+        rms = dict()
+        for ob in data.obs:
+            rms[ob.name] = dict()
+            times = ob.shared["times"]
+            for det in ob.local_detectors:
+                flags = np.array(ob.shared["flags"])
+                flags |= ob.detdata["flags"][det]
+                good = (flags == 0)
+                # Replace signal with time stamps to get a common mode
+                ob.detdata["signal"][det] = times
+                rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
+
+        # Filter
+
+        common_filter = ops.CommonModeFilter(
+            det_data="signal",
+            det_flags="flags",
+            det_flag_mask=255,
+            shared_flags="flags",
+            shared_flag_mask=255,
+            view=None,
+        )
+        common_filter.apply(data)
+
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                flags = np.array(ob.shared["flags"])
+                flags |= ob.detdata["flags"][det]
+                good = (flags == 0)
+                check_rms = np.std(ob.detdata["signal"][det][good])
+                # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
+                self.assertTrue(1e-3 * check_rms < rms[ob.name][det])
+
+        del data
+        return
+

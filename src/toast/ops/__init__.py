@@ -68,4 +68,4 @@ from .sim_gaindrifts import GainDrifter
 
 from .totalconvolve import SimTotalconvolve
 
-from .polyfilter import PolyFilter, PolyFilter2D
+from .polyfilter import PolyFilter, PolyFilter2D, CommonModeFilter
