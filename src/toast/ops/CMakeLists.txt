@@ -38,5 +38,6 @@ install(FILES
     conviqt.py
     sim_gaindrifts.py
     totalconvolve.py
+    polyfilter.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

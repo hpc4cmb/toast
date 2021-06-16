@@ -54,6 +54,7 @@ from . import ops_madam as test_ops_madam
 
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
+from . import ops_polyfilter as test_ops_polyfilter
 
 
 from . import covariance as test_covariance
@@ -175,6 +176,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_madam))
         suite.addTest(loader.loadTestsFromModule(test_ops_gainscrambler))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))
+        suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 

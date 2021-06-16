@@ -42,5 +42,6 @@ install(FILES
     template_fourier2d.py
     template_subharmonic.py
     ops_sim_gaindrifts.py
+    ops_polyfilter.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

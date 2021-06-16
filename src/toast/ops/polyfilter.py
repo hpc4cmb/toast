@@ -2,19 +2,27 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 import re
-
 from time import time
+import warnings
 
+from astropy import units as u
 import numpy as np
+import traitlets
+
+from ..mpi import MPI, MPI_Comm, use_mpi, Comm
+
+from .operator import Operator
+from .. import qarray as qa
+from ..timing import function_timer
+from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
+from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
+
 
 from .._libtoast import filter_polynomial
 
-from ..operator import Operator
 
-from ..timing import function_timer
-
-from .. import qarray as qa
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
@@ -24,42 +32,68 @@ XAXIS, YAXIS, ZAXIS = np.eye(3)
 class PolyFilter2D(Operator):
     """Operator to regress out 2D polynomials across the focal plane."""
 
-    def __init__(
-        self,
-        order=1,
-        pattern=r".*",
-        name=None,
-        common_flag_name=None,
-        common_flag_mask=255,
-        flag_name=None,
-        flag_mask=255,
-        poly_flag_mask=1,
-        intervals="intervals",
-    ):
-        self._order = order
-        self._nmode = (order + 1) * (order + 2) // 2
-        self._pattern = pattern
-        self._name = name
-        self._common_flag_name = common_flag_name
-        self._common_flag_mask = common_flag_mask
-        self._flag_name = flag_name
-        self._flag_mask = flag_mask
-        self._poly_flag_mask = poly_flag_mask
-        self._intervals = intervals
+    API = Int(0, help="Internal interface version for this operator")
 
-        # Call the parent class constructor.
-        super().__init__()
+    det_data = Unicode("signal", help="Observation detdata key apply the gain error to")
+
+    pattern = Unicode(
+        f".*",
+        allow_none=True,
+        help="Regex pattern to match against detector names. Only detectors that "
+        "match the pattern are scrambled.",
+    )
+
+    order = Int(1, allow_none=False, help="Polynomial order")
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to use"
+    )
+
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        return
 
     @function_timer
-    def exec(self, data):
+    def _exec(self, data, detectors=None, **kwargs):
         """Apply the 2D polynomial filter to the signal.
 
         Args:
             data (toast.Data): The distributed data.
 
         """
-        norder = self._order + 1
-        nmode = self._nmode
+        if detectors is not None:
+            raise RuntimeError("PolyFilter2D cannot be run in batch mode")
+        nmode = (self.order + 1) * (self.order + 2) // 2
+        norder = self.order + 1
+        pat = re.compile(self.pattern)
 
         for obs in data.obs:
             t0 = time()
@@ -69,24 +103,18 @@ class PolyFilter2D(Operator):
             t_solve = 0
             t_clean = 0
 
-            tod = obs["tod"]
-            times = tod.local_times()
-            comm = tod.grid_comm_row
-            detectors = tod.detectors
-            ndet = len(detectors)
-            detector_index = {}
-            pat = re.compile(self._pattern)
+            comm = obs.dist.comm_row
 
+            detector_index = {}
             ndet = 0
-            for det in detectors:
+            for det in obs.all_detectors:
                 if pat.match(det) is None:
                     continue
                 detector_index[det] = ndet
                 ndet += 1
-            # Number of detectors may limit the number of modes we can constrain
-            nmode = min(self._nmode, ndet)
 
-            focalplane = obs["focalplane"]
+            # Number of detectors may limit the number of modes we can constrain
+            nmode = min(nmode, ndet)
 
             detector_templates = np.zeros([ndet, nmode])
             mode = 0
@@ -103,30 +131,27 @@ class PolyFilter2D(Operator):
                 if mode == nmode:
                     break
 
-            for det in tod.local_dets:
+            for det in obs.local_detectors:
                 if det not in detector_index:
                     continue
                 idet = detector_index[det]
-                det_quat = focalplane[det]["quat"]
+                det_quat = obs.telescope.focalplane[det]["quat"]
                 x, y, z = qa.rotate(det_quat, ZAXIS)
                 theta, phi = np.arcsin([x, y])
                 detector_templates[idet] = theta ** xorders * phi ** yorders
 
-            if self._intervals in obs:
-                intervals = obs[self._intervals]
-            else:
-                intervals = None
-            local_intervals = tod.local_intervals(intervals)
-            if len(local_intervals) == 0:
-                # No intervals to filter
-                continue
-            common_ref = tod.local_common_flags(self._common_flag_name)
-
             # Iterate over each interval
 
-            for ival in local_intervals:
-                ind = slice(ival.first, ival.last + 1)
-                nsample = ival.last - ival.first + 1
+            views = obs.view[self.view]
+            for iview, view in enumerate(views):
+                if view.start is None:
+                    # This is a view of the whole obs
+                    nsample = obs.n_local_samples
+                else:
+                    nsample = view.stop - view.start
+
+                # Accumulate the linear regression templates
+
                 templates = np.zeros([ndet, nmode, nsample])
                 proj = np.zeros([nmode, nsample])
 
@@ -134,29 +159,24 @@ class PolyFilter2D(Operator):
 
                 norms = np.zeros(nmode)
 
-                for det in tod.local_dets:
+                shared_flags = views.shared[self.shared_flags][iview]
+                shared_mask = (shared_flags & self.shared_flag_mask) == 0
+
+                for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
                         continue
-                    idet = detector_index[det]
+                    ind = detector_index[det]
 
-                    ref = tod.local_signal(det, self._name)[ind]
-                    flag_ref = tod.local_flags(det, self._flag_name)[ind]
+                    signal = views.detdata[self.det_data][iview][idet]
+                    det_flags = views.detdata[self.det_flags][iview][idet]
+                    det_mask = (det_flags & self.det_flag_mask) == 0
 
-                    flg = common_ref[ind] & self._common_flag_mask
-                    flg |= flag_ref & self._flag_mask
-                    mask = flg == 0
+                    mask = np.logical_and(shared_mask, det_mask)
 
-                    # We might want to remove the interval mean if the
-                    # data were not already 1D-filtered
-                    # ref -= np.mean(ref[mask])
-
-                    template = detector_templates[idet]
+                    template = detector_templates[ind]
                     templates[idet] = np.outer(template, mask)
-                    proj += np.outer(template, ref * mask)
+                    proj += np.outer(template, signal * mask)
                     norms += template ** 2
-
-                    del ref
-                    del flag_ref
 
                 t_template += time() - t1
 
@@ -168,6 +188,8 @@ class PolyFilter2D(Operator):
                 norms[good] = norms[good] ** -0.5
                 t_get_norm += time() - t1
 
+                # Noise-weight
+
                 t1 = time()
                 templates = np.transpose(
                     templates, [1, 0, 2]
@@ -177,6 +199,9 @@ class PolyFilter2D(Operator):
                         templates[mode] *= norm
                         proj[mode] *= norm
                 t_apply_norm += time() - t1
+
+                # Solve the linear regression amplitudes.  Each task
+                # inverts different template matrices
 
                 t1 = time()
                 templates = np.transpose(
@@ -199,39 +224,24 @@ class PolyFilter2D(Operator):
 
                 t1 = time()
 
-                """
                 for isample in range(nsample):
                     if np.all(coeff[isample] == 0):
-                        common_ref[isample + ival.first] |= self._poly_flag_mask
-                        continue
-                    for det in tod.local_dets:
-                        if det not in detector_index:
-                            continue
-                        idet = detector_index[det]
-                        ref = tod.local_signal(det, self._name)[ind]
-                        ref[isample] -= np.dot(coeff[isample], templates[isample, idet])
-                """
-
-                for isample in range(nsample):
-                    if np.all(coeff[isample] == 0):
-                        common_ref[isample + ival.first] |= self._poly_flag_mask
+                        shared_flags[isample] |= self.poly_flag_mask
 
                 templates = np.transpose(
                     templates, [1, 2, 0]
                 ).copy()  # ndet x nmode x nsample
                 coeff = coeff.T.copy()  # nmode x nsample
 
-                for det in tod.local_dets:
+                for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
                         continue
-                    idet = detector_index[det]
-                    ref = tod.local_signal(det, self._name)[ind]
+                    ind = detector_index[det]
+                    signal = views.detdata[self.det_data][iview][idet]
                     for mode in range(nmode):
-                        ref -= coeff[mode] * templates[idet, mode]
+                        signal -= coeff[mode] * templates[ind, mode]
 
                 t_clean += time() - t1
-
-            del common_ref
 
             """
             print(
@@ -249,35 +259,33 @@ class PolyFilter2D(Operator):
 
         return
 
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": list(),
+            "shared": [self.shared_flags],
+            "detdata": [self.det_data, self.det_flags],
+            "intervals": [self.view],
+        }
+        return req
+
+    def _provides(self):
+        prov = {
+            "meta": list(),
+            "shared": list(),
+            "detdata": list(),
+        }
+        return prov
+
+    def _accelerators(self):
+        return list()
+
+
 @trait_docs
 class PolyFilter(Operator):
-    """Operator which applies polynomial filtering to the TOD.
-
-    This applies polynomial filtering to the valid intervals of each TOD.
-
-    Args:
-        order (int):  Order of the filtering polynomial.
-        pattern (str):  Regex pattern to match against detector names.
-            Only detectors that match the pattern are filtered.
-        name (str):  Name of the output signal cache object will be
-            <name_in>_<detector>.  If the object exists, it is used as
-            input.  Otherwise signal is read using the tod read method.
-        common_flag_name (str):  Cache name of the output common flags.
-            If it already exists, it is used.  Otherwise flags
-            are read from the tod object and stored in the cache under
-            common_flag_name.
-        common_flag_mask (byte):  Bitmask to use when flagging data
-           based on the common flags.
-        flag_name (str):  Cache name of the output detector flags will
-            be <flag_name>_<detector>.  If the object exists, it is
-            used.  Otherwise flags are read from the tod object.
-        flag_mask (byte):  Bitmask to use when flagging data
-           based on the detector flags.
-        poly_flag_mask (byte):  Bitmask to use when adding flags based
-           on polynomial filter failures.
-        intervals (str):  Name of the valid intervals in observation.
-
-    """
+    """Operator which applies polynomial filtering to the TOD."""
 
     API = Int(0, help="Internal interface version for this operator")
 
@@ -289,7 +297,7 @@ class PolyFilter(Operator):
         help="Regex pattern to match against detector names. Only detectors that "
         "match the pattern are scrambled.",
     )
-    
+
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
@@ -344,51 +352,58 @@ class PolyFilter(Operator):
                 # Nothing to do for this observation
                 continue
 
-            if self.view is not None:
-                if self.view not in ob.intervals:
-                    msg = "View '{}' does not exist in observation {}".format(
-                        self.view, ob.name
-                    )
-                    raise RuntimeError(msg)
-            intervals = ob.intervals[self.view]:
+            views = obs.view[self.view]
+            for iview, view in enumerate(views):
+                shared_flags = obs.shared[self.shared_flags].data & self.shared_flag_mask
 
-            shared_flags = ob.view[self.view].shared[self.shared_flags] & self.shared_flag_mask
+                if self.view is not None:
+                    local_starts = []
+                    local_stops = []
+                    for interval in obs.intervals[self.view]:
+                        local_starts.append(interval.first)
+                        local_stops.append(intervallast)
+                else:
+                    local_starts = [0]
+                    local_stops = [obs.n_local_samples - 1]
 
-            for view in obs.view[self.view].detdata[self.detdata_name]:
-                shared_flags = ob.view[self.view].shared[self.shared_flags] & self.shared_flag_mask
- 
- 
+                local_starts = np.array(local_starts)
+                local_stops = np.array(local_stops)
+
                 for idet, det in enumerate(dets):
                     # Test the detector pattern
                     if pat.match(det) is None:
                         continue
 
-                    detflags |= ob.view[self.view].detdata[self.det_flags][idet] & self.det_flag_mask
+                    det_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
+                    signal = obs.detdata[self.det_data][idet]
 
-                ref = tod.local_signal(det, self._name)
-                flag_ref = tod.local_flags(det, self._flag_name)
+                    flags = shared_flags | det_flags
 
-                # Iterate over each interval
+                    filter_polynomial(self.order, flags, [signal], local_starts, local_stops)
 
-                local_starts = []
-                local_stops = []
-                for ival in local_intervals:
-                    local_starts.append(ival.first)
-                    local_stops.append(ival.last)
-
-                local_starts = np.array(local_starts)
-                local_stops = np.array(local_stops)
-
-                flg = common_ref & self._common_flag_mask
-                flg |= flag_ref & self._flag_mask
-
-                filter_polynomial(self._order, flg, [ref], local_starts, local_stops)
-
-                flag_ref[flg != 0] |= self._poly_flag_mask
-
-                del ref
-                del flag_ref
-
-            del common_ref
+                    obs.detdata[self.det_flags][idet][flags] & self.poly_flag_mask
 
         return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": list(),
+            "shared": [self.shared_flags],
+            "detdata": [self.det_data, self.det_flags],
+            "intervals": [self.view],
+        }
+        return req
+
+    def _provides(self):
+        prov = {
+            "meta": list(),
+            "shared": list(),
+            "detdata": list(),
+        }
+        return prov
+
+    def _accelerators(self):
+        return list()
