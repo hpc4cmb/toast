@@ -102,6 +102,8 @@ find_package(SuiteSparse)
 
 find_package(PythonInterp REQUIRED)
 
+find_package(CUDAToolkit)
+
 # Internal products
 
 enable_testing()

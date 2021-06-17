@@ -142,6 +142,20 @@ if(LAPACK_FOUND)
     target_link_libraries(toast "${BLAS_LIBRARIES}")
 endif(LAPACK_FOUND)
 
+# GPU
+
+# TODO
+# https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html#module:FindCUDAToolkit
+if(CUDAToolkit_FOUND)
+    message(WARNING "CUDA libs found.")
+    target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
+    target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
+    # there are also static versions of those libs
+    target_link_libraries(toast CUDA::cublas CUDA::cusolver)
+else()
+    message(WARNING "CUDA libs not found.")
+endif(CUDAToolkit_FOUND)
+
 # Installation
 
 #install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
