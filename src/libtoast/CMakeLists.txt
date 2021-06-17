@@ -151,7 +151,7 @@ if(CUDAToolkit_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
     target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
     # there are also static versions of those libs
-    target_link_libraries(toast CUDA::cublas CUDA::cusolver)
+    target_link_libraries(toast CUDA::cudart CUDA::cublas CUDA::cusolver)
 else()
     message(WARNING "CUDA libs not found.")
 endif(CUDAToolkit_FOUND)
