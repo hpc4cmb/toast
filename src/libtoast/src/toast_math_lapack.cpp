@@ -31,7 +31,10 @@ void toast::lapack_gemm(char * TRANSA, char * TRANSB, int * M, int * N,
                         int * K, double * ALPHA, double * A, int * LDA,
                         double * B, int * LDB, double * BETA, double * C,
                         int * LDC) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // TODO
+    dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    #elif HAVE_LAPACK
     dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -72,7 +75,10 @@ extern "C" void dsyev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
 void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
                         int * LDA, double * W, double * WORK, int * LWORK,
                         int * INFO) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // TODO
+    dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
+    #elif HAVE_LAPACK
     dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -133,7 +139,10 @@ extern "C" void dsymm(char * SIDE, char * UPLO, int * M, int * N,
 void toast::lapack_symm(char * SIDE, char * UPLO, int * M, int * N,
                         double * ALPHA, double * A, int * LDA, double * B,
                         int * LDB, double * BETA, double * C, int * LDC) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // TODO
+    dsymm(SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    #elif HAVE_LAPACK
     dsymm(SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -154,7 +163,10 @@ extern "C" void dsyrk(char * UPLO, char * TRANS, int * N, int * K,
 void toast::lapack_syrk(char * UPLO, char * TRANS, int * N, int * K,
                         double * ALPHA, double * A, int * LDA, double * BETA,
                         double * C, int * LDC) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // TODO
+    dsyrk(UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC);
+    #elif HAVE_LAPACK
     dsyrk(UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -234,7 +246,10 @@ extern "C" void dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
 void toast::lapack_dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
                           double * B, int * LDB, double * S, double * RCOND,
                           int * RANK, double * WORK, int * LWORK, int * INFO) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // TODO
+    dgelss(M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK, WORK, LWORK, INFO);
+    #elif HAVE_LAPACK
     dgelss(M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
