@@ -2459,7 +2459,14 @@ def parse_patch_sso(args, parts):
     name = parts[0]
     weight = float(parts[2])
     radius = float(parts[3]) * degree
-    patch = SSOPatch(name, weight, radius, elevations=args.elevations_deg)
+    patch = SSOPatch(
+        name,
+        weight,
+        radius,
+        el_min=args.el_min_deg * degree,
+        el_max=args.el_max_deg * degree,
+        elevations=args.elevations_deg,
+    )
     return patch
 
 
