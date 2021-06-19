@@ -409,6 +409,7 @@ class SSOPatch(Patch):
         self._area = np.pi * radius ** 2 / (4 * np.pi)
         self.el_min0 = el_min
         self.el_min = el_min
+        self.el_max = el_max
         self.el_max0 = el_max
         self.parse_elevations(elevations)
         try:
