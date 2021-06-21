@@ -202,8 +202,16 @@ void toast::lapack_syrk(char * UPLO, char * TRANS, int * N, int * K,
                         double * ALPHA, double * A, int * LDA, double * BETA,
                         double * C, int * LDC) {
     #ifdef HAVE_CUDALIBS
-    // TODO
-    dsyrk(UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC);
+    // make cublas handle
+    cublasHandle_t handle;
+    cublasStatus_t errorCodeHandle = cublasCreate(&handle);
+    // prepare inputs
+    cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    cublasOperation_t trans_cuda = (*TRANS == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    // compute gemm
+    cublasStatus_t errorCodeOp = cublasDsyrk(handle, uplo_cuda, trans_cuda, *N, *K, ALPHA, A, *LDA, BETA, C, *LDC);
+    // free handle
+    cublasDestroy(handle);
     #elif HAVE_LAPACK
     dsyrk(UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
