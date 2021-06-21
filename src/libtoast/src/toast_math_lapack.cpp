@@ -6,6 +6,18 @@
 #include <toast/sys_utils.hpp>
 #include <toast/math_lapack.hpp>
 
+#ifdef HAVE_CUDALIBS
+#include <cublas_v2.h>
+#include <cusolverDn.h>
+#endif
+
+// TODO error out if status is not CUBLAS_STATUS_SUCCESS
+//  https://docs.nvidia.com/cuda/cublas/index.html#cublasstatus_t
+//  a helper function would be nice
+// TODO handle is costly to create and delete, put it inside singleton
+// TODO batch operations would be much faster
+// TODO are the side, uplo, trans encoded in capital (L) or not (l)?
+
 // Define macros for lapack name mangling
 
 #if defined LAPACK_NAMES_LOWER
@@ -32,8 +44,16 @@ void toast::lapack_gemm(char * TRANSA, char * TRANSB, int * M, int * N,
                         double * B, int * LDB, double * BETA, double * C,
                         int * LDC) {
     #ifdef HAVE_CUDALIBS
-    // TODO
-    dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    // make cublas handle
+    cublasHandle_t handle;
+    cublasStatus_t errorCodeHandle = cublasCreate(&handle);
+    // prepare inputs
+    cublasOperation_t transA_cuda = (*TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    cublasOperation_t transB_cuda = (*TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    // compute gemm
+    cublasStatus_t errorCodeOp = cublasDgemm(handle, transA_cuda, transB_cuda, *M, *N, *K, ALPHA, A, *LDA, B, *LDB, BETA, C, *LDC);
+    // free handle
+    cublasDestroy(handle);
     #elif HAVE_LAPACK
     dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
@@ -76,8 +96,18 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
                         int * LDA, double * W, double * WORK, int * LWORK,
                         int * INFO) {
     #ifdef HAVE_CUDALIBS
-    // TODO
-    dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
+    // make cusolver handle
+    cusolverDnHandle_t handle;
+    cusolverStatus_t statusHandle = cusolverDnCreate(&handle);
+    // prepare inputs
+    cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
+    cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    // query working space
+    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, LWORK);
+    // compute spectrum
+    cusolverStatus_t statusSolver = cusolverDnDsyevd(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, WORK, *LWORK, INFO);
+    // free handle
+    cusolverDnDestroy(handle);
     #elif HAVE_LAPACK
     dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK
@@ -140,8 +170,16 @@ void toast::lapack_symm(char * SIDE, char * UPLO, int * M, int * N,
                         double * ALPHA, double * A, int * LDA, double * B,
                         int * LDB, double * BETA, double * C, int * LDC) {
     #ifdef HAVE_CUDALIBS
-    // TODO
-    dsymm(SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    // make cublas handle
+    cublasHandle_t handle;
+    cublasStatus_t errorCodeHandle = cublasCreate(&handle);
+    // prepare inputs
+    cublasSideMode_t side_cuda = (*SIDE == 'L') ? CUBLAS_SIDE_LEFT : CUBLAS_SIDE_RIGHT;
+    cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    // compute gemm
+    cublasStatus_t errorCodeOp = cublasDsymm(handle, side_cuda, uplo_cuda, *M, *N, ALPHA, A, *LDA, B, *LDB, BETA, C, *LDC);
+    // free handle
+    cublasDestroy(handle);
     #elif HAVE_LAPACK
     dsymm(SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
