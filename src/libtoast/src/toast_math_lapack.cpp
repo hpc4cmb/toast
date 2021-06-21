@@ -16,7 +16,6 @@
 //  a helper function would be nice
 // TODO handle is costly to create and delete, put it inside singleton
 // TODO batch operations would be much faster
-// TODO are the side, uplo, trans encoded in capital (L) or not (l)?
 
 // Define macros for lapack name mangling
 
@@ -75,7 +74,14 @@ extern "C" void dgemv(char * TRANS, int * M, int * N, double * ALPHA,
 void toast::lapack_gemv(char * TRANS, int * M, int * N, double * ALPHA,
                         double * A, int * LDA, double * X, int * INCX,
                         double * BETA, double * Y, int * INCY) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // this function is never called
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST does not currently include GPU 'gemv' implementation.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+    #elif HAVE_LAPACK
     dgemv(TRANS, M, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -129,7 +135,14 @@ extern "C" void dsymv(char * UPLO, int * N, double * ALPHA, double * A,
 void toast::lapack_symv(char * UPLO, int * N, double * ALPHA, double * A,
                         int * LDA, double * X, int * INCX, double * BETA,
                         double * Y, int * INCY) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // this function is never called
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST does not currently include GPU 'symv' implementation.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+    #elif HAVE_LAPACK
     dsymv(UPLO, N, ALPHA, A, LDA, X, INCX, BETA, Y, INCY);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -148,7 +161,14 @@ extern "C" void dtrmv(char * UPLO, char * TRANS, char * DIAG, int * N,
 
 void toast::lapack_trmv(char * UPLO, char * TRANS, char * DIAG, int * N,
                         double * A, int * LDA, double * X, int * INCX) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // this function is never called
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST does not currently include GPU 'trmv' implementation.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+    #elif HAVE_LAPACK
     dtrmv(UPLO, TRANS, DIAG, N, A, LDA, X, INCX);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -231,7 +251,14 @@ extern "C" void dpotrf(char * UPLO, int * N, double * A, int * LDA,
 
 void toast::lapack_potrf(char * UPLO, int * N, double * A, int * LDA,
                          int * INFO) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // this function is never called
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST does not currently include GPU 'potrf' implementation.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+    #elif HAVE_LAPACK
     dpotrf(UPLO, N, A, LDA, INFO);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -252,7 +279,14 @@ extern "C" void dpocon(char * UPLO, int * N, double * A, int * LDA,
 void toast::lapack_pocon(char * UPLO, int * N, double * A, int * LDA,
                          double * ANORM, double * RCOND, double * WORK,
                          int * IWORK, int * INFO) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // this function is never called
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST does not currently include GPU 'pocon' implementation.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+    #elif HAVE_LAPACK
     dpocon(UPLO, N, A, LDA, ANORM, RCOND, WORK, IWORK, INFO);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -271,7 +305,14 @@ extern "C" void dpotri(char * UPLOW, int * N, double * A, int * LDA,
 
 void toast::lapack_potri(char * UPLO, int * N, double * A, int * LDA,
                          int * INFO) {
-    #ifdef HAVE_LAPACK
+    #ifdef HAVE_CUDALIBS
+    // this function is never called
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST does not currently include GPU 'potri' implementation.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+    #elif HAVE_LAPACK
     dpotri(UPLO, N, A, LDA, INFO);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -292,10 +333,8 @@ extern "C" void dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
 void toast::lapack_dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
                           double * B, int * LDB, double * S, double * RCOND,
                           int * RANK, double * WORK, int * LWORK, int * INFO) {
-    #ifdef HAVE_CUDALIBS
-    // TODO
-    dgelss(M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK, WORK, LWORK, INFO);
-    #elif HAVE_LAPACK
+    // NOTE: there is no GPU dgelss implementation at the moment (there are dgels implementations however)
+    #ifdef HAVE_LAPACK
     dgelss(M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
