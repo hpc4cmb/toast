@@ -63,6 +63,8 @@ class PolyFilter2D(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    focalplane_key = Unicode(None, allow_none=True, help="Which focalplane key to match")
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -103,7 +105,18 @@ class PolyFilter2D(Operator):
             t_solve = 0
             t_clean = 0
 
-            comm = obs.dist.comm_row
+            # communicator for processes with the same sample range
+            comm = obs.comm_col
+
+            if self.focalplane_key is None:
+                key_values = [None]
+            else:
+                key_values = set()
+                for det in obs.all_detectors:
+                    if pat.match(det) is None:
+                        continue
+                    key_values.add(focalplane[det][self.focalplane_key])
+                key_values = sorted(key_values)
 
             detector_index = {}
             ndet = 0
@@ -483,6 +496,8 @@ class CommonModeFilter(Operator):
             else:
                 values = set()
                 for det in detectors:
+                    if pat.match(det) is None:
+                        continue
                     values.add(focalplane[det][self.focalplane_key])
                 values = sorted(values)
 
