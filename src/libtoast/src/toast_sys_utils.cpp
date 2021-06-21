@@ -36,7 +36,8 @@ void * toast::aligned_alloc(size_t size, size_t align) {
         auto log = toast::Logger::get();
         std::ostringstream o;
         o << "cannot allocate " << size
-          << " bytes of memory with alignment " << align;
+          << " bytes of memory with alignment " << align
+          << " (error code:" << ret << ")";
         log.error(o.str().c_str(), here);
         throw std::runtime_error(o.str().c_str());
     }
