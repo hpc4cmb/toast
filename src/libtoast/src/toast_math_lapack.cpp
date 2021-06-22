@@ -9,9 +9,23 @@
 #ifdef HAVE_CUDALIBS
 #include <cublas_v2.h>
 #include <cusolverDn.h>
+#include <cuda_runtime_api.h>
 
 // displays an error message if the computation did not end in sucess
-void checkCublasErrorCode(cublasStatus_t errorCode)
+void checkCudaErrorCode(const cudaError errorCode)
+{
+    if (errorCode != cudaSuccess)
+    {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg = "CUDA threw a '" + std::string(cudaGetErrorString(errorCode)) + "' error code.";
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
+}
+
+// displays an error message if the computation did not end in sucess
+void checkCublasErrorCode(const cublasStatus_t errorCode)
 {
     if(errorCode != CUBLAS_STATUS_SUCCESS)
     {
@@ -24,7 +38,7 @@ void checkCublasErrorCode(cublasStatus_t errorCode)
 }
 
 // displays an error message if the computation did not end in sucess
-void checkCusolverErrorCode(cusolverStatus_t errorCode)
+void checkCusolverErrorCode(const cusolverStatus_t errorCode)
 {
     if(errorCode != CUSOLVER_STATUS_SUCCESS)
     {
@@ -128,21 +142,40 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
                         int * INFO) {
     #ifdef HAVE_CUDALIBS
     // make cusolver handle
-    /*cusolverDnHandle_t handle;
+    cusolverDnHandle_t handle;
     cusolverStatus_t statusHandle = cusolverDnCreate(&handle);
     checkCusolverErrorCode(statusHandle);
     // prepare inputs
     cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     // query working space
-    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, LWORK);
+    int new_LWORK;
+    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, &new_LWORK);
     checkCusolverErrorCode(statusBuffer);
+    // allocates larger workspace if needed
+    if(new_LWORK > *LWORK)
+    {
+        // notifies user of additional allocation
+        auto log = toast::Logger::get();
+        std::string msg("Allocating " + std::to_string(new_LWORK * sizeof(double)) + "bytes to run syev on GPU.");
+        log.info(msg.c_str());
+        // frees previously used memory and allocates new memory
+        // we could use a Managed malloc but it would be less efficient for a workspace
+        *LWORK = new_LWORK;
+        cudaFree(WORK);
+        cudaError statusAlloc = cudaMalloc((void**)&WORK, sizeof(double) * (*LWORK));
+        checkCudaErrorCode(statusAlloc);
+    }
     // compute spectrum
+    // TODO this fails with an 'internal error' error code
+    //  even without parallelism
+    //  on the first call
+    //  might be caused by incorrect cusolver install or use after free (unlikely as the lapack version works)
+    //  i also sometimes gets a 'execution failed' error code which would point to an install problem
     cusolverStatus_t statusSolver = cusolverDnDsyevd(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, WORK, *LWORK, INFO);
     checkCusolverErrorCode(statusSolver);
     // free handle
-    cusolverDnDestroy(handle);*/
-    dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
+    cusolverDnDestroy(handle);
     #elif HAVE_LAPACK
     dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK
