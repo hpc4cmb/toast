@@ -10,6 +10,7 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
+#include <cassert>
 
 // displays an error message if the computation did not end in sucess
 void checkCudaErrorCode(const cudaError errorCode)
@@ -142,16 +143,17 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
                         int * INFO) {
     #ifdef HAVE_CUDALIBS
     // make cusolver handle
-    cusolverDnHandle_t handle;
+    cusolverDnHandle_t handle = NULL;
     cusolverStatus_t statusHandle = cusolverDnCreate(&handle);
     checkCusolverErrorCode(statusHandle);
     // prepare inputs
     cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     int* INFO_cuda = NULL;
-    cudaMallocManaged((void**)&INFO_cuda, sizeof(int));
+    cudaError statusAllocINFO = cudaMallocManaged((void**)&INFO_cuda, sizeof(int));
+    checkCudaErrorCode(statusAllocINFO);
     // query working space
-    int new_LWORK;
+    int new_LWORK = 0;
     cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, &new_LWORK);
     checkCusolverErrorCode(statusBuffer);
     // allocates larger workspace if needed
@@ -162,25 +164,18 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
         std::string msg("Allocating " + std::to_string(new_LWORK * sizeof(double)) + " bytes to run syev on GPU.");
         log.info(msg.c_str());
         // frees previously used memory and allocates new memory
-        // we could use a Managed malloc but it would be less efficient for a workspace
+        // we could use a Managed malloc but it would be less efficient for a workspace used only on GPU
         *LWORK = new_LWORK;
-        cudaFree(WORK);
-        cudaError statusAlloc = cudaMalloc((void**)&WORK, sizeof(double) * (*LWORK));
-        checkCudaErrorCode(statusAlloc);
+        //cudaFree(WORK); // this free should be required but it causes internal errors in syev
+        cudaError statusAllocWORK = cudaMalloc((void**)&WORK, sizeof(double) * (*LWORK));
+        checkCudaErrorCode(statusAllocWORK);
     }
     // compute spectrum
-    // TODO this fails with an 'internal error' error code
-    //  even without parallelism
-    //  on the first call
-    //  might be caused by incorrect cusolver install or use after free (unlikely as the lapack version works)
-    //  i also sometimes gets a 'execution failed' error code which would point to an install problem
     cusolverStatus_t statusSolver = cusolverDnDsyevd(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, WORK, *LWORK, INFO_cuda);
-    // TODO sync gives use more info
-    //  illegal memory access was encountered
-    cudaError statusSync = cudaDeviceSynchronize();
-    checkCudaErrorCode(statusSync);
     checkCusolverErrorCode(statusSolver);
     // gets info back to CPU
+    cudaError statusSync = cudaDeviceSynchronize();
+    checkCudaErrorCode(statusSync);
     *INFO = *INFO_cuda;
     cudaFree(INFO_cuda);
     // free handle
