@@ -148,6 +148,8 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
     // prepare inputs
     cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    int* INFO_cuda = NULL;
+    cudaMallocManaged((void**)&INFO_cuda, sizeof(int));
     // query working space
     int new_LWORK;
     cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, &new_LWORK);
@@ -157,7 +159,7 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
     {
         // notifies user of additional allocation
         auto log = toast::Logger::get();
-        std::string msg("Allocating " + std::to_string(new_LWORK * sizeof(double)) + "bytes to run syev on GPU.");
+        std::string msg("Allocating " + std::to_string(new_LWORK * sizeof(double)) + " bytes to run syev on GPU.");
         log.info(msg.c_str());
         // frees previously used memory and allocates new memory
         // we could use a Managed malloc but it would be less efficient for a workspace
@@ -172,8 +174,15 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
     //  on the first call
     //  might be caused by incorrect cusolver install or use after free (unlikely as the lapack version works)
     //  i also sometimes gets a 'execution failed' error code which would point to an install problem
-    cusolverStatus_t statusSolver = cusolverDnDsyevd(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, WORK, *LWORK, INFO);
+    cusolverStatus_t statusSolver = cusolverDnDsyevd(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, WORK, *LWORK, INFO_cuda);
+    // TODO sync gives use more info
+    //  illegal memory access was encountered
+    cudaError statusSync = cudaDeviceSynchronize();
+    checkCudaErrorCode(statusSync);
     checkCusolverErrorCode(statusSolver);
+    // gets info back to CPU
+    *INFO = *INFO_cuda;
+    cudaFree(INFO_cuda);
     // free handle
     cusolverDnDestroy(handle);
     #elif HAVE_LAPACK
