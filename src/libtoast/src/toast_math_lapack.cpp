@@ -7,10 +7,6 @@
 #include <toast/math_lapack.hpp>
 
 #ifdef HAVE_CUDALIBS
-#include <cublas_v2.h>
-#include <cusolverDn.h>
-#include <cuda_runtime_api.h>
-
 // displays an error message if the computation did not end in sucess
 void checkCudaErrorCode(const cudaError errorCode)
 {
@@ -129,9 +125,7 @@ void toast::LinearAlgebra::syev(char * JOBZ, char * UPLO, int * N, double * A,
     // prepare inputs
     cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    int* INFO_cuda = NULL;
-    cudaError statusAllocINFO = cudaMallocManaged((void**)&INFO_cuda, sizeof(int));
-    checkCudaErrorCode(statusAllocINFO);
+    int* INFO_cuda = gpu_allocated_integer;
     // compute spectrum
     cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_cuda, uplo_cuda, *N, A, *LDA, W, WORK, *LWORK, INFO_cuda);
     checkCusolverErrorCode(statusSolver);
@@ -139,7 +133,6 @@ void toast::LinearAlgebra::syev(char * JOBZ, char * UPLO, int * N, double * A,
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
     *INFO = *INFO_cuda;
-    cudaFree(INFO_cuda);
     #elif HAVE_LAPACK
     dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK

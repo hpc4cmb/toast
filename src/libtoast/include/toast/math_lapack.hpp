@@ -9,6 +9,7 @@
 #ifdef HAVE_CUDALIBS
 #include <cublas_v2.h>
 #include <cusolverDn.h>
+#include <cuda_runtime_api.h>
 
 void checkCudaErrorCode(const cudaError errorCode);
 void checkCublasErrorCode(const cublasStatus_t errorCode);
@@ -17,10 +18,11 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode);
 
 // TODO:
 //  - rename file
-//  - delete copy methods to insure handle is handled properly
 //  - put gpu helper function in dedicated file
 
 namespace toast {
+    // encapsulate construction and destruction of GPU linear algebra handles
+    // WARNING: this class is *not* threadsafe
     class LinearAlgebra {
     public:
         LinearAlgebra()
@@ -32,8 +34,15 @@ namespace toast {
             // creates cusolver handle
             cusolverStatus_t statusHandle = cusolverDnCreate(&handleSolver);
             checkCusolverErrorCode(statusHandle);
+            // allocates an integer on GPU to use it as an output parameter
+            cudaError statusAlloc = cudaMallocManaged((void**)&gpu_allocated_integer, sizeof(int));
+            checkCudaErrorCode(statusAlloc);
             #endif
         };
+
+        // insures that the class is never copied
+        LinearAlgebra(LinearAlgebra const&) = delete;
+        void operator=(LinearAlgebra const&) = delete;
 
         ~LinearAlgebra()
         {
@@ -42,6 +51,8 @@ namespace toast {
             cublasDestroy(handleBlas);
             // free cusolver handle
             cusolverDnDestroy(handleSolver);
+            // release integer allocation
+            cudaFree(gpu_allocated_integer);
             #endif
         };
 
@@ -69,6 +80,7 @@ namespace toast {
     #ifdef HAVE_CUDALIBS
         cublasHandle_t handleBlas = NULL;
         cusolverDnHandle_t handleSolver = NULL;
+        int* gpu_allocated_integer = NULL;
     #endif
     };
 }
