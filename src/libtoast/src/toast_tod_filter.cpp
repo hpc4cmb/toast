@@ -11,7 +11,7 @@
 #endif // ifdef _OPENMP
 
 #include <toast/sys_utils.hpp>
-#include <toast/math_lapack.hpp>
+#include <toast/math_linearalgebra.hpp>
 #include <toast/tod_filter.hpp>
 
 

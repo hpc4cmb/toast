@@ -4,7 +4,7 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 #include <toast/sys_utils.hpp>
-#include <toast/math_lapack.hpp>
+#include <toast/math_linearalgebra.hpp>
 #include <toast/map_cov.hpp>
 
 #ifdef _OPENMP

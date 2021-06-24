@@ -8,7 +8,7 @@
 
 #include <toast/sys_environment.hpp>
 #include <toast/sys_utils.hpp>
-#include <toast/math_lapack.hpp>
+#include <toast/math_linearalgebra.hpp>
 #include <toast/math_sf.hpp>
 #include <toast/math_rng.hpp>
 #include <toast/math_qarray.hpp>

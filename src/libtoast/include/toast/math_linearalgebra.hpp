@@ -3,8 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef TOAST_MATH_LAPACK_HPP
-#define TOAST_MATH_LAPACK_HPP
+#ifndef TOAST_MATH_LINEARALGEBRA_HPP
+#define TOAST_MATH_LINEARALGEBRA_HPP
 
 #ifdef HAVE_CUDALIBS
 #include <cublas_v2.h>
@@ -17,11 +17,10 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode);
 #endif
 
 // TODO:
-//  - rename file
 //  - put gpu helper function in dedicated file
 
 namespace toast {
-    // encapsulate construction and destruction of GPU linear algebra handles
+    // encapsulates construction and destruction of GPU linear algebra handles
     // WARNING: this class is *not* threadsafe
     class LinearAlgebra {
     public:
@@ -29,11 +28,11 @@ namespace toast {
         {
             #ifdef HAVE_CUDALIBS
             // creates cublas handle
-            cublasStatus_t errorCodeHandle = cublasCreate(&handleBlas);
-            checkCublasErrorCode(errorCodeHandle);
+            cublasStatus_t statusHandleBlas = cublasCreate(&handleBlas);
+            checkCublasErrorCode(statusHandleBlas);
             // creates cusolver handle
-            cusolverStatus_t statusHandle = cusolverDnCreate(&handleSolver);
-            checkCusolverErrorCode(statusHandle);
+            cusolverStatus_t statusHandleCusolver = cusolverDnCreate(&handleSolver);
+            checkCusolverErrorCode(statusHandleCusolver);
             // allocates an integer on GPU to use it as an output parameter
             cudaError statusAlloc = cudaMallocManaged((void**)&gpu_allocated_integer, sizeof(int));
             checkCudaErrorCode(statusAlloc);
