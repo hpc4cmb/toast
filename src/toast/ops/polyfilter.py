@@ -93,8 +93,8 @@ class PolyFilter2D(Operator):
         """
         if detectors is not None:
             raise RuntimeError("PolyFilter2D cannot be run in batch mode")
-        nmode = (self.order + 1) * (self.order + 2) // 2
         norder = self.order + 1
+        nmode = norder ** 2
         pat = re.compile(self.pattern)
 
         for obs in data.obs:
@@ -108,49 +108,96 @@ class PolyFilter2D(Operator):
             # communicator for processes with the same sample range
             comm = obs.comm_col
 
-            if self.focalplane_key is None:
-                key_values = [None]
-            else:
-                key_values = set()
-                for det in obs.all_detectors:
-                    if pat.match(det) is None:
-                        continue
-                    key_values.add(focalplane[det][self.focalplane_key])
-                key_values = sorted(key_values)
+            # Detectors to process
 
-            detector_index = {}
-            ndet = 0
+            detectors = []
             for det in obs.all_detectors:
                 if pat.match(det) is None:
                     continue
-                detector_index[det] = ndet
-                ndet += 1
+                detectors.append(det)
+            ndet = len(detectors)
+            if ndet == 0:
+                continue
 
-            # Number of detectors may limit the number of modes we can constrain
-            nmode = min(nmode, ndet)
+            # Detector positions
+
+            detector_position = {}
+            for det in detectors:
+                det_quat = obs.telescope.focalplane[det]["quat"]
+                x, y, z = qa.rotate(det_quat, ZAXIS)
+                theta, phi = np.arcsin([x, y])
+                detector_position[det] = [theta, phi]
+
+            # Enumerate detector groups (e.g. wafers) to filter
+
+            group_index = {}
+            if self.focalplane_key is None:
+                groups = None
+                ngroup = 1
+                for det in detectors:
+                    group_index[det] = 0
+            else:
+                groups = {}
+                for det in detectors:
+                    value = focalplane[det][self.focalplane_key]
+                    if value not in groups:
+                        groups[value] = []
+                    groups[value].append(det)
+                ngroup = len(groups)
+                for igroup, group in sorted(groups):
+                    for det in groups[group]:
+                        group_index[det] = igroup
+
+            # Enumerate detectors to process
+
+            detector_index = {}
+            group_det = np.zeros(ndet)
+            for idet, det in enumerate(detectors):
+                detector_index[det] = idet
+                group_det[idet] = group_index[det]
+
+            # Measure offset for each group, translate and scale
+            # detector positions to [-1, 1]
+            
+            group_offset = {}
+            all_positions = []
+            for group, detectors_group in groups.items():
+                ndet_group = len(detectors_group)
+                theta_offset, phi_offset = 0, 0
+                for det in detectors_group:
+                    theta, phi = detector_position[det]
+                    theta_offset += theta
+                    phi_offset += phi
+                theta_offset /= ndet_group
+                phi_offset /= ndet_group
+                for det in detectors_group:
+                    theta, phi = detector_position[det]
+                    detector_position[det] = [theta - theta_offset, phi - phi_offset]
+                    all_positions.append(detector_position[det])
+                    
+            thetavec, phivec = np.vstack(all_positions).T
+            thetamax = np.amax(np.abs(thetavec))
+            phimax = np.amax(np.abs(phivec))
+            scale = 0.999 / max(thetamax, phimax)
+            
+            for det in detector_position:
+                theta, phi = detector_position[det]
+                detector_position[det] = [theta * scale, phi * scale]
+
+            # Now evaluate the polynomial templates at the sites of
+            # each detector
+
+            orders = np.arange(norder)
+            xorders, yorders = np.meshgrid(orders, orders, indexing="ij")
+            xorders = xorders.ravel()
+            yorders = yorders.ravel()
 
             detector_templates = np.zeros([ndet, nmode])
-            mode = 0
-            xorders = np.zeros(nmode)
-            yorders = np.zeros(nmode)
-            for order in range(norder):
-                for yorder in range(order + 1):
-                    xorder = order - yorder
-                    xorders[mode] = xorder
-                    yorders[mode] = yorder
-                    mode += 1
-                    if mode == nmode:
-                        break
-                if mode == nmode:
-                    break
-
             for det in obs.local_detectors:
                 if det not in detector_index:
                     continue
                 idet = detector_index[det]
-                det_quat = obs.telescope.focalplane[det]["quat"]
-                x, y, z = qa.rotate(det_quat, ZAXIS)
-                theta, phi = np.arcsin([x, y])
+                theta, phi = detector_position[det]
                 detector_templates[idet] = theta ** xorders * phi ** yorders
 
             # Iterate over each interval
@@ -166,11 +213,9 @@ class PolyFilter2D(Operator):
                 # Accumulate the linear regression templates
 
                 templates = np.zeros([ndet, nmode, nsample])
-                proj = np.zeros([nmode, nsample])
+                proj = np.zeros([ngroup, nmode, nsample])
 
                 t1 = time()
-
-                norms = np.zeros(nmode)
 
                 shared_flags = views.shared[self.shared_flags][iview]
                 shared_mask = (shared_flags & self.shared_flag_mask) == 0
@@ -178,7 +223,8 @@ class PolyFilter2D(Operator):
                 for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
                         continue
-                    ind = detector_index[det]
+                    ind_det = detector_index[det]
+                    ind_group = group_index[det]
 
                     signal = views.detdata[self.det_data][iview][idet]
                     det_flags = views.detdata[self.det_flags][iview][idet]
@@ -186,60 +232,55 @@ class PolyFilter2D(Operator):
 
                     mask = np.logical_and(shared_mask, det_mask)
 
-                    template = detector_templates[ind]
-                    templates[idet] = np.outer(template, mask)
-                    proj += np.outer(template, signal * mask)
-                    norms += template ** 2
+                    template = detector_templates[ind_det]
+                    templates[ind_det] = np.outer(template, mask)
+                    proj[ind_group] += np.outer(template, signal * mask)
 
                 t_template += time() - t1
 
                 t1 = time()
                 comm.allreduce(templates)
                 comm.allreduce(proj)
-                comm.allreduce(norms)
-                good = norms != 0
-                norms[good] = norms[good] ** -0.5
                 t_get_norm += time() - t1
-
-                # Noise-weight
-
-                t1 = time()
-                templates = np.transpose(
-                    templates, [1, 0, 2]
-                ).copy()  # nmode x ndet x nsample
-                for mode, norm in enumerate(norms):
-                    if norm:
-                        templates[mode] *= norm
-                        proj[mode] *= norm
-                t_apply_norm += time() - t1
 
                 # Solve the linear regression amplitudes.  Each task
                 # inverts different template matrices
 
                 t1 = time()
                 templates = np.transpose(
-                    templates, [2, 1, 0]
+                    templates, [2, 0, 1]
                 ).copy()  # nsample x ndet x nmode
-                proj = proj.T.copy()  # nsample x nmode
-                coeff = np.zeros([nsample, nmode])
+                proj = np.transpose(proj, [2, 1, 0])  # nsample x ngroup x nmode
+                coeff = np.zeros([nsample, ngroup, nmode])
                 for isample in range(nsample):
                     if isample % comm.size != comm.rank:
                         continue
-                    templatesT = templates[isample].T.copy()  # ndet x nmode
-                    ccinv = np.dot(templatesT, templates[isample])
-                    try:
-                        cc = np.linalg.inv(ccinv)
-                        coeff[isample] = np.dot(cc, proj[isample])
-                    except np.linalg.LinAlgError:
-                        coeff[isample] = 0
+                    for igroup in range(ngroup):
+                        good = group_det == igroup
+                        t = templates[isample][good].copy()
+                        ccinv = np.dot(t.T, t)
+                        try:
+                            cc = np.linalg.inv(ccinv)
+                            coeff[isample, igroup] = np.dot(cc, proj[isample, igroup])
+                        except np.linalg.LinAlgError:
+                            coeff[isample, igroup] = 0
                 comm.allreduce(coeff)
                 t_solve += time() - t1
 
                 t1 = time()
 
-                for isample in range(nsample):
-                    if np.all(coeff[isample] == 0):
-                        shared_flags[isample] |= self.poly_flag_mask
+                for igroup in range(ngroup):
+                    local_dets = obs.local_detectors
+                    good = np.zeros(len(local_dets), dtype=np.bool)
+                    for idet, det in local_dets:
+                        if group_index[det] == igroup:
+                            good[idet] = True
+                    if not np.any(good):
+                        continue
+                    for isample in range(nsample):
+                        if np.all(coeff[isample, igroup] == 0):
+                            views.detdata[self.det_flags][iview][good, isample] \
+                                |= self.poly_flag_mask
 
                 templates = np.transpose(
                     templates, [1, 2, 0]
