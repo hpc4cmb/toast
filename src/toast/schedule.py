@@ -1588,6 +1588,9 @@ def add_scan(
                 vec_min = qa.rotate(min_rot, offset_vec)
 
                 az_min, el_min = hp.vec2dir(vec_min, lonlat=True)
+                # Choose the right branch of Azimuth
+                if az_min < 0:
+                    az_min += 360
 
                 el_offset = np.degrees(el) - el_min
                 el_observe = np.degrees(el) + el_offset
