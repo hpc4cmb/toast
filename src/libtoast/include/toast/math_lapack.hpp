@@ -6,46 +6,71 @@
 #ifndef TOAST_MATH_LAPACK_HPP
 #define TOAST_MATH_LAPACK_HPP
 
+#ifdef HAVE_CUDALIBS
+#include <cublas_v2.h>
+#include <cusolverDn.h>
+
+void checkCudaErrorCode(const cudaError errorCode);
+void checkCublasErrorCode(const cublasStatus_t errorCode);
+void checkCusolverErrorCode(const cusolverStatus_t errorCode);
+#endif
+
+// TODO:
+//  - rename file
+//  - delete copy methods to insure handle is handled properly
+//  - put gpu helper function in dedicated file
 
 namespace toast {
-void lapack_gemm(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
-                 double * ALPHA, double * A, int * LDA, double * B, int * LDB,
-                 double * BETA, double * C, int * LDC);
+    class LinearAlgebra {
+    public:
+        LinearAlgebra()
+        {
+            #ifdef HAVE_CUDALIBS
+            // creates cublas handle
+            cublasStatus_t errorCodeHandle = cublasCreate(&handleBlas);
+            checkCublasErrorCode(errorCodeHandle);
+            // creates cusolver handle
+            cusolverStatus_t statusHandle = cusolverDnCreate(&handleSolver);
+            checkCusolverErrorCode(statusHandle);
+            #endif
+        };
 
-void lapack_gemv(char * TRANS, int * M, int * N, double * ALPHA, double * A,
-                 int * LDA, double * X, int * INCX, double * BETA, double * Y,
-                 int * INCY);
+        ~LinearAlgebra()
+        {
+            #ifdef HAVE_CUDALIBS
+            // free cublas handle
+            cublasDestroy(handleBlas);
+            // free cusolver handle
+            cusolverDnDestroy(handleSolver);
+            #endif
+        };
 
-int lapack_syev_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
-                           int * LDA, double * W);
+        void gemm(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
+                  double * ALPHA, double * A, int * LDA, double * B, int * LDB,
+                  double * BETA, double * C, int * LDC) const;
 
-void lapack_syev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
-                 double * W, double * WORK, int * LWORK, int * INFO);
+        int syev_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
+                            int * LDA, double * W) const;
 
-void lapack_symv(char * UPLO, int * N, double * ALPHA, double * A, int * LDA,
-                 double * X, int * INCX, double * BETA, double * Y,
-                 int * INCY);
+        void syev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
+                  double * W, double * WORK, int * LWORK, int * INFO) const;
 
-void lapack_trmv(char * UPLO, char * TRANS, char * DIAG, int * N, double * A,
-                 int * LDA, double * X, int * INCX);
+        void symm(char * SIDE, char * UPLO, int * M, int * N, double * ALPHA,
+                  double * A, int * LDA, double * B, int * LDB, double * BETA,
+                  double * C, int * LDC) const;
 
-void lapack_symm(char * SIDE, char * UPLO, int * M, int * N, double * ALPHA,
-                 double * A, int * LDA, double * B, int * LDB, double * BETA,
-                 double * C, int * LDC);
+        void syrk(char * UPLO, char * TRANS, int * N, int * K, double * ALPHA,
+                  double * A, int * LDA, double * BETA, double * C, int * LDC) const;
 
-void lapack_syrk(char * UPLO, char * TRANS, int * N, int * K, double * ALPHA,
-                 double * A, int * LDA, double * BETA, double * C, int * LDC);
-
-void lapack_potrf(char * UPLO, int * N, double * A, int * LDA, int * INFO);
-
-void lapack_pocon(char * UPLO, int * N, double * A, int * LDA, double * ANORM,
-                  double * RCOND, double * WORK, int * IWORK, int * INFO);
-
-void lapack_potri(char * UPLO, int * N, double * A, int * LDA, int * INFO);
-
-void lapack_dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
-                   double * B, int * LDB, double * S, double * RCOND,
-                   int * RANK, double * WORK, int * LWORK, int * INFO);
+        void dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
+                    double * B, int * LDB, double * S, double * RCOND,
+                    int * RANK, double * WORK, int * LWORK, int * INFO) const;
+    private:
+    #ifdef HAVE_CUDALIBS
+        cublasHandle_t handleBlas = NULL;
+        cusolverDnHandle_t handleSolver = NULL;
+    #endif
+    };
 }
 
 #endif // ifndef TOAST_LAPACK_HPP

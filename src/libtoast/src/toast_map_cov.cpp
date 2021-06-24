@@ -274,6 +274,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
         {
             // thread-private variables
+            toast::LinearAlgebra linearAlgebra;
 
             int fnnz = (int)nnz;
 
@@ -301,7 +302,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             toast::AlignedVector <double> evals(nnz);
 
             // computes the required buffer size
-            int lwork = toast::lapack_syev_buffersize(&jobz_val, &uplo, &fnnz, fdata.data(), &fnnz, evals.data());
+            int lwork = linearAlgebra.syev_buffersize(&jobz_val, &uplo, &fnnz, fdata.data(), &fnnz, evals.data());
             toast::AlignedVector <double> work(lwork);
 
             // Here we "unroll" the loop over submaps and pixels within each submap.
@@ -323,11 +324,11 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
                 // eigendecompose
                 if (!invert) {
-                    toast::lapack_syev(&jobz_val, &uplo, &fnnz,
+                    linearAlgebra.syev(&jobz_val, &uplo, &fnnz,
                                        fdata.data(), &fnnz, evals.data(),
                                        work.data(), &lwork, &info);
                 } else {
-                    toast::lapack_syev(&jobz_vec, &uplo, &fnnz,
+                    linearAlgebra.syev(&jobz_vec, &uplo, &fnnz,
                                        fdata.data(), &fnnz, evals.data(),
                                        work.data(), &lwork, &info);
                 }
@@ -360,7 +361,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                                                          fdata[k * nnz + m];
                                 }
                             }
-                            toast::lapack_gemm(&transN, &transT, &fnnz, &fnnz,
+                            linearAlgebra.gemm(&transN, &transT, &fnnz, &fnnz,
                                                &fnnz, &fone, ftemp.data(),
                                                &fnnz, fdata.data(), &fnnz,
                                                &fzero, finv.data(), &fnnz);
@@ -421,6 +422,8 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         omp parallel default(none) shared(nsub, subsize, nnz, data1, data2)
         {
             // thread-private variables
+            toast::LinearAlgebra linearAlgebra;
+
             int fnnz = (int)nnz;
 
             double fzero = 0.0;
@@ -465,7 +468,7 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                     }
                 }
 
-                toast::lapack_symm(&side, &uplo, &fnnz, &fnnz, &fone,
+                linearAlgebra.symm(&side, &uplo, &fnnz, &fnnz, &fone,
                                    fdata1.data(), &fnnz, fdata2.data(), &fnnz,
                                    &fzero, fdata3.data(), &fnnz);
 
