@@ -274,11 +274,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
         {
             // thread-private variables
-            // We assume a large value here, since the work space needed
-            // will still be small.
-            int NB = 256;
 
-            int lwork = NB * 2 + (int)nnz;
             int fnnz = (int)nnz;
 
             double fzero = 0.0;
@@ -303,6 +299,9 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             toast::AlignedVector <double> ftemp(nnz * nnz);
             toast::AlignedVector <double> finv(nnz * nnz);
             toast::AlignedVector <double> evals(nnz);
+
+            // computes the required buffer size
+            int lwork = toast::lapack_syev_buffersize(&jobz_val, &uplo, &fnnz, fdata.data(), &fnnz, evals.data());
             toast::AlignedVector <double> work(lwork);
 
             // Here we "unroll" the loop over submaps and pixels within each submap.
