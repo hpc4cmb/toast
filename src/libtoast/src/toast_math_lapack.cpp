@@ -138,6 +138,32 @@ void toast::lapack_gemv(char * TRANS, int * M, int * N, double * ALPHA,
 extern "C" void dsyev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
                       double * W, double * WORK, int * LWORK, int * INFO);
 
+// computes LWORK, the size (in number of elements) of WORK, the workspace used during the computation of syev
+int toast::lapack_syev_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
+                                  int * LDA, double * W) {
+    // We assume a large value here, since the work space needed will still be small.
+    int NB = 256;
+    int LWORK = NB * 2 + (*N);
+
+    #ifdef HAVE_CUDALIBS
+    // make cusolver handle
+    cusolverDnHandle_t handle = NULL;
+    cusolverStatus_t statusHandle = cusolverDnCreate(&handle);
+    checkCusolverErrorCode(statusHandle);
+    // prepare inputs
+    cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
+    cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    // computes buffersize
+    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, &LWORK);
+    checkCusolverErrorCode(statusBuffer);
+    // frees handle
+    cusolverDnDestroy(handle);
+    #endif
+
+    return LWORK;
+}
+
+// LWORK, the size of WORK in number of elements, should have been computed with lapack_syev_buffersize
 void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
                         int * LDA, double * W, double * WORK, int * LWORK,
                         int * INFO) {
@@ -152,24 +178,6 @@ void toast::lapack_syev(char * JOBZ, char * UPLO, int * N, double * A,
     int* INFO_cuda = NULL;
     cudaError statusAllocINFO = cudaMallocManaged((void**)&INFO_cuda, sizeof(int));
     checkCudaErrorCode(statusAllocINFO);
-    // query working space
-    int new_LWORK = 0;
-    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, &new_LWORK);
-    checkCusolverErrorCode(statusBuffer);
-    // allocates larger workspace if needed
-    if(new_LWORK > *LWORK)
-    {
-        // notifies user of additional allocation
-        auto log = toast::Logger::get();
-        std::string msg("Allocating " + std::to_string(new_LWORK * sizeof(double)) + " bytes to run syev on GPU.");
-        log.info(msg.c_str());
-        // frees previously used memory and allocates new memory
-        // we could use a Managed malloc but it would be less efficient for a workspace used only on GPU
-        *LWORK = new_LWORK;
-        //cudaFree(WORK); // this free should be required but it causes internal errors in syev
-        cudaError statusAllocWORK = cudaMalloc((void**)&WORK, sizeof(double) * (*LWORK));
-        checkCudaErrorCode(statusAllocWORK);
-    }
     // compute spectrum
     cusolverStatus_t statusSolver = cusolverDnDsyevd(handle, jobz_cuda, uplo_cuda, *N, A, *LDA, W, WORK, *LWORK, INFO_cuda);
     checkCusolverErrorCode(statusSolver);

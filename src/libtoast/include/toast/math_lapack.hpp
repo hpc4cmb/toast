@@ -16,6 +16,9 @@ void lapack_gemv(char * TRANS, int * M, int * N, double * ALPHA, double * A,
                  int * LDA, double * X, int * INCX, double * BETA, double * Y,
                  int * INCY);
 
+int lapack_syev_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
+                           int * LDA, double * W);
+
 void lapack_syev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
                  double * W, double * WORK, int * LWORK, int * INFO);
 
