@@ -1538,42 +1538,78 @@ def add_scan(
                 log.debug("Moon too close")
                 raise MoonTooClose
 
-        observer.date = to_DJD(t2)
-        sun.compute(observer)
-        moon.compute(observer)
-        sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
-        moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
-        moon_phase2 = moon.phase
-        # Create an entry in the schedule
-        entry = fout_fmt.format(
-            to_UTC(t1),
-            to_UTC(t2),
-            to_MJD(t1),
-            to_MJD(t2),
-            boresight_angle,
-            patch.name,
-            (azmin + args.boresight_offset_az_deg) % 360,
-            (azmax + args.boresight_offset_az_deg) % 360,
-            (el / degree + args.boresight_offset_el_deg),
-            rising_string,
-            sun_el1,
-            sun_az1,
-            sun_el2,
-            sun_az2,
-            moon_el1,
-            moon_az1,
-            moon_el2,
-            moon_az2,
-            0.005 * (moon_phase1 + moon_phase2),
-            -1 - patch.partial_hits if partial_scan else patch.hits,
-            subscan,
-        )
-        entries.append(entry)
-        if partial_scan:
+        # Do not schedule observations shorter than a second
+        too_short = t1 + 1 > t2
+
+        if not too_short:
+            observer.date = to_DJD(t2)
+            sun.compute(observer)
+            moon.compute(observer)
+            sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
+            moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
+            moon_phase2 = moon.phase
+            # optionally offset scan
+            if args.boresight_offset_az_deg != 0 or args.boresight_offset_el_deg != 0:
+                az_offset = np.radians(args.boresight_offset_az_deg)
+                el_offset = np.radians(args.boresight_offset_el_deg)
+
+                az_offset_rot = qa.rotation(ZAXIS, az_offset)
+                el_offset_rot = qa.rotation(YAXIS, el_offset)
+                offset_rot = qa.mult(az_offset_rot, el_offset_rot)
+                offset_vec = qa.rotate(offset_rot, XAXIS)
+
+                az_min_rot = qa.rotation(ZAXIS, np.radians(azmin))
+                az_max_rot = qa.rotation(ZAXIS, np.radians(azmax))
+                el_rot = qa.rotation(YAXIS, -el)
+                min_rot = qa.mult(az_min_rot, el_rot)
+
+                vec_min = qa.rotate(min_rot, offset_vec)
+
+                az_min, el_min = hp.vec2dir(vec_min, lonlat=True)
+                # Choose the right branch of Azimuth
+                if az_min < 0:
+                    az_min += 360
+
+                el_offset = np.degrees(el) - el_min
+                el_observe = np.degrees(el) + el_offset
+
+                az_offset = (az_min - azmin) * np.cos(el) / np.cos(np.radians(el_observe))
+                azmin += az_offset
+                azmax += az_offset
+            else:
+                el_observe = np.degrees(el)
+            # Create an entry in the schedule
+            entry = fout_fmt.format(
+                to_UTC(t1),
+                to_UTC(t2),
+                to_MJD(t1),
+                to_MJD(t2),
+                boresight_angle,
+                patch.name,
+                azmin % 360,
+                azmax % 360,
+                el_observe,
+                rising_string,
+                sun_el1,
+                sun_az1,
+                sun_el2,
+                sun_az2,
+                moon_el1,
+                moon_az1,
+                moon_el2,
+                moon_az2,
+                0.005 * (moon_phase1 + moon_phase2),
+                -1 - patch.partial_hits if partial_scan else patch.hits,
+                subscan,
+            )
+            entries.append(entry)
+
+        if too_short or sun_too_close or moon_too_close or partial_scan:
             # Never append more than one partial scan before
             # checking if full scans are again available
             tstop = t2
             break
+
         t1 = t2 + args.gap_small_s
 
     # Write the entries
