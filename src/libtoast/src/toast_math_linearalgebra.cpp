@@ -47,11 +47,11 @@ toast::LinearAlgebra::~LinearAlgebra()
 #endif
 }
 
-#define dgemm LAPACK_FUNC(dgemm, DGEMM)
+#define wrapped_dgemm LAPACK_FUNC(dgemm, DGEMM)
 
-extern "C" void dgemm(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
-                      double * ALPHA, double * A, int * LDA, double * B,
-                      int * LDB, double * BETA, double * C, int * LDC);
+extern "C" void wrapped_dgemm(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
+                              double * ALPHA, double * A, int * LDA, double * B,
+                              int * LDB, double * BETA, double * C, int * LDC);
 
 void toast::LinearAlgebra::gemm(char * TRANSA, char * TRANSB, int * M, int * N,
                         int * K, double * ALPHA, double * A, int * LDA,
@@ -65,7 +65,7 @@ void toast::LinearAlgebra::gemm(char * TRANSA, char * TRANSB, int * M, int * N,
     cublasStatus_t errorCodeOp = cublasDgemm(handleBlas, transA_cuda, transB_cuda, *M, *N, *K, ALPHA, A, *LDA, B, *LDB, BETA, C, *LDC);
     checkCublasErrorCode(errorCodeOp);
     #elif HAVE_LAPACK
-    dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    wrapped_dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
@@ -76,10 +76,10 @@ void toast::LinearAlgebra::gemm(char * TRANSA, char * TRANSB, int * M, int * N,
     return;
 }
 
-#define dsyev LAPACK_FUNC(dsyev, DSYEV)
+#define wrapped_dsyev LAPACK_FUNC(dsyev, DSYEV)
 
-extern "C" void dsyev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
-                      double * W, double * WORK, int * LWORK, int * INFO);
+extern "C" void wrapped_dsyev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
+                              double * W, double * WORK, int * LWORK, int * INFO);
 
 // computes LWORK, the size (in number of elements) of WORK, the workspace used during the computation of syev
 int toast::LinearAlgebra::syev_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
@@ -117,7 +117,7 @@ void toast::LinearAlgebra::syev(char * JOBZ, char * UPLO, int * N, double * A,
     checkCudaErrorCode(statusSync);
     *INFO = *INFO_cuda;
     #elif HAVE_LAPACK
-    dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
+    wrapped_dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
@@ -128,11 +128,11 @@ void toast::LinearAlgebra::syev(char * JOBZ, char * UPLO, int * N, double * A,
     return;
 }
 
-#define dsymm LAPACK_FUNC(dsymm, DSYMM)
+#define wrapped_dsymm LAPACK_FUNC(dsymm, DSYMM)
 
-extern "C" void dsymm(char * SIDE, char * UPLO, int * M, int * N,
-                      double * ALPHA, double * A, int * LDA, double * B,
-                      int * LDB, double * BETA, double * C, int * LDC);
+extern "C" void wrapped_dsymm(char * SIDE, char * UPLO, int * M, int * N,
+                              double * ALPHA, double * A, int * LDA, double * B,
+                              int * LDB, double * BETA, double * C, int * LDC);
 
 void toast::LinearAlgebra::symm(char * SIDE, char * UPLO, int * M, int * N,
                         double * ALPHA, double * A, int * LDA, double * B,
@@ -145,7 +145,7 @@ void toast::LinearAlgebra::symm(char * SIDE, char * UPLO, int * M, int * N,
     cublasStatus_t errorCodeOp = cublasDsymm(handleBlas, side_cuda, uplo_cuda, *M, *N, ALPHA, A, *LDA, B, *LDB, BETA, C, *LDC);
     checkCublasErrorCode(errorCodeOp);
     #elif HAVE_LAPACK
-    dsymm(SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    wrapped_dsymm(SIDE, UPLO, M, N, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
@@ -156,11 +156,11 @@ void toast::LinearAlgebra::symm(char * SIDE, char * UPLO, int * M, int * N,
     return;
 }
 
-#define dsyrk LAPACK_FUNC(dsyrk, DSYRK)
+#define wrapped_dsyrk LAPACK_FUNC(dsyrk, DSYRK)
 
-extern "C" void dsyrk(char * UPLO, char * TRANS, int * N, int * K,
-                      double * ALPHA, double * A, int * LDA, double * BETA,
-                      double * C, int * LDC);
+extern "C" void wrapped_dsyrk(char * UPLO, char * TRANS, int * N, int * K,
+                              double * ALPHA, double * A, int * LDA, double * BETA,
+                              double * C, int * LDC);
 
 void toast::LinearAlgebra::syrk(char * UPLO, char * TRANS, int * N, int * K,
                         double * ALPHA, double * A, int * LDA, double * BETA,
@@ -173,7 +173,7 @@ void toast::LinearAlgebra::syrk(char * UPLO, char * TRANS, int * N, int * K,
     cublasStatus_t errorCodeOp = cublasDsyrk(handleBlas, uplo_cuda, trans_cuda, *N, *K, ALPHA, A, *LDA, BETA, C, *LDC);
     checkCublasErrorCode(errorCodeOp);
     #elif HAVE_LAPACK
-    dsyrk(UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC);
+    wrapped_dsyrk(UPLO, TRANS, N, K, ALPHA, A, LDA, BETA, C, LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
@@ -184,18 +184,18 @@ void toast::LinearAlgebra::syrk(char * UPLO, char * TRANS, int * N, int * K,
     return;
 }
 
-#define dgelss LAPACK_FUNC(dgelss, DGELSS)
+#define wrapped_dgelss LAPACK_FUNC(dgelss, DGELSS)
 
-extern "C" void dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
-                       double * B, int * LDB, double * S, double * RCOND,
-                       int * RANK, double * WORK, int * LWORK, int * INFO);
+extern "C" void wrapped_dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
+                               double * B, int * LDB, double * S, double * RCOND,
+                               int * RANK, double * WORK, int * LWORK, int * INFO);
 
 void toast::LinearAlgebra::dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
                           double * B, int * LDB, double * S, double * RCOND,
                           int * RANK, double * WORK, int * LWORK, int * INFO) const {
     // NOTE: there is no GPU dgelss implementation at the moment (there are dgels implementations however)
     #ifdef HAVE_LAPACK
-    dgelss(M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK, WORK, LWORK, INFO);
+    wrapped_dgelss(M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK, WORK, LWORK, INFO);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
