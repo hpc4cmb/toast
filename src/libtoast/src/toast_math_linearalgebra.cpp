@@ -6,49 +6,6 @@
 #include <toast/sys_utils.hpp>
 #include <toast/math_linearalgebra.hpp>
 
-#ifdef HAVE_CUDALIBS
-// displays an error message if the computation did not end in sucess
-void checkCudaErrorCode(const cudaError errorCode)
-{
-    if (errorCode != cudaSuccess)
-    {
-        auto here = TOAST_HERE();
-        auto log = toast::Logger::get();
-        std::string msg = "CUDA threw a '" + std::string(cudaGetErrorString(errorCode)) + "' error code.";
-        log.error(msg.c_str(), here);
-        throw std::runtime_error(msg.c_str());
-    }
-}
-
-// displays an error message if the computation did not end in sucess
-void checkCublasErrorCode(const cublasStatus_t errorCode)
-{
-    if(errorCode != CUBLAS_STATUS_SUCCESS)
-    {
-        auto here = TOAST_HERE();
-        auto log = toast::Logger::get();
-        std::string msg = "CUBLAS threw a '" + std::to_string(errorCode) + "' error code.";
-        log.error(msg.c_str(), here);
-        throw std::runtime_error(msg.c_str());
-    }
-}
-
-// displays an error message if the computation did not end in sucess
-void checkCusolverErrorCode(const cusolverStatus_t errorCode)
-{
-    if(errorCode != CUSOLVER_STATUS_SUCCESS)
-    {
-        auto here = TOAST_HERE();
-        auto log = toast::Logger::get();
-        std::string msg = "CUSOLVER threw a '" + std::to_string(errorCode) + "' error code.";
-        log.error(msg.c_str(), here);
-        throw std::runtime_error(msg.c_str());
-    }
-}
-#endif
-
-// TODO batch operations would be much faster where possible
-
 // Define macros for lapack name mangling
 
 #if defined LAPACK_NAMES_LOWER
@@ -63,6 +20,32 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode)
 # define LAPACK_FUNC(lname, uname) lname
 #endif // if defined LAPACK_NAMES_LOWER
 
+toast::LinearAlgebra::LinearAlgebra()
+{
+#ifdef HAVE_CUDALIBS
+    // creates cublas handle
+    cublasStatus_t statusHandleBlas = cublasCreate(&handleBlas);
+    checkCublasErrorCode(statusHandleBlas);
+    // creates cusolver handle
+    cusolverStatus_t statusHandleCusolver = cusolverDnCreate(&handleSolver);
+    checkCusolverErrorCode(statusHandleCusolver);
+    // allocates an integer on GPU to use it as an output parameter
+    cudaError statusAlloc = cudaMallocManaged((void**)&gpu_allocated_integer, sizeof(int));
+    checkCudaErrorCode(statusAlloc);
+#endif
+}
+
+toast::LinearAlgebra::~LinearAlgebra()
+{
+#ifdef HAVE_CUDALIBS
+    // free cublas handle
+    cublasDestroy(handleBlas);
+    // free cusolver handle
+    cusolverDnDestroy(handleSolver);
+    // release integer allocation
+    cudaFree(gpu_allocated_integer);
+#endif
+}
 
 #define dgemm LAPACK_FUNC(dgemm, DGEMM)
 

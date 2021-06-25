@@ -20,9 +20,10 @@ add_custom_command(OUTPUT ${versioncpp}
 
 set(toast_SOURCES
     toast.cpp
+    src/toast_gpu_helpers.cpp
     src/toast_sys_environment.cpp
     src/toast_sys_utils.cpp
-        src/toast_math_linearalgebra.cpp
+    src/toast_math_linearalgebra.cpp
     src/toast_math_sf.cpp
     src/toast_math_rng.cpp
     src/toast_math_qarray.cpp
