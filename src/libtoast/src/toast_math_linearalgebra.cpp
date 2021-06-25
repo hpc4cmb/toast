@@ -20,6 +20,7 @@
 # define LAPACK_FUNC(lname, uname) lname
 #endif // if defined LAPACK_NAMES_LOWER
 
+// NOTE: one could use one handle per gpu if several are available
 toast::LinearAlgebra::LinearAlgebra()
 {
 #ifdef HAVE_CUDALIBS
