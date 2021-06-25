@@ -8,6 +8,7 @@
 
 #include <toast/sys_environment.hpp>
 #include <toast/sys_utils.hpp>
+#include <toast/gpu_helpers.hpp>
 #include <toast/math_linearalgebra.hpp>
 #include <toast/math_sf.hpp>
 #include <toast/math_rng.hpp>
