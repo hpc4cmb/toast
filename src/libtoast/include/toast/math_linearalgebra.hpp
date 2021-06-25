@@ -13,7 +13,7 @@
 
 namespace toast {
     // encapsulates construction and destruction of GPU linear algebra handles
-    // WARNING: this class is *not* threadsafe
+    // WARNING: this class is *not* threadsafe and one should create one LinearAlgebra object per thread
     class LinearAlgebra {
     public:
         // handles creation and destruction of gpu handles
@@ -32,7 +32,7 @@ namespace toast {
                             int * LDA, double * W) const;
 
         void syev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
-                  double * W, double * WORK, int * LWORK, int * INFO) const;
+                  double * W, double * WORK, int * LWORK, int * INFO);
 
         void symm(char * SIDE, char * UPLO, int * M, int * N, double * ALPHA,
                   double * A, int * LDA, double * B, int * LDB, double * BETA,
@@ -53,4 +53,4 @@ namespace toast {
     };
 }
 
-#endif // ifndef TOAST_LAPACK_HPP
+#endif // TOAST_MATH_LINEARALGEBRA_HPP
