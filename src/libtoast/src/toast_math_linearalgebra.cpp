@@ -54,9 +54,9 @@ extern "C" void wrapped_dgemm(char * TRANSA, char * TRANSB, int * M, int * N, in
                               int * LDB, double * BETA, double * C, int * LDC);
 
 void toast::LinearAlgebra::gemm(char * TRANSA, char * TRANSB, int * M, int * N,
-                        int * K, double * ALPHA, double * A, int * LDA,
-                        double * B, int * LDB, double * BETA, double * C,
-                        int * LDC) const {
+                                int * K, double * ALPHA, double * A, int * LDA,
+                                double * B, int * LDB, double * BETA, double * C,
+                                int * LDC) const {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasOperation_t transA_cuda = (*TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
@@ -83,7 +83,7 @@ extern "C" void wrapped_dsyev(char * JOBZ, char * UPLO, int * N, double * A, int
 
 // computes LWORK, the size (in number of elements) of WORK, the workspace used during the computation of syev
 int toast::LinearAlgebra::syev_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
-                                  int * LDA, double * W) const {
+                                          int * LDA, double * W) const {
     // We assume a large value here, since the work space needed will still be small.
     int NB = 256;
     int LWORK = NB * 2 + (*N);
@@ -102,8 +102,8 @@ int toast::LinearAlgebra::syev_buffersize(char * JOBZ, char * UPLO, int * N, dou
 
 // LWORK, the size of WORK in number of elements, should have been computed with lapack_syev_buffersize
 void toast::LinearAlgebra::syev(char * JOBZ, char * UPLO, int * N, double * A,
-                        int * LDA, double * W, double * WORK, int * LWORK,
-                        int * INFO) const {
+                                int * LDA, double * W, double * WORK, int * LWORK,
+                                int * INFO) {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
     cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
@@ -135,8 +135,8 @@ extern "C" void wrapped_dsymm(char * SIDE, char * UPLO, int * M, int * N,
                               int * LDB, double * BETA, double * C, int * LDC);
 
 void toast::LinearAlgebra::symm(char * SIDE, char * UPLO, int * M, int * N,
-                        double * ALPHA, double * A, int * LDA, double * B,
-                        int * LDB, double * BETA, double * C, int * LDC) const {
+                                double * ALPHA, double * A, int * LDA, double * B,
+                                int * LDB, double * BETA, double * C, int * LDC) const {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasSideMode_t side_cuda = (*SIDE == 'L') ? CUBLAS_SIDE_LEFT : CUBLAS_SIDE_RIGHT;
@@ -163,8 +163,8 @@ extern "C" void wrapped_dsyrk(char * UPLO, char * TRANS, int * N, int * K,
                               double * C, int * LDC);
 
 void toast::LinearAlgebra::syrk(char * UPLO, char * TRANS, int * N, int * K,
-                        double * ALPHA, double * A, int * LDA, double * BETA,
-                        double * C, int * LDC) const {
+                                double * ALPHA, double * A, int * LDA, double * BETA,
+                                double * C, int * LDC) const {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
@@ -191,8 +191,8 @@ extern "C" void wrapped_dgelss(int * M, int * N, int * NRHS, double * A, int * L
                                int * RANK, double * WORK, int * LWORK, int * INFO);
 
 void toast::LinearAlgebra::dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
-                          double * B, int * LDB, double * S, double * RCOND,
-                          int * RANK, double * WORK, int * LWORK, int * INFO) const {
+                                  double * B, int * LDB, double * S, double * RCOND,
+                                  int * RANK, double * WORK, int * LWORK, int * INFO) const {
     // NOTE: there is no GPU dgelss implementation at the moment (there are dgels implementations however)
     #ifdef HAVE_LAPACK
     wrapped_dgelss(M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK, WORK, LWORK, INFO);

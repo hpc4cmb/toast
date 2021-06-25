@@ -9,7 +9,7 @@
 #ifdef HAVE_CUDALIBS
 
 // displays an error message if the computation did not end in success
-void checkCudaErrorCode(const cudaError errorCode, const std::string functionName = "unknown")
+void checkCudaErrorCode(const cudaError errorCode, const std::string& functionName = "unknown")
 {
     if (errorCode != cudaSuccess)
     {
@@ -42,7 +42,7 @@ std::string cublasGetErrorString(const cublasStatus_t errorCode)
 }
 
 // displays an error message if the computation did not end in sucess
-void checkCublasErrorCode(const cublasStatus_t errorCode, const std::string functionName = "unknown")
+void checkCublasErrorCode(const cublasStatus_t errorCode, const std::string& functionName = "unknown")
 {
     if(errorCode != CUBLAS_STATUS_SUCCESS)
     {
@@ -90,7 +90,7 @@ std::string cusolverGetErrorString(const cusolverStatus_t errorCode)
 }
 
 // displays an error message if the computation did not end in sucess
-void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string functionName = "unknown")
+void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string& functionName = "unknown")
 {
     if(errorCode != CUSOLVER_STATUS_SUCCESS)
     {
