@@ -6,54 +6,23 @@
 #ifndef TOAST_MATH_LINEARALGEBRA_HPP
 #define TOAST_MATH_LINEARALGEBRA_HPP
 
-#ifdef HAVE_CUDALIBS
-#include <cublas_v2.h>
-#include <cusolverDn.h>
-#include <cuda_runtime_api.h>
+#include "gpu_helpers.hpp"
 
-void checkCudaErrorCode(const cudaError errorCode);
-void checkCublasErrorCode(const cublasStatus_t errorCode);
-void checkCusolverErrorCode(const cusolverStatus_t errorCode);
-#endif
-
-// TODO:
-//  - put gpu helper function in dedicated file
+// TODO
+//  - batch operations would be much faster where possible
 
 namespace toast {
     // encapsulates construction and destruction of GPU linear algebra handles
     // WARNING: this class is *not* threadsafe
     class LinearAlgebra {
     public:
-        LinearAlgebra()
-        {
-            #ifdef HAVE_CUDALIBS
-            // creates cublas handle
-            cublasStatus_t statusHandleBlas = cublasCreate(&handleBlas);
-            checkCublasErrorCode(statusHandleBlas);
-            // creates cusolver handle
-            cusolverStatus_t statusHandleCusolver = cusolverDnCreate(&handleSolver);
-            checkCusolverErrorCode(statusHandleCusolver);
-            // allocates an integer on GPU to use it as an output parameter
-            cudaError statusAlloc = cudaMallocManaged((void**)&gpu_allocated_integer, sizeof(int));
-            checkCudaErrorCode(statusAlloc);
-            #endif
-        };
+        // handles creation and destruction of gpu handles
+        LinearAlgebra();
+        ~LinearAlgebra();
 
         // insures that the class is never copied
         LinearAlgebra(LinearAlgebra const&) = delete;
         void operator=(LinearAlgebra const&) = delete;
-
-        ~LinearAlgebra()
-        {
-            #ifdef HAVE_CUDALIBS
-            // free cublas handle
-            cublasDestroy(handleBlas);
-            // free cusolver handle
-            cusolverDnDestroy(handleSolver);
-            // release integer allocation
-            cudaFree(gpu_allocated_integer);
-            #endif
-        };
 
         void gemm(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
                   double * ALPHA, double * A, int * LDA, double * B, int * LDB,
