@@ -33,6 +33,8 @@ toast::LinearAlgebra::LinearAlgebra()
     // allocates an integer on GPU to use it as an output parameter
     cudaError statusAlloc = cudaMallocManaged((void**)&gpu_allocated_integer, sizeof(int));
     checkCudaErrorCode(statusAlloc);
+    // gets id of the GPU device being used
+    cudaGetDevice(&gpuId);
 #endif
 }
 
@@ -62,7 +64,11 @@ void toast::LinearAlgebra::gemm(char * TRANSA, char * TRANSB, int * M, int * N,
     // prepare inputs
     cublasOperation_t transA_cuda = (*TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB_cuda = (*TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
-    // compute gemm
+    // prefetch data to GPU (optional)
+    cudaMemPrefetchAsync(A, (*M) * (*K) * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(B, (*K) * (*N) * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(C, (*M) * (*N) * sizeof(double), gpuId);
+    // compute blas operation
     cublasStatus_t errorCodeOp = cublasDgemm(handleBlas, transA_cuda, transB_cuda, *M, *N, *K, ALPHA, A, *LDA, B, *LDB, BETA, C, *LDC);
     checkCublasErrorCode(errorCodeOp);
     #elif HAVE_LAPACK
@@ -110,7 +116,11 @@ void toast::LinearAlgebra::syev(char * JOBZ, char * UPLO, int * N, double * A,
     cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     int* INFO_cuda = gpu_allocated_integer;
-    // compute spectrum
+    // prefetch data to GPU (optional)
+    cudaMemPrefetchAsync(A, (*N) * (*LDA) * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(W, (*N) * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(WORK, (*LWORK) * sizeof(double), gpuId);
+    // compute cusolver operation
     cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_cuda, uplo_cuda, *N, A, *LDA, W, WORK, *LWORK, INFO_cuda);
     checkCusolverErrorCode(statusSolver);
     // gets info back to CPU
@@ -142,7 +152,11 @@ void toast::LinearAlgebra::symm(char * SIDE, char * UPLO, int * M, int * N,
     // prepare inputs
     cublasSideMode_t side_cuda = (*SIDE == 'L') ? CUBLAS_SIDE_LEFT : CUBLAS_SIDE_RIGHT;
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    // compute gemm
+    // prefetch data to GPU (optional)
+    cudaMemPrefetchAsync(A, (*LDA) * ( (*SIDE == 'L') ? (*M) : (*N) ) * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(B, (*LDB) * (*N) * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(C, (*LDC) * (*N) * sizeof(double), gpuId);
+    // compute blas operation
     cublasStatus_t errorCodeOp = cublasDsymm(handleBlas, side_cuda, uplo_cuda, *M, *N, ALPHA, A, *LDA, B, *LDB, BETA, C, *LDC);
     checkCublasErrorCode(errorCodeOp);
     #elif HAVE_LAPACK
@@ -170,7 +184,10 @@ void toast::LinearAlgebra::syrk(char * UPLO, char * TRANS, int * N, int * K,
     // prepare inputs
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     cublasOperation_t trans_cuda = (*TRANS == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
-    // compute gemm
+    // prefetch data to GPU (optional)
+    cudaMemPrefetchAsync(A, (*LDA) * ( (*TRANS == 'T') ? (*N) : (*K) ) * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(C, (*LDC) * (*N) * sizeof(double), gpuId);
+    // compute blas operation
     cublasStatus_t errorCodeOp = cublasDsyrk(handleBlas, uplo_cuda, trans_cuda, *N, *K, ALPHA, A, *LDA, BETA, C, *LDC);
     checkCublasErrorCode(errorCodeOp);
     #elif HAVE_LAPACK
