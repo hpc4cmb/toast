@@ -49,6 +49,7 @@ namespace toast {
         cublasHandle_t handleBlas = NULL;
         cusolverDnHandle_t handleSolver = NULL;
         int* gpu_allocated_integer = NULL;
+        int gpuId = -1;
     #endif
     };
 }
