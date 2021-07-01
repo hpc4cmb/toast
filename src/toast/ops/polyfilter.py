@@ -49,15 +49,15 @@ class PolyFilter2D(Operator):
         None, allow_none=True, help="Observation detdata key for flags to use"
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
 
-    poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
+    poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
         None, allow_none=True, help="Observation shared key for telescope flags to use"
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(1, help="Bit mask value for optional shared flagging")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
@@ -131,20 +131,21 @@ class PolyFilter2D(Operator):
             # Enumerate detector groups (e.g. wafers) to filter
 
             group_index = {}
+            groups = {}
             if self.focalplane_key is None:
-                groups = None
+                groups[None] = []
                 ngroup = 1
                 for det in detectors:
                     group_index[det] = 0
+                    groups[None].append(det)
             else:
-                groups = {}
                 for det in detectors:
-                    value = focalplane[det][self.focalplane_key]
+                    value = obs.telescope.focalplane[det][self.focalplane_key]
                     if value not in groups:
                         groups[value] = []
                     groups[value].append(det)
                 ngroup = len(groups)
-                for igroup, group in sorted(groups):
+                for igroup, group in enumerate(sorted(groups)):
                     for det in groups[group]:
                         group_index[det] = igroup
 
@@ -158,7 +159,7 @@ class PolyFilter2D(Operator):
 
             # Measure offset for each group, translate and scale
             # detector positions to [-1, 1]
-            
+
             group_offset = {}
             all_positions = []
             for group, detectors_group in groups.items():
@@ -174,12 +175,12 @@ class PolyFilter2D(Operator):
                     theta, phi = detector_position[det]
                     detector_position[det] = [theta - theta_offset, phi - phi_offset]
                     all_positions.append(detector_position[det])
-                    
+
             thetavec, phivec = np.vstack(all_positions).T
             thetamax = np.amax(np.abs(thetavec))
             phimax = np.amax(np.abs(phivec))
             scale = 0.999 / max(thetamax, phimax)
-            
+
             for det in detector_position:
                 theta, phi = detector_position[det]
                 detector_position[det] = [theta * scale, phi * scale]
@@ -250,7 +251,7 @@ class PolyFilter2D(Operator):
                 templates = np.transpose(
                     templates, [2, 0, 1]
                 ).copy()  # nsample x ndet x nmode
-                proj = np.transpose(proj, [2, 1, 0])  # nsample x ngroup x nmode
+                proj = np.transpose(proj, [2, 0, 1])  # nsample x ngroup x nmode
                 coeff = np.zeros([nsample, ngroup, nmode])
                 for isample in range(nsample):
                     if isample % comm.size != comm.rank:
@@ -272,28 +273,30 @@ class PolyFilter2D(Operator):
                 for igroup in range(ngroup):
                     local_dets = obs.local_detectors
                     good = np.zeros(len(local_dets), dtype=np.bool)
-                    for idet, det in local_dets:
+                    for idet, det in enumerate(local_dets):
                         if group_index[det] == igroup:
                             good[idet] = True
                     if not np.any(good):
                         continue
                     for isample in range(nsample):
                         if np.all(coeff[isample, igroup] == 0):
-                            views.detdata[self.det_flags][iview][good, isample] \
-                                |= self.poly_flag_mask
-
+                            views.detdata[self.det_flags][iview][:, isample] \
+                                |= (good * self.poly_flag_mask).astype(
+                                    views.detdata[self.det_flags][0].dtype
+                                )
                 templates = np.transpose(
                     templates, [1, 2, 0]
                 ).copy()  # ndet x nmode x nsample
-                coeff = coeff.T.copy()  # nmode x nsample
+                coeff = np.transpose(coeff, [1, 2, 0]).copy()  # ngroup x nmode x nsample
 
                 for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
                         continue
+                    igroup = group_index[det]
                     ind = detector_index[det]
                     signal = views.detdata[self.det_data][iview][idet]
                     for mode in range(nmode):
-                        signal -= coeff[mode] * templates[ind, mode]
+                        signal -= coeff[igroup, mode] * templates[ind, mode]
 
                 t_clean += time() - t1
 
