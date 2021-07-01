@@ -52,6 +52,7 @@ else:
 
 
 def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
+    """Add crosstalk args to argparse.ArgumentParser object."""
     parser.add_argument(
         "--crosstalk-matrix",
         type=Path,
