@@ -185,13 +185,10 @@ class OpCrosstalkTest(MPITestCase):
     def test_io(self):
         path = self.outdir / 'simple_crosstalk_matrix.hdf5'
 
-        names = np.array(['det1A', 'det1B', dtype='S'])
-        data = np.identity(2, dtype=np.float64)
-
-        crosstalk_matrix = SimpleCrosstalkMatrix(names, data)
+        crosstalk_matrix = SimpleCrosstalkMatrix(names, crosstalk_data)
         crosstalk_matrix.dump(path)
 
         crosstalk_matrix_read = SimpleCrosstalkMatrix.load(path)
 
         np.testing.assert_array_equal(names, crosstalk_matrix_read.names)
-        np.testing.assert_array_equal(data, crosstalk_matrix_read.data)
+        np.testing.assert_array_equal(crosstalk_data, crosstalk_matrix_read.data)
