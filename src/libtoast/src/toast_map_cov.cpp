@@ -265,134 +265,127 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                 }
             }
         }
-    } else {
+    }
+    else
+    {
         // Even if the actual BLAS/LAPACK library is threaded, these are very
         // small matrices.  So instead we divide up the map data across threads
         // and each thread does some large number of small eigenvalue problems.
-
-        #pragma \
-        omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
+        #pragma omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
         {
             // thread-private variables
-            toast::LinearAlgebra linearAlgebra;
 
-            int fnnz = (int)nnz;
-
-            double fzero = 0.0;
-            double fone = 1.0;
-
-            char jobz_vec = 'V';
-            char jobz_val = 'N';
-            char uplo = 'L';
-            char transN = 'N';
-            char transT = 'T';
-
-            int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-            int64_t off;
-
-            double emin;
-            double emax;
-            double rcond;
-
-            int info;
-
+            // data storage
             toast::AlignedVector <double> fdata(nnz * nnz);
             toast::AlignedVector <double> ftemp(nnz * nnz);
             toast::AlignedVector <double> finv(nnz * nnz);
             toast::AlignedVector <double> evals(nnz);
 
-            // computes the required buffer size
-            int lwork = linearAlgebra.syev_buffersize(&jobz_val, &uplo, &fnnz, fdata.data(), &fnnz, evals.data());
+            // solver parameters
+            toast::LinearAlgebra linearAlgebra;
+            char jobz = (invert) ? 'V' : 'N';
+            char uplo = 'L';
+            char transN = 'N';
+            char transT = 'T';
+            int fnnz = (int)nnz;
+
+            // allocates a buffer of the proper size
+            int lwork = linearAlgebra.syev_buffersize(&jobz, &uplo, &fnnz, fdata.data(), &fnnz, evals.data());
             toast::AlignedVector <double> work(lwork);
 
             // Here we "unroll" the loop over submaps and pixels within each submap.
             // This allows us to distribute the total pixels across all threads.
-
+            int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
             #pragma omp for schedule(static)
-            for (int64_t i = 0; i < (nsub * subsize); ++i) {
+            for (int64_t i = 0; i < (nsub * subsize); ++i)
+            {
                 int64_t dpx = i * block;
 
-                // copy to fortran buffer
-                off = 0;
-                std::fill(fdata.begin(), fdata.end(), 0);
-                for (int64_t k = 0; k < nnz; ++k) {
-                    for (int64_t m = k; m < nnz; ++m) {
+                // fdata = data
+                int off = 0;
+                std::fill(fdata.begin(), fdata.end(), 0); // TODO do we need this?
+                for (int64_t k = 0; k < nnz; ++k)
+                {
+                    for (int64_t m = k; m < nnz; ++m)
+                    {
                         fdata[k * nnz + m] = data[dpx + off];
                         off += 1;
                     }
                 }
 
-                // eigendecompose
-                if (!invert) {
-                    linearAlgebra.syev(&jobz_val, &uplo, &fnnz,
-                                       fdata.data(), &fnnz, evals.data(),
-                                       work.data(), &lwork, &info);
-                } else {
-                    linearAlgebra.syev(&jobz_vec, &uplo, &fnnz,
-                                       fdata.data(), &fnnz, evals.data(),
-                                       work.data(), &lwork, &info);
-                }
+                // compute eigenvalues of fdata (stored in evals)
+                // and, potentially, eigenvectors (which are then stored in fdata)
+                int info;
+                linearAlgebra.syev(&jobz, &uplo, &fnnz, fdata.data(), &fnnz, evals.data(), work.data(), &lwork, &info);
 
-                rcond = 0.0;
-
-                if (info == 0) {
-                    // it worked, compute condition number
-                    emin = 1.0e100;
-                    emax = 0.0;
-                    for (int64_t k = 0; k < nnz; ++k) {
-                        if (evals[k] < emin) {
-                            emin = evals[k];
-                        }
-                        if (evals[k] > emax) {
-                            emax = evals[k];
-                        }
+                double rcond = 0.0;
+                if (info == 0) // it worked
+                {
+                    // compute condition number as the ratio of the eigenvalues
+                    double emin = 1.0e100;
+                    double emax = 0.0;
+                    for (int64_t k = 0; k < nnz; ++k)
+                    {
+                        if (evals[k] < emin) emin = evals[k];
+                        if (evals[k] > emax) emax = evals[k];
                     }
-                    if (emax > 0.0) {
-                        rcond = emin / emax;
-                    }
+                    if (emax > 0.0) rcond = emin / emax;
 
                     // compare to threshold
-                    if (rcond >= threshold) {
-                        if (invert) {
-                            for (int64_t k = 0; k < nnz; ++k) {
-                                evals[k] = 1.0 / evals[k];
-                                for (int64_t m = 0; m < nnz; ++m) {
-                                    ftemp[k * nnz + m] = evals[k] *
-                                                         fdata[k * nnz + m];
-                                }
-                            }
-                            linearAlgebra.gemm(&transN, &transT, &fnnz, &fnnz,
-                                               &fnnz, &fone, ftemp.data(),
-                                               &fnnz, fdata.data(), &fnnz,
-                                               &fzero, finv.data(), &fnnz);
-
-                            off = 0;
-                            for (int64_t k = 0; k < nnz; ++k) {
-                                for (int64_t m = k; m < nnz; ++m) {
-                                    data[dpx + off] = finv[k * nnz + m];
-                                    off += 1;
-                                }
+                    if (invert and (rcond >= threshold))
+                    {
+                        // ftemp = fdata / evals (eigenvectors divided by eigenvalues)
+                        for (int64_t k = 0; k < nnz; k++)
+                        {
+                            evals[k] = 1.0 / evals[k]; // TODO do we really need to invert instead of dividing later?
+                            for (int64_t m = 0; m < nnz; m++)
+                            {
+                                ftemp[k * nnz + m] = evals[k] * fdata[k * nnz + m];
                             }
                         }
-                    } else {
-                        // reject this pixel
+
+                        // finv = ftemp x fdata
+                        double fzero = 0.0;
+                        double fone = 1.0;
+                        linearAlgebra.gemm(&transN, &transT, &fnnz, &fnnz,
+                                           &fnnz, &fone, ftemp.data(),
+                                           &fnnz, fdata.data(), &fnnz,
+                                           &fzero, finv.data(), &fnnz);
+
+                        // data = finv
+                        int off2 = 0;
+                        for (int64_t k = 0; k < nnz; k++)
+                        {
+                            for (int64_t m = k; m < nnz; m++)
+                            {
+                                data[dpx + off2] = finv[k * nnz + m];
+                                off2 += 1;
+                            }
+                        }
+                    }
+                    else // reject this pixel
+                    {
                         rcond = 0.0;
                         info = 1;
                     }
                 }
 
-                if (invert) {
-                    if (info != 0) {
-                        off = 0;
-                        for (int64_t k = 0; k < nnz; ++k) {
-                            for (int64_t m = k; m < nnz; ++m) {
-                                data[dpx + off] = 0.0;
-                                off += 1;
-                            }
+                if (invert and (info != 0)) // failure of the inversion
+                {
+                    // data = 0.0
+                    int off2 = 0;
+                    for (int64_t k = 0; k < nnz; ++k)
+                    {
+                        for (int64_t m = k; m < nnz; ++m)
+                        {
+                            data[dpx + off2] = 0.0;
+                            off2 += 1;
                         }
                     }
                 }
-                if (cond != NULL) {
+
+                if (cond != NULL) // we want to extract the condition number
+                {
                     cond[i] = rcond;
                 }
             }
