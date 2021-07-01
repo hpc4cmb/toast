@@ -293,12 +293,12 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             int lwork = linearAlgebra.syev_buffersize(&jobz, &uplo, &fnnz, fdata.data(), &fnnz, evals.data());
             toast::AlignedVector <double> work(lwork);
 
-            // Here we "unroll" the loop over submaps and pixels within each submap.
-            // This allows us to distribute the total pixels across all threads.
+            // parallel loop over submaps and pixels within each submap
             int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
             #pragma omp for schedule(static)
             for (int64_t i = 0; i < (nsub * subsize); ++i)
             {
+                // index of the pixel (current batch element)
                 int64_t dpx = i * block;
 
                 // fdata = data
@@ -332,7 +332,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                     if (emax > 0.0) rcond = emin / emax;
 
                     // compare to threshold
-                    if (invert and (rcond >= threshold))
+                    if (invert and (rcond >= threshold)) // TODO is this test often true?
                     {
                         // ftemp = fdata / evals (eigenvectors divided by eigenvalues)
                         for (int64_t k = 0; k < nnz; k++)
