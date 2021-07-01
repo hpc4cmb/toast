@@ -10,6 +10,11 @@
 
 // TODO
 //  - batch operations would be much faster where possible
+//    gemm has a batched version
+//    syevd doesnt but syevj, which does the same thing with jacobi, does
+//    symm doesnt
+//    syrk doesnt (unless you use magma)
+//    dgelss doesnt
 
 namespace toast {
     // encapsulates construction and destruction of GPU linear algebra handles
@@ -28,11 +33,22 @@ namespace toast {
                   double * ALPHA, double * A, int * LDA, double * B, int * LDB,
                   double * BETA, double * C, int * LDC) const;
 
+        void gemm_batched(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
+                          double * ALPHA, double * A_batch[], int * LDA, double * B_batch[], int * LDB,
+                          double * BETA, double * C_batch[], int * LDC, const int batchCount) const;
+
         int syev_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
                             int * LDA, double * W) const;
 
         void syev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
                   double * W, double * WORK, int * LWORK, int * INFO);
+
+        int syev_batched_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
+                                    int * LDA, double * W, const int batchCount) const;
+
+        void syev_batched(char * JOBZ, char * UPLO, int * N, double * A_batched,
+                          int * LDA, double * W_batched, double * WORK, int * LWORK,
+                          int * INFO, const int batchCount);
 
         void symm(char * SIDE, char * UPLO, int * M, int * N, double * ALPHA,
                   double * A, int * LDA, double * B, int * LDB, double * BETA,
@@ -48,6 +64,7 @@ namespace toast {
     #ifdef HAVE_CUDALIBS
         cublasHandle_t handleBlas = NULL;
         cusolverDnHandle_t handleSolver = NULL;
+        syevjInfo_t jacobiParameters = NULL;
         int* gpu_allocated_integer = NULL;
         int gpuId = -1;
     #endif
