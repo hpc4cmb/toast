@@ -9,6 +9,7 @@ import numpy as np
 from numpy.random import default_rng
 
 from ..mpi import get_world
+from ..dist import Data
 from ..tod import TODCache
 from ..tod.crosstalk import OpCrosstalk, SimpleCrosstalkMatrix
 from ..utils import Logger
@@ -18,8 +19,6 @@ from ._helpers import create_outdir  #, create_satellite_data
 
 if TYPE_CHECKING:
     from typing import List
-
-    import toast
 
 
 mpiworld, procs, rank = get_world()
@@ -53,7 +52,7 @@ crosstalk_data_2 = np.identity(n_detectors) + np.reciprocal(np.arange(10, 10 + n
 tod_crosstalked_random = crosstalk_data_2 @ tod_array_random
 
 
-class FakeData(toast.dist.Data):
+class FakeData(Data):
 
     def __init__(
         self,
