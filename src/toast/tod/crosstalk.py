@@ -1,14 +1,13 @@
-# py36
+# py37+
 # from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
-import toast
+
 
 try:
     from numba import jit
@@ -20,9 +19,11 @@ from ..op import Operator
 from ..utils import Logger
 
 if TYPE_CHECKING:
-    from typing import Optional, List
+    from typing import List  # Optional
 
-# py36
+    import toast
+
+# py37+
 # COMM: Optional[toast.mpi.Comm]
 # PROCS: int
 # RANK: int
@@ -72,14 +73,19 @@ def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
     )
 
 
-@dataclass
 class SimpleCrosstalkMatrix:
     """A thin crosstalk matrix class.
 
     For feature-rich crosstalk matrix class, see `coscon.toast_helper.CrosstalkMatrix`.
     """
-    names: "np.ndarray['S']"
-    data: 'np.ndarray[np.float64]'
+
+    def __init__(
+        self,
+        names: "np.ndarray['S']",
+        data: 'np.ndarray[np.float64]',
+    ):
+        self.names = names
+        self.data = data
 
     @property
     def names_str(self) -> 'List[str]':
@@ -109,17 +115,27 @@ class SimpleCrosstalkMatrix:
             )
 
 
-@dataclass
 class OpCrosstalk(Operator):
     """Operator that apply crosstalk matrix to detector ToDs.
+
+    : param n_crosstalk_matrices: total no. of crosstalk matrices
+    : param crosstalk_matrices: the crosstalk matrices.
+        In MPI case, this holds only those matrices owned by a rank
+        dictate by the condition `i % PROCS == RANK`
+    : param name: this name is used to save data in tod.cache, so better be unique from other cache
+
+    In a typical scenario, the classmethod `read` is used to create an object instead of initiating directly.
     """
-    # total no. of crosstalk matrices
-    n_crosstalk_matrices: 'int'
-    # in MPI case, this holds only those matrices owned by a rank
-    # dictate by the condition i % PROCS == RANK
-    crosstalk_matrices: 'List[SimpleCrosstalkMatrix]'
-    # this name is used to save data in tod.cache, so better be unique from other cache
-    name: 'str' = "crosstalk"
+
+    def __init__(
+        self,
+        n_crosstalk_matrices: 'int',
+        crosstalk_matrices: 'List[SimpleCrosstalkMatrix]',
+        name: 'str' = "crosstalk",
+    ):
+        self.n_crosstalk_matrices = n_crosstalk_matrices
+        self.crosstalk_matrices = crosstalk_matrices
+        self.name = name
 
     def _get_crosstalk_matrix(self, i: 'int') -> 'SimpleCrosstalkMatrix':
         """Get the i-th crosstalk matrix, used this with MPI only.
