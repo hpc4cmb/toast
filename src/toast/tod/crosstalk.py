@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 
-
 try:
     from numba import jit
 except ImportError:
@@ -42,7 +41,7 @@ H5_CREATE_KW = {
 }
 
 
-def fma(out: 'np.ndarray[np.float64]', ws: 'np.ndarray[np.float64]', *arrays: 'np.ndarray[np.float64]'):
+def _fma(out: 'np.ndarray[np.float64]', ws: 'np.ndarray[np.float64]', *arrays: 'np.ndarray[np.float64]'):
     """Simple FMA, compiled to avoid Python memory implications.
 
     :param out: must be zero array in the same shape of each array in `arrays`
@@ -58,9 +57,9 @@ def fma(out: 'np.ndarray[np.float64]', ws: 'np.ndarray[np.float64]', *arrays: 'n
 
 
 if jit is None:
-    LOGGER.warning('Numba not present. fma in crosstalk will have more intermediate Numpy array objects created that uses more memory.')
+    LOGGER.warning('Numba not present. _fma in crosstalk will have more intermediate Numpy array objects created that uses more memory.')
 else:
-    fma = jit(fma, nopython=True, nogil=True, cache=False)
+    _fma = jit(_fma, nopython=True, nogil=True, cache=False)
 
 
 def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
@@ -235,7 +234,7 @@ class OpCrosstalk(Operator):
                 for name, row in zip(names, crosstalk_data):
                     row_global_total = tod.cache.create(f"{crosstalk_name}_{name}", np.float64, (n_samples,))
                     tods_list = [tod.cache.reference(f"{signal_name}_{name_j}") for name_j in names]
-                    fma(row_global_total, row, *tods_list)
+                    _fma(row_global_total, row, *tods_list)
                 for name in names:
                     # overwrite it in-place
                     # not using tod.cache.put as that will destroy and create
@@ -332,7 +331,7 @@ class OpCrosstalk(Operator):
                         row_local_total[:] = 0.
                         row_local_weights[:] = row[local_det_idxs]
                         tods_list = [tod.cache.reference(f"{signal_name}_{names[local_det_idxs[i]]}") for i in range(n_local_dets)]
-                        fma(row_local_total, row_local_weights, *tods_list)
+                        _fma(row_local_total, row_local_weights, *tods_list)
                     if rank == rank_owner:
                         row_global_total = tod.cache.create(f"{crosstalk_name}_{name}", np.float64, (n_samples,))
                         comm.Reduce(row_local_total, row_global_total, root=rank_owner)
