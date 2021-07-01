@@ -3,7 +3,8 @@
 
 from typing import TYPE_CHECKING
 
-# import os
+import os
+from pathlib import Path
 import numpy as np
 from numpy.random import default_rng
 
@@ -13,7 +14,7 @@ from ..tod.crosstalk import OpCrosstalk, SimpleCrosstalkMatrix
 from ..utils import Logger
 from .mpi import MPITestCase
 
-# from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir  #, create_satellite_data
 
 if TYPE_CHECKING:
     from typing import List
@@ -63,9 +64,9 @@ class FakeData(toast.dist.Data):
 
 class OpCrosstalkTest(MPITestCase):
 
-    # def setUp(self):
-    #     fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-    #     self.outdir = create_outdir(self.comm, fixture_name)
+    def setUp(self):
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = Path(create_outdir(self.comm, fixture_name))
 
     @staticmethod
     def _tset_op_crosstalk(
@@ -181,3 +182,17 @@ class OpCrosstalkTest(MPITestCase):
             )
         for case in cases:
             self._tset_op_crosstalk_multiple_matrices(*case)
+
+    def test_io(self):
+        path = self.outdir / 'simple_crosstalk_matrix.hdf5'
+
+        names = np.array(['det1A', 'det1B', dtype='S'])
+        data = np.identity(2, dtype=np.float64)
+
+        crosstalk_matrix = SimpleCrosstalkMatrix(names, data)
+        crosstalk_matrix.dump(path)
+
+        crosstalk_matrix_read = SimpleCrosstalkMatrix.load(path)
+
+        np.testing.assert_array_equal(names, crosstalk_matrix_read.names)
+        np.testing.assert_array_equal(data, crosstalk_matrix_read.data)
