@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.random import default_rng
 
-from ..tod import TODCache
 from ..mpi import get_world
+from ..tod import TODCache
+from ..tod.crosstalk import OpCrosstalk, SimpleCrosstalkMatrix
 from ..utils import Logger
-from ..tod.crosstalk import SimpleCrosstalkMatrix, OpCrosstalk
 from .mpi import MPITestCase
+
 # from ._helpers import create_outdir, create_satellite_data
 
 if TYPE_CHECKING:
