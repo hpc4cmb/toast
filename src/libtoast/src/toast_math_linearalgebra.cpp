@@ -33,6 +33,9 @@ toast::LinearAlgebra::LinearAlgebra()
     // allocates an integer on GPU to use it as an output parameter
     cudaError statusAlloc = cudaMallocManaged((void**)&gpu_allocated_integer, sizeof(int));
     checkCudaErrorCode(statusAlloc);
+    // gets jacobi parameters for batched syev
+    cusolverStatus_t statusJacobiParams = cusolverDnCreateSyevjInfo(&jacobiParameters);
+    checkCusolverErrorCode(statusJacobiParams);
     // gets id of the GPU device being used
     cudaGetDevice(&gpuId);
 #endif
@@ -45,6 +48,9 @@ toast::LinearAlgebra::~LinearAlgebra()
     cublasDestroy(handleBlas);
     // free cusolver handle
     cusolverDnDestroy(handleSolver);
+    // destroys jacobi parameters for batched syev
+    cusolverStatus_t statusJacobiParams = cusolverDnDestroySyevjInfo(jacobiParameters);
+    checkCusolverErrorCode(statusJacobiParams);
     // release integer allocation
     cudaFree(gpu_allocated_integer);
 #endif
@@ -80,6 +86,36 @@ void toast::LinearAlgebra::gemm(char * TRANSA, char * TRANSB, int * M, int * N,
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
+    return;
+}
+
+void toast::LinearAlgebra::gemm_batched(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
+                                        double * ALPHA, double * A_batch[], int * LDA, double * B_batch[], int * LDB,
+                                        double * BETA, double * C_batch[], int * LDC, const int batchCount) const {
+#ifdef HAVE_CUDALIBS
+    // prepare inputs
+    cublasOperation_t transA_cuda = (*TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    cublasOperation_t transB_cuda = (*TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    // compute batched blas operation
+    cublasStatus_t errorCodeOp = cublasDgemmBatched(handleBlas, transA_cuda, transB_cuda, *M, *N, *K, ALPHA, A_batch, *LDA, B_batch, *LDB, BETA, C_batch, *LDC, batchCount);
+    checkCublasErrorCode(errorCodeOp);
+#elif HAVE_LAPACK
+    // use naive opemMP paralellism
+    #pragma omp parallel for
+    for(unsigned int b=0; b<batchCount; b++)
+    {
+        double * A = A_batch[b];
+        double * B = B_batch[b];
+        double * C = C_batch[b];
+        wrapped_dgemm(TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC);
+    }
+    #else // ifdef HAVE_LAPACK
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+#endif // ifdef HAVE_LAPACK
     return;
 }
 
@@ -136,6 +172,65 @@ void toast::LinearAlgebra::syev(char * JOBZ, char * UPLO, int * N, double * A,
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
+    return;
+}
+
+// we assume that buffers will be threadlocal
+int toast::LinearAlgebra::syev_batched_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
+                                                  int * LDA, double * W, const int batchCount) const {
+    // We assume a large value here, since the work space needed will still be small.
+    int NB = 256;
+    int LWORK = NB * 2 + (*N);
+
+#ifdef HAVE_CUDALIBS
+    // prepare inputs
+    cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
+    cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    // computes buffersize
+    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(handleSolver, jobz_cuda, uplo_cuda, *N, A, *LDA, W, &LWORK, jacobiParameters, batchCount);
+    checkCusolverErrorCode(statusBuffer);
+#endif
+
+    return LWORK;
+}
+
+// matrices are expected to be in continuous memory in A_batched (one every N*LDA elements)
+// LWORK, the size of WORK in number of elements, should have been computed with lapack_syev_buffersize
+void toast::LinearAlgebra::syev_batched(char * JOBZ, char * UPLO, int * N, double * A_batch,
+                                        int * LDA, double * W_batch, double * WORK, int * LWORK,
+                                        int * INFO, const int batchCount) {
+#ifdef HAVE_CUDALIBS
+    // prepare inputs
+    cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
+    cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    int* INFO_cuda = gpu_allocated_integer;
+    // prefetch data to GPU (optional)
+    cudaMemPrefetchAsync(A_batch, (*N) * (*LDA) * batchCount * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(W_batch, (*N) * sizeof(double), gpuId);
+    cudaMemPrefetchAsync(WORK, (*LWORK) * sizeof(double), gpuId);
+    // compute cusolver operation
+    cusolverStatus_t statusSolver = cusolverDnDsyevjBatched(handleSolver, jobz_cuda, uplo_cuda, *N, A_batch, *LDA, W_batch, WORK, *LWORK, INFO_cuda, jacobiParameters, batchCount);
+    checkCusolverErrorCode(statusSolver);
+    // gets info back to CPU
+    cudaError statusSync = cudaDeviceSynchronize();
+    checkCudaErrorCode(statusSync);
+    *INFO = *INFO_cuda;
+#elif HAVE_LAPACK
+    // use naive opemMP paralellism
+    #pragma omp parallel for
+    for(unsigned int b=0; b<batchCount; b++)
+    {
+        double * A = A_batch[b * (*N) * (*LDA)];
+        double * W = W_batch[b * (*N) * (*LDA)];
+        wrapped_dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
+    }
+    #else // ifdef HAVE_LAPACK
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+#endif // ifdef HAVE_LAPACK
     return;
 }
 
