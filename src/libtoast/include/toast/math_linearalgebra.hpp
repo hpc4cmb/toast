@@ -15,6 +15,7 @@
 //    symm doesnt
 //    syrk doesnt (unless you use magma)
 //    dgelss doesnt
+//  => function cov_eigendecompose_diag in toast_map_cov.cpp is the only one we can run on batch
 
 namespace toast {
     // encapsulates construction and destruction of GPU linear algebra handles
