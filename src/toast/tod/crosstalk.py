@@ -30,23 +30,11 @@ COMM, PROCS, RANK = get_world()
 LOGGER = Logger.get()
 IS_SERIAL = PROCS == 1
 
-H5_CREATE_KW = {
-    'compression': 'gzip',
-    # shuffle minimize the output size
-    'shuffle': True,
-    # checksum for data integrity
-    'fletcher32': True,
-    # turn off track_times so that identical output gives the same md5sum
-    'track_times': False
-}
-
 
 def _fma(out: 'np.ndarray[np.float64]', ws: 'np.ndarray[np.float64]', *arrays: 'np.ndarray[np.float64]'):
     """Simple FMA, compiled to avoid Python memory implications.
 
     :param out: must be zero array in the same shape of each array in `arrays`
-
-    cache is False to avoid IO on HPC.
 
     If not compiled, a lot of Python objects will be created,
     and as the Python garbage collector is inefficient,
@@ -59,6 +47,7 @@ def _fma(out: 'np.ndarray[np.float64]', ws: 'np.ndarray[np.float64]', *arrays: '
 if jit is None:
     LOGGER.warning('Numba not present. _fma in crosstalk will have more intermediate Numpy array objects created that uses more memory.')
 else:
+    # cache is False to avoid IO on HPC.
     _fma = jit(_fma, nopython=True, nogil=True, cache=False)
 
 
@@ -75,7 +64,11 @@ def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
 class SimpleCrosstalkMatrix:
     """A thin crosstalk matrix class.
 
-    For feature-rich crosstalk matrix class, see `coscon.toast_helper.CrosstalkMatrix`.
+    This is a simple container storing the crosstalk matrix,
+    but not generating it.
+
+    The length of `names` should match the dimension of `data`, which should be a square array.
+    No runtime checking is done to enforce this.
     """
 
     def __init__(
@@ -88,29 +81,55 @@ class SimpleCrosstalkMatrix:
 
     @property
     def names_str(self) -> 'List[str]':
-        """names in list of str"""
+        """names in list of str."""
         return [name.decode() for name in self.names]
 
     @classmethod
     def load(cls, path: 'Path'):
+        """Load from an HDF5 file."""
         with h5py.File(path, 'r') as f:
             names = f["names"][:]
             data = f["data"][:]
         return cls(names, data)
 
-    def dump(self, path: 'Path', compress_level: 'int' = 9):
-        with h5py.File(path, 'w', libver='latest') as f:
+    def dump(
+        self,
+        path: 'Path',
+        *,
+        libver: 'str' = 'latest',
+        # h5py.File.create_dataset args
+        compression: 'str' = 'gzip',
+        shuffle: 'bool' = True,
+        fletcher32: 'bool' = True,
+        track_times: 'bool' = False,
+        compression_opts: 'int' = 9,
+        **kwargs,
+    ):
+        """Dump to an HDF5 file.
+
+        `libver` will be passed to h5py.File,
+        and the rest keyword arguments will be passed to `h5py.File.create_dataset` with sensible defaults.
+        """
+        with h5py.File(path, 'w', libver=libver) as f:
             f.create_dataset(
                 'names',
                 data=self.names,
-                compression_opts=compress_level,
-                **H5_CREATE_KW
+                compression=compression,
+                shuffle=shuffle,
+                fletcher32=fletcher32,
+                track_times=track_times,
+                compression_opts=compression_opts,
+                **kwargs,
             )
             f.create_dataset(
                 'data',
                 data=self.data,
-                compression_opts=compress_level,
-                **H5_CREATE_KW
+                compression=compression,
+                shuffle=shuffle,
+                fletcher32=fletcher32,
+                track_times=track_times,
+                compression_opts=compression_opts,
+                **kwargs,
             )
 
 
