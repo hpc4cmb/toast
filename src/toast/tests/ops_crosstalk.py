@@ -1,7 +1,6 @@
-# py36
+# py37+
 # from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 # import os
@@ -18,6 +17,8 @@ from .mpi import MPITestCase
 
 if TYPE_CHECKING:
     from typing import List
+
+    import toast
 
 
 mpiworld, procs, rank = get_world()
@@ -51,9 +52,13 @@ crosstalk_data_2 = np.identity(n_detectors) + np.reciprocal(np.arange(10, 10 + n
 tod_crosstalked_random = crosstalk_data_2 @ tod_array_random
 
 
-@dataclass
-class FakeData:
-    obs: 'List[dict]'
+class FakeData(toast.dist.Data):
+
+    def __init__(
+        self,
+        obs: 'List[dict]',
+    ):
+        self.obs = obs
 
 
 class OpCrosstalkTest(MPITestCase):
