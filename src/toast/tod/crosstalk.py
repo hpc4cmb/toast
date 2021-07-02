@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 # PROCS: int
 # RANK: int
 COMM, PROCS, RANK = get_world()
-LOGGER = Logger.get()
+logger = Logger.get()
 IS_SERIAL = PROCS == 1
 
 
@@ -81,7 +81,7 @@ def _fma(out: 'np.ndarray[np.float64]', ws: 'np.ndarray[np.float64]', *arrays: '
 
 
 if jit is None:
-    LOGGER.warning('Numba not present. _fma in crosstalk will have more intermediate Numpy array objects created that uses more memory.')
+    logger.warning('Numba not present. _fma in crosstalk will have more intermediate Numpy array objects created that uses more memory.')
 else:
     # cache is False to avoid IO on HPC.
     _fma = jit(_fma, nopython=True, nogil=True, cache=False)
@@ -216,7 +216,7 @@ class OpCrosstalk(Operator):
         else:
             lengths = np.empty(2, dtype=np.int64)
         COMM.Bcast(lengths, root=rank_owner)
-        LOGGER.debug(f'crosstalk: Rank {RANK} receives lengths {lengths}')
+        logger.debug(f'crosstalk: Rank {RANK} receives lengths {lengths}')
 
         # broadcast arrays
         if RANK != rank_owner:
@@ -226,9 +226,9 @@ class OpCrosstalk(Operator):
             names = names_int.view(f'S{name_len}')
             data = np.empty((n, n), dtype=np.float64)
         COMM.Bcast(names_int, root=rank_owner)
-        LOGGER.debug(f'crosstalk: Rank {RANK} receives names {names}')
+        logger.debug(f'crosstalk: Rank {RANK} receives names {names}')
         COMM.Bcast(data, root=rank_owner)
-        LOGGER.debug(f'crosstalk: Rank {RANK} receives data {data}')
+        logger.debug(f'crosstalk: Rank {RANK} receives data {data}')
 
         if RANK == rank_owner:
             return crosstalk_matrix
@@ -282,7 +282,7 @@ class OpCrosstalk(Operator):
                 # TODO: should we only check this only `if debug`?
                 detectors_set = set(tod.detectors)
                 if not (names_set & detectors_set):
-                    LOGGER.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
+                    logger.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
                     continue
                 elif not (names_set <= detectors_set):
                     raise ValueError(f"Crosstalk: tod {tod} only include some detectors from the crosstalk matrix with these detectors: {names}.")
@@ -332,7 +332,7 @@ class OpCrosstalk(Operator):
                 # all ranks need to check this as they need to perform the same action
                 detectors_set = set(tod.detectors)
                 if not (names_set & detectors_set):
-                    LOGGER.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
+                    logger.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
                     continue
                 elif not (names_set <= detectors_set):
                     raise ValueError(f"Crosstalk: tod {tod} only include some detectors from the crosstalk matrix with these detectors: {names}.")
@@ -375,7 +375,7 @@ class OpCrosstalk(Operator):
                 del global_has_det, i, j
                 tod.cache.destroy(f"{crosstalk_name}_global_has_det_{rank}")
 
-                LOGGER.debug(f'Rank {rank} has detectors LUT: {det_lut}')
+                logger.debug(f'Rank {rank} has detectors LUT: {det_lut}')
 
                 if debug:
                     for name in local_crosstalk_dets_set:
