@@ -486,7 +486,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             // computes the maximum and minimum eigenvalues
             double emin = 1.0e100;
             double emax = 0.0;
-            for (int64_t k = batchNumber*nnz; k < (batchNumber+1)*nnz; k++)
+            for (int64_t k = batchid*nnz; k < (batchid+1)*nnz; k++)
             {
                 if (evals_batch[k] < emin) emin = evals_batch[k];
                 if (evals_batch[k] > emax) emax = evals_batch[k];
@@ -501,7 +501,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         #pragma omp parallel for
         for(int64_t batchid = 0; batchid < batchNumber; batchid++)
         {
-            for (int64_t k = batchNumber*nnz; k < (batchNumber+1)*nnz; k++)
+            for (int64_t k = batchid*nnz; k < (batchid+1)*nnz; k++)
             {
                 for (int64_t m = 0; m < nnz; m++)
                 {
@@ -539,7 +539,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         for(int64_t batchid = 0; batchid < batchNumber; batchid++)
         {
             // did the computation of finv succeed
-            const bool success = (info = 0) and (rcond_batch[batchid] >= threshold);
+            const bool success = (info == 0) and (rcond_batch[batchid] >= threshold);
             // stores result in data
             if(invert)
             {
