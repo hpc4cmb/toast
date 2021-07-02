@@ -459,16 +459,16 @@ class OpCrosstalk(Operator):
 
                 # this is easier to understand and shorter
                 # but uses allgather instead of the more efficient Allgather
-                # construct detector LUT
+                # construct detector lookup table
                 # local_dets = tod.local_dets
                 # global_dets = comm.allgather(local_dets)
                 # det_lut = {}
                 # for i, dets in enumerate(global_dets):
                 #     for det in dets:
                 #         det_lut[det] = i
-                # log.debug(f'dets LUT: {dets_lut}')
+                # log.debug(f'dets lookup table: {dets_lut}')
 
-                # construct det_lut, a LUT to know which rank holds a detector
+                # construct det_lut, a lookup table to know which rank holds a detector
                 local_has_det = tod.cache.create(
                     f"{crosstalk_name}_local_has_det_{rank}",
                     np.uint8,
@@ -499,11 +499,11 @@ class OpCrosstalk(Operator):
                 tod.cache.destroy(f"{crosstalk_name}_global_has_det_{rank}")
 
                 if debug:
-                    logger.debug(f'Rank {rank} has detectors LUT: {det_lut}')
+                    logger.debug(f'Rank {rank} has detectors lookup table: {det_lut}')
                     for name in local_crosstalk_dets_set:
                         if det_lut[name] != rank:
                             raise RuntimeError(
-                                'Error in creating a LUT '
+                                'Error in creating a lookup table '
                                 f'from detector name to rank: {det_lut}'
                             )
 
