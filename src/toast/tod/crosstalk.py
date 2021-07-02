@@ -73,10 +73,10 @@ if TYPE_CHECKING:
     import toast
 
 # py37+
-# COMM: Optional[toast.mpi.Comm]
+# world_comm: Optional[toast.mpi.Comm]
 # PROCS: int
 # RANK: int
-COMM, PROCS, RANK = get_world()
+world_comm, PROCS, RANK = get_world()
 logger = Logger.get()
 IS_SERIAL = PROCS == 1
 
@@ -284,7 +284,7 @@ class OpCrosstalk(Operator):
             lengths = np.array([names.size, names.dtype.itemsize], dtype=np.int64)
         else:
             lengths = np.empty(2, dtype=np.int64)
-        COMM.Bcast(lengths, root=rank_owner)
+        world_comm.Bcast(lengths, root=rank_owner)
         if debug:
             logger.debug(f'crosstalk: Rank {RANK} receives lengths {lengths}')
 
@@ -295,10 +295,10 @@ class OpCrosstalk(Operator):
             names_int = np.empty(n * name_len, dtype=np.uint8)
             names = names_int.view(f'S{name_len}')
             data = np.empty((n, n), dtype=np.float64)
-        COMM.Bcast(names_int, root=rank_owner)
+        world_comm.Bcast(names_int, root=rank_owner)
         if debug:
             logger.debug(f'crosstalk: Rank {RANK} receives names {names}')
-        COMM.Bcast(data, root=rank_owner)
+        world_comm.Bcast(data, root=rank_owner)
         if debug:
             logger.debug(f'crosstalk: Rank {RANK} receives data {data}')
 
