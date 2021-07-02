@@ -75,10 +75,10 @@ class OpCrosstalkTest(MPITestCase):
         detranks: 'int',
     ):
         if rank == 0:
-            crosstalk_matrices = [SimpleCrosstalkMatrix(names, crosstalk_data)]
+            crosstalk_matrices = [SimpleCrosstalkMatrix(names, crosstalk_data, debug=True)]
         else:
             crosstalk_matrices = []
-        op_crosstalk = OpCrosstalk(1, crosstalk_matrices)
+        op_crosstalk = OpCrosstalk(1, crosstalk_matrices, debug=True)
 
         tod = TODCache(mpiworld, names_str, n_samples, detranks=detranks)
 
@@ -136,8 +136,8 @@ class OpCrosstalkTest(MPITestCase):
     ):
         n_crosstalk_matrices = len(names)
         idxs_per_rank = range(rank, n_crosstalk_matrices, procs)
-        crosstalk_matrices = [SimpleCrosstalkMatrix(names[i], crosstalk_datas[i]) for i in idxs_per_rank]
-        op_crosstalk = OpCrosstalk(n_crosstalk_matrices, crosstalk_matrices)
+        crosstalk_matrices = [SimpleCrosstalkMatrix(names[i], crosstalk_datas[i], debug=True) for i in idxs_per_rank]
+        op_crosstalk = OpCrosstalk(n_crosstalk_matrices, crosstalk_matrices, debug=True)
 
         tod = TODCache(mpiworld, sum(names_strs, []), n_samples, detranks=detranks)
 
@@ -185,10 +185,10 @@ class OpCrosstalkTest(MPITestCase):
     def test_op_crosstalk_io(self):
         path = self.outdir / 'simple_crosstalk_matrix.hdf5'
 
-        crosstalk_matrix = SimpleCrosstalkMatrix(names, crosstalk_data)
+        crosstalk_matrix = SimpleCrosstalkMatrix(names, crosstalk_data, debug=True)
         crosstalk_matrix.dump(path)
 
-        crosstalk_matrix_read = SimpleCrosstalkMatrix.load(path)
+        crosstalk_matrix_read = SimpleCrosstalkMatrix.load(path, debug=True)
 
         np.testing.assert_array_equal(names, crosstalk_matrix_read.names)
         np.testing.assert_array_equal(crosstalk_data, crosstalk_matrix_read.data)
