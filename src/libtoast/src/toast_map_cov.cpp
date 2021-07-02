@@ -338,6 +338,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
         // finv = ftemp x fdata
         toast::AlignedVector <double> finv_batch(batchNumber * nnz * nnz);
+        if(invert)
         {
             // pointers to each batch matrix
             toast::AlignedVector <double*> ftemp_ptr_batch(batchNumber);
