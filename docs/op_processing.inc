@@ -26,6 +26,12 @@ This operator applies a set of gains to the timestreams:
 .. autoclass:: toast.tod.OpApplyGain
     :members:
 
+Crosstalk
+~~~~~~~~~
+
+.. automodule:: toast.tod.crosstalk
+    :members: add_crosstalk_args, SimpleCrosstalkMatrix, OpCrosstalk
+
 Utilities
 ~~~~~~~~~~~~~~~~~~~~~
 

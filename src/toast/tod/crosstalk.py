@@ -3,16 +3,23 @@
 
 """Simulate crosstalk between detectors in ToD.
 
-A typical use of this is that in your pipeline script, add
+A typical use of this is that in your pipeline script,
 
-1. `add_crosstalk_args(parser)` to your argparse parser to add cli args,
-2. Read & create `op_crosstalk`:
+1. Add `add_crosstalk_args(parser)` to your argparse parser to add cli args,
+2. Read & create `op_crosstalk` by adding
+
+
+    .. highlight:: python
+    .. code-block:: python
 
         if args.crosstalk_matrix is not None:
             op_crosstalk = OpCrosstalk.read(args)
 
-3. Apply the crosstalk matrix to your data after the ToD is prepared (e.g. signal & noise):
+3. Apply the crosstalk matrix to your data after the ToD is prepared (e.g. signal & noise) by adding
 
+
+    .. highlight:: python
+    .. code-block:: python
 
         if args.crosstalk_matrix is not None:
             if comm.comm_world is not None:
@@ -22,7 +29,9 @@ A typical use of this is that in your pipeline script, add
                 comm.comm_world.barrier()
 
 Note that you need to create your crosstalk matri(x|ces)
-in HDF5 container(s) beforehand. With the simple conventions that
+in HDF5 container(s) beforehand. A simple class `SimpleCrosstalkMatrix`
+can assist you to write such file,
+with the simple conventions that
 it has the following datasets:
 
 1. names: ASCII names of your detectors, say of length ``n``
@@ -32,9 +41,12 @@ it has the following datasets:
 
     (Assuming row-major as is standard in Python.)
 
-Note that each crosstalk matrix has no assumption (i.e. they are dense),
+Note that each crosstalk matrix is dense,
 and when multiple matrices are supplied, they are effectively block-diagonal
-(where each dense matrix given in the form of a HDF5 file forms a block.)
+(where each given dense matrix is a block.)
+I.e. in order to provide a block-diagonal crosstalk matrix,
+each block (together with the names of the detectors in that block)
+should write to a seperate HDF5 file to avoid unnessary computation.
 """
 
 import argparse
@@ -203,11 +215,9 @@ class SimpleCrosstalkMatrix:
 class OpCrosstalk(Operator):
     """Operator that apply crosstalk matrix to detector ToDs.
 
-    : param n_crosstalk_matrices: total no. of crosstalk matrices
-    : param crosstalk_matrices: the crosstalk matrices.
-        In MPI case, this holds only those matrices owned by a rank
-        dictate by the condition `i % PROCS == RANK`
-    : param name: this name is used to save data in tod.cache, so better be unique from other cache
+    :param n_crosstalk_matrices: total no. of crosstalk matrices
+    :param crosstalk_matrices: the crosstalk matrices. In MPI case, this holds only those matrices owned by a rank dictate by the condition `i % PROCS == RANK`
+    :param name: this name is used to save data in tod.cache, so better be unique from other cache
 
     In a typical scenario, the classmethod `read` is used to create an object instead of initiating directly.
     """
