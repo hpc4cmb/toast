@@ -229,7 +229,7 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
     return;
 }
 
-void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
+void OLD_cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                                     double * data, double * cond,
                                     double threshold, bool invert) {
     if (nnz == 1) {
@@ -271,7 +271,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // Even if the actual BLAS/LAPACK library is threaded, these are very
         // small matrices.  So instead we divide up the map data across threads
         // and each thread does some large number of small eigenvalue problems.
-        #pragma omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
+#pragma omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
         {
             // thread-private variables
 
@@ -295,7 +295,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
             // parallel loop over submaps and pixels within each submap
             int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-            #pragma omp for schedule(static)
+#pragma omp for schedule(static)
             for (int64_t i = 0; i < (nsub * subsize); ++i)
             {
                 // index of the pixel (current batch element)
@@ -393,6 +393,185 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
     }
 
     return;
+}
+
+void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
+                                    double * data, double * cond,
+                                    double threshold, bool invert) {
+    if (nnz == 1) {
+        // shortcut for NNZ == 1
+        if (!invert) {
+            // Not much point in calling this!
+            if (cond != NULL) {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        cond[i * subsize + j] = 1.0;
+                    }
+                }
+            }
+        } else {
+            if (cond != NULL) {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        int64_t dpx = (i * subsize) + j;
+                        cond[dpx] = 1.0;
+                        if (data[dpx] != 0) {
+                            data[dpx] = 1.0 / data[dpx];
+                        }
+                    }
+                }
+            } else {
+                for (int64_t i = 0; i < nsub; ++i) {
+                    for (int64_t j = 0; j < subsize; ++j) {
+                        int64_t dpx = (i * subsize) + j;
+                        if (data[dpx] != 0) {
+                            data[dpx] = 1.0 / data[dpx];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        // problem size parameters
+        int fnnz = (int)nnz;
+        int batchNumber = nsub * subsize; // TODO doing all batch at once might be too memory hungry
+        int64_t blockSize = (int64_t)(nnz * (nnz + 1) / 2);
+
+        // solver parameters
+        toast::LinearAlgebra linearAlgebra;
+        char jobz = (invert) ? 'V' : 'N';
+        char uplo = 'L';
+        char transN = 'N';
+        char transT = 'T';
+
+        // allocates buffers of the proper size
+        toast::AlignedVector <double> fdata_batch(batchNumber * nnz * nnz);
+        toast::AlignedVector <double> evals_batch(batchNumber * nnz);
+        int lwork = linearAlgebra.syev_batched_buffersize(&jobz, &uplo, &fnnz, fdata_batch.data(), &fnnz, evals_batch.data(), batchNumber);
+        toast::AlignedVector <double> work(lwork);
+
+        // fdata = data (reordering)
+        #pragma omp parallel for
+        for(int64_t batchid = 0; batchid < batchNumber; batchid++)
+        {
+            int offset = 0;
+            for (int64_t k = 0; k < nnz; k++)
+            {
+                // zero half matrix
+                for (int64_t m = 0; m < k; m++)
+                {
+                    fdata_batch[batchid*nnz*nnz + k*nnz + m] = 0.;
+                }
+                // copies other half matrix
+                for (int64_t m = k; m < nnz; m++)
+                {
+                    fdata_batch[batchid*nnz*nnz + k*nnz + m] = data[batchid*blockSize + offset];
+                    offset += 1;
+                }
+            }
+        }
+
+        // compute eigenvalues of fdata (stored in evals)
+        // and, potentially, eigenvectors (which are then stored in fdata)
+        int info;
+        linearAlgebra.syev_batched(&jobz, &uplo, &fnnz, fdata_batch.data(), &fnnz, evals_batch.data(), work.data(), &lwork, &info, batchNumber);
+
+        // compute condition number as the ratio of the eigenvalues
+        toast::AlignedVector <double> rcond_batch(batchNumber);
+        #pragma omp parallel for
+        for(int64_t batchid = 0; batchid < batchNumber; batchid++)
+        {
+            // computes the maximum and minimum eigenvalues
+            double emin = 1.0e100;
+            double emax = 0.0;
+            for (int64_t k = batchNumber*nnz; k < (batchNumber+1)*nnz; k++)
+            {
+                if (evals_batch[k] < emin) emin = evals_batch[k];
+                if (evals_batch[k] > emax) emax = evals_batch[k];
+            }
+            // stores the resulting condition number
+            rcond_batch[batchid] = (emax > 0.0) ? (emin / emax) : 0.;
+        }
+
+        // ftemp = fdata / evals (eigenvectors divided by eigenvalues)
+        // TODO we could fuse this with the previous omp batch loop
+        toast::AlignedVector <double> ftemp_batch(batchNumber * nnz * nnz);
+        #pragma omp parallel for
+        for(int64_t batchid = 0; batchid < batchNumber; batchid++)
+        {
+            for (int64_t k = batchNumber*nnz; k < (batchNumber+1)*nnz; k++)
+            {
+                for (int64_t m = 0; m < nnz; m++)
+                {
+                    ftemp_batch[k * nnz + m] = fdata_batch[k * nnz + m] / evals_batch[k];
+                }
+            }
+        }
+
+        // finv = ftemp x fdata
+        toast::AlignedVector <double> finv_batch(batchNumber * nnz * nnz);
+        {
+            // pointers to each batch matrix
+            toast::AlignedVector <double*> ftemp_ptr_batch(batchNumber);
+            toast::AlignedVector <double*> fdata_ptr_batch(batchNumber);
+            toast::AlignedVector <double*> finv_ptr_batch(batchNumber);
+            #pragma omp parallel for
+            for(int64_t batchid = 0; batchid < batchNumber; batchid++)
+            {
+                ftemp_ptr_batch[batchid] = ftemp_batch.data() + batchid * (nnz*nnz);
+                fdata_ptr_batch[batchid] = fdata_batch.data() + batchid * (nnz*nnz);
+                finv_ptr_batch[batchid] = finv_batch.data() + batchid * (nnz*nnz);
+            }
+            // does matrix multiplication
+            double fzero = 0.0;
+            double fone = 1.0;
+            linearAlgebra.gemm_batched(&transN, &transT, &fnnz, &fnnz,
+                                       &fnnz, &fone, ftemp_ptr_batch.data(),
+                                       &fnnz, fdata_ptr_batch.data(), &fnnz,
+                                       &fzero, finv_ptr_batch.data(), &fnnz, batchNumber);
+            // the pointer memory is freed at the end of the scope
+        }
+
+        // data = finv
+        #pragma omp parallel for
+        for(int64_t batchid = 0; batchid < batchNumber; batchid++)
+        {
+            // did the computation of finv succeed
+            const bool success = (info = 0) and (rcond_batch[batchid] >= threshold);
+            // stores result in data
+            if(invert)
+            {
+                if(success)
+                {
+                    // data = finv (reordering)
+                    int offset = 0;
+                    for (int64_t k = 0; k < nnz; k++)
+                    {
+                        for (int64_t m = k; m < nnz; m++)
+                        {
+                            data[batchid*blockSize + offset] = finv_batch[batchid*nnz*nnz + k*nnz + m];
+                            offset += 1;
+                        }
+                    }
+                }
+                else
+                {
+                    // data = 0.
+                    for (int64_t k = batchid*blockSize; k < (batchid+1)*blockSize; k++)
+                    {
+                        data[k] = 0.;
+                    }
+                }
+            }
+            // if we have an output parameter for the condition number
+            if (cond != NULL)
+            {
+                cond[batchid] = (success) ? rcond_batch[batchid] : 0.;
+            }
+        }
+    }
 }
 
 void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,

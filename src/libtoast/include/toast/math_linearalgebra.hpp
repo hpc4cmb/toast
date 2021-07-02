@@ -44,8 +44,8 @@ namespace toast {
         void syev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
                   double * W, double * WORK, int * LWORK, int * INFO);
 
-        int syev_batched_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
-                                    int * LDA, double * W, const int batchCount) const;
+        int syev_batched_buffersize(char * JOBZ, char * UPLO, int * N, double * A_batch,
+                                    int * LDA, double * W_batch, const int batchCount) const;
 
         void syev_batched(char * JOBZ, char * UPLO, int * N, double * A_batched,
                           int * LDA, double * W_batched, double * WORK, int * LWORK,
