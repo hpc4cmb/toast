@@ -279,7 +279,7 @@ class OpCrosstalk(Operator):
             crosstalk_data = crosstalk_matrix.data
             for obs in data.obs:
                 tod = obs["tod"]
-                # TODO: should we only check this only `if debug`?
+
                 detectors_set = set(tod.detectors)
                 if not (names_set & detectors_set):
                     logger.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
@@ -328,7 +328,6 @@ class OpCrosstalk(Operator):
                 procs = tod.grid_size[0]
                 rank = tod.grid_ranks[0]
 
-                # TODO: should we only check this only `if debug`?
                 # all ranks need to check this as they need to perform the same action
                 detectors_set = set(tod.detectors)
                 if not (names_set & detectors_set):
