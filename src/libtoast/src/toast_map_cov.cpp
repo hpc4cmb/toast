@@ -229,172 +229,6 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
     return;
 }
 
-void OLD_cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
-                                    double * data, double * cond,
-                                    double threshold, bool invert) {
-    if (nnz == 1) {
-        // shortcut for NNZ == 1
-        if (!invert) {
-            // Not much point in calling this!
-            if (cond != NULL) {
-                for (int64_t i = 0; i < nsub; ++i) {
-                    for (int64_t j = 0; j < subsize; ++j) {
-                        cond[i * subsize + j] = 1.0;
-                    }
-                }
-            }
-        } else {
-            if (cond != NULL) {
-                for (int64_t i = 0; i < nsub; ++i) {
-                    for (int64_t j = 0; j < subsize; ++j) {
-                        int64_t dpx = (i * subsize) + j;
-                        cond[dpx] = 1.0;
-                        if (data[dpx] != 0) {
-                            data[dpx] = 1.0 / data[dpx];
-                        }
-                    }
-                }
-            } else {
-                for (int64_t i = 0; i < nsub; ++i) {
-                    for (int64_t j = 0; j < subsize; ++j) {
-                        int64_t dpx = (i * subsize) + j;
-                        if (data[dpx] != 0) {
-                            data[dpx] = 1.0 / data[dpx];
-                        }
-                    }
-                }
-            }
-        }
-    }
-    else
-    {
-        // Even if the actual BLAS/LAPACK library is threaded, these are very
-        // small matrices.  So instead we divide up the map data across threads
-        // and each thread does some large number of small eigenvalue problems.
-#pragma omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
-        {
-            // thread-private variables
-
-            // data storage
-            toast::AlignedVector <double> fdata(nnz * nnz);
-            toast::AlignedVector <double> ftemp(nnz * nnz);
-            toast::AlignedVector <double> finv(nnz * nnz);
-            toast::AlignedVector <double> evals(nnz);
-
-            // solver parameters
-            toast::LinearAlgebra linearAlgebra;
-            char jobz = (invert) ? 'V' : 'N';
-            char uplo = 'L';
-            char transN = 'N';
-            char transT = 'T';
-            int fnnz = (int)nnz;
-
-            // allocates a buffer of the proper size
-            int lwork = linearAlgebra.syev_buffersize(&jobz, &uplo, &fnnz, fdata.data(), &fnnz, evals.data());
-            toast::AlignedVector <double> work(lwork);
-
-            // parallel loop over submaps and pixels within each submap
-            int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-#pragma omp for schedule(static)
-            for (int64_t i = 0; i < (nsub * subsize); ++i)
-            {
-                // index of the pixel (current batch element)
-                int64_t dpx = i * block;
-
-                // fdata = data
-                int off = 0;
-                std::fill(fdata.begin(), fdata.end(), 0); // TODO do we need this?
-                for (int64_t k = 0; k < nnz; ++k)
-                {
-                    for (int64_t m = k; m < nnz; ++m)
-                    {
-                        fdata[k * nnz + m] = data[dpx + off];
-                        off += 1;
-                    }
-                }
-
-                // compute eigenvalues of fdata (stored in evals)
-                // and, potentially, eigenvectors (which are then stored in fdata)
-                int info;
-                linearAlgebra.syev(&jobz, &uplo, &fnnz, fdata.data(), &fnnz, evals.data(), work.data(), &lwork, &info);
-
-                double rcond = 0.0;
-                if (info == 0) // it worked
-                {
-                    // compute condition number as the ratio of the eigenvalues
-                    double emin = 1.0e100;
-                    double emax = 0.0;
-                    for (int64_t k = 0; k < nnz; ++k)
-                    {
-                        if (evals[k] < emin) emin = evals[k];
-                        if (evals[k] > emax) emax = evals[k];
-                    }
-                    if (emax > 0.0) rcond = emin / emax;
-
-                    // compare to threshold
-                    if (invert and (rcond >= threshold)) // TODO is this test often true?
-                    {
-                        // ftemp = fdata / evals (eigenvectors divided by eigenvalues)
-                        for (int64_t k = 0; k < nnz; k++)
-                        {
-                            evals[k] = 1.0 / evals[k]; // TODO do we really need to invert instead of dividing later?
-                            for (int64_t m = 0; m < nnz; m++)
-                            {
-                                ftemp[k * nnz + m] = evals[k] * fdata[k * nnz + m];
-                            }
-                        }
-
-                        // finv = ftemp x fdata
-                        double fzero = 0.0;
-                        double fone = 1.0;
-                        linearAlgebra.gemm(&transN, &transT, &fnnz, &fnnz,
-                                           &fnnz, &fone, ftemp.data(),
-                                           &fnnz, fdata.data(), &fnnz,
-                                           &fzero, finv.data(), &fnnz);
-
-                        // data = finv
-                        int off2 = 0;
-                        for (int64_t k = 0; k < nnz; k++)
-                        {
-                            for (int64_t m = k; m < nnz; m++)
-                            {
-                                data[dpx + off2] = finv[k * nnz + m];
-                                off2 += 1;
-                            }
-                        }
-                    }
-                    else // reject this pixel
-                    {
-                        rcond = 0.0;
-                        info = 1;
-                    }
-                }
-
-                if (invert and (info != 0)) // failure of the inversion
-                {
-                    // data = 0.0
-                    int off2 = 0;
-                    for (int64_t k = 0; k < nnz; ++k)
-                    {
-                        for (int64_t m = k; m < nnz; ++m)
-                        {
-                            data[dpx + off2] = 0.0;
-                            off2 += 1;
-                        }
-                    }
-                }
-
-                if (cond != NULL) // we want to extract the condition number
-                {
-                    cond[i] = rcond;
-                }
-            }
-        }
-    }
-
-    return;
-}
-
 void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                                     double * data, double * cond,
                                     double threshold, bool invert) {
@@ -436,7 +270,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
     {
         // problem size parameters
         int fnnz = (int)nnz;
-        int batchNumber = nsub * subsize; // TODO doing all batch at once might be too memory hungry
+        int batchNumber = nsub * subsize;
         int64_t blockSize = (int64_t)(nnz * (nnz + 1) / 2);
 
         // solver parameters
@@ -479,35 +313,27 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         linearAlgebra.syev_batched(&jobz, &uplo, &fnnz, fdata_batch.data(), &fnnz, evals_batch.data(), work.data(), &lwork, &info, batchNumber);
 
         // compute condition number as the ratio of the eigenvalues
+        // and sets ftemp = fdata / evals
         toast::AlignedVector <double> rcond_batch(batchNumber);
-        #pragma omp parallel for
-        for(int64_t batchid = 0; batchid < batchNumber; batchid++)
-        {
-            // computes the maximum and minimum eigenvalues
-            double emin = 1.0e100;
-            double emax = 0.0;
-            for (int64_t k = batchid*nnz; k < (batchid+1)*nnz; k++)
-            {
-                if (evals_batch[k] < emin) emin = evals_batch[k];
-                if (evals_batch[k] > emax) emax = evals_batch[k];
-            }
-            // stores the resulting condition number
-            rcond_batch[batchid] = (emax > 0.0) ? (emin / emax) : 0.;
-        }
-
-        // ftemp = fdata / evals (eigenvectors divided by eigenvalues)
-        // TODO we could fuse this with the previous omp batch loop
         toast::AlignedVector <double> ftemp_batch(batchNumber * nnz * nnz);
         #pragma omp parallel for
         for(int64_t batchid = 0; batchid < batchNumber; batchid++)
         {
+            double emin = 1.0e100;
+            double emax = 0.0;
             for (int64_t k = batchid*nnz; k < (batchid+1)*nnz; k++)
             {
+                // computes the maximum and minimum eigenvalues
+                if (evals_batch[k] < emin) emin = evals_batch[k];
+                if (evals_batch[k] > emax) emax = evals_batch[k];
+                // ftemp = fdata / evals (eigenvectors divided by eigenvalues)
                 for (int64_t m = 0; m < nnz; m++)
                 {
                     ftemp_batch[k * nnz + m] = fdata_batch[k * nnz + m] / evals_batch[k];
                 }
             }
+            // stores the condition number
+            rcond_batch[batchid] = (emax > 0.0) ? (emin / emax) : 0.;
         }
 
         // finv = ftemp x fdata
@@ -531,7 +357,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                                        &fnnz, &fone, ftemp_ptr_batch.data(),
                                        &fnnz, fdata_ptr_batch.data(), &fnnz,
                                        &fzero, finv_ptr_batch.data(), &fnnz, batchNumber);
-            // the pointer memory is freed at the end of the scope
+            // the pointers memory is freed at the end of the scope
         }
 
         // data = finv
