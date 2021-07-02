@@ -110,9 +110,9 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             // Square the template matrix for A^T.A
 
             toast::AlignedVector <double> invcov(norder * norder);
-            linearAlgebra.syrk(&upper, &trans, &norder, &ngood, &fone,
-                               masked_templates.data(), &ngood, &fzero, invcov.data(),
-                               &norder);
+            linearAlgebra.syrk(upper, trans, norder, ngood, fone,
+                               masked_templates.data(), ngood, fzero, invcov.data(),
+                               norder);
 
             // Project the signals against the templates
 
@@ -129,10 +129,10 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
 
             toast::AlignedVector <double> proj(norder * nsignal);
 
-            linearAlgebra.gemm(&trans, &notrans, &norder, &nsignal, &ngood,
-                               &fone, masked_templates.data(), &ngood,
-                               masked_signals.data(), &ngood,
-                               &fzero, proj.data(), &norder);
+            linearAlgebra.gemm(trans, notrans, norder, nsignal, ngood,
+                               fone, masked_templates.data(), ngood,
+                               masked_signals.data(), ngood,
+                               fzero, proj.data(), norder);
 
             // Symmetrize the covariance matrix, dgells is written for
             // generic matrices
@@ -156,11 +156,11 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             // DGELSS will overwrite proj with the fitting
             // coefficients.  invcov is overwritten with
             // singular vectors.
-            linearAlgebra.dgelss(&norder, &norder, &nsignal,
-                                 invcov.data(), &norder,
-                                 proj.data(), &norder,
-                                 singular_values.data(), &rcond_limit,
-                                 &rank, work.data(), &lwork, &info);
+            linearAlgebra.gelss(norder, norder, nsignal,
+                                invcov.data(), norder,
+                                proj.data(), norder,
+                                singular_values.data(), rcond_limit,
+                                rank, work.data(), lwork, &info);
 
             for (int iorder = 0; iorder < norder; ++iorder) {
                 double * temp = &full_templates[iorder * scanlen];

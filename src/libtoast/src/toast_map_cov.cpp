@@ -283,7 +283,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // allocates buffers of the proper size
         toast::AlignedVector <double> fdata_batch(batchNumber * nnz * nnz);
         toast::AlignedVector <double> evals_batch(batchNumber * nnz);
-        int lwork = linearAlgebra.syev_batched_buffersize(&jobz, &uplo, &fnnz, fdata_batch.data(), &fnnz, evals_batch.data(), batchNumber);
+        int lwork = linearAlgebra.syev_batched_buffersize(jobz, uplo, fnnz, fdata_batch.data(), fnnz, evals_batch.data(), batchNumber);
         toast::AlignedVector <double> work(lwork);
 
         // fdata = data (reordering)
@@ -310,7 +310,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // compute eigenvalues of fdata (stored in evals)
         // and, potentially, eigenvectors (which are then stored in fdata)
         int info;
-        linearAlgebra.syev_batched(&jobz, &uplo, &fnnz, fdata_batch.data(), &fnnz, evals_batch.data(), work.data(), &lwork, &info, batchNumber);
+        linearAlgebra.syev_batched(jobz, uplo, fnnz, fdata_batch.data(), fnnz, evals_batch.data(), work.data(), lwork, &info, batchNumber);
 
         // compute condition number as the ratio of the eigenvalues
         // and sets ftemp = fdata / evals
@@ -354,10 +354,10 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             // does matrix multiplication
             double fzero = 0.0;
             double fone = 1.0;
-            linearAlgebra.gemm_batched(&transN, &transT, &fnnz, &fnnz,
-                                       &fnnz, &fone, ftemp_ptr_batch.data(),
-                                       &fnnz, fdata_ptr_batch.data(), &fnnz,
-                                       &fzero, finv_ptr_batch.data(), &fnnz, batchNumber);
+            linearAlgebra.gemm_batched(transN, transT, fnnz, fnnz,
+                                       fnnz, fone, ftemp_ptr_batch.data(),
+                                       fnnz, fdata_ptr_batch.data(), fnnz,
+                                       fzero, finv_ptr_batch.data(), fnnz, batchNumber);
             // the pointers memory is freed at the end of the scope
         }
 
@@ -467,9 +467,9 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                     }
                 }
 
-                linearAlgebra.symm(&side, &uplo, &fnnz, &fnnz, &fone,
-                                   fdata1.data(), &fnnz, fdata2.data(), &fnnz,
-                                   &fzero, fdata3.data(), &fnnz);
+                linearAlgebra.symm(side, uplo, fnnz, fnnz, fone,
+                                   fdata1.data(), fnnz, fdata2.data(), fnnz,
+                                   fzero, fdata3.data(), fnnz);
 
                 off = 0;
                 for (int64_t k = 0; k < nnz; ++k) {
