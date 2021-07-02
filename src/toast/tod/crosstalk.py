@@ -106,7 +106,7 @@ if jit is None:
     )
 else:
     # cache is False to avoid IO on HPC.
-    _fma = jit(_fma, nopython=True, nogil=True, cache=False)
+    _fma = jit(_fma, nopython=True, nogil=True, parallel=True, cache=False)
 
 
 def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
