@@ -217,11 +217,13 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     #pragma omp parallel for
     for(unsigned int b=0; b<batchCount; b++)
     {
-        double * A = A_batch[b * (*N) * (*LDA)];
-        double * W = W_batch[b * (*N) * (*LDA)];
-        double * WORKb = &WORK[b*(LWORK/batchCount)];
+        double * A = &A_batch[b * N * LDA];
+        double * W = &W_batch[b * N * LDA];
         int LWORKb = LWORK/batchCount;
-        wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORKb, &LWORKb, INFO);
+        double * WORKb = &WORK[b*LWORKb];
+        int INFOb = 0;
+        wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORKb, &LWORKb, &INFOb);
+        if (INFOb != 0) *INFO = INFOb;
     }
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
