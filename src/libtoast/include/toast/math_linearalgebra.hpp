@@ -21,37 +21,37 @@ namespace toast {
         LinearAlgebra(LinearAlgebra const&) = delete;
         void operator=(LinearAlgebra const&) = delete;
 
-        void gemm(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
-                  double * ALPHA, double * A, int * LDA, double * B, int * LDB,
-                  double * BETA, double * C, int * LDC) const;
+        void gemm(char TRANSA, char TRANSB, int M, int N, int K,
+                  double ALPHA, double * A, int LDA, double * B, int LDB,
+                  double BETA, double * C, int LDC) const;
 
-        void gemm_batched(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
-                          double * ALPHA, double * A_batch[], int * LDA, double * B_batch[], int * LDB,
-                          double * BETA, double * C_batch[], int * LDC, const int batchCount) const;
+        void gemm_batched(char TRANSA, char TRANSB, int M, int N, int K,
+                          double ALPHA, double * A_batch[], int LDA, double * B_batch[], int LDB,
+                          double BETA, double * C_batch[], int LDC, const int batchCount) const;
 
-        int syev_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
-                            int * LDA, double * W) const;
+        int syev_buffersize(char JOBZ, char UPLO, int N, double * A,
+                            int LDA, double * W) const;
 
-        void syev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
-                  double * W, double * WORK, int * LWORK, int * INFO);
+        void syev(char JOBZ, char UPLO, int N, double * A, int LDA,
+                  double * W, double * WORK, int LWORK, int * INFO);
 
-        int syev_batched_buffersize(char * JOBZ, char * UPLO, int * N, double * A_batch,
-                                    int * LDA, double * W_batch, const int batchCount) const;
+        int syev_batched_buffersize(char JOBZ, char UPLO, int N, double * A_batch,
+                                    int LDA, double * W_batch, const int batchCount) const;
 
-        void syev_batched(char * JOBZ, char * UPLO, int * N, double * A_batched,
-                          int * LDA, double * W_batched, double * WORK, int * LWORK,
+        void syev_batched(char JOBZ, char UPLO, int N, double * A_batched,
+                          int LDA, double * W_batched, double * WORK, int LWORK,
                           int * INFO, const int batchCount);
 
-        void symm(char * SIDE, char * UPLO, int * M, int * N, double * ALPHA,
-                  double * A, int * LDA, double * B, int * LDB, double * BETA,
-                  double * C, int * LDC) const;
+        void symm(char SIDE, char UPLO, int M, int N, double ALPHA,
+                  double * A, int LDA, double * B, int LDB, double BETA,
+                  double * C, int LDC) const;
 
-        void syrk(char * UPLO, char * TRANS, int * N, int * K, double * ALPHA,
-                  double * A, int * LDA, double * BETA, double * C, int * LDC) const;
+        void syrk(char UPLO, char TRANS, int N, int K, double ALPHA,
+                  double * A, int LDA, double BETA, double * C, int LDC) const;
 
-        void dgelss(int * M, int * N, int * NRHS, double * A, int * LDA,
-                    double * B, int * LDB, double * S, double * RCOND,
-                    int * RANK, double * WORK, int * LWORK, int * INFO) const;
+        void gelss(int M, int N, int NRHS, double * A, int LDA,
+                    double * B, int LDB, double * S, double RCOND,
+                    int RANK, double * WORK, int LWORK, int * INFO) const;
     private:
     #ifdef HAVE_CUDALIBS
         cublasHandle_t handleBlas = NULL;
