@@ -182,7 +182,7 @@ class OpCrosstalkTest(MPITestCase):
         for case in cases:
             self._tset_op_crosstalk_multiple_matrices(*case)
 
-    def test_io(self):
+    def test_op_crosstalk_io(self):
         path = self.outdir / 'simple_crosstalk_matrix.hdf5'
 
         crosstalk_matrix = SimpleCrosstalkMatrix(names, crosstalk_data)
