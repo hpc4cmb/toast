@@ -8,15 +8,6 @@
 
 #include "gpu_helpers.hpp"
 
-// TODO
-//  - batch operations would be much faster where possible
-//    gemm has a batched version
-//    syevd doesnt but syevj, which does the same thing with jacobi, does
-//    symm doesnt
-//    syrk doesnt (unless you use magma)
-//    dgelss doesnt
-//  => function cov_eigendecompose_diag in toast_map_cov.cpp is the only one we can run on batch
-
 namespace toast {
     // encapsulates construction and destruction of GPU linear algebra handles
     // WARNING: this class is *not* threadsafe and one should create one LinearAlgebra object per thread
