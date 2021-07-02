@@ -234,7 +234,7 @@ class SimpleCrosstalkMatrix:
 
 
 class OpCrosstalk(Operator):
-    """Operator that apply crosstalk matrix to detector ToDs.
+    """Operator that applies crosstalk matrix to detector ToDs.
 
     :param n_crosstalk_matrices: total no. of crosstalk matrices
     :param crosstalk_matrices: the crosstalk matrices.
