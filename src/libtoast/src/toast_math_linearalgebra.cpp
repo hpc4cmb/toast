@@ -176,18 +176,18 @@ void toast::LinearAlgebra::syev(char * JOBZ, char * UPLO, int * N, double * A,
 }
 
 // we assume that buffers will be threadlocal
-int toast::LinearAlgebra::syev_batched_buffersize(char * JOBZ, char * UPLO, int * N, double * A,
-                                                  int * LDA, double * W, const int batchCount) const {
+int toast::LinearAlgebra::syev_batched_buffersize(char * JOBZ, char * UPLO, int * N, double * A_batch,
+                                                  int * LDA, double * W_batch, const int batchCount) const {
     // We assume a large value here, since the work space needed will still be small.
     int NB = 256;
-    int LWORK = NB * 2 + (*N);
+    int LWORK = batchCount * (NB * 2 + (*N));
 
 #ifdef HAVE_CUDALIBS
     // prepare inputs
     cusolverEigMode_t jobz_cuda = (*JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_cuda = (*UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     // computes buffersize
-    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(handleSolver, jobz_cuda, uplo_cuda, *N, A, *LDA, W, &LWORK, jacobiParameters, batchCount);
+    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(handleSolver, jobz_cuda, uplo_cuda, *N, A_batch, *LDA, W_batch, &LWORK, jacobiParameters, batchCount);
     checkCusolverErrorCode(statusBuffer);
 #endif
 
@@ -222,7 +222,8 @@ void toast::LinearAlgebra::syev_batched(char * JOBZ, char * UPLO, int * N, doubl
     {
         double * A = A_batch[b * (*N) * (*LDA)];
         double * W = W_batch[b * (*N) * (*LDA)];
-        wrapped_dsyev(JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO);
+        double * WORKb = &WORK[b*(LWORK/batchCount)]
+        wrapped_dsyev(JOBZ, UPLO, N, A, LDA, W, WORKb, LWORK/batchCount, INFO);
     }
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
