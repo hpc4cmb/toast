@@ -15,7 +15,8 @@ A typical use of this is that in your pipeline script,
         if args.crosstalk_matrix is not None:
             op_crosstalk = OpCrosstalk.read(args)
 
-3. Apply the crosstalk matrix to your data after the ToD is prepared (e.g. signal & noise) by adding
+3. Apply the crosstalk matrix to your data after the ToD is prepared
+(e.g. signal & noise) by adding
 
 
     .. highlight:: python
@@ -35,7 +36,8 @@ with the simple conventions that
 it has the following datasets:
 
 1. names: ASCII names of your detectors, say of length ``n``
-2. data: ``n`` by ``n`` float64 array of your crosstalk matrix ``m``, where you expect
+2. data: ``n`` by ``n`` float64 array of your crosstalk matrix ``m``,
+where you expect
 
     ToD_crosstalked = m @ ToD_original
 
@@ -79,10 +81,14 @@ logger = Logger.get()
 IS_SERIAL = PROCS == 1
 
 
-def _fma(out: 'np.ndarray[np.float64]', weights: 'np.ndarray[np.float64]', *arrays: 'np.ndarray[np.float64]'):
+def _fma(
+    out: 'np.ndarray[np.float64]',
+    weights: 'np.ndarray[np.float64]',
+    *arrays: 'np.ndarray[np.float64]',
+):
     """Simple FMA, compiled to avoid Python memory implications.
 
-    :param out: must be zero array in the same shape of each array in `arrays`
+    :param out: must be zero array in the same shape of each in `arrays`
 
     If not compiled, a lot of Python objects will be created,
     and as the Python garbage collector is inefficient,
@@ -93,7 +99,11 @@ def _fma(out: 'np.ndarray[np.float64]', weights: 'np.ndarray[np.float64]', *arra
 
 
 if jit is None:
-    logger.warning('Numba not present. _fma in crosstalk will have more intermediate Numpy array objects created that uses more memory.')
+    logger.warning(
+        'Numba not present. '
+        '_fma in crosstalk will have more intermediate Numpy array objects '
+        'created that uses more memory.'
+    )
 else:
     # cache is False to avoid IO on HPC.
     _fma = jit(_fma, nopython=True, nogil=True, cache=False)
@@ -113,7 +123,8 @@ def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
         type=bool,
         action='store_true',
         required=False,
-        help="if specified, perform more checks and emit more messages. You may want to set TOAST_LOGLEVEL=DEBUG as well.",
+        help="if specified, perform more checks and emit more messages. "
+             "You may want to set TOAST_LOGLEVEL=DEBUG as well.",
     )
 
 
@@ -123,7 +134,8 @@ class SimpleCrosstalkMatrix:
     This is a simple container storing the crosstalk matrix,
     but not generating it.
 
-    The length of `names` should match the dimension of `data`, which should be a square array.
+    The length of `names` should match the dimension of `data`,
+    which should be a square array.
     Runtime checking is done only if `debug` is set to `True`.
     """
 
@@ -146,7 +158,13 @@ class SimpleCrosstalkMatrix:
         try:
             if not isinstance(names.dtype, type(np.dtype('S'))):
                 raise TypeError('names has to be a numpy array with dtype("S")')
-            if not isinstance(data.dtype, (type(np.dtype(np.float64)), type(np.dtype(np.float32)))):
+            if not isinstance(
+                data.dtype,
+                (
+                    type(np.dtype(np.float64)),
+                    type(np.dtype(np.float32)),
+                )
+            ):
                 raise TypeError('data has to be a numpy array of float')
             if data.ndim != 2:
                 raise TypeError('data should be 2-dimensional')
@@ -187,7 +205,8 @@ class SimpleCrosstalkMatrix:
         """Dump to an HDF5 file.
 
         `libver` will be passed to h5py.File,
-        and the rest keyword arguments will be passed to `h5py.File.create_dataset` with sensible defaults.
+        and the rest keyword arguments will be passed to `h5py.File.create_dataset`
+        with sensible defaults.
         """
         with h5py.File(path, 'w', libver=libver) as f:
             f.create_dataset(
@@ -216,10 +235,13 @@ class OpCrosstalk(Operator):
     """Operator that apply crosstalk matrix to detector ToDs.
 
     :param n_crosstalk_matrices: total no. of crosstalk matrices
-    :param crosstalk_matrices: the crosstalk matrices. In MPI case, this holds only those matrices owned by a rank dictate by the condition `i % PROCS == RANK`
+    :param crosstalk_matrices: the crosstalk matrices.
+        In MPI case, this holds only those matrices owned by a rank dictate
+        by the condition `i % PROCS == RANK`
     :param name: this name is used to save data in tod.cache, so better be unique from other cache
 
-    In a typical scenario, the classmethod `read` is used to create an object instead of initiating directly.
+    In a typical scenario, the classmethod `read` is used to create an object
+    instead of initiating directly.
     """
 
     def __init__(
@@ -278,15 +300,27 @@ class OpCrosstalk(Operator):
         if debug:
             logger.debug(f'crosstalk: Rank {RANK} receives data {data}')
 
-        return crosstalk_matrix if RANK == rank_owner else SimpleCrosstalkMatrix(names, data)
+        return (
+            crosstalk_matrix
+        ) if RANK == rank_owner else (
+            SimpleCrosstalkMatrix(names, data)
+        )
 
     @staticmethod
-    def _read_serial(paths: 'List[Path]', *, debug: 'bool' = False) -> 'List[SimpleCrosstalkMatrix]':
+    def _read_serial(
+        paths: 'List[Path]',
+        *,
+        debug: 'bool' = False,
+    ) -> 'List[SimpleCrosstalkMatrix]':
         """Read crosstalk matri(x|ces) from HDF5 file(s) serially."""
         return [SimpleCrosstalkMatrix.load(path, debug=debug) for path in paths]
 
     @staticmethod
-    def _read_mpi(paths: 'List[Path]', *, debug: 'bool' = False) -> 'List[SimpleCrosstalkMatrix]':
+    def _read_mpi(
+        paths: 'List[Path]',
+        *,
+        debug: 'bool' = False,
+    ) -> 'List[SimpleCrosstalkMatrix]':
         """Read crosstalk matri(x|ces) from HDF5 file(s) with MPI.
 
         This holds only those matrices owned by a rank
@@ -294,7 +328,10 @@ class OpCrosstalk(Operator):
         """
         N = len(paths)
         path_idxs_per_rank = range(RANK, N, PROCS)
-        return [SimpleCrosstalkMatrix.load(paths[i], debug=debug) for i in path_idxs_per_rank]
+        return [
+            SimpleCrosstalkMatrix.load(paths[i], debug=debug)
+            for i in path_idxs_per_rank
+        ]
 
     @classmethod
     def read(
@@ -304,11 +341,17 @@ class OpCrosstalk(Operator):
         name: 'str' = "crosstalk",
         debug: 'bool' = False,
     ) -> 'OpCrosstalk':
-        """Read crosstalk matri(x|ces) from HDF5 file(s), dispatched depending if MPI is used.
+        """Read crosstalk matri(x|ces) from HDF5 file(s).
+
+        It will be dispatched depending if MPI is used.
         """
         paths = args.crosstalk_matrix
         debug = args.crosstalk_matrix_debug
-        crosstalk_matrices = cls._read_serial(paths, debug=debug) if IS_SERIAL else cls._read_mpi(paths, debug=debug)
+        crosstalk_matrices = (
+            cls._read_serial(paths, debug=debug)
+        ) if IS_SERIAL else (
+            cls._read_mpi(paths, debug=debug)
+        )
         return cls(len(paths), crosstalk_matrices, name=name, debug=debug)
 
     def _exec_serial(
@@ -329,10 +372,18 @@ class OpCrosstalk(Operator):
 
                 detectors_set = set(tod.detectors)
                 if not (names_set & detectors_set):
-                    logger.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
+                    logger.info(
+                        f"Crosstalk: skipping tod {tod} as "
+                        "it does not include detectors from crosstalk matrix "
+                        f"with these detectors: {names}."
+                    )
                     continue
                 elif not (names_set <= detectors_set):
-                    raise ValueError(f"Crosstalk: tod {tod} only include some detectors from the crosstalk matrix with these detectors: {names}.")
+                    raise ValueError(
+                        f"Crosstalk: tod {tod} only include some detectors "
+                        "from the crosstalk matrix "
+                        f"with these detectors: {names}."
+                    )
                 del detectors_set
 
                 n_samples = tod.local_samples[1]
@@ -341,16 +392,25 @@ class OpCrosstalk(Operator):
                 # This follows the _exec_mpi mat-mul algorithm
                 # but not put them in a contiguous array and use real mat-mul @
                 # The advantage is to reduce memory use
-                # (if creating an intermediate contiguous array that would requires one more copy of tod than needed below)
+                # (if creating an intermediate contiguous array
+                # that would requires one more copy of tod than needed below)
                 # and perhaps served as a easier-to-understand version of _exec_mpi below
                 for name, row in zip(names, crosstalk_data):
-                    row_global_total = tod.cache.create(f"{crosstalk_name}_{name}", np.float64, (n_samples,))
-                    tods_list = [tod.cache.reference(f"{signal_name}_{name_j}") for name_j in names]
+                    row_global_total = tod.cache.create(
+                        f"{crosstalk_name}_{name}",
+                        np.float64,
+                        (n_samples,),
+                    )
+                    tods_list = [
+                        tod.cache.reference(f"{signal_name}_{name_j}")
+                        for name_j in names
+                    ]
                     _fma(row_global_total, row, *tods_list)
                 for name in names:
                     # overwrite it in-place
                     # not using tod.cache.put as that will destroy and create
-                    tod.cache.reference(f"{signal_name}_{name}")[:] = tod.cache.reference(f"{crosstalk_name}_{name}")
+                    tod.cache.reference(f"{signal_name}_{name}")[:] = \
+                        tod.cache.reference(f"{crosstalk_name}_{name}")
                     tod.cache.destroy(f"{crosstalk_name}_{name}")
 
     def _exec_mpi(
@@ -378,10 +438,17 @@ class OpCrosstalk(Operator):
                 # all ranks need to check this as they need to perform the same action
                 detectors_set = set(tod.detectors)
                 if not (names_set & detectors_set):
-                    logger.info(f"Crosstalk: skipping tod {tod} as it does not include detectors from crosstalk matrix with these detectors: {names}.")
+                    logger.info(
+                        f"Crosstalk: skipping tod {tod} as "
+                        "it does not include detectors from crosstalk matrix "
+                        f"with these detectors: {names}."
+                    )
                     continue
                 elif not (names_set <= detectors_set):
-                    raise ValueError(f"Crosstalk: tod {tod} only include some detectors from the crosstalk matrix with these detectors: {names}.")
+                    raise ValueError(
+                        f"Crosstalk: tod {tod} only include some detectors "
+                        f"from the crosstalk matrix with these detectors: {names}."
+                    )
                 del detectors_set
 
                 n_samples = tod.local_samples[1]
@@ -400,12 +467,20 @@ class OpCrosstalk(Operator):
                 # log.debug(f'dets LUT: {dets_lut}')
 
                 # construct det_lut, a LUT to know which rank holds a detector
-                local_has_det = tod.cache.create(f"{crosstalk_name}_local_has_det_{rank}", np.uint8, (n,)).view(np.bool_)
+                local_has_det = tod.cache.create(
+                    f"{crosstalk_name}_local_has_det_{rank}",
+                    np.uint8,
+                    (n,),
+                ).view(np.bool_)
                 for i, name in enumerate(names):
                     if name in local_crosstalk_dets_set:
                         local_has_det[i] = True
 
-                global_has_det = tod.cache.create(f"{crosstalk_name}_global_has_det_{rank}", np.uint8, (procs, n)).view(np.bool_)
+                global_has_det = tod.cache.create(
+                    f"{crosstalk_name}_global_has_det_{rank}",
+                    np.uint8,
+                    (procs, n),
+                ).view(np.bool_)
                 comm.Allgather(local_has_det, global_has_det)
 
                 if debug:
@@ -425,29 +500,59 @@ class OpCrosstalk(Operator):
                     logger.debug(f'Rank {rank} has detectors LUT: {det_lut}')
                     for name in local_crosstalk_dets_set:
                         if det_lut[name] != rank:
-                            raise RuntimeError(f'Error in creating a LUT from detector name to rank: {det_lut}')
+                            raise RuntimeError(
+                                'Error in creating a LUT '
+                                f'from detector name to rank: {det_lut}'
+                            )
 
                 # mat-mul
-                row_local_total = tod.cache.create(f"{crosstalk_name}_row_local_total_{rank}", np.float64, (n_samples,))
+                row_local_total = tod.cache.create(
+                    f"{crosstalk_name}_row_local_total_{rank}",
+                    np.float64,
+                    (n_samples,),
+                )
                 if n_local_dets > 0:
-                    row_local_weights = tod.cache.create(f"{crosstalk_name}_row_local_weights_{rank}", np.float64, (n_local_dets,))
-                    local_det_idxs = tod.cache.create(f"{crosstalk_name}_local_det_idxs_{rank}", np.int64, (n_local_dets,))
+                    row_local_weights = tod.cache.create(
+                        f"{crosstalk_name}_row_local_weights_{rank}",
+                        np.float64,
+                        (n_local_dets,),
+                    )
+                    local_det_idxs = tod.cache.create(
+                        f"{crosstalk_name}_local_det_idxs_{rank}",
+                        np.int64,
+                        (n_local_dets,),
+                    )
                 for i, name in enumerate(local_crosstalk_dets_set):
                     local_det_idxs[i] = names.index(name)
                 # row-loop
-                # * potentially the tod can have more detectors than SimpleCrosstalkMatrix.names_str has
+                # * potentially the tod can have more detectors
+                # * than SimpleCrosstalkMatrix.names_str has
                 # * and they will be skipped
                 for name, row in zip(names, crosstalk_data):
                     rank_owner = det_lut[name]
                     if n_local_dets > 0:
                         row_local_total[:] = 0.
                         row_local_weights[:] = row[local_det_idxs]
-                        tods_list = [tod.cache.reference(f"{signal_name}_{names[local_det_idxs[i]]}") for i in range(n_local_dets)]
+                        tods_list = [
+                            tod.cache.reference(
+                                f"{signal_name}_{names[local_det_idxs[i]]}"
+                            )
+                            for i in range(n_local_dets)
+                        ]
                         _fma(row_local_total, row_local_weights, *tods_list)
                     if rank == rank_owner:
-                        row_global_total = tod.cache.create(f"{crosstalk_name}_{name}", np.float64, (n_samples,))
-                        comm.Reduce(row_local_total, row_global_total, root=rank_owner)
-                        # it is reduced into tod.cache and the python reference can be safely deleted
+                        row_global_total = tod.cache.create(
+                            f"{crosstalk_name}_{name}",
+                            np.float64,
+                            (n_samples,),
+                        )
+                        comm.Reduce(
+                            row_local_total,
+                            row_global_total,
+                            root=rank_owner,
+                        )
+                        # it is reduced into tod.cache and
+                        # the python reference can be safely deleted
                         del row_global_total
                     else:
                         comm.Reduce(row_local_total, None, root=rank_owner)
@@ -461,7 +566,8 @@ class OpCrosstalk(Operator):
                 for name in local_crosstalk_dets_set:
                     # overwrite it in-place
                     # not using tod.cache.put as that will destroy and create
-                    tod.cache.reference(f"{signal_name}_{name}")[:] = tod.cache.reference(f"{crosstalk_name}_{name}")
+                    tod.cache.reference(f"{signal_name}_{name}")[:] = \
+                        tod.cache.reference(f"{crosstalk_name}_{name}")
                     tod.cache.destroy(f"{crosstalk_name}_{name}")
 
     def exec(
@@ -469,5 +575,11 @@ class OpCrosstalk(Operator):
         data: 'toast.dist.Data',
         signal_name: 'str',
     ):
-        """Apply crosstalk matrix on ToD in data, dispatched depending if MPI is used."""
-        self._exec_serial(data, signal_name) if IS_SERIAL else self._exec_mpi(data, signal_name)
+        """Apply crosstalk matrix on ToD in data.
+
+        It is dispatched depending if MPI is used."""
+        (
+            self._exec_serial(data, signal_name)
+        ) if IS_SERIAL else (
+            self._exec_mpi(data, signal_name)
+        )
