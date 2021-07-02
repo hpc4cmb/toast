@@ -15,7 +15,7 @@ from ..tod.crosstalk import OpCrosstalk, SimpleCrosstalkMatrix
 from ..utils import Logger
 from .mpi import MPITestCase
 
-from ._helpers import create_outdir  #, create_satellite_data
+from ._helpers import create_outdir  # , create_satellite_data
 
 if TYPE_CHECKING:
     from typing import List
