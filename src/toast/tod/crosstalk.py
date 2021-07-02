@@ -1,6 +1,42 @@
 # py37+
 # from __future__ import annotations
 
+"""Simulate crosstalk between detectors in ToD.
+
+A typical use of this is that in your pipeline script, add
+
+1. `add_crosstalk_args(parser)` to your argparse parser to add cli args,
+2. Read & create `op_crosstalk`:
+
+        if args.crosstalk_matrix is not None:
+            op_crosstalk = OpCrosstalk.read(args)
+
+3. Apply the crosstalk matrix to your data after the ToD is prepared (e.g. signal & noise):
+
+
+        if args.crosstalk_matrix is not None:
+            if comm.comm_world is not None:
+                comm.comm_world.barrier()
+            op_crosstalk.exec(data, "tot_signal")
+            if comm.comm_world is not None:
+                comm.comm_world.barrier()
+
+Note that you need to create your crosstalk matri(x|ces)
+in HDF5 container(s) beforehand. With the simple conventions that
+it has the following datasets:
+
+1. names: ASCII names of your detectors, say of length ``n``
+2. data: ``n`` by ``n`` float64 array of your crosstalk matrix ``m``, where you expect
+
+    ToD_crosstalked = m @ ToD_original
+
+    (Assuming row-major as is standard in Python.)
+
+Note that each crosstalk matrix has no assumption (i.e. they are dense),
+and when multiple matrices are supplied, they are effectively block-diagonal
+(where each dense matrix given in the form of a HDF5 file forms a block.)
+"""
+
 import argparse
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -201,10 +237,16 @@ class OpCrosstalk(Operator):
 
     @staticmethod
     def _read_serial(paths: 'List[Path]') -> 'List[SimpleCrosstalkMatrix]':
+        """Read crosstalk matri(x|ces) from HDF5 file(s) serially."""
         return [SimpleCrosstalkMatrix.load(path) for path in paths]
 
     @staticmethod
     def _read_mpi(paths: 'List[Path]') -> 'List[SimpleCrosstalkMatrix]':
+        """Read crosstalk matri(x|ces) from HDF5 file(s) with MPI.
+
+        This holds only those matrices owned by a rank
+        dictate by the condition `i % PROCS == RANK`
+        """
         N = len(paths)
         path_idxs_per_rank = range(RANK, N, PROCS)
         return [SimpleCrosstalkMatrix.load(paths[i]) for i in path_idxs_per_rank]
@@ -215,6 +257,8 @@ class OpCrosstalk(Operator):
         args: 'argparse.Namespace',
         name: 'str' = "crosstalk",
     ) -> 'OpCrosstalk':
+        """Read crosstalk matri(x|ces) from HDF5 file(s), dispatched depending if MPI is used.
+        """
         paths = args.crosstalk_matrix
         crosstalk_matrices = cls._read_serial(paths) if IS_SERIAL else cls._read_mpi(paths)
         return cls(len(paths), crosstalk_matrices, name=name)
@@ -225,6 +269,7 @@ class OpCrosstalk(Operator):
         signal_name: 'str',
         debug: 'bool' = False,
     ):
+        """Apply crosstalk matrix on ToD in data serially."""
         crosstalk_name = self.name
 
         # loop over crosstalk matrices
@@ -267,6 +312,7 @@ class OpCrosstalk(Operator):
         signal_name: 'str',
         debug: 'bool' = False,
     ):
+        """Apply crosstalk matrix on ToD in data with MPI."""
         crosstalk_name = self.name
 
         # loop over crosstalk matrices
@@ -378,4 +424,5 @@ class OpCrosstalk(Operator):
         signal_name: 'str',
         debug: 'bool' = False,
     ):
+        """Apply crosstalk matrix on ToD in data, dispatched depending if MPI is used."""
         self._exec_serial(data, signal_name, debug=debug) if IS_SERIAL else self._exec_mpi(data, signal_name, debug=debug)
