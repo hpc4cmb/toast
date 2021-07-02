@@ -183,13 +183,12 @@ class OpCrosstalkTest(MPITestCase):
             self._tset_op_crosstalk_multiple_matrices(*case)
 
     def test_op_crosstalk_io(self):
-        path = self.outdir / 'simple_crosstalk_matrix.hdf5'
-
-        crosstalk_matrix = SimpleCrosstalkMatrix(names, crosstalk_data, debug=True)
         if rank == 0:
+            path = self.outdir / 'simple_crosstalk_matrix.hdf5'
+            crosstalk_matrix = SimpleCrosstalkMatrix(names, crosstalk_data, debug=True)
+
             crosstalk_matrix.dump(path)
+            crosstalk_matrix_read = SimpleCrosstalkMatrix.load(path, debug=True)
 
-        crosstalk_matrix_read = SimpleCrosstalkMatrix.load(path, debug=True)
-
-        np.testing.assert_array_equal(names, crosstalk_matrix_read.names)
-        np.testing.assert_array_equal(crosstalk_data, crosstalk_matrix_read.data)
+            np.testing.assert_array_equal(names, crosstalk_matrix_read.names)
+            np.testing.assert_array_equal(crosstalk_data, crosstalk_matrix_read.data)
