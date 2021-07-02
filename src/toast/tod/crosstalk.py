@@ -86,7 +86,7 @@ def _fma(
     weights: 'np.ndarray[np.float64]',
     *arrays: 'np.ndarray[np.float64]',
 ):
-    """Simple FMA, compiled to avoid Python memory implications.
+    """Simple fused multiply–add, compiled to avoid Python memory implications.
 
     :param out: must be zero array in the same shape of each in `arrays`
 
