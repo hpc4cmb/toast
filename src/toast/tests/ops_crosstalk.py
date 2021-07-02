@@ -186,7 +186,8 @@ class OpCrosstalkTest(MPITestCase):
         path = self.outdir / 'simple_crosstalk_matrix.hdf5'
 
         crosstalk_matrix = SimpleCrosstalkMatrix(names, crosstalk_data, debug=True)
-        crosstalk_matrix.dump(path)
+        if rank == 0:
+            crosstalk_matrix.dump(path)
 
         crosstalk_matrix_read = SimpleCrosstalkMatrix.load(path, debug=True)
 
