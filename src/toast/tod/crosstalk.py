@@ -68,7 +68,7 @@ from ..op import Operator
 from ..utils import Logger
 
 if TYPE_CHECKING:
-    from typing import List  # Optional
+    from typing import List, Union  # Optional
 
     import toast
 
@@ -131,22 +131,24 @@ def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
 class SimpleCrosstalkMatrix:
     """A thin crosstalk matrix class.
 
+    :param names: detector names.
+    :param data: crosstalk matrix.
+        The length of `names` should match the dimension of `data`,
+        which should be a square array.
+    :param debug: emit more debug message and perform runtime validation check.
+
     This is a simple container storing the crosstalk matrix,
     but not generating it.
-
-    The length of `names` should match the dimension of `data`,
-    which should be a square array.
-    Runtime checking is done only if `debug` is set to `True`.
     """
 
     def __init__(
         self,
-        names: "np.ndarray['S']",
+        names: "Union[np.ndarray['S'], List[str]]",
         data: 'np.ndarray[np.float64]',
         *,
         debug: 'bool' = False,
     ):
-        self.names = names
+        self.names = np.asarray(names, dtype="S")
         self.data = data
         self.debug = debug
         if debug:
