@@ -1,21 +1,20 @@
 # py37+
 # from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
+
 import numpy as np
 from numpy.random import default_rng
 
-from ..mpi import get_world
 from ..dist import Data
+from ..mpi import get_world
 from ..tod import TODCache
 from ..tod.crosstalk import OpCrosstalk, SimpleCrosstalkMatrix
 from ..utils import Logger
-from .mpi import MPITestCase
-
 from ._helpers import create_outdir  # , create_satellite_data
+from .mpi import MPITestCase
 
 if TYPE_CHECKING:
     from typing import List
