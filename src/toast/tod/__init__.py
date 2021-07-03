@@ -39,7 +39,6 @@ from .polyfilter import OpPolyFilter, OpPolyFilter2D
 
 from .gainscrambler import OpGainScrambler
 from .applygain import OpApplyGain, write_calibration_file
-
 from .crosstalk import OpCrosstalk, SimpleCrosstalkMatrix
 
 from .memorycounter import OpMemoryCounter
