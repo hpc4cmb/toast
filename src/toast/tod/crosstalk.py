@@ -70,10 +70,11 @@ from ..utils import Logger
 if TYPE_CHECKING:
     from typing import List, Union  # Optional
 
-    import toast
+    from .mpi import Comm
+    from .dist import Data
 
 # py37+
-# world_comm: Optional[toast.mpi.Comm]
+# world_comm: Optional[Comm]
 # PROCS: int
 # RANK: int
 world_comm, PROCS, RANK = get_world()
@@ -358,7 +359,7 @@ class OpCrosstalk(Operator):
 
     def _exec_serial(
         self,
-        data: 'toast.dist.Data',
+        data: 'Data',
         signal_name: 'str',
     ):
         """Apply crosstalk matrix on ToD in data serially."""
@@ -417,7 +418,7 @@ class OpCrosstalk(Operator):
 
     def _exec_mpi(
         self,
-        data: 'toast.dist.Data',
+        data: 'Data',
         signal_name: 'str',
     ):
         """Apply crosstalk matrix on ToD in data with MPI."""
@@ -574,7 +575,7 @@ class OpCrosstalk(Operator):
 
     def exec(
         self,
-        data: 'toast.dist.Data',
+        data: 'Data',
         signal_name: 'str',
     ):
         """Apply crosstalk matrix on ToD in data.
