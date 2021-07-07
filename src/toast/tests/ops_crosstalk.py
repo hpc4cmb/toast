@@ -201,14 +201,12 @@ class OpCrosstalkTest(MPITestCase):
     def test_op_crosstalk_multiple_matrices(self):
         for detranks in self.detranks:
             self._each_op_crosstalk_multiple_matrices(
-                (
-                    self.names,
-                    self.names_strs,
-                    self.tod,
-                    self.data,
-                    self.tod_crosstalked,
-                    detranks,
-                ),
+                self.names,
+                self.names_strs,
+                self.tod,
+                self.data,
+                self.tod_crosstalked,
+                detranks,
             )
 
     def test_op_crosstalk_io(self):
