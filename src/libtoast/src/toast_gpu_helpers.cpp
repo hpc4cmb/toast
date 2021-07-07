@@ -168,34 +168,27 @@ namespace GPU_memory_pool
     // recycles memory from the pool or, if necessary, allocates new memory
     int malloc(void** output_ptr, size_t size)
     {
-        std::cerr << "allocating " << size << std::endl;
         int errorCode = 0;
         *output_ptr = find(size);
 
         // if we did not find an allocation large enough in the pool
         if(*output_ptr == NULL)
         {
-            std::cerr << "not found" << std::endl;
             // tries doing the allocation from scratch
             // allocates with CUDA to get unified memory that can be accessed from CPU and GPU transparently
             // garantees that the memory will be "suitably aligned for any kind of variable"
             errorCode = cudaMallocManaged(output_ptr, size);
-            std::cerr << "malloc done" << std::endl;
 
             // if it fails, try after a purge of the pool
             if (errorCode != 0)
             {
-                std::cerr << "free all" << std::endl;
                 free_all();
-                std::cerr << "malloc2" << std::endl;
                 errorCode = cudaMallocManaged(output_ptr, size);
             }
 
-            std::cerr << "recording size" << std::endl;
             size_of_ptr[*output_ptr] = size;
         }
 
-        std::cerr << "done" << std::endl;
         return errorCode;
     }
 
