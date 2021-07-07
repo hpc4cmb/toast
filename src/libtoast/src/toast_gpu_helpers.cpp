@@ -166,9 +166,9 @@ namespace GPU_memory_pool
     }
 
     // recycles memory from the pool or, if necessary, allocates new memory
-    int malloc(void** output_ptr, size_t size)
+    cudaError malloc(void** output_ptr, size_t size)
     {
-        int errorCode = 0;
+        cudaError errorCode = cudaSuccess;
         *output_ptr = find(size);
 
         // if we did not find an allocation large enough in the pool
@@ -180,7 +180,7 @@ namespace GPU_memory_pool
             errorCode = cudaMallocManaged(output_ptr, size);
 
             // if it fails, try after a purge of the pool
-            if (errorCode != 0)
+            if (errorCode != cudaSuccess)
             {
                 free_all();
                 errorCode = cudaMallocManaged(output_ptr, size);

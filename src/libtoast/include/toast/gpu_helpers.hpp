@@ -18,7 +18,7 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string&
 
 namespace GPU_memory_pool
 {
-    int malloc(void** output_ptr, size_t size);
+    cudaError malloc(void** output_ptr, size_t size);
     void free(void* ptr);
 }
 
