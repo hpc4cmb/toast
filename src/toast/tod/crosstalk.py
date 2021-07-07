@@ -233,12 +233,19 @@ class OpCrosstalk(Operator):
 
     :param n_crosstalk_matrices: total no. of crosstalk matrices
     :param crosstalk_matrices: the crosstalk matrices.
-        In MPI case, this holds only those matrices owned by a rank dictate
+        In MPI case, this should holds only those matrices owned by a rank dictate
         by the condition `i % world_procs == world_rank`
     :param name: this name is used to save data in tod.cache, so better be unique from other cache
 
     In a typical scenario, the classmethod `read` is used to create an object
-    instead of initiating directly.
+    instead of initiating directly. This classmethod guarantees the condition above holds.
+
+    Note that in the MPI case, the matrices are distributed in the world communicator, while the
+    `exec` method will uses the grid commuicator specified per ToD. This is because at the time
+    of initiating, we have no knowledge on how the data is going to be distributed yet,
+    nor how that is "partitioned" in relation with multiple crosstalk matrix files given.
+    These 2 processes (of finding the crosstalk matrix, and finding the ToD) are orthogonal though
+    so the operator is completely general.
     """
 
     def __init__(
