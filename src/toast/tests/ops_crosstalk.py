@@ -145,12 +145,10 @@ class OpCrosstalkTest(MPITestCase):
             for detranks in self.detranks:
                 with self.subTest(msg=f'OpCrosstalk Test case {i + 1} with detranks {detranks}'):
                     self._each_op_crosstalk(
-                        (
-                            tod,
-                            data,
-                            tod_crosstalked,
-                            detranks,
-                        )
+                        tod,
+                        data,
+                        tod_crosstalked,
+                        detranks,
                     )
 
     def _each_op_crosstalk_multiple_matrices(
