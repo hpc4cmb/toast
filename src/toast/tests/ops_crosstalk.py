@@ -141,16 +141,17 @@ class OpCrosstalkTest(MPITestCase):
                 np.testing.assert_allclose(answer, output)
 
     def test_op_crosstalk(self):
-        for tod, data, tod_crosstalked in zip(self.tod, self.data, self.tod_crosstalked):
+        for i, (tod, data, tod_crosstalked) in enumerate(zip(self.tod, self.data, self.tod_crosstalked)):
             for detranks in self.detranks:
-                self._each_op_crosstalk(
-                    (
-                        tod,
-                        data,
-                        tod_crosstalked,
-                        detranks,
+                with self.subTest(msg=f'OpCrosstalk Test case {i + 1} with detranks {detranks}'):
+                    self._each_op_crosstalk(
+                        (
+                            tod,
+                            data,
+                            tod_crosstalked,
+                            detranks,
+                        )
                     )
-                )
 
     def _each_op_crosstalk_multiple_matrices(
         self,
@@ -200,14 +201,15 @@ class OpCrosstalkTest(MPITestCase):
 
     def test_op_crosstalk_multiple_matrices(self):
         for detranks in self.detranks:
-            self._each_op_crosstalk_multiple_matrices(
-                self.names,
-                self.names_strs,
-                self.tod,
-                self.data,
-                self.tod_crosstalked,
-                detranks,
-            )
+            with self.subTest(msg=f'Test OpCrosstalk with multiple matrices and detranks {detranks}'):
+                self._each_op_crosstalk_multiple_matrices(
+                    self.names,
+                    self.names_strs,
+                    self.tod,
+                    self.data,
+                    self.tod_crosstalked,
+                    detranks,
+                )
 
     def test_op_crosstalk_io(self):
         names = self.names[0]
