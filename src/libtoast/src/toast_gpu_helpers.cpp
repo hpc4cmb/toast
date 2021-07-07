@@ -3,10 +3,15 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
+#include <utility>
+#include <unordered_map>
 #include <toast/gpu_helpers.hpp>
 #include <toast/sys_utils.hpp>
 
 #ifdef HAVE_CUDALIBS
+
+//---------------------------------------------------------------------------------------
+// ERROR CODE CHECKING
 
 // displays an error message if the computation did not end in success
 void checkCudaErrorCode(const cudaError errorCode, const std::string& functionName)
@@ -101,5 +106,97 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string&
         throw std::runtime_error(msg.c_str());
     }
 }
+
+//---------------------------------------------------------------------------------------
+// MEMORY POOL
+
+namespace GPU_memory_pool
+{
+    // TODO there will be a memory leak when the program stops as free will not be called on the pool
+    //  storing it in a proper object with a destructor would be a proper solution
+
+    // global variable
+    // used to recycle GPU memory allocation
+    thread_local std::vector<void*> pool = std::vector<void*>();
+    // sizes of all the pointers either in use or in the pool
+    thread_local std::unordered_map<void*, size_t> size_of_ptr = std::unordered_map<void*, size_t>();
+
+    // frees all the memory allocated by the pool
+    // does NOT purge the sizes of allocations currently in use from size_of_ptr
+    void free_all()
+    {
+        for(void* ptr : pool)
+        {
+            size_of_ptr.erase(ptr);
+            cudaFree(ptr);
+        }
+        pool.clear();
+    }
+
+    // tries to find the memory allocation of size closest (but above or equal) to size in the memory pool
+    // returns NULL if nothing was found
+    void* find(size_t size)
+    {
+        void * result = NULL;
+        int index_result = -1;
+        int lower_memory_overhead = INT64_MAX;
+
+        // finds the closest fit in the gpu memory pool
+        for(unsigned int i = 0; i < pool.size(); i++)
+        {
+            void* ptr = pool[i];
+            size_t size = size_of_ptr[ptr];
+            int memory_overhead = size - size;
+            if( (memory_overhead >= 0) and (memory_overhead < lower_memory_overhead) )
+            {
+                lower_memory_overhead = memory_overhead;
+                result = ptr;
+                index_result = i;
+            }
+        }
+
+        // removes the result from the pool
+        if(index_result != -1)
+        {
+            pool.erase(pool.begin() + index_result);
+        }
+
+        return result;
+    }
+
+    // recycles memory from the pool or, if necessary, allocates new memory
+    int alloc(void** output_ptr, size_t size)
+    {
+        int errorCode = 0;
+        *output_ptr = find(size);
+
+        // if we did not find an allocation large enough in the pool
+        if(*output_ptr == NULL)
+        {
+            // tries doing the allocation from scratch
+            errorCode = cudaMallocManaged(output_ptr, size);
+
+            // if it fails, try after a purge of the pool
+            if (errorCode != 0)
+            {
+                free_all();
+                errorCode = cudaMallocManaged(output_ptr, size);
+            }
+
+            size_of_ptr[*output_ptr] = size;
+        }
+
+        return errorCode;
+    }
+
+    // frees a pointer
+    // by storing it in the pool for later reuse
+    // its size zas is still in the pool
+    void free(void* ptr)
+    {
+        pool.push_back(ptr);
+    }
+}
+
 
 #endif
