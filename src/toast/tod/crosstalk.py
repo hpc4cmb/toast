@@ -70,16 +70,10 @@ from ..utils import Logger
 if TYPE_CHECKING:
     from typing import List, Union  # Optional
 
-    from .mpi import Comm
+    # from .mpi import Comm
     from .dist import Data
 
-# py37+
-# world_comm: Optional[Comm]
-# PROCS: int
-# RANK: int
-world_comm, PROCS, RANK = get_world()
 logger = Logger.get()
-IS_SERIAL = PROCS == 1
 
 
 def _fma(
@@ -240,7 +234,7 @@ class OpCrosstalk(Operator):
     :param n_crosstalk_matrices: total no. of crosstalk matrices
     :param crosstalk_matrices: the crosstalk matrices.
         In MPI case, this holds only those matrices owned by a rank dictate
-        by the condition `i % PROCS == RANK`
+        by the condition `i % world_procs == world_rank`
     :param name: this name is used to save data in tod.cache, so better be unique from other cache
 
     In a typical scenario, the classmethod `read` is used to create an object
@@ -260,16 +254,26 @@ class OpCrosstalk(Operator):
         self.name = name
         self.debug = debug
 
+        # py37+
+        # self.world_comm: Optional[Comm]
+        # self.world_procs: int
+        # self.world_rank: int
+        self.world_comm, self.world_procs, self.world_rank = get_world()
+
+    @property
+    def is_serial(self) -> 'bool':
+        return self.world_procs == 1
+
     def _get_crosstalk_matrix(self, i: 'int') -> 'SimpleCrosstalkMatrix':
         """Get the i-th crosstalk matrix, used this with MPI only.
         """
         debug = self.debug
 
-        rank_owner = i % PROCS
+        rank_owner = i % self.world_procs
         # index of the i-th matrix in the local rank
-        idx = i // PROCS
+        idx = i // self.world_procs
 
-        if RANK == rank_owner:
+        if self.world_rank == rank_owner:
             crosstalk_matrix = self.crosstalk_matrices[idx]
 
             names = crosstalk_matrix.names
@@ -285,56 +289,29 @@ class OpCrosstalk(Operator):
             lengths = np.array([names.size, names.dtype.itemsize], dtype=np.int64)
         else:
             lengths = np.empty(2, dtype=np.int64)
-        world_comm.Bcast(lengths, root=rank_owner)
+        self.world_comm.Bcast(lengths, root=rank_owner)
         if debug:
-            logger.debug(f'crosstalk: Rank {RANK} receives lengths {lengths}')
+            logger.debug(f'crosstalk: Rank {self.world_rank} receives lengths {lengths}')
 
         # broadcast arrays
-        if RANK != rank_owner:
+        if self.world_rank != rank_owner:
             n = lengths[0]
             name_len = lengths[1]
             names_int = np.empty(n * name_len, dtype=np.uint8)
             names = names_int.view(f'S{name_len}')
             data = np.empty((n, n), dtype=np.float64)
-        world_comm.Bcast(names_int, root=rank_owner)
+        self.world_comm.Bcast(names_int, root=rank_owner)
         if debug:
-            logger.debug(f'crosstalk: Rank {RANK} receives names {names}')
-        world_comm.Bcast(data, root=rank_owner)
+            logger.debug(f'crosstalk: Rank {self.world_rank} receives names {names}')
+        self.world_comm.Bcast(data, root=rank_owner)
         if debug:
-            logger.debug(f'crosstalk: Rank {RANK} receives data {data}')
+            logger.debug(f'crosstalk: Rank {self.world_rank} receives data {data}')
 
         return (
             crosstalk_matrix
-        ) if RANK == rank_owner else (
+        ) if self.world_rank == rank_owner else (
             SimpleCrosstalkMatrix(names, data)
         )
-
-    @staticmethod
-    def _read_serial(
-        paths: 'List[Path]',
-        *,
-        debug: 'bool' = False,
-    ) -> 'List[SimpleCrosstalkMatrix]':
-        """Read crosstalk matri(x|ces) from HDF5 file(s) serially."""
-        return [SimpleCrosstalkMatrix.load(path, debug=debug) for path in paths]
-
-    @staticmethod
-    def _read_mpi(
-        paths: 'List[Path]',
-        *,
-        debug: 'bool' = False,
-    ) -> 'List[SimpleCrosstalkMatrix]':
-        """Read crosstalk matri(x|ces) from HDF5 file(s) with MPI.
-
-        This holds only those matrices owned by a rank
-        dictate by the condition `i % PROCS == RANK`
-        """
-        N = len(paths)
-        path_idxs_per_rank = range(RANK, N, PROCS)
-        return [
-            SimpleCrosstalkMatrix.load(paths[i], debug=debug)
-            for i in path_idxs_per_rank
-        ]
 
     @classmethod
     def read(
@@ -346,16 +323,22 @@ class OpCrosstalk(Operator):
     ) -> 'OpCrosstalk':
         """Read crosstalk matri(x|ces) from HDF5 file(s).
 
-        It will be dispatched depending if MPI is used.
+        This holds only those matrices owned by a rank
+        dictate by the condition `i % world_procs == world_rank`.
         """
+        _, world_procs, world_rank = get_world()
+
         paths = args.crosstalk_matrix
         debug = args.crosstalk_matrix_debug
-        crosstalk_matrices = (
-            cls._read_serial(paths, debug=debug)
-        ) if IS_SERIAL else (
-            cls._read_mpi(paths, debug=debug)
-        )
-        return cls(len(paths), crosstalk_matrices, name=name, debug=debug)
+
+        N = len(paths)
+
+        crosstalk_matrices = [
+            SimpleCrosstalkMatrix.load(paths[i], debug=debug)
+            for i in range(world_rank, N, world_procs)
+        ]
+
+        return cls(N, crosstalk_matrices, name=name, debug=debug)
 
     def _exec_serial(
         self,
@@ -583,6 +566,6 @@ class OpCrosstalk(Operator):
         It is dispatched depending if MPI is used."""
         (
             self._exec_serial(data, signal_name)
-        ) if IS_SERIAL else (
+        ) if self.is_serial else (
             self._exec_mpi(data, signal_name)
         )
