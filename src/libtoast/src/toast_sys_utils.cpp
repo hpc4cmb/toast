@@ -28,7 +28,6 @@ void * toast::aligned_alloc(size_t size, size_t align) {
     #ifdef HAVE_CUDALIBS
         // allocates with CUDA to get unified memory that can be accessed from CPU and GPU transparently
         // garantees that the memory will be "suitably aligned for any kind of variable"
-        //int ret = cudaMallocManaged(&mem, size);
         int ret = GPU_memory_pool::malloc(&mem, size);
     #else
         int ret = posix_memalign(&mem, align, size);
@@ -50,7 +49,6 @@ void * toast::aligned_alloc(size_t size, size_t align) {
 void toast::aligned_free(void * ptr) {
     #ifdef HAVE_CUDALIBS
         // frees with CUDA when using unified memory
-        //cudaFree(ptr);
         GPU_memory_pool::free(ptr);
     #else
         free(ptr);
