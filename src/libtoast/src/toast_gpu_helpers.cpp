@@ -121,6 +121,7 @@ GPU_memory_pool_t::~GPU_memory_pool_t()
 // does NOT purge the sizes of allocations currently in use from size_of_ptr
 void GPU_memory_pool_t::free_all()
 {
+    //std::cerr << "free all: " << pool.size() << " allocations" << std::endl;
     for(void* ptr : pool)
     {
         size_of_ptr.erase(ptr);
@@ -129,10 +130,9 @@ void GPU_memory_pool_t::free_all()
     pool.clear();
 }
 
-
 // tries to find the memory allocation of size closest (but above or equal) to size in the memory pool
 // returns NULL if nothing was found
-void* GPU_memory_pool_t::find(size_t size)
+void * GPU_memory_pool_t::find(size_t size)
 {
     void * result = NULL;
     int index_result = -1;
@@ -141,9 +141,9 @@ void* GPU_memory_pool_t::find(size_t size)
     // finds the closest fit in the gpu memory pool
     for(unsigned int i = 0; i < pool.size(); i++)
     {
-        void* ptr = pool[i];
-        size_t sizePtr = size_of_ptr[ptr];
-        int memory_overhead = sizePtr - size;
+        void * ptr = pool[i];
+        const size_t sizePtr = size_of_ptr[ptr];
+        const int memory_overhead = static_cast<int>(sizePtr) - size;
         // keeps the allocation if it is larger then needed and lower than the previous best
         if( (memory_overhead >= 0) and (memory_overhead < lower_memory_overhead) )
         {
@@ -171,6 +171,7 @@ cudaError GPU_memory_pool_t::malloc(void** output_ptr, size_t size)
     // if we did not find an allocation large enough in the pool
     if(*output_ptr == NULL)
     {
+        //std::cerr << "actual malloc: " << size << std::endl;
         // tries doing the allocation from scratch
         // allocates with CUDA to get unified memory that can be accessed from CPU and GPU transparently
         // garantees that the memory will be "suitably aligned for any kind of variable"
