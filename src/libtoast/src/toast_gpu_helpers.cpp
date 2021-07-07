@@ -139,14 +139,15 @@ namespace GPU_memory_pool
     {
         void * result = NULL;
         int index_result = -1;
-        int lower_memory_overhead = INT64_MAX;
+        int lower_memory_overhead = INT32_MAX;
 
         // finds the closest fit in the gpu memory pool
         for(unsigned int i = 0; i < pool.size(); i++)
         {
             void* ptr = pool[i];
-            size_t size = size_of_ptr[ptr];
-            int memory_overhead = size - size;
+            size_t sizePtr = size_of_ptr[ptr];
+            int memory_overhead = sizePtr - size;
+            // keeps the allocation if it is larger then needed and lower than the previous best
             if( (memory_overhead >= 0) and (memory_overhead < lower_memory_overhead) )
             {
                 lower_memory_overhead = memory_overhead;
@@ -165,38 +166,46 @@ namespace GPU_memory_pool
     }
 
     // recycles memory from the pool or, if necessary, allocates new memory
-    int alloc(void** output_ptr, size_t size)
+    int malloc(void** output_ptr, size_t size)
     {
+        std::cerr << "allocating " << size << std::endl;
         int errorCode = 0;
         *output_ptr = find(size);
 
         // if we did not find an allocation large enough in the pool
         if(*output_ptr == NULL)
         {
+            std::cerr << "not found" << std::endl;
             // tries doing the allocation from scratch
+            // allocates with CUDA to get unified memory that can be accessed from CPU and GPU transparently
+            // garantees that the memory will be "suitably aligned for any kind of variable"
             errorCode = cudaMallocManaged(output_ptr, size);
+            std::cerr << "malloc done" << std::endl;
 
             // if it fails, try after a purge of the pool
             if (errorCode != 0)
             {
+                std::cerr << "free all" << std::endl;
                 free_all();
+                std::cerr << "malloc2" << std::endl;
                 errorCode = cudaMallocManaged(output_ptr, size);
             }
 
+            std::cerr << "recording size" << std::endl;
             size_of_ptr[*output_ptr] = size;
         }
 
+        std::cerr << "done" << std::endl;
         return errorCode;
     }
 
-    // frees a pointer
+    // frees memory
     // by storing it in the pool for later reuse
-    // its size zas is still in the pool
+    // its size is still in the pool
     void free(void* ptr)
     {
         pool.push_back(ptr);
     }
 }
-
 
 #endif
