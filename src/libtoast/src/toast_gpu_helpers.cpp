@@ -3,8 +3,6 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#include <utility>
-#include <unordered_map>
 #include <toast/gpu_helpers.hpp>
 #include <toast/sys_utils.hpp>
 
@@ -110,95 +108,96 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string&
 //---------------------------------------------------------------------------------------
 // MEMORY POOL
 
-namespace GPU_memory_pool
+// initialize the storage variables
+GPU_memory_pool_t::GPU_memory_pool_t(): pool(), size_of_ptr() {}
+
+// destructor, insures that all the allocation are freed
+GPU_memory_pool_t::~GPU_memory_pool_t()
 {
-    // TODO there will be a memory leak when the program stops as free will not be called on the pool
-    //  storing it in a proper object with a destructor would be a proper solution
-
-    // global variable
-    // used to recycle GPU memory allocation
-    thread_local std::vector<void*> pool = std::vector<void*>();
-    // sizes of all the pointers either in use or in the pool
-    thread_local std::unordered_map<void*, size_t> size_of_ptr = std::unordered_map<void*, size_t>();
-
-    // frees all the memory allocated by the pool
-    // does NOT purge the sizes of allocations currently in use from size_of_ptr
-    void free_all()
-    {
-        for(void* ptr : pool)
-        {
-            size_of_ptr.erase(ptr);
-            cudaFree(ptr);
-        }
-        pool.clear();
-    }
-
-    // tries to find the memory allocation of size closest (but above or equal) to size in the memory pool
-    // returns NULL if nothing was found
-    void* find(size_t size)
-    {
-        void * result = NULL;
-        int index_result = -1;
-        int lower_memory_overhead = INT32_MAX;
-
-        // finds the closest fit in the gpu memory pool
-        for(unsigned int i = 0; i < pool.size(); i++)
-        {
-            void* ptr = pool[i];
-            size_t sizePtr = size_of_ptr[ptr];
-            int memory_overhead = sizePtr - size;
-            // keeps the allocation if it is larger then needed and lower than the previous best
-            if( (memory_overhead >= 0) and (memory_overhead < lower_memory_overhead) )
-            {
-                lower_memory_overhead = memory_overhead;
-                result = ptr;
-                index_result = i;
-            }
-        }
-
-        // removes the result from the pool
-        if(index_result != -1)
-        {
-            pool.erase(pool.begin() + index_result);
-        }
-
-        return result;
-    }
-
-    // recycles memory from the pool or, if necessary, allocates new memory
-    cudaError malloc(void** output_ptr, size_t size)
-    {
-        cudaError errorCode = cudaSuccess;
-        *output_ptr = find(size);
-
-        // if we did not find an allocation large enough in the pool
-        if(*output_ptr == NULL)
-        {
-            // tries doing the allocation from scratch
-            // allocates with CUDA to get unified memory that can be accessed from CPU and GPU transparently
-            // garantees that the memory will be "suitably aligned for any kind of variable"
-            errorCode = cudaMallocManaged(output_ptr, size);
-
-            // if it fails, try after a purge of the pool
-            if (errorCode != cudaSuccess)
-            {
-                free_all();
-                errorCode = cudaMallocManaged(output_ptr, size);
-            }
-
-            size_of_ptr[*output_ptr] = size;
-        }
-
-        return errorCode;
-    }
-
-    // frees memory
-    // by storing it in the pool for later reuse
-    // its size is still in the pool
-    void free(void* ptr)
-    {
-        pool.push_back(ptr);
-    }
+    free_all();
 }
+
+// frees all the memory allocated by the pool
+// does NOT purge the sizes of allocations currently in use from size_of_ptr
+void GPU_memory_pool_t::free_all()
+{
+    for(void* ptr : pool)
+    {
+        size_of_ptr.erase(ptr);
+        cudaFree(ptr);
+    }
+    pool.clear();
+}
+
+
+// tries to find the memory allocation of size closest (but above or equal) to size in the memory pool
+// returns NULL if nothing was found
+void* GPU_memory_pool_t::find(size_t size)
+{
+    void * result = NULL;
+    int index_result = -1;
+    int lower_memory_overhead = INT32_MAX;
+
+    // finds the closest fit in the gpu memory pool
+    for(unsigned int i = 0; i < pool.size(); i++)
+    {
+        void* ptr = pool[i];
+        size_t sizePtr = size_of_ptr[ptr];
+        int memory_overhead = sizePtr - size;
+        // keeps the allocation if it is larger then needed and lower than the previous best
+        if( (memory_overhead >= 0) and (memory_overhead < lower_memory_overhead) )
+        {
+            lower_memory_overhead = memory_overhead;
+            result = ptr;
+            index_result = i;
+        }
+    }
+
+    // removes the result from the pool
+    if(index_result != -1)
+    {
+        pool.erase(pool.begin() + index_result);
+    }
+
+    return result;
+}
+
+// recycles memory from the pool or, if necessary, allocates new memory
+cudaError GPU_memory_pool_t::malloc(void** output_ptr, size_t size)
+{
+    cudaError errorCode = cudaSuccess;
+    *output_ptr = find(size);
+
+    // if we did not find an allocation large enough in the pool
+    if(*output_ptr == NULL)
+    {
+        // tries doing the allocation from scratch
+        // allocates with CUDA to get unified memory that can be accessed from CPU and GPU transparently
+        // garantees that the memory will be "suitably aligned for any kind of variable"
+        errorCode = cudaMallocManaged(output_ptr, size);
+
+        // if it fails, try after a purge of the pool
+        if (errorCode != cudaSuccess)
+        {
+            free_all();
+            errorCode = cudaMallocManaged(output_ptr, size);
+        }
+
+        size_of_ptr[*output_ptr] = size;
+    }
+
+    return errorCode;
+}
+
+// frees memory
+// by storing it in the pool for later reuse
+// its size is still in the pool
+void GPU_memory_pool_t::free(void* ptr)
+{
+    pool.push_back(ptr);
+}
+
+// global variable
+thread_local GPU_memory_pool_t GPU_memory_pool = GPU_memory_pool_t();
 
 #endif

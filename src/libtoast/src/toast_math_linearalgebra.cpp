@@ -31,7 +31,7 @@ toast::LinearAlgebra::LinearAlgebra()
     cusolverStatus_t statusHandleCusolver = cusolverDnCreate(&handleSolver);
     checkCusolverErrorCode(statusHandleCusolver);
     // allocates an integer on GPU to use it as an output parameter
-    cudaError statusAlloc = GPU_memory_pool::malloc((void**)&gpu_allocated_integer, sizeof(int));
+    cudaError statusAlloc = GPU_memory_pool.malloc((void**)&gpu_allocated_integer, sizeof(int));
     checkCudaErrorCode(statusAlloc);
     // gets jacobi parameters for batched syev
     cusolverStatus_t statusJacobiParams = cusolverDnCreateSyevjInfo(&jacobiParameters);
@@ -52,7 +52,7 @@ toast::LinearAlgebra::~LinearAlgebra()
     cusolverStatus_t statusJacobiParams = cusolverDnDestroySyevjInfo(jacobiParameters);
     checkCusolverErrorCode(statusJacobiParams);
     // release integer allocation
-    GPU_memory_pool::free(gpu_allocated_integer);
+    GPU_memory_pool.free(gpu_allocated_integer);
 #endif
 }
 
