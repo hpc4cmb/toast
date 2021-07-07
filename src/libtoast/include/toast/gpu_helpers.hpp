@@ -16,5 +16,11 @@ void checkCudaErrorCode(const cudaError errorCode, const std::string& functionNa
 void checkCublasErrorCode(const cublasStatus_t errorCode, const std::string& functionName = "unknown");
 void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string& functionName = "unknown");
 
+namespace GPU_memory_pool
+{
+    int malloc(void** output_ptr, size_t size);
+    void free(void* ptr);
+}
+
 #endif //HAVE_CUDALIBS
 #endif //TOAST_GPU_HELPER_H
