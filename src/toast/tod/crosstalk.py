@@ -68,9 +68,9 @@ from ..op import Operator
 from ..utils import Logger
 
 if TYPE_CHECKING:
-    from typing import List, Union  # Optional
+    from typing import List, Union, Optional
 
-    # from .mpi import Comm
+    from .mpi import Comm
     from .dist import Data
 
 
@@ -259,10 +259,9 @@ class OpCrosstalk(Operator):
         self.name = name
         self.debug = debug
 
-        # py37+
-        # self.world_comm: Optional[Comm]
-        # self.world_procs: int
-        # self.world_rank: int
+        self.world_comm: 'Optional[Comm]'
+        self.world_procs: 'int'
+        self.world_rank: 'int'
         self.world_comm, self.world_procs, self.world_rank = get_world()
 
     @property
