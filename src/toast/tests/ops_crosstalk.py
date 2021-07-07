@@ -106,15 +106,11 @@ class OpCrosstalkTest(MPITestCase):
         # half float64 precision (float64 has 53-bit precison)
         # will not produce bit-identical output as mat-mul
         # is sensitive to the sum-ordering
-        ulp_max = 2 ** (53 / 2)
         for i, name in enumerate(names_str):
             if name in local_dets_set:
                 output = tod.cache.reference(f"{signal_name}_{name}")
-                answer = tod_crosstalked[i, start : start + length]
-                ulp = np.testing.assert_array_max_ulp(answer, output, ulp_max)
-                log.info(
-                    f"Reproducing mat-mul for detector {name} with max ULP: {ulp.max():e}"
-                )
+                answer = tod_crosstalked[i, start:start + length]
+                np.testing.assert_allclose(answer, output)
 
     def test_op_crosstalk(self):
         cases = []
@@ -175,16 +171,12 @@ class OpCrosstalkTest(MPITestCase):
         # half float64 precision (float64 has 53-bit precison)
         # will not produce bit-identical output as mat-mul
         # is sensitive to the sum-ordering
-        ulp_max = 2 ** (53 / 2)
         for names_str, tod_crosstalked in zip(names_strs, tods_crosstalked):
             for i, name in enumerate(names_str):
                 if name in local_dets_set:
                     output = tod.cache.reference(f"{signal_name}_{name}")
-                    answer = tod_crosstalked[i, start : start + length]
-                    ulp = np.testing.assert_array_max_ulp(answer, output, ulp_max)
-                    log.info(
-                        f"Reproducing mat-mul for detector {name} with max ULP: {ulp.max():e}"
-                    )
+                    answer = tod_crosstalked[i, start:start + length]
+                    np.testing.assert_allclose(answer, output)
 
     def test_op_crosstalk_multiple_matrices(self):
         cases = []
