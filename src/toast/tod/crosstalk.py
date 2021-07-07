@@ -73,8 +73,6 @@ if TYPE_CHECKING:
     # from .mpi import Comm
     from .dist import Data
 
-logger = Logger.get()
-
 
 def _fma(
     out: 'np.ndarray[np.float64]',
@@ -94,7 +92,7 @@ def _fma(
 
 
 if jit is None:
-    logger.warning(
+    Logger.get().warning(
         'Numba not present. '
         '_fma in crosstalk will have more intermediate Numpy array objects '
         'created that uses more memory.'
@@ -275,6 +273,7 @@ class OpCrosstalk(Operator):
         """Get the i-th crosstalk matrix, used this with MPI only.
         """
         debug = self.debug
+        logger = Logger.get()
 
         rank_owner = i % self.world_procs
         # index of the i-th matrix in the local rank
@@ -354,6 +353,7 @@ class OpCrosstalk(Operator):
     ):
         """Apply crosstalk matrix on ToD in data serially."""
         crosstalk_name = self.name
+        logger = Logger.get()
 
         # loop over crosstalk matrices
         for crosstalk_matrix in self.crosstalk_matrices:
@@ -414,6 +414,7 @@ class OpCrosstalk(Operator):
         """Apply crosstalk matrix on ToD in data with MPI."""
         debug = self.debug
         crosstalk_name = self.name
+        logger = Logger.get()
 
         # loop over crosstalk matrices
         for idx_crosstalk_matrix in range(self.n_crosstalk_matrices):
