@@ -371,27 +371,31 @@ class GroundSchedule(object):
                 isplit, nsplit = file_split
             scan_counters = dict()
 
+            read_header = False
+            header_done = False
+            last_name = None
+
             with open(file, "r") as f:
-                while True:
-                    line = f.readline()
-                    if line.startswith("#"):
-                        continue
-                    (
-                        site_name,
-                        telescope_name,
-                        site_lat,
-                        site_lon,
-                        site_alt,
-                    ) = line.split()
-                    self.site_name = site_name
-                    self.telescope_name = telescope_name
-                    self.site_lat = float(site_lat) * u.degree
-                    self.site_lon = float(site_lon) * u.degree
-                    self.site_alt = float(site_alt) * u.meter
-                    break
-                last_name = None
                 for line in f:
+                    if read_header:
+                        (
+                            site_name,
+                            telescope_name,
+                            site_lat,
+                            site_lon,
+                            site_alt,
+                        ) = line.split()
+                        self.site_name = site_name
+                        self.telescope_name = telescope_name
+                        self.site_lat = float(site_lat) * u.degree
+                        self.site_lon = float(site_lon) * u.degree
+                        self.site_alt = float(site_alt) * u.meter
+                        header_done = True
+                        read_header = False
+                        continue
                     if line.startswith("#"):
+                        if not header_done:
+                            read_header = True
                         continue
                     gscan = _parse_line(line)
                     if nsplit is not None:
@@ -419,6 +423,11 @@ class GroundSchedule(object):
                 sortedscans = sorted(self.scans, key=lambda scn: scn.name)
                 self.scans = sortedscans
         if comm is not None:
+            self.site_name = comm.bcast(self.site_name, root=0)
+            self.telescope_name = comm.bcast(self.telescope_name, root=0)
+            self.site_lat = comm.bcast(self.site_lat, root=0)
+            self.site_lon = comm.bcast(self.site_lon, root=0)
+            self.site_alt = comm.bcast(self.site_alt, root=0)
             self.scans = comm.bcast(self.scans, root=0)
 
     @function_timer

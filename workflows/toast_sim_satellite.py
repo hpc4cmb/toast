@@ -137,22 +137,30 @@ def job_create(config, jobargs, telescope, schedule, comm):
 
 
 def simulate_data(job, toast_comm, telescope, schedule):
+    log = toast.utils.Logger.get()
     ops = job.operators
     tmpls = job.templates
+    world_comm = toast_comm.comm_world
 
     # Create the (initially empty) data
 
     data = toast.Data(comm=toast_comm)
+
+    # Timer for reporting the progress
+    timer = toast.timing.Timer()
+    timer.start()
 
     # Simulate the telescope pointing
 
     ops.sim_satellite.telescope = telescope
     ops.sim_satellite.schedule = schedule
     ops.sim_satellite.apply(data)
+    log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
     # Construct a "perfect" noise model just from the focalplane parameters
 
     ops.default_model.apply(data)
+    log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
 
     # Set up detector pointing
 
@@ -184,18 +192,27 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.scan_map.pointing = ops.pointing_final
     ops.scan_map.save_pointing = use_full_pointing(job)
     ops.scan_map.apply(data)
+    log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
     # Simulate detector noise
 
     ops.sim_noise.noise_model = ops.default_model.noise_model
     ops.sim_noise.apply(data)
+    log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
     return data
 
 
 def reduce_data(job, args, data):
+    log = toast.utils.Logger.get()
     ops = job.operators
     tmpls = job.templates
+
+    world_comm = data.comm.comm_world
+
+    # Timer for reporting the progress
+    timer = toast.timing.Timer()
+    timer.start()
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -210,10 +227,12 @@ def reduce_data(job, args, data):
     ops.mapmaker.output_dir = args.out_dir
 
     ops.mapmaker.apply(data)
+    log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # Optionally run Madam
     if toast.ops.madam.available():
         ops.madam.apply(data)
+        log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
 
 
 def main():

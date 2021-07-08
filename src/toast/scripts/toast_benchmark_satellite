@@ -184,7 +184,7 @@ def main():
     # from here on, we start the actual work (unless this is a dry run)
     global_timer.start("toast_benchmark_satellite (science work)")
     if args.dry_run is not None:
-        log.info_rank0("Exit from dry run.", world_comm)
+        log.info_rank("Exit from dry run.", comm=world_comm)
         # We are done!
         sys.exit(0)
 
@@ -213,13 +213,19 @@ def main():
     # Create the (initially empty) data
     data = toast.Data(comm=comm)
 
+    # Timer for reporting the progress
+    timer = toast.timing.Timer()
+    timer.start()
+
     # Simulate the telescope pointing
     ops.sim_satellite.telescope = telescope
     ops.sim_satellite.schedule = schedule
     ops.sim_satellite.apply(data)
+    log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
     # Construct a "perfect" noise model just from the focalplane parameters
     ops.default_model.apply(data)
+    log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
 
     # Set the pointing matrix operators to use the detector pointing
     ops.pointing.detector_pointing = ops.det_pointing
@@ -239,23 +245,28 @@ def main():
 
     # Simulate sky signal from a map.
     scan_map(args, rank, ops, data, log)
+    log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
     # Simulate detector noise
     ops.sim_noise.apply(data)
+    log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
     # Build up our map-making operation.
     run_mapmaker(ops, args, job.templates, data)
+    log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # end of the computations, sync and computes efficiency
     global_timer.stop_all()
-    log.info_rank0("Gathering benchmarking metrics.", world_comm)
+    log.info_rank("Gathering benchmarking metrics.", comm=world_comm)
     if world_comm is not None:
         world_comm.barrier()
     runtime = global_timer.seconds("toast_benchmark_satellite (science work)")
     compute_science_metric(args, runtime, n_nodes, rank, log)
 
     # dumps all the timing information
-    timer = toast.timing.Timer()
+
+    timer.stop()
+    timer.clear()
     timer.start()
     alltimers = gather_timers(comm=world_comm)
     if comm.world_rank == 0:
