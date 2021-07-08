@@ -108,94 +108,79 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string&
 //---------------------------------------------------------------------------------------
 // MEMORY POOL
 
-// initialize the storage variables
-GPU_memory_pool_t::GPU_memory_pool_t(): pool(), size_of_ptr() {}
+GPU_memory_block_t::GPU_memory_block_t(void* ptr, size_t size)
+{
+    // align size with 512
+    if(size % 512 != 0) size += 512 - (size % 512);
+    start = ptr;
+    end = static_cast<char *>(start) + size;
+    isFree = false;
+}
 
-// destructor, insures that all the allocation are freed
+// constructor, does the initial allocation
+GPU_memory_pool_t::GPU_memory_pool_t(): blocks()
+{
+    // pick the memory that will be preallocated
+    available_memory = 32 * 1073741824l; // 4GB TODO set it as a function of the memory on GPU
+    // allocates the memory
+    const cudaError errorCode = cudaMallocManaged(&start, available_memory);
+    checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
+    // first block to mark the starting point
+    GPU_memory_block_t initialBlock(start, 0);
+    blocks.push_back(initialBlock);
+}
+
+// destructor, insures that the pre-allocation is released
 GPU_memory_pool_t::~GPU_memory_pool_t()
 {
-    free_all();
+    cudaFree(start);
 }
 
-// frees all the memory allocated by the pool
-// does NOT purge the sizes of allocations currently in use from size_of_ptr
-void GPU_memory_pool_t::free_all()
-{
-    //std::cerr << "free all: " << pool.size() << " allocations" << std::endl;
-    for(void* ptr : pool)
-    {
-        size_of_ptr.erase(ptr);
-        cudaFree(ptr);
-    }
-    pool.clear();
-}
-
-// tries to find the memory allocation of size closest (but above or equal) to size in the memory pool
-// returns NULL if nothing was found
-void * GPU_memory_pool_t::find(size_t size)
-{
-    void * result = NULL;
-    int index_result = -1;
-    int lower_memory_overhead = INT32_MAX;
-
-    // finds the closest fit in the gpu memory pool
-    for(unsigned int i = 0; i < pool.size(); i++)
-    {
-        void * ptr = pool[i];
-        const size_t sizePtr = size_of_ptr[ptr];
-        const int memory_overhead = static_cast<int>(sizePtr) - size;
-        // keeps the allocation if it is larger then needed and lower than the previous best
-        if( (memory_overhead >= 0) and (memory_overhead < lower_memory_overhead) )
-        {
-            lower_memory_overhead = memory_overhead;
-            result = ptr;
-            index_result = i;
-        }
-    }
-
-    // removes the result from the pool
-    if(index_result != -1)
-    {
-        pool.erase(pool.begin() + index_result);
-    }
-
-    return result;
-}
-
-// recycles memory from the pool or, if necessary, allocates new memory
+// allocates memory starting from the end of the latest block
 cudaError GPU_memory_pool_t::malloc(void** output_ptr, size_t size)
 {
-    cudaError errorCode = cudaSuccess;
-    *output_ptr = find(size);
+    // builds a block starting at the end of the existing blocks
+    *output_ptr = blocks.back().end;
+    const GPU_memory_block_t memoryBlock(*output_ptr, size);
 
-    // if we did not find an allocation large enough in the pool
-    if(*output_ptr == NULL)
+    // errors out if the allocation goes beyond the preallocated memory
+    const size_t usedMemory = static_cast<char *>(memoryBlock.end) - static_cast<char *>(start);
+    if(usedMemory > available_memory)
     {
-        //std::cerr << "actual malloc: " << size << std::endl;
-        // tries doing the allocation from scratch
-        // allocates with CUDA to get unified memory that can be accessed from CPU and GPU transparently
-        // garantees that the memory will be "suitably aligned for any kind of variable"
-        errorCode = cudaMallocManaged(output_ptr, size);
-
-        // if it fails, try after a purge of the pool
-        if (errorCode != cudaSuccess)
-        {
-            free_all();
-            errorCode = cudaMallocManaged(output_ptr, size);
-        }
-
-        size_of_ptr[*output_ptr] = size;
+        std::cerr << "INSUFICIENT GPU MEMORY PREALOCATION"
+                  << " memory that will be allocated:" << usedMemory
+                  << " total memory available:" << available_memory
+                  << " size requested:" << size << std::endl;
+        *output_ptr = NULL;
+        return cudaErrorMemoryAllocation;
     }
 
-    return errorCode;
+    // stores the block and returns
+    blocks.push_back(memoryBlock);
+    return cudaSuccess;
 }
 
-// frees memory
-// by storing it in the pool for later reuse
-// its size is still in the pool
+// frees memory by releasing the block
 void GPU_memory_pool_t::free(void* ptr)
 {
-    pool.push_back(ptr);
+    // gets index of ptr in block, starting from the end
+    int i = blocks.size() - 1;
+    while(blocks[i].start != ptr)
+    {
+        i--;
+    }
+
+    // frees ptr
+    blocks[i].isFree = true;
+
+    // if ptr was the last elements, frees a maximum of elements
+    if(i == blocks.size() - 1)
+    {
+        while(blocks.back().isFree)
+        {
+            blocks.pop_back();
+        }
+    }
 }
 
 // global variable

@@ -8,8 +8,8 @@
 #ifdef HAVE_CUDALIBS
 
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
@@ -18,21 +18,31 @@ void checkCudaErrorCode(const cudaError errorCode, const std::string& functionNa
 void checkCublasErrorCode(const cublasStatus_t errorCode, const std::string& functionName = "unknown");
 void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string& functionName = "unknown");
 
+class GPU_memory_block_t
+{
+public:
+    void* start;
+    void* end;
+    bool isFree;
+
+    GPU_memory_block_t(void* ptr, size_t size);
+};
+
 // used to recycle GPU allocation
 // this class is NOT threadsafe
 // one should use one instance per thread and not have a thread free memory it did not allocate
 class GPU_memory_pool_t
 {
 private:
-    // pointers to all the allocations not currently in use
-    std::vector<void*> pool;
-    // sizes of all the pointers either in use or in the pool
-    std::unordered_map<void*, size_t> size_of_ptr;
-    void* find(size_t size);
+    // starting point of the current allocation
+    void* start;
+    // what is the total memory allocated here
+    size_t available_memory;
+    // memory blocks that have been allocated at some point
+    std::vector<GPU_memory_block_t> blocks;
 public:
     GPU_memory_pool_t();
     ~GPU_memory_pool_t();
-    void free_all();
     cudaError malloc(void** output_ptr, size_t size);
     void free(void* ptr);
 };
