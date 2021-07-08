@@ -17,10 +17,33 @@ if [ "x${unexe}" = "x" ]; then
     exit 1
 fi
 
+umajor=$(uncrustify --version | sed -e "s#.*-\([0-9]\+\)\.[0-9]\+\.[0-9]\+_.*#\1#")
+uminor=$(uncrustify --version | sed -e "s#.*-[0-9]\+\.\([0-9]\+\)\.[0-9]\+_.*#\1#")
+upatch=$(uncrustify --version | sed -e "s#.*-[0-9]\+\.[0-9]\+\.\([0-9]\+\)_.*#\1#")
+
+echo "Found uncrustify version ${umajor}.${uminor}.${upatch}"
+if [ ${umajor} -eq "0" ]; then
+    if [ ${uminor} -lt "73" ]; then
+        echo "This script requires at least uncrustify version 0.73.0"
+        exit 1
+    fi
+fi
+
 blkexe=$(which black)
 if [ "x${blkexe}" = "x" ]; then
     echo "Cannot find the \"black\" executable.  Is it in your PATH?"
     exit 1
+fi
+
+bmajor=$(black --version | awk '{print $3}' | sed -e "s#\([0-9]\+\)\.[0-9]\+.*#\1#")
+bminor=$(black --version | awk '{print $3}' | sed -e "s#[0-9]\+\.\([0-9]\+\).*#\1#")
+
+echo "Found black version ${bmajor}.${bminor}"
+if [ ${bmajor} -le "21" ]; then
+    if [ ${bminor} -lt "5" ]; then
+        echo "This script requires at least black version 21.5"
+        exit 1
+    fi
 fi
 
 # The uncrustify config file
