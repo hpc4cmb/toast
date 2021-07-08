@@ -121,7 +121,7 @@ GPU_memory_block_t::GPU_memory_block_t(void* ptr, size_t size)
 GPU_memory_pool_t::GPU_memory_pool_t(): blocks()
 {
     // pick the memory that will be preallocated
-    available_memory = 32 * 1073741824l; // 4GB TODO set it as a function of the memory on GPU
+    available_memory = 4 * 1073741824l; // 4GB TODO set it as a function of the memory on GPU
     // allocates the memory
     const cudaError errorCode = cudaMallocManaged(&start, available_memory);
     checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
