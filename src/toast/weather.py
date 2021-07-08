@@ -189,7 +189,7 @@ class SimWeather(Weather):
     Supported name values (using a bundled file) are currently:
         - "atacama"
         - "south_pole"
-    
+
     Alternatively a file path may be provided.
 
     Args:

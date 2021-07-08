@@ -80,13 +80,10 @@ def main():
     data = toast.Data(comm=toast_comm)
 
     # Simulate data
-    #---------------------------------------------------------------
+    # ---------------------------------------------------------------
 
     # Simulate the telescope pointing
-    sim_ground = toast.ops.SimGround(
-        telescope=telescope,
-        schedule=schedule
-    )
+    sim_ground = toast.ops.SimGround(telescope=telescope, schedule=schedule)
     sim_ground.apply(data)
 
     # Construct a "perfect" noise model just from the focalplane parameters
@@ -95,12 +92,10 @@ def main():
 
     # Set up detector pointing.  This just uses the focalplane offsets.
     det_pointing_azel = toast.ops.PointingDetectorSimple(
-        boresight=sim_ground.boresight_azel,
-        quats="quats_azel"
+        boresight=sim_ground.boresight_azel, quats="quats_azel"
     )
     det_pointing_radec = toast.ops.PointingDetectorSimple(
-        boresight=sim_ground.boresight_radec,
-        quats="quats_radec"
+        boresight=sim_ground.boresight_radec, quats="quats_radec"
     )
 
     # Elevation-modulated noise model.
@@ -108,16 +103,14 @@ def main():
         noise_model=default_model.noise_model,
         out_model="el_weighted_model",
         detector_pointing=det_pointing_azel,
-        view=det_pointing_azel.view
+        view=det_pointing_azel.view,
     )
     elevation_model.apply(data)
 
     # Set up the pointing matrix.  We will use the same pointing matrix for the
     # template solve and the final binning.
     pointing = toast.ops.PointingHealpix(
-        nside=2048, 
-        mode="IQU",
-        detector_pointing=det_pointing_radec
+        nside=2048, mode="IQU", detector_pointing=det_pointing_radec
     )
 
     # Simulate sky signal from a map and accumulate.
@@ -132,20 +125,15 @@ def main():
     sim_noise.apply(data)
 
     # Simulate atmosphere signal
-    sim_atm = toast.ops.SimAtmosphere(
-        detector_pointing=det_pointing_azel
-    )
+    sim_atm = toast.ops.SimAtmosphere(detector_pointing=det_pointing_azel)
     sim_atm.apply(data)
 
     # Reduce data
-    #---------------------------------------------------------------
+    # ---------------------------------------------------------------
 
     # Set up the binning operator.  We will use the same binning for the template solve
     # and the final map.
-    binner = toast.ops.BinMap(
-        pointing=pointing,
-        noise_model=elevation_model.out_model
-    )
+    binner = toast.ops.BinMap(pointing=pointing, noise_model=elevation_model.out_model)
 
     # FIXME:  Apply filtering here, and optionally pass an empty template
     # list to disable the template solve and just make a binned map.

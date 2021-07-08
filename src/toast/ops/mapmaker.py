@@ -83,9 +83,7 @@ class MapMaker(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode(
-        "signal", help="Observation detdata key for the timestream data"
-    )
+    det_data = Unicode("signal", help="Observation detdata key for the timestream data")
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
 

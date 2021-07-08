@@ -78,7 +78,9 @@ class SimAtmosphere(Operator):
         0, help="If simulating multiple realizations, the realization index"
     )
 
-    component = Int(123456, help="The component index to use for this atmosphere simulation")
+    component = Int(
+        123456, help="The component index to use for this atmosphere simulation"
+    )
 
     lmin_center = Quantity(
         0.01 * u.meter, help="Kolmogorov turbulence dissipation scale center"
@@ -245,10 +247,12 @@ class SimAtmosphere(Operator):
             # The site and weather for this observation
             site = ob.telescope.site
             if not hasattr(site, "weather") or site.weather is None:
-                raise RuntimeError("Cannot simulate atmosphere for sites without weather")
+                raise RuntimeError(
+                    "Cannot simulate atmosphere for sites without weather"
+                )
             weather = site.weather
 
-             # Make sure detector data output exists
+            # Make sure detector data output exists
             ob.detdata.ensure(self.det_data, detectors=dets)
 
             # Check that our view is fully covered by detector pointing.  If the
@@ -430,7 +434,6 @@ class SimAtmosphere(Operator):
                     f"{log_prefix}Simulate and observe atmosphere:  {tmr.seconds()} seconds"
                 )
 
-
     def _get_rng_keys(self, obs):
         """Get random number keys and counters for an observation.
 
@@ -438,7 +441,7 @@ class SimAtmosphere(Operator):
         index is typically smaller, and should fit within 2^16.  The component index
         is a small integer.
 
-        The random number generator accepts a key and a counter, each made of two 64bit 
+        The random number generator accepts a key and a counter, each made of two 64bit
         integers.  For a given observation we set these as:
             key 1 = site UID * 2^32 + telescope UID
             key 2 = observation UID * 2^32 + realization * 2^16 + component
@@ -457,10 +460,10 @@ class SimAtmosphere(Operator):
         obsid = obs.uid
 
         # site UID in higher bits, telescope UID in lower bits
-        key1 = site * 2**32 + telescope
+        key1 = site * 2 ** 32 + telescope
 
         # Observation UID in higher bits, realization and component in lower bits
-        key2 = obsid * 2**32 + self.realization * 2**16 + self.component
+        key2 = obsid * 2 ** 32 + self.realization * 2 ** 16 + self.component
 
         # This tracks the number of cones simulated due to the wind speed.
         counter1 = 0
@@ -603,17 +606,21 @@ class SimAtmosphere(Operator):
             while istop < len(times) and times[istop] < tmax:
                 istop += 1
             iturn = 0
-            while (iturn < len(obs.intervals[self.turnaround_interval] - 1) and (times[istop] > obs.intervals[self.turnaround_interval][iturn].stop)):
+            while iturn < len(obs.intervals[self.turnaround_interval] - 1) and (
+                times[istop] > obs.intervals[self.turnaround_interval][iturn].stop
+            ):
                 iturn += 1
             if times[istop] > obs.intervals[self.turnaround_interval][iturn].stop:
-                # We are past the last turnaround.  
+                # We are past the last turnaround.
                 # Extend to the end of the observation.
                 istop = len(times)
                 tmax = tmax_tot
             else:
                 # Stop time is either before or in the middle of the turnaround.
                 # Extend to the start of the turnaround.
-                while istop < len(times) and (times[istop] < obs.intervals[self.turnaround_interval][iturn].start):
+                while istop < len(times) and (
+                    times[istop] < obs.intervals[self.turnaround_interval][iturn].start
+                ):
                     istop += 1
                 if istop < len(times):
                     tmax = times[istop]
@@ -758,7 +765,6 @@ class SimAtmosphere(Operator):
             tmr.start()
 
         return sim, counter2
-
 
     def _finalize(self, data, **kwargs):
         return

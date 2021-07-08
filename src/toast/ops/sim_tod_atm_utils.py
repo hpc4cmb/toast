@@ -124,8 +124,9 @@ class ObserveAtmosphere(Operator):
                 # by the calling code to break on the data view boundaries.
                 if len(views) > 1:
                     while (
-                        cur_wind < (len(ob.view[self.wind_view]) - 1) and
-                        views.shared[self.times][vw][0] <= ob.view[self.wind_view].shared[self.times][cur_wind][0]
+                        cur_wind < (len(ob.view[self.wind_view]) - 1)
+                        and views.shared[self.times][vw][0]
+                        <= ob.view[self.wind_view].shared[self.times][cur_wind][0]
                     ):
                         cur_wind += 1
 
@@ -190,8 +191,8 @@ class ObserveAtmosphere(Operator):
                     for icur, cur_sim in enumerate(sim_list):
                         if (
                             not (
-                                cur_sim.azmin <= azmin_det and 
-                                azmax_det <= cur_sim.azmax
+                                cur_sim.azmin <= azmin_det
+                                and azmax_det <= cur_sim.azmax
                             )
                             and not (
                                 cur_sim.azmin <= azmin_det - 2 * np.pi
@@ -252,11 +253,15 @@ class ObserveAtmosphere(Operator):
                                 atmdata[bad] = 0
                                 if self.det_flags is None:
                                     msg = "Some samples failed atmosphere simulation, but "
-                                    msg += "no det flag field was specified.  Cannot flag "
+                                    msg += (
+                                        "no det flag field was specified.  Cannot flag "
+                                    )
                                     msg += "samples"
                                     log.warning(msg)
                                 else:
-                                    views.detdata[self.det_flags][vw][det][good][bad] = 255
+                                    views.detdata[self.det_flags][vw][det][good][
+                                        bad
+                                    ] = 255
                                     nbad_tot += nbad
 
                     atmdata *= self.gain
@@ -311,7 +316,7 @@ class ObserveAtmosphere(Operator):
             "detdata": [
                 self.det_data,
             ],
-            "intervals": list()
+            "intervals": list(),
         }
         return prov
 

@@ -567,9 +567,7 @@ def fake_flags(data, shared_name="flags", shared_val=1, det_name="flags", det_va
             ob.detdata[det_name][det, :half] = det_val
 
 
-def create_ground_data(
-    mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None
-):
+def create_ground_data(mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None):
     """Create a data object with a simple ground sim.
 
     Use the specified MPI communicator to attempt to create 2 process groups.  Create
@@ -592,7 +590,7 @@ def create_ground_data(
 
     # Create a schedule.
 
-    # FIXME: change this once the ground scheduler supports in-memory creation of the 
+    # FIXME: change this once the ground scheduler supports in-memory creation of the
     # schedule.
 
     schedule = None

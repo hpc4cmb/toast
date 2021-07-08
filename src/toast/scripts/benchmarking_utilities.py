@@ -342,10 +342,10 @@ def scan_map(args, rank, ops, data, log):
 
     # adds the scan map operator
     scan_map = toast.ops.ScanHealpix(
-        pixel_dist=ops.binner_final.pixel_dist, 
+        pixel_dist=ops.binner_final.pixel_dist,
         pointing=ops.pointing_final,
         save_pointing=ops.binner_final.full_pointing,
-        file=args.input_map
+        file=args.input_map,
     )
     scan_map.apply(data)
 

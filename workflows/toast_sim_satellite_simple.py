@@ -75,13 +75,10 @@ def main():
     data = toast.Data(comm=toast_comm)
 
     # Simulate data
-    #---------------------------------------------------------------
+    # ---------------------------------------------------------------
 
     # Simulate the telescope pointing
-    sim_satellite = toast.ops.SimSatellite(
-        telescope=telescope,
-        schedule=schedule
-    )
+    sim_satellite = toast.ops.SimSatellite(telescope=telescope, schedule=schedule)
     sim_satellite.apply(data)
 
     # Construct a "perfect" noise model just from the focalplane parameters
@@ -94,9 +91,7 @@ def main():
     # Set up the pointing matrix.  We will use the same pointing matrix for the
     # template solve and the final binning.
     pointing = toast.ops.PointingHealpix(
-        nside=512, 
-        mode="IQU",
-        detector_pointing=det_pointing
+        nside=512, mode="IQU", detector_pointing=det_pointing
     )
 
     # Simulate sky signal from a map and accumulate.
@@ -111,14 +106,11 @@ def main():
     sim_noise.apply(data)
 
     # Reduce data
-    #---------------------------------------------------------------
+    # ---------------------------------------------------------------
 
     # Set up the binning operator.  We will use the same binning for the template solve
     # and the final map.
-    binner = toast.ops.BinMap(
-        pointing=pointing,
-        noise_model=default_model.noise_model
-    )
+    binner = toast.ops.BinMap(pointing=pointing, noise_model=default_model.noise_model)
 
     # Set up the template matrix for the solve
     template_matrix = toast.ops.TemplateMatrix(

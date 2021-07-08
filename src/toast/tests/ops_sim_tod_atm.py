@@ -41,12 +41,10 @@ class SimAtmTest(MPITestCase):
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight="boresight_azel",
-            quats="quats_azel"
+            boresight="boresight_azel", quats="quats_azel"
         )
         detpointing_radec = ops.PointingDetectorSimple(
-            boresight="boresight_radec",
-            quats="quats_radec"
+            boresight="boresight_radec", quats="quats_radec"
         )
 
         # Create a noise model from focalplane detector properties
@@ -124,7 +122,6 @@ class SimAtmTest(MPITestCase):
         )
         mapmaker.apply(data)
 
-
         if rank == 0:
             import matplotlib.pyplot as plt
 
@@ -143,5 +140,3 @@ class SimAtmTest(MPITestCase):
             hp.gnomview(mdata, xsize=1600, rot=(42.0, -42.0), reso=0.5, nest=False)
             plt.savefig(outfile)
             plt.close()
-
-

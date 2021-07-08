@@ -169,7 +169,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # use the same one as the solve.
     if not ops.pointing_final.enabled:
         ops.pointing_final = ops.pointing
-    
+
     ops.binner_final.pointing = ops.pointing_final
 
     # If we are not using a different binner for our final binning, use the same one
@@ -272,7 +272,7 @@ def main():
 
     # Reduce the data
     reduce_data(job, args, data)
-    
+
     # Collect optional timing information
     alltimers = toast.timing.gather_timers(comm=toast_comm.comm_world)
     if toast_comm.world_rank == 0:

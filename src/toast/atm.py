@@ -1124,8 +1124,7 @@ class AtmSim(object):
         return
 
     def get_repr(self):
-        """Return string representation of local properties.
-        """
+        """Return string representation of local properties."""
         ret = ""
         ret += f"  Az (deg) min = {np.degrees(self._azmin)}, max = {np.degrees(self._azmax)}, delta = {np.degrees(self._delta_az)}\n"
         ret += f"  El (deg) min = {np.degrees(self._elmin)}, max = {np.degrees(self._elmax)}, delta = {np.degrees(self._delta_el)}\n"

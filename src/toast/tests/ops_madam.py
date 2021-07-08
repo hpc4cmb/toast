@@ -134,7 +134,7 @@ class MadamTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 # Add an offset to the data
                 ob.detdata["signal"][det] += 500.0
                 rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
@@ -243,7 +243,7 @@ class MadamTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 check_rms = np.std(ob.detdata["destriped"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(0.9 * check_rms < rms[ob.name][det])
