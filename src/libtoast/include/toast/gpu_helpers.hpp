@@ -45,6 +45,31 @@ public:
     ~GPU_memory_pool_t();
     cudaError malloc(void** output_ptr, size_t size);
     void free(void* ptr);
+
+    // allocates gpu memory and returns a pointer to the memory after having copied the data there
+    template<typename T>
+    T* toDevice(T* data, size_t nbElements)
+    {
+        // memory allocation
+        void* data_gpu = NULL;
+        const cudaError errorCodeMalloc = this->malloc(&data_gpu, nbElements*sizeof(T));
+        checkCudaErrorCode(errorCodeMalloc, "GPU_memory_pool_t::toDevice (malloc)");
+        // data transfer
+        const cudaError errorCodeMemcpy = cudaMemcpy(data_gpu, data, nbElements*sizeof(T), cudaMemcpyHostToDevice);
+        checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool_t::toDevice (memcpy)");
+        return static_cast<T*>(data_gpu);
+    }
+
+    // gets data back from GPU and deallocates gpu memory
+    template<typename T>
+    void fromDevice(T* data_cpu, T* data_gpu, size_t nbElements)
+    {
+        // data transfer
+        const cudaError errorCodeMemcpy = cudaMemcpy(data_cpu, data_gpu, nbElements*sizeof(T), cudaMemcpyDeviceToHost);
+        checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool_t::fromDevice (memcpy)");
+        // deallocation
+        this->free(data_gpu);
+    }
 };
 
 // global variable (one instance per thread) containing the pool

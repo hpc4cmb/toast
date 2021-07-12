@@ -70,13 +70,19 @@ void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
     // prepare inputs
     cublasOperation_t transA_cuda = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB_cuda = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
-    // prefetch data to GPU (optional)
-    cudaMemPrefetchAsync(A, M * K * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(B, K * N * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(C, M * N * sizeof(double), gpuId);
+    // send data to GPU
+    double* A_gpu = GPU_memory_pool.toDevice(A, M * K);
+    double* B_gpu = GPU_memory_pool.toDevice(B, K * N);
+    double* C_gpu = GPU_memory_pool.toDevice(C, M * N);
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDgemm(handleBlas, transA_cuda, transB_cuda, M, N, K, &ALPHA, A, LDA, B, LDB, &BETA, C, LDC);
+    cublasStatus_t errorCodeOp = cublasDgemm(handleBlas, transA_cuda, transB_cuda, M, N, K, &ALPHA, A_gpu, LDA, B_gpu, LDB, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
+    cudaError statusSync = cudaDeviceSynchronize();
+    checkCudaErrorCode(statusSync);
+    // gets data back from GPU
+    GPU_memory_pool.fromDevice(A, A_gpu, M * K);
+    GPU_memory_pool.fromDevice(B, B_gpu, K * N);
+    GPU_memory_pool.fromDevice(C, C_gpu, M * N);
     #elif HAVE_LAPACK
     wrapped_dgemm(&TRANSA, &TRANSB, &M, &N, &K, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
     #else // ifdef HAVE_LAPACK
@@ -95,9 +101,13 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
     // prepare inputs
     cublasOperation_t transA_cuda = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB_cuda = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    // TODO send data to GPU
     // compute batched blas operation
     cublasStatus_t errorCodeOp = cublasDgemmBatched(handleBlas, transA_cuda, transB_cuda, M, N, K, &ALPHA, A_batch, LDA, B_batch, LDB, &BETA, C_batch, LDC, batchCount);
     checkCublasErrorCode(errorCodeOp);
+    cudaError statusSync = cudaDeviceSynchronize();
+    checkCudaErrorCode(statusSync);
+    // TODO get data back from GPU
 #elif HAVE_LAPACK
     // use naive opemMP paralellism
     #pragma omp parallel for
@@ -134,7 +144,7 @@ int toast::LinearAlgebra::syev_buffersize(char JOBZ, char UPLO, int N, double * 
     cusolverEigMode_t jobz_cuda = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_cuda = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     // computes buffersize
-    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handleSolver, jobz_cuda, uplo_cuda, N, A, LDA, W, &LWORK);
+    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handleSolver, jobz_cuda, uplo_cuda, N, /*A=*/NULL, LDA, /*W=*/NULL, &LWORK);
     checkCusolverErrorCode(statusBuffer);
     #endif
 
@@ -150,17 +160,21 @@ void toast::LinearAlgebra::syev(char JOBZ, char UPLO, int N, double * A,
     cusolverEigMode_t jobz_cuda = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_cuda = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     int* INFO_cuda = gpu_allocated_integer;
-    // prefetch data to GPU (optional)
-    cudaMemPrefetchAsync(A, N * LDA * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(W, N * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(WORK, LWORK * sizeof(double), gpuId);
+    // send data to GPU
+    double* A_gpu = GPU_memory_pool.toDevice(A, N * LDA);
+    double* W_gpu = GPU_memory_pool.toDevice(W, N);
+    double* WORK_gpu = GPU_memory_pool.toDevice(WORK, LWORK);
     // compute cusolver operation
-    cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_cuda, uplo_cuda, N, A, LDA, W, WORK, LWORK, INFO_cuda);
+    cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_cuda, uplo_cuda, N, A_gpu, LDA, W_gpu, WORK_gpu, LWORK, INFO_cuda);
     checkCusolverErrorCode(statusSolver);
-    // gets info back to CPU
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
-    *INFO = *INFO_cuda;
+    // gets info back to CPU
+    GPU_memory_pool.fromDevice(A, A_gpu, N * LDA);
+    GPU_memory_pool.fromDevice(W, W_gpu, N);
+    GPU_memory_pool.fromDevice(WORK, WORK_gpu, LWORK);
+    const cudaError errorCodeMemcpy = cudaMemcpy(INFO, INFO_cuda, sizeof(int), cudaMemcpyDeviceToHost); // *INFO = *INFO_cuda
+    checkCudaErrorCode(errorCodeMemcpy, "syev (INFO memcpy)");
     #elif HAVE_LAPACK
     wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK, &LWORK, INFO);
     #else // ifdef HAVE_LAPACK
