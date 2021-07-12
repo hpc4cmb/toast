@@ -123,7 +123,7 @@ GPU_memory_pool_t::GPU_memory_pool_t(): blocks()
     // pick the memory that will be preallocated
     available_memory = 4 * 1073741824l; // 4GB TODO set it as a function of the memory on GPU
     // allocates the memory
-    const cudaError errorCode = cudaMallocManaged(&start, available_memory);
+    const cudaError errorCode = cudaMalloc(&start, available_memory);
     checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
     // first block to mark the starting point
     GPU_memory_block_t initialBlock(start, 0);
@@ -133,7 +133,8 @@ GPU_memory_pool_t::GPU_memory_pool_t(): blocks()
 // destructor, insures that the pre-allocation is released
 GPU_memory_pool_t::~GPU_memory_pool_t()
 {
-    cudaFree(start);
+    const cudaError errorCode = cudaFree(start);
+    checkCudaErrorCode(errorCode, "GPU memory de-allocation");
 }
 
 // allocates memory starting from the end of the latest block
