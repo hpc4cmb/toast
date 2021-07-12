@@ -113,7 +113,6 @@ def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
     )
     parser.add_argument(
         "--crosstalk-matrix-debug",
-        type=bool,
         action='store_true',
         required=False,
         help="if specified, perform more checks and emit more messages. "
