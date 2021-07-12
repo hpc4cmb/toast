@@ -89,6 +89,8 @@ def _create_log_rank(level):
                 log.error(msg)
             elif level == "CRITICAL":
                 log.critical(msg)
+            else:
+                raise RuntimeError(f"invalid log level {level}")
 
         if timer is not None:
             timer.clear()

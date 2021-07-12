@@ -371,12 +371,13 @@ class GroundSchedule(object):
                 isplit, nsplit = file_split
             scan_counters = dict()
 
-            read_header = False
-            header_done = False
+            read_header = True
             last_name = None
 
             with open(file, "r") as f:
                 for line in f:
+                    if line.startswith("#"):
+                        continue
                     if read_header:
                         (
                             site_name,
@@ -390,12 +391,7 @@ class GroundSchedule(object):
                         self.site_lat = float(site_lat) * u.degree
                         self.site_lon = float(site_lon) * u.degree
                         self.site_alt = float(site_alt) * u.meter
-                        header_done = True
                         read_header = False
-                        continue
-                    if line.startswith("#"):
-                        if not header_done:
-                            read_header = True
                         continue
                     gscan = _parse_line(line)
                     if nsplit is not None:

@@ -391,14 +391,14 @@ class SimAtmosphere(Operator):
 
                 ob[atm_sim_key].append(sim_list)
 
-                # if self.debug_tod:
-                #     self._save_tod(ob, times, istart, nind, ind, comm)
+                if self.debug_tod:
+                    self._save_tod(ob, times, istart, nind, ind, comm)
                 tmin = tmax
 
             # Create the wind intervals
             ob.intervals.create_col(wind_intervals, wind_times, ob.shared[self.times])
 
-            # Observation pipeline.  We do not want to store persistant detector
+            # Observation pipeline.  We do not want to store persistent detector
             # pointing, so we build a small pipeline that runs one detector at a time
             # on only the current observation.
 
@@ -794,3 +794,136 @@ class SimAtmosphere(Operator):
 
     def _accelerators(self):
         return list()
+
+    @function_timer
+    def _plot_snapshots(
+        self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax
+    ):
+        """Create snapshots of the atmosphere"""
+        from ..vis import set_backend
+
+        set_backend()
+        import matplotlib.pyplot as plt
+        import pickle
+
+        azmin, azmax, elmin, elmax = scan_range
+
+        # elstep = np.radians(0.01)
+        elstep = (elmax - elmin) / 320
+        azstep = elstep * np.cos(0.5 * (elmin + elmax))
+        azgrid = np.linspace(azmin, azmax, (azmax - azmin) // azstep + 1)
+        elgrid = np.linspace(elmin, elmax, (elmax - elmin) // elstep + 1)
+        AZ, EL = np.meshgrid(azgrid, elgrid)
+        nn = AZ.size
+        az = AZ.ravel()
+        el = EL.ravel()
+        atmdata = np.zeros(nn, dtype=np.float64)
+        atmtimes = np.zeros(nn, dtype=np.float64)
+
+        rank = 0
+        ntask = 1
+        if comm is not None:
+            rank = comm.rank
+            ntask = comm.size
+
+        r = 0
+        t = 0
+        my_snapshots = []
+        vmin = 1e30
+        vmax = -1e30
+        tstep = 1
+        for i, t in enumerate(np.arange(tmin, tmax, tstep)):
+            if i % ntask != rank:
+                continue
+            err = sim.observe(atmtimes + t, az, el, atmdata, r)
+            if err != 0:
+                raise RuntimeError(prefix + "Observation failed")
+            if self._gain:
+                atmdata *= self._gain
+            vmin = min(vmin, np.amin(atmdata))
+            vmax = max(vmax, np.amax(atmdata))
+            atmdata2d = atmdata.reshape(AZ.shape)
+            my_snapshots.append((t, r, atmdata2d.copy()))
+
+        if self.debug_snapshots:
+            outdir = "snapshots"
+            if rank == 0:
+                try:
+                    os.makedirs(outdir)
+                except FileExistsError:
+                    pass
+            fn = os.path.join(
+                outdir,
+                "atm_{}_{}_t_{}_{}_r_{}_{}.pck".format(
+                    obsname, rank, int(tmin), int(tmax), int(rmin), int(rmax)
+                ),
+            )
+            with open(fn, "wb") as fout:
+                pickle.dump([azgrid, elgrid, my_snapshots], fout)
+
+        log.debug("Snapshots saved in {}".format(fn), flush=True)
+
+        if self.debug_plots:
+            if comm is not None:
+                vmin = comm.allreduce(vmin, op=MPI.MIN)
+                vmax = comm.allreduce(vmax, op=MPI.MAX)
+
+            for t, r, atmdata2d in my_snapshots:
+                plt.figure(figsize=[12, 4])
+                plt.imshow(
+                    atmdata2d,
+                    interpolation="nearest",
+                    origin="lower",
+                    extent=np.degrees(
+                        [
+                            0,
+                            (azmax - azmin) * np.cos(0.5 * (elmin + elmax)),
+                            elmin,
+                            elmax,
+                        ]
+                    ),
+                    cmap=plt.get_cmap("Blues"),
+                    vmin=vmin,
+                    vmax=vmax,
+                )
+                plt.colorbar()
+                ax = plt.gca()
+                ax.set_title("t = {:15.1f} s, r = {:15.1f} m".format(t, r))
+                ax.set_xlabel("az [deg]")
+                ax.set_ylabel("el [deg]")
+                ax.set_yticks(np.degrees([elmin, elmax]))
+                plt.savefig(
+                    "atm_{}_t_{:04}_r_{:04}.png".format(obsname, int(t), int(r))
+                )
+                plt.close()
+
+        del my_snapshots
+
+        return
+
+    @function_timer
+    def _save_tod(self, ob, times, istart, nind, ind, comm):
+        import pickle
+
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+
+        t = times[ind]
+        tmin, tmax = t[0], t[-1]
+        outdir = "snapshots"
+        if rank == 0:
+            try:
+                os.makedirs(outdir)
+            except FileExistsError:
+                pass
+
+        for det in ob.local_detectors:
+            fn = os.path.join(
+                outdir,
+                f"atm_tod_{ob.name}_{det}_t_{int(tmin)}_{int(tmax)}.pck",
+            )
+            with open(fn, "wb") as fout:
+                pickle.dump([det, t, ob.detdata[self.det_data][det, ind]], fout)
+
+        return
