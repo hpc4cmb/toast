@@ -69,10 +69,10 @@ from ..timing import GlobalTimers
 from ..utils import Logger
 
 if TYPE_CHECKING:
-    from typing import List, Union, Optional
+    from typing import List, Optional, Union
 
-    from .mpi import Comm
     from .dist import Data
+    from .mpi import Comm
 
 
 def _fma(
