@@ -65,6 +65,7 @@ except ImportError:
 
 from ..mpi import get_world
 from ..op import Operator
+from ..timing import GlobalTimers
 from ..utils import Logger
 
 if TYPE_CHECKING:
@@ -413,6 +414,7 @@ class OpCrosstalk(Operator):
         debug = self.debug
         crosstalk_name = self.name
         logger = Logger.get()
+        gt = GlobalTimers.get()
 
         # loop over crosstalk matrices
         for idx_crosstalk_matrix in range(self.n_crosstalk_matrices):
@@ -421,11 +423,14 @@ class OpCrosstalk(Operator):
             names_set = set(names)
             crosstalk_data = crosstalk_matrix.data
             n = crosstalk_data.shape[0]
-            for obs in data.obs:
+            for obs_i, obs in enumerate(data.obs):
                 tod = obs["tod"]
                 comm = tod.grid_comm_col
                 procs = tod.grid_size[0]
                 rank = tod.grid_ranks[0]
+
+                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}")
+                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_1-check")
 
                 # all ranks need to check this as they need to perform the same action
                 detectors_set = set(tod.detectors)
@@ -442,6 +447,9 @@ class OpCrosstalk(Operator):
                         f"from the crosstalk matrix with these detectors: {names}."
                     )
                 del detectors_set
+
+                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_1-check")
+                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_2-detector-lut")
 
                 n_samples = tod.local_samples[1]
                 local_crosstalk_dets_set = set(tod.local_dets) & names_set
@@ -496,6 +504,9 @@ class OpCrosstalk(Operator):
                                 'Error in creating a lookup table '
                                 f'from detector name to rank: {det_lut}'
                             )
+
+                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_2-detector-lut")
+                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_3-mat-mul")
 
                 # mat-mul
                 row_local_total = tod.cache.create(
@@ -555,12 +566,18 @@ class OpCrosstalk(Operator):
                     tod.cache.destroy(f"{crosstalk_name}_row_local_weights_{rank}")
                     tod.cache.destroy(f"{crosstalk_name}_local_det_idxs_{rank}")
 
+                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_3-mat-mul")
+                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_4-copy-inplace")
+
                 for name in local_crosstalk_dets_set:
                     # overwrite it in-place
                     # not using tod.cache.put as that will destroy and create
                     tod.cache.reference(f"{signal_name}_{name}")[:] = \
                         tod.cache.reference(f"{crosstalk_name}_{name}")
                     tod.cache.destroy(f"{crosstalk_name}_{name}")
+
+                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_4-copy-inplace")
+                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}")
 
     def exec(
         self,
