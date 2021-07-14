@@ -959,17 +959,23 @@ class IntervalMgr(MutableMapping):
         send_col_rank = 0
         send_row_rank = 0
         if self.comm is not None:
+            col_rank = 0
+            if self.comm_col is not None:
+                col_rank = self.comm_col.rank
             # Find the process grid ranks of the incoming data
             if self.comm.rank == fromrank:
-                send_col_rank = self.comm_col.rank
-                send_row_rank = self.comm_row.rank
+                if self.comm_col is not None:
+                    send_col_rank = self.comm_col.rank
+                if self.comm_row is not None:
+                    send_row_rank = self.comm_row.rank
             send_col_rank = self.comm.bcast(send_col_rank, root=0)
             send_row_rank = self.comm.bcast(send_row_rank, root=0)
             # Broadcast data along the row
-            if self.comm_col.rank == send_col_rank:
-                global_timespans = self.comm_row.bcast(
-                    global_timespans, root=send_row_rank
-                )
+            if col_rank == send_col_rank:
+                if self.comm_row is not None:
+                    global_timespans = self.comm_row.bcast(
+                        global_timespans, root=send_row_rank
+                    )
         # Every process column creates their local intervals
         self.create_col(name, global_timespans, local_times, fromrank=send_col_rank)
 
