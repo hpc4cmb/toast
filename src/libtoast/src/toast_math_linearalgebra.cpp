@@ -32,13 +32,9 @@ toast::LinearAlgebra::LinearAlgebra()
     // creates cusolver handle
     cusolverStatus_t statusHandleCusolver = cusolverDnCreate(&handleSolver);
     checkCusolverErrorCode(statusHandleCusolver);
-    // allocates an integer on GPU to use it as an output parameter
-    gpu_allocated_integer = GPU_memory_pool.alloc<int>(1);
     // gets jacobi parameters for batched syev
     cusolverStatus_t statusJacobiParams = cusolverDnCreateSyevjInfo(&jacobiParameters);
     checkCusolverErrorCode(statusJacobiParams);
-    // gets id of the GPU device being used
-    cudaGetDevice(&gpuId);
 #endif
 }
 
@@ -52,8 +48,6 @@ toast::LinearAlgebra::~LinearAlgebra()
     // destroys jacobi parameters for batched syev
     cusolverStatus_t statusJacobiParams = cusolverDnDestroySyevjInfo(jacobiParameters);
     checkCusolverErrorCode(statusJacobiParams);
-    // release integer allocation
-    GPU_memory_pool.free(gpu_allocated_integer);
 #endif
 }
 
@@ -193,7 +187,7 @@ void toast::LinearAlgebra::syev(char JOBZ, char UPLO, int N, double * A,
     // prepare inputs
     cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    int* INFO_gpu = gpu_allocated_integer;
+    int* INFO_gpu = GPU_memory_pool.alloc<int>(1);
     // send data to GPU
     double* A_gpu = GPU_memory_pool.toDevice(A, N * LDA);
     double* W_gpu = GPU_memory_pool.toDevice(W, N); // TODO do we need to copy this data (is WORK an input?)
@@ -208,8 +202,7 @@ void toast::LinearAlgebra::syev(char JOBZ, char UPLO, int N, double * A,
     GPU_memory_pool.fromDevice(A, A_gpu, N * LDA); // TODO copy not always needed
     GPU_memory_pool.fromDevice(W, W_gpu, N);
     GPU_memory_pool.free(WORK_gpu);
-    const cudaError errorCodeMemcpy = cudaMemcpy(INFO, INFO_gpu, sizeof(int), cudaMemcpyDeviceToHost); // *INFO = *INFO_gpu
-    checkCudaErrorCode(errorCodeMemcpy, "syev (INFO memcpy)");
+    GPU_memory_pool.fromDevice(INFO, INFO_gpu, 1);
     #elif HAVE_LAPACK
     wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK, &LWORK, INFO);
     #else // ifdef HAVE_LAPACK
@@ -249,7 +242,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     // prepare inputs
     cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    int* INFO_gpu = gpu_allocated_integer;
+    int* INFO_gpu = GPU_memory_pool.alloc<int>(1);
     // send data to GPU
     double* A_batch_gpu = GPU_memory_pool.toDevice(A_batch, batchCount * N * LDA);
     double* W_batch_gpu = GPU_memory_pool.toDevice(W_batch, batchCount * N); // TODO do we need to copy this data (is WORK an input?)
@@ -264,8 +257,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     GPU_memory_pool.fromDevice(A_batch, A_batch_gpu, batchCount * N * LDA); // TODO copy not always needed
     GPU_memory_pool.fromDevice(W_batch, W_batch_gpu, batchCount * N);
     GPU_memory_pool.free(WORK_gpu);
-    const cudaError errorCodeMemcpy = cudaMemcpy(INFO, INFO_gpu, sizeof(int), cudaMemcpyDeviceToHost); // *INFO = *INFO_gpu
-    checkCudaErrorCode(errorCodeMemcpy, "syev_batched (INFO memcpy)");
+    GPU_memory_pool.fromDevice(INFO, INFO_gpu, 1);
 #elif HAVE_LAPACK
     // use naive opemMP paralellism
     #pragma omp parallel for
