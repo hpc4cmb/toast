@@ -46,6 +46,17 @@ public:
     cudaError malloc(void** output_ptr, size_t size);
     void free(void* ptr);
 
+    // allocates memory for the given number of elements and returns a pointer to the allocated memory
+    // this function is slightly higher level than malloc
+    template<typename T>
+    T* alloc(size_t size)
+    {
+        T* output_ptr = NULL;
+        cudaError errorCode = this->malloc((void**)&output_ptr, size*sizeof(T));
+        checkCudaErrorCode(errorCode, "GPU_memory_pool_t::alloc");
+        return output_ptr;
+    }
+
     // allocates gpu memory and returns a pointer to the memory after having copied the data there
     template<typename T>
     T* toDevice(T* data, size_t nbElements)
