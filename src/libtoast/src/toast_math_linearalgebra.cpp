@@ -68,14 +68,14 @@ void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
                                 int LDC) const {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
-    cublasOperation_t transA_cuda = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
-    cublasOperation_t transB_cuda = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    cublasOperation_t transA_gpu = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    cublasOperation_t transB_gpu = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     // send data to GPU
     double* A_gpu = GPU_memory_pool.toDevice(A, M * K);
     double* B_gpu = GPU_memory_pool.toDevice(B, K * N);
     double* C_gpu = GPU_memory_pool.toDevice(C, M * N);
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDgemm(handleBlas, transA_cuda, transB_cuda, M, N, K, &ALPHA, A_gpu, LDA, B_gpu, LDB, &BETA, C_gpu, LDC);
+    cublasStatus_t errorCodeOp = cublasDgemm(handleBlas, transA_gpu, transB_gpu, M, N, K, &ALPHA, A_gpu, LDA, B_gpu, LDB, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
@@ -99,11 +99,11 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
                                         double BETA, double * C_batch[], int LDC, const int batchCount) const {
 #ifdef HAVE_CUDALIBS
     // prepare inputs
-    cublasOperation_t transA_cuda = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
-    cublasOperation_t transB_cuda = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    cublasOperation_t transA_gpu = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    cublasOperation_t transB_gpu = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     // TODO send data to GPU
     // compute batched blas operation
-    cublasStatus_t errorCodeOp = cublasDgemmBatched(handleBlas, transA_cuda, transB_cuda, M, N, K, &ALPHA, A_batch, LDA, B_batch, LDB, &BETA, C_batch, LDC, batchCount);
+    cublasStatus_t errorCodeOp = cublasDgemmBatched(handleBlas, transA_gpu, transB_gpu, M, N, K, &ALPHA, A_batch, LDA, B_batch, LDB, &BETA, C_batch, LDC, batchCount);
     checkCublasErrorCode(errorCodeOp);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
@@ -141,10 +141,10 @@ int toast::LinearAlgebra::syev_buffersize(char JOBZ, char UPLO, int N, double * 
 
     #ifdef HAVE_CUDALIBS
     // prepare inputs
-    cusolverEigMode_t jobz_cuda = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
-    cublasFillMode_t uplo_cuda = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
+    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     // computes buffersize
-    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handleSolver, jobz_cuda, uplo_cuda, N, /*A=*/NULL, LDA, /*W=*/NULL, &LWORK);
+    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handleSolver, jobz_gpu, uplo_gpu, N, /*A=*/NULL, LDA, /*W=*/NULL, &LWORK);
     checkCusolverErrorCode(statusBuffer);
     #endif
 
@@ -157,23 +157,26 @@ void toast::LinearAlgebra::syev(char JOBZ, char UPLO, int N, double * A,
                                 int * INFO) {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
-    cusolverEigMode_t jobz_cuda = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
-    cublasFillMode_t uplo_cuda = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    int* INFO_cuda = gpu_allocated_integer;
+    cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
+    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    int* INFO_gpu = gpu_allocated_integer;
     // send data to GPU
     double* A_gpu = GPU_memory_pool.toDevice(A, N * LDA);
     double* W_gpu = GPU_memory_pool.toDevice(W, N);
-    double* WORK_gpu = GPU_memory_pool.toDevice(WORK, LWORK);
+    // allocates workspace
+    void* WORK_gpu = NULL;
+    cudaError statusWorkAlloc = GPU_memory_pool.malloc(&WORK_gpu, LWORK * sizeof(double));
+    checkCudaErrorCode(statusWorkAlloc, "syev (WORK malloc)");
     // compute cusolver operation
-    cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_cuda, uplo_cuda, N, A_gpu, LDA, W_gpu, WORK_gpu, LWORK, INFO_cuda);
+    cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_gpu, uplo_gpu, N, A_gpu, LDA, W_gpu, static_cast<double*>(WORK_gpu), LWORK, INFO_gpu);
     checkCusolverErrorCode(statusSolver);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
     // gets info back to CPU
     GPU_memory_pool.fromDevice(A, A_gpu, N * LDA);
     GPU_memory_pool.fromDevice(W, W_gpu, N);
-    GPU_memory_pool.fromDevice(WORK, WORK_gpu, LWORK);
-    const cudaError errorCodeMemcpy = cudaMemcpy(INFO, INFO_cuda, sizeof(int), cudaMemcpyDeviceToHost); // *INFO = *INFO_cuda
+    GPU_memory_pool.free(WORK_gpu);
+    const cudaError errorCodeMemcpy = cudaMemcpy(INFO, INFO_gpu, sizeof(int), cudaMemcpyDeviceToHost); // *INFO = *INFO_gpu
     checkCudaErrorCode(errorCodeMemcpy, "syev (INFO memcpy)");
     #elif HAVE_LAPACK
     wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK, &LWORK, INFO);
@@ -195,10 +198,10 @@ int toast::LinearAlgebra::syev_batched_buffersize(char JOBZ, char UPLO, int N, d
 
 #ifdef HAVE_CUDALIBS
     // prepare inputs
-    cusolverEigMode_t jobz_cuda = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
-    cublasFillMode_t uplo_cuda = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
+    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     // computes buffersize
-    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(handleSolver, jobz_cuda, uplo_cuda, N, A_batch, LDA, W_batch, &LWORK, jacobiParameters, batchCount);
+    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(handleSolver, jobz_gpu, uplo_gpu, N, /*A_batch=*/NULL, LDA, /*W_batch=*/NULL, &LWORK, jacobiParameters, batchCount);
     checkCusolverErrorCode(statusBuffer);
 #endif
 
@@ -212,20 +215,27 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
                                         int * INFO, const int batchCount) {
 #ifdef HAVE_CUDALIBS
     // prepare inputs
-    cusolverEigMode_t jobz_cuda = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
-    cublasFillMode_t uplo_cuda = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    int* INFO_cuda = gpu_allocated_integer;
-    // prefetch data to GPU (optional)
-    cudaMemPrefetchAsync(A_batch, batchCount * N * LDA * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(W_batch, batchCount * N * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(WORK, LWORK * sizeof(double), gpuId);
+    cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
+    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    int* INFO_gpu = gpu_allocated_integer;
+    // send data to GPU
+    double* A_batch_gpu = GPU_memory_pool.toDevice(A_batch, batchCount * N * LDA);
+    double* W_batch_gpu = GPU_memory_pool.toDevice(W_batch, batchCount * N);
+    // allocates workspace
+    void* WORK_gpu = NULL;
+    cudaError statusWorkAlloc = GPU_memory_pool.malloc(&WORK_gpu, LWORK * sizeof(double));
+    checkCudaErrorCode(statusWorkAlloc, "syev_batched (WORK malloc)");
     // compute cusolver operation
-    cusolverStatus_t statusSolver = cusolverDnDsyevjBatched(handleSolver, jobz_cuda, uplo_cuda, N, A_batch, LDA, W_batch, WORK, LWORK, INFO_cuda, jacobiParameters, batchCount);
+    cusolverStatus_t statusSolver = cusolverDnDsyevjBatched(handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA, W_batch_gpu, static_cast<double*>(WORK_gpu), LWORK, INFO_gpu, jacobiParameters, batchCount);
     checkCusolverErrorCode(statusSolver);
-    // gets info back to CPU
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
-    *INFO = *INFO_cuda;
+    // gets info back to CPU
+    GPU_memory_pool.fromDevice(A_batch, A_batch_gpu, batchCount * N * LDA);
+    GPU_memory_pool.fromDevice(W_batch, W_batch_gpu, batchCount * N);
+    GPU_memory_pool.free(WORK_gpu);
+    const cudaError errorCodeMemcpy = cudaMemcpy(INFO, INFO_gpu, sizeof(int), cudaMemcpyDeviceToHost); // *INFO = *INFO_gpu
+    checkCudaErrorCode(errorCodeMemcpy, "syev_batched (INFO memcpy)");
 #elif HAVE_LAPACK
     // use naive opemMP paralellism
     #pragma omp parallel for
@@ -259,15 +269,21 @@ void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
                                 int LDB, double BETA, double * C, int LDC) const {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
-    cublasSideMode_t side_cuda = (SIDE == 'L') ? CUBLAS_SIDE_LEFT : CUBLAS_SIDE_RIGHT;
-    cublasFillMode_t uplo_cuda = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    // prefetch data to GPU (optional)
-    cudaMemPrefetchAsync(A, LDA * ( (SIDE == 'L') ? M : N ) * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(B, LDB * N * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(C, LDC * N * sizeof(double), gpuId);
+    cublasSideMode_t side_gpu = (SIDE == 'L') ? CUBLAS_SIDE_LEFT : CUBLAS_SIDE_RIGHT;
+    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    // send data to GPU
+    double* A_gpu = GPU_memory_pool.toDevice(A, LDA * ( (SIDE == 'L') ? M : N ));
+    double* B_gpu = GPU_memory_pool.toDevice(B, LDB * N);
+    double* C_gpu = GPU_memory_pool.toDevice(C, LDC * N);
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDsymm(handleBlas, side_cuda, uplo_cuda, M, N, &ALPHA, A, LDA, B, LDB, &BETA, C, LDC);
+    cublasStatus_t errorCodeOp = cublasDsymm(handleBlas, side_gpu, uplo_gpu, M, N, &ALPHA, A_gpu, LDA, B_gpu, LDB, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
+    cudaError statusSync = cudaDeviceSynchronize();
+    checkCudaErrorCode(statusSync);
+    // gets data back from GPU
+    GPU_memory_pool.fromDevice(A, A_gpu, LDA * ( (SIDE == 'L') ? M : N ));
+    GPU_memory_pool.fromDevice(B, B_gpu, LDB * N);
+    GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
     #elif HAVE_LAPACK
     wrapped_dsymm(&SIDE, &UPLO, &M, &N, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
     #else // ifdef HAVE_LAPACK
@@ -290,14 +306,19 @@ void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
                                 double * C, int LDC) const {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
-    cublasFillMode_t uplo_cuda = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    cublasOperation_t trans_cuda = (TRANS == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
-    // prefetch data to GPU (optional)
-    cudaMemPrefetchAsync(A, LDA * ( (TRANS == 'T') ? N : K ) * sizeof(double), gpuId);
-    cudaMemPrefetchAsync(C, LDC * N * sizeof(double), gpuId);
+    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+    cublasOperation_t trans_gpu = (TRANS == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
+    // send data to GPU
+    double* A_gpu = GPU_memory_pool.toDevice(A, LDA * ( (TRANS == 'T') ? N : K ));
+    double* C_gpu = GPU_memory_pool.toDevice(C, LDC * N);
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDsyrk(handleBlas, uplo_cuda, trans_cuda, N, K, &ALPHA, A, LDA, &BETA, C, LDC);
+    cublasStatus_t errorCodeOp = cublasDsyrk(handleBlas, uplo_gpu, trans_gpu, N, K, &ALPHA, A_gpu, LDA, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
+    cudaError statusSync = cudaDeviceSynchronize();
+    checkCudaErrorCode(statusSync);
+    // gets data back from GPU
+    GPU_memory_pool.fromDevice(A, A_gpu, LDA * ( (TRANS == 'T') ? N : K ));
+    GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
     #elif HAVE_LAPACK
     wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
     #else // ifdef HAVE_LAPACK
