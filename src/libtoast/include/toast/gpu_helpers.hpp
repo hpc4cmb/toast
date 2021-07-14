@@ -41,7 +41,7 @@ private:
     // memory blocks that have been allocated at some point
     std::vector<GPU_memory_block_t> blocks;
 public:
-    GPU_memory_pool_t();
+    GPU_memory_pool_t(int nbGB);
     ~GPU_memory_pool_t();
     cudaError malloc(void** output_ptr, size_t size);
     void free(void* ptr);

@@ -118,10 +118,10 @@ GPU_memory_block_t::GPU_memory_block_t(void* ptr, size_t size)
 }
 
 // constructor, does the initial allocation
-GPU_memory_pool_t::GPU_memory_pool_t(): blocks()
+GPU_memory_pool_t::GPU_memory_pool_t(int nbGB): blocks()
 {
     // pick the memory that will be preallocated
-    available_memory = 4 * 1073741824l; // 4GB TODO set it as a function of the memory on GPU
+    available_memory = nbGB * 1073741824l;
     // allocates the memory
     const cudaError errorCode = cudaMalloc(&start, available_memory);
     checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
@@ -184,7 +184,7 @@ void GPU_memory_pool_t::free(void* ptr)
     }
 }
 
-// global variable
-thread_local GPU_memory_pool_t GPU_memory_pool = GPU_memory_pool_t();
+// global variable, 4Gb of preallocated GPU memory
+thread_local GPU_memory_pool_t GPU_memory_pool = GPU_memory_pool_t(4);
 
 #endif
