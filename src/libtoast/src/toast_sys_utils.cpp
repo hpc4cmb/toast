@@ -8,14 +8,8 @@
 
 #include <cstring>
 #include <sstream>
-
 #include <vector>
 #include <algorithm>
-
-#ifdef HAVE_CUDALIBS
-#include <cuda_runtime_api.h>
-#include "toast/gpu_helpers.hpp"
-#endif
 
 std::string toast::format_here(std::pair <std::string, int> const & here) {
     std::ostringstream h;
@@ -25,13 +19,7 @@ std::string toast::format_here(std::pair <std::string, int> const & here) {
 
 void * toast::aligned_alloc(size_t size, size_t align) {
     void * mem = NULL;
-    #ifdef HAVE_CUDALIBS
-        // allocates with CUDA to get unified memory that can be accessed from CPU and GPU transparently
-        // garantees that the memory will be "suitably aligned for any kind of variable"
-        int ret = GPU_memory_pool.malloc(&mem, size);
-    #else
-        int ret = posix_memalign(&mem, align, size);
-    #endif
+    int ret = posix_memalign(&mem, align, size);
     if (ret != 0) {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
@@ -47,12 +35,7 @@ void * toast::aligned_alloc(size_t size, size_t align) {
 }
 
 void toast::aligned_free(void * ptr) {
-    #ifdef HAVE_CUDALIBS
-        // frees with CUDA when using unified memory
-        GPU_memory_pool.free(ptr);
-    #else
-        free(ptr);
-    #endif
+    free(ptr);
     return;
 }
 
