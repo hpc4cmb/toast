@@ -340,25 +340,12 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         toast::AlignedVector <double> finv_batch(batchNumber * nnz * nnz);
         if(invert)
         {
-            // pointers to each batch matrix
-            toast::AlignedVector <double*> ftemp_ptr_batch(batchNumber);
-            toast::AlignedVector <double*> fdata_ptr_batch(batchNumber);
-            toast::AlignedVector <double*> finv_ptr_batch(batchNumber);
-            #pragma omp parallel for
-            for(int64_t batchid = 0; batchid < batchNumber; batchid++)
-            {
-                ftemp_ptr_batch[batchid] = ftemp_batch.data() + batchid * (nnz*nnz);
-                fdata_ptr_batch[batchid] = fdata_batch.data() + batchid * (nnz*nnz);
-                finv_ptr_batch[batchid] = finv_batch.data() + batchid * (nnz*nnz);
-            }
-            // does matrix multiplication
             double fzero = 0.0;
             double fone = 1.0;
             linearAlgebra.gemm_batched(transN, transT, fnnz, fnnz,
-                                       fnnz, fone, ftemp_ptr_batch.data(),
-                                       fnnz, fdata_ptr_batch.data(), fnnz,
-                                       fzero, finv_ptr_batch.data(), fnnz, batchNumber);
-            // the pointers memory is freed at the end of the scope
+                                       fnnz, fone, ftemp_batch.data(),
+                                       fnnz, fdata_batch.data(), fnnz,
+                                       fzero, finv_batch.data(), fnnz, batchNumber);
         }
 
         // data = finv

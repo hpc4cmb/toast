@@ -26,8 +26,8 @@ namespace toast {
                   double BETA, double * C, int LDC) const;
 
         void gemm_batched(char TRANSA, char TRANSB, int M, int N, int K,
-                          double ALPHA, double * A_batch[], int LDA, double * B_batch[], int LDB,
-                          double BETA, double * C_batch[], int LDC, const int batchCount) const;
+                          double ALPHA, double * A_batch, int LDA, double * B_batch, int LDB,
+                          double BETA, double * C_batch, int LDC, const int batchCount) const;
 
         int syev_buffersize(char JOBZ, char UPLO, int N, double * A,
                             int LDA, double * W) const;
