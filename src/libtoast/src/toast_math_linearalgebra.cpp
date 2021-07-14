@@ -161,8 +161,7 @@ extern "C" void wrapped_dsyev(char * JOBZ, char * UPLO, int * N, double * A, int
                               double * W, double * WORK, int * LWORK, int * INFO);
 
 // computes LWORK, the size (in number of elements) of WORK, the workspace used during the computation of syev
-int toast::LinearAlgebra::syev_buffersize(char JOBZ, char UPLO, int N, double * A,
-                                          int LDA, double * W) const {
+int toast::LinearAlgebra::syev_buffersize(char JOBZ, char UPLO, int N, int LDA) const {
     // We assume a large value here, since the work space needed will still be small.
     int NB = 256;
     int LWORK = NB * 2 + N;
@@ -221,8 +220,8 @@ void toast::LinearAlgebra::syev(char JOBZ, char UPLO, int N, double * A,
 }
 
 // we assume that buffers will be threadlocal
-int toast::LinearAlgebra::syev_batched_buffersize(char JOBZ, char UPLO, int N, double * A_batch,
-                                                  int LDA, double * W_batch, const int batchCount) const {
+int toast::LinearAlgebra::syev_batched_buffersize(char JOBZ, char UPLO, int N,
+                                                  int LDA, const int batchCount) const {
     // We assume a large value here, since the work space needed will still be small.
     int NB = 256;
     int LWORK = batchCount * (NB * 2 + N);
