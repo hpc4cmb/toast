@@ -33,8 +33,7 @@ toast::LinearAlgebra::LinearAlgebra()
     cusolverStatus_t statusHandleCusolver = cusolverDnCreate(&handleSolver);
     checkCusolverErrorCode(statusHandleCusolver);
     // allocates an integer on GPU to use it as an output parameter
-    cudaError statusAlloc = GPU_memory_pool.malloc((void**)&gpu_allocated_integer, sizeof(int));
-    checkCudaErrorCode(statusAlloc);
+    gpu_allocated_integer = GPU_memory_pool.alloc<int>(1);
     // gets jacobi parameters for batched syev
     cusolverStatus_t statusJacobiParams = cusolverDnCreateSyevjInfo(&jacobiParameters);
     checkCusolverErrorCode(statusJacobiParams);
@@ -199,11 +198,9 @@ void toast::LinearAlgebra::syev(char JOBZ, char UPLO, int N, double * A,
     double* A_gpu = GPU_memory_pool.toDevice(A, N * LDA);
     double* W_gpu = GPU_memory_pool.toDevice(W, N); // TODO do we need to copy this data (is WORK an input?)
     // allocates workspace
-    void* WORK_gpu = NULL;
-    cudaError statusWorkAlloc = GPU_memory_pool.malloc(&WORK_gpu, LWORK * sizeof(double));
-    checkCudaErrorCode(statusWorkAlloc, "syev (WORK malloc)");
+    double* WORK_gpu = GPU_memory_pool.alloc<double>(LWORK);
     // compute cusolver operation
-    cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_gpu, uplo_gpu, N, A_gpu, LDA, W_gpu, static_cast<double*>(WORK_gpu), LWORK, INFO_gpu);
+    cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_gpu, uplo_gpu, N, A_gpu, LDA, W_gpu, WORK_gpu, LWORK, INFO_gpu);
     checkCusolverErrorCode(statusSolver);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
@@ -257,11 +254,9 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     double* A_batch_gpu = GPU_memory_pool.toDevice(A_batch, batchCount * N * LDA);
     double* W_batch_gpu = GPU_memory_pool.toDevice(W_batch, batchCount * N); // TODO do we need to copy this data (is WORK an input?)
     // allocates workspace
-    void* WORK_gpu = NULL;
-    cudaError statusWorkAlloc = GPU_memory_pool.malloc(&WORK_gpu, LWORK * sizeof(double));
-    checkCudaErrorCode(statusWorkAlloc, "syev_batched (WORK malloc)");
+    double* WORK_gpu = GPU_memory_pool.alloc<double>(LWORK);
     // compute cusolver operation
-    cusolverStatus_t statusSolver = cusolverDnDsyevjBatched(handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA, W_batch_gpu, static_cast<double*>(WORK_gpu), LWORK, INFO_gpu, jacobiParameters, batchCount);
+    cusolverStatus_t statusSolver = cusolverDnDsyevjBatched(handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA, W_batch_gpu, WORK_gpu, LWORK, INFO_gpu, jacobiParameters, batchCount);
     checkCusolverErrorCode(statusSolver);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
