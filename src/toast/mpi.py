@@ -166,10 +166,7 @@ class Comm(object):
         if self._ngroups == 1:
             # We just have one group with all processes.
             self._gcomm = self._wcomm
-            if use_mpi:
-                self._rcomm = MPI.COMM_SELF
-            else:
-                self._rcomm = None
+            self._rcomm = None
         else:
             # We need to split the communicator.  This code is never executed
             # unless MPI is enabled and we have multiple groups.

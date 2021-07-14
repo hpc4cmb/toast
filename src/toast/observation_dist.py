@@ -109,15 +109,11 @@ class DistDetSamp(object):
             # Split the main communicator into process row and column
             # communicators.
 
-            if self.process_cols == 1:
-                self.comm_row = MPI.COMM_SELF
-            else:
+            if self.process_cols > 1:
                 self.comm_row = self.comm.Split(self.comm_col_rank, self.comm_row_rank)
                 self.comm_row_size = self.comm_row.size
 
-            if self.process_rows == 1:
-                self.comm_col = MPI.COMM_SELF
-            else:
+            if self.process_rows > 1:
                 self.comm_col = self.comm.Split(self.comm_row_rank, self.comm_col_rank)
                 self.comm_col_size = self.comm_col.size
 
