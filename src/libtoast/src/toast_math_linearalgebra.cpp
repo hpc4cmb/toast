@@ -213,7 +213,8 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     }
 #elif HAVE_LAPACK
     // workspace
-    toast::AlignedVector <double> WORK(LWORK);
+    toast::AlignedVector <double> WORK_batch(LWORK);
+    int LWORK_per_batch = LWORK / batchCount;
     // use naive opemMP paralellism
     #pragma omp parallel for
     for(unsigned int b=0; b<batchCount; b++)
@@ -221,14 +222,13 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
         // gets batch element
         double * A = &A_batch[b * N * LDA];
         double * W = &W_batch[b * N];
-        int LWORKb = LWORK / batchCount;
-        double * WORKb = &WORK[b * LWORKb];
+        double * WORK = &WORK_batch[b * LWORK_per_batch];
         // runs syev
         int INFOb = 0;
-        wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORKb, &LWORKb, &INFOb);
-        if (INFOb != 0) *INFO = INFOb;
+        wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK, &LWORK_per_batch, &INFOb);
+        if (INFOb != 0) *INFO = INFOb; // race condition is okay, in the end we just want to know if it is 0
     }
-    #else // ifdef HAVE_LAPACK
+#else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
     std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
