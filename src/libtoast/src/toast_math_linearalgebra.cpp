@@ -220,7 +220,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     {
         // gets batch element
         double * A = &A_batch[b * N * LDA];
-        double * W = &W_batch[b * N * LDA];
+        double * W = &W_batch[b * N];
         int LWORKb = LWORK / batchCount;
         double * WORKb = &WORK[b * LWORKb];
         // runs syev
