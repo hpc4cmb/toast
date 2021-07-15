@@ -269,7 +269,6 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
     else
     {
         // problem size parameters
-        int fnnz = (int)nnz;
         int batchNumber = nsub * subsize;
         int64_t blockSize = (int64_t)(nnz * (nnz + 1) / 2);
 
@@ -279,7 +278,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         char uplo = 'L';
         char transN = 'N';
         char transT = 'T';
-        
+
         // fdata = data (reordering)
         toast::AlignedVector <double> fdata_batch(batchNumber * nnz * nnz);
         #pragma omp parallel for
@@ -306,7 +305,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // and, potentially, eigenvectors (which are then stored in fdata)
         int info;
         toast::AlignedVector <double> evals_batch(batchNumber * nnz);
-        linearAlgebra.syev_batched(jobz, uplo, fnnz, fdata_batch.data(), fnnz, evals_batch.data(), &info, batchNumber);
+        linearAlgebra.syev_batched(jobz, uplo, nnz, fdata_batch.data(), nnz, evals_batch.data(), &info, batchNumber);
 
         // compute condition number as the ratio of the eigenvalues
         // and sets ftemp = fdata / evals
@@ -338,10 +337,10 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         {
             double fzero = 0.0;
             double fone = 1.0;
-            linearAlgebra.gemm_batched(transN, transT, fnnz, fnnz,
-                                       fnnz, fone, ftemp_batch.data(),
-                                       fnnz, fdata_batch.data(), fnnz,
-                                       fzero, finv_batch.data(), fnnz, batchNumber);
+            linearAlgebra.gemm_batched(transN, transT, nnz, nnz,
+                                       nnz, fone, ftemp_batch.data(),
+                                       nnz, fdata_batch.data(), nnz,
+                                       fzero, finv_batch.data(), nnz, batchNumber);
         }
 
         // data = finv
