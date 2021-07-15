@@ -279,14 +279,9 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         char uplo = 'L';
         char transN = 'N';
         char transT = 'T';
-
-        // allocates buffers of the proper size
-        int lwork = linearAlgebra.syev_batched_buffersize(jobz, uplo, fnnz, fnnz, batchNumber);
-        toast::AlignedVector <double> work(lwork);
-        toast::AlignedVector <double> fdata_batch(batchNumber * nnz * nnz);
-        toast::AlignedVector <double> evals_batch(batchNumber * nnz);
         
         // fdata = data (reordering)
+        toast::AlignedVector <double> fdata_batch(batchNumber * nnz * nnz);
         #pragma omp parallel for
         for(int64_t batchid = 0; batchid < batchNumber; batchid++)
         {
@@ -310,7 +305,8 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // compute eigenvalues of fdata (stored in evals)
         // and, potentially, eigenvectors (which are then stored in fdata)
         int info;
-        linearAlgebra.syev_batched(jobz, uplo, fnnz, fdata_batch.data(), fnnz, evals_batch.data(), work.data(), lwork, &info, batchNumber);
+        toast::AlignedVector <double> evals_batch(batchNumber * nnz);
+        linearAlgebra.syev_batched(jobz, uplo, fnnz, fdata_batch.data(), fnnz, evals_batch.data(), &info, batchNumber);
 
         // compute condition number as the ratio of the eigenvalues
         // and sets ftemp = fdata / evals

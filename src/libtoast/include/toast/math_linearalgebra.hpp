@@ -29,17 +29,11 @@ namespace toast {
                           double ALPHA, double * A_batch, int LDA, double * B_batch, int LDB,
                           double BETA, double * C_batch, int LDC, const int batchCount) const;
 
-        int syev_buffersize(char JOBZ, char UPLO, int N, int LDA) const;
-
-        void syev(char JOBZ, char UPLO, int N, double * A, int LDA,
-                  double * W, double * WORK, int LWORK, int * INFO);
-
         int syev_batched_buffersize(char JOBZ, char UPLO, int N,
                                     int LDA, const int batchCount) const;
 
         void syev_batched(char JOBZ, char UPLO, int N, double * A_batched,
-                          int LDA, double * W_batched, double * WORK, int LWORK,
-                          int * INFO, const int batchCount);
+                          int LDA, double * W_batched, int * INFO, const int batchCount);
 
         void symm(char SIDE, char UPLO, int M, int N, double ALPHA,
                   double * A, int LDA, double * B, int LDB, double BETA,

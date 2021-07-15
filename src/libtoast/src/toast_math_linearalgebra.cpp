@@ -160,65 +160,6 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
 extern "C" void wrapped_dsyev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
                               double * W, double * WORK, int * LWORK, int * INFO);
 
-// computes LWORK, the size (in number of elements) of WORK, the workspace used during the computation of syev
-int toast::LinearAlgebra::syev_buffersize(char JOBZ, char UPLO, int N, int LDA) const {
-    // We assume a large value here, since the work space needed will still be small.
-    int NB = 256;
-    int LWORK = NB * 2 + N;
-
-    #ifdef HAVE_CUDALIBS
-    // prepare inputs
-    cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
-    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    // computes buffersize
-    cusolverStatus_t statusBuffer = cusolverDnDsyevd_bufferSize(handleSolver, jobz_gpu, uplo_gpu, N, /*A=*/NULL, LDA, /*W=*/NULL, &LWORK);
-    checkCusolverErrorCode(statusBuffer);
-    #endif
-
-    return LWORK;
-}
-
-// LWORK, the size of WORK in number of elements, should have been computed with lapack_syev_buffersize
-void toast::LinearAlgebra::syev(char JOBZ, char UPLO, int N, double * A,
-                                int LDA, double * W, double * WORK, int LWORK,
-                                int * INFO) {
-    #ifdef HAVE_CUDALIBS
-    // prepare inputs
-    cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
-    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    int* INFO_gpu = GPU_memory_pool.alloc<int>(1);
-    // send data to GPU
-    double* A_gpu = GPU_memory_pool.toDevice(A, N * LDA);
-    double* W_gpu = GPU_memory_pool.alloc<double>(N); // output, no need to send
-    // allocates workspace
-    double* WORK_gpu = GPU_memory_pool.alloc<double>(LWORK);
-    // compute cusolver operation
-    cusolverStatus_t statusSolver = cusolverDnDsyevd(handleSolver, jobz_gpu, uplo_gpu, N, A_gpu, LDA, W_gpu, WORK_gpu, LWORK, INFO_gpu);
-    checkCusolverErrorCode(statusSolver);
-    cudaError statusSync = cudaDeviceSynchronize();
-    checkCudaErrorCode(statusSync);
-    // gets info back to CPU
-    GPU_memory_pool.fromDevice(W, W_gpu, N);
-    GPU_memory_pool.free(WORK_gpu);
-    GPU_memory_pool.fromDevice(INFO, INFO_gpu, 1);
-    // copies only if the eigenvectors have been stored in A
-    if(JOBZ == 'V') {
-        GPU_memory_pool.fromDevice(A, A_gpu, N * LDA);
-    }
-    else {
-        GPU_memory_pool.free(A_gpu);
-    }
-    #elif HAVE_LAPACK
-    wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK, &LWORK, INFO);
-    #else // ifdef HAVE_LAPACK
-    auto here = TOAST_HERE();
-    auto log = toast::Logger::get();
-    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
-    log.error(msg.c_str(), here);
-    throw std::runtime_error(msg.c_str());
-    #endif // ifdef HAVE_LAPACK
-}
-
 // we assume that buffers will be threadlocal
 int toast::LinearAlgebra::syev_batched_buffersize(char JOBZ, char UPLO, int N,
                                                   int LDA, const int batchCount) const {
@@ -241,8 +182,9 @@ int toast::LinearAlgebra::syev_batched_buffersize(char JOBZ, char UPLO, int N,
 // matrices are expected to be in continuous memory in A_batched (one every N*LDA elements)
 // LWORK, the size of WORK in number of elements, should have been computed with lapack_syev_buffersize
 void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_batch,
-                                        int LDA, double * W_batch, double * WORK, int LWORK,
-                                        int * INFO, const int batchCount) {
+                                        int LDA, double * W_batch, int * INFO, const int batchCount) {
+    // size of the workspace needed by the function
+    int LWORK = this->syev_batched_buffersize(JOBZ, UPLO, N, LDA, batchCount);
 #ifdef HAVE_CUDALIBS
     // prepare inputs
     cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
@@ -270,14 +212,18 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
         GPU_memory_pool.free(A_batch_gpu);
     }
 #elif HAVE_LAPACK
+    // workspace
+    toast::AlignedVector <double> WORK(LWORK);
     // use naive opemMP paralellism
     #pragma omp parallel for
     for(unsigned int b=0; b<batchCount; b++)
     {
+        // gets batch element
         double * A = &A_batch[b * N * LDA];
         double * W = &W_batch[b * N * LDA];
-        int LWORKb = LWORK/batchCount;
-        double * WORKb = &WORK[b*LWORKb];
+        int LWORKb = LWORK / batchCount;
+        double * WORKb = &WORK[b * LWORKb];
+        // runs syev
         int INFOb = 0;
         wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORKb, &LWORKb, &INFOb);
         if (INFOb != 0) *INFO = INFOb;
