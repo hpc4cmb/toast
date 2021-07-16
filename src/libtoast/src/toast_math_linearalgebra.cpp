@@ -20,35 +20,6 @@
 # define LAPACK_FUNC(lname, uname) lname
 #endif // if defined LAPACK_NAMES_LOWER
 
-// NOTE: one could use one handle per gpu if several are available
-toast::LinearAlgebra::LinearAlgebra()
-{
-#ifdef HAVE_CUDALIBS
-    // creates cublas handle
-    cublasStatus_t statusHandleBlas = cublasCreate(&handleBlas);
-    checkCublasErrorCode(statusHandleBlas);
-    // creates cusolver handle
-    cusolverStatus_t statusHandleCusolver = cusolverDnCreate(&handleSolver);
-    checkCusolverErrorCode(statusHandleCusolver);
-    // gets jacobi parameters for batched syev
-    cusolverStatus_t statusJacobiParams = cusolverDnCreateSyevjInfo(&jacobiParameters);
-    checkCusolverErrorCode(statusJacobiParams);
-#endif
-}
-
-toast::LinearAlgebra::~LinearAlgebra()
-{
-#ifdef HAVE_CUDALIBS
-    // free cublas handle
-    cublasDestroy(handleBlas);
-    // free cusolver handle
-    cusolverDnDestroy(handleSolver);
-    // destroys jacobi parameters for batched syev
-    cusolverStatus_t statusJacobiParams = cusolverDnDestroySyevjInfo(jacobiParameters);
-    checkCusolverErrorCode(statusJacobiParams);
-#endif
-}
-
 #define wrapped_dgemm LAPACK_FUNC(dgemm, DGEMM)
 
 extern "C" void wrapped_dgemm(char * TRANSA, char * TRANSB, int * M, int * N, int * K,
@@ -58,7 +29,7 @@ extern "C" void wrapped_dgemm(char * TRANSA, char * TRANSB, int * M, int * N, in
 void toast::LinearAlgebra::gemm_cpu(char TRANSA, char TRANSB, int M, int N,
                                     int K, double ALPHA, double * A, int LDA,
                                     double * B, int LDB, double BETA, double * C,
-                                    int LDC) const {
+                                    int LDC) {
 /*#ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasOperation_t transA_gpu = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
@@ -93,7 +64,7 @@ void toast::LinearAlgebra::gemm_cpu(char TRANSA, char TRANSB, int M, int N,
 // matrices are expected to be in continuous memory in A_batched (one every N*LDA elements), B_batch and C_batch
 void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, int K,
                                         double ALPHA, double * A_batch, int LDA, double * B_batch, int LDB,
-                                        double BETA, double * C_batch, int LDC, const int batchCount) const {
+                                        double BETA, double * C_batch, int LDC, const int batchCount) {
     // size of the various matrices
     size_t A_size = LDA * ((TRANSA == 'N') ? K : M);
     size_t B_size = LDB * ((TRANSB == 'N') ? N : K);
@@ -123,7 +94,7 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
     double ** B_ptrs_gpu = GPU_memory_pool.toDevice(B_ptrs.data(), batchCount);
     double ** C_ptrs_gpu = GPU_memory_pool.toDevice(C_ptrs.data(), batchCount);
     // compute batched blas operation
-    cublasStatus_t errorCodeOp = cublasDgemmBatched(handleBlas, transA_gpu, transB_gpu, M, N, K, &ALPHA, A_ptrs_gpu, LDA, B_ptrs_gpu, LDB, &BETA, C_ptrs_gpu, LDC, batchCount);
+    cublasStatus_t errorCodeOp = cublasDgemmBatched(GPU_memory_pool.handleBlas, transA_gpu, transB_gpu, M, N, K, &ALPHA, A_ptrs_gpu, LDA, B_ptrs_gpu, LDB, &BETA, C_ptrs_gpu, LDC, batchCount);
     checkCublasErrorCode(errorCodeOp);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
@@ -175,12 +146,12 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     double* W_batch_gpu = GPU_memory_pool.alloc<double>(batchCount * N); // output, no need to send
     // computes workspace size
     int LWORK = 0;
-    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA, W_batch_gpu, &LWORK, jacobiParameters, batchCount);
+    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(GPU_memory_pool.handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA, W_batch_gpu, &LWORK, GPU_memory_pool.jacobiParameters, batchCount);
     checkCusolverErrorCode(statusBuffer);
     // allocates workspace
     double* WORK_gpu = GPU_memory_pool.alloc<double>(LWORK);
     // compute cusolver operation
-    cusolverStatus_t statusSolver = cusolverDnDsyevjBatched(handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA, W_batch_gpu, WORK_gpu, LWORK, INFO_gpu, jacobiParameters, batchCount);
+    cusolverStatus_t statusSolver = cusolverDnDsyevjBatched(GPU_memory_pool.handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA, W_batch_gpu, WORK_gpu, LWORK, INFO_gpu, GPU_memory_pool.jacobiParameters, batchCount);
     checkCusolverErrorCode(statusSolver);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
@@ -237,7 +208,7 @@ extern "C" void wrapped_dsymm(char * SIDE, char * UPLO, int * M, int * N,
 // NOTE: if needed one could implement a batched version of symm on top of batched gemm
 void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
                                 double ALPHA, double * A, int LDA, double * B,
-                                int LDB, double BETA, double * C, int LDC) const {
+                                int LDB, double BETA, double * C, int LDC) {
     #ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasSideMode_t side_gpu = (SIDE == 'L') ? CUBLAS_SIDE_LEFT : CUBLAS_SIDE_RIGHT;
@@ -248,7 +219,7 @@ void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
     double* C_gpu = (BETA == 0.) ? GPU_memory_pool.alloc<double>(LDC * N)
                                  : GPU_memory_pool.toDevice(C, LDC * N);
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDsymm(handleBlas, side_gpu, uplo_gpu, M, N, &ALPHA, A_gpu, LDA, B_gpu, LDB, &BETA, C_gpu, LDC);
+    cublasStatus_t errorCodeOp = cublasDsymm(GPU_memory_pool.handleBlas, side_gpu, uplo_gpu, M, N, &ALPHA, A_gpu, LDA, B_gpu, LDB, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
@@ -276,7 +247,7 @@ extern "C" void wrapped_dsyrk(char * UPLO, char * TRANS, int * N, int * K,
 
 void toast::LinearAlgebra::syrk_cpu(char UPLO, char TRANS, int N, int K,
                                 double ALPHA, double * A, int LDA, double BETA,
-                                double * C, int LDC) const {
+                                double * C, int LDC) {
     /*#ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
@@ -315,7 +286,7 @@ extern "C" void wrapped_dgelss(int * M, int * N, int * NRHS, double * A, int * L
 // NOTE: there is no GPU dgelss implementation at the moment (there are dgels implementations however)
 void toast::LinearAlgebra::gelss_cpu(int M, int N, int NRHS, double * A, int LDA,
                                      double * B, int LDB, double * S, double RCOND,
-                                     int RANK, double * WORK, int LWORK, int * INFO) const {
+                                     int RANK, double * WORK, int LWORK, int * INFO) {
     #ifdef HAVE_LAPACK
     wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, &RANK, WORK, &LWORK, INFO);
     #else // ifdef HAVE_LAPACK

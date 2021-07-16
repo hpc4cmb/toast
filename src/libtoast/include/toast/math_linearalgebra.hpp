@@ -9,46 +9,29 @@
 #include "gpu_helpers.hpp"
 
 namespace toast {
-    // encapsulates construction and destruction of GPU linear algebra handles
-    // WARNING: this class is *not* threadsafe and one should create one LinearAlgebra object per thread
-    class LinearAlgebra {
-    public:
-        // handles creation and destruction of gpu handles
-        LinearAlgebra();
-        ~LinearAlgebra();
-
-        // insures that the class is never copied
-        LinearAlgebra(LinearAlgebra const&) = delete;
-        void operator=(LinearAlgebra const&) = delete;
-
+    namespace LinearAlgebra {
         void gemm_cpu(char TRANSA, char TRANSB, int M, int N, int K,
                       double ALPHA, double * A, int LDA, double * B, int LDB,
-                      double BETA, double * C, int LDC) const;
+                      double BETA, double * C, int LDC);
 
         void gemm_batched(char TRANSA, char TRANSB, int M, int N, int K,
                           double ALPHA, double * A_batch, int LDA, double * B_batch, int LDB,
-                          double BETA, double * C_batch, int LDC, const int batchCount) const;
+                          double BETA, double * C_batch, int LDC, int batchCount);
 
         void syev_batched(char JOBZ, char UPLO, int N, double * A_batched,
-                          int LDA, double * W_batched, int * INFO, const int batchCount);
+                          int LDA, double * W_batched, int * INFO, int batchCount);
 
         void symm(char SIDE, char UPLO, int M, int N, double ALPHA,
                   double * A, int LDA, double * B, int LDB, double BETA,
-                  double * C, int LDC) const;
+                  double * C, int LDC);
 
         void syrk_cpu(char UPLO, char TRANS, int N, int K, double ALPHA,
-                      double * A, int LDA, double BETA, double * C, int LDC) const;
+                      double * A, int LDA, double BETA, double * C, int LDC);
 
         void gelss_cpu(int M, int N, int NRHS, double * A, int LDA,
-                    double * B, int LDB, double * S, double RCOND,
-                    int RANK, double * WORK, int LWORK, int * INFO) const;
-    private:
-    #ifdef HAVE_CUDALIBS
-        cublasHandle_t handleBlas = NULL;
-        cusolverDnHandle_t handleSolver = NULL;
-        syevjInfo_t jacobiParameters = NULL;
-    #endif
-    };
+                       double * B, int LDB, double * S, double RCOND,
+                       int RANK, double * WORK, int LWORK, int * INFO);
+    }
 }
 
 #endif // TOAST_MATH_LINEARALGEBRA_HPP

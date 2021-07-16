@@ -41,6 +41,11 @@ private:
     // memory blocks that have been allocated at some point
     std::vector<GPU_memory_block_t> blocks;
 public:
+    // reused handles for linear algebra (as they are very expensive to create)
+    cublasHandle_t handleBlas = NULL;
+    cusolverDnHandle_t handleSolver = NULL;
+    syevjInfo_t jacobiParameters = NULL;
+
     GPU_memory_pool_t(int nbGB);
     ~GPU_memory_pool_t();
     cudaError malloc(void** output_ptr, size_t size);

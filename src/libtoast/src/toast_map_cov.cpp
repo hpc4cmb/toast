@@ -273,7 +273,6 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         int64_t blockSize = (int64_t)(nnz * (nnz + 1) / 2);
 
         // solver parameters
-        toast::LinearAlgebra linearAlgebra;
         char jobz = (invert) ? 'V' : 'N';
         char uplo = 'L';
         char transN = 'N';
@@ -305,7 +304,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // and, potentially, eigenvectors (which are then stored in fdata)
         int info;
         toast::AlignedVector <double> evals_batch(batchNumber * nnz);
-        linearAlgebra.syev_batched(jobz, uplo, nnz, fdata_batch.data(), nnz, evals_batch.data(), &info, batchNumber);
+        toast::LinearAlgebra::syev_batched(jobz, uplo, nnz, fdata_batch.data(), nnz, evals_batch.data(), &info, batchNumber);
 
         // compute condition number as the ratio of the eigenvalues
         // and sets ftemp = fdata / evals
@@ -337,10 +336,10 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         {
             double fzero = 0.0;
             double fone = 1.0;
-            linearAlgebra.gemm_batched(transN, transT, nnz, nnz,
-                                       nnz, fone, ftemp_batch.data(),
-                                       nnz, fdata_batch.data(), nnz,
-                                       fzero, finv_batch.data(), nnz, batchNumber);
+            toast::LinearAlgebra::gemm_batched(transN, transT, nnz, nnz,
+                                               nnz, fone, ftemp_batch.data(),
+                                               nnz, fdata_batch.data(), nnz,
+                                               fzero, finv_batch.data(), nnz, batchNumber);
         }
 
         // data = finv
@@ -402,18 +401,12 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         #pragma omp parallel default(none) shared(nsub, subsize, nnz, data1, data2)
         {
             // thread-private variables
-            toast::LinearAlgebra linearAlgebra;
-
             int fnnz = (int)nnz;
-
             double fzero = 0.0;
             double fone = 1.0;
-
             char uplo = 'L';
             char side = 'L';
-
             int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-
             int64_t off;
 
             toast::AlignedVector <double> fdata1(nnz * nnz);
@@ -448,9 +441,9 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                     }
                 }
 
-                linearAlgebra.symm(side, uplo, fnnz, fnnz, fone,
-                                   fdata1.data(), fnnz, fdata2.data(), fnnz,
-                                   fzero, fdata3.data(), fnnz);
+                toast::LinearAlgebra::symm(side, uplo, fnnz, fnnz, fone,
+                                           fdata1.data(), fnnz, fdata2.data(), fnnz,
+                                           fzero, fdata3.data(), fnnz);
 
                 off = 0;
                 for (int64_t k = 0; k < nnz; ++k) {
