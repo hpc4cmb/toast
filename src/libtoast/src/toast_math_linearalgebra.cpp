@@ -55,11 +55,11 @@ extern "C" void wrapped_dgemm(char * TRANSA, char * TRANSB, int * M, int * N, in
                               double * ALPHA, double * A, int * LDA, double * B,
                               int * LDB, double * BETA, double * C, int * LDC);
 
-void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
-                                int K, double ALPHA, double * A, int LDA,
-                                double * B, int LDB, double BETA, double * C,
-                                int LDC) const {
-    #ifdef HAVE_CUDALIBS
+void toast::LinearAlgebra::gemm_cpu(char TRANSA, char TRANSB, int M, int N,
+                                    int K, double ALPHA, double * A, int LDA,
+                                    double * B, int LDB, double BETA, double * C,
+                                    int LDC) const {
+/*#ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasOperation_t transA_gpu = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB_gpu = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
@@ -78,7 +78,8 @@ void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
     GPU_memory_pool.free(A);
     GPU_memory_pool.free(B);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
-    #elif HAVE_LAPACK
+#elif HAVE_LAPACK*/
+#ifdef HAVE_LAPACK
     wrapped_dgemm(&TRANSA, &TRANSB, &M, &N, &K, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -86,7 +87,7 @@ void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
     std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
-    #endif // ifdef HAVE_LAPACK
+#endif // ifdef HAVE_LAPACK
 }
 
 // matrices are expected to be in continuous memory in A_batched (one every N*LDA elements), B_batch and C_batch
@@ -160,31 +161,10 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
 extern "C" void wrapped_dsyev(char * JOBZ, char * UPLO, int * N, double * A, int * LDA,
                               double * W, double * WORK, int * LWORK, int * INFO);
 
-// we assume that buffers will be threadlocal
-int toast::LinearAlgebra::syev_batched_buffersize(char JOBZ, char UPLO, int N,
-                                                  int LDA, const int batchCount) const {
-    // We assume a large value here, since the work space needed will still be small.
-    int NB = 256;
-    int LWORK = batchCount * (NB * 2 + N);
-
-#ifdef HAVE_CUDALIBS
-    // prepare inputs
-    cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
-    cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    // computes buffersize
-    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(handleSolver, jobz_gpu, uplo_gpu, N, /*A_batch=*/NULL, LDA, /*W_batch=*/NULL, &LWORK, jacobiParameters, batchCount);
-    checkCusolverErrorCode(statusBuffer);
-#endif
-
-    return LWORK;
-}
-
 // matrices are expected to be in continuous memory in A_batched (one every N*LDA elements)
 // LWORK, the size of WORK in number of elements, should have been computed with lapack_syev_buffersize
 void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_batch,
                                         int LDA, double * W_batch, int * INFO, const int batchCount) {
-    // size of the workspace needed by the function
-    int LWORK = this->syev_batched_buffersize(JOBZ, UPLO, N, LDA, batchCount);
 #ifdef HAVE_CUDALIBS
     // prepare inputs
     cusolverEigMode_t jobz_gpu = (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
@@ -193,6 +173,10 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     // send data to GPU
     double* A_batch_gpu = GPU_memory_pool.toDevice(A_batch, batchCount * N * LDA);
     double* W_batch_gpu = GPU_memory_pool.alloc<double>(batchCount * N); // output, no need to send
+    // computes workspace size
+    int LWORK = 0;
+    cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA, W_batch_gpu, &LWORK, jacobiParameters, batchCount);
+    checkCusolverErrorCode(statusBuffer);
     // allocates workspace
     double* WORK_gpu = GPU_memory_pool.alloc<double>(LWORK);
     // compute cusolver operation
@@ -212,21 +196,28 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
         GPU_memory_pool.free(A_batch_gpu);
     }
 #elif HAVE_LAPACK
-    // workspace
-    toast::AlignedVector <double> WORK_batch(LWORK);
-    int LWORK_per_batch = LWORK / batchCount;
-    // use naive opemMP paralellism
-    #pragma omp parallel for
-    for(unsigned int b=0; b<batchCount; b++)
+    // workspace size
+    // We assume a large value here, since the work space needed will still be small.
+    int NB = 256;
+    int LWORK = NB * 2 + N;
+    #pragma omp parallel
     {
-        // gets batch element
-        double * A = &A_batch[b * N * LDA];
-        double * W = &W_batch[b * N];
-        double * WORK = &WORK_batch[b * LWORK_per_batch];
-        // runs syev
-        int INFOb = 0;
-        wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK, &LWORK_per_batch, &INFOb);
-        if (INFOb != 0) *INFO = INFOb; // race condition is okay, in the end we just want to know if it is 0
+        // threadlocal
+        toast::AlignedVector <double> WORK(LWORK);
+        // use naive opemMP paralellism
+        #pragma omp for
+        for(unsigned int b=0; b<batchCount; b++)
+        {
+            // gets batch element
+            double * A = &A_batch[b * N * LDA];
+            double * W = &W_batch[b * N];
+            // runs syev
+            int INFOb = 0;
+            wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK.data(), &LWORK, &INFOb);
+            // checks output status
+            // race condition is okay, in the end we just want to know if it is 0
+            if (INFOb != 0) *INFO = INFOb;
+        }
     }
 #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -243,6 +234,7 @@ extern "C" void wrapped_dsymm(char * SIDE, char * UPLO, int * M, int * N,
                               double * ALPHA, double * A, int * LDA, double * B,
                               int * LDB, double * BETA, double * C, int * LDC);
 
+// NOTE: if needed one could implement a batched version of symm on top of batched gemm
 void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
                                 double ALPHA, double * A, int LDA, double * B,
                                 int LDB, double BETA, double * C, int LDC) const {
@@ -282,10 +274,10 @@ extern "C" void wrapped_dsyrk(char * UPLO, char * TRANS, int * N, int * K,
                               double * ALPHA, double * A, int * LDA, double * BETA,
                               double * C, int * LDC);
 
-void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
+void toast::LinearAlgebra::syrk_cpu(char UPLO, char TRANS, int N, int K,
                                 double ALPHA, double * A, int LDA, double BETA,
                                 double * C, int LDC) const {
-    #ifdef HAVE_CUDALIBS
+    /*#ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     cublasOperation_t trans_gpu = (TRANS == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
@@ -302,7 +294,8 @@ void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
     // frees input memory
     GPU_memory_pool.free(A);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
-    #elif HAVE_LAPACK
+    #elif HAVE_LAPACK*/
+    #ifdef HAVE_LAPACK
     wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -319,10 +312,10 @@ extern "C" void wrapped_dgelss(int * M, int * N, int * NRHS, double * A, int * L
                                double * B, int * LDB, double * S, double * RCOND,
                                int * RANK, double * WORK, int * LWORK, int * INFO);
 
-void toast::LinearAlgebra::gelss(int M, int N, int NRHS, double * A, int LDA,
-                                 double * B, int LDB, double * S, double RCOND,
-                                 int RANK, double * WORK, int LWORK, int * INFO) const {
-    // NOTE: there is no GPU dgelss implementation at the moment (there are dgels implementations however)
+// NOTE: there is no GPU dgelss implementation at the moment (there are dgels implementations however)
+void toast::LinearAlgebra::gelss_cpu(int M, int N, int NRHS, double * A, int LDA,
+                                     double * B, int LDB, double * S, double RCOND,
+                                     int RANK, double * WORK, int LWORK, int * INFO) const {
     #ifdef HAVE_LAPACK
     wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, &RANK, WORK, &LWORK, INFO);
     #else // ifdef HAVE_LAPACK
