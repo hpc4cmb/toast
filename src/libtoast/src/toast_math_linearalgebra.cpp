@@ -117,7 +117,7 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
         double * C = &C_batch[b * C_size];
         wrapped_dgemm(&TRANSA, &TRANSB, &M, &N, &K, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
     }
-    #else // ifdef HAVE_LAPACK
+#else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
     std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
@@ -244,11 +244,10 @@ extern "C" void wrapped_dsyrk(char * UPLO, char * TRANS, int * N, int * K,
                               double * ALPHA, double * A, int * LDA, double * BETA,
                               double * C, int * LDC);
 
-// NOTE: could be batched by calling a gemm
 void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
                                 double ALPHA, double * A, int LDA, double BETA,
                                 double * C, int LDC) {
-    #ifdef HAVE_CUDALIBS
+#ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     cublasOperation_t trans_gpu = (TRANS == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
@@ -265,15 +264,42 @@ void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
     // frees input memory
     GPU_memory_pool.free(A);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
-    #elif HAVE_LAPACK
+#elif HAVE_LAPACK
     wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
-    #else // ifdef HAVE_LAPACK
+#else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
     std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
-    #endif // ifdef HAVE_LAPACK
+#endif // ifdef HAVE_LAPACK
+}
+
+// the batch element are supposed continuous in memory
+void toast::LinearAlgebra::syrk_batched(char UPLO, char TRANS, int N, int K, double ALPHA,
+                                        double * A_batched, int LDA, double BETA, double * C_batched, int LDC,
+                                        int batchCount) {
+#ifdef HAVE_CUDALIBS
+    // the GPU version calls gemm as it can be batched on GPU and not a true syrk
+    char TRANSA = (TRANS == 'N') ? 'N' : 'T';
+    char TRANSB = (TRANS == 'N') ? 'T' : 'N';
+    toast::LinearAlgebra::gemm_batched(TRANSA, TRANSB, N, N, K, ALPHA, A_batched, LDA, A_batched, LDA, BETA, C_batched, LDC, batchCount);
+#elif HAVE_LAPACK
+    // use naive opemMP paralellism
+    #pragma omp parallel for
+    for(unsigned int b=0; b<batchCount; b++)
+    {
+        double * A = &A_batched[b * LDA * ((TRANS == 'T') ? N : K)];
+        double * C = &C_batched[b * LDC * N];
+        wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
+    }
+#else // ifdef HAVE_LAPACK
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+#endif // ifdef HAVE_LAPACK
 }
 
 #define wrapped_dgelss LAPACK_FUNC(dgelss, DGELSS)

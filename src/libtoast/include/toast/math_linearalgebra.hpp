@@ -28,6 +28,9 @@ namespace toast {
         void syrk(char UPLO, char TRANS, int N, int K, double ALPHA,
                   double * A, int LDA, double BETA, double * C, int LDC);
 
+        void syrk_batched(char UPLO, char TRANS, int N, int K, double ALPHA,
+                          double * A_batched, int LDA, double BETA, double * C_batched, int LDC, int batchCount);
+
         void gelss(int M, int N, int NRHS, double * A, int LDA,
                    double * B, int LDB, double * S, double RCOND,
                    int RANK, double * WORK, int LWORK, int * INFO);
