@@ -204,7 +204,6 @@ extern "C" void wrapped_dsymm(char * SIDE, char * UPLO, int * M, int * N,
                               double * ALPHA, double * A, int * LDA, double * B,
                               int * LDB, double * BETA, double * C, int * LDC);
 
-// NOTE: if needed one could implement a batched version of symm on top of batched gemm
 void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
                                 double ALPHA, double * A, int LDA, double * B,
                                 int LDB, double BETA, double * C, int LDC) {
@@ -236,6 +235,59 @@ void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
     #endif // ifdef HAVE_LAPACK
+}
+
+void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N, double ALPHA,
+                                        double * A_batch, int LDA, double * B_batch, int LDB, double BETA,
+                                        double * C_batch, int LDC, int batchCount) {
+#ifdef HAVE_CUDALIBS
+    int K = M;
+    char TRANSA = 'N';
+    char TRANSB = 'N';
+    // take side into account
+    if(SIDE == 'R') {
+        std::swap(A_batch, B_batch);
+        std::swap(LDA, LDB);
+        K = N;
+    }
+    // fills A to make it truly symmetrical
+    #pragma omp parallel for
+    for(unsigned int b=0; b<batchCount; b++)
+    {
+        double * A = &A_batch[b * LDA * K];
+        for(int r = 0; r < K; r++) {
+            for(int c = 0; c < r; c++) {
+                // TODO we assume colmajor
+                if(UPLO == 'U') {
+                    // fill lower part of A
+                    A[r + LDA*c] = A[c + LDA*r];
+                }
+                else {
+                    // fill upper part of A
+                    A[c + LDA*r] = A[r + LDA*c];
+                }
+            }
+        }
+    }
+    // the GPU version calls gemm as it can be batched on GPU and not a true syrk
+    toast::LinearAlgebra::gemm_batched(TRANSA, TRANSB, M, N, K, ALPHA, A_batch, LDA, B_batch, LDB, BETA, C_batch, LDC, batchCount);
+#elif HAVE_LAPACK
+    // use naive opemMP paralellism
+    #pragma omp parallel for
+    for(unsigned int b=0; b<batchCount; b++)
+    {
+        double * A = &A_batch[b * LDA * ((SIDE == 'L') ? M : N)];
+        double * B = &B_batch[b * LDB * N];
+        double * C = &C_batch[b * LDC * N];
+        wrapped_dsymm(&SIDE, &UPLO, &M, &N, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
+    }
+#else // ifdef HAVE_LAPACK
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+#endif // ifdef HAVE_LAPACK
 }
 
 #define wrapped_dsyrk LAPACK_FUNC(dsyrk, DSYRK)
