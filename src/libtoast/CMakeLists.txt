@@ -149,7 +149,7 @@ endif(LAPACK_FOUND)
 # https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html#module:FindCUDAToolkit
 if(CUDAToolkit_FOUND)
     message(WARNING "CUDA libs found.")
-    #target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
+    target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
     target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
     # there are also static versions of those libs
     target_link_libraries(toast CUDA::cudart CUDA::cublas CUDA::cusolver)
