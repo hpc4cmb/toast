@@ -128,6 +128,16 @@ GPU_memory_pool_t::GPU_memory_pool_t(int nbGB): blocks()
     // first block to mark the starting point
     GPU_memory_block_t initialBlock(start, 0);
     blocks.push_back(initialBlock);
+
+    // creates cublas handle
+    cublasStatus_t statusHandleBlas = cublasCreate(&handleBlas);
+    checkCublasErrorCode(statusHandleBlas);
+    // creates cusolver handle
+    cusolverStatus_t statusHandleCusolver = cusolverDnCreate(&handleSolver);
+    checkCusolverErrorCode(statusHandleCusolver);
+    // gets jacobi parameters for batched syev
+    cusolverStatus_t statusJacobiParams = cusolverDnCreateSyevjInfo(&jacobiParameters);
+    checkCusolverErrorCode(statusJacobiParams);
 }
 
 // destructor, insures that the pre-allocation is released
@@ -135,6 +145,14 @@ GPU_memory_pool_t::~GPU_memory_pool_t()
 {
     const cudaError errorCode = cudaFree(start);
     checkCudaErrorCode(errorCode, "GPU memory de-allocation");
+
+    // free cublas handle
+    cublasDestroy(handleBlas);
+    // free cusolver handle
+    cusolverDnDestroy(handleSolver);
+    // destroys jacobi parameters for batched syev
+    cusolverStatus_t statusJacobiParams = cusolverDnDestroySyevjInfo(jacobiParameters);
+    checkCusolverErrorCode(statusJacobiParams);
 }
 
 // allocates memory starting from the end of the latest block
