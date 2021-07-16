@@ -244,6 +244,7 @@ extern "C" void wrapped_dsyrk(char * UPLO, char * TRANS, int * N, int * K,
                               double * ALPHA, double * A, int * LDA, double * BETA,
                               double * C, int * LDC);
 
+// NOTE: could be batched by calling a gemm
 void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
                                 double ALPHA, double * A, int LDA, double BETA,
                                 double * C, int LDC) {
