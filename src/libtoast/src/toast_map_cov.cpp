@@ -399,8 +399,7 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // small matrices.  So instead we divide up the map data across threads
         // and each thread does some large number of small eigenvalue problems.
 
-        #pragma \
-        omp parallel default(none) shared(nsub, subsize, nnz, data1, data2)
+        #pragma omp parallel default(none) shared(nsub, subsize, nnz, data1, data2)
         {
             // thread-private variables
             toast::LinearAlgebra linearAlgebra;
