@@ -10,9 +10,9 @@
 
 namespace toast {
     namespace LinearAlgebra {
-        void gemm_cpu(char TRANSA, char TRANSB, int M, int N, int K,
-                      double ALPHA, double * A, int LDA, double * B, int LDB,
-                      double BETA, double * C, int LDC);
+        void gemm(char TRANSA, char TRANSB, int M, int N, int K,
+                  double ALPHA, double * A, int LDA, double * B, int LDB,
+                  double BETA, double * C, int LDC);
 
         void gemm_batched(char TRANSA, char TRANSB, int M, int N, int K,
                           double ALPHA, double * A_batch, int LDA, double * B_batch, int LDB,
@@ -25,12 +25,12 @@ namespace toast {
                   double * A, int LDA, double * B, int LDB, double BETA,
                   double * C, int LDC);
 
-        void syrk_cpu(char UPLO, char TRANS, int N, int K, double ALPHA,
-                      double * A, int LDA, double BETA, double * C, int LDC);
+        void syrk(char UPLO, char TRANS, int N, int K, double ALPHA,
+                  double * A, int LDA, double BETA, double * C, int LDC);
 
-        void gelss_cpu(int M, int N, int NRHS, double * A, int LDA,
-                       double * B, int LDB, double * S, double RCOND,
-                       int RANK, double * WORK, int LWORK, int * INFO);
+        void gelss(int M, int N, int NRHS, double * A, int LDA,
+                   double * B, int LDB, double * S, double RCOND,
+                   int RANK, double * WORK, int LWORK, int * INFO);
     }
 }
 

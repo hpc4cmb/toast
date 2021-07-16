@@ -26,11 +26,11 @@ extern "C" void wrapped_dgemm(char * TRANSA, char * TRANSB, int * M, int * N, in
                               double * ALPHA, double * A, int * LDA, double * B,
                               int * LDB, double * BETA, double * C, int * LDC);
 
-void toast::LinearAlgebra::gemm_cpu(char TRANSA, char TRANSB, int M, int N,
-                                    int K, double ALPHA, double * A, int LDA,
-                                    double * B, int LDB, double BETA, double * C,
-                                    int LDC) {
-/*#ifdef HAVE_CUDALIBS
+void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
+                                int K, double ALPHA, double * A, int LDA,
+                                double * B, int LDB, double BETA, double * C,
+                                int LDC) {
+#ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasOperation_t transA_gpu = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB_gpu = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
@@ -40,7 +40,7 @@ void toast::LinearAlgebra::gemm_cpu(char TRANSA, char TRANSB, int M, int N,
     double* C_gpu = (BETA == 0.) ? GPU_memory_pool.alloc<double>(LDC * N)
                                  : GPU_memory_pool.toDevice(C, LDC * N);
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDgemm(handleBlas, transA_gpu, transB_gpu, M, N, K, &ALPHA, A_gpu, LDA, B_gpu, LDB, &BETA, C_gpu, LDC);
+    cublasStatus_t errorCodeOp = cublasDgemm(GPU_memory_pool.handleBlas, transA_gpu, transB_gpu, M, N, K, &ALPHA, A_gpu, LDA, B_gpu, LDB, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
@@ -49,8 +49,7 @@ void toast::LinearAlgebra::gemm_cpu(char TRANSA, char TRANSB, int M, int N,
     GPU_memory_pool.free(A);
     GPU_memory_pool.free(B);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
-#elif HAVE_LAPACK*/
-#ifdef HAVE_LAPACK
+#elif HAVE_LAPACK
     wrapped_dgemm(&TRANSA, &TRANSB, &M, &N, &K, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -245,10 +244,10 @@ extern "C" void wrapped_dsyrk(char * UPLO, char * TRANS, int * N, int * K,
                               double * ALPHA, double * A, int * LDA, double * BETA,
                               double * C, int * LDC);
 
-void toast::LinearAlgebra::syrk_cpu(char UPLO, char TRANS, int N, int K,
+void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
                                 double ALPHA, double * A, int LDA, double BETA,
                                 double * C, int LDC) {
-    /*#ifdef HAVE_CUDALIBS
+    #ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     cublasOperation_t trans_gpu = (TRANS == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
@@ -257,7 +256,7 @@ void toast::LinearAlgebra::syrk_cpu(char UPLO, char TRANS, int N, int K,
     double* C_gpu = (BETA == 0.) ? GPU_memory_pool.alloc<double>(LDC * N)
                                  : GPU_memory_pool.toDevice(C, LDC * N);
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDsyrk(handleBlas, uplo_gpu, trans_gpu, N, K, &ALPHA, A_gpu, LDA, &BETA, C_gpu, LDC);
+    cublasStatus_t errorCodeOp = cublasDsyrk(GPU_memory_pool.handleBlas, uplo_gpu, trans_gpu, N, K, &ALPHA, A_gpu, LDA, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
@@ -265,8 +264,7 @@ void toast::LinearAlgebra::syrk_cpu(char UPLO, char TRANS, int N, int K,
     // frees input memory
     GPU_memory_pool.free(A);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
-    #elif HAVE_LAPACK*/
-    #ifdef HAVE_LAPACK
+    #elif HAVE_LAPACK
     wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
     #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
@@ -284,9 +282,9 @@ extern "C" void wrapped_dgelss(int * M, int * N, int * NRHS, double * A, int * L
                                int * RANK, double * WORK, int * LWORK, int * INFO);
 
 // NOTE: there is no GPU dgelss implementation at the moment (there are dgels implementations however)
-void toast::LinearAlgebra::gelss_cpu(int M, int N, int NRHS, double * A, int LDA,
-                                     double * B, int LDB, double * S, double RCOND,
-                                     int RANK, double * WORK, int LWORK, int * INFO) {
+void toast::LinearAlgebra::gelss(int M, int N, int NRHS, double * A, int LDA,
+                                 double * B, int LDB, double * S, double RCOND,
+                                 int RANK, double * WORK, int LWORK, int * INFO) {
     #ifdef HAVE_LAPACK
     wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, &RANK, WORK, &LWORK, INFO);
     #else // ifdef HAVE_LAPACK
