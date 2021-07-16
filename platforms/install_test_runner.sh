@@ -5,11 +5,6 @@
 
 set -e
 
-# Temporary workaround:  Install latest master version of pshmem
-# before running tests
-
-python3 -m pip install --upgrade https://github.com/tskisner/pshmem/tarball/more_tests
-
 # Get the absolute path to the source tree
 pushd $(dirname $(dirname $0)) >/dev/null 2>&1
 toastdir=$(pwd -P)
