@@ -363,7 +363,7 @@ class SimSatellite(Operator):
             ob = Observation(
                 self.telescope,
                 scan_samples[obindx],
-                name=scan.name,
+                name=f"{scan.name}_{int(scan.start.timestamp())}",
                 uid=name_UID(scan.name),
                 comm=comm.comm_group,
                 process_rows=det_ranks,

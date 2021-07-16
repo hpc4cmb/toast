@@ -25,6 +25,7 @@ from astropy import units as u
 import toast
 
 from toast.mpi import MPI
+from toast.ops import noise_model
 
 
 def main():
@@ -73,36 +74,25 @@ def main():
     # Create the (initially empty) data
     data = toast.Data(comm=toast_comm)
 
-    # Set up some operators that we are going to use later in both
-    # Simulation and Reduction.
-    #---------------------------------------------------------------
+    # Simulate data
+    # ---------------------------------------------------------------
+
+    # Simulate the telescope pointing
+    sim_satellite = toast.ops.SimSatellite(telescope=telescope, schedule=schedule)
+    sim_satellite.apply(data)
 
     # Construct a "perfect" noise model just from the focalplane parameters
     default_model = toast.ops.DefaultNoiseModel()
+    default_model.apply(data)
 
     # Set up detector pointing.  This just uses the focalplane offsets.
-    det_pointing = toast.ops.PointingDetectorSimple()
+    det_pointing = toast.ops.PointingDetectorSimple(boresight=sim_satellite.boresight)
 
     # Set up the pointing matrix.  We will use the same pointing matrix for the
     # template solve and the final binning.
     pointing = toast.ops.PointingHealpix(
-        nside=512, 
-        mode="IQU",
-        detector_pointing=det_pointing
+        nside=512, mode="IQU", detector_pointing=det_pointing
     )
-
-    # Simulate data
-    #---------------------------------------------------------------
-
-    # Simulate the telescope pointing
-    sim_satellite = toast.ops.SimSatellite(
-        telescope=telescope,
-        schedule=schedule
-    )
-    sim_satellite.apply(data)
-
-    # Create a default noise model from focalplane parameters
-    default_model.apply(data)
 
     # Simulate sky signal from a map and accumulate.
     # scan_map = toast.ops.ScanHealpix(
@@ -112,18 +102,15 @@ def main():
     # scan_map.apply(data)
 
     # Simulate detector noise and accumulate.
-    sim_noise = toast.ops.SimNoise()
+    sim_noise = toast.ops.SimNoise(noise_model=default_model.noise_model)
     sim_noise.apply(data)
 
     # Reduce data
-    #---------------------------------------------------------------
+    # ---------------------------------------------------------------
 
     # Set up the binning operator.  We will use the same binning for the template solve
     # and the final map.
-    binner = toast.ops.BinMap(
-        pointing=pointing,
-        noise_model=default_model.noise_model
-    )
+    binner = toast.ops.BinMap(pointing=pointing, noise_model=default_model.noise_model)
 
     # Set up the template matrix for the solve
     template_matrix = toast.ops.TemplateMatrix(

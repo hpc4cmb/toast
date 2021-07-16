@@ -28,6 +28,8 @@ from .sim_tod_noise import SimNoise
 
 from .sim_tod_dipole import SimDipole
 
+from .sim_tod_atm import SimAtmosphere
+
 from .noise_model import DefaultNoiseModel
 
 from .noise_weight import NoiseWeight

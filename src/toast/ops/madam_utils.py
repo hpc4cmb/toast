@@ -105,7 +105,9 @@ def stage_local(
                     1,
                 )
                 if nnz > 1:
-                    madam_buffer[slc] = views.detdata[detdata_name][ivw][ldet].flatten()[::nnz_stride]
+                    madam_buffer[slc] = views.detdata[detdata_name][ivw][
+                        ldet
+                    ].flatten()[::nnz_stride]
                 else:
                     madam_buffer[slc] = views.detdata[detdata_name][ivw][ldet].flatten()
                 detflags = None
@@ -211,7 +213,9 @@ def restore_local(
                     1,
                 )
                 if nnz > 1:
-                    views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc].reshape((-1, nnz))
+                    views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc].reshape(
+                        (-1, nnz)
+                    )
                 else:
                     # If this is the pointing pixel indices, AND if the original was
                     # in RING ordering, then make a temporary array to do the conversion

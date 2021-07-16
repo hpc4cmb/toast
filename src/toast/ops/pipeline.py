@@ -10,6 +10,8 @@ from ..utils import Logger
 
 from ..traits import trait_docs, Int, Unicode, List
 
+from ..data import Data
+
 from .operator import Operator
 
 
@@ -107,6 +109,7 @@ class Pipeline(Operator):
 
         # Select the observations we will use
         data_sets = [data]
+
         if self.observation_key is not None:
             data_sets = list()
             split_data = data.split(self.observation_key)

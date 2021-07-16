@@ -83,9 +83,7 @@ class MapMaker(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
-    )
+    det_data = Unicode("signal", help="Observation detdata key for the timestream data")
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
 
@@ -198,37 +196,17 @@ class MapMaker(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _log_info(self, comm, rank, msg, timer=None):
-        """Helper function to log an INFO level message from rank zero"""
-        log = Logger.get()
-        if comm is not None:
-            comm.barrier()
-        if timer is not None:
-            timer.stop()
-        if rank == 0:
-            if timer is None:
-                msg = "MapMaker {}".format(msg)
-            else:
-                msg = "MapMaker {} {:0.2f} s".format(msg, timer.seconds())
-            log.info(msg)
-        if timer is not None:
-            timer.clear()
-            timer.start()
-
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         timer = Timer()
+        log_prefix = "MapMaker"
 
         # The global communicator we are using (or None)
         comm = data.comm.comm_world
         rank = 0
         if comm is not None:
             rank = comm.rank
-
-        # Check that the detector data is set
-        if self.det_data is None:
-            raise RuntimeError("You must set the det_data trait before calling exec()")
 
         # Check map binning
         map_binning = self.map_binning
@@ -273,7 +251,7 @@ class MapMaker(Operator):
 
         timer.start()
 
-        if len(self.template_matrix.templates) > 0:
+        if self.template_matrix is not None and len(self.template_matrix.templates) > 0:
             # We are solving for template amplitudes
 
             self.binning.covariance = self.solver_cov_name
@@ -304,9 +282,13 @@ class MapMaker(Operator):
                             )
                             log.error(msg)
                             raise RuntimeError(msg)
-                self._log_info(comm, rank, "MC mode, reusing flags for solver")
+                log.info_rank(
+                    f"{log_prefix} MC mode, reusing flags for solver", comm=comm
+                )
             else:
-                self._log_info(comm, rank, "begin building flags for solver")
+                log.info_rank(
+                    f"{log_prefix} begin building flags for solver", comm=comm
+                )
 
                 # Use the same data view as the pointing operator in binning
                 solve_view = self.binning.pointing.view
@@ -380,7 +362,11 @@ class MapMaker(Operator):
                     # We have a mask.  Scan it.
                     scan_pipe.apply(data, detectors=detectors)
 
-                self._log_info(comm, rank, "  finished flag building in", timer=timer)
+                log.info_rank(
+                    f"{log_prefix}  finished flag building in",
+                    comm=comm,
+                    timer=timer,
+                )
 
             # Now construct the noise covariance, hits, and condition number mask for
             # the solver.
@@ -400,9 +386,15 @@ class MapMaker(Operator):
                     log.error(msg)
                     raise RuntimeError(msg)
 
-                self._log_info(comm, rank, "MC mode, reusing covariance for solver")
+                log.info_rank(
+                    f"{log_prefix} MC mode, reusing covariance for solver",
+                    comm=comm,
+                )
             else:
-                self._log_info(comm, rank, "begin build of solver covariance")
+                log.info_rank(
+                    f"{log_prefix} begin build of solver covariance",
+                    comm=comm,
+                )
 
                 solver_cov = CovarianceAndHits(
                     pixel_dist=self.binning.pixel_dist,
@@ -433,8 +425,10 @@ class MapMaker(Operator):
                 scanner.mask_key = self.solver_rcond_mask_name
                 scan_pipe.apply(data, detectors=detectors)
 
-                self._log_info(
-                    comm, rank, "  finished build of solver covariance in", timer=timer
+                log.info_rank(
+                    f"{log_prefix}  finished build of solver covariance in",
+                    comm=comm,
+                    timer=timer,
                 )
 
                 local_total = 0
@@ -462,11 +456,17 @@ class MapMaker(Operator):
                         msg = "Solver flags cut {} / {} = {:0.2f}% of samples".format(
                             cut, total, 100.0 * (cut / total)
                         )
-                self._log_info(comm, rank, msg)
+                log.info_rank(
+                    f"{log_prefix} {msg}",
+                    comm=comm,
+                )
 
             # Compute the RHS.  Overwrite inputs, either the original or the copy.
 
-            self._log_info(comm, rank, "begin RHS calculation")
+            log.info_rank(
+                f"{log_prefix} begin RHS calculation",
+                comm=comm,
+            )
 
             # Set our binning operator to use only our new solver flags
             self.binning.shared_flags = None
@@ -490,11 +490,18 @@ class MapMaker(Operator):
 
             rhs_calc.apply(data, detectors=detectors)
 
-            self._log_info(comm, rank, "  finished RHS calculation in", timer=timer)
+            log.info_rank(
+                f"{log_prefix}  finished RHS calculation in",
+                comm=comm,
+                timer=timer,
+            )
 
             # Set up the LHS operator.
 
-            self._log_info(comm, rank, "begin PCG solver")
+            log.info_rank(
+                f"{log_prefix} begin PCG solver",
+                comm=comm,
+            )
 
             lhs_calc = SolverLHS(
                 name="{}_lhs".format(self.name),
@@ -517,7 +524,11 @@ class MapMaker(Operator):
                 n_iter_max=self.iter_max,
             )
 
-            self._log_info(comm, rank, "  finished solver in", timer=timer)
+            log.info_rank(
+                f"{log_prefix}  finished solver in",
+                comm=comm,
+                timer=timer,
+            )
 
         # Restore flag names and masks to binning operator, in case it is being used
         # for the final map making or for other external operations.
@@ -546,9 +557,15 @@ class MapMaker(Operator):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
-            self._log_info(comm, rank, "MC mode, reusing covariance for final binning")
+            log.info_rank(
+                f"{log_prefix} MC mode, reusing covariance for final binning",
+                comm=comm,
+            )
         else:
-            self._log_info(comm, rank, "begin build of final binning covariance")
+            log.info_rank(
+                f"{log_prefix} begin build of final binning covariance",
+                comm=comm,
+            )
 
             final_cov = CovarianceAndHits(
                 pixel_dist=map_binning.pixel_dist,
@@ -568,19 +585,24 @@ class MapMaker(Operator):
 
             final_cov.apply(data, detectors=detectors)
 
-            self._log_info(
-                comm, rank, "  finished build of final covariance in", timer=timer
+            log.info_rank(
+                f"{log_prefix}  finished build of final covariance in",
+                comm=comm,
+                timer=timer,
             )
 
         # Project the solved template amplitudes into timestreams and subtract
         # from the original.  Then make a binned map of the result.
 
-        self._log_info(comm, rank, "begin final map binning")
+        log.info_rank(
+            f"{log_prefix} begin final map binning",
+            comm=comm,
+        )
 
         pre_pipe = None
         map_binning.binned = self.map_name
 
-        if len(self.template_matrix.templates) > 0:
+        if self.template_matrix is not None and len(self.template_matrix.templates) > 0:
             # We have some templates to subtract
             temp_project = "{}_temp_project".format(self.name)
 
@@ -645,7 +667,11 @@ class MapMaker(Operator):
         map_binning.apply(data, detectors=detectors)
         map_binning.pre_process = None
 
-        self._log_info(comm, rank, "  finished final binning in", timer=timer)
+        log.info_rank(
+            f"{log_prefix}  finished final binning in",
+            comm=comm,
+            timer=timer,
+        )
 
         # Write the outputs
         # FIXME:  This all assumes the pointing operator is an instance of the
@@ -657,7 +683,11 @@ class MapMaker(Operator):
                 file = os.path.join(self.output_dir, "{}.fits".format(dkey))
                 write_healpix_fits(data[dkey], file, nest=map_binning.pointing.nest)
 
-        self._log_info(comm, rank, "  finished output write in", timer=timer)
+        log.info_rank(
+            f"{log_prefix}  finished output write in",
+            comm=comm,
+            timer=timer,
+        )
 
         return
 
@@ -667,7 +697,8 @@ class MapMaker(Operator):
     def _requires(self):
         # This operator requires everything that its sub-operators needs.
         req = self.binning.requires()
-        req.update(self.template_matrix.requires())
+        if self.template_matrix is not None:
+            req.update(self.template_matrix.requires())
         if self.map_binning is not None:
             req.update(self.map_binning.requires())
         req["detdata"].append(self.det_data)

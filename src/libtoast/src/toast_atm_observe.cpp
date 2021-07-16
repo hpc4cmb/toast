@@ -481,7 +481,7 @@ int toast::atm_sim_observe(
                 // if ( fixed_r > 0 and r > fixed_r ) break;
             }
 
-            tod[i] = val * rstep * T0;
+            tod[i] += val * rstep * T0;
         }
     }
     return error;

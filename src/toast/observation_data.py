@@ -167,6 +167,8 @@ class DetectorData(object):
 
     @property
     def data(self):
+        if not hasattr(self, "_data"):
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         return self._data
 
     @property
@@ -288,6 +290,8 @@ class DetectorData(object):
             return view
 
     def __getitem__(self, key):
+        if not hasattr(self, "_data"):
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         view = self._get_view(key)
         return self._data[view]
 
@@ -296,6 +300,8 @@ class DetectorData(object):
         return
 
     def __setitem__(self, key, value):
+        if not hasattr(self, "_data"):
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         view = self._get_view(key)
         self._data[view] = value
 
@@ -310,6 +316,8 @@ class DetectorData(object):
             (DetectorData):  A new instance whose data is a view of the current object.
 
         """
+        if not hasattr(self, "_data"):
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         full_view = self._get_view(key)
         view_dets = self.detectors[full_view[0]]
         return DetectorData(
@@ -951,17 +959,23 @@ class IntervalMgr(MutableMapping):
         send_col_rank = 0
         send_row_rank = 0
         if self.comm is not None:
+            col_rank = 0
+            if self.comm_col is not None:
+                col_rank = self.comm_col.rank
             # Find the process grid ranks of the incoming data
             if self.comm.rank == fromrank:
-                send_col_rank = self.comm_col.rank
-                send_row_rank = self.comm_row.rank
+                if self.comm_col is not None:
+                    send_col_rank = self.comm_col.rank
+                if self.comm_row is not None:
+                    send_row_rank = self.comm_row.rank
             send_col_rank = self.comm.bcast(send_col_rank, root=0)
             send_row_rank = self.comm.bcast(send_row_rank, root=0)
             # Broadcast data along the row
-            if self.comm_col.rank == send_col_rank:
-                global_timespans = self.comm_row.bcast(
-                    global_timespans, root=send_row_rank
-                )
+            if col_rank == send_col_rank:
+                if self.comm_row is not None:
+                    global_timespans = self.comm_row.bcast(
+                        global_timespans, root=send_row_rank
+                    )
         # Every process column creates their local intervals
         self.create_col(name, global_timespans, local_times, fromrank=send_col_rank)
 

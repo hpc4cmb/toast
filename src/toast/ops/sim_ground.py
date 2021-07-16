@@ -503,13 +503,19 @@ class SimGround(Operator):
             )
 
             ob = Observation(
-                self.telescope,
+                telescope,
                 len(times),
-                name=scan.name,
+                name=f"{scan.name}_{int(scan.start.timestamp())}",
                 uid=name_UID(scan.name),
                 comm=comm.comm_group,
                 process_rows=det_ranks,
             )
+
+            # Scan limits
+            ob["scan_min_az"] = scan_min_az * u.radian
+            ob["scan_max_az"] = scan_max_az * u.radian
+            ob["scan_min_el"] = scan_min_el * u.radian
+            ob["scan_max_el"] = scan_max_el * u.radian
 
             # Create and set shared objects for timestamps, position, velocity, and
             # boresight.

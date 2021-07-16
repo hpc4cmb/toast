@@ -27,17 +27,18 @@ def get_mpi_settings(args, log, env):
     """
     # gets actual MPI information
     world_comm, procs, rank = toast.get_world()
-    log.info_rank0(f"TOAST version = {env.version()}", world_comm)
-    log.info_rank0(
-        f"Using a maximum of {env.max_threads()} threads per process", world_comm
+    log.info_rank(f"TOAST version = {env.version()}", comm=world_comm)
+    log.info_rank(
+        f"Using a maximum of {env.max_threads()} threads per process", comm=world_comm
     )
     if world_comm is None:
-        log.info_rank0(
-            f"Running serially with one process at {str(datetime.now())}", world_comm
+        log.info_rank(
+            f"Running serially with one process at {str(datetime.now())}",
+            comm=world_comm,
         )
     else:
-        log.info_rank0(
-            f"Running with {procs} processes at {str(datetime.now())}", world_comm
+        log.info_rank(
+            f"Running with {procs} processes at {str(datetime.now())}", comm=world_comm
         )
 
     # is this a dry run that does not use MPI
@@ -45,9 +46,9 @@ def get_mpi_settings(args, log, env):
         procs, procs_per_node = args.dry_run.split(",")
         procs = int(procs)
         procs_per_node = int(procs_per_node)
-        log.info_rank0(
+        log.info_rank(
             f"DRY RUN simulating {procs} total processes with {procs_per_node} per node",
-            world_comm,
+            comm=world_comm,
         )
         # We are simulating the distribution
         min_avail, max_avail = get_node_mem(world_comm, 0)
@@ -58,20 +59,20 @@ def get_mpi_settings(args, log, env):
         avail_node_bytes = max_avail
 
     # sets per node memory
-    log.info_rank0(
+    log.info_rank(
         f"Minimum detected per-node memory available is {avail_node_bytes / (1024 ** 3) :0.2f} GB",
-        world_comm,
+        comm=world_comm,
     )
     if args.node_mem_gb is not None:
         avail_node_bytes = int((1024 ** 3) * args.node_mem_gb)
-        log.info_rank0(
+        log.info_rank(
             f"Setting per-node available memory to {avail_node_bytes / (1024 ** 3) :0.2f} GB as requested",
-            world_comm,
+            comm=world_comm,
         )
 
     # computes the total number of nodes
     n_nodes = procs // procs_per_node
-    log.info_rank0(f"Job has {n_nodes} total nodes", world_comm)
+    log.info_rank(f"Job has {n_nodes} total nodes", comm=world_comm)
 
     return world_comm, procs, rank, n_nodes, avail_node_bytes
 
@@ -210,13 +211,13 @@ def select_case(
         )
         args.n_detector = n_detector
         args.num_obs = num_obs
-        log.info_rank0(
+        log.info_rank(
             f"Distribution using {args.total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{args.case}' workflow size)",
-            world_comm,
+            comm=world_comm,
         )
-        log.info_rank0(
+        log.info_rank(
             f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute.",
-            world_comm,
+            comm=world_comm,
         )
         if (memory_used_bytes >= available_memory_bytes) and (
             (world_comm is None) or (world_comm.rank == 0)
@@ -225,9 +226,9 @@ def select_case(
                 f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB)."
             )
     else:
-        log.info_rank0(
+        log.info_rank(
             f"Using automatic workflow size selection (case='auto') with {(per_process_overhead_bytes) / (1024 ** 3) :0.2f} GB reserved for per process overhead.",
-            world_comm,
+            comm=world_comm,
         )
         # finds the number of samples that gets us closest to the available memory
         total_samples = maximize_nb_samples(
@@ -249,13 +250,13 @@ def select_case(
         args.total_samples = total_samples
         args.n_detector = n_detector
         args.num_obs = num_obs
-        log.info_rank0(
+        log.info_rank(
             f"Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('auto' workflow size)",
-            world_comm,
+            comm=world_comm,
         )
-        log.info_rank0(
+        log.info_rank(
             f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB which should be below the available {available_memory_bytes / (1024 ** 3) :0.2f} GB).",
-            world_comm,
+            comm=world_comm,
         )
 
 
@@ -266,7 +267,7 @@ def make_focalplane(args, world_comm, log):
     # computes the number of pixels to be used
     ring = math.ceil(math.sqrt((args.n_detector - 2) / 6)) if args.n_detector > 2 else 0
     n_pixel = 1 + 3 * ring * (ring + 1)
-    log.info_rank0(f"Using {n_pixel} hexagon-packed pixels.", world_comm)
+    log.info_rank(f"Using {n_pixel} hexagon-packed pixels.", comm=world_comm)
     # creates the focalplane
     focalplane = None
     if (world_comm is None) or (world_comm.rank == 0):
@@ -342,10 +343,10 @@ def scan_map(args, rank, ops, data, log):
 
     # adds the scan map operator
     scan_map = toast.ops.ScanHealpix(
-        pixel_dist=ops.binner_final.pixel_dist, 
+        pixel_dist=ops.binner_final.pixel_dist,
         pointing=ops.pointing_final,
         save_pointing=ops.binner_final.full_pointing,
-        file=args.input_map
+        file=args.input_map,
     )
     scan_map.apply(data)
 

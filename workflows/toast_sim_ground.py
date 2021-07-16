@@ -145,33 +145,49 @@ def job_create(config, jobargs, telescope, schedule, comm):
 
 
 def simulate_data(job, toast_comm, telescope, schedule):
+    log = toast.utils.Logger.get()
     ops = job.operators
     tmpls = job.templates
+    world_comm = toast_comm.comm_world
 
     # Create the (initially empty) data
 
     data = toast.Data(comm=toast_comm)
 
+    # Timer for reporting the progress
+    timer = toast.timing.Timer()
+    timer.start()
+
     # Simulate the telescope pointing
 
     ops.sim_ground.telescope = telescope
     ops.sim_ground.schedule = schedule
+    ops.sim_ground.weather = telescope.site.name
     ops.sim_ground.apply(data)
+    log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
     # Construct a "perfect" noise model just from the focalplane parameters
 
     ops.default_model.apply(data)
+    log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
+
+    # Set up detector pointing in both Az/El and RA/DEC
+
+    ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
+    ops.det_pointing_radec.boresight = ops.sim_ground.boresight_radec
 
     # Create the Elevation modulated noise model
 
-    ops.elevation_model.detector_pointing = ops.det_pointing
-    ops.elevation_model.view = ops.det_pointing.view
+    ops.elevation_model.noise_model = ops.default_model.noise_model
+    ops.elevation_model.detector_pointing = ops.det_pointing_azel
+    ops.elevation_model.view = ops.det_pointing_azel.view
     ops.elevation_model.apply(data)
+    log.info_rank("Created elevation noise model in", comm=world_comm, timer=timer)
 
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
-    ops.pointing.detector_pointing = ops.det_pointing
-    ops.pointing_final.detector_pointing = ops.det_pointing
+    ops.pointing.detector_pointing = ops.det_pointing_radec
+    ops.pointing_final.detector_pointing = ops.det_pointing_radec
 
     ops.binner.pointing = ops.pointing
 
@@ -179,7 +195,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # use the same one as the solve.
     if not ops.pointing_final.enabled:
         ops.pointing_final = ops.pointing
-    
+
     ops.binner_final.pointing = ops.pointing_final
 
     # If we are not using a different binner for our final binning, use the same one
@@ -194,23 +210,39 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.scan_map.pointing = ops.pointing_final
     ops.scan_map.save_pointing = use_full_pointing(job)
     ops.scan_map.apply(data)
+    log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
     # Simulate detector noise
 
+    ops.sim_noise.noise_model = ops.elevation_model.out_model
     ops.sim_noise.apply(data)
+    log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
+
+    # Simulate atmosphere
+
+    ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
+    ops.sim_atmosphere.apply(data)
+    log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
     return data
 
 
 def reduce_data(job, args, data):
+    log = toast.utils.Logger.get()
     ops = job.operators
     tmpls = job.templates
+
+    world_comm = data.comm.comm_world
+
+    # Timer for reporting the progress
+    timer = toast.timing.Timer()
+    timer.start()
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
 
-    ops.binner.noise_model = ops.default_model.noise_model
-    ops.binner_final.noise_model = ops.default_model.noise_model
+    ops.binner.noise_model = ops.elevation_model.out_model
+    ops.binner_final.noise_model = ops.elevation_model.out_model
 
     ops.mapmaker.binning = ops.binner
     ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
@@ -219,10 +251,12 @@ def reduce_data(job, args, data):
     ops.mapmaker.output_dir = args.out_dir
 
     ops.mapmaker.apply(data)
+    log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # Optionally run Madam
     if toast.ops.madam.available():
         ops.madam.apply(data)
+        log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
 
 
 def main():
@@ -247,15 +281,18 @@ def main():
 
     operators = [
         toast.ops.SimGround(name="sim_ground"),
-        toast.ops.DefaultNoiseModel(name="default_model", noise_model="default_model"),
+        toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(
             name="elevation_model",
-            noise_model="default_model",
-            out_model="el_weighted_model",
+            out_model="el_noise_model",
+        ),
+        toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
+        toast.ops.PointingDetectorSimple(
+            name="det_pointing_radec", quats="quats_radec"
         ),
         toast.ops.ScanHealpix(name="scan_map"),
-        toast.ops.SimNoise(name="sim_noise", noise_model="el_weighted_model"),
-        toast.ops.PointingDetectorSimple(name="det_pointing"),
+        toast.ops.SimNoise(name="sim_noise"),
+        toast.ops.SimAtmosphere(name="sim_atmosphere"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
@@ -289,7 +326,7 @@ def main():
 
     # Reduce the data
     reduce_data(job, args, data)
-    
+
     # Collect optional timing information
     alltimers = toast.timing.gather_timers(comm=toast_comm.comm_world)
     if toast_comm.world_rank == 0:

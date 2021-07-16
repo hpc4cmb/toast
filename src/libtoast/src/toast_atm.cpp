@@ -184,7 +184,6 @@ bool toast::atm_sim_in_cone(
         }
 
         // Passed all the checks
-
         return true;
     }
 
@@ -220,17 +219,17 @@ void toast::atm_sim_compress_flag_hits_rank(
     double sinel0
     ) {
     double t_fake = -1.0;
-    for (int64_t ix = 0; ix < nx - 1; ++ix) {
+    for (int64_t ix = 0; ix < nx; ++ix) {
         if (ix % ntask != rank) {
             continue;
         }
         double x = xstart + ix * xstep;
 
         # pragma omp parallel for schedule(static, 10)
-        for (int64_t iy = 0; iy < ny - 1; ++iy) {
+        for (int64_t iy = 0; iy < ny; ++iy) {
             double y = ystart + iy * ystep;
 
-            for (int64_t iz = 0; iz < nz - 1; ++iz) {
+            for (int64_t iz = 0; iz < nz; ++iz) {
                 double z = zstart + iz * zstep;
                 if (toast::atm_sim_in_cone(
                         x, y, z, t_fake, delta_t, delta_az, elmin, elmax, wx, wy, wz,
@@ -261,8 +260,8 @@ void toast::atm_sim_compress_flag_extend_rank(
         }
 
         # pragma omp parallel for schedule(static, 10)
-        for (int64_t iy = 1; iy < ny - 1; ++iy) {
-            for (int64_t iz = 1; iz < nz - 1; ++iz) {
+        for (int64_t iy = 1; iy < ny; ++iy) {
+            for (int64_t iz = 1; iz < nz; ++iz) {
                 int64_t offset = ix * xstride + iy * ystride + iz * zstride;
 
                 if (hit2[offset]) {

@@ -13,6 +13,8 @@ install(FILES
     sim_hwp.py
     sim_tod_noise.py
     sim_tod_dipole.py
+    sim_tod_atm.py
+    sim_tod_atm_utils.py
     sim_satellite.py
     sim_ground.py
     sim_ground_utils.py

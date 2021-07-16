@@ -1,21 +1,23 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
 import numpy as np
 
+from astropy import units as u
+
 import h5py
 
-from ..utils import Environment, Logger
+from .utils import Environment, Logger
 
-from ..timing import Timer, function_timer, GlobalTimers
+from .timing import Timer, function_timer, GlobalTimers
 
-from ..rng import random as toast_rng
+from .rng import random as toast_rng
 
-from ..mpi import MPI, MPIShared
+from .mpi import MPI, MPIShared
 
-from .._libtoast import (
+from ._libtoast import (
     atm_sim_compute_slice,
     atm_sim_observe,
     atm_sim_compress_flag_hits_rank,
@@ -27,7 +29,7 @@ available_utils = None
 if available_utils is None:
     available_utils = True
     try:
-        from .._libtoast import (
+        from ._libtoast import (
             atm_absorption_coefficient,
             atm_absorption_coefficient_vec,
             atm_atmospheric_loading,
@@ -45,35 +47,34 @@ class AtmSim(object):
     individual detectors.
 
     Args:
-        azmin (float):  The minimum of the azimuth range in radians.
-        azmax (float):  The maximum of the azimuth range in radians.
-        elmin (float):  The minimum of the elevation range in radians.
-        elmax (float):  The maximum of the elevation range in radians.
+        azmin (Quantity):  The minimum of the azimuth range.
+        azmax (Quantity):  The maximum of the azimuth range.
+        elmin (Quantity):  The minimum of the elevation range.
+        elmax (Quantity):  The maximum of the elevation range.
         tmin (float):  The minimum of the time range.
         tmax (float):  The maximum of the time range.
-        lmin_center (float):  Center point of the distribution of the dissipation
+        lmin_center (Quantity):  Center point of the distribution of the dissipation
             scale of the Kolmogorov turbulence.
-        lmin_sigma (float):  Width of the distribution of the dissipation
+        lmin_sigma (Quantity):  Width of the distribution of the dissipation
             scale of the Kolmogorov turbulence.
-        lmax_center (float):  Center point of the distribution of the injection
+        lmax_center (Quantity):  Center point of the distribution of the injection
             scale of the Kolmogorov turbulence.
-        lmax_sigma (float):  Width of the distribution of the injection
+        lmax_sigma (Quantity):  Width of the distribution of the injection
             scale of the Kolmogorov turbulence.
-        w_center (float):  Center point of the distribution of wind speed (m/s).
-        w_sigma (float):  Width of the distribution of wind speed.
-        wdir_center (float):  Center point of the distribution of wind direction
-            (radians).
-        wdir_sigma (float):  Width of the distribution of wind direction.
-        z0_center (float):  Center point of the distribution of the water vapor (m).
-        z0_sigma (float):  Width of the distribution of the water vapor.
-        T0_center (float):  Center point of the distribution of ground temperature
+        w_center (Quantity):  Center point of the distribution of wind speed (m/s).
+        w_sigma (Quantity):  Width of the distribution of wind speed.
+        wdir_center (Quantity):  Center point of the distribution of wind direction.
+        wdir_sigma (Quantity):  Width of the distribution of wind direction.
+        z0_center (Quantity):  Center point of the distribution of the water vapor (m).
+        z0_sigma (Quantity):  Width of the distribution of the water vapor.
+        T0_center (Quantity):  Center point of the distribution of ground temperature
             (Kelvin).
-        T0_sigma (float):  Width of the distribution of ground temperature.
-        zatm (float):  Atmosphere extent for temperature profile.
-        zmax (float):  Water vaport extent for integration.
-        xstep (float):  Size of volume element in the X direction.
-        ystep (float):  Size of volume element in the Y direction.
-        zstep (float):  Size of volume element in the Z direction.
+        T0_sigma (Quantity):  Width of the distribution of ground temperature.
+        zatm (Quantity):  Atmosphere extent for temperature profile.
+        zmax (Quantity):  Water vaport extent for integration.
+        xstep (Quantity):  Size of volume element in the X direction.
+        ystep (Quantity):  Size of volume element in the Y direction.
+        zstep (Quantity):  Size of volume element in the Z direction.
         nelem_sim_max (int):  Size of the simulation slices.
         comm (mpi4py.MPI.Comm):  The MPI communicator or None.
         key1 (uint64):  Streamed RNG key 1.
@@ -81,8 +82,8 @@ class AtmSim(object):
         counterval1 (uint64):  Streamed RNG counter 1.
         counterval2 (uint64):  Streamed RNG counter 2.
         cachedir (str):  The location of the cached simulation.
-        rmin (float):  Minimum line of sight observing distance.
-        rmax (float):  Maximum line of sight observing distance.
+        rmin (Quantity):  Minimum line of sight observing distance.
+        rmax (Quantity):  Maximum line of sight observing distance.
         write_debug (bool): If true, write out intermediate text files for debugging.
 
     """
@@ -123,29 +124,29 @@ class AtmSim(object):
         rmax,
         write_debug=False,
     ):
-        self._azmin = azmin
-        self._azmax = azmax
-        self._elmin = elmin
-        self._elmax = elmax
+        self._azmin = azmin.to_value(u.radian)
+        self._azmax = azmax.to_value(u.radian)
+        self._elmin = elmin.to_value(u.radian)
+        self._elmax = elmax.to_value(u.radian)
         self._tmin = tmin
         self._tmax = tmax
-        self._lmin_center = lmin_center
-        self._lmin_sigma = lmin_sigma
-        self._lmax_center = lmax_center
-        self._lmax_sigma = lmax_sigma
-        self._w_center = w_center
-        self._w_sigma = w_sigma
-        self._wdir_center = wdir_center
-        self._wdir_sigma = wdir_sigma
-        self._z0_center = z0_center
-        self._z0_sigma = z0_sigma
-        self._T0_center = T0_center
-        self._T0_sigma = T0_sigma
-        self._zatm = zatm
-        self._zmax = zmax
-        self._xstep = xstep
-        self._ystep = ystep
-        self._zstep = zstep
+        self._lmin_center = lmin_center.to_value(u.meter)
+        self._lmin_sigma = lmin_sigma.to_value(u.meter)
+        self._lmax_center = lmax_center.to_value(u.meter)
+        self._lmax_sigma = lmax_sigma.to_value(u.meter)
+        self._w_center = w_center.to_value(u.meter / u.second)
+        self._w_sigma = w_sigma.to_value(u.meter / u.second)
+        self._wdir_center = wdir_center.to_value(u.radian)
+        self._wdir_sigma = wdir_sigma.to_value(u.radian)
+        self._z0_center = z0_center.to_value(u.meter)
+        self._z0_sigma = z0_sigma.to_value(u.meter)
+        self._T0_center = T0_center.to_value(u.Kelvin)
+        self._T0_sigma = T0_sigma.to_value(u.Kelvin)
+        self._zatm = zatm.to_value(u.meter)
+        self._zmax = zmax.to_value(u.meter)
+        self._xstep = xstep.to_value(u.meter)
+        self._ystep = ystep.to_value(u.meter)
+        self._zstep = zstep.to_value(u.meter)
         self._nelem_sim_max = nelem_sim_max
         self._comm = comm
         self._key1 = key1
@@ -153,8 +154,8 @@ class AtmSim(object):
         self._counter1start = counterval1
         self._counter2start = counterval2
         self._cachedir = cachedir
-        self._rmin = rmin
-        self._rmax = rmax
+        self._rmin = rmin.to_value(u.meter)
+        self._rmax = rmax.to_value(u.meter)
         self._write_debug = write_debug
 
         self._counter1 = self._counter1start
@@ -173,29 +174,22 @@ class AtmSim(object):
 
         log = Logger.get()
 
-        if self._rank == 0:
-            log.debug(
-                "AtmSim constructed with {} processes, {} threads per process".format(
-                    self._ntask, self._nthread
-                )
-            )
-
-        if azmin >= azmax:
+        if self._azmin >= self._azmax:
             raise RuntimeError("AtmSim: azmin >= azmax")
 
-        if elmin < 0:
+        if self._elmin < 0:
             raise RuntimeError("AtmSim: elmin < 0")
 
-        if elmax > 0.5 * np.pi:
+        if self._elmax > 0.5 * np.pi:
             raise RuntimeError("AtmSim: elmax > pi/2")
 
-        if elmin > elmax:
+        if self._elmin > self._elmax:
             raise RuntimeError("AtmSim: elmin >= elmax")
 
-        if tmin >= tmax:
+        if self._tmin >= self._tmax:
             raise RuntimeError("AtmSim: tmin >= tmax")
 
-        if lmin_center > lmax_center:
+        if self._lmin_center > self._lmax_center:
             raise RuntimeError("AtmSim: lmin_center >= lmax_center")
 
         self._delta_az = self._azmax - self._azmin
@@ -212,55 +206,32 @@ class AtmSim(object):
         self._zzstep = self._xstep * self._sinel0 + self._zstep * self._cosel0
 
         if self._rank == 0:
-            msg = "\nInput parameters:\n"
-            msg += "             az = [{} - {}] ({} degrees)\n".format(
-                np.degrees(self._azmin),
-                np.degrees(self._azmax),
-                np.degrees(self._delta_az),
-            )
-            msg += "             el = [{} - {}] ({} degrees)\n".format(
-                np.degrees(self._elmin),
-                np.degrees(self._elmax),
-                np.degrees(self._delta_el),
-            )
-            msg += "              t = [{} - {}] ({} s)\n".format(
-                self._tmin, self._tmax, self._delta_t
-            )
-            msg += "           lmin = {} +- {} m\n".format(
-                self._lmin_center, self._lmin_sigma
-            )
-            msg += "           lmax = {} +- {} m\n".format(
-                self._lmax_center, self._lmax_sigma
-            )
-            msg += "              w = {} +- {} m/s\n".format(
-                self._w_center, self._w_sigma
-            )
-            msg += "           wdir = {} +- {} degrees\n".format(
-                np.degrees(self._wdir_center), np.degrees(self._wdir_sigma)
-            )
-            msg += "             z0 = {} +- {} m\n".format(
-                self._z0_center, self._z0_sigma
-            )
-            msg += "             T0 = {} +- {} K\n".format(
-                self._T0_center, self._T0_sigma
-            )
-            msg += "           zatm = {} m\n".format(self._zatm)
-            msg += "           zmax = {} m\n".format(self._zmax)
-            msg += "       scan frame:\n"
-            msg += "          xstep = {} m\n".format(self._xstep)
-            msg += "          ystep = {} m\n".format(self._ystep)
-            msg += "          zstep = {} m\n".format(self._zstep)
-            msg += "  nelem_sim_max = {}\n".format(self._nelem_sim_max)
-            msg += "        corrlim = {}\n".format(self._corrlim)
-            msg += "           rmin = {} m\n".format(self._rmin)
-            msg += "           rmax = {} m\n".format(self._rmax)
+            msg = f"AtmSim constructed with {self._ntask} processes, {self._nthread} threads per process"
             log.debug(msg)
+        msg = f"AtmSim proc {self._rank} constructor:\n{self.get_repr()}"
+        log.verbose(msg)
 
         self._compressed_index = None
         self._full_index = None
         self._realization = None
         self._cached = False
         self._nelem = None
+
+    @property
+    def azmin(self):
+        return self._azmin
+
+    @property
+    def azmax(self):
+        return self._azmax
+
+    @property
+    def elmin(self):
+        return self._elmin
+
+    @property
+    def elmax(self):
+        return self._elmax
 
     @function_timer
     def simulate(self, use_cache=False, smooth=False):
@@ -747,7 +718,7 @@ class AtmSim(object):
 
         # Grid points
 
-        # TK: the original code had an implicity conversion from double to long,
+        # TK: the original code had an implicit conversion from double to long,
         # which is replicated here.  Is this the desired behavior?
         self._nx = int(self._delta_x / self._xstep) + 1
         self._ny = int(self._delta_y / self._ystep) + 1
@@ -1152,6 +1123,28 @@ class AtmSim(object):
             log.debug("Initialized Kolmogorov in {} s".format(timer.seconds()))
         return
 
+    def get_repr(self):
+        """Return string representation of local properties."""
+        ret = ""
+        ret += f"  Az (deg) min = {np.degrees(self._azmin)}, max = {np.degrees(self._azmax)}, delta = {np.degrees(self._delta_az)}\n"
+        ret += f"  El (deg) min = {np.degrees(self._elmin)}, max = {np.degrees(self._elmax)}, delta = {np.degrees(self._delta_el)}\n"
+        ret += f"  Time (sec) min = {np.degrees(self._tmin)}, max = {np.degrees(self._tmax)}, delta = {np.degrees(self._delta_t)}\n"
+        ret += f"  lmin (m) = {self._lmin_center} +/- {self._lmin_sigma}\n"
+        ret += f"  lmax (m) = {self._lmax_center} +/- {self._lmax_sigma}\n"
+        ret += f"  wind (m/s) = {self._w_center} +/- {self._w_sigma}\n"
+        ret += f"  wind dir (deg) = {np.degrees(self._wdir_center)} +/- {np.degrees(self._wdir_sigma)}\n"
+        ret += f"  z0 (m) = {self._z0_center} +/- {self._z0_sigma}\n"
+        ret += f"  T0 (K) = {self._T0_center} +/- {self._T0_sigma}\n"
+        ret += f"  RNG keys = {self._key1} / {self._key2}\n"
+        ret += f"  RNG counters = {self._counter1} / {self._counter2}\n"
+        ret += f"  RNG counter start = {self._counter1start} / {self._counter2start}\n"
+        ret += f"  nelem_sim_max = {self._nelem_sim_max}\n"
+        ret += f"  corrlim = {self._corrlim}\n"
+        ret += f"  zatm / zmax (m) = {self._zatm} / {self._zmax}\n"
+        ret += f"  Step X/Y/Z (m) = {self._xstep} / {self._ystep} / {self._zstep}\n"
+        ret += f"  rmin / rmax (m) = {self._rmin} / {self._rmax}\n"
+        return ret
+
     def __repr__(self):
         ret = "<AtmSim rank = {}".format(self._rank)
         if self._rank == 0:
@@ -1159,27 +1152,6 @@ class AtmSim(object):
             ret += "  {} processes\n".format(self._ntask)
             ret += "  {} threads per process\n".format(self._nthread)
             ret += "  cachedir = {}\n".format(self._cachedir)
-            ret += "  key1 = {}\n".format(self._key1)
-            ret += "  key2 = {}\n".format(self._key2)
-            ret += "  counter1 = {}\n".format(self._counter1)
-            ret += "  counter2 = {}\n".format(self._counter2)
-            ret += "  counter1start = {}\n".format(self._counter1start)
-            ret += "  counter2start = {}\n".format(self._counter2start)
-            ret += "  azmin = {}\n".format(self._azmin)
-            ret += "  azmax = {}\n".format(self._azmax)
-            ret += "  elmin = {}\n".format(self._elmin)
-            ret += "  elmax = {}\n".format(self._elmax)
-            ret += "  tmin = {}\n".format(self._tmin)
-            ret += "  tmax = {}\n".format(self._tmax)
-            ret += "  lmin_center = {}\n".format(self._lmin_center)
-            ret += "  lmax_center = {}\n".format(self._lmax_center)
-            ret += "  w_center = {}\n".format(self._w_center)
-            ret += "  w_sigma = {}\n".format(self._w_sigma)
-            ret += "  wdir_center = {}\n".format(self._wdir_center)
-            ret += "  wdir_sigma = {}\n".format(self._wdir_sigma)
-            ret += "  z0_center = {}\n".format(self._z0_center)
-            ret += "  z0_sigma = {}\n".format(self._z0_sigma)
-            ret += "  T0_center = {}\n".format(self._T0_center)
-            ret += "  T0_sigma = {}\n".format(self._T0_sigma)
+            ret += self.get_repr()
         ret += ">"
         return ret

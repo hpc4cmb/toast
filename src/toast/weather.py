@@ -12,6 +12,8 @@ from pkg_resources import resource_filename
 
 import numpy as np
 
+from astropy import units as u
+
 import h5py
 
 from . import rng as rng
@@ -184,8 +186,11 @@ class SimWeather(Weather):
     The files contain parameter distributions for every UTC hour of the day, averaged
     over months.
 
-    Supported name values are currently "atacama" and "south_pole".  Alternatively a
-    file path may be provided.
+    Supported name values (using a bundled file) are currently:
+        - "atacama"
+        - "south_pole"
+
+    Alternatively a file path may be provided.
 
     Args:
         time (datetime):  A python date/time in UTC.
@@ -227,10 +232,10 @@ class SimWeather(Weather):
         self._sim_pwv = self._draw("TQV")
         self._sim_humidity = self._draw("QV10M")
         self._sim_surface_pressure = self._draw("PS")
-        self._sim_surface_temperature = self._draw("TS")
-        self._sim_air_temperature = self._draw("T10M")
-        self._sim_west_wind = self._draw("U10M")
-        self._sim_south_wind = self._draw("V10M")
+        self._sim_surface_temperature = self._draw("TS") * u.Kelvin
+        self._sim_air_temperature = self._draw("T10M") * u.Kelvin
+        self._sim_west_wind = self._draw("U10M") * (u.meter / u.second)
+        self._sim_south_wind = self._draw("V10M") * (u.meter / u.second)
         super().__init__()
 
     def _draw(self, name):

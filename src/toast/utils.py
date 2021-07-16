@@ -45,16 +45,68 @@ from .mpi import MPI, use_mpi
 from ._libtoast import Logger
 
 
-def _info_rank0(self, message, comm):
-    """
-    Behaves like `info` exept that it will only activate if rank==0 or comm is None.
-    """
-    if (comm is None) or (comm.rank == 0):
-        self.info(message)
+def _create_log_rank(level):
+    def log_rank(self, msg, comm=None, rank=0, timer=None):
+        """Log a message on one process with optional timing.
+
+        A common use case when logging from high-level code is to print a message on
+        only a single process, and also to include some timing information.
+
+        If a timer is specified, then it must be specified on all processes.  In this
+        case the method is collective, and a barrier() is used to ensure accurate
+        timing results.
+
+        Args:
+            msg (str):  The log message (only used on specified rank).
+            comm (MPI.Comm):  The communicator, or None.
+            rank (int):  The rank of the process that should do the logging.
+            timer (Timer):  The optional timer.
+
+        """
+        log = Logger.get()
+        my_rank = 0
+        if comm is not None:
+            my_rank = comm.rank
+
+        if comm is not None and timer is not None:
+            comm.barrier()
+
+        if timer is not None:
+            timer.stop()
+
+        if my_rank == rank:
+            if timer is not None:
+                msg = f"{msg} {timer.seconds():0.2f} s"
+            if level == "VERBOSE":
+                log.verbose(msg)
+            elif level == "DEBUG":
+                log.debug(msg)
+            elif level == "INFO":
+                log.info(msg)
+            elif level == "WARNING":
+                log.warning(msg)
+            elif level == "ERROR":
+                log.error(msg)
+            elif level == "CRITICAL":
+                log.critical(msg)
+            else:
+                raise RuntimeError(f"invalid log level {level}")
+
+        if timer is not None:
+            timer.clear()
+            timer.start()
+
+    return log_rank
 
 
-# adds the `info_MPI` member function to the Logger class
-Logger.info_rank0 = _info_rank0
+# Add rank logging for all log levels
+Logger.verbose_rank = _create_log_rank("VERBOSE")
+Logger.debug_rank = _create_log_rank("DEBUG")
+Logger.info_rank = _create_log_rank("INFO")
+Logger.warning_rank = _create_log_rank("WARNING")
+Logger.error_rank = _create_log_rank("ERROR")
+Logger.critical_rank = _create_log_rank("CRITICAL")
+
 
 # This function sets the numba threading layer to (hopefully) be compatible with TOAST.
 # The TOAST threading concurrency is used to attempt to set the numba threading.  We

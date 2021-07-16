@@ -23,6 +23,7 @@ install(FILES
     ops_sim_ground.py
     ops_sim_tod_noise.py
     ops_sim_tod_dipole.py
+    ops_sim_tod_atm.py
     ops_sim_tod_conviqt.py
     ops_sim_tod_totalconvolve.py
     ops_mapmaker_utils.py
