@@ -241,33 +241,36 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N, doub
                                         double * A_batch, int LDA, double * B_batch, int LDB, double BETA,
                                         double * C_batch, int LDC, int batchCount) {
 #ifdef HAVE_CUDALIBS
-    int K = M;
     char TRANSA = 'N';
     char TRANSB = 'N';
-    // take side into account
-    if(SIDE == 'R') {
-        std::swap(A_batch, B_batch);
-        std::swap(LDA, LDB);
-        K = N;
-    }
+    int K = (SIDE == 'R') ? N : M;
     // fills A to make it truly symmetrical
     #pragma omp parallel for
     for(unsigned int b=0; b<batchCount; b++)
     {
         double * A = &A_batch[b * LDA * K];
-        for(int r = 0; r < K; r++) {
-            for(int c = 0; c < r; c++) {
-                // TODO we assume colmajor
-                if(UPLO == 'U') {
+        for(int r = 0; r < K; r++)
+        {
+            for(int c = 0; c < r; c++)
+            {
+                if(UPLO == 'U')
+                {
                     // fill lower part of A
                     A[r + LDA*c] = A[c + LDA*r];
                 }
-                else {
+                else
+                {
                     // fill upper part of A
                     A[c + LDA*r] = A[r + LDA*c];
                 }
             }
         }
+    }
+    // take side into account
+    if(SIDE == 'R')
+    {
+        std::swap(A_batch, B_batch);
+        std::swap(LDA, LDB);
     }
     // the GPU version calls gemm as it can be batched on GPU and not a true syrk
     toast::LinearAlgebra::gemm_batched(TRANSA, TRANSB, M, N, K, ALPHA, A_batch, LDA, B_batch, LDB, BETA, C_batch, LDC, batchCount);
