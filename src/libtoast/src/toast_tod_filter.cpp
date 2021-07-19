@@ -140,20 +140,19 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         // minimize the norm of the difference and the solution
         // vector.
 
-        toast::AlignedVector <double> singular_values(norder);
+        // DGELSS will overwrite proj with the fitting
+        // coefficients.  invcov is overwritten with
+        // singular vectors.
         int rank, info;
         double rcond_limit = 1e-3;
         int lwork = std::max(10 * (norder + nsignal), 1000000);
         toast::AlignedVector <double> work(lwork);
-
-        // DGELSS will overwrite proj with the fitting
-        // coefficients.  invcov is overwritten with
-        // singular vectors.
+        toast::AlignedVector <double> singular_values(norder);
         toast::LinearAlgebra::gelss(norder, norder, nsignal,
                                     invcov.data(), norder,
                                     proj.data(), norder,
                                     singular_values.data(), rcond_limit,
-                                    rank, work.data(), lwork, &info);
+                                    &rank, work.data(), lwork, &info);
 
         for (int iorder = 0; iorder < norder; ++iorder) {
             double * temp = &full_templates[iorder * scanlen];
