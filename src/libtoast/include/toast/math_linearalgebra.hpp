@@ -35,9 +35,14 @@ namespace toast {
         void syrk_batched(char UPLO, char TRANS, int N, int K, double ALPHA,
                           double * A_batch, int LDA, double BETA, double * C_batch, int LDC, int batchCount);
 
+        void gels(int M, int N, int NRHS, double * A, int LDA,
+                  double * B, int LDB, int * INFO);
+
         void gelss(int M, int N, int NRHS, double * A, int LDA,
                    double * B, int LDB, double * S, double RCOND,
                    int * RANK, double * WORK, int LWORK, int * INFO);
+
+        // TODO introduce GELS, its different from GELSS but close enough for our use I believe
     }
 }
 
