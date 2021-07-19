@@ -81,7 +81,7 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
     toast::AlignedVector <double*> A_ptrs(batchCount);
     toast::AlignedVector <double*> B_ptrs(batchCount);
     toast::AlignedVector <double*> C_ptrs(batchCount);
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(static)
     for(int64_t batchid = 0; batchid < batchCount; batchid++)
     {
         // using GPU adresses
@@ -109,7 +109,7 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
     GPU_memory_pool.free(B_batch_gpu);
 #elif HAVE_LAPACK
     // use naive opemMP paralellism
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(static)
     for(unsigned int b=0; b<batchCount; b++)
     {
         double * A = &A_batch[b * A_size];
@@ -175,7 +175,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
         // threadlocal
         toast::AlignedVector <double> WORK(LWORK);
         // use naive opemMP paralellism
-        #pragma omp for
+        #pragma omp for schedule(static)
         for(unsigned int b=0; b<batchCount; b++)
         {
             // gets batch element
@@ -245,7 +245,7 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N, doub
     char TRANSB = 'N';
     int K = (SIDE == 'R') ? N : M;
     // fills A to make it truly symmetrical
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(static)
     for(unsigned int b=0; b<batchCount; b++)
     {
         double * A = &A_batch[b * LDA * K];
@@ -276,7 +276,7 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N, doub
     toast::LinearAlgebra::gemm_batched(TRANSA, TRANSB, M, N, K, ALPHA, A_batch, LDA, B_batch, LDB, BETA, C_batch, LDC, batchCount);
 #elif HAVE_LAPACK
     // use naive opemMP paralellism
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(static)
     for(unsigned int b=0; b<batchCount; b++)
     {
         double * A = &A_batch[b * LDA * ((SIDE == 'L') ? M : N)];
@@ -341,7 +341,7 @@ void toast::LinearAlgebra::syrk_batched(char UPLO, char TRANS, int N, int K, dou
     toast::LinearAlgebra::gemm_batched(TRANSA, TRANSB, N, N, K, ALPHA, A_batched, LDA, A_batched, LDA, BETA, C_batched, LDC, batchCount);
 #elif HAVE_LAPACK
     // use naive opemMP paralellism
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(static)
     for(unsigned int b=0; b<batchCount; b++)
     {
         double * A = &A_batched[b * LDA * ((TRANS == 'T') ? N : K)];
