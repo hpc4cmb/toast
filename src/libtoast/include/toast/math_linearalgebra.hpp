@@ -41,8 +41,6 @@ namespace toast {
         void gelss(int M, int N, int NRHS, double * A, int LDA,
                    double * B, int LDB, double * S, double RCOND,
                    int * RANK, double * WORK, int LWORK, int * INFO);
-
-        // TODO introduce GELS, its different from GELSS but close enough for our use I believe
     }
 }
 
