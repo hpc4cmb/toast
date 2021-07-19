@@ -361,7 +361,7 @@ void toast::LinearAlgebra::syrk_batched(char UPLO, char TRANS, int N, int K, dou
 extern "C" void wrapped_dgels(char TRANS, int * M, int * N, int * NRHS, double * A, int * LDA,
                               double * B, int * LDB, double * WORK, int * LWORK, int * INFO);
 
-// NOTE: cusolver has the function to make a batched GPU version
+// NOTE: cublas has the needed info for a batched gpu version
 void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
                                 double * B, int LDB, int * INFO) {
 #ifdef HAVE_CUDALIBS
