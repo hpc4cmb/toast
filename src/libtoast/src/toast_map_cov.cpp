@@ -280,7 +280,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
         // fdata = data (reordering)
         toast::AlignedVector <double> fdata_batch(batchNumber * nnz * nnz);
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
         for(int64_t batchid = 0; batchid < batchNumber; batchid++)
         {
             int offset = 0;
@@ -310,7 +310,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // and sets ftemp = fdata / evals
         toast::AlignedVector <double> rcond_batch(batchNumber);
         toast::AlignedVector <double> ftemp_batch(batchNumber * nnz * nnz);
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
         for(int64_t batchid = 0; batchid < batchNumber; batchid++)
         {
             double emin = 1.0e100;
@@ -343,7 +343,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         }
 
         // data = finv
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
         for(int64_t batchid = 0; batchid < batchNumber; batchid++)
         {
             // did the computation of finv succeed
@@ -394,63 +394,60 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             }
         }
     } else {
-        // Even if the actual BLAS/LAPACK library is threaded, these are very
-        // small matrices.  So instead we divide up the map data across threads
-        // and each thread does some large number of small eigenvalue problems.
+        // problem size
+        int batchNumber = nsub * subsize;
+        int64_t blockSize = nnz * (nnz + 1) / 2;
 
-        #pragma omp parallel default(none) shared(nsub, subsize, nnz, data1, data2)
+        // temporary buffer for the data
+        toast::AlignedVector <double> fdata1(batchNumber * nnz * nnz);
+        toast::AlignedVector <double> fdata2(batchNumber * nnz * nnz);
+        toast::AlignedVector <double> fdata3(batchNumber * nnz * nnz);
+
+        // copy data to buffers
+        #pragma omp parallel for schedule(static)
+        for (int64_t b = 0; b < batchNumber; b++)
         {
-            // thread-private variables
-            int fnnz = (int)nnz;
-            double fzero = 0.0;
-            double fone = 1.0;
-            char uplo = 'L';
-            char side = 'L';
-            int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-            int64_t off;
+            // zero out data
+            std::fill(fdata1.begin() + b * (nnz * nnz), fdata1.begin() + (b+1) * (nnz * nnz), 0.0);
+            std::fill(fdata2.begin() + b * (nnz * nnz), fdata2.begin() + (b+1) * (nnz * nnz), 0.0);
 
-            toast::AlignedVector <double> fdata1(nnz * nnz);
-            toast::AlignedVector <double> fdata2(nnz * nnz);
-            toast::AlignedVector <double> fdata3(nnz * nnz);
-
-            // Here we "unroll" the loop over submaps and pixels within each
-            // submap.
-            // This allows us to distribute the total pixels across all
-            // threads.
-
-            #pragma omp for schedule(static)
-            for (int64_t i = 0; i < (nsub * subsize); ++i) {
-                int64_t px = i * block;
-
-                // copy to fortran buffer
-
-                std::fill(fdata1.begin(), fdata1.end(), 0);
-                std::fill(fdata2.begin(), fdata2.end(), 0);
-                std::fill(fdata3.begin(), fdata3.end(), 0);
-
-                off = 0;
-                for (int64_t k = 0; k < nnz; ++k) {
-                    for (int64_t m = k; m < nnz; ++m) {
-                        fdata1[k * nnz + m] = data1[px + off];
-                        fdata2[k * nnz + m] = data2[px + off];
-                        if (k != m) {
-                            // Second argument to dsymm must be full
-                            fdata2[m * nnz + k] = data2[px + off];
-                        }
-                        off += 1;
+            // copies inputs and reshape them for the upcoming computation
+            int64_t offset1 = 0;
+            for (int64_t k = 0; k < nnz; ++k)
+            {
+                for (int64_t m = k; m < nnz; ++m)
+                {
+                    fdata1[k * nnz + m] = data1[b * blockSize + offset1];
+                    fdata2[k * nnz + m] = data2[b * blockSize + offset1];
+                    if (k != m) {
+                        // Second argument to dsymm must be full
+                        fdata2[m * nnz + k] = data2[b * blockSize + offset1];
                     }
+                    offset1 += 1;
                 }
+            }
+        }
 
-                toast::LinearAlgebra::symm(side, uplo, fnnz, fnnz, fone,
-                                           fdata1.data(), fnnz, fdata2.data(), fnnz,
-                                           fzero, fdata3.data(), fnnz);
+        // batched symmetric matrix product
+        const double fzero = 0.0;
+        const double fone = 1.0;
+        const char uplo = 'L';
+        const char side = 'L';
+        toast::LinearAlgebra::symm_batched(side, uplo, nnz, nnz, fone,
+                                           fdata1.data(), nnz, fdata2.data(), nnz,
+                                           fzero, fdata3.data(), nnz, batchNumber);
 
-                off = 0;
-                for (int64_t k = 0; k < nnz; ++k) {
-                    for (int64_t m = k; m < nnz; ++m) {
-                        data1[px + off] = fdata3[k * nnz + m];
-                        off += 1;
-                    }
+        // copy data back from buffer
+        #pragma omp parallel for schedule(static)
+        for (int64_t b = 0; b < batchNumber; b++)
+        {
+            int64_t offset2 = 0;
+            for (int64_t k = 0; k < nnz; ++k)
+            {
+                for (int64_t m = k; m < nnz; ++m)
+                {
+                    data1[b * blockSize + offset2] = fdata3[k * nnz + m];
+                    offset2 += 1;
                 }
             }
         }
