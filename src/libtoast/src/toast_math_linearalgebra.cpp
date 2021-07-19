@@ -315,8 +315,7 @@ void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
     checkCublasErrorCode(errorCodeOp);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
-    // gets data back from GPU
-    // frees input memory
+    // gets data back from GPU and frees input memory
     GPU_memory_pool.free(A);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
 #elif HAVE_LAPACK
@@ -348,6 +347,56 @@ void toast::LinearAlgebra::syrk_batched(char UPLO, char TRANS, int N, int K, dou
         double * C = &C_batched[b * LDC * N];
         wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
     }
+#else // ifdef HAVE_LAPACK
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+#endif // ifdef HAVE_LAPACK
+}
+
+#define wrapped_dgels LAPACK_FUNC(dgels, DGELSS)
+
+extern "C" void wrapped_dgels(char TRANS, int * M, int * N, int * NRHS, double * A, int * LDA,
+                              double * B, int * LDB, double * WORK, int * LWORK, int * INFO);
+
+// NOTE: cusolver has the function to make a batched GPU version
+void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
+                                double * B, int LDB, int * INFO) {
+#ifdef HAVE_CUDALIBS
+    // prepare inputs
+    int* INFO_gpu = GPU_memory_pool.alloc<int>(1);
+    // send data to GPU
+    double* A_gpu = GPU_memory_pool.toDevice(A, N * LDA);
+    double* B_gpu = GPU_memory_pool.toDevice(B, N * NRHS);
+    // get output ready
+    int LDX = LDB;
+    double* X_gpu = GPU_memory_pool.alloc<double>(N * NRHS);
+    // computes workspace size
+    size_t LWORK = 0;
+    cusolverStatus_t statusBuffer = cusolverDnDDgels_bufferSize(GPU_memory_pool.handleSolver, M, N, NRHS, A_gpu, LDA, B_gpu, LDB, X_gpu, LDX, /*WORK=*/NULL, &LWORK);
+    checkCusolverErrorCode(statusBuffer);
+    // allocates workspace
+    double* WORK_gpu = GPU_memory_pool.alloc<double>(LWORK);
+    // compute cusolver operation
+    int NITER = 0;
+    cusolverStatus_t statusSolver = cusolverDnDDgels(GPU_memory_pool.handleSolver, M, N, NRHS, A_gpu, LDA, B_gpu, LDB, X_gpu, LDX, WORK_gpu, LWORK, &NITER, INFO_gpu);
+    checkCusolverErrorCode(statusSolver);
+    cudaError statusSync = cudaDeviceSynchronize();
+    checkCudaErrorCode(statusSync);
+    // gets info back to CPU
+    GPU_memory_pool.free(A_gpu);
+    GPU_memory_pool.free(B_gpu);
+    GPU_memory_pool.fromDevice(B, X_gpu, N * NRHS); // copy X to B in order to follow CPU behaviour
+    GPU_memory_pool.free(WORK_gpu);
+    GPU_memory_pool.fromDevice(INFO, INFO_gpu, 1);
+#elif HAVE_LAPACK
+    char TRANS = 'N';
+    int minMN = std::min(M, N);
+    int LWORK = std::max(1, minMN + std::max(minMN, NRHS));
+    toast::AlignedVector <double> WORK(LWORK);
+    wrapped_dgels(TRANS, &M, &N, &NRHS, A, &LDA, B, &LDB, WORK.data(), &LWORK, INFO);
 #else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
