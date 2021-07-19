@@ -240,8 +240,9 @@ class PolyFilter2D(Operator):
                 t_template += time() - t1
 
                 t1 = time()
-                comm.allreduce(templates)
-                comm.allreduce(proj)
+                if comm is not None:
+                    comm.allreduce(templates)
+                    comm.allreduce(proj)
                 t_get_norm += time() - t1
 
                 # Solve the linear regression amplitudes.  Each task
@@ -254,7 +255,7 @@ class PolyFilter2D(Operator):
                 proj = np.transpose(proj, [2, 0, 1])  # nsample x ngroup x nmode
                 coeff = np.zeros([nsample, ngroup, nmode])
                 for isample in range(nsample):
-                    if isample % comm.size != comm.rank:
+                    if comm is not None and isample % comm.size != comm.rank:
                         continue
                     for igroup in range(ngroup):
                         good = group_det == igroup
@@ -265,7 +266,8 @@ class PolyFilter2D(Operator):
                             coeff[isample, igroup] = np.dot(cc, proj[isample, igroup])
                         except np.linalg.LinAlgError:
                             coeff[isample, igroup] = 0
-                comm.allreduce(coeff)
+                if comm is not None:
+                    comm.allreduce(coeff)
                 t_solve += time() - t1
 
                 t1 = time()
