@@ -153,6 +153,11 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                                     proj.data(), norder,
                                     singular_values.data(), rcond_limit,
                                     &rank, work.data(), lwork, &info);
+        // TODO how does this impact speed and precision?
+        /*int info;
+        toast::LinearAlgebra::gels(norder, norder, nsignal,
+                                    invcov.data(), norder,
+                                    proj.data(), norder, &info);*/
 
         for (int iorder = 0; iorder < norder; ++iorder) {
             double * temp = &full_templates[iorder * scanlen];
