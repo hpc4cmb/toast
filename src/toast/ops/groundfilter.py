@@ -33,68 +33,87 @@ from .._libtoast import bin_templates, add_templates, legendre
 
 @trait_docs
 class GroundFilter(Operator):
-    """Operator which applies ground template filtering to constant
-    elevation scans.
-
-    Args:
-        name (str):  Name of the output signal cache object will be
-            <name_in>_<detector>.  If the object exists, it is used as
-            input.  Otherwise signal is read using the tod read method.
-        common_flag_name (str):  Cache name of the output common flags.
-            If it already exists, it is used.  Otherwise flags
-            are read from the tod object and stored in the cache under
-            common_flag_name.
-        common_flag_mask (byte):  Bitmask to use when flagging data
-           based on the common flags.
-        flag_name (str):  Cache name of the output detector flags will
-            be <flag_name>_<detector>.  If the object exists, it is
-            used.  Otherwise flags are read from the tod object.
-        flag_mask (byte):  Bitmask to use when flagging data
-           based on the detector flags.
-        ground_flag_mask (byte):  Bitmask to use when adding flags based
-           on ground filter failures.
-        trend_order (int):  Order of a Legendre polynomial to fit along
-            with the ground template
-        filter_order (int):  Order of a Legendre polynomial to fit as a
-            function of azimuth
-        detrend (bool):  Subtract the fitted trend along with the
-             ground template
-        intervals (str):  Name of the valid intervals in observation
-        split_template (bool):  Apply a different template for left and
-             right scans
-
+    """Operator that applies ground template filtering to azimuthal scans.
     """
 
-    def __init__(
-        self,
-        name=None,
-        common_flag_name=None,
-        common_flag_mask=255,
-        flag_name=None,
-        flag_mask=255,
-        ground_flag_mask=1,
-        trend_order=5,
-        filter_order=5,
-        detrend=False,
-        intervals="intervals",
-        split_template=False,
-        verbose=True,
-    ):
-        self._name = name
-        self._common_flag_name = common_flag_name
-        self._common_flag_mask = common_flag_mask
-        self._flag_name = flag_name
-        self._flag_mask = flag_mask
-        self._ground_flag_mask = ground_flag_mask
-        self._trend_order = trend_order
-        self._filter_order = filter_order
-        self._detrend = detrend
-        self._intervals = intervals
-        self._split_template = split_template
-        self.verbose = verbose
+    # Class traits
 
-        # Call the parent class constructor.
-        super().__init__()
+    API = Int(0, help="Internal interface version for this operator")
+
+    det_data = Unicode(
+        "signal", help="Observation detdata key for accumulating atmosphere timestreams"
+    )
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
+    shared_flags = Unicode(
+        None, allow_none=True, help="Observation shared key for telescope flags to use"
+    )
+
+    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to use"
+    )
+
+    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+
+    ground_flag_mask = Int(
+        1, help="Bit mask to use when adding flags based on ground filter failures."
+    )
+
+    trend_order = Int(
+        5, help="Order of a Legendre polynomial to fit along with the ground template."
+    )
+
+    filter_order = Int(
+        5, help="Order of a Legendre polynomial to fit as a function of azimuth."
+    )
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
+    detrend = Bool(
+        False, help="Subtract the fitted trend along with the ground template"
+    )
+
+    split_template = Bool(
+        False, help="Apply a different template for left and right scans"
+    )
+
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("trend_order")
+    def _check_trend_order(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Trend order should be a non-negative integer")
+        return check
+
+    @traitlets.validate("filter_order")
+    def _check_filter_order(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Filtere order should be a non-negative integer")
+        return check
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     @function_timer
     def build_templates(self, tod, obs):
