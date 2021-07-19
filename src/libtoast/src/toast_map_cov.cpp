@@ -413,13 +413,14 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
             // copies inputs and reshape them for the upcoming computation
             int64_t offset1 = 0;
-            for (int64_t k = 0; k < nnz; ++k)
+            for (int64_t k = 0; k < nnz; k++)
             {
-                for (int64_t m = k; m < nnz; ++m)
+                for (int64_t m = k; m < nnz; m++)
                 {
                     fdata1[k * nnz + m] = data1[b * blockSize + offset1];
                     fdata2[k * nnz + m] = data2[b * blockSize + offset1];
-                    if (k != m) {
+                    if (k != m)
+                    {
                         // Second argument to dsymm must be full
                         fdata2[m * nnz + k] = data2[b * blockSize + offset1];
                     }
@@ -442,9 +443,9 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         for (int64_t b = 0; b < batchNumber; b++)
         {
             int64_t offset2 = 0;
-            for (int64_t k = 0; k < nnz; ++k)
+            for (int64_t k = 0; k < nnz; k++)
             {
-                for (int64_t m = k; m < nnz; ++m)
+                for (int64_t m = k; m < nnz; m++)
                 {
                     data1[b * blockSize + offset2] = fdata3[k * nnz + m];
                     offset2 += 1;
