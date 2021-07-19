@@ -136,11 +136,9 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             }
         }
 
-        // Fit the templates against the data.  DGELSS uses SVD to
-        // minimize the norm of the difference and the solution
-        // vector.
-
-        // DGELS will overwrite proj with the fitting coefficients.
+        // Fit the templates against the data.
+        // DGELS minimizes the norm of the difference and the solution vector
+        // and overwrites proj with the fitting coefficients.
         int info;
         toast::LinearAlgebra::gels(norder, norder, nsignal,
                                     invcov.data(), norder,
