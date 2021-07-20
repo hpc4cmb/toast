@@ -27,6 +27,7 @@ set(toast_SOURCES
     src/toast_math_rng.cpp
     src/toast_math_qarray.cpp
     src/toast_math_fft.cpp
+    src/toast_math_fma.cpp
     src/toast_math_healpix.cpp
     src/toast_map_cov.cpp
     src/toast_fod_psd.cpp
@@ -44,6 +45,7 @@ set(toast_SOURCES
     tests/toast_test_rng.cpp
     tests/toast_test_qarray.cpp
     tests/toast_test_fft.cpp
+    tests/toast_test_fma.cpp
     tests/toast_test_healpix.cpp
     tests/toast_test_cov.cpp
     tests/toast_test_polyfilter.cpp

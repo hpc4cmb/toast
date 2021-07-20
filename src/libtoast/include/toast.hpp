@@ -13,6 +13,7 @@
 #include <toast/math_rng.hpp>
 #include <toast/math_qarray.hpp>
 #include <toast/math_fft.hpp>
+#include <toast/math_fma.hpp>
 #include <toast/math_healpix.hpp>
 #include <toast/fod_psd.hpp>
 #include <toast/map_pixels.hpp>

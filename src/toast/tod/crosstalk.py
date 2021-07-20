@@ -58,49 +58,16 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 
-try:
-    from numba import jit
-except ImportError:
-    jit = None
-
 from ..mpi import get_world
 from ..op import Operator
 from ..timing import GlobalTimers
-from ..utils import Logger
+from ..utils import Logger, inplace_weighted_sum
 
 if TYPE_CHECKING:
     from typing import List, Optional, Union
 
     from .dist import Data
     from .mpi import Comm
-
-
-def _fma(
-    out: 'np.ndarray[np.float64]',
-    weights: 'np.ndarray[np.float64]',
-    *arrays: 'np.ndarray[np.float64]',
-):
-    """Simple fused multiply–add, compiled to avoid Python memory implications.
-
-    :param out: must be zero array in the same shape of each in `arrays`
-
-    If not compiled, a lot of Python objects will be created,
-    and as the Python garbage collector is inefficient,
-    it would have larger memory footprints.
-    """
-    for weight, array in zip(weights, arrays):
-        out += weight * array
-
-
-if jit is None:
-    Logger.get().warning(
-        'Numba not present. '
-        '_fma in crosstalk will have more intermediate Numpy array objects '
-        'created that uses more memory.'
-    )
-else:
-    # cache is False to avoid IO on HPC.
-    _fma = jit(_fma, nopython=True, nogil=True, parallel=True, cache=False)
 
 
 def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
@@ -397,7 +364,7 @@ class OpCrosstalk(Operator):
                         tod.cache.reference(f"{signal_name}_{name_j}")
                         for name_j in names
                     ]
-                    _fma(row_global_total, row, *tods_list)
+                    inplace_weighted_sum(row_global_total, row, *tods_list)
                 for name in names:
                     # overwrite it in-place
                     # not using tod.cache.put as that will destroy and create
@@ -542,7 +509,7 @@ class OpCrosstalk(Operator):
                             )
                             for i in range(n_local_dets)
                         ]
-                        _fma(row_local_total, row_local_weights, *tods_list)
+                        inplace_weighted_sum(row_local_total, row_local_weights, *tods_list)
                     if rank == rank_owner:
                         row_global_total = tod.cache.create(
                             f"{crosstalk_name}_{name}",
