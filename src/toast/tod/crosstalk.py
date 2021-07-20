@@ -274,6 +274,9 @@ class OpCrosstalk(Operator):
         This holds only those matrices owned by a rank
         dictate by the condition `i % world_procs == world_rank`.
         """
+        gt = GlobalTimers.get()
+        gt.start(f"OpCrosstalk_read")
+
         _, world_procs, world_rank = get_world()
 
         paths = args.crosstalk_matrix
@@ -284,6 +287,8 @@ class OpCrosstalk(Operator):
             SimpleCrosstalkMatrix.load(paths[i])
             for i in range(world_rank, N, world_procs)
         ]
+
+        gt.stop(f"OpCrosstalk_read")
 
         return cls(N, crosstalk_matrices, name=name)
 
@@ -532,8 +537,11 @@ class OpCrosstalk(Operator):
         """Apply crosstalk matrix on ToD in data.
 
         It is dispatched depending if MPI is used."""
+        gt = GlobalTimers.get()
+        gt.start(f"OpCrosstalk_exec")
         (
             self._exec_serial(data, signal_name)
         ) if self.is_serial else (
             self._exec_mpi(data, signal_name)
         )
+        gt.stop(f"OpCrosstalk_exec")
