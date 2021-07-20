@@ -141,8 +141,8 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         // and overwrites proj with the fitting coefficients.
         int info;
         toast::LinearAlgebra::gels(norder, norder, nsignal,
-                                    invcov.data(), norder,
-                                    proj.data(), norder, &info);
+                                   invcov.data(), norder,
+                                   proj.data(), norder, &info);
 
         for (int iorder = 0; iorder < norder; ++iorder) {
             double * temp = &full_templates[iorder * scanlen];

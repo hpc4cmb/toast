@@ -51,7 +51,7 @@ void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
 #elif HAVE_LAPACK
     wrapped_dgemm(&TRANSA, &TRANSB, &M, &N, &K, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
-    #else // ifdef HAVE_LAPACK
+#else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
     std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
