@@ -169,12 +169,12 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     // computes workspace size
     int LWORK = -1; // -1 triggers LWORK computation instead of syev
     {
-        toast::AlignedVector <double> WORK(1);
+        double optimal_LWORK = 0;
         double * A = &A_batch[0];
         double * W = &W_batch[0];
-        wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK.data(), &LWORK, INFO);
+        wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, &optimal_LWORK, &LWORK, INFO);
         if(*INFO == 0) {
-            LWORK = WORK[0];
+            LWORK = optimal_LWORK;
         }
         else {
             auto here = TOAST_HERE();
@@ -408,8 +408,23 @@ void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
     GPU_memory_pool.fromDevice(INFO, INFO_gpu, 1);
 #elif HAVE_LAPACK
     char TRANS = 'N';
-    int minMN = std::min(M, N);
-    int LWORK = std::max(1, minMN + std::max(minMN, NRHS));
+    // computes workspace size
+    int LWORK = -1; // -1 triggers LWORK computation instead of dgels
+    {
+        double optimal_LWORK = 0;
+        wrapped_dgels(TRANS, &M, &N, &NRHS, A, &LDA, B, &LDB, &optimal_LWORK, &LWORK, INFO);
+        if(*INFO == 0) {
+            LWORK = optimal_LWORK;
+        }
+        else {
+            auto here = TOAST_HERE();
+            auto log = toast::Logger::get();
+            std::string msg("TOAST was unable to determine the workspace size (LWORK) to call DGELS.");
+            log.error(msg.c_str(), here);
+            throw std::runtime_error(msg.c_str());
+        }
+    }
+    // runs dgels on all batch elements
     toast::AlignedVector <double> WORK(LWORK);
     wrapped_dgels(TRANS, &M, &N, &NRHS, A, &LDA, B, &LDB, WORK.data(), &LWORK, INFO);
 #else // ifdef HAVE_LAPACK
