@@ -30,7 +30,7 @@ Crosstalk
 ~~~~~~~~~
 
 .. automodule:: toast.tod.crosstalk
-    :members: add_crosstalk_args, SimpleCrosstalkMatrix, OpCrosstalk
+    :members:
 
 Utilities
 ~~~~~~~~~~~~~~~~~~~~~
