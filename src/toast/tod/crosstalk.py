@@ -312,7 +312,7 @@ class OpCrosstalk(Operator):
 
         """
         gt = GlobalTimers.get()
-        gt.start(f"OpCrosstalk_read")
+        gt.start("OpCrosstalk_read")
 
         _, world_procs, world_rank = get_world()
 
@@ -325,7 +325,7 @@ class OpCrosstalk(Operator):
             for i in range(world_rank, N, world_procs)
         ]
 
-        gt.stop(f"OpCrosstalk_read")
+        gt.stop("OpCrosstalk_read")
 
         return cls(N, crosstalk_matrices, name=name)
 
@@ -583,10 +583,10 @@ class OpCrosstalk(Operator):
 
         """
         gt = GlobalTimers.get()
-        gt.start(f"OpCrosstalk_exec")
+        gt.start("OpCrosstalk_exec")
         (
             self._exec_serial(data, signal_name)
         ) if self.is_serial else (
             self._exec_mpi(data, signal_name)
         )
-        gt.stop(f"OpCrosstalk_exec")
+        gt.stop("OpCrosstalk_exec")
