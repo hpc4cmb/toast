@@ -166,10 +166,25 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
         GPU_memory_pool.free(A_batch_gpu);
     }
 #elif HAVE_LAPACK
-    // workspace size
-    // We assume a large value here, since the work space needed will still be small.
-    int NB = 256;
-    int LWORK = NB * 2 + N;
+    // computes workspace size
+    int LWORK = -1; // -1 triggers LWORK computation instead of syev
+    {
+        toast::AlignedVector <double> WORK(1);
+        double * A = &A_batch[0];
+        double * W = &W_batch[0];
+        wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, WORK.data(), &LWORK, INFO);
+        if(*INFO == 0) {
+            LWORK = WORK[0];
+        }
+        else {
+            auto here = TOAST_HERE();
+            auto log = toast::Logger::get();
+            std::string msg("TOAST was unable to determine the workspace size (LWORK) to call DSYEV.");
+            log.error(msg.c_str(), here);
+            throw std::runtime_error(msg.c_str());
+        }
+    }
+    // runs syev on all batch elements
     #pragma omp parallel
     {
         // threadlocal
