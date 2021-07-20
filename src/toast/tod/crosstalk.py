@@ -36,6 +36,7 @@ with the simple conventions that
 it has the following datasets:
 
 1. names: ASCII names of your detectors, say of length ``n``
+
 2. data: ``n`` by ``n`` float64 array of your crosstalk matrix ``m``,
 where you expect
 
@@ -71,7 +72,14 @@ if TYPE_CHECKING:
 
 
 def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
-    """Add crosstalk args to argparse.ArgumentParser object."""
+    """Add crosstalk args to argparse.ArgumentParser object.
+
+    Args:
+      parser: 'argparse.ArgumentParser': argparse' argument parser
+
+    Returns:
+        None
+    """
     parser.add_argument(
         "--crosstalk-matrix",
         type=Path,
@@ -84,10 +92,11 @@ def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
 class SimpleCrosstalkMatrix:
     """A thin crosstalk matrix class.
 
-    :param names: detector names.
-    :param data: crosstalk matrix.
-        The length of `names` should match the dimension of `data`,
-        which should be a square array.
+    Args:
+      names: detector names.
+      data: crosstalk matrix.
+    The length of `names` should match the dimension of `data`,
+    which should be a square array.
 
     This is a simple container storing the crosstalk matrix,
     but not generating it.
@@ -126,8 +135,15 @@ class SimpleCrosstalkMatrix:
         return [name.decode() for name in self.names]
 
     @classmethod
-    def load(cls, path: 'Path'):
-        """Load from an HDF5 file."""
+    def load(cls, path: 'Path') -> 'SimpleCrosstalkMatrix':
+        """Load from an HDF5 file.
+
+        Args:
+          path: 'Path': path to an HDF5 file containing the data and names.
+
+        Returns:
+            SimpleCrosstalkMatrix
+        """
         with h5py.File(path, 'r') as f:
             names = f["names"][:]
             data = f["data"][:]
@@ -151,6 +167,12 @@ class SimpleCrosstalkMatrix:
         `libver` will be passed to h5py.File,
         and the rest keyword arguments will be passed to `h5py.File.create_dataset`
         with sensible defaults.
+
+        Args:
+          path: 'Path': output file path.
+
+        Returns:
+            None
         """
         with h5py.File(path, 'w', libver=libver) as f:
             f.create_dataset(
@@ -178,11 +200,12 @@ class SimpleCrosstalkMatrix:
 class OpCrosstalk(Operator):
     """Operator that applies crosstalk matrix to detector ToDs.
 
-    :param n_crosstalk_matrices: total no. of crosstalk matrices
-    :param crosstalk_matrices: the crosstalk matrices.
+    Args:
+      n_crosstalk_matrices: total no. of crosstalk matrices
+      crosstalk_matrices: the crosstalk matrices.
         In MPI case, this should holds only those matrices owned by a rank dictate
         by the condition `i % world_procs == world_rank`
-    :param name: this name is used to save data in tod.cache, so better be unique from other cache
+      name: this name is used to save data in tod.cache, so better be unique from other cache
 
     In a typical scenario, the classmethod `read` is used to create an object
     instead of initiating directly. This classmethod guarantees the condition above holds.
@@ -217,6 +240,12 @@ class OpCrosstalk(Operator):
 
     def _get_crosstalk_matrix(self, i: 'int') -> 'SimpleCrosstalkMatrix':
         """Get the i-th crosstalk matrix, used this with MPI only.
+
+        Args:
+          i: 'int': the i-th crosstalk matrix.
+
+        Returns:
+            SimpleCrosstalkMatrix
         """
         logger = Logger.get()
 
@@ -273,6 +302,14 @@ class OpCrosstalk(Operator):
 
         This holds only those matrices owned by a rank
         dictate by the condition `i % world_procs == world_rank`.
+
+        Args:
+          args: 'argparse.Namespace': namespace object from argparse' parser
+          name: 'str':  (Default value = "crosstalk"): this name is used to
+            save data in tod.cache, so better be unique from other cache
+
+        Returns:
+
         """
         gt = GlobalTimers.get()
         gt.start(f"OpCrosstalk_read")
@@ -536,7 +573,15 @@ class OpCrosstalk(Operator):
     ):
         """Apply crosstalk matrix on ToD in data.
 
-        It is dispatched depending if MPI is used."""
+        It is dispatched depending if MPI is used.
+
+        Args:
+          data: 'Data': the data to be exec on.
+          signal_name: 'str': the name of the signal.
+
+        Returns:
+
+        """
         gt = GlobalTimers.get()
         gt.start(f"OpCrosstalk_exec")
         (
