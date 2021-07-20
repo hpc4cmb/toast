@@ -64,7 +64,7 @@ from ..timing import GlobalTimers
 from ..utils import Logger, inplace_weighted_sum
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Union
+    from typing import List, Optional
 
     from .dist import Data
     from .mpi import Comm
@@ -79,13 +79,6 @@ def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
         required=False,
         help="input path(s) to crosstalk matrix in HDF5 container.",
     )
-    parser.add_argument(
-        "--crosstalk-matrix-debug",
-        action='store_true',
-        required=False,
-        help="if specified, perform more checks and emit more messages. "
-             "You may want to set TOAST_LOGLEVEL=DEBUG as well.",
-    )
 
 
 class SimpleCrosstalkMatrix:
@@ -95,7 +88,6 @@ class SimpleCrosstalkMatrix:
     :param data: crosstalk matrix.
         The length of `names` should match the dimension of `data`,
         which should be a square array.
-    :param debug: emit more debug message and perform runtime validation check.
 
     This is a simple container storing the crosstalk matrix,
     but not generating it.
@@ -103,40 +95,30 @@ class SimpleCrosstalkMatrix:
 
     def __init__(
         self,
-        names: "Union[np.ndarray['S'], List[str]]",
+        names: "np.ndarray['S']",
         data: 'np.ndarray[np.float64]',
-        *,
-        debug: 'bool' = False,
     ):
-        self.names = np.asarray(names, dtype="S")
+        self.names = names
         self.data = data
-        self.debug = debug
-        if debug:
-            self.__post_init__()
+
+        # py37+: we keep the dataclass semantics here in anticipation to use it in the future
+        self.__post_init__()
 
     def __post_init__(self):
-        names = self.names
-        data = self.data
+        logger = Logger.get()
         try:
-            if not isinstance(names.dtype, type(np.dtype('S'))):
-                raise TypeError('names has to be a numpy array with dtype("S")')
-            if not isinstance(
-                data.dtype,
-                (
-                    type(np.dtype(np.float64)),
-                    type(np.dtype(np.float32)),
-                )
-            ):
-                raise TypeError('data has to be a numpy array of float')
-            if data.ndim != 2:
-                raise TypeError('data should be 2-dimensional')
-            if names.ndim != 1:
-                raise TypeError('names should be 1-dimensional')
-            shape = data.shape
-            if not (names.size == shape[0] == shape[1]):
-                raise TypeError('The dimensions of names and/or data not matched.')
-        except AttributeError:
-            raise TypeError('name and data has to be numpy arrays')
+            names = self.names = np.asarray(self.names, dtype="S")
+            data = self.data = np.asarray(self.data, dtype=np.float64)
+        except ValueError as e:
+            logger.critical('name and data has to be Numpy-array-like')
+            raise e
+        if data.ndim != 2:
+            raise TypeError('data should be 2-dimensional')
+        if names.ndim != 1:
+            raise TypeError('names should be 1-dimensional')
+        shape = data.shape
+        if not (names.size == shape[0] == shape[1]):
+            raise TypeError('The dimensions of names and/or data not matched.')
 
     @property
     def names_str(self) -> 'List[str]':
@@ -144,12 +126,12 @@ class SimpleCrosstalkMatrix:
         return [name.decode() for name in self.names]
 
     @classmethod
-    def load(cls, path: 'Path', *, debug: 'bool' = False):
+    def load(cls, path: 'Path'):
         """Load from an HDF5 file."""
         with h5py.File(path, 'r') as f:
             names = f["names"][:]
             data = f["data"][:]
-        return cls(names, data, debug=debug)
+        return cls(names, data)
 
     def dump(
         self,
@@ -219,12 +201,10 @@ class OpCrosstalk(Operator):
         crosstalk_matrices: 'List[SimpleCrosstalkMatrix]',
         *,
         name: 'str' = "crosstalk",
-        debug: 'bool' = False,
     ):
         self.n_crosstalk_matrices = n_crosstalk_matrices
         self.crosstalk_matrices = crosstalk_matrices
         self.name = name
-        self.debug = debug
 
         self.world_comm: 'Optional[Comm]'
         self.world_procs: 'int'
@@ -238,7 +218,6 @@ class OpCrosstalk(Operator):
     def _get_crosstalk_matrix(self, i: 'int') -> 'SimpleCrosstalkMatrix':
         """Get the i-th crosstalk matrix, used this with MPI only.
         """
-        debug = self.debug
         logger = Logger.get()
 
         rank_owner = i % self.world_procs
@@ -262,8 +241,7 @@ class OpCrosstalk(Operator):
         else:
             lengths = np.empty(2, dtype=np.int64)
         self.world_comm.Bcast(lengths, root=rank_owner)
-        if debug:
-            logger.debug(f'crosstalk: Rank {self.world_rank} receives lengths {lengths}')
+        # logger.debug(f'crosstalk: Rank {self.world_rank} receives lengths {lengths}')
 
         # broadcast arrays
         if self.world_rank != rank_owner:
@@ -273,12 +251,11 @@ class OpCrosstalk(Operator):
             names = names_int.view(f'S{name_len}')
             data = np.empty((n, n), dtype=np.float64)
         self.world_comm.Bcast(names_int, root=rank_owner)
-        if debug:
-            logger.debug(f'crosstalk: Rank {self.world_rank} receives names {names}')
+        # logger.debug(f'crosstalk: Rank {self.world_rank} receives names {names}')
         self.world_comm.Bcast(data, root=rank_owner)
-        if debug:
-            logger.debug(f'crosstalk: Rank {self.world_rank} receives data {data}')
+        # logger.debug(f'crosstalk: Rank {self.world_rank} receives data {data}')
 
+        logger.info(f'Obtained the {i + 1}-th crosstalk matrix from world-rank {rank_owner}.')
         return (
             crosstalk_matrix
         ) if self.world_rank == rank_owner else (
@@ -291,7 +268,6 @@ class OpCrosstalk(Operator):
         args: 'argparse.Namespace',
         *,
         name: 'str' = "crosstalk",
-        debug: 'bool' = False,
     ) -> 'OpCrosstalk':
         """Read crosstalk matri(x|ces) from HDF5 file(s).
 
@@ -301,16 +277,15 @@ class OpCrosstalk(Operator):
         _, world_procs, world_rank = get_world()
 
         paths = args.crosstalk_matrix
-        debug = args.crosstalk_matrix_debug
 
         N = len(paths)
 
         crosstalk_matrices = [
-            SimpleCrosstalkMatrix.load(paths[i], debug=debug)
+            SimpleCrosstalkMatrix.load(paths[i])
             for i in range(world_rank, N, world_procs)
         ]
 
-        return cls(N, crosstalk_matrices, name=name, debug=debug)
+        return cls(N, crosstalk_matrices, name=name)
 
     def _exec_serial(
         self,
@@ -378,7 +353,6 @@ class OpCrosstalk(Operator):
         signal_name: 'str',
     ):
         """Apply crosstalk matrix on ToD in data with MPI."""
-        debug = self.debug
         crosstalk_name = self.name
         logger = Logger.get()
         gt = GlobalTimers.get()
@@ -450,8 +424,7 @@ class OpCrosstalk(Operator):
                 ).view(np.bool_)
                 comm.Allgather(local_has_det, global_has_det)
 
-                if debug:
-                    np.testing.assert_array_equal(local_has_det, global_has_det[rank])
+                # np.testing.assert_array_equal(local_has_det, global_has_det[rank])
                 del local_has_det
                 tod.cache.destroy(f"{crosstalk_name}_local_has_det_{rank}")
 
@@ -463,14 +436,13 @@ class OpCrosstalk(Operator):
                 del global_has_det, i, j
                 tod.cache.destroy(f"{crosstalk_name}_global_has_det_{rank}")
 
-                if debug:
-                    logger.debug(f'Rank {rank} has detectors lookup table: {det_lut}')
-                    for name in local_crosstalk_dets_set:
-                        if det_lut[name] != rank:
-                            raise RuntimeError(
-                                'Error in creating a lookup table '
-                                f'from detector name to rank: {det_lut}'
-                            )
+                # logger.debug(f'Rank {rank} has detectors lookup table: {det_lut}')
+                # for name in local_crosstalk_dets_set:
+                #     if det_lut[name] != rank:
+                #         raise RuntimeError(
+                #             'Error in creating a lookup table '
+                #             f'from detector name to rank: {det_lut}'
+                #         )
 
                 gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_2-detector-lut")
                 gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_3-mat-mul")
@@ -499,7 +471,13 @@ class OpCrosstalk(Operator):
                 # * than SimpleCrosstalkMatrix.names_str has
                 # * and they will be skipped
                 for name, row in zip(names, crosstalk_data):
-                    rank_owner = det_lut[name]
+                    try:
+                        rank_owner = det_lut[name]
+                    # in the unlikely scenario this happened,
+                    # it is likely the detector LUT is incorrect.
+                    # check the code containing `det_lut` above
+                    except KeyError:
+                        raise RuntimeError(f'Detector look-up table cannot find rank-owner of {name}: det_lut = {det_lut}')
                     if n_local_dets > 0:
                         row_local_total[:] = 0.
                         row_local_weights[:] = row[local_det_idxs]
