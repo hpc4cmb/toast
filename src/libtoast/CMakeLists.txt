@@ -27,6 +27,9 @@ set(toast_SOURCES
     src/toast_math_sf.cpp
     src/toast_math_rng.cpp
     src/toast_math_qarray.cpp
+    src/toast_math_fft_fftw.cpp
+    src/toast_math_fft_mkl.cpp
+    src/toast_math_fft_cufft.cpp
     src/toast_math_fft.cpp
     src/toast_math_healpix.cpp
     src/toast_map_cov.cpp
@@ -146,7 +149,7 @@ if(CUDAToolkit_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
     target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
     # there are also static versions of those libs
-    target_link_libraries(toast CUDA::cudart CUDA::cublas CUDA::cusolver)
+    target_link_libraries(toast CUDA::cudart CUDA::cublas CUDA::cusolver CUDA::cufft CUDA::cufftw)
 else()
     message(WARNING "CUDA libs not found.")
 endif(CUDAToolkit_FOUND)
