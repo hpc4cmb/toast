@@ -14,10 +14,16 @@
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
 
+// checks on various type of cuda error codes
 void checkCudaErrorCode(const cudaError errorCode, const std::string& functionName = "unknown");
 void checkCublasErrorCode(const cublasStatus_t errorCode, const std::string& functionName = "unknown");
 void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string& functionName = "unknown");
 
+// fucntions to get a number of bbytes for an allocation
+size_t GigagbytesToBytes(const size_t nbGB = 4);
+size_t FractionOfGPUMemory(const double fraction = 0.9);
+
+// represents a block of memory that has been allocated
 class GPU_memory_block_t
 {
 public:
@@ -46,7 +52,7 @@ public:
     cusolverDnHandle_t handleSolver = NULL;
     syevjInfo_t jacobiParameters = NULL;
 
-    GPU_memory_pool_t(int nbGB);
+    GPU_memory_pool_t(size_t bytesPreallocated);
     ~GPU_memory_pool_t();
     cudaError malloc(void** output_ptr, size_t size);
     void free(void* ptr);

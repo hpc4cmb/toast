@@ -17,7 +17,7 @@ void checkCudaErrorCode(const cudaError errorCode, const std::string& functionNa
     if (errorCode != cudaSuccess)
     {
         auto log = toast::Logger::get();
-        std::string msg = "CUDA threw a '" + std::string(cudaGetErrorString(errorCode)) + "' error code";
+        std::string msg = "The CUDA Runtime threw a '" + std::string(cudaGetErrorString(errorCode)) + "' error code";
         if (functionName != "unknown") msg += " in function '" + functionName + "'.";
         log.error(msg.c_str());
         throw std::runtime_error(msg.c_str());
@@ -108,20 +108,21 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string&
 //---------------------------------------------------------------------------------------
 // MEMORY POOL
 
+// cnostant used to make sure allocations are aligned
+const int ALIGNEMENT_SIZE = 512;
+
 GPU_memory_block_t::GPU_memory_block_t(void* ptr, size_t size)
 {
     // align size with 512
-    if(size % 512 != 0) size += 512 - (size % 512);
+    if(size % ALIGNEMENT_SIZE != 0) size += ALIGNEMENT_SIZE - (size % ALIGNEMENT_SIZE);
     start = ptr;
     end = static_cast<char *>(start) + size;
     isFree = false;
 }
 
 // constructor, does the initial allocation
-GPU_memory_pool_t::GPU_memory_pool_t(int nbGB): blocks()
+GPU_memory_pool_t::GPU_memory_pool_t(size_t bytesPreallocated): available_memory(bytesPreallocated), blocks()
 {
-    // pick the memory that will be preallocated
-    available_memory = nbGB * 1073741824l;
     // allocates the memory
     const cudaError errorCode = cudaMalloc(&start, available_memory);
     checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
@@ -202,7 +203,31 @@ void GPU_memory_pool_t::free(void* ptr)
     }
 }
 
-// global variable, 4Gb of preallocated GPU memory
-thread_local GPU_memory_pool_t GPU_memory_pool = GPU_memory_pool_t(4);
+// converts a number of gigabytes into a number of bytes
+size_t GigagbytesToBytes(const size_t nbGB)
+{
+    return nbGB * 1073741824l;
+}
+
+// returns a fraction of the GPU available memory, in bytes
+// either the full GPU memory (default) or only the free memory left
+size_t FractionOfGPUMemory(const double fraction)
+{
+    // computes the GPU memory available
+    int deviceId;
+    cudaGetDevice(&deviceId);
+    cudaDeviceProp deviceProp;
+    const cudaError errorCodeGetProperties = cudaGetDeviceProperties(&deviceProp, deviceId);
+    checkCudaErrorCode(errorCodeGetProperties, "FractionOfGPUMemory::cudaGetDeviceProperties");
+    const size_t totalGPUmemory = deviceProp.totalGlobalMem;
+    // computes the portion that we want to reserve
+    size_t result = fraction * totalGPUmemory;
+    // makes sure the end of the reservation is aligned properly
+    result -= result % ALIGNEMENT_SIZE;
+    return result;
+}
+
+// global variable, preallocates 90% of the total GPU memory available
+thread_local GPU_memory_pool_t GPU_memory_pool = GPU_memory_pool_t(FractionOfGPUMemory(0.9));
 
 #endif
