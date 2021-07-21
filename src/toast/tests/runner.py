@@ -54,6 +54,7 @@ from . import ops_madam as test_ops_madam
 
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
+from . import ops_sim_crosstalk as test_ops_sim_crosstalk
 
 
 from . import covariance as test_covariance
