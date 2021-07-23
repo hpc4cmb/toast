@@ -38,6 +38,6 @@ blktest="--check"
 
 cd "$base"
 # Directories to process
-find libtoast toast -name "*.hpp" -not -path '*Random123*' -not -path '*pybind11/*' -not -path '*gtest/*' -exec ${unexe} ${unrun} {} + &
+find libtoast toast \( -name "*.hpp" -or -name "*.cpp" \) -and -not \( -path '*Random123*' -or -path '*pybind11/*' -or -path '*gtest/*' \) -exec ${unexe} ${unrun} {} + &
 find toast ../pipelines -name "*.py" -not -path '*pybind11/*' -exec ${blkexe} ${blkrun} {} + &
 wait
