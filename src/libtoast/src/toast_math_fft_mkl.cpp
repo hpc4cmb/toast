@@ -208,11 +208,7 @@ void toast::FFTPlanReal1DMKL::cce2hc() {
     // as workspace for the shuffling.
 
     int64_t half = (int64_t)(length_ / 2);
-    bool even = false;
-
-    if (length_ % 2 == 0) {
-        even = true;
-    }
+    bool even = (length_ % 2 == 0);
 
     int64_t offcce;
 
@@ -251,11 +247,7 @@ void toast::FFTPlanReal1DMKL::hc2cce() {
     // as workspace for the shuffling.
 
     int64_t half = (int64_t)(length_ / 2);
-    bool even = false;
-
-    if (length_ % 2 == 0) {
-        even = true;
-    }
+    bool even = (length_ % 2 == 0);
 
     int64_t offcce;
 

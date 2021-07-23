@@ -13,12 +13,7 @@
 #include <vector>
 
 // TODO
-//  move data to GPU
-//  decide on which data should be on gpu by default
-//  take into account need for halfcomplex format
-
-// TODO doc on halfcomplex
-//  http://www.fftw.org/fftw3_doc/The-Halfcomplex_002dformat-DFT.html
+//  we are not using the fft_plan_type information (previously used in a flag)
 
 #ifdef HAVE_CUDALIBS
 
@@ -48,7 +43,7 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     // creates a plan
     int ilength = static_cast <int> (length_);
     int iN = static_cast <int> (n_);
-    cufftType fft_type = (dir == toast::fft_direction::forward) ? CUFFT_R2C : CUFFT_C2R;
+    cufftType fft_type = (dir == toast::fft_direction::forward) ? CUFFT_D2Z : CUFFT_Z2D;
     cufftResult errorCodePlan = cufftPlanMany(&plan_, /*rank*/ 1, /*n*/ &ilength,
                   /*inembed*/ &ilength, /*istride*/ 1, /*idist*/ ilength,
                   /*onembed*/ &ilength, /*ostride*/ 1, /*odist*/ ilength,
@@ -58,47 +53,47 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
 
 toast::FFTPlanReal1DCUFFT::~FFTPlanReal1DCUFFT() {
     cufftDestroy(plan_);
-    tview_.clear();
-    fview_.clear();
-    data_.clear();
-    // TODO deallocate GPU memory or allocate/deallocate in exec?
 }
 
-void toast::FFTPlanReal1DCUFFT::exec() {
-    // TODO reoder input data
+// TODO doc on halfcomplex
+//  http://www.fftw.org/fftw3_doc/The-Halfcomplex_002dformat-DFT.html
+//  the MKL code might have most of the functionalities to deal with it
 
+void toast::FFTPlanReal1DCUFFT::exec() {
+    int64_t nb_elements_real = n_ * length_;
+    int64_t nb_elements_complex = 1 + (nb_elements_real / 2);
     if (dir_ == toast::fft_direction::forward) // R2C
     {
-        // TODO get input data from CPU
-        cufftReal* idata = GPU_memory_pool.alloc<cufftReal>(n_ * length_); //traw_
-        cufftComplex* odata = GPU_memory_pool.alloc<cufftComplex>(n_ * length_); //fraw_
+        // get input data from CPU
+        cufftDoubleReal* idata = GPU_memory_pool.toDevice(traw_, nb_elements_real); //traw_
+        cufftDoubleComplex* odata = GPU_memory_pool.alloc<cufftDoubleComplex>(nb_elements_complex); //fraw_
         // execute plan
-        cufftResult errorCodeExec = cufftExecR2C(plan_, idata, odata);
+        cufftResult errorCodeExec = cufftExecD2Z(plan_, idata, odata);
         checkCufftErrorCode(errorCodeExec, "FFTPlanReal1DCUFFT::cufftExecR2C");
         cudaError statusSync = cudaDeviceSynchronize();
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
-        // TODO send output data to CPU
+        // send output data to CPU
         GPU_memory_pool.free(idata);
-        GPU_memory_pool.free(odata);
+        GPU_memory_pool.fromDevice((double*)(odata), traw_, nb_elements_real);
+        // TODO reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
     }
     else // C2R
     {
-        // TODO get input data from CPU
-        cufftComplex* idata = GPU_memory_pool.alloc<cufftComplex>(n_ * length_); //fraw_
-        cufftReal* odata = GPU_memory_pool.alloc<cufftReal>(n_ * length_); //traw_
+        // TODO reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
+        // get input data from CPU
+        cufftDoubleComplex* idata = GPU_memory_pool.toDevice((double2*)(traw_), nb_elements_complex); //fraw_
+        cufftDoubleReal* odata = GPU_memory_pool.alloc<cufftDoubleReal>(nb_elements_real); //traw_
         // execute plan
-        cufftResult errorCodeExec = cufftExecC2R(plan_, idata, odata);
+        cufftResult errorCodeExec = cufftExecZ2D(plan_, idata, odata);
         checkCufftErrorCode(errorCodeExec, "FFTPlanReal1DCUFFT::cufftExecC2R");
         cudaError statusSync = cudaDeviceSynchronize();
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
-        // TODO send output data to CPU
+        // send output data to CPU
         GPU_memory_pool.free(idata);
-        GPU_memory_pool.free(odata);
+        GPU_memory_pool.fromDevice(odata, traw_, nb_elements_real);
     }
 
-    // TODO reorder output data
-
-    // gets parameters to normalize output
+    // gets parameters to rescale output
     double * rawout;
     double norm;
     if (dir_ == toast::fft_direction::forward) {
