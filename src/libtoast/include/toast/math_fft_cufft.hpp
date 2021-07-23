@@ -28,6 +28,8 @@ class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
         double * fdata(int64_t indx);
 
     private:
+        void cce2hc();
+        void hc2cce();
 
         cufftHandle plan_;
         // TODO this is all the actual data

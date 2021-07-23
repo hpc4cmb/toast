@@ -10,10 +10,6 @@
 
 #include <cstring>
 #include <cmath>
-#include <vector>
-
-// TODO
-//  we are not using the fft_plan_type information (previously used in a flag)
 
 #ifdef HAVE_CUDALIBS
 
@@ -27,7 +23,6 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     std::fill(data_.begin(), data_.end(), 0);
 
     // creates raw pointers for input and output
-    // TODO might not be useful anymore
     traw_ = static_cast <double *> (&data_[0]);
     fraw_ = static_cast <double *> (&data_[n_ * length_]);
 
@@ -55,10 +50,6 @@ toast::FFTPlanReal1DCUFFT::~FFTPlanReal1DCUFFT() {
     cufftDestroy(plan_);
 }
 
-// TODO doc on halfcomplex
-//  http://www.fftw.org/fftw3_doc/The-Halfcomplex_002dformat-DFT.html
-//  the MKL code might have most of the functionalities to deal with it
-
 void toast::FFTPlanReal1DCUFFT::exec() {
     int64_t nb_elements_real = n_ * length_;
     int64_t nb_elements_complex = 1 + (nb_elements_real / 2);
@@ -74,13 +65,17 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
         // send output data to CPU
         GPU_memory_pool.free(idata);
-        GPU_memory_pool.fromDevice((double*)(odata), traw_, nb_elements_real);
-        // TODO reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
+        // TODO might be too much data if nb_elements_real is odd
+        GPU_memory_pool.fromDevice(odata, (double2*)(traw_), nb_elements_complex);
+        // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
+        cce2hc();
     }
     else // C2R
     {
-        // TODO reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
+        // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
+        hc2cce();
         // get input data from CPU
+        // TODO might be too much data if nb_elements_real is odd
         cufftDoubleComplex* idata = GPU_memory_pool.toDevice((double2*)(traw_), nb_elements_complex); //fraw_
         cufftDoubleReal* odata = GPU_memory_pool.alloc<cufftDoubleReal>(nb_elements_real); //traw_
         // execute plan
@@ -96,18 +91,84 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     // gets parameters to rescale output
     double * rawout;
     double norm;
-    if (dir_ == toast::fft_direction::forward) {
+    if (dir_ == toast::fft_direction::forward)
+    {
         rawout = fraw_;
         norm = scale_;
-    } else {
+    }
+    else
+    {
         rawout = traw_;
         norm = scale_ / static_cast <double> (length_);
     }
 
     // normalize output
     int64_t len = n_ * length_;
-    for (int64_t i = 0; i < len; ++i) {
+    for (int64_t i = 0; i < len; ++i)
+    {
         rawout[i] *= norm;
+    }
+}
+
+// moves CCE packed data in tview_ / traw_ to HC packed data in fview_ / fraw_
+// CCE packed format is a vector of complex real / imaginary pairs from 0 to Nyquist (0 to N/2 + 1).
+void toast::FFTPlanReal1DCUFFT::cce2hc()
+{
+    const int64_t half = length_ / 2;
+    const bool even = (length_ % 2 == 0);
+
+    for (int64_t i = 0; i < n_; i++)
+    {
+        // copy the first element.
+        fview_[i][0] = tview_[i][0];
+
+        if (even)
+        {
+            // copy in the real part of the last element of the
+            // CCE data, which has N/2+1 complex element pairs.
+            // This element is located at 2 * half == length_.
+            fview_[i][half] = tview_[i][length_];
+        }
+
+        for (int64_t j = 1; j < half; j++)
+        {
+            const int64_t offcce = 2 * j;
+            fview_[i][j] = tview_[i][offcce];
+            fview_[i][length_ - j] = tview_[i][offcce + 1];
+        }
+
+        fview_[i][length_] = 0.0;
+        fview_[i][length_ + 1] = 0.0;
+    }
+
+    // TODO useful?
+    memset((void *)traw_, 0, n_ * length_ * sizeof(double));
+}
+
+// moves HC packed data in fview_ / fraw_ to CCE packed data in tview_ / traw_
+// CCE packed format is a vector of complex real / imaginary pairs from 0 to Nyquist (0 to N/2 + 1).
+void toast::FFTPlanReal1DCUFFT::hc2cce() {
+    const int64_t half = length_ / 2;
+    const bool even = (length_ % 2 == 0);
+
+    for (int64_t i = 0; i < n_; i++)
+    {
+        // copy the first element.
+        tview_[i][0] = fview_[i][0];
+        tview_[i][1] = 0.0;
+
+        if (even)
+        {
+            tview_[i][length_] = fview_[i][half];
+            tview_[i][length_ + 1] = 0.0;
+        }
+
+        for (int64_t j = 1; j < half; j++)
+        {
+            const int64_t offcce = 2 * j;
+            tview_[i][offcce] = fview_[i][j];
+            tview_[i][offcce + 1] = fview_[i][length_ - j];
+        }
     }
 }
 
