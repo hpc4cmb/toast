@@ -71,7 +71,7 @@ if TYPE_CHECKING:
     from .mpi import Comm
 
 
-def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
+def add_crosstalk_args(parser: "argparse.ArgumentParser"):
     """Add crosstalk args to argparse.ArgumentParser object.
 
     Args:
@@ -83,7 +83,7 @@ def add_crosstalk_args(parser: 'argparse.ArgumentParser'):
     parser.add_argument(
         "--crosstalk-matrix",
         type=Path,
-        nargs='*',
+        nargs="*",
         required=False,
         help="input path(s) to crosstalk matrix in HDF5 container.",
     )
@@ -105,7 +105,7 @@ class SimpleCrosstalkMatrix:
     def __init__(
         self,
         names: "np.ndarray['S']",
-        data: 'np.ndarray[np.float64]',
+        data: "np.ndarray[np.float64]",
     ):
         self.names = names
         self.data = data
@@ -119,23 +119,23 @@ class SimpleCrosstalkMatrix:
             names = self.names = np.asarray(self.names, dtype="S")
             data = self.data = np.asarray(self.data, dtype=np.float64)
         except ValueError as e:
-            logger.critical('name and data has to be Numpy-array-like')
+            logger.critical("name and data has to be Numpy-array-like")
             raise e
         if data.ndim != 2:
-            raise TypeError('data should be 2-dimensional')
+            raise TypeError("data should be 2-dimensional")
         if names.ndim != 1:
-            raise TypeError('names should be 1-dimensional')
+            raise TypeError("names should be 1-dimensional")
         shape = data.shape
         if not (names.size == shape[0] == shape[1]):
-            raise TypeError('The dimensions of names and/or data not matched.')
+            raise TypeError("The dimensions of names and/or data not matched.")
 
     @property
-    def names_str(self) -> 'List[str]':
+    def names_str(self) -> "List[str]":
         """names in list of str."""
         return [name.decode() for name in self.names]
 
     @classmethod
-    def load(cls, path: 'Path') -> 'SimpleCrosstalkMatrix':
+    def load(cls, path: "Path") -> "SimpleCrosstalkMatrix":
         """Load from an HDF5 file.
 
         Args:
@@ -144,22 +144,22 @@ class SimpleCrosstalkMatrix:
         Returns:
             SimpleCrosstalkMatrix
         """
-        with h5py.File(path, 'r') as f:
+        with h5py.File(path, "r") as f:
             names = f["names"][:]
             data = f["data"][:]
         return cls(names, data)
 
     def dump(
         self,
-        path: 'Path',
+        path: "Path",
         *,
-        libver: 'str' = 'latest',
+        libver: "str" = "latest",
         # h5py.File.create_dataset args
-        compression: 'str' = 'gzip',
-        shuffle: 'bool' = True,
-        fletcher32: 'bool' = True,
-        track_times: 'bool' = False,
-        compression_opts: 'int' = 9,
+        compression: "str" = "gzip",
+        shuffle: "bool" = True,
+        fletcher32: "bool" = True,
+        track_times: "bool" = False,
+        compression_opts: "int" = 9,
         **kwargs,
     ):
         """Dump to an HDF5 file.
@@ -174,9 +174,9 @@ class SimpleCrosstalkMatrix:
         Returns:
             None
         """
-        with h5py.File(path, 'w', libver=libver) as f:
+        with h5py.File(path, "w", libver=libver) as f:
             f.create_dataset(
-                'names',
+                "names",
                 data=self.names,
                 compression=compression,
                 shuffle=shuffle,
@@ -186,7 +186,7 @@ class SimpleCrosstalkMatrix:
                 **kwargs,
             )
             f.create_dataset(
-                'data',
+                "data",
                 data=self.data,
                 compression=compression,
                 shuffle=shuffle,
@@ -220,25 +220,25 @@ class OpCrosstalk(Operator):
 
     def __init__(
         self,
-        n_crosstalk_matrices: 'int',
-        crosstalk_matrices: 'List[SimpleCrosstalkMatrix]',
+        n_crosstalk_matrices: "int",
+        crosstalk_matrices: "List[SimpleCrosstalkMatrix]",
         *,
-        name: 'str' = "crosstalk",
+        name: "str" = "crosstalk",
     ):
         self.n_crosstalk_matrices = n_crosstalk_matrices
         self.crosstalk_matrices = crosstalk_matrices
         self.name = name
 
-        self.world_comm: 'Optional[Comm]'
-        self.world_procs: 'int'
-        self.world_rank: 'int'
+        self.world_comm: "Optional[Comm]"
+        self.world_procs: "int"
+        self.world_rank: "int"
         self.world_comm, self.world_procs, self.world_rank = get_world()
 
     @property
-    def is_serial(self) -> 'bool':
+    def is_serial(self) -> "bool":
         return self.world_procs == 1
 
-    def _get_crosstalk_matrix(self, i: 'int') -> 'SimpleCrosstalkMatrix':
+    def _get_crosstalk_matrix(self, i: "int") -> "SimpleCrosstalkMatrix":
         """Get the i-th crosstalk matrix, used this with MPI only.
 
         Args:
@@ -265,7 +265,7 @@ class OpCrosstalk(Operator):
             # this is needed for comm.Bcast below
             data = data.view(np.float64)
 
-        # prepare lengths for creating arrays
+            # prepare lengths for creating arrays
             lengths = np.array([names.size, names.dtype.itemsize], dtype=np.int64)
         else:
             lengths = np.empty(2, dtype=np.int64)
@@ -277,27 +277,29 @@ class OpCrosstalk(Operator):
             n = lengths[0]
             name_len = lengths[1]
             names_int = np.empty(n * name_len, dtype=np.uint8)
-            names = names_int.view(f'S{name_len}')
+            names = names_int.view(f"S{name_len}")
             data = np.empty((n, n), dtype=np.float64)
         self.world_comm.Bcast(names_int, root=rank_owner)
         # logger.debug(f'crosstalk: Rank {self.world_rank} receives names {names}')
         self.world_comm.Bcast(data, root=rank_owner)
         # logger.debug(f'crosstalk: Rank {self.world_rank} receives data {data}')
 
-        logger.info(f'Obtained the {i + 1}-th crosstalk matrix from world-rank {rank_owner}.')
+        logger.info(
+            f"Obtained the {i + 1}-th crosstalk matrix from world-rank {rank_owner}."
+        )
         return (
             crosstalk_matrix
-        ) if self.world_rank == rank_owner else (
-            SimpleCrosstalkMatrix(names, data)
+            if self.world_rank == rank_owner
+            else SimpleCrosstalkMatrix(names, data)
         )
 
     @classmethod
     def read(
         cls,
-        args: 'argparse.Namespace',
+        args: "argparse.Namespace",
         *,
-        name: 'str' = "crosstalk",
-    ) -> 'OpCrosstalk':
+        name: "str" = "crosstalk",
+    ) -> "OpCrosstalk":
         """Read crosstalk matri(x|ces) from HDF5 file(s).
 
         This holds only those matrices owned by a rank
@@ -331,8 +333,8 @@ class OpCrosstalk(Operator):
 
     def _exec_serial(
         self,
-        data: 'Data',
-        signal_name: 'str',
+        data: "Data",
+        signal_name: "str",
     ):
         """Apply crosstalk matrix on ToD in data serially."""
         crosstalk_name = self.name
@@ -385,14 +387,15 @@ class OpCrosstalk(Operator):
                 for name in names:
                     # overwrite it in-place
                     # not using tod.cache.put as that will destroy and create
-                    tod.cache.reference(f"{signal_name}_{name}")[:] = \
-                        tod.cache.reference(f"{crosstalk_name}_{name}")
+                    tod.cache.reference(f"{signal_name}_{name}")[
+                        :
+                    ] = tod.cache.reference(f"{crosstalk_name}_{name}")
                     tod.cache.destroy(f"{crosstalk_name}_{name}")
 
     def _exec_mpi(
         self,
-        data: 'Data',
-        signal_name: 'str',
+        data: "Data",
+        signal_name: "str",
     ):
         """Apply crosstalk matrix on ToD in data with MPI."""
         crosstalk_name = self.name
@@ -412,8 +415,12 @@ class OpCrosstalk(Operator):
                 procs = tod.grid_size[0]
                 rank = tod.grid_ranks[0]
 
-                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}")
-                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_1-check")
+                gt.start(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}"
+                )
+                gt.start(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_1-check"
+                )
 
                 # all ranks need to check this as they need to perform the same action
                 detectors_set = set(tod.detectors)
@@ -431,8 +438,12 @@ class OpCrosstalk(Operator):
                     )
                 del detectors_set
 
-                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_1-check")
-                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_2-detector-lut")
+                gt.stop(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_1-check"
+                )
+                gt.start(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_2-detector-lut"
+                )
 
                 n_samples = tod.local_samples[1]
                 local_crosstalk_dets_set = set(tod.local_dets) & names_set
@@ -486,8 +497,12 @@ class OpCrosstalk(Operator):
                 #             f'from detector name to rank: {det_lut}'
                 #         )
 
-                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_2-detector-lut")
-                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_3-mat-mul")
+                gt.stop(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_2-detector-lut"
+                )
+                gt.start(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_3-mat-mul"
+                )
 
                 # mat-mul
                 row_local_total = tod.cache.create(
@@ -519,9 +534,11 @@ class OpCrosstalk(Operator):
                     # it is likely the detector LUT is incorrect.
                     # check the code containing `det_lut` above
                     except KeyError:
-                        raise RuntimeError(f'Detector look-up table cannot find rank-owner of {name}: det_lut = {det_lut}')
+                        raise RuntimeError(
+                            f"Detector look-up table cannot find rank-owner of {name}: det_lut = {det_lut}"
+                        )
                     if n_local_dets > 0:
-                        row_local_total[:] = 0.
+                        row_local_total[:] = 0.0
                         row_local_weights[:] = row[local_det_idxs]
                         tods_list = [
                             tod.cache.reference(
@@ -529,7 +546,11 @@ class OpCrosstalk(Operator):
                             )
                             for i in range(n_local_dets)
                         ]
-                        inplace_weighted_sum(row_local_total, row_local_weights, *tods_list)
+                        inplace_weighted_sum(
+                            row_local_total,
+                            row_local_weights,
+                            *tods_list,
+                        )
                     if rank == rank_owner:
                         row_global_total = tod.cache.create(
                             f"{crosstalk_name}_{name}",
@@ -553,23 +574,32 @@ class OpCrosstalk(Operator):
                     tod.cache.destroy(f"{crosstalk_name}_row_local_weights_{rank}")
                     tod.cache.destroy(f"{crosstalk_name}_local_det_idxs_{rank}")
 
-                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_3-mat-mul")
-                gt.start(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_4-copy-inplace")
+                gt.stop(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_3-mat-mul"
+                )
+                gt.start(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_4-copy-inplace"
+                )
 
                 for name in local_crosstalk_dets_set:
                     # overwrite it in-place
                     # not using tod.cache.put as that will destroy and create
-                    tod.cache.reference(f"{signal_name}_{name}")[:] = \
-                        tod.cache.reference(f"{crosstalk_name}_{name}")
+                    tod.cache.reference(f"{signal_name}_{name}")[
+                        :
+                    ] = tod.cache.reference(f"{crosstalk_name}_{name}")
                     tod.cache.destroy(f"{crosstalk_name}_{name}")
 
-                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_4-copy-inplace")
-                gt.stop(f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}")
+                gt.stop(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}_4-copy-inplace"
+                )
+                gt.stop(
+                    f"OpCrosstalk_matrix-{idx_crosstalk_matrix}_observation-{obs_i}"
+                )
 
     def exec(
         self,
-        data: 'Data',
-        signal_name: 'str',
+        data: "Data",
+        signal_name: "str",
     ):
         """Apply crosstalk matrix on ToD in data.
 
@@ -586,7 +616,7 @@ class OpCrosstalk(Operator):
         gt.start("OpCrosstalk_exec")
         (
             self._exec_serial(data, signal_name)
-        ) if self.is_serial else (
-            self._exec_mpi(data, signal_name)
+            if self.is_serial
+            else self._exec_mpi(data, signal_name)
         )
         gt.stop("OpCrosstalk_exec")

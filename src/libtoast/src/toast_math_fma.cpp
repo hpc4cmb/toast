@@ -8,12 +8,18 @@
 
 
 // be careful of incorrect result if the pragma is put outside
-void toast::inplace_weighted_sum(int const n_out, int const n_weights, double * const out, double const * const weights, double const * const * const arrays) {
-    if (! toast::is_aligned(out)) {
+void toast::inplace_weighted_sum(
+    int const n_out,
+    int const n_weights,
+    double * const out,
+    double const * const weights,
+    double const * const * const arrays
+    ) {
+    if (!toast::is_aligned(out)) {
         for (int i = 0; i < n_weights; ++i) {
             double const weight = weights[i];
             double const * const array = arrays[i];
-            # pragma omp parallel for default(shared) schedule(static)
+            #pragma omp parallel for default(shared) schedule(static)
             for (int j = 0; j < n_out; ++j) {
                 out[j] += weight * array[j];
             }
@@ -23,12 +29,12 @@ void toast::inplace_weighted_sum(int const n_out, int const n_weights, double * 
             double const weight = weights[i];
             double const * const array = arrays[i];
             if (toast::is_aligned(array)) {
-                # pragma omp parallel for simd default(shared) schedule(static)
+                #pragma omp parallel for simd default(shared) schedule(static)
                 for (int j = 0; j < n_out; ++j) {
                     out[j] += weight * array[j];
                 }
             } else {
-                # pragma omp parallel for default(shared) schedule(static)
+                #pragma omp parallel for default(shared) schedule(static)
                 for (int j = 0; j < n_out; ++j) {
                     out[j] += weight * array[j];
                 }
@@ -37,10 +43,15 @@ void toast::inplace_weighted_sum(int const n_out, int const n_weights, double * 
     }
 }
 
-
 // the following produces correct results, but slower.
-// void toast::inplace_weighted_sum(int n_out, int n_weights, double * out, double const * weights, double ** arrays) {
-//     # pragma omp parallel for simd
+// void toast::inplace_weighted_sum(
+//     int const n_out,
+//     int const n_weights,
+//     double * const out,
+//     double const * const weights,
+//     double const * const * const arrays
+//     ) {
+//     #pragma omp parallel for simd
 //     for (int j = 0; j < n_out; ++j) {
 //         for (int i = 0; i < n_weights; ++i) {
 //             out[j] += weights[i] * arrays[i][j];

@@ -32,32 +32,34 @@ class FakeData(Data):
 
 class OpCrosstalkTest(MPITestCase):
     def setUp(self):
-        fixture_name: 'str' = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir: 'Path' = Path(create_outdir(self.comm, fixture_name))
+        fixture_name: "str" = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir: "Path" = Path(create_outdir(self.comm, fixture_name))
 
-        self.world_comm: 'Optional[Comm]'
-        self.world_procs: 'int'
-        self.world_rank: 'int'
+        self.world_comm: "Optional[Comm]"
+        self.world_procs: "int"
+        self.world_rank: "int"
         self.world_comm, self.world_procs, self.world_rank = get_world()
 
         logger = Logger.get()
 
         # just to have more than 1 detectors per self.world_procs, and is irregular
-        n_detectors: 'int' = 4 * self.world_procs + 3
-        self.n_samples: 'int' = 100
-        self.signal_name: 'str' = "signal"
+        n_detectors: "int" = 4 * self.world_procs + 3
+        self.n_samples: "int" = 100
+        self.signal_name: "str" = "signal"
 
-        self.detranks: 'List[int]' = [1]
+        self.detranks: "List[int]" = [1]
         for i in range(2, self.world_procs + 1):
             if self.world_procs % i == 0:
                 self.detranks.append(i)
-        logger.info(f'Testing OpCrosstalk against detranks {", ".join(map(str, self.detranks))}.')
+        logger.info(
+            f'Testing OpCrosstalk against detranks {", ".join(map(str, self.detranks))}.'
+        )
 
-        self.names_strs: 'List[List[str]]' = []
+        self.names_strs: "List[List[str]]" = []
         self.names: 'List[np.ndarray["S"]]' = []
-        self.tod: 'List[np.ndarray[np.float64]]' = []
-        self.data: 'List[np.ndarray[np.float64]]' = []
-        self.tod_crosstalked: 'List[np.ndarray[np.float64]]' = []
+        self.tod: "List[np.ndarray[np.float64]]" = []
+        self.data: "List[np.ndarray[np.float64]]" = []
+        self.tod_crosstalked: "List[np.ndarray[np.float64]]" = []
 
         temp = [f"A{i}" for i in range(n_detectors)]
         self.names_strs.append(temp)
@@ -79,7 +81,9 @@ class OpCrosstalkTest(MPITestCase):
 
         y = (
             np.arange(n_detectors * n_detectors).reshape((n_detectors, n_detectors))
-            @ np.arange(n_detectors * self.n_samples).reshape((n_detectors, self.n_samples))
+            @ np.arange(n_detectors * self.n_samples).reshape(
+                (n_detectors, self.n_samples)
+            )
         ).astype(np.float64)
         self.tod_crosstalked.append(y)
 
@@ -106,9 +110,7 @@ class OpCrosstalkTest(MPITestCase):
         names_str = self.names_strs[0]
 
         if self.world_rank == 0:
-            crosstalk_matrices = [
-                SimpleCrosstalkMatrix(names, crosstalk_data)
-            ]
+            crosstalk_matrices = [SimpleCrosstalkMatrix(names, crosstalk_data)]
         else:
             crosstalk_matrices = []
         op_crosstalk = OpCrosstalk(1, crosstalk_matrices)
@@ -120,7 +122,7 @@ class OpCrosstalkTest(MPITestCase):
         local_dets_set = set(tod.local_dets)
         for i, name in enumerate(names_str):
             if name in local_dets_set:
-                tod.write(detector=name, data=tod_array[i, start:start + length])
+                tod.write(detector=name, data=tod_array[i, start : start + length])
         data = FakeData(
             [
                 {
@@ -137,13 +139,17 @@ class OpCrosstalkTest(MPITestCase):
         for i, name in enumerate(names_str):
             if name in local_dets_set:
                 output = tod.cache.reference(f"{self.signal_name}_{name}")
-                answer = tod_crosstalked[i, start:start + length]
+                answer = tod_crosstalked[i, start : start + length]
                 np.testing.assert_allclose(answer, output)
 
     def test_op_crosstalk(self):
-        for i, (tod, data, tod_crosstalked) in enumerate(zip(self.tod, self.data, self.tod_crosstalked)):
+        for i, (tod, data, tod_crosstalked) in enumerate(
+            zip(self.tod, self.data, self.tod_crosstalked)
+        ):
             for detranks in self.detranks:
-                with self.subTest(msg=f'OpCrosstalk Test case {i + 1} with detranks {detranks}'):
+                with self.subTest(
+                    msg=f"OpCrosstalk Test case {i + 1} with detranks {detranks}"
+                ):
                     self._each_op_crosstalk(
                         tod,
                         data,
@@ -163,12 +169,13 @@ class OpCrosstalkTest(MPITestCase):
         n_crosstalk_matrices = len(names)
         idxs_per_rank = range(self.world_rank, n_crosstalk_matrices, self.world_procs)
         crosstalk_matrices = [
-            SimpleCrosstalkMatrix(names[i], crosstalk_datas[i])
-            for i in idxs_per_rank
+            SimpleCrosstalkMatrix(names[i], crosstalk_datas[i]) for i in idxs_per_rank
         ]
         op_crosstalk = OpCrosstalk(n_crosstalk_matrices, crosstalk_matrices)
 
-        tod = TODCache(self.world_comm, sum(names_strs, []), self.n_samples, detranks=detranks)
+        tod = TODCache(
+            self.world_comm, sum(names_strs, []), self.n_samples, detranks=detranks
+        )
 
         # write local detectors
         start, length = tod.local_samples
@@ -176,7 +183,7 @@ class OpCrosstalkTest(MPITestCase):
         for names_str, tod_array in zip(names_strs, tods_array):
             for i, name in enumerate(names_str):
                 if name in local_dets_set:
-                    tod.write(detector=name, data=tod_array[i, start:start + length])
+                    tod.write(detector=name, data=tod_array[i, start : start + length])
         data = FakeData(
             [
                 {
@@ -194,12 +201,14 @@ class OpCrosstalkTest(MPITestCase):
             for i, name in enumerate(names_str):
                 if name in local_dets_set:
                     output = tod.cache.reference(f"{self.signal_name}_{name}")
-                    answer = tod_crosstalked[i, start:start + length]
+                    answer = tod_crosstalked[i, start : start + length]
                     np.testing.assert_allclose(answer, output)
 
     def test_op_crosstalk_multiple_matrices(self):
         for detranks in self.detranks:
-            with self.subTest(msg=f'Test OpCrosstalk with multiple matrices and detranks {detranks}'):
+            with self.subTest(
+                msg=f"Test OpCrosstalk with multiple matrices and detranks {detranks}"
+            ):
                 self._each_op_crosstalk_multiple_matrices(
                     self.names,
                     self.names_strs,
