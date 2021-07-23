@@ -12,12 +12,10 @@
 #include <cmath>
 #include <vector>
 
-
-// The memory buffer used for these FFTs is allocated as a single
-// block.  The first half of the block is for the real space data and the
-// second half of the buffer is for the complex Fourier space data.  The data
-// in each half is further split into buffers for each of the inputs and
-// outputs.
+// TODO
+//  move data to GPU
+//  decide on which data should be on gpu by default
+//  take into account need for halfcomplex format
 
 #ifdef HAVE_CUDALIBS
 
@@ -25,22 +23,12 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     int64_t length, int64_t n, toast::fft_plan_type type,
     toast::fft_direction dir, double scale) :
     toast::FFTPlanReal1D(length, n, type, dir, scale) {
-    int threads = 1;
-
-    // enable threads
-    # ifdef HAVE_FFTW_THREADS
-    auto env = toast::Environment::get();
-    threads = env.max_threads();
-    fftw_plan_with_nthreads(threads);
-    # endif // ifdef HAVE_FFTW_THREADS
 
     // allocate memory
-
     data_.resize(n_ * 2 * length_);
     std::fill(data_.begin(), data_.end(), 0);
 
     // create vector views and raw pointers
-
     traw_ = static_cast <double *> (&data_[0]);
     fraw_ = static_cast <double *> (&data_[n_ * length_]);
 
@@ -53,25 +41,12 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     }
 
     // create plan
-
     int ilength = static_cast <int> (length_);
     int iN = static_cast <int> (n_);
 
     unsigned flags = 0;
     double * rawin;
     double * rawout;
-
-    fftw_r2r_kind kind;
-
-    if (dir == toast::fft_direction::forward) {
-        rawin = traw_;
-        rawout = fraw_;
-        kind = FFTW_R2HC;
-    } else {
-        rawin = fraw_;
-        rawout = traw_;
-        kind = FFTW_HC2R;
-    }
 
     flags = flags | FFTW_DESTROY_INPUT;
 
@@ -81,9 +56,28 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
         flags = flags | FFTW_ESTIMATE;
     }
 
-    plan_ = fftw_plan_many_r2r(1, &ilength, iN, rawin, &ilength,
-                               1, ilength, rawout, &ilength, 1,
-                               ilength, &kind, flags);
+    // TODO doc on halfcomplex
+    //  http://www.fftw.org/fftw3_doc/The-Halfcomplex_002dformat-DFT.html
+    if (dir == toast::fft_direction::forward) {
+        rawin = traw_;
+        rawout = fraw_;
+        // TODO we should store output in halfcomplex-format
+        //  it is expecting a fftw_complex
+        plan_ = fftw_plan_many_dft_r2c(1, &ilength, iN,
+                                       rawin, &ilength, 1, ilength,
+                                       rawout, &ilength, 1, ilength,
+                                       flags);
+    } else {
+        rawin = fraw_;
+        rawout = traw_;
+        // TODO we should store output in halfcomplex-format
+        //  it is expecting a fftw_complex
+        plan_ = fftw_plan_many_dft_c2r(1, &ilength, iN,
+                                       rawin, &ilength, 1, ilength,
+                                       rawout, &ilength, 1, ilength,
+                                       flags);
+    }
+
     if (plan_ == NULL) {
         // This can occur, for example, if MKL is masquerading as FFTW.
         auto here = TOAST_HERE();
@@ -95,14 +89,18 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
 }
 
 toast::FFTPlanReal1DCUFFT::~FFTPlanReal1DCUFFT() {
-    fftw_destroy_plan(static_cast <fftw_plan> (plan_));
+    fftw_destroy_plan(plan_);
     tview_.clear();
     fview_.clear();
     data_.clear();
 }
 
 void toast::FFTPlanReal1DCUFFT::exec() {
+    // TODO reoder data
+    //  send data to GPU
     fftw_execute(plan_);
+    // TODO get data from GPU
+    //  deorder it
 
     double * rawout;
     double norm;

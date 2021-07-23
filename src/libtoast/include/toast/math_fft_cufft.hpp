@@ -30,7 +30,9 @@ class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
 
         // TODO keep data on GPU?
         fftw_plan plan_;
+        // TODO this is all the actual data
         toast::AlignedVector <double> data_;
+        // TODO those are all views into data
         double * traw_;
         double * fraw_;
         std::vector <double *> tview_;

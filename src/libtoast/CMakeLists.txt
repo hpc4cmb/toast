@@ -142,16 +142,15 @@ endif(LAPACK_FOUND)
 
 # GPU
 
-# TODO
 # https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html#module:FindCUDAToolkit
-if(CUDAToolkit_FOUND)
-    message(WARNING "CUDA libs found.")
+if(CUDAToolkit_FOUND AND NOT CUDA_DISABLED)
+    message(WARNING "CUDA libs found.") # TODO remove debug message
     target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
     target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
     # there are also static versions of those libs
     target_link_libraries(toast CUDA::cudart CUDA::cublas CUDA::cusolver CUDA::cufft CUDA::cufftw)
 else()
-    message(WARNING "CUDA libs not found.")
+    message(WARNING "CUDA libs not found.") # TODO remove debug message
 endif(CUDAToolkit_FOUND)
 
 # Installation
