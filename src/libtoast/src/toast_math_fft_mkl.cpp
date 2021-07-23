@@ -168,8 +168,6 @@ void toast::FFTPlanReal1DMKL::exec() {
         log.error(o.str().c_str(), here);
         throw std::runtime_error(o.str().c_str());
     }
-
-    return;
 }
 
 double * toast::FFTPlanReal1DMKL::tdata(int64_t indx) {
@@ -196,35 +194,33 @@ double * toast::FFTPlanReal1DMKL::fdata(int64_t indx) {
 
 void toast::FFTPlanReal1DMKL::check_status(FILE * fp, MKL_LONG status) {
     if (status != 0) {
-        fprintf(fp, "MKL DFTI error = %s\n",
-                DftiErrorMessage(status));
+        fprintf(fp, "MKL DFTI error = %s\n", DftiErrorMessage(status));
     }
-    return;
 }
 
+// CCE packed format is a vector of complex real / imaginary pairs
+// from 0 to Nyquist (0 to N/2 + 1).  We use the real space buffer
+// as workspace for the shuffling.
 void toast::FFTPlanReal1DMKL::cce2hc() {
-    // CCE packed format is a vector of complex real / imaginary pairs
-    // from 0 to Nyquist (0 to N/2 + 1).  We use the real space buffer
-    // as workspace for the shuffling.
+    const int64_t half = length_ / 2;
+    const bool even = (length_ % 2 == 0);
 
-    int64_t half = (int64_t)(length_ / 2);
-    bool even = (length_ % 2 == 0);
-
-    int64_t offcce;
-
-    for (int64_t i = 0; i < n_; ++i) {
+    for (int64_t i = 0; i < n_; i++)
+    {
         // copy the first element.
         tview_[i][0] = fview_[i][0];
 
-        if (even) {
+        if (even)
+        {
             // copy in the real part of the last element of the
             // CCE data, which has N/2+1 complex element pairs.
             // This element is located at 2 * half == length_.
             tview_[i][half] = fview_[i][length_];
         }
 
-        for (int64_t j = 1; j < half; ++j) {
-            offcce = 2 * j;
+        for (int64_t j = 1; j < half; j++)
+        {
+            const int64_t offcce = 2 * j;
             tview_[i][j] = fview_[i][offcce];
             tview_[i][length_ - j] = fview_[i][offcce + 1];
         }
@@ -232,48 +228,42 @@ void toast::FFTPlanReal1DMKL::cce2hc() {
         tview_[i][length_] = 0.0;
         tview_[i][length_ + 1] = 0.0;
 
-        memcpy((void *)fview_[i], (void *)tview_[i],
-               buflength_ * sizeof(double));
+        memcpy((void *)fview_[i], (void *)tview_[i], buflength_ * sizeof(double));
     }
 
     memset((void *)traw_, 0, n_ * buflength_ * sizeof(double));
-
-    return;
 }
 
+// CCE packed format is a vector of complex real / imaginary pairs
+// from 0 to Nyquist (0 to N/2 + 1).  We use the real space buffer
+// as workspace for the shuffling.
 void toast::FFTPlanReal1DMKL::hc2cce() {
-    // CCE packed format is a vector of complex real / imaginary pairs
-    // from 0 to Nyquist (0 to N/2 + 1).  We use the real space buffer
-    // as workspace for the shuffling.
+    const int64_t half = length_ / 2;
+    const bool even = (length_ % 2 == 0);
 
-    int64_t half = (int64_t)(length_ / 2);
-    bool even = (length_ % 2 == 0);
-
-    int64_t offcce;
-
-    for (int64_t i = 0; i < n_; ++i) {
+    for (int64_t i = 0; i < n_; i++)
+    {
         // copy the first element.
         tview_[i][0] = fview_[i][0];
         tview_[i][1] = 0.0;
 
-        if (even) {
+        if (even)
+        {
             tview_[i][length_] = fview_[i][half];
             tview_[i][length_ + 1] = 0.0;
         }
 
-        for (int64_t j = 1; j < half; ++j) {
-            offcce = 2 * j;
+        for (int64_t j = 1; j < half; j++)
+        {
+            const int64_t offcce = 2 * j;
             tview_[i][offcce] = fview_[i][j];
             tview_[i][offcce + 1] = fview_[i][length_ - j];
         }
 
-        memcpy((void *)fview_[i], (void *)tview_[i],
-               buflength_ * sizeof(double));
+        memcpy((void *)fview_[i], (void *)tview_[i], buflength_ * sizeof(double));
     }
 
     memset((void *)traw_, 0, n_ * buflength_ * sizeof(double));
-
-    return;
 }
 
 #endif // ifdef HAVE_MKL
