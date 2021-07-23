@@ -29,7 +29,7 @@ void init_math_fma(py::module & m) {
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
-            double * out_raw = reinterpret_cast <double *> (info_out.ptr);
+            double * const out_raw = reinterpret_cast <double *> (info_out.ptr);
 
             if (info_weights.format != py::format_descriptor<double>::format()) {
                 auto log = toast::Logger::get();
@@ -38,9 +38,9 @@ void init_math_fma(py::module & m) {
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
-            double * weights_raw = reinterpret_cast <double *> (info_weights.ptr);
+            double const * const weights_raw = reinterpret_cast <double *> (info_weights.ptr);
 
-            double** arrays = new double*[a.size()];
+            double ** arrays = new double*[a.size()];
             for (size_t i = 0; i < a.size(); ++i) {
                 // Use raw Python API here to avoid an extra, intermediate incref on the tuple item:
                 py::handle array = PyTuple_GET_ITEM(a.ptr(), static_cast<py::ssize_t>(i));
