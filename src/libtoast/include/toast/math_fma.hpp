@@ -9,7 +9,7 @@
 
 
 namespace toast {
-void inplace_weighted_sum(int n_out, int n_weights, double * out, double const * weights, double ** arrays);
+void inplace_weighted_sum(int const n_out, int const n_weights, double * const out, double const * const weights, double const * const * const arrays);
 }
 
 #endif
