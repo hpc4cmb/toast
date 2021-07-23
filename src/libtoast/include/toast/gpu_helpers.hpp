@@ -13,11 +13,13 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
+#include <cufft.h>
 
 // checks on various type of cuda error codes
 void checkCudaErrorCode(const cudaError errorCode, const std::string& functionName = "unknown");
 void checkCublasErrorCode(const cublasStatus_t errorCode, const std::string& functionName = "unknown");
 void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string& functionName = "unknown");
+void checkCufftErrorCode(const cufftResult errorCode, const std::string& functionName = "unknown");
 
 // fucntions to get a number of bbytes for an allocation
 size_t GigagbytesToBytes(const size_t nbGB = 4);

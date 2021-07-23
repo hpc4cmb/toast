@@ -11,6 +11,7 @@
 #ifdef HAVE_CUDALIBS
 
 # include <cufftw.h>
+#include <toast/gpu_helpers.hpp>
 
 namespace toast {
 class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
@@ -28,8 +29,7 @@ class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
 
     private:
 
-        // TODO keep data on GPU?
-        fftw_plan plan_;
+        cufftHandle plan_;
         // TODO this is all the actual data
         toast::AlignedVector <double> data_;
         // TODO those are all views into data
