@@ -6,9 +6,7 @@
 #
 
 # Get the directory containing this script
-pushd $(dirname $0) > /dev/null
-base=$(pwd -P)
-popd > /dev/null
+base="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Check executables
 unexe=$(which uncrustify)
@@ -38,16 +36,8 @@ blkrun="-l 88"
 # Black test options
 blktest="--check"
 
+cd "$base"
 # Directories to process
-cppdirs="libtoast libtoast_mpi toast"
-pydirs="toast ../pipelines"
-
-# Test
-for cppd in ${cppdirs}; do
-    find "${base}/${cppd}" -name "*.hpp" -not -path '*Random123*' -not -path '*pybind11/*' -not -path '*gtest/*' -exec ${unexe} ${unrun} '{}' \;
-    find "${base}/${cppd}" -name "*.cpp" -not -path '*Random123*' -not -path '*pybind11/*' -not -path '*gtest/*' -exec ${unexe} ${unrun} '{}' \;
-done
-
-for pyd in ${pydirs}; do
-    find "${base}/${pyd}" -name "*.py" -not -path '*pybind11/*' -exec ${blkexe} ${blkrun} '{}' \;
-done
+find libtoast toast \( -name "*.hpp" -or -name "*.cpp" \) -and -not \( -path '*Random123*' -or -path '*pybind11/*' -or -path '*gtest/*' \) -exec ${unexe} ${unrun} {} + &
+find toast ../pipelines -name "*.py" -not -path '*pybind11/*' -exec ${blkexe} ${blkrun} {} + &
+wait
