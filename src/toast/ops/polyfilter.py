@@ -324,10 +324,16 @@ class PolyFilter2D(Operator):
     def _requires(self):
         req = {
             "meta": list(),
-            "shared": [self.shared_flags],
-            "detdata": [self.det_data, self.det_flags],
-            "intervals": [self.view],
+            "shared": list(),
+            "detdata": [self.det_data],
+            "intervals": list(),
         }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
+        if self.det_flags is not None:
+            req["detdata"].append(self.det_flags)
+        if self.view is not None:
+            req["intervals"].append(self.view)
         return req
 
     def _provides(self):
