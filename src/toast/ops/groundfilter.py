@@ -116,7 +116,7 @@ class GroundFilter(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def build_templates(self, tod, obs):
+    def build_templates(self, obs):
         """Construct the local ground template hierarchy"""
         if self._intervals in obs:
             intervals = obs[self._intervals]
@@ -247,68 +247,45 @@ class GroundFilter(Operator):
         return
 
     @function_timer
-    def exec(self, data):
-        """Apply the ground filter to the signal.
-
-        Args:
-            data (toast.Data): The distributed data.
-
-        """
-
+    def _exec(self, data, detectors=None, **kwargs):
         t0 = time()
+        env = Environment.get()
+        log = Logger.get()
 
-        self.comm = data.comm.comm_world
-        if self.comm is None:
-            self.rank = 0
-            self.ntask = 1
-        else:
-            self.rank = self.comm.rank
-            self.ntask = self.comm.size
+        wcomm = data.comm.comm_world
         gcomm = data.comm.comm_group
-        self.group = data.comm.group
-        if gcomm is None:
-            self.grank = 0
-        else:
-            self.grank = gcomm.rank
 
         self.nsingular = 0
         self.ngood = 0
         self.rcondsum = 0
 
         # Each group loops over its own CES:es
+        nobs = len(data.obs)
         for iobs, obs in enumerate(data.obs):
-            tod = obs["tod"]
-            if (self.rank == 0 and self.verbose) or (
-                self.grank == 0 and self.verbose > 1
-            ):
-                print(
-                    "{:4} : OpGroundFilter: Processing observation {} / {}".format(
-                        self.group, iobs + 1, len(data.obs)
-                    ),
-                    flush=True,
-                )
+            # Prefix for logging
+            log_prefix = f"{data.comm.group} : {obs.name} :"
+
+            if gcomm.rank == 0:
+                msg = f"{log_prefix} OpGroundFilter: " \
+                    f"Processing observation {iobs + 1} / {nobs}"
+                log.debug(msg)
 
             # Cache the output common flags
-            common_ref = tod.local_common_flags(self._common_flag_name)
+            common_flags = (obs.shared[self.shared_flags] & self.shared_flag_mask) != 1
 
             t1 = time()
-            templates, legendre_trend, legendre_filter = self.build_templates(tod, obs)
-            if self.grank == 0 and self.verbose > 1:
-                print(
-                    "{:4} : OpGroundFilter: Built templates in {:.1f}s".format(
-                        self.group, time() - t1
-                    ),
-                    flush=True,
-                )
+            templates, legendre_trend, legendre_filter = self.build_templates(obs)
+            if gcomm.rank == 0:
+                msg = f"{log_prefix} OpGroundFilter: " \
+                    f"Built templates in {time() - t1:.1f}s"
+                log.debug(msg)
 
+            ndet = len(tod.local_dets)
             for idet, det in enumerate(tod.local_dets):
-                if self.grank == 0 and self.verbose > 1:
-                    print(
-                        "{:4} : OpGroundFilter:   Processing detector # {} / {}".format(
-                            self.group, idet + 1, len(tod.local_dets)
-                        ),
-                        flush=True,
-                    )
+                if gcomm.rank == 0:
+                    msg = f"{log_prefix} OpGroundFilter: " \
+                        f"Processing detector # {idet + 1} / {ndet}"
+
                 ref = tod.local_signal(det, self._name)
                 flag_ref = tod.local_flags(det, self._flag_name)
                 good = np.logical_and(
@@ -319,13 +296,10 @@ class GroundFilter(Operator):
 
                 t1 = time()
                 coeff = self.fit_templates(tod, det, templates, ref, good)
-                if self.grank == 0 and self.verbose > 1:
-                    print(
-                        "{:4} : OpGroundFilter: Fit templates in {:.1f}s".format(
-                            self.group, time() - t1
-                        ),
-                        flush=True,
-                    )
+                if gcomm.rank == 0:
+                    msg = f"{log_prefix} OpGroundFilter: " \
+                        f"Fit templates in {time() - t1:.1f}s"
+                    log.debug(msg)
 
                 if coeff is None:
                     continue
@@ -334,28 +308,24 @@ class GroundFilter(Operator):
                 self.subtract_templates(
                     ref, good, coeff, legendre_trend, legendre_filter
                 )
-                if self.grank == 0 and self.verbose > 1:
-                    print(
-                        "{:4} : OpGroundFilter: Subtract templates in {:.1f}s".format(
-                            self.group, time() - t1
-                        ),
-                        flush=True,
-                    )
+                if gcomm.rank == 0:
+                    msg = f"{log_prefix} OpGroundFilter: " \
+                        f"Subtract templates in {time() - t1:.1f}s"
+                    log.debug(msg)
 
                 del ref
 
             del common_ref
 
-        if self.comm is not None:
-            self.nsingular = self.comm.allreduce(self.nsingular)
-            self.ngood = self.comm.allreduce(self.ngood)
-            self.rcondsum = self.comm.allreduce(self.rcondsum)
-        if self.rank == 0:
-            print(
-                "Applied ground filter in {:.1f} s.  Average rcond of template matrix was {}".format(
-                    time() - t0, self.rcondsum / (self.nsingular + self.ngood)
-                ),
-                flush=True,
-            )
+        if comm is not None:
+            self.nsingular = comm.allreduce(self.nsingular)
+            self.ngood = comm.allreduce(self.ngood)
+            self.rcondsum = comm.allreduce(self.rcondsum)
+
+        if wcomm.rank == 0:
+            rcond_mean = self.rcondsum / (self.nsingular + self.ngood)
+            msg =  f"Applied ground filter in {time() - t0:.1f} s.  " \
+                f"Average rcond of template matrix was {rcond_mean}"
+            log.debug(msg)
 
         return
