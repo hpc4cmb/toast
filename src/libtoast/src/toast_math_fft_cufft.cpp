@@ -19,20 +19,21 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     toast::FFTPlanReal1D(length, n, type, dir, scale) {
 
     // allocate CPU memory
-    data_.resize(n_ * 2 * length_);
+    // adds 1 to traw's length to deal with n_*length_ being odd causing out of bounds problems in exec
+    data_.resize(n_ * 2 * length_ + 1);
     std::fill(data_.begin(), data_.end(), 0);
 
     // creates raw pointers for input and output
-    traw_ = static_cast <double *> (&data_[0]);
-    fraw_ = static_cast <double *> (&data_[n_ * length_]);
+    fraw_ = static_cast <double *> (&data_[0]);
+    traw_ = static_cast <double *> (&data_[n_ * length_]);
 
     // creates vector views that will be used by user to send and receive data
     tview_.clear();
     fview_.clear();
-    for (int64_t i = 0; i < n_; ++i)
+    for (int64_t i = 0; i < n_; i++)
     {
-        tview_.push_back(&data_[i * length_]);
-        fview_.push_back(&data_[(n_ + i) * length_]);
+        fview_.push_back(&data_[i * length_]);
+        tview_.push_back(&data_[(n_ + i) * length_]);
     }
 
     // creates a plan
@@ -56,8 +57,8 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     if (dir_ == toast::fft_direction::forward) // R2C
     {
         // get input data from CPU
-        cufftDoubleReal* idata = GPU_memory_pool.toDevice(traw_, nb_elements_real); //traw_
-        cufftDoubleComplex* odata = GPU_memory_pool.alloc<cufftDoubleComplex>(nb_elements_complex); //fraw_
+        cufftDoubleReal* idata = GPU_memory_pool.toDevice(traw_, nb_elements_real);
+        cufftDoubleComplex* odata = GPU_memory_pool.alloc<cufftDoubleComplex>(nb_elements_complex);
         // execute plan
         cufftResult errorCodeExec = cufftExecD2Z(plan_, idata, odata);
         checkCufftErrorCode(errorCodeExec, "FFTPlanReal1DCUFFT::cufftExecR2C");
@@ -65,7 +66,6 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
         // send output data to CPU
         GPU_memory_pool.free(idata);
-        // TODO might be too much data if nb_elements_real is odd
         GPU_memory_pool.fromDevice(odata, (double2*)(traw_), nb_elements_complex);
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
         cce2hc();
@@ -75,9 +75,8 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
         hc2cce();
         // get input data from CPU
-        // TODO might be too much data if nb_elements_real is odd
-        cufftDoubleComplex* idata = GPU_memory_pool.toDevice((double2*)(traw_), nb_elements_complex); //fraw_
-        cufftDoubleReal* odata = GPU_memory_pool.alloc<cufftDoubleReal>(nb_elements_real); //traw_
+        cufftDoubleComplex* idata = GPU_memory_pool.toDevice((double2*)(traw_), nb_elements_complex);
+        cufftDoubleReal* odata = GPU_memory_pool.alloc<cufftDoubleReal>(nb_elements_real);
         // execute plan
         cufftResult errorCodeExec = cufftExecZ2D(plan_, idata, odata);
         checkCufftErrorCode(errorCodeExec, "FFTPlanReal1DCUFFT::cufftExecC2R");
