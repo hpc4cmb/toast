@@ -18,22 +18,36 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     toast::fft_direction dir, double scale) :
     toast::FFTPlanReal1D(length, n, type, dir, scale) {
 
+    // checks whether the size is compatible with the assumptions of the code
+    // note that this condition is likely always satisfied and that it could break other version such as the MKL FFT wrapper
+    if(n_ * length_ % 2 != 0)
+    {
+        // cause nb_elements_complex*2 == nb_elements_real+1 in the exec function
+        // which causes copies to out of bound memory
+        // might also break some assumptions of the cce2hc and hc2cce functions
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("TOAST requires an even number of elements (n_ * length_) when building a CUFFT plan.");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+
+    }
+
     // allocate CPU memory
-    // adds 1 to traw's length to deal with n_*length_ being odd causing out of bounds problems in exec
-    data_.resize(n_ * 2 * length_ + 1);
+    data_.resize(n_ * 2 * length_);
     std::fill(data_.begin(), data_.end(), 0);
 
     // creates raw pointers for input and output
-    fraw_ = static_cast <double *> (&data_[0]);
-    traw_ = static_cast <double *> (&data_[n_ * length_]);
+    traw_ = static_cast <double *> (&data_[0]);
+    fraw_ = static_cast <double *> (&data_[n_ * length_]);
 
     // creates vector views that will be used by user to send and receive data
     tview_.clear();
     fview_.clear();
     for (int64_t i = 0; i < n_; i++)
     {
-        fview_.push_back(&data_[i * length_]);
-        tview_.push_back(&data_[(n_ + i) * length_]);
+        tview_.push_back(&data_[i * length_]);
+        fview_.push_back(&data_[(n_ + i) * length_]);
     }
 
     // creates a plan
@@ -52,8 +66,11 @@ toast::FFTPlanReal1DCUFFT::~FFTPlanReal1DCUFFT() {
 }
 
 void toast::FFTPlanReal1DCUFFT::exec() {
+    // number of elements to be manipulated
     int64_t nb_elements_real = n_ * length_;
     int64_t nb_elements_complex = 1 + (nb_elements_real / 2);
+
+    // actual execution of the FFT
     if (dir_ == toast::fft_direction::forward) // R2C
     {
         // get input data from CPU
