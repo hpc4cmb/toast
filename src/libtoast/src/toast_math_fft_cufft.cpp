@@ -27,7 +27,7 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
         // might also break some assumptions of the cce2hc and hc2cce functions
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
-        std::string msg("TOAST requires an even number of elements (n_ * length_) when building a CUFFT plan.");
+        std::string msg("requires an even number of elements (n_ * length_) when building a CUFFT plan.");
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
 
@@ -104,6 +104,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         GPU_memory_pool.fromDevice(traw_, odata, nb_elements_real);
     }
 
+    // TODO should check this rescaling as it was inherited from the FFTW implementation
     // gets parameters to rescale output
     double * rawout;
     double norm;
