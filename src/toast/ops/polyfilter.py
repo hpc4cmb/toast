@@ -92,7 +92,7 @@ class PolyFilter2D(Operator):
 
         """
         if detectors is not None:
-            raise RuntimeError("PolyFilter2D cannot be run in batch mode")
+            raise RuntimeError("PolyFilter2D cannot be run on subsets of detectors")
         norder = self.order + 1
         nmode = norder ** 2
         pat = re.compile(self.pattern)
