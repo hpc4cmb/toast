@@ -66,7 +66,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
         // send output data to CPU
         GPU_memory_pool.free(idata);
-        GPU_memory_pool.fromDevice(odata, (double2*)(traw_), nb_elements_complex);
+        GPU_memory_pool.fromDevice((cufftDoubleComplex*)(traw_), odata, nb_elements_complex);
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
         cce2hc();
     }
@@ -75,7 +75,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
         hc2cce();
         // get input data from CPU
-        cufftDoubleComplex* idata = GPU_memory_pool.toDevice((double2*)(traw_), nb_elements_complex);
+        cufftDoubleComplex* idata = GPU_memory_pool.toDevice((cufftDoubleComplex*)(traw_), nb_elements_complex);
         cufftDoubleReal* odata = GPU_memory_pool.alloc<cufftDoubleReal>(nb_elements_real);
         // execute plan
         cufftResult errorCodeExec = cufftExecZ2D(plan_, idata, odata);
@@ -84,7 +84,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
         // send output data to CPU
         GPU_memory_pool.free(idata);
-        GPU_memory_pool.fromDevice(odata, traw_, nb_elements_real);
+        GPU_memory_pool.fromDevice(traw_, odata, nb_elements_real);
     }
 
     // gets parameters to rescale output
@@ -139,9 +139,6 @@ void toast::FFTPlanReal1DCUFFT::cce2hc()
         fview_[i][length_] = 0.0;
         fview_[i][length_ + 1] = 0.0;
     }
-
-    // TODO useful?
-    memset((void *)traw_, 0, n_ * length_ * sizeof(double));
 }
 
 // moves HC packed data in fview_ / fraw_ to CCE packed data in tview_ / traw_
