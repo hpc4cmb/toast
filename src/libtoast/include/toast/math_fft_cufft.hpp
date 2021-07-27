@@ -32,9 +32,9 @@ class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
         void hc2cce();
 
         cufftHandle plan_;
-        // TODO this is all the actual data
+        // this is all the actual data allocated as a continuous block
         toast::AlignedVector <double> data_;
-        // TODO those are all views into data
+        // those are all views into the data
         double * traw_;
         double * fraw_;
         std::vector <double *> tview_;

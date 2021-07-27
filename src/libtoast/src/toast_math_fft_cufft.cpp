@@ -20,7 +20,7 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
 
     // checks whether the size is compatible with the assumptions of the code
     // note that this condition is likely always satisfied and that it could break other version such as the MKL FFT wrapper
-    if(n_ * length_ % 2 != 0)
+    if((n_ * length_) % 2 != 0)
     {
         // cause nb_elements_complex*2 == nb_elements_real+1 in the exec function
         // which causes copies to out of bound memory
@@ -67,8 +67,8 @@ toast::FFTPlanReal1DCUFFT::~FFTPlanReal1DCUFFT() {
 
 void toast::FFTPlanReal1DCUFFT::exec() {
     // number of elements to be manipulated
-    int64_t nb_elements_real = n_ * length_;
-    int64_t nb_elements_complex = 1 + (nb_elements_real / 2);
+    const int64_t nb_elements_real = n_ * length_;
+    const int64_t nb_elements_complex = 1 + (nb_elements_real / 2);
 
     // actual execution of the FFT
     if (dir_ == toast::fft_direction::forward) // R2C
@@ -77,9 +77,9 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         cufftDoubleReal* idata = GPU_memory_pool.toDevice(traw_, nb_elements_real);
         cufftDoubleComplex* odata = GPU_memory_pool.alloc<cufftDoubleComplex>(nb_elements_complex);
         // execute plan
-        cufftResult errorCodeExec = cufftExecD2Z(plan_, idata, odata);
+        const cufftResult errorCodeExec = cufftExecD2Z(plan_, idata, odata);
         checkCufftErrorCode(errorCodeExec, "FFTPlanReal1DCUFFT::cufftExecR2C");
-        cudaError statusSync = cudaDeviceSynchronize();
+        const cudaError statusSync = cudaDeviceSynchronize();
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
         // send output data to CPU
         GPU_memory_pool.free(idata);
@@ -95,9 +95,9 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         cufftDoubleComplex* idata = GPU_memory_pool.toDevice((cufftDoubleComplex*)(traw_), nb_elements_complex);
         cufftDoubleReal* odata = GPU_memory_pool.alloc<cufftDoubleReal>(nb_elements_real);
         // execute plan
-        cufftResult errorCodeExec = cufftExecZ2D(plan_, idata, odata);
+        const cufftResult errorCodeExec = cufftExecZ2D(plan_, idata, odata);
         checkCufftErrorCode(errorCodeExec, "FFTPlanReal1DCUFFT::cufftExecC2R");
-        cudaError statusSync = cudaDeviceSynchronize();
+        const cudaError statusSync = cudaDeviceSynchronize();
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
         // send output data to CPU
         GPU_memory_pool.free(idata);
@@ -120,8 +120,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     }
 
     // normalize output
-    int64_t len = n_ * length_;
-    for (int64_t i = 0; i < len; ++i)
+    for (int64_t i = 0; i < nb_elements_real; ++i)
     {
         rawout[i] *= norm;
     }
