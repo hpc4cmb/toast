@@ -28,8 +28,8 @@ class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
         double * fdata(int64_t indx);
 
     private:
-        void cce2hc();
-        void hc2cce();
+        void complexToHalfcomplex();
+        void halfcomplexToComplex();
 
         cufftHandle plan_;
         // this is all the actual data allocated as a continuous block

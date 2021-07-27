@@ -85,12 +85,12 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         GPU_memory_pool.free(idata);
         GPU_memory_pool.fromDevice((cufftDoubleComplex*)(traw_), odata, nb_elements_complex);
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
-        cce2hc();
+        complexToHalfcomplex();
     }
     else // C2R
     {
         // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
-        hc2cce();
+        halfcomplexToComplex();
         // get input data from CPU
         cufftDoubleComplex* idata = GPU_memory_pool.toDevice((cufftDoubleComplex*)(traw_), nb_elements_complex);
         cufftDoubleReal* odata = GPU_memory_pool.alloc<cufftDoubleReal>(nb_elements_real);
@@ -104,7 +104,6 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         GPU_memory_pool.fromDevice(traw_, odata, nb_elements_real);
     }
 
-    // TODO should check this rescaling as it was inherited from the FFTW implementation
     // gets parameters to rescale output
     double * rawout;
     double norm;
@@ -128,59 +127,60 @@ void toast::FFTPlanReal1DCUFFT::exec() {
 
 // moves CCE packed data in tview_ / traw_ to HC packed data in fview_ / fraw_
 // CCE packed format is a vector of complex real / imaginary pairs from 0 to Nyquist (0 to N/2 + 1).
-void toast::FFTPlanReal1DCUFFT::cce2hc()
+// see: https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
+void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex()
 {
     const int64_t half = length_ / 2;
-    const bool even = (length_ % 2 == 0);
+    const bool is_even = (length_ % 2 == 0);
 
-    for (int64_t i = 0; i < n_; i++)
+    for (int64_t batchId = 0; batchId < n_; batchId++)
     {
-        // copy the first element.
-        fview_[i][0] = tview_[i][0];
+        // 0th value
+        fview_[batchId][0] = tview_[batchId][0]; // real
+        // imag is zero by convention and thus not encoded
 
-        if (even)
+        // all intermediate values
+        for (int64_t i = 1; i < half; i++)
         {
-            // copy in the real part of the last element of the
-            // CCE data, which has N/2+1 complex element pairs.
-            // This element is located at 2 * half == length_.
-            fview_[i][half] = tview_[i][length_];
+            fview_[batchId][i] = tview_[batchId][2 * i]; // real
+            fview_[batchId][length_ - i] = tview_[batchId][2 * i + 1]; // imag
         }
 
-        for (int64_t j = 1; j < half; j++)
+        // n/2th value
+        if (is_even)
         {
-            const int64_t offcce = 2 * j;
-            fview_[i][j] = tview_[i][offcce];
-            fview_[i][length_ - j] = tview_[i][offcce + 1];
+            fview_[batchId][half] = tview_[batchId][length_]; // real
+            // imag is zero by convention and thus not encoded
         }
-
-        fview_[i][length_] = 0.0;
-        fview_[i][length_ + 1] = 0.0;
     }
 }
 
 // moves HC packed data in fview_ / fraw_ to CCE packed data in tview_ / traw_
 // CCE packed format is a vector of complex real / imaginary pairs from 0 to Nyquist (0 to N/2 + 1).
-void toast::FFTPlanReal1DCUFFT::hc2cce() {
+// see: https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
+void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex() {
     const int64_t half = length_ / 2;
-    const bool even = (length_ % 2 == 0);
+    const bool is_even = (length_ % 2 == 0);
 
-    for (int64_t i = 0; i < n_; i++)
+    // iterates on all batches one after the other
+    for (int64_t batchId = 0; batchId < n_; batchId++)
     {
-        // copy the first element.
-        tview_[i][0] = fview_[i][0];
-        tview_[i][1] = 0.0;
+        // 0th value
+        tview_[batchId][0] = fview_[batchId][0]; // real
+        tview_[batchId][1] = 0.0; // imag part is 0 by convention
 
-        if (even)
+        // all intermediate values
+        for (int64_t i = 1; i < half; i++)
         {
-            tview_[i][length_] = fview_[i][half];
-            tview_[i][length_ + 1] = 0.0;
+            tview_[batchId][2 * i] = fview_[batchId][i]; // real
+            tview_[batchId][2 * i + 1] = fview_[batchId][length_ - i]; // imag
         }
 
-        for (int64_t j = 1; j < half; j++)
+        // n/2th value
+        if (is_even)
         {
-            const int64_t offcce = 2 * j;
-            tview_[i][offcce] = fview_[i][j];
-            tview_[i][offcce + 1] = fview_[i][length_ - j];
+            tview_[batchId][length_] = fview_[batchId][half]; // real
+            tview_[batchId][length_ + 1] = 0.0; // imag is 0 by convention
         }
     }
 }
