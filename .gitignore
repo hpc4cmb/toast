@@ -11,7 +11,10 @@
 # *.py[cod]
 
 # Compiled extensions
-# *.so
+*.so
+
+# Python egg
+toast_cmb.egg-info
 
 /examples/job_*
 /examples/data/
@@ -23,6 +26,7 @@
 
 # generated files
 src/libtoast/src/version.cpp
+src/libtoast/version.cpp
 
 # vim
 *.swp
@@ -36,3 +40,6 @@ src/libtoast/src/version.cpp
 # Jupyter notebooks
 .ipynb_checkpoints
 __pycache__
+
+# VSCode
+.vscode/

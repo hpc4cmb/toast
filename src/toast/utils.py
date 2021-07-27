@@ -36,6 +36,8 @@ from ._libtoast import (
     vfast_erfinv,
 )
 
+from ._libtoast import inplace_weighted_sum
+
 from .mpi import MPI, use_mpi
 
 

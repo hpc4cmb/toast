@@ -149,6 +149,26 @@ class TOASTfftTest : public ::testing::Test {
 };
 
 
+class TOASTfmaTest : public ::testing::Test {
+    public:
+
+        TOASTfmaTest() {}
+
+        ~TOASTfmaTest() {}
+
+        virtual void SetUp();
+
+        virtual void TearDown() {}
+
+        static const int n_out;
+        static const int n_weights;
+        toast::AlignedVector <double> weights;
+        toast::AlignedVector <double> answer;
+        toast::AlignedVector <double> arrays_flat;
+        toast::AlignedVector <double> out;
+};
+
+
 class TOASTcovTest : public ::testing::Test {
     public:
 

@@ -47,6 +47,8 @@ from . import ops_madam as testopsmadam
 from . import ops_mapmaker as testopsmapmaker
 from . import ops_filterbin as testopsfilterbin
 
+from . import ops_crosstalk as testopscrosstalk
+
 from . import map_satellite as testmapsatellite
 
 from . import map_ground as testmapground
@@ -138,6 +140,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(testopsmadam))
         suite.addTest(loader.loadTestsFromModule(testopsmapmaker))
         suite.addTest(loader.loadTestsFromModule(testopsfilterbin))
+        suite.addTest(loader.loadTestsFromModule(testopscrosstalk))
         suite.addTest(loader.loadTestsFromModule(testmapsatellite))
         suite.addTest(loader.loadTestsFromModule(testmapground))
         suite.addTest(loader.loadTestsFromModule(testbinned))
