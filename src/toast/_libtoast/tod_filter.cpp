@@ -7,6 +7,38 @@
 
 
 void init_tod_filter(py::module & m) {
+    m.def("legendre",
+          [](py::buffer x, py::buffer templates, size_t start_order,
+             size_t stop_order) {
+              pybuffer_check_1D <double> (x);
+              py::buffer_info info_x = x.request();
+              py::buffer_info info_templates = templates.request();
+
+              size_t nsample = info_x.size;
+              size_t ntemplate = info_templates.size / nsample;
+              if (ntemplate != stop_order - start_order) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Size of templates does not match x, and order";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+
+              double * px = reinterpret_cast <double *> (info_x.ptr);
+              double * ptemplates = reinterpret_cast <double *> (info_templates.ptr);
+              toast::legendre(px, ptemplates, start_order, stop_order, nsample);
+
+              return;
+          }, py::arg("x"), py::arg("templates"), py::arg("start_order"),
+          py::arg(
+              "stop_order"),
+          R"(
+        Populate an array of Legendre polynomials at x (in range [-1, 1])
+        Args:
+        Returns:
+            None.
+    )");
+
     m.def("chebyshev",
           [](py::buffer x, py::buffer templates, size_t start_order,
              size_t stop_order) {

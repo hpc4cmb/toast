@@ -64,6 +64,14 @@ class GroundFilter(Operator):
         1, help="Bit mask to use when adding flags based on ground filter failures."
     )
 
+    azimuth = Unicode("azimuth", allow_none=True, help="Observation shared key for Azimuth")
+
+    boresight_azel = Unicode(
+        "boresight_azel",
+        allow_none=True,
+        help="Observation shared key for boresight Az/El",
+    )
+
     trend_order = Int(
         5, help="Order of a Legendre polynomial to fit along with the ground template."
     )
@@ -118,26 +126,30 @@ class GroundFilter(Operator):
     @function_timer
     def build_templates(self, obs):
         """Construct the local ground template hierarchy"""
-        if self._intervals in obs:
-            intervals = obs[self._intervals]
-        else:
-            intervals = None
-        local_intervals = tod.local_intervals(intervals)
+
+        views = obs.view[self.view]
 
         # Construct trend templates.  Full domain for x is [-1, 1]
 
-        my_offset, my_nsamp = tod.local_samples
-        nsamp_tot = tod.total_samples
+        my_offset = obs.local_index_offset
+        my_nsamp = obs.n_local_samples
+        nsamp_tot = obs.n_all_samples
         x = np.arange(my_offset, my_offset + my_nsamp) / nsamp_tot * 2 - 1
 
         # Do not include the offset in the trend.  It will be part of
         # of the ground template
-        legendre_trend = np.zeros([self._trend_order, x.size])
-        legendre(x, legendre_trend, 1, self._trend_order + 1)
+        legendre_trend = np.zeros([self.trend_order, x.size])
+        legendre(x, legendre_trend, 1, self.trend_order + 1)
 
         try:
-            (azmin, azmax, _, _) = tod.scan_range
-            az = tod.read_boresight_az()
+            azmin = obs["scan_min_az"].to_value(u.radian)
+            azmax = obs["scan_max_az"].to_value(u.radian)
+            if self.azimuth is not None:
+                az = obs.shared[self.azimuth]
+            else:
+                quats = obs.shared[self.boresight_azel]
+                theta, phi = qa.to_position(quats)
+                az = 2 * np.pi - phi
         except Exception as e:
             raise RuntimeError(
                 "Failed to get boresight azimuth from TOD.  Perhaps it is "
@@ -148,23 +160,23 @@ class GroundFilter(Operator):
         # azimuth increases monotonously even across the zero meridian.
 
         phase = (az - azmin) / (azmax - azmin) * 2 - 1
-        nfilter = self._filter_order + 1
+        nfilter = self.filter_order + 1
         legendre_templates = np.zeros([nfilter, phase.size])
         legendre(phase, legendre_templates, 0, nfilter)
-        if not self._split_template:
+        if not self.split_template:
             legendre_filter = legendre_templates
         else:
             # Create separate templates for alternating scans
-            common_ref = tod.local_common_flags(self._common_flag_name)
+            common_flags = obs.shared[self.shared_flags].data
             legendre_filter = []
-            mask1 = common_ref & tod.LEFTRIGHT_SCAN == 0
-            mask2 = common_ref & tod.RIGHTLEFT_SCAN == 0
+            # The flag masks are hard-coded in sim_ground.py
+            mask1 = common_flags & 2 == 0
+            mask2 = common_flags & 4 == 0
             for template in legendre_templates:
                 for mask in mask1, mask2:
                     temp = template.copy()
                     temp[mask] = 0
                     legendre_filter.append(temp)
-            del common_ref
             legendre_filter = np.vstack(legendre_filter)
 
         templates = np.vstack([legendre_trend, legendre_filter])
@@ -189,10 +201,10 @@ class GroundFilter(Operator):
         return
 
     @function_timer
-    def fit_templates(self, tod, det, templates, ref, good):
+    def fit_templates(self, obs, det, templates, ref, good):
         log = Logger.get()
         # communicator for processes with the same detectors
-        comm = tod.grid_comm_row
+        comm = obs.comm_row
         ngood = np.sum(good)
         if comm is not None:
             ngood = comm.allreduce(ngood)
@@ -206,13 +218,14 @@ class GroundFilter(Operator):
         bin_templates(ref, templates, good.astype(np.uint8), invcov, proj)
 
         if comm is not None:
-            # Reduce the binned data.  The detector signals is
+            # Reduce the binned data.  The detector signal is
             # distributed across the group communicator.
             comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
             comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
 
         # Assemble the joint template
         rcond = 1 / np.linalg.cond(invcov)
+
         self.rcondsum += rcond
         if rcond > 1e-6:
             self.ngood += 1
@@ -235,13 +248,13 @@ class GroundFilter(Operator):
     @function_timer
     def subtract_templates(self, ref, good, coeff, legendre_trend, legendre_filter):
         # Trend
-        if self._detrend:
+        if self.detrend:
             trend = np.zeros_like(ref)
-            add_templates(trend, legendre_trend, coeff[: self._trend_order])
+            add_templates(trend, legendre_trend, coeff[: self.trend_order])
             ref[good] -= trend[good]
         # Ground template
         grtemplate = np.zeros_like(ref)
-        add_templates(grtemplate, legendre_filter, coeff[self._trend_order :])
+        add_templates(grtemplate, legendre_filter, coeff[self.trend_order :])
         ref[good] -= grtemplate[good]
         ref[np.logical_not(good)] = 0
         return
@@ -265,38 +278,34 @@ class GroundFilter(Operator):
             # Prefix for logging
             log_prefix = f"{data.comm.group} : {obs.name} :"
 
-            if gcomm.rank == 0:
+            if gcomm is None or gcomm.rank == 0:
                 msg = f"{log_prefix} OpGroundFilter: " \
                     f"Processing observation {iobs + 1} / {nobs}"
                 log.debug(msg)
 
             # Cache the output common flags
-            common_flags = (obs.shared[self.shared_flags] & self.shared_flag_mask) != 1
+            common_flags = obs.shared[self.shared_flags].data & self.shared_flag_mask
 
             t1 = time()
             templates, legendre_trend, legendre_filter = self.build_templates(obs)
-            if gcomm.rank == 0:
+            if gcomm is None or gcomm.rank == 0:
                 msg = f"{log_prefix} OpGroundFilter: " \
                     f"Built templates in {time() - t1:.1f}s"
                 log.debug(msg)
 
-            ndet = len(tod.local_dets)
-            for idet, det in enumerate(tod.local_dets):
-                if gcomm.rank == 0:
+            ndet = len(obs.local_detectors)
+            for idet, det in enumerate(obs.local_detectors):
+                if gcomm is None or gcomm.rank == 0:
                     msg = f"{log_prefix} OpGroundFilter: " \
                         f"Processing detector # {idet + 1} / {ndet}"
 
-                ref = tod.local_signal(det, self._name)
-                flag_ref = tod.local_flags(det, self._flag_name)
-                good = np.logical_and(
-                    common_ref & self._common_flag_mask == 0,
-                    flag_ref & self._flag_mask == 0,
-                )
-                del flag_ref
+                ref = obs.detdata[self.det_data][idet]
+                def_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
+                good = np.logical_and(common_flags == 0, def_flags == 0)
 
                 t1 = time()
-                coeff = self.fit_templates(tod, det, templates, ref, good)
-                if gcomm.rank == 0:
+                coeff = self.fit_templates(obs, det, templates, ref, good)
+                if gcomm is None or gcomm.rank == 0:
                     msg = f"{log_prefix} OpGroundFilter: " \
                         f"Fit templates in {time() - t1:.1f}s"
                     log.debug(msg)
@@ -308,24 +317,44 @@ class GroundFilter(Operator):
                 self.subtract_templates(
                     ref, good, coeff, legendre_trend, legendre_filter
                 )
-                if gcomm.rank == 0:
+                if gcomm is None or gcomm.rank == 0:
                     msg = f"{log_prefix} OpGroundFilter: " \
                         f"Subtract templates in {time() - t1:.1f}s"
                     log.debug(msg)
 
-                del ref
+        if wcomm is not None:
+            self.nsingular = wcomm.allreduce(self.nsingular)
+            self.ngood = wcomm.allreduce(self.ngood)
+            self.rcondsum = wcomm.allreduce(self.rcondsum)
 
-            del common_ref
-
-        if comm is not None:
-            self.nsingular = comm.allreduce(self.nsingular)
-            self.ngood = comm.allreduce(self.ngood)
-            self.rcondsum = comm.allreduce(self.rcondsum)
-
-        if wcomm.rank == 0:
+        if wcomm is None or wcomm.rank == 0:
             rcond_mean = self.rcondsum / (self.nsingular + self.ngood)
             msg =  f"Applied ground filter in {time() - t0:.1f} s.  " \
                 f"Average rcond of template matrix was {rcond_mean}"
             log.debug(msg)
 
         return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "shared" : list(),
+            "detdata" : [self.det_data],
+        }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
+        if self.azimuth is not None:
+            req["shared"].append(self.azimuth)
+        if self.boresight_azel is not None:
+            req["shared"].append(self.boresight_azel)
+        if self.det_flags is not None:
+            req["detdata"].append(self.det_flags)
+        return req
+
+    def _provides(self):
+        return dict()
+
+    def _accelerators(self):
+        return list()

@@ -570,9 +570,9 @@ def fake_flags(data, shared_name="flags", shared_val=1, det_name="flags", det_va
         if ob.comm_col_rank == 0:
             fshared = np.zeros(ob.n_local_samples, dtype=np.uint8)
             fshared[::100] = shared_val
-        ob.shared[shared_name].set(fshared, offset=(0,), fromrank=0)
+        ob.shared[shared_name].set(ob.shared[shared_name].data | fshared, offset=(0,), fromrank=0)
         for det in ob.local_detectors:
-            ob.detdata[det_name][det, :half] = det_val
+            ob.detdata[det_name][det, :half] |= det_val
 
 
 def create_ground_data(mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None):

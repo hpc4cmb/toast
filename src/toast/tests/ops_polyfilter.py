@@ -201,7 +201,7 @@ class PolyFilterTest(MPITestCase):
                 good = (flags == 0)
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(1e-3 * check_rms < rms[ob.name][det])
+                self.assertTrue(check_rms < 1e-3 * rms[ob.name][det])
 
         # Plot filtered TOD
 
@@ -281,7 +281,7 @@ class PolyFilterTest(MPITestCase):
                 good = (flags == 0)
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(1e-3 * check_rms < rms[ob.name][det])
+                self.assertTrue(check_rms < 1e-3 * rms[ob.name][det])
 
         del data
         return

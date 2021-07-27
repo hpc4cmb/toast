@@ -667,11 +667,12 @@ class SimGround(Operator):
                 (self.scan_rightleft_interval, 4),
                 (self.turn_leftright_interval, 3),
                 (self.turn_rightleft_interval, 5),
-                (self.sun_up_interval, 8),
-                (self.sun_close_interval, 16),
+                #(self.sun_up_interval, 8),
+                #(self.sun_close_interval, 16),
                 (self.elnod_interval, 32),
             ],
         )
+        flag_intervals.apply(data, detectors=None)
 
         return
 
@@ -686,7 +687,10 @@ class SimGround(Operator):
             "shared": [
                 self.times,
                 self.shared_flags,
-                self.boresight,
+                self.azimuth,
+                self.elevation,
+                self.boresight_azel,
+                self.boresight_radec,
                 self.hwp_angle,
                 self.position,
                 self.velocity,
