@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <mutex>
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
@@ -37,11 +38,11 @@ public:
 };
 
 // used to recycle GPU allocation
-// this class is NOT threadsafe
-// one should use one instance per thread and not have a thread free memory it did not allocate
 class GPU_memory_pool_t
 {
 private:
+    // used to make class threadsafe
+    std::mutex alloc_mutex;
     // starting point of the current allocation
     void* start;
     // what is the total memory allocated here
@@ -65,7 +66,7 @@ public:
     T* alloc(size_t size)
     {
         T* output_ptr = NULL;
-        cudaError errorCode = this->malloc((void**)&output_ptr, size*sizeof(T));
+        const cudaError errorCode = this->malloc((void**)&output_ptr, size*sizeof(T));
         checkCudaErrorCode(errorCode, "GPU_memory_pool_t::alloc");
         return output_ptr;
     }
@@ -97,7 +98,7 @@ public:
 };
 
 // global variable (one instance per thread) containing the pool
-extern thread_local GPU_memory_pool_t GPU_memory_pool;
+extern GPU_memory_pool_t GPU_memory_pool;
 
 #endif //HAVE_CUDALIBS
 #endif //TOAST_GPU_HELPER_H

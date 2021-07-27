@@ -148,7 +148,7 @@ void checkCufftErrorCode(const cufftResult errorCode, const std::string& functio
 //---------------------------------------------------------------------------------------
 // MEMORY POOL
 
-// cnostant used to make sure allocations are aligned
+// constant used to make sure allocations are aligned
 const int ALIGNEMENT_SIZE = 512;
 
 GPU_memory_block_t::GPU_memory_block_t(void* ptr, size_t size)
@@ -199,6 +199,9 @@ GPU_memory_pool_t::~GPU_memory_pool_t()
 // allocates memory starting from the end of the latest block
 cudaError GPU_memory_pool_t::malloc(void** output_ptr, size_t size)
 {
+    // insure two threads cannot interfere
+    const std::lock_guard<std::mutex> lock(alloc_mutex);
+
     // builds a block starting at the end of the existing blocks
     *output_ptr = blocks.back().end;
     const GPU_memory_block_t memoryBlock(*output_ptr, size);
@@ -223,6 +226,9 @@ cudaError GPU_memory_pool_t::malloc(void** output_ptr, size_t size)
 // frees memory by releasing the block
 void GPU_memory_pool_t::free(void* ptr)
 {
+    // insure two threads cannot interfere
+    const std::lock_guard<std::mutex> lock(alloc_mutex);
+
     // gets index of ptr in block, starting from the end
     int i = blocks.size() - 1;
     while(blocks[i].start != ptr)
@@ -262,12 +268,12 @@ size_t FractionOfGPUMemory(const double fraction)
     const size_t totalGPUmemory = deviceProp.totalGlobalMem;
     // computes the portion that we want to reserve
     size_t result = fraction * totalGPUmemory;
-    // makes sure the end of the reservation is aligned properly
+    // makes sure the end of the reservation is a multiple of the alignement
     result -= result % ALIGNEMENT_SIZE;
     return result;
 }
 
 // global variable, preallocates 90% of the total GPU memory available
-thread_local GPU_memory_pool_t GPU_memory_pool = GPU_memory_pool_t(FractionOfGPUMemory(0.9));
+GPU_memory_pool_t GPU_memory_pool(FractionOfGPUMemory(0.9));
 
 #endif
