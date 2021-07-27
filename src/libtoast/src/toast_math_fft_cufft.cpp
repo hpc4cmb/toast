@@ -17,7 +17,7 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     int64_t length, int64_t n, toast::fft_plan_type type,
     toast::fft_direction dir, double scale) :
     toast::FFTPlanReal1D(length, n, type, dir, scale) {
-
+    
     // checks whether the size is compatible with the assumptions of the code
     // note that this condition is likely always satisfied and that it could break other version such as the MKL FFT wrapper
     if((n_ * length_) % 2 != 0)
