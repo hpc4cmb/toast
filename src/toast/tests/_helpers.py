@@ -166,11 +166,11 @@ def create_satellite_empty(mpicomm, obs_per_group=1, samples=10):
 
 
 def create_satellite_data(
-        mpicomm,
-        obs_per_group=1,
-        sample_rate=10.0 * u.Hz,
-        obs_time=10.0 * u.minute,
-        pixel_per_process=1,
+    mpicomm,
+    obs_per_group=1,
+    sample_rate=10.0 * u.Hz,
+    obs_time=10.0 * u.minute,
+    pixel_per_process=1,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -570,7 +570,9 @@ def fake_flags(data, shared_name="flags", shared_val=1, det_name="flags", det_va
         if ob.comm_col_rank == 0:
             fshared = np.zeros(ob.n_local_samples, dtype=np.uint8)
             fshared[::100] = shared_val
-        ob.shared[shared_name].set(ob.shared[shared_name].data | fshared, offset=(0,), fromrank=0)
+        ob.shared[shared_name].set(
+            ob.shared[shared_name].data | fshared, offset=(0,), fromrank=0
+        )
         for det in ob.local_detectors:
             ob.detdata[det_name][det, :half] |= det_val
 

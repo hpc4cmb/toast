@@ -656,16 +656,16 @@ def simulate_ces_scan(
 
 @function_timer
 def add_solar_intervals(
-        intervals,
-        site,
-        times,
-        az_bore,
-        el_bore,
-        sun_up_interval,
-        sun_close_interval,
-        sun_close_distance,
+    intervals,
+    site,
+    times,
+    az_bore,
+    el_bore,
+    sun_up_interval,
+    sun_close_interval,
+    sun_close_distance,
 ):
-    """ Get the Sun's position in the horizontal coordinate system and
+    """Get the Sun's position in the horizontal coordinate system and
     translate it into 'Sun up' and 'Sun close' intervals.
     """
 
@@ -697,8 +697,9 @@ def add_solar_intervals(
     sun_up = el_sun > 0
 
     cos_lim = np.cos(sun_close_distance)
-    cos_dist = np.sin(el_bore) * np.sin(el_sun) \
-        + np.cos(el_bore) * np.cos(el_sun) * np.cos(az_bore - az_sun)
+    cos_dist = np.sin(el_bore) * np.sin(el_sun) + np.cos(el_bore) * np.cos(
+        el_sun
+    ) * np.cos(az_bore - az_sun)
     sun_close = cos_dist > cos_lim
 
     # Translate the boolean vectors into intervals

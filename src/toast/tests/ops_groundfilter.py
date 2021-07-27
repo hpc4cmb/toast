@@ -36,6 +36,7 @@ from ..todmap import OpGroundFilter, TODGround
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
 """
 
+
 class GroundFilterTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -59,7 +60,6 @@ class GroundFilterTest(MPITestCase):
         )
         pointing.apply(data)
 
-
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
@@ -78,7 +78,7 @@ class GroundFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = ob.shared["flags"].data & self.shared_flag_mask
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 # Add scan-synchronous signal to the data
                 ob.detdata["signal"][det] += az
                 rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
@@ -103,7 +103,7 @@ class GroundFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = ob.shared["flags"].data & self.shared_flag_mask
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
@@ -127,7 +127,6 @@ class GroundFilterTest(MPITestCase):
         )
         pointing.apply(data)
 
-
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
@@ -149,7 +148,7 @@ class GroundFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = ob.shared["flags"].data & self.shared_flag_mask
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 # Add scan-synchronous signal to the data
                 ob.detdata["signal"][det][leftgoing] += az[leftgoing]
                 ob.detdata["signal"][det][rightgoing] -= az[rightgoing]
@@ -175,7 +174,7 @@ class GroundFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = ob.shared["flags"].data & self.shared_flag_mask
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])

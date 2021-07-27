@@ -23,8 +23,6 @@ from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 from .._libtoast import filter_polynomial
 
 
-
-
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
@@ -63,7 +61,9 @@ class PolyFilter2D(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    focalplane_key = Unicode(None, allow_none=True, help="Which focalplane key to match")
+    focalplane_key = Unicode(
+        None, allow_none=True, help="Which focalplane key to match"
+    )
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -282,14 +282,15 @@ class PolyFilter2D(Operator):
                         continue
                     for isample in range(nsample):
                         if np.all(coeff[isample, igroup] == 0):
-                            views.detdata[self.det_flags][iview][:, isample] \
-                                |= (good * self.poly_flag_mask).astype(
-                                    views.detdata[self.det_flags][0].dtype
-                                )
+                            views.detdata[self.det_flags][iview][:, isample] |= (
+                                good * self.poly_flag_mask
+                            ).astype(views.detdata[self.det_flags][0].dtype)
                 templates = np.transpose(
                     templates, [1, 2, 0]
                 ).copy()  # ndet x nmode x nsample
-                coeff = np.transpose(coeff, [1, 2, 0]).copy()  # ngroup x nmode x nsample
+                coeff = np.transpose(
+                    coeff, [1, 2, 0]
+                ).copy()  # ngroup x nmode x nsample
 
                 for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
@@ -419,7 +420,9 @@ class PolyFilter(Operator):
 
             views = obs.view[self.view]
             for iview, view in enumerate(views):
-                shared_flags = obs.shared[self.shared_flags].data & self.shared_flag_mask
+                shared_flags = (
+                    obs.shared[self.shared_flags].data & self.shared_flag_mask
+                )
 
                 if self.view is not None:
                     local_starts = []
@@ -444,7 +447,9 @@ class PolyFilter(Operator):
 
                     flags = shared_flags | det_flags
 
-                    filter_polynomial(self.order, flags, [signal], local_starts, local_stops)
+                    filter_polynomial(
+                        self.order, flags, [signal], local_starts, local_stops
+                    )
 
                     obs.detdata[self.det_flags][idet][flags] & self.poly_flag_mask
 
@@ -504,7 +509,9 @@ class CommonModeFilter(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
 
-    focalplane_key = Unicode(None, allow_none=True, help="Which focalplane key to match")
+    focalplane_key = Unicode(
+        None, allow_none=True, help="Which focalplane key to match"
+    )
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -560,8 +567,10 @@ class CommonModeFilter(Operator):
                 for idet, det in enumerate(obs.local_detectors):
                     if pat.match(det) is None:
                         continue
-                    if value is not None and \
-                       focalplane[det][self.focalplane_key] != value:
+                    if (
+                        value is not None
+                        and focalplane[det][self.focalplane_key] != value
+                    ):
                         continue
                     local_dets.append((idet, det))
 

@@ -33,8 +33,7 @@ from .._libtoast import bin_templates, add_templates, legendre
 
 @trait_docs
 class GroundFilter(Operator):
-    """Operator that applies ground template filtering to azimuthal scans.
-    """
+    """Operator that applies ground template filtering to azimuthal scans."""
 
     # Class traits
 
@@ -64,7 +63,9 @@ class GroundFilter(Operator):
         1, help="Bit mask to use when adding flags based on ground filter failures."
     )
 
-    azimuth = Unicode("azimuth", allow_none=True, help="Observation shared key for Azimuth")
+    azimuth = Unicode(
+        "azimuth", allow_none=True, help="Observation shared key for Azimuth"
+    )
 
     boresight_azel = Unicode(
         "boresight_azel",
@@ -279,8 +280,10 @@ class GroundFilter(Operator):
             log_prefix = f"{data.comm.group} : {obs.name} :"
 
             if gcomm is None or gcomm.rank == 0:
-                msg = f"{log_prefix} OpGroundFilter: " \
+                msg = (
+                    f"{log_prefix} OpGroundFilter: "
                     f"Processing observation {iobs + 1} / {nobs}"
+                )
                 log.debug(msg)
 
             # Cache the output common flags
@@ -289,15 +292,19 @@ class GroundFilter(Operator):
             t1 = time()
             templates, legendre_trend, legendre_filter = self.build_templates(obs)
             if gcomm is None or gcomm.rank == 0:
-                msg = f"{log_prefix} OpGroundFilter: " \
+                msg = (
+                    f"{log_prefix} OpGroundFilter: "
                     f"Built templates in {time() - t1:.1f}s"
+                )
                 log.debug(msg)
 
             ndet = len(obs.local_detectors)
             for idet, det in enumerate(obs.local_detectors):
                 if gcomm is None or gcomm.rank == 0:
-                    msg = f"{log_prefix} OpGroundFilter: " \
+                    msg = (
+                        f"{log_prefix} OpGroundFilter: "
                         f"Processing detector # {idet + 1} / {ndet}"
+                    )
 
                 ref = obs.detdata[self.det_data][idet]
                 def_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
@@ -306,8 +313,10 @@ class GroundFilter(Operator):
                 t1 = time()
                 coeff = self.fit_templates(obs, det, templates, ref, good)
                 if gcomm is None or gcomm.rank == 0:
-                    msg = f"{log_prefix} OpGroundFilter: " \
+                    msg = (
+                        f"{log_prefix} OpGroundFilter: "
                         f"Fit templates in {time() - t1:.1f}s"
+                    )
                     log.debug(msg)
 
                 if coeff is None:
@@ -318,8 +327,10 @@ class GroundFilter(Operator):
                     ref, good, coeff, legendre_trend, legendre_filter
                 )
                 if gcomm is None or gcomm.rank == 0:
-                    msg = f"{log_prefix} OpGroundFilter: " \
+                    msg = (
+                        f"{log_prefix} OpGroundFilter: "
                         f"Subtract templates in {time() - t1:.1f}s"
+                    )
                     log.debug(msg)
 
         if wcomm is not None:
@@ -329,8 +340,10 @@ class GroundFilter(Operator):
 
         if wcomm is None or wcomm.rank == 0:
             rcond_mean = self.rcondsum / (self.nsingular + self.ngood)
-            msg =  f"Applied ground filter in {time() - t0:.1f} s.  " \
+            msg = (
+                f"Applied ground filter in {time() - t0:.1f} s.  "
                 f"Average rcond of template matrix was {rcond_mean}"
+            )
             log.debug(msg)
 
         return
@@ -340,8 +353,8 @@ class GroundFilter(Operator):
 
     def _requires(self):
         req = {
-            "shared" : list(),
-            "detdata" : [self.det_data],
+            "shared": list(),
+            "detdata": [self.det_data],
         }
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
