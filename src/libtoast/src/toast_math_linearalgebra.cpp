@@ -222,7 +222,7 @@ extern "C" void wrapped_dsymm(char * SIDE, char * UPLO, int * M, int * N,
 void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
                                 double ALPHA, double * A, int LDA, double * B,
                                 int LDB, double BETA, double * C, int LDC) {
-    #ifdef HAVE_CUDALIBS
+#ifdef HAVE_CUDALIBS
     // prepare inputs
     cublasSideMode_t side_gpu = (SIDE == 'L') ? CUBLAS_SIDE_LEFT : CUBLAS_SIDE_RIGHT;
     cublasFillMode_t uplo_gpu = (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
@@ -241,15 +241,15 @@ void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
     GPU_memory_pool.free(A);
     GPU_memory_pool.free(B);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
-    #elif HAVE_LAPACK
+#elif HAVE_LAPACK
     wrapped_dsymm(&SIDE, &UPLO, &M, &N, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
-    #else // ifdef HAVE_LAPACK
+#else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
     std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
-    #endif // ifdef HAVE_LAPACK
+#endif // ifdef HAVE_LAPACK
 }
 
 void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N, double ALPHA,
@@ -446,13 +446,13 @@ extern "C" void wrapped_dgelss(int * M, int * N, int * NRHS, double * A, int * L
 void toast::LinearAlgebra::gelss(int M, int N, int NRHS, double * A, int LDA,
                                  double * B, int LDB, double * S, double RCOND,
                                  int* RANK, double * WORK, int LWORK, int * INFO) {
-    #ifdef HAVE_LAPACK
+#ifdef HAVE_LAPACK
     wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, RANK, WORK, &LWORK, INFO);
-    #else // ifdef HAVE_LAPACK
+#else // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
     std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
-    #endif // ifdef HAVE_LAPACK
+#endif // ifdef HAVE_LAPACK
 }
