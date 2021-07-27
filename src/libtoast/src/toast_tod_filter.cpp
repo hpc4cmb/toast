@@ -35,9 +35,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t *flags,
     double fzero = 0.0;
     double fone = 1.0;
 
-#pragma omp parallel for schedule(static) default(none)      \
-    shared(order, signals, flags, n, nsignal, starts, stops, \
-           nscan, norder, upper, lower, notrans, trans, fzero, fone)
+#pragma omp parallel for schedule(static) default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder, upper, lower, notrans, trans, fzero, fone)
     for (size_t iscan = 0; iscan < nscan; ++iscan)
     {
         int64_t start = starts[iscan];
@@ -190,8 +188,6 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t *flags,
             }
         }
     }
-
-    return;
 }
 
 void toast::bin_proj(double *signal, double *templates,

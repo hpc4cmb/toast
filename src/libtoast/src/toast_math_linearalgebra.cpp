@@ -46,8 +46,8 @@ void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
     checkCudaErrorCode(statusSync);
     // gets result back from GPU
     // and frees input memory
-    GPU_memory_pool.free(A);
-    GPU_memory_pool.free(B);
+    GPU_memory_pool.free(A_gpu);
+    GPU_memory_pool.free(B_gpu);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
 #elif HAVE_LAPACK
     wrapped_dgemm(&TRANSA, &TRANSB, &M, &N, &K, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
@@ -238,8 +238,8 @@ void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
     checkCudaErrorCode(statusSync);
     // gets data back from GPU
     // frees input memory that does not need to go back
-    GPU_memory_pool.free(A);
-    GPU_memory_pool.free(B);
+    GPU_memory_pool.free(A_gpu);
+    GPU_memory_pool.free(B_gpu);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
 #elif HAVE_LAPACK
     wrapped_dsymm(&SIDE, &UPLO, &M, &N, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
@@ -331,7 +331,7 @@ void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
     // gets data back from GPU and frees input memory
-    GPU_memory_pool.free(A);
+    GPU_memory_pool.free(A_gpu);
     GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
 #elif HAVE_LAPACK
     wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
