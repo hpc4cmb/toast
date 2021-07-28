@@ -13,6 +13,9 @@
 
 #ifdef HAVE_CUDALIBS
 
+// TODO try removing the for;at conversion to see how it goes
+//  this will require a memcopy to keep the current code
+
 toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     int64_t length, int64_t n, toast::fft_plan_type type,
     toast::fft_direction dir, double scale) :
@@ -52,13 +55,18 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     }
 
     // creates a plan
-    int ilength = static_cast <int> (length_);
-    int iN = static_cast <int> (n_);
-    cufftType fft_type = (dir == toast::fft_direction::forward) ? CUFFT_D2Z : CUFFT_Z2D;
-    cufftResult errorCodePlan = cufftPlanMany(&plan_, /*rank*/ 1, /*n*/ &ilength,
-                                              /*inembed*/ NULL, /*istride*/ 1, /*idist*/ ilength,
-                                              /*onembed*/ NULL, /*ostride*/ 1, /*odist*/ ilength,
-                                              fft_type, /*batch*/ iN);
+    const int rank = 1; // 1D FFTs
+    int ilength = length_; // Size of the Fourier transform
+    int inembed = 0, onembed = 0; // Input/output size with pitch (ignored for 1D transforms)
+    const int istride = 1, ostride = 1; // Distance between two successive input/output elements
+    const int idist = (dir == toast::fft_direction::forward) ? buflength_ : (buflength_ / 2); // Distance between input batches
+    const int odist = (dir == toast::fft_direction::forward) ? (buflength_ / 2) : buflength_; // Distance between output batches
+    const cufftType fft_type = (dir == toast::fft_direction::forward) ? CUFFT_D2Z : CUFFT_Z2D;
+    const int batch = n_; // Number of batched executions
+    cufftResult errorCodePlan = cufftPlanMany(&plan_, rank, &ilength,
+                                              &inembed, istride, idist,
+                                              &onembed, ostride, odist,
+                                              fft_type, batch);
     checkCufftErrorCode(errorCodePlan, "FFTPlanReal1DCUFFT::cufftPlanMany");
 }
 
@@ -72,7 +80,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     const int64_t nb_elements_complex = n_ * (1 + (length_ / 2));
 
     // actual execution of the FFT
-    if (dir_ == toast::fft_direction::forward) // R2C
+    if (dir_ == toast::fft_direction::forward) // R2C real input in traw_ and complex output in fraw_
     {
         // get input data from CPU
         cufftDoubleReal* idata = GPU_memory_pool.toDevice(traw_, nb_elements_real);
@@ -88,7 +96,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
         complexToHalfcomplex();
     }
-    else // C2R
+    else // C2R complex input in fraw_ and real output in traw_
     {
         // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
         halfcomplexToComplex();
@@ -105,21 +113,9 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         GPU_memory_pool.fromDevice(traw_, odata, nb_elements_real);
     }
 
-    // gets parameters to rescale output
-    double * rawout;
-    double norm;
-    if (dir_ == toast::fft_direction::forward)
-    {
-        rawout = fraw_;
-        norm = scale_;
-    }
-    else
-    {
-        rawout = traw_;
-        norm = scale_ / static_cast <double> (length_);
-    }
-
     // normalize output
+    double * rawout = (dir_ == toast::fft_direction::forward) ? fraw_ : traw_;
+    const double norm = (dir_ == toast::fft_direction::forward) ? scale_ : (scale_ / length_);
     // TODO we could parallelize this loop
     for (int64_t i = 0; i < n_ * buflength_; i++)
     {
