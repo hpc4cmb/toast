@@ -224,6 +224,10 @@ def oscillate_el(
 
     """
     tt = times - times[0]
+    # Shift the starting time by a random phase
+    np.random.seed(int(times[0] % 2 ** 32))
+    tt += np.random.rand() / self._el_mod_rate
+
     if el_mod_sine:
         # elevation is modulated along a sine wave
         angular_rate = 2 * np.pi * el_mod_rate
