@@ -13,9 +13,6 @@
 
 #ifdef HAVE_CUDALIBS
 
-// TODO try removing the for;at conversion to see how it goes
-//  this will require a memcopy to keep the current code
-
 toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     int64_t length, int64_t n, toast::fft_plan_type type,
     toast::fft_direction dir, double scale) :
