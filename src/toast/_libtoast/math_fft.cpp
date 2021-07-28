@@ -111,7 +111,7 @@ void init_math_fft(py::module & m) {
     .def("get", []() {
              return std::unique_ptr <toast::FFTPlanReal1DStore,
                                      py::nodelete>
-             (
+                    (
                  &toast::FFTPlanReal1DStore::get());
          }, R"(
             Get a handle to the global FFT plan cache.

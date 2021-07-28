@@ -105,7 +105,7 @@ void register_aligned(py::module & m, char const * name) {
 
              if (slicelength != info.size) {
                  throw std::runtime_error(
-                     "Left and right hand size of slice assignment have different sizes!");
+                           "Left and right hand size of slice assignment have different sizes!");
              }
 
              for (size_t i = 0; i < slicelength; ++i) {
@@ -150,7 +150,7 @@ void register_aligned(py::module & m, char const * name) {
 
              if (indices.size() != info.size) {
                  throw std::runtime_error(
-                     "Left and right hand indexed assignment have different sizes!");
+                           "Left and right hand indexed assignment have different sizes!");
              }
 
              auto * dat = indices.data();
@@ -234,7 +234,7 @@ void register_aligned(py::module & m, char const * name) {
 
              if (self.size() != info.size) {
                  throw std::runtime_error(
-                     "Object and operand have different sizes!");
+                           "Object and operand have different sizes!");
              }
 
              for (size_t i = 0; i < info.size; ++i) {
@@ -256,7 +256,7 @@ void register_aligned(py::module & m, char const * name) {
 
              if (self.size() != info.size) {
                  throw std::runtime_error(
-                     "Object and operand have different sizes!");
+                           "Object and operand have different sizes!");
              }
 
              for (size_t i = 0; i < info.size; ++i) {
@@ -278,7 +278,7 @@ void register_aligned(py::module & m, char const * name) {
 
              if (self.size() != info.size) {
                  throw std::runtime_error(
-                     "Object and operand have different sizes!");
+                           "Object and operand have different sizes!");
              }
 
              for (size_t i = 0; i < info.size; ++i) {
@@ -299,7 +299,7 @@ void register_aligned(py::module & m, char const * name) {
                  reinterpret_cast <typename C::value_type *> (info.ptr);
              if (self.size() != info.size) {
                  throw std::runtime_error(
-                     "Object and operand have different sizes!");
+                           "Object and operand have different sizes!");
              }
              std::unique_ptr <C> ret(new C(self));
              for (size_t i = 0; i < info.size; ++i) {
@@ -323,7 +323,7 @@ void register_aligned(py::module & m, char const * name) {
                  reinterpret_cast <typename C::value_type *> (info.ptr);
              if (self.size() != info.size) {
                  throw std::runtime_error(
-                     "Object and operand have different sizes!");
+                           "Object and operand have different sizes!");
              }
              std::unique_ptr <C> ret(new C(self));
              for (size_t i = 0; i < info.size; ++i) {
@@ -347,7 +347,7 @@ void register_aligned(py::module & m, char const * name) {
                  reinterpret_cast <typename C::value_type *> (info.ptr);
              if (self.size() != info.size) {
                  throw std::runtime_error(
-                     "Object and operand have different sizes!");
+                           "Object and operand have different sizes!");
              }
              std::unique_ptr <C> ret(new C(self));
              for (size_t i = 0; i < info.size; ++i) {
