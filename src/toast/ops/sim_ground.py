@@ -504,11 +504,12 @@ class SimGround(Operator):
                 site=site,
             )
 
+            name = f"{scan.name}_{int(scan.start.timestamp())}"
             ob = Observation(
                 telescope,
                 len(times),
-                name=f"{scan.name}_{int(scan.start.timestamp())}",
-                uid=name_UID(scan.name),
+                name=name,
+                uid=name_UID(name),
                 comm=comm.comm_group,
                 process_rows=det_ranks,
             )
