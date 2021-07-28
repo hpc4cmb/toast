@@ -162,7 +162,8 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     ops.sim_ground.telescope = telescope
     ops.sim_ground.schedule = schedule
-    ops.sim_ground.weather = telescope.site.name
+    if ops.sim_ground.weather is None:
+        ops.sim_ground.weather = telescope.site.name
     ops.sim_ground.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
