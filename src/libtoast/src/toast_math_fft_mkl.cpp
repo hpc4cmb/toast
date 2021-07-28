@@ -31,11 +31,9 @@ toast::FFTPlanReal1DMKL::FFTPlanReal1DMKL(
     if (sizeof(MKL_Complex16) != 2 * sizeof(double)) {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
-        std::ostringstream o;
-        o << "MKL_Complex16 is not the size of 2 doubles, "
-          << "check MKL API";
-        log.error(o.str().c_str(), here);
-        throw std::runtime_error(o.str().c_str());
+        std::string msg("MKL_Complex16 is not the size of 2 doubles, check MKL API");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
     }
 
     buflength_ = 2 * (length_ / 2 + 1);

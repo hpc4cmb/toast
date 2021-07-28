@@ -19,15 +19,14 @@ class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
 
         FFTPlanReal1DCUFFT(int64_t length, int64_t n, toast::fft_plan_type type,
                           toast::fft_direction dir, double scale);
-
         ~FFTPlanReal1DCUFFT();
 
         void exec();
-
         double * tdata(int64_t indx);
         double * fdata(int64_t indx);
 
     private:
+        int64_t buflength_; // like length_ but takes overflow due to format conversion into account
         void complexToHalfcomplex();
         void halfcomplexToComplex();
 
