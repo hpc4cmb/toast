@@ -14,7 +14,7 @@ const int64_t TOASTfftTest::n = 3;
 
 void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
                             toast::FFTPlanReal1D::pshr reverse) {
-    const bool debug = false; // false;
+    const bool debug = true; // false;
 
     if (debug) {
         std::cout << "------- FFT batch of " << nbatch << " --------" << std::endl;

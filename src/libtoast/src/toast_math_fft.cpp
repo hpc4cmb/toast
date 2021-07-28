@@ -46,7 +46,7 @@ toast::FFTPlanReal1D * toast::FFTPlanReal1D::create(int64_t length, int64_t n,
 #else
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
-    std::string msg = "FFTs require MKL, FFTW or CUFFT";
+    std::string msg("FFTs require MKL, FFTW or CUFFT");
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
 #endif

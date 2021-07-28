@@ -18,24 +18,10 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     toast::fft_direction dir, double scale) :
     toast::FFTPlanReal1D(length, n, type, dir, scale) {
 
-    // TODO we might be able to eliminate this check later
-    // Checks whether the size is compatible with the assumptions of the code
-    // note that this condition is likely always satisfied and that it could break other version such as the MKL FFT wrapper
-    if((n_ * length_) % 2 != 0)
-    {
-        // cause nb_elements_complex*2 == nb_elements_real+1 in the exec function
-        // which causes copies to out of bound memory
-        // might also break some assumptions of the cce2hc and hc2cce functions
-        auto here = TOAST_HERE();
-        auto log = toast::Logger::get();
-        std::string msg("requires an even number of elements (n_ * length_) when building a CUFFT plan.");
-        log.error(msg.c_str(), here);
-        throw std::runtime_error(msg.c_str());
-    }
-
     // Verifies that datatype sizes are as expected.
     if (sizeof(cufftDoubleComplex) != 2 * sizeof(double))
     {
+        // this would kill the complexToHalfcomplex and halfcomplexToComplex functions
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("cufftDoubleComplex is not the size of 2 doubles, check CUFFT API");
@@ -44,12 +30,12 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     }
 
     // size needed to store the complex numbers representing the halfcomplex
-    // taking into account the addition of a few previously-implicit zeroes
-    buflength_ = 2 * (length_ / 2 + 1);
+    // taking into account the addition of a few, previously-implicit, zeroes
+    buflength_ = 2 * (1 + (length_ / 2));
 
     // allocate CPU memory
     data_.resize(2 * n_ * buflength_);
-    std::fill(data_.begin(), data_.end(), 0);
+    std::fill(data_.begin(), data_.end(), 0.0);
 
     // creates raw pointers for input and output
     traw_ = static_cast <double *> (&data_[0]);
@@ -58,10 +44,10 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     // creates vector views that will be used by user to send and receive data
     tview_.clear();
     fview_.clear();
-    for (int64_t i = 0; i < n_; i++)
+    for (int64_t batchId = 0; batchId < n_; batchId++)
     {
-        tview_.push_back(&data_[i * buflength_]);
-        fview_.push_back(&data_[(n_ + i) * buflength_]);
+        tview_.push_back(&traw_[batchId * buflength_]);
+        fview_.push_back(&fraw_[batchId * buflength_]);
     }
 
     // creates a plan
@@ -82,7 +68,7 @@ toast::FFTPlanReal1DCUFFT::~FFTPlanReal1DCUFFT() {
 void toast::FFTPlanReal1DCUFFT::exec() {
     // number of elements to be manipulated
     const int64_t nb_elements_real = n_ * length_;
-    const int64_t nb_elements_complex = 1 + (nb_elements_real / 2);
+    const int64_t nb_elements_complex = n_ * (1 + (length_ / 2));
 
     // actual execution of the FFT
     if (dir_ == toast::fft_direction::forward) // R2C
@@ -133,7 +119,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     }
 
     // normalize output
-    for (int64_t i = 0; i < nb_elements_real; ++i)
+    for (int64_t i = 0; i < nb_elements_real; i++)
     {
         rawout[i] *= norm;
     }
@@ -145,7 +131,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
 void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex()
 {
     const int64_t half = length_ / 2;
-    const bool is_even = (length_ % 2 == 0);
+    const bool is_even = (length_ % 2) == 0;
 
     for (int64_t batchId = 0; batchId < n_; batchId++)
     {
@@ -178,14 +164,14 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex()
 // see: https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
 void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex() {
     const int64_t half = length_ / 2;
-    const bool is_even = (length_ % 2 == 0);
+    const bool is_even = (length_ % 2) == 0;
 
     // iterates on all batches one after the other
     for (int64_t batchId = 0; batchId < n_; batchId++)
     {
         // 0th value
         tview_[batchId][0] = fview_[batchId][0]; // real
-        tview_[batchId][1] = 0.0; // imag part is 0 by convention
+        tview_[batchId][1] = 0.0; // imag is 0 by convention
 
         // all intermediate values
         for (int64_t i = 1; i < half; i++)
@@ -202,8 +188,6 @@ void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex() {
         }
     }
 }
-
-// TODO running the code with another version could help identify where it diverges
 
 double * toast::FFTPlanReal1DCUFFT::tdata(int64_t indx) {
     if ((indx < 0) || (indx >= n_)) {
