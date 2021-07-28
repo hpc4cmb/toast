@@ -42,6 +42,7 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     fraw_ = static_cast <double *> (&data_[n_ * buflength_]);
 
     // creates vector views that will be used by user to send and receive data
+    // TODO we could parallelize this loop but is it useful?
     tview_.clear();
     fview_.clear();
     for (int64_t batchId = 0; batchId < n_; batchId++)
@@ -55,9 +56,9 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     int iN = static_cast <int> (n_);
     cufftType fft_type = (dir == toast::fft_direction::forward) ? CUFFT_D2Z : CUFFT_Z2D;
     cufftResult errorCodePlan = cufftPlanMany(&plan_, /*rank*/ 1, /*n*/ &ilength,
-                  /*inembed*/ &ilength, /*istride*/ 1, /*idist*/ ilength,
-                  /*onembed*/ &ilength, /*ostride*/ 1, /*odist*/ ilength,
-                  fft_type, /*batch*/ iN);
+                                              /*inembed*/ NULL, /*istride*/ 1, /*idist*/ ilength,
+                                              /*onembed*/ NULL, /*ostride*/ 1, /*odist*/ ilength,
+                                              fft_type, /*batch*/ iN);
     checkCufftErrorCode(errorCodePlan, "FFTPlanReal1DCUFFT::cufftPlanMany");
 }
 
@@ -119,7 +120,8 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     }
 
     // normalize output
-    for (int64_t i = 0; i < nb_elements_real; i++)
+    // TODO we could parallelize this loop
+    for (int64_t i = 0; i < n_ * buflength_; i++)
     {
         rawout[i] *= norm;
     }
@@ -133,6 +135,8 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex()
     const int64_t half = length_ / 2;
     const bool is_even = (length_ % 2) == 0;
 
+    // TODO we could parallelize this loop if realistic test cases have enough batch elements
+    // iterates on all batches one after the other
     for (int64_t batchId = 0; batchId < n_; batchId++)
     {
         // 0th value
@@ -166,6 +170,7 @@ void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex() {
     const int64_t half = length_ / 2;
     const bool is_even = (length_ % 2) == 0;
 
+    // TODO we could parallelize this loop if realistic test cases have enough batch elements
     // iterates on all batches one after the other
     for (int64_t batchId = 0; batchId < n_; batchId++)
     {
