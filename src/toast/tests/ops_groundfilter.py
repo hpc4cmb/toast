@@ -23,20 +23,6 @@ from ..pixels import PixelDistribution, PixelData
 from ._helpers import create_outdir, create_ground_data, fake_flags
 
 
-"""
-from .mpi import MPITestCase
-
-import os
-
-import numpy as np
-
-from ..tod import AnalyticNoise, OpSimNoise
-from ..todmap import OpGroundFilter, TODGround
-
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
-"""
-
-
 class GroundFilterTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -46,7 +32,7 @@ class GroundFilterTest(MPITestCase):
 
     def test_groundfilter(self):
 
-        # Create a fake satellite data set for testing
+        # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
         # Create some detector pointing matrices
