@@ -47,7 +47,7 @@ from .sim_hwp import simulate_hwp_response
 
 from .flag_intervals import FlagIntervals
 
-from .sim_ground_utils import simulate_elnod, simulate_ces_scan
+from .sim_ground_utils import simulate_elnod, simulate_ces_scan, add_solar_intervals
 
 
 @trait_docs
@@ -198,6 +198,8 @@ class SimGround(Operator):
     sun_close_interval = Unicode(
         "sun_close", help="Interval name for times when the sun is close"
     )
+
+    sun_close_distance = Quantity(45.0 * u.degree, help="'Sun close' flagging distance")
 
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
@@ -650,6 +652,20 @@ class SimGround(Operator):
                 | ob.intervals[self.turn_rightleft_interval]
             )
 
+            # Get the Sun's position in horizontal coordinates and define
+            # "Sun up" and "Sun close" intervals according to it
+
+            add_solar_intervals(
+                ob.intervals,
+                site,
+                ob.shared[self.times],
+                ob.shared[self.azimuth].data,
+                ob.shared[self.elevation].data,
+                self.sun_up_interval,
+                self.sun_close_interval,
+                self.sun_close_distance,
+            )
+
             data.obs.append(ob)
 
         # For convenience, we additionally create a shared flag field with bits set
@@ -672,6 +688,7 @@ class SimGround(Operator):
                 (self.elnod_interval, 32),
             ],
         )
+        flag_intervals.apply(data, detectors=None)
 
         return
 
@@ -686,7 +703,10 @@ class SimGround(Operator):
             "shared": [
                 self.times,
                 self.shared_flags,
-                self.boresight,
+                self.azimuth,
+                self.elevation,
+                self.boresight_azel,
+                self.boresight_radec,
                 self.hwp_angle,
                 self.position,
                 self.velocity,

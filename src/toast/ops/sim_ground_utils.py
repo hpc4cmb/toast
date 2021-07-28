@@ -8,7 +8,10 @@ import numpy as np
 
 from astropy import units as u
 
+import ephem
+
 from ..timing import function_timer, Timer
+from ..intervals import IntervalList
 
 
 @function_timer
@@ -653,3 +656,69 @@ def simulate_ces_scan(
         ival_scan_rightleft,
         ival_turn_rightleft,
     )
+
+
+@function_timer
+def add_solar_intervals(
+    intervals,
+    site,
+    times,
+    az_bore,
+    el_bore,
+    sun_up_interval,
+    sun_close_interval,
+    sun_close_distance,
+):
+    """Get the Sun's position in the horizontal coordinate system and
+    translate it into 'Sun up' and 'Sun close' intervals.
+    """
+
+    observer = ephem.Observer()
+    observer.lon = site.earthloc.lon.to_value(u.radian)
+    observer.lat = site.earthloc.lat.to_value(u.radian)
+    observer.elevation = site.earthloc.height.to_value(u.meter)
+    observer.epoch = ephem.J2000
+    observer.compute_pressure()
+    observer.pressure = 0
+
+    Sun = ephem.Sun()
+
+    tstart = times[0]
+    tstop = times[-1]
+    # Motion of the Sun on sky is slow and interpolates well.
+    # Get the horizontal position every minute and interpolate
+    nstep = int((tstop - tstart) // 60 + 1)
+    tvec = np.linspace(tstart, tstop, nstep)
+    azvec = []
+    elvec = []
+    for tstep in tvec:
+        observer.date = tstep / 86400.0 + 2440587.5 - 2415020
+        Sun.compute(observer)
+        azvec.append(Sun.az)
+        elvec.append(Sun.alt)
+    az_sun = np.interp(times, tvec, azvec)
+    el_sun = np.interp(times, tvec, elvec)
+    sun_up = el_sun > 0
+
+    cos_lim = np.cos(sun_close_distance)
+    cos_dist = np.sin(el_bore) * np.sin(el_sun) + np.cos(el_bore) * np.cos(
+        el_sun
+    ) * np.cos(az_bore - az_sun)
+    sun_close = cos_dist > cos_lim
+
+    # Translate the boolean vectors into intervals
+    ivals_up, ivals_close = [], []
+    for vec, ivals in zip([sun_up, sun_close], [ivals_up, ivals_close]):
+        starts = np.where(np.diff(vec.astype(int)) == 1)[0] + 1
+        stops = np.where(np.diff(vec.astype(int)) == -1)[0] + 1
+        if vec[0]:
+            starts = np.hstack([0, starts])
+        if vec[-1]:
+            stops = np.hstack([stops, vec.size - 1])
+        for start, stop in zip(starts, stops):
+            ivals.append((times[start], times[stop]))
+
+    intervals[sun_up_interval] = IntervalList(times, timespans=ivals_up)
+    intervals[sun_close_interval] = IntervalList(times, timespans=ivals_close)
+
+    return

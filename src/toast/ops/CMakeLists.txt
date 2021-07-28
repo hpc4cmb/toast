@@ -39,5 +39,6 @@ install(FILES
     sim_gaindrifts.py
     totalconvolve.py
     polyfilter.py
+    groundfilter.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

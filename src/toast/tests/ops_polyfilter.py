@@ -74,7 +74,7 @@ class PolyFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 # Add an offset to the data
                 ob.detdata["signal"][det] += 500.0
                 rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
@@ -96,7 +96,7 @@ class PolyFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(0.9 * check_rms < rms[ob.name][det])
@@ -157,7 +157,7 @@ class PolyFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 wafer = obs.telescope.focalplane[det]["wafer"]
                 # Replace signal with time stamps to get a common mode
                 ob.detdata["signal"][det] = times - offset + wafer * 1000
@@ -175,7 +175,7 @@ class PolyFilterTest(MPITestCase):
             for idet, det in enumerate(ob.local_detectors):
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 signal = ob.detdata["signal"][det]
                 x = np.arange(signal.size)
                 ax.plot(x[good], signal[good], "-", label=det)
@@ -198,10 +198,10 @@ class PolyFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(1e-3 * check_rms < rms[ob.name][det])
+                self.assertTrue(check_rms < 1e-3 * rms[ob.name][det])
 
         # Plot filtered TOD
 
@@ -209,7 +209,7 @@ class PolyFilterTest(MPITestCase):
             for idet, det in enumerate(ob.local_detectors):
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 signal = ob.detdata["signal"][det]
                 x = np.arange(signal.size)
                 ax.plot(x[good], signal[good], ".", label=det)
@@ -257,7 +257,7 @@ class PolyFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 # Replace signal with time stamps to get a common mode
                 ob.detdata["signal"][det] = times
                 rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
@@ -278,10 +278,10 @@ class PolyFilterTest(MPITestCase):
             for det in ob.local_detectors:
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
-                good = (flags == 0)
+                good = flags == 0
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(1e-3 * check_rms < rms[ob.name][det])
+                self.assertTrue(check_rms < 1e-3 * rms[ob.name][det])
 
         del data
         return
