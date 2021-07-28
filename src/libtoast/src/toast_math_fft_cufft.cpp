@@ -13,6 +13,10 @@
 
 #ifdef HAVE_CUDALIBS
 
+// TODO
+//  the last (nbbatch-1)*2 values of the last batch are wrong
+//  they end up as 0 if we cut the halfcomplex conversions
+
 toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     int64_t length, int64_t n, toast::fft_plan_type type,
     toast::fft_direction dir, double scale) :
