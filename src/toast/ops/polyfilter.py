@@ -32,7 +32,7 @@ class PolyFilter2D(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply the gain error to")
+    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
 
     pattern = Unicode(
         f".*",
@@ -218,8 +218,11 @@ class PolyFilter2D(Operator):
 
                 t1 = time()
 
-                shared_flags = views.shared[self.shared_flags][iview]
-                shared_mask = (shared_flags & self.shared_flag_mask) == 0
+                if self.shared_flags is not None:
+                    shared_flags = views.shared[self.shared_flags][iview]
+                    shared_mask = (shared_flags & self.shared_flag_mask) == 0
+                else:
+                    shared_mask = np.ones(nsample, dtype=bool)
 
                 for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
@@ -228,10 +231,12 @@ class PolyFilter2D(Operator):
                     ind_group = group_index[det]
 
                     signal = views.detdata[self.det_data][iview][idet]
-                    det_flags = views.detdata[self.det_flags][iview][idet]
-                    det_mask = (det_flags & self.det_flag_mask) == 0
-
-                    mask = np.logical_and(shared_mask, det_mask)
+                    if self.det_flags is not None:
+                        det_flags = views.detdata[self.det_flags][iview][idet]
+                        det_mask = (det_flags & self.det_flag_mask) == 0
+                        mask = np.logical_and(shared_mask, det_mask)
+                    else:
+                        mask = shared_mask
 
                     template = detector_templates[ind_det]
                     templates[ind_det] = np.outer(template, mask)
@@ -280,11 +285,12 @@ class PolyFilter2D(Operator):
                             good[idet] = True
                     if not np.any(good):
                         continue
-                    for isample in range(nsample):
-                        if np.all(coeff[isample, igroup] == 0):
-                            views.detdata[self.det_flags][iview][:, isample] |= (
-                                good * self.poly_flag_mask
-                            ).astype(views.detdata[self.det_flags][0].dtype)
+                    if self.det_flags is not None:
+                        for isample in range(nsample):
+                            if np.all(coeff[isample, igroup] == 0):
+                                views.detdata[self.det_flags][iview][:, isample] |= (
+                                    good * self.poly_flag_mask
+                                ).astype(views.detdata[self.det_flags][0].dtype)
                 templates = np.transpose(
                     templates, [1, 2, 0]
                 ).copy()  # ndet x nmode x nsample
@@ -355,7 +361,7 @@ class PolyFilter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply the gain error to")
+    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
 
     pattern = Unicode(
         f".*",
@@ -418,40 +424,44 @@ class PolyFilter(Operator):
                 # Nothing to do for this observation
                 continue
 
-            views = obs.view[self.view]
-            for iview, view in enumerate(views):
+            if self.view is not None:
+                local_starts = []
+                local_stops = []
+                for interval in obs.intervals[self.view]:
+                    local_starts.append(interval.first)
+                    local_stops.append(intervallast)
+            else:
+                local_starts = [0]
+                local_stops = [obs.n_local_samples - 1]
+
+            local_starts = np.array(local_starts)
+            local_stops = np.array(local_stops)
+
+            if self.shared_flags is not None:
                 shared_flags = (
                     obs.shared[self.shared_flags].data & self.shared_flag_mask
                 )
+            else:
+                shared_flags = np.zeros(obs.n_local_sample, dtype=np.uint8)
 
-                if self.view is not None:
-                    local_starts = []
-                    local_stops = []
-                    for interval in obs.intervals[self.view]:
-                        local_starts.append(interval.first)
-                        local_stops.append(intervallast)
-                else:
-                    local_starts = [0]
-                    local_stops = [obs.n_local_samples - 1]
+            for idet, det in enumerate(dets):
+                # Test the detector pattern
+                if pat.match(det) is None:
+                    continue
 
-                local_starts = np.array(local_starts)
-                local_stops = np.array(local_stops)
-
-                for idet, det in enumerate(dets):
-                    # Test the detector pattern
-                    if pat.match(det) is None:
-                        continue
-
+                signal = obs.detdata[self.det_data][idet]
+                if self.det_flags is not None:
                     det_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
-                    signal = obs.detdata[self.det_data][idet]
-
                     flags = shared_flags | det_flags
+                else:
+                    flags = shared_flags
 
-                    filter_polynomial(
-                        self.order, flags, [signal], local_starts, local_stops
-                    )
+                filter_polynomial(
+                    self.order, flags, [signal], local_starts, local_stops
+                )
 
-                    obs.detdata[self.det_flags][idet][flags] & self.poly_flag_mask
+                if self.det_flags is not None:
+                    obs.detdata[self.det_flags][idet][flags != 0] |= self.poly_flag_mask
 
         return
 
@@ -461,10 +471,14 @@ class PolyFilter(Operator):
     def _requires(self):
         req = {
             "meta": list(),
-            "shared": [self.shared_flags],
-            "detdata": [self.det_data, self.det_flags],
+            "shared": list(),
+            "detdata": [self.det_data],
             "intervals": [self.view],
         }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
+        if self.det_flags is not None:
+            req["detdata"].append(self.det_flags)
         return req
 
     def _provides(self):
@@ -484,7 +498,7 @@ class CommonModeFilter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply the gain error to")
+    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
 
     pattern = Unicode(
         f".*",
@@ -576,13 +590,19 @@ class CommonModeFilter(Operator):
 
                 template = np.zeros(nsample)
                 hits = np.zeros(nsample)
-                shared_flags = obs.shared[self.shared_flags].data
-                shared_mask = (shared_flags & self.shared_flag_mask) == 0
+                if self.shared_flags is not None:
+                    shared_flags = obs.shared[self.shared_flags].data
+                    shared_mask = (shared_flags & self.shared_flag_mask) == 0
+                else:
+                    shared_mask = np.ones(nsample, dtype=bool)
                 for idet, det in local_dets:
                     signal = obs.detdata[self.det_data][idet]
-                    det_flags = obs.detdata[self.det_flags][idet]
-                    det_mask = (det_flags & self.det_flag_mask) == 0
-                    mask = np.logical_and(shared_mask, det_mask)
+                    if self.det_flags is not None:
+                        det_flags = obs.detdata[self.det_flags][idet]
+                        det_mask = (det_flags & self.det_flag_mask) == 0
+                        mask = np.logical_and(shared_mask, det_mask)
+                    else:
+                        mask = shared_mask
                     template[mask] += signal[mask]
                     hits[mask] += 1
 
@@ -604,10 +624,14 @@ class CommonModeFilter(Operator):
     def _requires(self):
         req = {
             "meta": list(),
-            "shared": [self.shared_flags],
-            "detdata": [self.det_data, self.det_flags],
+            "shared": list(),
+            "detdata": [self.det_data],
             "intervals": [self.view],
         }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
+        if self.det_flags is not None:
+            req["detdata"].append(self.det_flags)
         return req
 
     def _provides(self):
