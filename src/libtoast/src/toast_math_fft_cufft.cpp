@@ -13,10 +13,6 @@
 
 #ifdef HAVE_CUDALIBS
 
-// TODO
-//  the last (nbBatch-1)*2 values of the last batch are wrong
-//  they end up as 0 if we cut the halfcomplex conversions
-
 toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     int64_t length, int64_t n, toast::fft_plan_type type,
     toast::fft_direction dir, double scale) :
@@ -76,8 +72,8 @@ toast::FFTPlanReal1DCUFFT::~FFTPlanReal1DCUFFT() {
 
 void toast::FFTPlanReal1DCUFFT::exec() {
     // number of elements to be manipulated
-    const int64_t nb_elements_real = n_ * length_;
-    const int64_t nb_elements_complex = n_ * (1 + (length_ / 2));
+    const int64_t nb_elements_real = n_ * buflength_;
+    const int64_t nb_elements_complex = n_ * (buflength_ / 2);
 
     // actual execution of the FFT
     if (dir_ == toast::fft_direction::forward) // R2C real input in traw_ and complex output in fraw_
@@ -94,12 +90,12 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         GPU_memory_pool.free(idata);
         GPU_memory_pool.fromDevice((cufftDoubleComplex*)(traw_), odata, nb_elements_complex);
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
-        complexToHalfcomplex();
+        complexToHalfcomplex(length_, n_, tview_.data(), fview_.data());
     }
     else // C2R complex input in fraw_ and real output in traw_
     {
         // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
-        halfcomplexToComplex();
+        halfcomplexToComplex(length_, n_, fview_.data(), tview_.data());
         // get input data from CPU
         cufftDoubleComplex* idata = GPU_memory_pool.toDevice((cufftDoubleComplex*)(traw_), nb_elements_complex);
         cufftDoubleReal* odata = GPU_memory_pool.alloc<cufftDoubleReal>(nb_elements_real);
@@ -114,77 +110,84 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     }
 
     // normalize output
-    double * rawout = (dir_ == toast::fft_direction::forward) ? fraw_ : traw_;
-    const double norm = (dir_ == toast::fft_direction::forward) ? scale_ : (scale_ / length_);
-    if(norm != 1.0) // usually 1.0 in the forward case
+    double * output = (dir_ == toast::fft_direction::forward) ? fraw_ : traw_;
+    const double scaling = (dir_ == toast::fft_direction::forward) ? scale_ : (scale_ / length_);
+    if(scaling != 1.0) // usually 1.0 in the forward case
     {
         #pragma omp parallel for schedule(static)
         for (int64_t i = 0; i < n_ * buflength_; i++)
         {
-            rawout[i] *= norm;
+            output[i] *= scaling;
         }
     }
 }
 
-// moves CCE packed data in tview_ / traw_ to HC packed data in fview_ / fraw_
-// CCE packed format is a vector of complex real / imaginary pairs from 0 to Nyquist (0 to N/2 + 1).
-// see: https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
-void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex()
+// reorder `nbBatch` arrays of size `length`
+// from a traditional complex representation (rcrc... stored in `batchedComplexInputs`)
+// to half-complex (rr...cc stored in `batchedHalfcomplexOutputs`)
+// for more information on the half-complex format, see:
+// https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
+void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex(const int64_t length, const int64_t nbBatch,
+                                                     double* batchedComplexInputs[], double* batchedHalfcomplexOutputs[])
 {
-    const int64_t half = length_ / 2;
-    const bool is_even = (length_ % 2) == 0;
+    const int64_t half = length / 2;
+    const bool is_even = (length % 2) == 0;
 
     // iterates on all batches one after the other
-    for (int64_t batchId = 0; batchId < n_; batchId++)
+    for (int64_t batchId = 0; batchId < nbBatch; batchId++)
     {
         // 0th value
-        fview_[batchId][0] = tview_[batchId][0]; // real
+        batchedHalfcomplexOutputs[batchId][0] = batchedComplexInputs[batchId][0]; // real
         // imag is zero by convention and thus not encoded
 
         // all intermediate values
         #pragma omp parallel for schedule(static)
         for (int64_t i = 1; i < half; i++)
         {
-            fview_[batchId][i] = tview_[batchId][2 * i]; // real
-            fview_[batchId][length_ - i] = tview_[batchId][2 * i + 1]; // imag
+            batchedHalfcomplexOutputs[batchId][i] = batchedComplexInputs[batchId][2 * i]; // real
+            batchedHalfcomplexOutputs[batchId][length - i] = batchedComplexInputs[batchId][2 * i + 1]; // imag
         }
 
         // n/2th value
         if (is_even)
         {
-            fview_[batchId][half] = tview_[batchId][length_]; // real
+            batchedHalfcomplexOutputs[batchId][half] = batchedComplexInputs[batchId][length]; // real
             // imag is zero by convention and thus not encoded
         }
     }
 }
 
-// moves HC packed data in fview_ / fraw_ to CCE packed data in tview_ / traw_
-// CCE packed format is a vector of complex real / imaginary pairs from 0 to Nyquist (0 to N/2 + 1).
-// see: https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
-void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex() {
-    const int64_t half = length_ / 2;
-    const bool is_even = (length_ % 2) == 0;
+// reorder `nbBatch` arrays of size `length`
+// from half-complex (rr...cc stored in `batchedHalfcomplexInputs`)
+// to a traditional complex representation (rcrc... stored in `batchedHComplexOutputs`)
+// for more information on the half-complex format, see:
+// https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
+void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex(const int64_t length, const int64_t nbBatch,
+                                                     double* batchedHalfcomplexInputs[], double* batchedHComplexOutputs[])
+{
+    const int64_t half = length / 2;
+    const bool is_even = (length % 2) == 0;
 
     // iterates on all batches one after the other
-    for (int64_t batchId = 0; batchId < n_; batchId++)
+    for (int64_t batchId = 0; batchId < nbBatch; batchId++)
     {
         // 0th value
-        tview_[batchId][0] = fview_[batchId][0]; // real
-        tview_[batchId][1] = 0.0; // imag is 0 by convention
+        batchedHComplexOutputs[batchId][0] = batchedHalfcomplexInputs[batchId][0]; // real
+        batchedHComplexOutputs[batchId][1] = 0.0; // imag is 0 by convention
 
         // all intermediate values
         #pragma omp parallel for schedule(static)
         for (int64_t i = 1; i < half; i++)
         {
-            tview_[batchId][2 * i] = fview_[batchId][i]; // real
-            tview_[batchId][2 * i + 1] = fview_[batchId][length_ - i]; // imag
+            batchedHComplexOutputs[batchId][2 * i] = batchedHalfcomplexInputs[batchId][i]; // real
+            batchedHComplexOutputs[batchId][2 * i + 1] = batchedHalfcomplexInputs[batchId][length - i]; // imag
         }
 
         // n/2th value
         if (is_even)
         {
-            tview_[batchId][length_] = fview_[batchId][half]; // real
-            tview_[batchId][length_ + 1] = 0.0; // imag is 0 by convention
+            batchedHComplexOutputs[batchId][length] = batchedHalfcomplexInputs[batchId][half]; // real
+            batchedHComplexOutputs[batchId][length + 1] = 0.0; // imag is 0 by convention
         }
     }
 }

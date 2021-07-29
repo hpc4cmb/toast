@@ -27,8 +27,10 @@ class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
 
     private:
         int64_t buflength_; // like length_ but takes overflow due to format conversion into account
-        void complexToHalfcomplex();
-        void halfcomplexToComplex();
+        static void complexToHalfcomplex(const int64_t length, const int64_t nbBatch,
+                                         double* batchedComplexInputs[], double* batchedHalfcomplexOutputs[]);
+        static void halfcomplexToComplex(const int64_t length, const int64_t nbBatch,
+                                         double* batchedHalfcomplexInputs[], double* batchedHComplexOutputs[]);
 
         cufftHandle plan_;
         // this is all the actual data allocated as a continuous block
