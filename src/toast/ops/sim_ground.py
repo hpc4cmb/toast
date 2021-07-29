@@ -575,11 +575,13 @@ class SimGround(Operator):
 
             # Optionally initialize detector data
 
+            dets = ob.select_local_detectors(detectors)
+
             if self.det_data is not None:
-                ob.detdata.ensure(self.det_data, dtype=np.float64, detectors=pipedets)
+                ob.detdata.ensure(self.det_data, dtype=np.float64, detectors=dets)
 
             if self.det_flags is not None:
-                ob.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=pipedets)
+                ob.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
 
             # Only the first rank of the process grid columns sets / computes these.
 
