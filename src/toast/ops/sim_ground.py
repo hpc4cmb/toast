@@ -133,6 +133,13 @@ class SimGround(Operator):
 
     shared_flags = Unicode("flags", help="Observation shared key for common flags")
 
+    det_data = Unicode(
+        None, allow_none=True, help="Observation detdata key to initialize")
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to initialize"
+    )
+
     hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
 
     azimuth = Unicode("azimuth", help="Observation shared key for Azimuth")
@@ -565,6 +572,14 @@ class SimGround(Operator):
                 dtype=np.float64,
                 comm=ob.comm_col,
             )
+
+            # Optionally initialize detector data
+
+            if self.det_data is not None:
+                ob.detdata.ensure(self.det_data, dtype=np.float64, detectors=pipedets)
+
+            if self.det_flags is not None:
+                ob.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=pipedets)
 
             # Only the first rank of the process grid columns sets / computes these.
 
