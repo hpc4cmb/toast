@@ -134,7 +134,8 @@ class SimGround(Operator):
     shared_flags = Unicode("flags", help="Observation shared key for common flags")
 
     det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key to initialize")
+        None, allow_none=True, help="Observation detdata key to initialize"
+    )
 
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to initialize"

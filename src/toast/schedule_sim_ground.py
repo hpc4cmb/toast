@@ -1573,7 +1573,9 @@ def add_scan(
                 el_offset = np.degrees(el) - el_min
                 el_observe = np.degrees(el) + el_offset
 
-                az_offset = (az_min - azmin) * np.cos(el) / np.cos(np.radians(el_observe))
+                az_offset = (
+                    (az_min - azmin) * np.cos(el) / np.cos(np.radians(el_observe))
+                )
                 azmin += az_offset
                 azmax += az_offset
             else:

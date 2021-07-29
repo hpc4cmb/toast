@@ -275,7 +275,9 @@ class ObserveAtmosphere(Operator):
 
             if nbad_tot > 0:
                 frac = nbad_tot / (ngood_tot + nbad_tot) * 100
-                log.error("{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples")
+                log.error(
+                    "{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
+                )
 
     def _finalize(self, data, **kwargs):
         return
