@@ -14,7 +14,7 @@
 #ifdef HAVE_CUDALIBS
 
 // TODO
-//  the last (nbbatch-1)*2 values of the last batch are wrong
+//  the last (nbBatch-1)*2 values of the last batch are wrong
 //  they end up as 0 if we cut the halfcomplex conversions
 
 toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
@@ -46,7 +46,6 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     fraw_ = static_cast <double *> (&data_[n_ * buflength_]);
 
     // creates vector views that will be used by user to send and receive data
-    // TODO we could parallelize this loop but is it useful?
     tview_.clear();
     fview_.clear();
     for (int64_t batchId = 0; batchId < n_; batchId++)
@@ -117,10 +116,13 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     // normalize output
     double * rawout = (dir_ == toast::fft_direction::forward) ? fraw_ : traw_;
     const double norm = (dir_ == toast::fft_direction::forward) ? scale_ : (scale_ / length_);
-    // TODO we could parallelize this loop
-    for (int64_t i = 0; i < n_ * buflength_; i++)
+    if(norm != 1.0) // usually 1.0 in the forward case
     {
-        rawout[i] *= norm;
+        #pragma omp parallel for schedule(static)
+        for (int64_t i = 0; i < n_ * buflength_; i++)
+        {
+            rawout[i] *= norm;
+        }
     }
 }
 
@@ -132,7 +134,6 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex()
     const int64_t half = length_ / 2;
     const bool is_even = (length_ % 2) == 0;
 
-    // TODO we could parallelize this loop if realistic test cases have enough batch elements
     // iterates on all batches one after the other
     for (int64_t batchId = 0; batchId < n_; batchId++)
     {
@@ -141,6 +142,7 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex()
         // imag is zero by convention and thus not encoded
 
         // all intermediate values
+        #pragma omp parallel for schedule(static)
         for (int64_t i = 1; i < half; i++)
         {
             fview_[batchId][i] = tview_[batchId][2 * i]; // real
@@ -153,10 +155,6 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex()
             fview_[batchId][half] = tview_[batchId][length_]; // real
             // imag is zero by convention and thus not encoded
         }
-
-        // sets additional, buffer, values to 0
-        fview_[batchId][length_] = 0.0;
-        fview_[batchId][length_ + 1] = 0.0;
     }
 }
 
@@ -167,7 +165,6 @@ void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex() {
     const int64_t half = length_ / 2;
     const bool is_even = (length_ % 2) == 0;
 
-    // TODO we could parallelize this loop if realistic test cases have enough batch elements
     // iterates on all batches one after the other
     for (int64_t batchId = 0; batchId < n_; batchId++)
     {
@@ -176,6 +173,7 @@ void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex() {
         tview_[batchId][1] = 0.0; // imag is 0 by convention
 
         // all intermediate values
+        #pragma omp parallel for schedule(static)
         for (int64_t i = 1; i < half; i++)
         {
             tview_[batchId][2 * i] = fview_[batchId][i]; // real
