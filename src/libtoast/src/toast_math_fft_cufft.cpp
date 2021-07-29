@@ -71,12 +71,12 @@ toast::FFTPlanReal1DCUFFT::~FFTPlanReal1DCUFFT() {
 }
 
 void toast::FFTPlanReal1DCUFFT::exec() {
-    // number of elements to be manipulated
+    // number of elements to be moved around
     const int64_t nb_elements_real = n_ * buflength_;
     const int64_t nb_elements_complex = n_ * (buflength_ / 2);
 
     // actual execution of the FFT
-    if (dir_ == toast::fft_direction::forward) // R2C real input in traw_ and complex output in fraw_
+    if (dir_ == toast::fft_direction::forward) // R2C, real input in traw_ and complex output in fraw_
     {
         // get input data from CPU
         cufftDoubleReal* idata = GPU_memory_pool.toDevice(traw_, nb_elements_real);
@@ -92,7 +92,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
         complexToHalfcomplex(length_, n_, tview_.data(), fview_.data());
     }
-    else // C2R complex input in fraw_ and real output in traw_
+    else // C2R, complex input in fraw_ and real output in traw_
     {
         // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
         halfcomplexToComplex(length_, n_, fview_.data(), tview_.data());
@@ -126,7 +126,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
 // from a traditional complex representation (rcrc... stored in `batchedComplexInputs`)
 // to half-complex (rr...cc stored in `batchedHalfcomplexOutputs`)
 // for more information on the half-complex format, see:
-// https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
+// https://www.fftw.org/fftw3_doc/The-Halfcomplex_002dformat-DFT.html
 void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex(const int64_t length, const int64_t nbBatch,
                                                      double* batchedComplexInputs[], double* batchedHalfcomplexOutputs[])
 {
@@ -161,7 +161,7 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex(const int64_t length, const
 // from half-complex (rr...cc stored in `batchedHalfcomplexInputs`)
 // to a traditional complex representation (rcrc... stored in `batchedHComplexOutputs`)
 // for more information on the half-complex format, see:
-// https://accserv.lepp.cornell.edu/svn/packages/fftw/doc/html/The-Halfcomplex_002dformat-DFT.html
+// https://www.fftw.org/fftw3_doc/The-Halfcomplex_002dformat-DFT.html
 void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex(const int64_t length, const int64_t nbBatch,
                                                      double* batchedHalfcomplexInputs[], double* batchedHComplexOutputs[])
 {
