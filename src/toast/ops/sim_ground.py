@@ -47,7 +47,7 @@ from .sim_hwp import simulate_hwp_response
 
 from .flag_intervals import FlagIntervals
 
-from .sim_ground_utils import simulate_elnod, simulate_ces_scan, add_solar_intervals
+from .sim_ground_utils import simulate_elnod, simulate_ces_scan, add_solar_intervals, oscillate_el, step_el
 
 
 @trait_docs
@@ -438,7 +438,7 @@ class SimGround(Operator):
                     self.scan_accel_el.to_value(u.radian / u.second ** 2),
                     scan_min_el,
                     scan_max_el,
-                    el_mod_step.to_value(u.radian),
+                    self.el_mod_step.to_value(u.radian),
                 )
 
             times.append(scan_times)
