@@ -1225,14 +1225,14 @@ def unwind_angle(alpha, beta, multiple=2 * np.pi):
 
 @function_timer
 def get_pole_raster_scan(
-        args,
-        el_start,
-        t_start,
-        patch,
-        fp_radius,
-        observer,
+    args,
+    el_start,
+    t_start,
+    patch,
+    fp_radius,
+    observer,
 ):
-    """ Determine the time it takes to perform Az-locked scanning with
+    """Determine the time it takes to perform Az-locked scanning with
     elevation steps after each half scan pair.
     """
     el_stop = el_start + np.radians(args.pole_el_step_deg)

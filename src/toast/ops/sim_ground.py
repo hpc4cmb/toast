@@ -47,7 +47,13 @@ from .sim_hwp import simulate_hwp_response
 
 from .flag_intervals import FlagIntervals
 
-from .sim_ground_utils import simulate_elnod, simulate_ces_scan, add_solar_intervals, oscillate_el, step_el
+from .sim_ground_utils import (
+    simulate_elnod,
+    simulate_ces_scan,
+    add_solar_intervals,
+    oscillate_el,
+    step_el,
+)
 
 
 @trait_docs
