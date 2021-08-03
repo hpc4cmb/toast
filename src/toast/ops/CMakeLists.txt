@@ -40,5 +40,6 @@ install(FILES
     totalconvolve.py
     polyfilter.py
     groundfilter.py
+    statistics.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

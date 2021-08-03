@@ -70,3 +70,5 @@ from .totalconvolve import SimTotalconvolve
 
 from .polyfilter import PolyFilter, PolyFilter2D, CommonModeFilter
 from .groundfilter import GroundFilter
+
+from .statistics import Statistics

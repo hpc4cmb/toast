@@ -239,6 +239,11 @@ def reduce_data(job, args, data):
     timer = toast.timing.Timer()
     timer.start()
 
+    # Collect signal statistics
+
+    ops.statistics.output_dir = args.out_dir
+    ops.statistics.apply(data)
+
     # Apply the filter stack
 
     ops.groundfilter.apply(data)
@@ -306,6 +311,7 @@ def main():
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
+        toast.ops.Statistics(name="statistics"),
         toast.ops.GroundFilter(name="groundfilter"),
         toast.ops.PolyFilter(name="polyfilter1D"),
         toast.ops.PolyFilter2D(name="polyfilter2D"),
