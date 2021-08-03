@@ -45,8 +45,6 @@ class Statistics(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    prefix = Unicode("stats", allow_none=True, help="Filename prefix to use")
-
     output_dir = Unicode(
         None,
         allow_none=True,
@@ -84,11 +82,9 @@ class Statistics(Operator):
 
         for obs in data.obs:
             if obs.name is None:
-                fname_out = f"{obs.uid}.h5"
+                fname_out = f"{self.name}_{obs.uid}.h5"
             else:
-                fname_out = f"{obs.name}.h5"
-            if self.prefix is not None:
-                fname_out = f"{self.prefix}_{fname_out}"
+                fname_out = f"{self.name}_{obs.name}.h5"
             if self.output_dir is not None:
                 fname_out = os.path.join(self.output_dir, fname_out)
             all_dets = list(obs.all_detectors)

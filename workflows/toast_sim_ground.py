@@ -239,10 +239,10 @@ def reduce_data(job, args, data):
     timer = toast.timing.Timer()
     timer.start()
 
-    # Collect signal statistics
+    # Collect signal statistics before filterting
 
-    ops.statistics.output_dir = args.out_dir
-    ops.statistics.apply(data)
+    ops.raw_statistics.output_dir = args.out_dir
+    ops.raw_statistics.apply(data)
 
     # Apply the filter stack
 
@@ -254,6 +254,11 @@ def reduce_data(job, args, data):
     log.info_rank("Finished 2D-poly-filtering in", comm=world_comm, timer=timer)
     ops.common_mode_filter.apply(data)
     log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
+
+    # Collect signal statistics after filterting
+
+    ops.filtered_statistics.output_dir = args.out_dir
+    ops.filtered_statistics.apply(data)
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -311,7 +316,8 @@ def main():
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
-        toast.ops.Statistics(name="statistics"),
+        toast.ops.Statistics(name="raw_statistics"),
+        toast.ops.Statistics(name="filtered_statistics"),
         toast.ops.GroundFilter(name="groundfilter"),
         toast.ops.PolyFilter(name="polyfilter1D"),
         toast.ops.PolyFilter2D(name="polyfilter2D"),
