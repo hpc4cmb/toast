@@ -251,7 +251,13 @@ class MapMaker(Operator):
 
         timer.start()
 
-        if self.template_matrix is not None and len(self.template_matrix.templates) > 0:
+        n_enabled_templates = 0
+        if self.template_matrix is not None:
+            for template in self.template_matrix.templates:
+                if template.enabled:
+                    n_enabled_templates += 1
+
+        if n_enabled_templates != 0:
             # We are solving for template amplitudes
 
             self.binning.covariance = self.solver_cov_name
@@ -602,7 +608,7 @@ class MapMaker(Operator):
         pre_pipe = None
         map_binning.binned = self.map_name
 
-        if self.template_matrix is not None and len(self.template_matrix.templates) > 0:
+        if n_enabled_templates != 0:
             # We have some templates to subtract
             temp_project = "{}_temp_project".format(self.name)
 

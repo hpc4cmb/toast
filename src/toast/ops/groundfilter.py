@@ -287,7 +287,12 @@ class GroundFilter(Operator):
                 log.debug(msg)
 
             # Cache the output common flags
-            common_flags = obs.shared[self.shared_flags].data & self.shared_flag_mask
+            if self.shared_flags is not None:
+                common_flags = (
+                    obs.shared[self.shared_flags].data & self.shared_flag_mask
+                )
+            else:
+                common_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             t1 = time()
             templates, legendre_trend, legendre_filter = self.build_templates(obs)
@@ -307,8 +312,11 @@ class GroundFilter(Operator):
                     )
 
                 ref = obs.detdata[self.det_data][idet]
-                def_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
-                good = np.logical_and(common_flags == 0, def_flags == 0)
+                if self.det_flags is not None:
+                    def_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
+                    good = np.logical_and(common_flags == 0, def_flags == 0)
+                else:
+                    good = common_flags == 0
 
                 t1 = time()
                 coeff = self.fit_templates(obs, det, templates, ref, good)

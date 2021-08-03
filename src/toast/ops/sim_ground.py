@@ -133,6 +133,14 @@ class SimGround(Operator):
 
     shared_flags = Unicode("flags", help="Observation shared key for common flags")
 
+    det_data = Unicode(
+        None, allow_none=True, help="Observation detdata key to initialize"
+    )
+
+    det_flags = Unicode(
+        None, allow_none=True, help="Observation detdata key for flags to initialize"
+    )
+
     hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
 
     azimuth = Unicode("azimuth", help="Observation shared key for Azimuth")
@@ -504,11 +512,12 @@ class SimGround(Operator):
                 site=site,
             )
 
+            name = f"{scan.name}_{int(scan.start.timestamp())}"
             ob = Observation(
                 telescope,
                 len(times),
-                name=f"{scan.name}_{int(scan.start.timestamp())}",
-                uid=name_UID(scan.name),
+                name=name,
+                uid=name_UID(name),
                 comm=comm.comm_group,
                 process_rows=det_ranks,
             )
@@ -564,6 +573,16 @@ class SimGround(Operator):
                 dtype=np.float64,
                 comm=ob.comm_col,
             )
+
+            # Optionally initialize detector data
+
+            dets = ob.select_local_detectors(detectors)
+
+            if self.det_data is not None:
+                ob.detdata.ensure(self.det_data, dtype=np.float64, detectors=dets)
+
+            if self.det_flags is not None:
+                ob.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
 
             # Only the first rank of the process grid columns sets / computes these.
 
