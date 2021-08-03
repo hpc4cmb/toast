@@ -80,7 +80,7 @@ class Statistics(Operator):
 
         """
         log = Logger.get()
-        nstat = 5  # ngood, Mean, Variance, Skewness, Kurtosis
+        nstat = 3  # Variance, Skewness, Kurtosis
 
         for obs in data.obs:
             if obs.name is None:
@@ -94,16 +94,26 @@ class Statistics(Operator):
             all_dets = list(obs.all_detectors)
             ndet = len(all_dets)
 
-            stats = np.zeros([nstat, ndet])
+            hits = np.zeros([ndet], dtype=int)
+            means = np.zeros([ndet], dtype=float)
+            stats = np.zeros([nstat, ndet], dtype=float)
 
             obs_dets = obs.select_local_detectors(detectors)
             views = obs.view[self.view]
+
+            # Measure the mean separately to simplify the math
             for iview, view in enumerate(views):
+                if view.start is None:
+                    # This is a view of the whole obs
+                    nsample = obs.n_local_samples
+                else:
+                    nsample = view.stop - view.start
                 if self.shared_flags is not None:
                     shared_flags = views.shared[self.shared_flags][iview]
                     shared_mask = (shared_flags & self.shared_flag_mask) == 0
                 else:
                     shared_mask = np.ones(nsample, dtype=bool)
+
                 for det in obs_dets:
                     if self.det_flags is not None:
                         det_flags = views.detdata[self.det_flags][iview][det]
@@ -118,62 +128,83 @@ class Statistics(Operator):
                     good_signal = signal[mask].copy()
                     idet = all_dets.index(det)
                     # Valid samples
-                    stats[0, idet] += ngood
+                    hits[idet] += ngood
                     # Mean
-                    stats[1, idet] += np.sum(good_signal)
-                    # Variance
-                    stats[2, idet] += np.sum(good_signal ** 2)
-                    # Skewness
-                    stats[3, idet] += np.sum(good_signal ** 3)
-                    # Kurtosis
-                    stats[4, idet] += np.sum(good_signal ** 4)
+                    means[idet] += np.sum(good_signal)
 
             if obs.comm is not None:
-                # Valid samples
-                stats[0] = obs.comm.reduce(stats[0], op=MPI.SUM)
-                # Mean
-                stats[1] = obs.comm.reduce(stats[1], op=MPI.SUM)
+                hits = obs.comm.allreduce(hits, op=MPI.SUM)
+                means = obs.comm.allreduce(means, op=MPI.SUM)
+
+            good = hits != 0
+            means[good] /= hits[good]
+
+            # Now evaluate the moments
+
+            for iview, view in enumerate(views):
+                if view.start is None:
+                    # This is a view of the whole obs
+                    nsample = obs.n_local_samples
+                else:
+                    nsample = view.stop - view.start
+                if self.shared_flags is not None:
+                    shared_flags = views.shared[self.shared_flags][iview]
+                    shared_mask = (shared_flags & self.shared_flag_mask) == 0
+                else:
+                    shared_mask = np.ones(nsample, dtype=bool)
+
+                for det in obs_dets:
+                    if self.det_flags is not None:
+                        det_flags = views.detdata[self.det_flags][iview][det]
+                        det_mask = (det_flags & self.det_flag_mask) == 0
+                        mask = np.logical_and(shared_mask, det_mask)
+                    else:
+                        mask = shared_mask
+                    ngood = np.sum(mask)
+                    if ngood == 0:
+                        continue
+                    idet = all_dets.index(det)
+                    signal = views.detdata[self.det_data][iview][det]
+                    good_signal = signal[mask].copy() - means[idet]
+                    # Variance
+                    stats[0, idet] += np.sum(good_signal ** 2)
+                    # Skewness
+                    stats[1, idet] += np.sum(good_signal ** 3)
+                    # Kurtosis
+                    stats[2, idet] += np.sum(good_signal ** 4)
+
+            if obs.comm is not None:
+                stats = obs.comm.reduce(stats, op=MPI.SUM)
+
+            if obs.comm is None or obs.comm.rank == 0:
+                # Central moments
+                m2 = stats[0]
+                m3 = stats[1]
+                m4 = stats[2]
+                for m in m2, m3, m4:
+                    m[good] /= hits[good]
                 # Variance
-                stats[2] = obs.comm.reduce(stats[2], op=MPI.SUM)
+                var = m2.copy()
                 # Skewness
-                stats[3] = obs.comm.reduce(stats[3], op=MPI.SUM)
+                skew = m3.copy()
+                skew[good] /= m2[good] ** 1.5
                 # Kurtosis
-                stats[4] = obs.comm.reduce(stats[4], op=MPI.SUM)
-            if obs.comm.rank is None or obs.comm.rank == 0:
-                good = stats[0] != 0
-                hits = stats[0][good]
-                # Mean
-                stats[1][good] /= hits
-                mean = stats[1][good]
-                # Variance
-                stats[2][good] = stats[2][good] / hits - mean ** 2
-                var = stats[2][good]
-                # Skewness
-                stats[3][good] = stats[3][good] / hits - mean * var - mean ** 3
-                skew = stats[3][good]
-                # Kurtosis
-                stats[4][good] = (
-                    stats[4][good] / hits
-                    - 4 * skew * mean
-                    + 6 * var * mean ** 2
-                    - 3 * mean ** 4
-                )
-                kurt = stats[4][good]
-                # Normalize
-                skew /= var ** 3 / 2
-                kurt /= var ** 2
+                kurt = m4.copy()
+                kurt[good] /= m2[good] ** 2
                 # Write the results
                 with h5py.File(fname_out, "w") as fout:
                     fout.attrs["UID"] = obs.uid
                     if obs.name is not None:
                         fout.attrs["name"] = obs.name
                     fout.attrs["nsample"] = obs.n_all_samples
-                    fout["detectors"] = all_dets
-                    fout["ngood"] = stats[0].astype(int)
-                    fout["mean"] = stats[1]
-                    fout["variance"] = stats[2]
-                    fout["skewness"] = stats[3]
-                    fout["kurtosis"] = stats[4]
+                    fout.create_dataset(
+                        "detectors", data=all_dets, dtype=h5py.string_dtype()
+                    )
+                    fout["ngood"] = hits
+                    fout["mean"] = means
+                    fout["variance"] = var
+                    fout["skewness"] = skew
+                    fout["kurtosis"] = kurt
                 log.debug(f"Wrote data statistics to {fname_out}")
 
         return
