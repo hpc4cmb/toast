@@ -562,8 +562,6 @@ class MapMaker(Operator):
         # Now construct the noise covariance, hits, and condition number mask for the
         # final binned map.
 
-        if self.write_invcov:
-            map_binning.inverse_covariance = self.invcov_name
         map_binning.covariance = self.cov_name
 
         if self.mc_mode:
@@ -593,7 +591,7 @@ class MapMaker(Operator):
             final_cov = CovarianceAndHits(
                 pixel_dist=map_binning.pixel_dist,
                 covariance=map_binning.covariance,
-                inverse_covariance=map_binning.inverse_covariance,
+                inverse_covariance=self.invcov_name,
                 hits=self.hits_name,
                 rcond=self.rcond_name,
                 det_flags=map_binning.det_flags,
