@@ -442,7 +442,7 @@ class PolyFilter(Operator):
                     obs.shared[self.shared_flags].data & self.shared_flag_mask
                 )
             else:
-                shared_flags = np.zeros(obs.n_local_sample, dtype=np.uint8)
+                shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             for idet, det in enumerate(dets):
                 # Test the detector pattern

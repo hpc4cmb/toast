@@ -53,6 +53,12 @@ class BinMap(Operator):
         help="The Data key where the binned map should be stored",
     )
 
+    noiseweighted = Unicode(
+        None,
+        allow_none=True,
+        help="The Data key where the noiseweighted map should be stored",
+    )
+
     det_data = Unicode("signal", help="Observation detdata key for the timestream data")
 
     det_flags = Unicode(
@@ -198,6 +204,10 @@ class BinMap(Operator):
         if data.comm.world_rank == 0:
             log.verbose("  BinMap running pipeline")
         pipe_out = accum.apply(data, detectors=detectors)
+
+        # Optionally, store the noise-weighted map
+        if self.noiseweighted is not None:
+            data[self.noiseweighted] = data[self.binned].duplicate()
 
         # Extract the results
         binned_map = data[self.binned]

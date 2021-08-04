@@ -718,6 +718,12 @@ class CovarianceAndHits(Operator):
         help="The Data key where the covariance should be stored",
     )
 
+    inverse_covariance = Unicode(
+        None,
+        allow_none=True,
+        help="The Data key where the inverse covariance should be stored",
+    )
+
     hits = Unicode(
         "hits",
         help="The Data key where the hit map should be stored",
@@ -725,7 +731,7 @@ class CovarianceAndHits(Operator):
 
     rcond = Unicode(
         "rcond",
-        help="The Data key where the inverse condition number should be stored",
+        help="The Data key where the reciprocal condition number should be stored",
     )
 
     det_flags = Unicode(
@@ -858,6 +864,10 @@ class CovarianceAndHits(Operator):
         accum.operators = [self.pointing, build_hits, build_invcov]
 
         pipe_out = accum.apply(data, detectors=detectors)
+
+        # Optionally, store the inverse covariance
+        if self.inverse_covariance is not None:
+            data[self.inverse_covariance] = data[self.covariance].duplicate()
 
         # Extract the results
         hits = data[self.hits]
