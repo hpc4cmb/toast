@@ -51,9 +51,9 @@ class StatisticsTest(MPITestCase):
             if data.comm.group_rank != 0:
                 continue
             if obs.name is not None:
-                fname = os.path.join(self.outdir, f"{statistics.prefix}_{obs.name}.h5")
+                fname = os.path.join(self.outdir, f"{statistics.name}_{obs.name}.h5")
             else:
-                fname = os.path.join(self.outdir, f"{statistics.prefix}_{obs.uid}.h5")
+                fname = os.path.join(self.outdir, f"{statistics.name}_{obs.uid}.h5")
             # Load data
             with h5py.File(fname, "r") as f:
                 detectors = list(f["detectors"].asstr())
