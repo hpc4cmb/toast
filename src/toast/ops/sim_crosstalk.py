@@ -17,6 +17,32 @@ from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
 from .operator import Operator
 
+@function_timer
+def init_xtalk ( data , detectors=None
+                    ,realization=0):
+
+    xtalk_mat={}
+
+    for ob in data.obs:
+        obsindx = ob.uid
+        key1 = ( 65536 +  realization  )
+        key2 = obsindx
+        counter1 = 0
+        counter2 = 1234567
+        Ndets= len(ob.telescope.focalplane.detectors )
+
+        rngdata = rng.random(
+             Ndets ,
+             sampler="uniform_01",
+             key=(key1, key2),
+             counter=(counter1, counter2),
+         )
+        dets = ob.select_local_detectors(detectors )
+        alldets = ob.telescope.focalplane.detectors
+        for   det in   dets :
+            xtalk_mat [det ]= {d : v for d,v in zip(alldets ,rngdata)}
+    return xtalk_mat
+
 
 @trait_docs
 class CrossTalk(Operator):
@@ -61,65 +87,87 @@ class CrossTalk(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    @function_timer
-    def init_xtalk (self, data ):
 
-        self.xtalk_mat={}
-
-        for ob in data.obs:
-            obsindx = ob.uid
-            key1 = ( 65536 + self.realization   )
-            key2 = obsindx
-            counter1 = 0
-            counter2 = 1234567
-            Ndets= len(ob.telescope.focalplane.detectors )
-            rngdata = rng.random(
-                 Ndets ,
-                 sampler="uniform_01",
-                 key=(key1, key2),
-                 counter=(counter1, counter2),
-             )
-            self.xtalk_mat[ob.name ]={}
-            for k, det in  enumerate(ob.telescope.focalplane.detectors ):
-                if self.detector_ordering == "random":
-                    self.xtalk_mat [ob.name][det ]= rngdata[k]
-                elif  self.detector_ordering == "constant":
-                    self.xtalk_mat[ob.name][det] =self.xtalk_mat_value
-
-        return
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
         if self.xtalk_mat_file is None :
-            self.init_xtalk(data )
+            self.xtalk_mat =init_xtalk(data , detectors ,
+                            realization=self.realization     )
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
-
-            if len(dets) == 0: continue
+            Ndets=len(dets)
+            if Ndets == 0: continue
             comm = ob.comm
             rank = ob.comm_rank
+
             ob.detdata.ensure(self.det_data, detectors=dets)
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
-            import pdb; pdb.set_trace()
+            #we loop over all the procs except rank
+
+            procs= np.arange(comm.size )
+            procs= procs[procs != rank]
             for det in dets:
-                detindx = focalplane[det]["uid"]
+                xtalklist = list( self.xtalk_mat[det].keys())
+                #send and recv data
+                for ip in procs :
+                    if ip == comm.size -1 :
+                        #if last rank
+                        # sendrecv list of local dets
+                        comm.send(ob.detdata[self.det_data].detectors ,
+                                dest=0 , tag= rank*100+ip *Ndets + ip   )
+                        detlist= comm.recv( source=ip -1,
+                                    tag= rank*100+ip *Ndets + ip   )
+                    elif ip==0:
+                        #if 0 rank
+                        comm.send(ob.detdata[self.det_data].detectors,
+                            dest=ip+1, tag= rank*100+ip *Ndets + ip   )
+                        detlist= comm.recv( source=comm.size -1,
+                                tag= rank*100+ip *Ndets + ip   )
+                    else :
+                        # if any other rank
+                         comm.send(ob.detdata[self.det_data].detectors ,
+                                 dest=ip+1,
+                                 tag= rank*100+ip *Ndets + ip  )
+                         detlist= comm.recv( source=ip-1,
+                          tag= rank*100+ip *Ndets + ip )
 
-                # xtalk_mat[det][detdatacomm]
-                # detdata_comm
+                    intersect = np.intersect1d( detlist,xtalklist)
+                    ## we make sure that we communicate the samples
+                    # ONLY in case some of the  detectors sent by a rank  xtalking with det
+                    if intersect.size >0: continue
+                    if ip == comm.size -1 :
+                        #if last rank
+                        # sendrecv samples
+                        comm.send(ob.detdata[self.det_data].data,
+                                dest=0 , tag= rank*100+ip *Ndets + ip   )
+                        detdata= comm.recv( source=ip -1,
+                                    tag= rank*100+ip *Ndets + ip   )
+                    elif ip==0:
+                        #if 0 rank
+                        comm.send(ob.detdata[self.det_data].data,
+                            dest=ip+1, tag= rank*100+ip *Ndets + ip   )
+                        detdata= comm.recv( source=comm.size -1,
+                                tag= rank*100+ip *Ndets + ip   )
+                    else :
+                        # if any other rank
+                        comm.send(ob.detdata[self.det_data].data,
+                                dest=ip+1,
+                                tag= rank*100+ip *Ndets + ip  )
+                        detdata= comm.recv( source=ip-1,
+                         tag= rank*100+ip *Ndets + ip )
 
-                for  r in range(comm.size) :
-
-                    if r== rank :continue
-                    #ob.detdata[self.det_data][det] =
-
-
-
+                    ind1 = np.where (xtalklist == intersect )
+                    ind2 = np.where (detlist == intersect )
+                    for i1,i2 in zip(ind1,ind2):
+                        xtalk_det = xtalklist[i1]
+                        ob.detdata[self.det_data][det].data += self.xtalk_mat[det][xtalk_det] * detdata[ind2]
         return
 
     def _finalize(self, data, **kwargs):
