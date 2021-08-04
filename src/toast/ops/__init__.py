@@ -68,3 +68,6 @@ from .sim_gaindrifts import GainDrifter
 from .sim_crosstalk import CrossTalk
 
 from .totalconvolve import SimTotalconvolve
+
+from .polyfilter import PolyFilter, PolyFilter2D, CommonModeFilter
+from .groundfilter import GroundFilter

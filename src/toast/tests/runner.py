@@ -55,6 +55,9 @@ from . import ops_madam as test_ops_madam
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
 from . import ops_sim_crosstalk as test_ops_sim_crosstalk
+from . import ops_polyfilter as test_ops_polyfilter
+from . import ops_groundfilter as test_ops_groundfilter
+
 
 
 from . import covariance as test_covariance
@@ -70,9 +73,6 @@ from . import template_subharmonic as test_template_subharmonic
 #
 # from . import ops_dipole as testopsdipole
 # from . import ops_sim_sss as testopssimsss
-#
-# from . import ops_polyfilter as testopspolyfilter
-# from . import ops_groundfilter as testopsgroundfilter
 #
 # from . import ops_gainscrambler as testopsgainscrambler
 # from . import ops_applygain as testopsapplygain
@@ -176,6 +176,8 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_madam))
         suite.addTest(loader.loadTestsFromModule(test_ops_gainscrambler))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))
+        suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
@@ -192,7 +194,6 @@ def test(name=None, verbosity=2):
         # suite.addTest(loader.loadTestsFromModule(testopsdipole))
         # suite.addTest(loader.loadTestsFromModule(testopsgroundfilter))
         # suite.addTest(loader.loadTestsFromModule(testsimfocalplane))
-        # suite.addTest(loader.loadTestsFromModule(testopspolyfilter))
         # suite.addTest(loader.loadTestsFromModule(testopsgainscrambler))
 
         # suite.addTest(loader.loadTestsFromModule(testpsdmath))

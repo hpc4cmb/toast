@@ -61,19 +61,22 @@ blkrun="-l 88"
 # Black test options
 blktest="--check"
 
-# Process directories with C++ files
-for cppd in libtoast toast; do
-    find "${base}/${cppd}" -name "*.hpp" -not -path '*Random123*' -not -path '*pybind11/*' -not -path '*gtest/*' -exec echo "uncrustify {}" \; -exec ${unexe} ${unrun} '{}' \;
-    find "${base}/${cppd}" -name "*.cpp" -not -path '*Random123*' -not -path '*pybind11/*' -not -path '*gtest/*' -exec echo "uncrustify {}" \; -exec ${unexe} ${unrun} '{}' \;
-done
+# Note that the "+" argument to "find ... -exec" below passes all found files to the
+# exec command in one go.  This works because both uncrustify and black accept multiple
+# files as arguments.
 
-# Process directories with *.py files
-for pyd in toast ../workflows; do
-    find "${base}/${pyd}" -name "*.py" -not -path '*pybind11/*' -exec echo "Formatting {}" \; -exec ${blkexe} ${blkrun} '{}' \;
-done
+# Process directories with C++ files.
+find "${base}/libtoast" "${base}/toast" \( -name "*.hpp" -or -name "*.cpp" \) \
+    -and -not \( -path '*Random123*' -or -path '*pybind11/*' -or -path '*gtest/*' \) \
+    -exec ${unexe} ${unrun} '{}' + &
+
+# Process directories with python files
+find "${base}/toast" "${base}/../workflows" -name "*.py" -and -not \
+    -path '*pybind11/*' -exec ${blkexe} ${blkrun} '{}' + &
 
 # Special case:  process files in the scripts directory which do not
 # have the .py extension
-for pyd in toast/scripts; do
-    find "${base}/${pyd}" -name "toast_*" -exec echo "Formatting {}" \; -exec ${blkexe} ${blkrun} '{}' \;
-done
+find "${base}/toast/scripts" -name "toast_*" -exec ${blkexe} ${blkrun} '{}' + &
+
+# Wait for the commands to finish
+wait

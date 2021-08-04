@@ -273,15 +273,10 @@ class ObserveAtmosphere(Operator):
                     # Add contribution to output
                     views.detdata[self.det_data][vw][det][good] += atmdata
 
-            if comm is not None:
-                comm.Barrier()
-                ngood_tot = comm.reduce(ngood_tot)
-                nbad_tot = comm.reduce(nbad_tot)
-            if rank == 0 and nbad_tot > 0:
+            if nbad_tot > 0:
+                frac = nbad_tot / (ngood_tot + nbad_tot) * 100
                 log.error(
-                    "{}: Observe atmosphere FAILED on {:.2f}% of samples".format(
-                        log_prefix, nbad_tot * 100 / ngood_tot
-                    )
+                    "{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
                 )
 
     def _finalize(self, data, **kwargs):

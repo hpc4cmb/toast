@@ -4,6 +4,8 @@
 
 from ..mpi import MPI
 
+import os
+
 import traitlets
 
 import numpy as np
@@ -800,19 +802,24 @@ class SimAtmosphere(Operator):
         self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax
     ):
         """Create snapshots of the atmosphere"""
-        from ..vis import set_backend
+        log = Logger.get()
+        from ..vis import set_matplotlib_backend
 
-        set_backend()
+        set_matplotlib_backend()
         import matplotlib.pyplot as plt
         import pickle
 
         azmin, azmax, elmin, elmax = scan_range
+        azmin = azmin.to_value(u.radian)
+        azmax = azmax.to_value(u.radian)
+        elmin = elmin.to_value(u.radian)
+        elmax = elmax.to_value(u.radian)
 
         # elstep = np.radians(0.01)
         elstep = (elmax - elmin) / 320
         azstep = elstep * np.cos(0.5 * (elmin + elmax))
-        azgrid = np.linspace(azmin, azmax, (azmax - azmin) // azstep + 1)
-        elgrid = np.linspace(elmin, elmax, (elmax - elmin) // elstep + 1)
+        azgrid = np.linspace(azmin, azmax, int((azmax - azmin) / azstep) + 1)
+        elgrid = np.linspace(elmin, elmax, int((elmax - elmin) / elstep) + 1)
         AZ, EL = np.meshgrid(azgrid, elgrid)
         nn = AZ.size
         az = AZ.ravel()
@@ -838,8 +845,7 @@ class SimAtmosphere(Operator):
             err = sim.observe(atmtimes + t, az, el, atmdata, r)
             if err != 0:
                 raise RuntimeError(prefix + "Observation failed")
-            if self._gain:
-                atmdata *= self._gain
+            atmdata *= self.gain
             vmin = min(vmin, np.amin(atmdata))
             vmax = max(vmax, np.amax(atmdata))
             atmdata2d = atmdata.reshape(AZ.shape)
@@ -861,7 +867,7 @@ class SimAtmosphere(Operator):
             with open(fn, "wb") as fout:
                 pickle.dump([azgrid, elgrid, my_snapshots], fout)
 
-        log.debug("Snapshots saved in {}".format(fn), flush=True)
+        log.debug("Snapshots saved in {}".format(fn))
 
         if self.debug_plots:
             if comm is not None:
