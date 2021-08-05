@@ -41,6 +41,7 @@ def init_xtalk ( data , detectors=None
         alldets = ob.telescope.focalplane.detectors
         for   det in   dets :
             xtalk_mat [det ]= {d : v for d,v in zip(alldets ,rngdata)}
+            xtalk_mat[det][det]=0.
     return xtalk_mat
 
 
@@ -110,64 +111,47 @@ class CrossTalk(Operator):
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
             #we loop over all the procs except rank
-
             procs= np.arange(comm.size )
             procs= procs[procs != rank]
+            tmp= ob.detdata[self.det_data].copy()
             for det in dets:
+
                 xtalklist = list( self.xtalk_mat[det].keys())
-                #send and recv data
+                # we firstly xtalk local detectors in each rank
+                intersect_local = np.intersect1d(ob.detdata[self.det_data].detectors ,xtalklist)
+                ind1 =[ xtalklist.index(k ) for  k in intersect_local ]
+                ind2 = [ ob.detdata[self.det_data].detectors .index(k)  for  k in intersect_local]
+
+                xtalk_weights = np.array([self.xtalk_mat[det][kk] for kk in np.array(xtalklist)[ind1]])
+
+                ob.detdata[self.det_data][det] += np.dot( xtalk_weights,  ob.detdata[self.det_data].data[ind2,:])
+                #assert  old.var() !=   ob.detdata[self.det_data][det] .var()
                 for ip in procs :
-                    if ip == comm.size -1 :
-                        #if last rank
-                        # sendrecv list of local dets
-                        comm.send(ob.detdata[self.det_data].detectors ,
-                                dest=0 , tag= rank*100+ip *Ndets + ip   )
-                        detlist= comm.recv( source=ip -1,
-                                    tag= rank*100+ip *Ndets + ip   )
-                    elif ip==0:
-                        #if 0 rank
-                        comm.send(ob.detdata[self.det_data].detectors,
-                            dest=ip+1, tag= rank*100+ip *Ndets + ip   )
-                        detlist= comm.recv( source=comm.size -1,
-                                tag= rank*100+ip *Ndets + ip   )
-                    else :
-                        # if any other rank
-                         comm.send(ob.detdata[self.det_data].detectors ,
-                                 dest=ip+1,
-                                 tag= rank*100+ip *Ndets + ip  )
-                         detlist= comm.recv( source=ip-1,
-                          tag= rank*100+ip *Ndets + ip )
+                    #send and recv data
+
+                    comm.send(ob.detdata[self.det_data].detectors ,
+                                dest=ip , tag= rank*10+   ip   )
+                    detlist= np.array(comm.recv( source=ip ,
+                                    tag=  ip*10+  rank    ))
 
                     intersect = np.intersect1d( detlist,xtalklist)
                     ## we make sure that we communicate the samples
                     # ONLY in case some of the  detectors sent by a rank  xtalking with det
-                    if intersect.size >0: continue
-                    if ip == comm.size -1 :
-                        #if last rank
-                        # sendrecv samples
-                        comm.send(ob.detdata[self.det_data].data,
-                                dest=0 , tag= rank*100+ip *Ndets + ip   )
-                        detdata= comm.recv( source=ip -1,
-                                    tag= rank*100+ip *Ndets + ip   )
-                    elif ip==0:
-                        #if 0 rank
-                        comm.send(ob.detdata[self.det_data].data,
-                            dest=ip+1, tag= rank*100+ip *Ndets + ip   )
-                        detdata= comm.recv( source=comm.size -1,
-                                tag= rank*100+ip *Ndets + ip   )
-                    else :
-                        # if any other rank
-                        comm.send(ob.detdata[self.det_data].data,
-                                dest=ip+1,
-                                tag= rank*100+ip *Ndets + ip  )
-                        detdata= comm.recv( source=ip-1,
-                         tag= rank*100+ip *Ndets + ip )
+                    if intersect.size ==0: continue
+                    #define the indices of Xtalk coefficients and of detdata
 
-                    ind1 = np.where (xtalklist == intersect )
-                    ind2 = np.where (detlist == intersect )
-                    for i1,i2 in zip(ind1,ind2):
-                        xtalk_det = xtalklist[i1]
-                        ob.detdata[self.det_data][det].data += self.xtalk_mat[det][xtalk_det] * detdata[ind2]
+                    ind1 = [ xtalklist.index(k ) for  k in  intersect]
+                    ind2 =[ detlist.index(k)  for  k in intersect]
+                    xtalk_weights = np.array([self.xtalk_mat[det][kk] for kk in np.array(xtalklist)[ind1]])
+
+                    #send and recv detdata
+                    comm.send(ob.detdata[self.det_data].data ,
+                                dest=ip , tag= rank*10 + ip   )
+                    detdata= comm.recv( source=ip ,
+                                    tag=  ip*10+  rank    )
+
+                    ob.detdata[self.det_data][det]  += np.dot( xtalk_weights,  detdata[ind2])
+
         return
 
     def _finalize(self, data, **kwargs):
