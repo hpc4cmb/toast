@@ -113,8 +113,8 @@ class CrossTalk(Operator):
             #we loop over all the procs except rank
             procs= np.arange(comm.size )
             procs= procs[procs != rank]
-            tmp= ob.detdata[self.det_data].copy()
-            for det in dets:
+            tmp= np.zeros_like(ob.detdata[self.det_data].data)
+            for idet, det in enumerate(dets):
 
                 xtalklist = list( self.xtalk_mat[det].keys())
                 # we firstly xtalk local detectors in each rank
@@ -124,7 +124,7 @@ class CrossTalk(Operator):
 
                 xtalk_weights = np.array([self.xtalk_mat[det][kk] for kk in np.array(xtalklist)[ind1]])
 
-                ob.detdata[self.det_data][det] += np.dot( xtalk_weights,  ob.detdata[self.det_data].data[ind2,:])
+                tmp[idet]  += np.dot( xtalk_weights,  ob.detdata[self.det_data].data[ind2,:])
                 #assert  old.var() !=   ob.detdata[self.det_data][det] .var()
                 for ip in procs :
                     #send and recv data
@@ -132,7 +132,7 @@ class CrossTalk(Operator):
                     comm.send(ob.detdata[self.det_data].detectors ,
                                 dest=ip , tag= rank*10+   ip   )
                     detlist= np.array(comm.recv( source=ip ,
-                                    tag=  ip*10+  rank    ))
+                                    tag=  ip*10+  rank    )).tolist()
 
                     intersect = np.intersect1d( detlist,xtalklist)
                     ## we make sure that we communicate the samples
@@ -150,7 +150,16 @@ class CrossTalk(Operator):
                     detdata= comm.recv( source=ip ,
                                     tag=  ip*10+  rank    )
 
-                    ob.detdata[self.det_data][det]  += np.dot( xtalk_weights,  detdata[ind2])
+                    tmp[idet]  += np.dot( xtalk_weights,  detdata[ind2])
+
+            # before updating detdata samples we make sure
+            #that all the send/receive have been performed
+            comm.Barrier()
+            for idet, det in enumerate(dets):
+
+                ob.detdata[self.det_data][det]+=tmp[idet]
+
+
 
         return
 
