@@ -370,12 +370,11 @@ class Focalplane(object):
             )
             for row in self.detector_data:
                 quat = row["quat"]
-                theta, phi = qarray.to_position(quat)
-                yrot = qarray.rotation(self.YAXIS, -theta)
-                zrot = qarray.rotation(self.ZAXIS, -phi)
-                rot = qarray.norm(qarray.mult(yrot, zrot))
-                pol_rot = qarray.mult(rot, quat)
-                pol_angle = qarray.to_angles(pol_rot)[2]
+                wx, wy, wz = qarray.rotate(quat, self.ZAXIS)
+                wdir = np.array([wx, wy, wz])
+                posrot = qarray.norm(qarray.from_vectors(self.ZAXIS, wdir))
+                angrot = qarray.norm(qarray.mult(qarray.inv(posrot), quat))
+                pol_angle = qarray.to_angles(angrot)[2] % np.pi
                 row["pol_angle"] = pol_angle * u.radian
 
     def _get_pol_efficiency(self):
