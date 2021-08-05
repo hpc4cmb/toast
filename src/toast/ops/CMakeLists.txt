@@ -38,8 +38,11 @@ install(FILES
     conviqt.py
     sim_gaindrifts.py
     totalconvolve.py
+<<<<<<< HEAD
     polyfilter.py
     groundfilter.py
+=======
+>>>>>>> 4c54e765c60a830089882d14571e033a45af4529
     sim_cosmic_rays.py 
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

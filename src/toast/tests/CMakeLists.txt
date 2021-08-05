@@ -42,8 +42,11 @@ install(FILES
     template_fourier2d.py
     template_subharmonic.py
     ops_sim_gaindrifts.py
+<<<<<<< HEAD
     ops_polyfilter.py
     ops_groundfilter.py
+=======
+>>>>>>> 4c54e765c60a830089882d14571e033a45af4529
     ops_sim_cosmic_rays.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
