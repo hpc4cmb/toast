@@ -123,6 +123,19 @@ class MapMaker(Operator):
         help="Binning operator for final map making.  Default is same as solver",
     )
 
+    write_map = Bool(True, help="If True, write the projected map")
+    write_noiseweighted_map = Bool(
+        False,
+        help="If True, write the noise-weighted map",
+    )
+    write_hits = Bool(True, help="If True, write the hits map")
+    write_cov = Bool(True, help="If True, write the white noise covariance matrices.")
+    write_invcov = Bool(
+        False,
+        help="If True, write the inverse white noise covariance matrices.",
+    )
+    write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
+
     mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
 
     mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
@@ -243,11 +256,13 @@ class MapMaker(Operator):
 
         self.hits_name = "{}_hits".format(self.name)
         self.cov_name = "{}_cov".format(self.name)
+        self.invcov_name = "{}_invcov".format(self.name)
         self.rcond_name = "{}_rcond".format(self.name)
         self.flag_name = "{}_flags".format(self.name)
 
         self.clean_name = "{}_cleaned".format(mc_root)
         self.map_name = "{}_map".format(mc_root)
+        self.noiseweighted_map_name = "{}_noiseweighted_map".format(mc_root)
 
         timer.start()
 
@@ -576,6 +591,7 @@ class MapMaker(Operator):
             final_cov = CovarianceAndHits(
                 pixel_dist=map_binning.pixel_dist,
                 covariance=map_binning.covariance,
+                inverse_covariance=self.invcov_name,
                 hits=self.hits_name,
                 rcond=self.rcond_name,
                 det_flags=map_binning.det_flags,
@@ -606,6 +622,8 @@ class MapMaker(Operator):
         )
 
         pre_pipe = None
+        if self.write_noiseweighted_map:
+            map_binning.noiseweighted = self.noiseweighted_map_name
         map_binning.binned = self.map_name
 
         if n_enabled_templates != 0:
@@ -684,10 +702,22 @@ class MapMaker(Operator):
         # PointingHealpix class.  We need to generalize distributed pixel data
         # formats and associate them with the pointing operator.
         if self.output_dir is not None:
-            for prod in ["map", "hits", "cov", "rcond"]:
-                dkey = "{}_{}".format(self.name, prod)
-                file = os.path.join(self.output_dir, "{}.fits".format(dkey))
-                write_healpix_fits(data[dkey], file, nest=map_binning.pointing.nest)
+            keys = []
+            if self.write_map:
+                keys.append(self.map_name)
+            if self.write_noiseweighted_map:
+                keys.append(self.noiseweighted_map_name)
+            if self.write_hits:
+                keys.append(self.hits_name)
+            if self.write_cov:
+                keys.append(self.cov_name)
+            if self.write_invcov:
+                keys.append(self.invcov_name)
+            if self.write_rcond:
+                keys.append(self.rcond_name)
+            for dkey in keys:
+                fname = os.path.join(self.output_dir, "{}.fits".format(dkey))
+                write_healpix_fits(data[dkey], fname, nest=map_binning.pointing.nest)
 
         log.info_rank(
             f"{log_prefix}  finished output write in",
