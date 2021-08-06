@@ -71,13 +71,13 @@ class ElevationNoise(Operator):
     noise_a = Float(
         None,
         allow_none=True,
-        help="Parameter 'a' in (a / sin(el) + c)",
+        help="Parameter 'a' in (a / sin(el) + c).  If not set, look for one in the Focalplane.",
     )
 
     noise_c = Float(
         None,
         allow_none=True,
-        help="Parameter 'c' in (a / sin(el) + c)",
+        help="Parameter 'c' in (a / sin(el) + c).  If not set, look for one in the Focalplane.",
     )
 
     @traitlets.validate("detector_pointing")
@@ -115,6 +115,8 @@ class ElevationNoise(Operator):
             raise RuntimeError(msg)
 
         for ob in data.obs:
+            focalplane = ob.telescope.focalplane
+
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
             if len(dets) == 0:
@@ -127,11 +129,6 @@ class ElevationNoise(Operator):
                     self.noise_model, ob.name
                 )
                 raise RuntimeError(msg)
-
-            # If both the A and B values are unset, the noise model is not modified.
-            if self.noise_a is None and self.noise_c is None:
-                ob[self.out_model] = ob[self.noise_model]
-                continue
 
             # Check that the view in the detector pointing operator covers
             # all the samples needed by this operator
@@ -181,6 +178,16 @@ class ElevationNoise(Operator):
                 view_flags.append(flags)
 
             for det in dets:
+                # If both the A and C values are unset, the noise model is not modified.
+                if self.noise_a is not None:
+                    noise_a = self.noise_a
+                    noise_c = self.noise_c
+                elif "elevation_noise_a" in focalplane[det]:
+                    noise_a = focalplane[det]["elevation_noise_a"]
+                    noise_c = focalplane[det]["elevation_noise_c"]
+                else:
+                    continue
+
                 # Compute detector quaternions one detector at a time.
                 self.detector_pointing.apply(data, detectors=[det])
                 el_view = list()
@@ -199,7 +206,7 @@ class ElevationNoise(Operator):
                 el = np.median(np.concatenate(el_view))
 
                 # Scale the PSD
-                el_factor = self.noise_a / np.sin(el) + self.noise_c
+                el_factor = noise_a / np.sin(el) + noise_c
                 psd[:] *= el_factor ** 2
         return
 

@@ -293,6 +293,9 @@ class Focalplane(object):
             DefaultNoiseModel operator.
         "psd_alpha":  Quantity used to create a synthetic noise model with the
             DefaultNoiseModel operator.
+        "elevation_noise_a" and "elevation_noise_c":  Parameters of elevation scaling
+            noise model: PSD_{out} = PSD_{ref} * (a / sin(el) + c)^2.  Only applicable
+            to ground data.
 
     Args:
         detector_data (QTable):  Table of detector properties.
