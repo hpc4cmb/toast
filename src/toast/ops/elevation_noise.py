@@ -182,7 +182,7 @@ class ElevationNoise(Operator):
                 if self.noise_a is not None:
                     noise_a = self.noise_a
                     noise_c = self.noise_c
-                elif "elevation_noise_a" in focalplane[det].keys():
+                elif "elevation_noise_a" in focalplane[det].colnames:
                     noise_a = focalplane[det]["elevation_noise_a"]
                     noise_c = focalplane[det]["elevation_noise_c"]
                 else:
