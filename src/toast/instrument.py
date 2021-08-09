@@ -101,6 +101,16 @@ class Site(object):
         value = "<Site '{}' : uid = {}>".format(self.name, self.uid)
         return value
 
+    def __eq__(self, other):
+        if self.name != other.name:
+            return False
+        if self.uid != other.uid:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
 class GroundSite(Site):
     """Site on the Earth.
@@ -471,6 +481,35 @@ class Focalplane(object):
     def keys(self):
         return self.detectors
 
+    def detector_groups(self, column):
+        """Group detectors by a common value in one property.
+
+        This returns a dictionary whose keys are the unique values of the specified
+        detector_data column.  The values for each key are a list of detectors that
+        have that value.  This can be useful for creating detector sets for data
+        distribution or for considering detectors with correlations.
+
+        Since the column values will be used for dictionary keys, the column must
+        be a data type which is hashable.
+
+        Args:
+            column (str):  The detector_data column.
+
+        Returns:
+            (dict):  The detector names grouped by unique column values.
+
+        """
+        if column not in self.detector_data.colnames:
+            raise RuntimeError(f"'{column}' is not a valid det data column")
+        detgroups = dict()
+        for d in self.detectors:
+            indx = self._det_to_row[d]
+            val = self.detector_data[column][indx]
+            if val not in detgroups:
+                detgroups[val] = list()
+            detgroups[val].append(d)
+        return detgroups
+
     def __repr__(self):
         value = "<Focalplane: {} detectors, sample_rate = {} Hz, FOV = {} deg, detectors = [".format(
             len(self.detector_data),
@@ -480,6 +519,23 @@ class Focalplane(object):
         value += "{} .. {}".format(self.detectors[0], self.detectors[-1])
         value += "]>"
         return value
+
+    def __eq__(self, other):
+        if self.sample_rate != other.sample_rate:
+            return False
+        if self.field_of_view != other.field_of_view:
+            return False
+        if self.detectors != other.detectors:
+            return False
+        if self.detector_data.colnames != other.detector_data.colnames:
+            return False
+        for cn in self.detector_data.colnames:
+            if not np.array_equal(self.detector_data[cn], other.detector_data[cn]):
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def read(self, file, comm=None):
         if comm is None or comm.rank == 0:
@@ -538,3 +594,17 @@ class Telescope(object):
         value += self.focalplane.__repr__()
         value += ">"
         return value
+
+    def __eq__(self, other):
+        if self.name != other.name:
+            return False
+        if self.uid != other.uid:
+            return False
+        if self.site != other.site:
+            return False
+        if self.focalplane != other.focalplane:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)

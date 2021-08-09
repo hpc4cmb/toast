@@ -120,7 +120,7 @@ def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proce
     """Create a fake ground telescope with at least one detector per process."""
     npix = 1
     ring = 1
-    while 2 * npix < group_size * pixel_per_process:
+    while 2 * npix <= group_size * pixel_per_process:
         npix += 6 * ring
         ring += 1
     fp = fake_hexagon_focalplane(
@@ -219,6 +219,7 @@ def create_satellite_data(
         hwp_rpm=10.0,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
+        detset_key="pixel",
     )
     sim_sat.apply(data)
 
@@ -294,6 +295,7 @@ def create_satellite_data_big(
         hwp_rpm=10.0,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
+        detset_key="pixel",
     )
     sim_sat.apply(data)
 
@@ -645,6 +647,7 @@ def create_ground_data(mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None):
         schedule=schedule,
         hwp_rpm=1.0,
         weather="atacama",
+        detset_key="pixel",
     )
     sim_ground.apply(data)
 

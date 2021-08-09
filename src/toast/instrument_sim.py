@@ -595,6 +595,9 @@ def fake_hexagon_focalplane(
             Column(name="psd_net", length=n_det, unit=(u.K * np.sqrt(1.0 * u.second))),
             Column(name="bandcenter", length=n_det, unit=u.GHz),
             Column(name="bandwidth", length=n_det, unit=u.GHz),
+            Column(
+                name="pixel", data=[x.rstrip("A").rstrip("B") for x in det_data.keys()]
+            ),
         ]
     )
 

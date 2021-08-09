@@ -4,6 +4,8 @@
 
 import sys
 
+import copy
+
 import numbers
 
 from collections.abc import MutableMapping, Sequence, Mapping
@@ -12,11 +14,13 @@ import numpy as np
 
 from pshmem.utils import mpi_data_type
 
-from .mpi import MPI
+from .mpi import MPI, comm_equal
 
 from .instrument import Telescope
 
 from .dist import distribute_samples
+
+from .intervals import IntervalList
 
 from .utils import (
     Logger,
@@ -29,7 +33,10 @@ from .observation_data import DetectorData, DetDataMgr, SharedDataMgr, IntervalM
 
 from .observation_view import DetDataView, SharedView, View, ViewMgr, ViewInterface
 
-from .observation_dist import DistDetSamp
+from .observation_dist import (
+    DistDetSamp,
+    redistribute_data,
+)
 
 
 class Observation(MutableMapping):
@@ -114,37 +121,20 @@ class Observation(MutableMapping):
     ):
         log = Logger.get()
         self._telescope = telescope
-        self._samples = n_samples
         self._name = name
         self._uid = uid
-        self._comm = comm
-        self._detector_sets = detector_sets
-        self._sample_sets = sample_sets
 
         if self._uid is None and self._name is not None:
             self._uid = name_UID(self._name)
 
         self.dist = DistDetSamp(
-            self._samples,
+            n_samples,
             self._telescope.focalplane.detectors,
-            self._sample_sets,
-            self._detector_sets,
-            self._comm,
+            sample_sets,
+            detector_sets,
+            comm,
             process_rows,
         )
-
-        if self.dist.comm_rank == 0:
-            # check that all processes have some data, otherwise print warning
-            for d in range(self.dist.process_rows):
-                if len(self.dist.dets[d]) == 0:
-                    msg = "WARNING: process row rank {} has no detectors"
-                    " assigned in observation.".format(d)
-                    log.warning(msg)
-            for r in range(self.dist.process_cols):
-                if self.dist.samps[r][1] <= 0:
-                    msg = "WARNING: process column rank {} has no data assigned "
-                    "in observation.".format(r)
-                    log.warning(msg)
 
         # The internal metadata dictionary
         self._internal = dict()
@@ -153,12 +143,16 @@ class Observation(MutableMapping):
         self.detdata = DetDataMgr(self.local_detectors, self.n_local_samples)
 
         self.shared = SharedDataMgr(
-            self._comm,
+            len(self.local_detectors),
+            self.n_local_samples,
+            self.dist.comm,
             self.dist.comm_row,
             self.dist.comm_col,
         )
 
-        self.intervals = IntervalMgr(self._comm, self.dist.comm_row, self.dist.comm_col)
+        self.intervals = IntervalMgr(
+            self.dist.comm, self.dist.comm_row, self.dist.comm_col
+        )
 
     # Fully clear the observation
 
@@ -266,16 +260,16 @@ class Observation(MutableMapping):
     @property
     def all_detectors(self):
         """
-        (list): All detectors.  Convenience wrapper for telescope.focalplane.detectors
+        (list): All detectors stored in this observation.
         """
-        return self._telescope.focalplane.detectors
+        return self.dist.detectors
 
     @property
     def local_detectors(self):
         """
         (list): The detectors assigned to this process.
         """
-        return self.dist.dets[self.dist.comm_col_rank]
+        return self.dist.dets[self.dist.comm_rank]
 
     def select_local_detectors(self, selection=None):
         """
@@ -297,20 +291,20 @@ class Observation(MutableMapping):
         """
         (list):  The total list of detector sets for this observation.
         """
-        return self._detector_sets
+        return self.dist.detector_sets
 
     @property
     def local_detector_sets(self):
         """
         (list):  The detector sets assigned to this process (or None).
         """
-        if self._detector_sets is None:
+        if self.dist.detector_sets is None:
             return None
         else:
             ds = list()
-            for d in range(self.dist.det_sets[self.dist.comm_col_rank][1]):
-                off = self.dist.det_sets[self.dist.comm_col_rank][0]
-                ds.append(self._detector_sets[off + d])
+            for d in range(self.dist.det_sets[self.dist.comm_rank][1]):
+                off = self.dist.det_sets[self.dist.comm_rank][0]
+                ds.append(self.dist.detector_sets[off + d])
             return ds
 
     # Sample distribution
@@ -318,21 +312,21 @@ class Observation(MutableMapping):
     @property
     def n_all_samples(self):
         """(int): the total number of samples in this observation."""
-        return self._samples
+        return self.dist.samples
 
     @property
     def local_index_offset(self):
         """
         The first sample on this process, relative to the observation start.
         """
-        return self.dist.samps[self.dist.comm_row_rank][0]
+        return self.dist.samps[self.dist.comm_rank][0]
 
     @property
     def n_local_samples(self):
         """
         The number of local samples on this process.
         """
-        return self.dist.samps[self.dist.comm_row_rank][1]
+        return self.dist.samps[self.dist.comm_rank][1]
 
     # Sample set distribution
 
@@ -341,20 +335,20 @@ class Observation(MutableMapping):
         """
         (list):  The input full list of sample sets used in data distribution
         """
-        return self._sample_sets
+        return self.dist.sample_sets
 
     @property
     def local_sample_sets(self):
         """
         (list):  The sample sets assigned to this process (or None).
         """
-        if self._sample_sets is None:
+        if self.dist.sample_sets is None:
             return None
         else:
             ss = list()
-            for s in range(self.dist.samp_sets[self.dist.comm_row_rank][1]):
-                off = self.dist.samp_sets[self.dist.comm_row_rank][0]
-                ss.append(self._sample_sets[off + d])
+            for s in range(self.dist.samp_sets[self.dist.comm_rank][1]):
+                off = self.dist.samp_sets[self.dist.comm_rank][0]
+                ss.append(self.dist.sample_sets[off + s])
             return ss
 
     # Mapping methods
@@ -382,21 +376,125 @@ class Observation(MutableMapping):
 
     def __repr__(self):
         val = "<Observation"
-        val += "\n  name = '{}'".format(self.name)
-        val += "\n  uid = '{}'".format(self.uid)
-        if self._comm is None:
+        val += f"\n  name = '{self.name}'"
+        val += f"\n  uid = '{self.uid}'"
+        if self.comm is None:
             val += "  group has a single process (no MPI)"
         else:
-            val += "  group has {} processes".format(self._comm.size)
-        val += "\n  telescope = {}".format(self._telescope.__repr__())
+            val += f"  group has {self.comm.size} processes"
+        val += f"\n  telescope = {self._telescope.__repr__()}"
         for k, v in self._internal.items():
-            val += "\n  {} = {}".format(k, v)
-        val += "\n  {} samples".format(self._samples)
-        val += "\n  shared:  {}".format(self.shared)
-        val += "\n  detdata:  {}".format(self.detdata)
-        val += "\n  intervals:  {}".format(self.intervals)
+            val += f"\n  {k} = {v}"
+        val += f"\n  {self.n_all_samples} total samples ({self.n_local_samples} local)"
+        val += f"\n  shared:  {self.shared}"
+        val += f"\n  detdata:  {self.detdata}"
+        val += f"\n  intervals:  {self.intervals}"
         val += "\n>"
         return val
+
+    def __eq__(self, other):
+        # Note that testing for equality is quite expensive, since it means testing all
+        # metadata and also all detector, shared, and interval data.  This is mainly
+        # used for unit tests.
+        log = Logger.get()
+        fail = 0
+        if self.name != other.name:
+            fail = 1
+            log.verbose(f"Obs names {self.name} != {other.name}")
+        if self.uid != other.uid:
+            fail = 1
+            log.verbose(f"Obs uid {self.uid} != {other.uid}")
+        if self.telescope != other.telescope:
+            fail = 1
+            log.verbose("Obs telescopes not equal")
+        if self.dist != other.dist:
+            fail = 1
+            log.verbose("Obs distributions not equal")
+        if self._internal.keys() != other._internal.keys():
+            fail = 1
+            log.verbose("Obs metadata keys not equal")
+        for k, v in self._internal.items():
+            if v != other._internal[k]:
+                fail = 1
+                log.verbose(f"Obs metadata[{k}]:  {v} != {other[k]}")
+                break
+        if self.shared != other.shared:
+            fail = 1
+            log.verbose("Obs shared data not equal")
+        if self.detdata != other.detdata:
+            fail = 1
+            log.verbose("Obs detdata not equal")
+        if self.intervals != other.intervals:
+            fail = 1
+            log.verbose("Obs intervals not equal")
+        if self.comm is not None:
+            fail = self.comm.allreduce(fail, op=MPI.SUM)
+        return fail == 0
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def duplicate(self, times=None):
+        """Return a copy of the observation and all its data.
+
+        The times field should be the name of the shared field containing timestamps.
+        This is used when copying interval lists to the new observation so that these
+        objects reference the timestamps within this observation (rather than the old
+        one).  If this is not specified and some intervals exist, then an exception is
+        raised.
+
+        Args:
+            times (str):  The name of the timestamps shared field.
+
+        Returns:
+            (Observation):  The new copy of the observation.
+
+        """
+        log = Logger.get()
+        if times is None and len(self.intervals) > 0:
+            msg = "You must specify the times field when duplicating observations "
+            msg += "that have some intervals defined."
+            log.error(msg)
+            raise RuntimeError(msg)
+        new_obs = Observation(
+            self.telescope,
+            self.n_all_samples,
+            name=self.name,
+            uid=self.uid,
+            comm=self.dist.comm,
+            detector_sets=self.all_detector_sets,
+            sample_sets=self.all_sample_sets,
+            process_rows=self.dist.process_rows,
+        )
+        for k, v in self._internal.items():
+            new_obs[k] = copy.deepcopy(v)
+        for name, data in self.detdata.items():
+            new_obs.detdata[name] = data
+        for name, data in self.shared.items():
+            # Create the object on the corresponding communicator in the new obs
+            new_comm = None
+            if comm_equal(data.comm, self.dist.comm_row):
+                # Row comm
+                new_comm = new_obs.dist.comm_row
+            elif comm_equal(data.comm, self.dist.comm_col):
+                # Col comm
+                new_comm = new_obs.dist.comm_col
+            else:
+                # Full obs comm
+                new_comm = new_obs.dist.comm
+            new_obs.shared.create(name, data.shape, dtype=data.dtype, comm=new_comm)
+            offset = None
+            dval = None
+            if new_comm is None or new_comm.rank == 0:
+                offset = tuple([0 for x in data.shape])
+                dval = data.data
+            new_obs.shared[name].set(dval, offset=offset, fromrank=0)
+        for name, data in self.intervals.items():
+            timespans = [(x.start, x.stop) for x in data]
+            new_obs.intervals[name] = IntervalList(
+                new_obs.shared[times], timespans=timespans
+            )
+        return new_obs
 
     def memory_use(self):
         """Estimate the memory used by shared and detector data.
@@ -460,6 +558,38 @@ class Observation(MutableMapping):
         if process_rows == self.dist.process_rows:
             # Nothing to do!
             return
+
+        # Create the new distribution
+        new_dist = DistDetSamp(
+            self.dist.samples,
+            self._telescope.focalplane.detectors,
+            self.dist.sample_sets,
+            self.dist.detector_sets,
+            self.dist.comm,
+            process_rows,
+        )
+
+        # Do the actual redistribution
+        new_shr_mgr, new_det_mgr, new_ivl_mgr = redistribute_data(
+            self.dist, new_dist, self.shared, self.detdata, self.intervals, times=times
+        )
+
+        # Replace our distribution and data managers with the new ones.
+        self.dist.close()
+        del self.dist
+        self.dist = new_dist
+
+        self.shared.clear()
+        del self.shared
+        self.shared = new_shr_mgr
+
+        self.detdata.clear()
+        del self.detdata
+        self.detdata = new_det_mgr
+
+        self.intervals.clear()
+        del self.intervals
+        self.intervals = new_ivl_mgr
 
     # Accelerator use
 

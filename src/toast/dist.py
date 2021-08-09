@@ -229,49 +229,66 @@ def distribute_samples(
 
     # Distribute detectors either by set or uniformly.
 
-    dist_dets = None
-    dist_detsets = None
+    dist_dets_col = None
+    dist_detsets_col = None
 
     if detsets is None:
         # Uniform distribution
         dist_detsindx = distribute_uniform(len(detectors), detranks)
-        dist_dets = [detectors[d[0] : d[0] + d[1]] for d in dist_detsindx]
+        dist_dets_col = [detectors[d[0] : d[0] + d[1]] for d in dist_detsindx]
     else:
         # Distribute by det set
         detsizes = [len(x) for x in detsets]
-        dist_detsets = distribute_discrete(detsizes, detranks)
-        dist_dets = list()
-        for set_off, n_set in dist_detsets:
+        dist_detsets_col = distribute_discrete(detsizes, detranks)
+        dist_dets_col = list()
+        for set_off, n_set in dist_detsets_col:
             cur = list()
             for ds in range(n_set):
                 cur.extend(detsets[set_off + ds])
-            dist_dets.append(cur)
+            dist_dets_col.append(cur)
 
     # Distribute samples either uniformly or by set.
 
-    dist_samples = None
-    dist_chunks = None
+    dist_samples_row = None
+    dist_chunks_row = None
 
     if sampsets is None:
-        dist_samples = distribute_uniform(samples, sampranks)
-        dist_chunks = None
+        dist_samples_row = distribute_uniform(samples, sampranks)
     else:
         sampsetsizes = [np.sum(x) for x in sampsets]
-        dist_sampsets = distribute_discrete(sampsetsizes, sampranks)
-        dist_chunks = list()
-        dist_samples = list()
+        dist_sampsets_row = distribute_discrete(sampsetsizes, sampranks)
+        dist_chunks_row = list()
+        dist_samples_row = list()
         samp_off = 0
         chunk_off = 0
-        for set_off, n_set in dist_sampsets:
+        for set_off, n_set in dist_sampsets_row:
             setsamp = 0
             setchunk = 0
             for ds in range(n_set):
                 sset = sampsets[set_off + ds]  # One sample set
                 setsamp += np.sum(sset)
                 setchunk += len(sset)
-            dist_chunks.append((chunk_off, setchunk))
-            dist_samples.append((samp_off, setsamp))
+            dist_chunks_row.append((chunk_off, setchunk))
+            dist_samples_row.append((samp_off, setsamp))
             samp_off += setsamp
             chunk_off += setchunk
+
+    # Replicate the detector distribution across all process columns
+    dist_dets = list()
+    dist_detsets = None
+    if dist_detsets_col is not None:
+        dist_detsets = list()
+    dist_samples = list()
+    dist_chunks = None
+    if dist_chunks_row is not None:
+        dist_chunks = list()
+    for r in range(detranks):
+        for c in range(sampranks):
+            dist_dets.append(dist_dets_col[r])
+            if dist_detsets is not None:
+                dist_detsets.append(dist_detsets_col[r])
+            dist_samples.append(dist_samples_row[c])
+            if dist_chunks is not None:
+                dist_chunks.append(dist_chunks_row[c])
 
     return (dist_dets, dist_detsets, dist_samples, dist_chunks)

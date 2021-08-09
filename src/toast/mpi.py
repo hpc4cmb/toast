@@ -167,7 +167,10 @@ class Comm(object):
         if self._ngroups == 1:
             # We just have one group with all processes.
             self._gcomm = self._wcomm
-            self._rcomm = None
+            if use_mpi:
+                self._rcomm = MPI.COMM_SELF
+            else:
+                self._rcomm = None
         else:
             # We need to split the communicator.  This code is never executed
             # unless MPI is enabled and we have multiple groups.
@@ -297,3 +300,67 @@ def exception_guard(comm=None):
                 comm.Abort()
 
     return
+
+
+def comm_equal(comm_a, comm_b):
+    """Compare communicators for equality.
+
+    Returns True if both communicators are None, or if they are identical
+    (e.g. the compare as MPI.IDENT).
+
+    Args:
+        comm_a (MPI.Comm):  First communicator, or None.
+        comm_b (MPI.Comm):  Second communicator, or None.
+
+    Returns:
+        (bool):  The result
+
+    """
+    if comm_a is None:
+        if comm_b is None:
+            return True
+        else:
+            return False
+    else:
+        if comm_b is None:
+            return False
+        else:
+            fail = 0
+            if MPI.Comm.Compare(comm_a, comm_b) != MPI.IDENT:
+                fail = 1
+            fail = comm_a.allreduce(fail, op=MPI.SUM)
+            return fail == 0
+
+
+def comm_equivalent(comm_a, comm_b):
+    """Compare communicators.
+
+    Returns True if both communicators are None, or if they have the same size
+    and ordering of ranks.
+
+    Args:
+        comm_a (MPI.Comm):  First communicator, or None.
+        comm_b (MPI.Comm):  Second communicator, or None.
+
+    Returns:
+        (bool):  The result
+
+    """
+    if comm_a is None:
+        if comm_b is None:
+            return True
+        else:
+            return False
+    else:
+        if comm_b is None:
+            return False
+        else:
+            fail = 0
+            if comm_a.size != comm_b.size:
+                fail = 1
+            if comm_a.rank != comm_b.rank:
+                fail = 1
+            if MPI.Comm.Compare(comm_a, comm_b) not in [MPI.IDENT, MPI.CONGRUENT]:
+                fail = 1
+            fail = comm_a.allreduce(fail, op=MPI.SUM)
+            return fail == 0
