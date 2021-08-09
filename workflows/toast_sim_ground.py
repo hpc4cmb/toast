@@ -239,7 +239,7 @@ def reduce_data(job, args, data):
     timer = toast.timing.Timer()
     timer.start()
 
-    # Collect signal statistics before filterting
+    # Collect signal statistics before filtering
 
     ops.raw_statistics.output_dir = args.out_dir
     ops.raw_statistics.apply(data)
@@ -255,7 +255,7 @@ def reduce_data(job, args, data):
     ops.common_mode_filter.apply(data)
     log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
 
-    # Collect signal statistics after filterting
+    # Collect signal statistics after filtering
 
     ops.filtered_statistics.output_dir = args.out_dir
     ops.filtered_statistics.apply(data)
@@ -363,17 +363,6 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = ["Proc {}: {}".format(rank, x) for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()

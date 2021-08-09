@@ -17,7 +17,7 @@ from astropy import units as u
 import toast
 from toast.schedule_sim_ground import run_scheduler
 from toast.timing import gather_timers, dump
-from benchmarking_utilities import (
+from toast.scripts.benchmarking_utilities import (
     get_mpi_settings,
     select_case,
     make_focalplane,
@@ -90,6 +90,12 @@ def parse_arguments():
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=1024),
+        toast.ops.Statistics(name="raw_statistics"),
+        toast.ops.Statistics(name="filtered_statistics"),
+        toast.ops.GroundFilter(name="groundfilter"),
+        toast.ops.PolyFilter(name="polyfilter1D"),
+        toast.ops.PolyFilter2D(name="polyfilter2D"),
+        toast.ops.CommonModeFilter(name="common_mode_filter"),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker", solve_rcond_threshold=1e-3),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
@@ -297,6 +303,24 @@ def main():
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
+    # Collect signal statistics before filtering
+    ops.raw_statistics.output_dir = args.out_dir
+    ops.raw_statistics.apply(data)
+
+    # Apply the filter stack
+    ops.groundfilter.apply(data)
+    log.info_rank("Finished ground-filtering in", comm=world_comm, timer=timer)
+    ops.polyfilter1D.apply(data)
+    log.info_rank("Finished 1D-poly-filtering in", comm=world_comm, timer=timer)
+    ops.polyfilter2D.apply(data)
+    log.info_rank("Finished 2D-poly-filtering in", comm=world_comm, timer=timer)
+    ops.common_mode_filter.apply(data)
+    log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
+
+    # Collect signal statistics after filtering
+    ops.filtered_statistics.output_dir = args.out_dir
+    ops.filtered_statistics.apply(data)
+
     # Build up our map-making operation.
     run_mapmaker(ops, args, job.templates, data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
@@ -310,7 +334,6 @@ def main():
     compute_science_metric(args, runtime, n_nodes, rank, log)
 
     # dumps all the timing information
-
     timer.stop()
     timer.clear()
     timer.start()
@@ -325,17 +348,6 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = [f"Proc {rank}: {x}" for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()
