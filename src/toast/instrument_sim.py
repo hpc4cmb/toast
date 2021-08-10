@@ -573,8 +573,11 @@ def fake_hexagon_focalplane(
     quat_A = hex_layout(n_pix, width_deg, "D", "A", pol_A)
     quat_B = hex_layout(n_pix, width_deg, "D", "B", pol_B)
 
-    det_data = dict(quat_A)
-    det_data.update(quat_B)
+    temp_data = dict(quat_A)
+    temp_data.update(quat_B)
+
+    # Sort by detector name so that detector pairs are together
+    det_data = {x: temp_data[x] for x in sorted(temp_data.keys())}
 
     nrings = hex_nring(n_pix)
 

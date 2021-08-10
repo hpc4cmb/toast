@@ -110,6 +110,7 @@ def parse_arguments():
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10
+    args.num_obs = 4320  # 6 months of one-hour observations
     args.obs_minutes = 60
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
@@ -138,7 +139,7 @@ def make_schedule(args, world_comm):
         )
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
-    return schedule
+    args.schedule = schedule
 
 
 def main():
@@ -167,6 +168,9 @@ def main():
         outlog = os.path.join(args.out_dir, "config_log.toml")
         toast.config.dump_toml(outlog, config)
 
+    # Create the schedule, so that we know the total maximum observing time.
+    make_schedule(args, world_comm)
+
     # selects appropriate case size
     select_case(
         args,
@@ -175,7 +179,6 @@ def main():
         avail_node_bytes,
         ops.binner.full_pointing,
         world_comm,
-        log,
     )
 
     # Creates the focalplane file.
@@ -194,15 +197,12 @@ def main():
         "satellite", focalplane=focalplane, site=site
     )
 
-    # Load the schedule file
-    schedule = make_schedule(args, world_comm)
-
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
     group_size = toast.job_group_size(
         world_comm,
         jobargs,
-        schedule=schedule,
+        schedule=args.schedule,
         focalplane=focalplane,
         full_pointing=ops.binner.full_pointing,
     )
@@ -219,7 +219,7 @@ def main():
 
     # Simulate the telescope pointing
     ops.sim_satellite.telescope = telescope
-    ops.sim_satellite.schedule = schedule
+    ops.sim_satellite.schedule = args.schedule
     ops.sim_satellite.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 

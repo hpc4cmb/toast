@@ -89,7 +89,7 @@ def parse_arguments():
         toast.ops.ScanHealpix(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=1024),
+        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=2048),
         toast.ops.Statistics(name="raw_statistics"),
         toast.ops.Statistics(name="filtered_statistics"),
         toast.ops.GroundFilter(name="groundfilter"),
@@ -114,23 +114,38 @@ def parse_arguments():
 
     # hardcoded arguments
     # focal plane
-    args.sample_rate = 100  # sample_rate is nb sample per second, we do (60 * obs_minutes * sample_rate) sample for one observation of one detector in a minute
+    args.sample_rate = 100  # sample_rate is nb sample per second.
     args.max_detector = (
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10
-    args.obs_minutes = 60
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
+
     # schedule, site and telescope parameters
-    args.telescope_name = "telescope"
+    args.telescope_name = "LAT"
     args.site_name = "atacama"
     args.site_lon = " -67:47:10"
     args.site_lat = " -22:57:30"
     args.site_alt = 5200.0 * u.meter
-    args.schedule_patch = "tile000,1,40,0,60,-40"
-    args.schedule_start = "2020-01-01 00:00:00"
-    args.schedule_stop = "2020-01-01 12:00:00"
+    args.patch_coord = "C"
+    args.el_min = 30.0
+    args.el_max = 70.0
+    args.sun_el_max = 90.0
+    args.sun_avoidance_angle = 0.0
+    args.moon_avoidance_angle = 0.0
+    args.gap_s = 60.0
+    args.gap_small_s = 0.0
+    args.ces_max_time = 1200.0
+    args.boresight_angle_step = 180.0
+    args.boresight_angle_time = 1440.0
+    args.schedule_patches = [
+        "RISING_SCAN_35,HORIZONTAL,1.00,30.00,150.00,35.00,1500",
+        "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
+    ]
+    args.schedule_start = "2027-06-01 00:00:00"
+    args.schedule_stop = "2027-06-30 00:00:00"
+
     # scan map
     args.input_map = "fake_input_sky.fits"
 
@@ -144,33 +159,54 @@ def make_schedule(args, world_comm, site):
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
         schedule_file = os.path.join(args.out_dir, "ground_bench_schedule.txt")
-        run_scheduler(
-            opts=[
-                "--site-name",
-                args.site_name,
-                "--telescope",
-                args.telescope_name,
-                "--site-lon",
-                "{}".format(site.earthloc.lon.to_value(u.degree)),
-                "--site-lat",
-                "{}".format(site.earthloc.lat.to_value(u.degree)),
-                "--site-alt",
-                "{}".format(site.earthloc.height.to_value(u.meter)),
-                "--patch",
-                args.schedule_patch,
-                "--start",
-                args.schedule_start,
-                "--stop",
-                args.schedule_stop,
-                "--out",
-                schedule_file,
-            ]
-        )
+        sch_opts = [
+            "--site-name",
+            args.site_name,
+            "--telescope",
+            args.telescope_name,
+            "--site-lon",
+            f"{site.earthloc.lon.to_value(u.degree)}",
+            "--site-lat",
+            f"{site.earthloc.lat.to_value(u.degree)}",
+            "--site-alt",
+            f"{site.earthloc.height.to_value(u.meter)}",
+            "--patch-coord",
+            args.patch_coord,
+            "--el-min",
+            f"{args.el_min}",
+            "--el-max",
+            f"{args.el_max}",
+            "--sun-el-max",
+            f"{args.sun_el_max}",
+            "--sun-avoidance-angle",
+            f"{args.sun_avoidance_angle}",
+            "--moon-avoidance-angle",
+            f"{args.moon_avoidance_angle}",
+            "--gap-s",
+            f"{args.gap_s}",
+            "--gap-small-s",
+            f"{args.gap_small_s}",
+            "--ces-max-time",
+            f"{args.ces_max_time}",
+            "--boresight-angle-step",
+            f"{args.boresight_angle_step}",
+            "--boresight-angle-time",
+            f"{args.boresight_angle_time}",
+            "--start",
+            args.schedule_start,
+            "--stop",
+            args.schedule_stop,
+            "--out",
+            schedule_file,
+        ]
+        for patch in args.schedule_patches:
+            sch_opts.extend(["--patch", patch])
+        run_scheduler(opts=sch_opts)
         schedule = toast.schedule.GroundSchedule()
         schedule.read(schedule_file)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
-    return schedule
+    args.schedule = schedule
 
 
 def main():
@@ -199,6 +235,14 @@ def main():
         outlog = os.path.join(args.out_dir, "config_log.toml")
         toast.config.dump_toml(outlog, config)
 
+    # Observing site
+    site = toast.instrument.GroundSite(
+        args.site_name, args.site_lat, args.site_lon, args.site_alt
+    )
+
+    # Create the schedule, so that we know the total observing time.
+    make_schedule(args, world_comm, site)
+
     # selects appropriate case size
     select_case(
         args,
@@ -207,7 +251,6 @@ def main():
         avail_node_bytes,
         ops.binner.full_pointing,
         world_comm,
-        log,
     )
 
     # Creates the focalplane file.
@@ -221,22 +264,16 @@ def main():
         sys.exit(0)
 
     # Create a telescope for the simulation.
-    site = toast.instrument.GroundSite(
-        args.site_name, args.site_lat, args.site_lon, args.site_alt
-    )
     telescope = toast.instrument.Telescope(
         args.telescope_name, focalplane=focalplane, site=site
     )
-
-    # Load the schedule file
-    schedule = make_schedule(args, world_comm, site)
 
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
     group_size = toast.job_group_size(
         world_comm,
         jobargs,
-        schedule=schedule,
+        schedule=args.schedule,
         focalplane=focalplane,
         full_pointing=ops.binner.full_pointing,
     )
@@ -253,7 +290,7 @@ def main():
 
     # Simulate the telescope pointing
     ops.sim_ground.telescope = telescope
-    ops.sim_ground.schedule = schedule
+    ops.sim_ground.schedule = args.schedule
     ops.sim_ground.weather = telescope.site.name
     ops.sim_ground.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
