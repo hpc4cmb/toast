@@ -261,7 +261,6 @@ def main():
     overhead_bytes = estimate_memory_overhead(
         n_procs, n_nodes, 0.4, ops.pointing.nside, nside_final=nside_final
     )
-    print(f"overhead = {overhead_bytes}")
 
     # selects appropriate case size
     select_case(
