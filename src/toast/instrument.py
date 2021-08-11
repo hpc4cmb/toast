@@ -16,7 +16,7 @@ import astropy.coordinates as coord
 from astropy.table import QTable, Column
 
 from scipy.constants import h, k
-import scipy.integrate
+from scipy.integrate import simpson
 
 import tomlkit
 
@@ -337,7 +337,7 @@ class Bandpass(object):
             except AttributeError:
                 self.bandpass[det] = np.ones(self.nstep)
 
-            norm = scipy.integrate.simpson(self.bandpass[det], x=self.freqs[det])
+            norm = simpson(self.bandpass[det], x=self.freqs[det])
             if norm == 0:
                 raise RuntimeError("Bandpass cannot be normalized")
             self.bandpass[det] /= norm
@@ -355,7 +355,7 @@ class Bandpass(object):
             spectrum_det *= rj2cmb
 
         # Average across the bandpass
-        convolved = scipy.integrate.simpson(spectrum_det * bandpass_det, x=freqs_det)
+        convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
 
         return convolved
 
