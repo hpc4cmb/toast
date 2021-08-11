@@ -90,7 +90,7 @@ def parse_arguments():
         toast.ops.ScanHealpix(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=2048),
+        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=4096),
         toast.ops.Statistics(name="raw_statistics"),
         toast.ops.Statistics(name="filtered_statistics"),
         toast.ops.GroundFilter(name="groundfilter"),
