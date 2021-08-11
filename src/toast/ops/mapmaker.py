@@ -573,8 +573,9 @@ class MapMaker(Operator):
                 self.solver_rhs,
                 self.solver_bin,
             ]:
-                data[prod].clear()
-                del data[prod]
+                if prod in data:
+                    data[prod].clear()
+                    del data[prod]
 
         # Restore flag names and masks to binning operator, in case it is being used
         # for the final map making or for other external operations.
