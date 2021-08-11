@@ -47,6 +47,7 @@ if use_mpi is None:
 import sys
 import itertools
 from contextlib import contextmanager
+import traceback
 
 import numpy as np
 
@@ -268,22 +269,31 @@ def exception_guard(comm=None):
     """
     log = Logger.get()
     failed = 0
+    rank = 0
+    if comm is not None:
+        rank = comm.rank
     try:
         yield
-    except:
-        msg = "Exception on process {}:\n".format(comm.rank)
+    except Exception:
+        # Note that the intention of this function is to handle *any* exception.
+        # The typical use case is to wrap main() and ensure that the job exits
+        # cleanly.
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        msg += "\n".join(lines)
+        lines = [f"Proc {rank}: {x}" for x in lines]
+        msg = "".join(lines)
         log.error(msg)
         failed = 1
 
-    failcount = None
-    if comm is None:
-        failcount = failed
-    else:
+    failcount = failed
+    if comm is not None:
         failcount = comm.allreduce(failed, op=MPI.SUM)
     if failcount > 0:
-        raise RuntimeError("One or more MPI processes raised an exception")
+        if rank == 0:
+            log.error(f"{failcount} process(es) raised an exception")
+            if comm is None:
+                os._exit(1)
+            else:
+                comm.Abort()
 
     return

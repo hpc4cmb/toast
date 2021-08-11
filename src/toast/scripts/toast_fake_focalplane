@@ -14,6 +14,7 @@ import numpy as np
 
 from astropy import units as u
 
+import toast
 from toast.mpi import get_world
 
 from toast.utils import Logger
@@ -203,4 +204,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
+        main()

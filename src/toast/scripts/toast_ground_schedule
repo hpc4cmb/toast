@@ -12,6 +12,7 @@ to toast_ground_sim.py
 import sys
 import traceback
 
+import toast
 from toast.mpi import get_world
 from toast.timing import GlobalTimers
 from toast.schedule_sim_ground import run_scheduler
@@ -29,17 +30,6 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception as e:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = get_world()
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = ["Proc {}: {}".format(rank, x) for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None and procs > 1:
-            mpiworld.Abort()
-        else:
-            raise e

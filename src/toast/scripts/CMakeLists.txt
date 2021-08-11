@@ -12,3 +12,9 @@ install(PROGRAMS
     benchmarking_utilities.py
     DESTINATION bin
 )
+
+install(FILES
+    __init__.py
+    benchmarking_utilities.py
+    DESTINATION ${PYTHON_SITE}/toast/scripts
+)

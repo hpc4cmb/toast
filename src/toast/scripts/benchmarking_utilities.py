@@ -9,14 +9,17 @@ total_sample = num_obs * obs_minutes * sample_rate * n_detector
 """
 
 import math
+import copy
 import healpy
 import os
 from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy import units as u
+from astropy.table import QTable
 import toast
 from toast.job import job_size, get_node_mem
+from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
 
 
@@ -77,99 +80,277 @@ def get_mpi_settings(args, log, env):
     return world_comm, procs, rank, n_nodes, avail_node_bytes
 
 
-def get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing):
+def memory_use(n_detector, group_nodes, total_samples, full_pointing):
+    """Compute the memory use for a given configuration.
+
+    Args:
+        n_detector (int):  The number of detectors.
+        group_nodes (int):  The number of nodes in one group.
+        total_samples (int):  The total number of detector samples in the job.
+        full_pointing (bool):  If True, we are storing full detector pointing in
+            memory.
+
+    Returns:
+        (int):  The bytes of allocated memory.
+
     """
-    Given a number of samples and some problems parameters,
-    returns (group_nodes, n_detector, memory_used_bytes)
-    such that memory_used_bytes is minimized.
-    """
-    # memory usage of the samples
+    # detector timestream  # pixel index and 3 IQU weights
     detector_timestream_cost = (1 + 4) if full_pointing else 1
+
     det_bytes_per_sample = 2 * (  # At most 2 detector data copies.
-        8  # 64 bit float / ints used
-        * detector_timestream_cost  # detector timestream  # pixel index and 3 IQU weights
+        8 * detector_timestream_cost  # 64 bit float / ints used
         + 1  # one byte per sample for flags
     )
+
     common_bytes_per_sample = (
-        8 * (4)  # 64 bit floats  # One quaternion per sample
+        8 * (4) * 2  # 64 bit floats x 2 boresight quaternions per sample
+        + 8 * 3 * 2  # 64 bit floats x (position + velocity) vectors per sample
         + 1  # one byte per sample for common flag
     )
-    # Minimum time span (one day)
-    min_time_samples = int(24 * 3600 * args.sample_rate)
-    # group_nodes is the number of nodes in each group, it should be a divisor of n_nodes
+
+    bytes_per_samp = (
+        n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
+    )
+    return bytes_per_samp * (total_samples // n_detector)
+
+
+def get_minimum_memory_use(
+    n_detector, n_nodes, n_procs, total_samples, scans, full_pointing
+):
+    """Compute the group size that minimizes the aggregate memory use.
+
+    Search the allowable values of the group size for the one which results in the
+    smallest memory use.
+
+    Args:
+        n_detector (int):  The number of detectors.
+        n_nodes (int):  The number of nodes in the job.
+        n_procs (int):  The number of MPI processes in the job.
+        total_samples (int):  The total number of detector samples in the job.
+        scans (list):  The list of observing scans.
+        full_pointing (bool):  If True, we are storing full detector pointing in
+            memory.
+
+    Returns:
+        (tuple):  The (group_nodes, memory_bytes) of the case with the smallest
+            memory footprint.
+
+    """
+
+    # The number of observations in the schedule
+    num_obs = len(scans)
+
     group_nodes_best = 1
-    n_detector_best = 1
-    num_obs_best = 1
     memory_used_bytes_best = np.inf
-    # what is the minimum memory we can use for that number of samples?
+
+    # what is the minimum memory we can use for the total number of samples?
     for group_nodes in range(1, n_nodes + 1):
         if n_nodes % group_nodes == 0:
-            # For the minimum time span, scale up the number of detectors to reach the requested total sample size.
-            n_detector = np.clip(
-                total_samples // min_time_samples,
-                a_min=n_procs // group_nodes,
-                a_max=args.max_detector,
+            # This is a valid group size.
+            n_group = n_nodes // group_nodes
+            if n_group > num_obs:
+                # Too many small groups- we do not have enough observations to give at
+                # least one to each group.
+                continue
+            group_procs = n_procs // group_nodes
+            if group_procs > n_detector:
+                # This group is too large for the number of detectors
+                continue
+
+            memory_used_bytes = memory_use(
+                n_detector, group_nodes, total_samples, full_pointing
             )
-            num_obs = max(
-                1, (args.obs_minutes * args.sample_rate * n_detector) // total_samples
-            )
-            bytes_per_samp = (
-                n_detector * det_bytes_per_sample
-                + group_nodes * common_bytes_per_sample
-            )
-            memory_used_bytes = bytes_per_samp * (total_samples // n_detector)
-            # needs to fit in memory and be able to split observations evenly between groups
-            if (memory_used_bytes < memory_used_bytes_best) and (
-                num_obs % group_nodes == 0
-            ):
+
+            if memory_used_bytes < memory_used_bytes_best:
                 group_nodes_best = group_nodes
-                n_detector_best = n_detector
-                num_obs_best = num_obs
                 memory_used_bytes_best = memory_used_bytes
-    # returns the group_nodes and n_detector that minimize memory usage
-    return (group_nodes_best, n_detector_best, num_obs_best, memory_used_bytes_best)
+    return (group_nodes_best, memory_used_bytes_best)
 
 
 def maximize_nb_samples(
-    args,
     n_nodes,
     n_procs,
+    scans,
+    max_n_detector,
+    sample_rate,
     full_pointing,
     available_memory_bytes,
     per_process_overhead_bytes=1024 ** 3,
 ):
-    """
-    Finds the largest number of samples that can fit in the available memory.
-    Returns 1 if not number of sample fits in memory.
-    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number of bytes
-    that will be consummed by each process, independently of the number of samples.
-    """
-    # returns true if a number of samples can fit in memory
-    def fits_in_memory(nb_samples):
-        (_, _, _, memory_used_bytes) = get_minimum_memory_use(
-            args, n_nodes, n_procs, nb_samples, full_pointing
-        )
-        return (
-            memory_used_bytes + n_procs * per_process_overhead_bytes
-            < available_memory_bytes
-        )
+    """Finds the largest number of samples that can fit in the available memory.
 
-    # finds an upper-bound on the number of samples that can fit in memory
-    max_samples = 2
-    while fits_in_memory(max_samples):
-        max_samples *= 2
-    min_samples = max_samples // 2
-    # finds the largest number of samples that *does* fit in memory
-    # using a binary search between min_samples (fits in memory)
-    # and max_samples (does not fit in memory)
-    mid_samples = (min_samples + max_samples) // 2
-    while mid_samples != min_samples:
-        if fits_in_memory(mid_samples):
-            min_samples = mid_samples
+    Return the resulting number of detectors, group size, total number of
+    samples, total memory use, and the list of observing scans.
+
+    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number
+    of bytes that will be consumed by each process, independently of the number of
+    samples.
+
+    Args:
+        n_nodes (int):  The number of nodes in the job.
+        n_procs (int):  The number of MPI processes in the job.
+        scans (list):  The list of observing scans.
+        max_n_detector (int):  The maximum number of detectors.
+        sample_rate (float):  The detector sample rate.
+        full_pointing (bool):  If True, we are storing full detector pointing in
+            memory.
+        available_memory_bytes (int):  The total aggregate memory in the job.
+        per_process_overhead_bytes (int):  The memory overhead per process.
+
+    Returns:
+        (tuple):  The (n_detector, new_scans, total_samples, group_nodes, memory_bytes)
+            of the best configuration.
+
+    """
+    # The output set of observation scans.
+    new_scans = list()
+
+    # The number of detectors
+    n_detector = 0
+
+    # The total samples
+    total = 0
+
+    # The process group size
+    group_nodes = 0
+
+    # The estimated memory size of the configuration
+    overhead_bytes = n_procs * per_process_overhead_bytes
+    memory_bytes = 0
+
+    scan_samples = 0
+    for isc, sc in enumerate(scans):
+        scan_samples += int(sample_rate * (sc.stop - sc.start).total_seconds())
+        if total == 0:
+            # First scan, compute number of detectors
+            while (
+                n_detector < max_n_detector
+                and (memory_bytes + overhead_bytes) < available_memory_bytes
+            ):
+                # Increment by whole pixels
+                n_detector += 2
+                det_samps = n_detector * scan_samples
+                group_nodes, memory_bytes = get_minimum_memory_use(
+                    n_detector,
+                    n_nodes,
+                    n_procs,
+                    det_samps,
+                    scans[: isc + 1],
+                    full_pointing,
+                )
+            total = det_samps
+            new_scans.append(copy.deepcopy(sc))
         else:
-            max_samples = mid_samples
-        mid_samples = (min_samples + max_samples) // 2
-    return mid_samples
+            det_samps = n_detector * scan_samples
+            gs, bytes = get_minimum_memory_use(
+                n_detector, n_nodes, n_procs, det_samps, scans[: isc + 1], full_pointing
+            )
+            if (bytes + overhead_bytes) > available_memory_bytes:
+                break
+            else:
+                group_nodes = gs
+                memory_bytes = bytes
+                total = det_samps
+                new_scans.append(copy.deepcopy(sc))
+
+    memory_bytes += overhead_bytes
+
+    return (n_detector, new_scans, total, group_nodes, memory_bytes)
+
+
+def get_from_samples(
+    n_nodes,
+    n_procs,
+    scans,
+    max_n_detector,
+    sample_rate,
+    full_pointing,
+    max_samples,
+    per_process_overhead_bytes=1024 ** 3,
+):
+    """Finds the best configuration for a fixed number of samples.
+
+    Similar to `maximize_nb_samples()`, but finds the instrument and observing
+    configuration which fits within the requested number of samples.
+
+    Return the resulting number of detectors, group size, total number of
+    samples, total memory use, and the list of observing scans.
+
+    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number
+    of bytes that will be consumed by each process, independently of the number of
+    samples.
+
+    Args:
+        n_nodes (int):  The number of nodes in the job.
+        n_procs (int):  The number of MPI processes in the job.
+        scans (list):  The list of observing scans.
+        max_n_detector (int):  The maximum number of detectors.
+        sample_rate (float):  The detector sample rate.
+        full_pointing (bool):  If True, we are storing full detector pointing in
+            memory.
+        max_samples (int):  The maximum number of samples.
+        per_process_overhead_bytes (int):  The memory overhead per process.
+
+    Returns:
+        (tuple):  The (n_detector, new_scans, total_samples, group_nodes, memory_bytes)
+            of the best configuration.
+
+    """
+    # The output set of observation scans.
+    new_scans = list()
+
+    # The number of detectors
+    n_detector = 0
+
+    # The total samples
+    total = 0
+
+    # The process group size
+    group_nodes = 0
+
+    # The estimated memory size of the configuration
+    memory_bytes = n_procs * per_process_overhead_bytes
+
+    scan_samples = 0
+    for isc, sc in enumerate(scans):
+        scan_samples += int(sample_rate * (sc.stop - sc.start).total_seconds())
+        if total == 0:
+            # First scan, compute number of detectors
+            while (n_detector < max_n_detector) and (
+                n_detector * scan_samples < max_samples
+            ):
+                # Increment by whole pixels
+                n_detector += 2
+                det_samps = n_detector * scan_samples
+                group_nodes, bytes = get_minimum_memory_use(
+                    n_detector,
+                    n_nodes,
+                    n_procs,
+                    det_samps,
+                    scans[: isc + 1],
+                    full_pointing,
+                )
+            memory_bytes += bytes
+            total = det_samps
+            new_scans.append(copy.deepcopy(sc))
+        else:
+            det_samps = n_detector * scan_samples
+            if det_samps > max_samples:
+                break
+            else:
+                group_nodes, bytes = get_minimum_memory_use(
+                    n_detector,
+                    n_nodes,
+                    n_procs,
+                    det_samps,
+                    scans[: isc + 1],
+                    full_pointing,
+                )
+                memory_bytes += bytes
+                total = det_samps
+                new_scans.append(copy.deepcopy(sc))
+
+    return (n_detector, new_scans, total, group_nodes, memory_bytes)
 
 
 def select_case(
@@ -179,16 +360,27 @@ def select_case(
     avail_node_bytes,
     full_pointing,
     world_comm,
-    log,
     per_process_overhead_bytes=1024 ** 3,
 ):
     """
-    Selects the most appropriate case size given the memory available and number of nodes
-    sets total_samples and n_detector in args
+    Selects the most appropriate case size given the memory available and number of
+    nodes sets total_samples, n_detector and group_nodes in args.
 
-    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number of bytes
-    that will be consummed by each process, independently of the number of samples, when using case=`auto`.
+    One can set `per_process_overhead_bytes` (which defaults to 1GB) to define a number
+    of bytes that will be consummed by each process, independently of the number of
+    samples, when using case=`auto`.
+
+    When determining the number of detectors and total samples, we start with the first
+    observation in the schedule and increase the number of detectors up to the size of
+    a nominal focalplane.  Then we add observations to achieve desired number of total
+    samples.
+
+    Given the number of detectors and total samples, the group size is chosen to
+    minimize total memory use.
+
     """
+    log = toast.utils.Logger.get()
+
     # computes the memory that is currently available
     available_memory_bytes = n_nodes * avail_node_bytes
 
@@ -204,60 +396,113 @@ def select_case(
             "tiny": 5000000,  # O(1) GB RAM
         }
         # force use the case size suggested by the user
-        args.total_samples = cases_samples[args.case]
-        # finds the parameters that minimize memory use
-        (group_nodes, n_detector, num_obs, memory_used_bytes) = get_minimum_memory_use(
-            args, n_nodes, n_procs, args.total_samples, full_pointing
-        )
-        args.n_detector = n_detector
-        args.num_obs = num_obs
-        log.info_rank(
-            f"Distribution using {args.total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('{args.case}' workflow size)",
-            comm=world_comm,
-        )
-        log.info_rank(
-            f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute.",
-            comm=world_comm,
-        )
-        if (memory_used_bytes >= available_memory_bytes) and (
-            (world_comm is None) or (world_comm.rank == 0)
-        ):
-            log.warning(
-                f"The selected case, '{args.case}' might not fit in memory (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB)."
-            )
-    else:
-        log.info_rank(
-            f"Using automatic workflow size selection (case='auto') with {(per_process_overhead_bytes) / (1024 ** 3) :0.2f} GB reserved for per process overhead.",
-            comm=world_comm,
-        )
-        # finds the number of samples that gets us closest to the available memory
-        total_samples = maximize_nb_samples(
-            args,
+        max_samples = cases_samples[args.case]
+
+        (
+            args.n_detector,
+            new_scans,
+            args.total_samples,
+            args.group_nodes,
+            memory_used_bytes,
+        ) = get_from_samples(
             n_nodes,
             n_procs,
+            args.schedule.scans,
+            args.max_detector,
+            args.sample_rate,
+            full_pointing,
+            max_samples,
+            per_process_overhead_bytes=per_process_overhead_bytes,
+        )
+
+        # Update the schedule to use only our subset of scans
+        args.schedule.scans = new_scans
+
+        msg = f"Distribution using:\n"
+        msg += f"  {args.n_detector} detectors and {len(new_scans)} observations\n"
+        msg += f"  {args.total_samples} total samples\n"
+        msg += f"  {args.group_nodes} groups of {n_nodes//args.group_nodes} nodes with {n_procs} processes each\n"
+        msg += f"  {memory_used_bytes / (1024 ** 3) :0.2f} GB predicted memory use\n"
+        msg += f"  ('{args.case}' workflow size)"
+        log.info_rank(msg, comm=world_comm)
+
+        if memory_used_bytes >= available_memory_bytes:
+            msg = f"The selected case, '{args.case}' might not fit in memory "
+            log.warning_rank(msg, comm=world_comm)
+    else:
+        msg = f"Using automatic workflow size selection (case='auto') with "
+        msg += f"{(per_process_overhead_bytes) / (1024 ** 3) :0.2f} GB reserved "
+        msg += "for per process overhead."
+        log.info_rank(
+            msg,
+            comm=world_comm,
+        )
+
+        # finds the number of samples that gets us closest to the available memory
+
+        (
+            args.n_detector,
+            new_scans,
+            args.total_samples,
+            args.group_nodes,
+            memory_used_bytes,
+        ) = get_from_samples(
+            n_nodes,
+            n_procs,
+            args.schedule.scans,
+            args.max_detector,
+            args.sample_rate,
             full_pointing,
             available_memory_bytes,
-            per_process_overhead_bytes,
+            per_process_overhead_bytes=per_process_overhead_bytes,
         )
-        # finds the associated parameters
-        (
-            group_nodes,
-            n_detector,
-            num_obs,
-            memory_used_bytes,
-        ) = get_minimum_memory_use(args, n_nodes, n_procs, total_samples, full_pointing)
-        # stores the parameters and displays the information
-        args.total_samples = total_samples
-        args.n_detector = n_detector
-        args.num_obs = num_obs
-        log.info_rank(
-            f"Distribution using {total_samples} total samples spread over {group_nodes} groups of {n_nodes//group_nodes} nodes that have {n_procs} processors each ('auto' workflow size)",
-            comm=world_comm,
-        )
-        log.info_rank(
-            f"Using {num_obs} observations produced at {args.obs_minutes} observation/minute (we predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB which should be below the available {available_memory_bytes / (1024 ** 3) :0.2f} GB).",
-            comm=world_comm,
-        )
+
+        # Update the schedule to use only our subset of scans
+        args.schedule.scans = new_scans
+
+        msg = f"Distribution using:\n"
+        msg += f"  {args.n_detector} detectors and {len(new_scans)} observations\n"
+        msg += f"  {args.total_samples} total samples\n"
+        msg += f"  {args.group_nodes} groups of {n_nodes//args.group_nodes} nodes with {n_procs} processes each\n"
+        msg += f"  {memory_used_bytes / (1024 ** 3) :0.2f} GB predicted memory use "
+        msg += f"  ({available_memory_bytes / (1024 ** 3) :0.2f} GB available)\n"
+        msg += f"  ('{args.case}' workflow size)"
+        log.info_rank(msg, comm=world_comm)
+
+
+def estimate_memory_overhead(
+    n_procs, n_nodes, sky_fraction, nside_solve, nside_final=None
+):
+    """Estimate bytes of memory used per-process for objects besides timestreams.
+
+    Args:
+        n_procs (int):  The number of MPI processes in the job.
+        n_nodes (int):  The number of nodes in the job.
+        sky_fraction (float):  The fraction of the sky covered by one process.
+        nside_solve (int):  The healpix NSIDE value for the solver.
+        nside_final (int):  The healpix NSIDE value for the final binning.
+
+    Returns:
+        (int):  The bytes used.
+
+    """
+    # Start with 1GB for everything else
+    base = 1024 ** 3
+
+    # Compute the bytes per pixel.  We have:
+    #   hits (int64):  8 bytes
+    #   noise weighted map (3 x float64):  24 bytes
+    #   condition number map (1 x float64):  8 bytes
+    #   diagonal covariance (6 x float64):  48 bytes
+    #   solved map (3 x float64):  24 bytes
+    bytes_per_pixel = 8 + 24 + 8 + 48 + 24
+
+    n_pixel_solve = sky_fraction * 12 * nside_solve ** 2
+    n_pixel_final = 0
+    if nside_final is not None:
+        n_pixel_final = sky_fraction * 12 * nside_final ** 2
+
+    return base + (n_pixel_solve + n_pixel_final) * bytes_per_pixel
 
 
 def make_focalplane(args, world_comm, log):
@@ -267,7 +512,7 @@ def make_focalplane(args, world_comm, log):
     # computes the number of pixels to be used
     ring = math.ceil(math.sqrt((args.n_detector - 2) / 6)) if args.n_detector > 2 else 0
     n_pixel = 1 + 3 * ring * (ring + 1)
-    log.info_rank(f"Using {n_pixel} hexagon-packed pixels.", comm=world_comm)
+
     # creates the focalplane
     focalplane = None
     if (world_comm is None) or (world_comm.rank == 0):
@@ -278,8 +523,18 @@ def make_focalplane(args, world_comm, log):
             psd_net=args.psd_net * u.K * np.sqrt(1 * u.second),
             psd_fmin=args.psd_fmin * u.Hz,
         )
+        if n_pixel != 2 * args.n_detector:
+            # Truncate number of detectors to our desired value
+            trunc_dets = QTable(focalplane.detector_data[0 : args.n_detector])
+            focalplane = Focalplane(
+                detector_data=trunc_dets, sample_rate=args.sample_rate * u.Hz
+            )
+
     if world_comm is not None:
         focalplane = world_comm.bcast(focalplane, root=0)
+    log.info_rank(
+        f"Using {len(focalplane.detectors)//2} hexagon-packed pixels.", comm=world_comm
+    )
     return focalplane
 
 

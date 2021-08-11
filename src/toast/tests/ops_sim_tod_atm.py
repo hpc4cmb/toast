@@ -119,6 +119,7 @@ class SimAtmTest(MPITestCase):
             name="test_atm",
             binning=binner,
             output_dir=self.outdir,
+            keep_final_products=True,
         )
         mapmaker.apply(data)
 
