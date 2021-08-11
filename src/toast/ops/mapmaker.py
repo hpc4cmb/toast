@@ -162,9 +162,8 @@ class MapMaker(Operator):
     )
 
     output_dir = Unicode(
-        None,
-        allow_none=True,
-        help="If specified, write output data products to this directory",
+        ".",
+        help="Write output data products to this directory",
     )
 
     @traitlets.validate("binning")
@@ -239,22 +238,6 @@ class MapMaker(Operator):
         if self.map_binning is None or not self.map_binning.enabled:
             # Use the same binning used in the solver.
             map_binning = self.binning
-
-        # Check for consistent writing options
-        writing_outputs = np.sum(
-            [
-                self.write_map,
-                self.write_noiseweighted_map,
-                self.write_hits,
-                self.write_cov,
-                self.write_invcov,
-                self.write_rcond,
-            ]
-        )
-        if writing_outputs > 0 and self.output_dir is None:
-            raise RuntimeError(
-                "output_dir must be specified if writing is enabled for any products"
-            )
 
         # We use the input binning operator to define the flags that the user has
         # specified.  We will save the name / bit mask for these and restore them later.

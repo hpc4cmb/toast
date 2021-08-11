@@ -112,6 +112,11 @@ class MapmakerTest(MPITestCase):
             det_data="signal",
             binning=binner,
             template_matrix=tmatrix,
+            write_hits=False,
+            write_map=False,
+            write_cov=False,
+            write_rcond=False,
+            keep_final_products=True,
         )
 
         # Make the map
@@ -210,6 +215,11 @@ class MapmakerTest(MPITestCase):
             solve_rcond_threshold=1.0e-6,
             map_rcond_threshold=1.0e-6,
             iter_max=10,
+            write_hits=False,
+            write_map=False,
+            write_cov=False,
+            write_rcond=False,
+            keep_final_products=True,
         )
 
         # Make the map
@@ -413,6 +423,11 @@ class MapmakerTest(MPITestCase):
             solve_rcond_threshold=1.0e-4,
             map_rcond_threshold=1.0e-4,
             iter_max=50,
+            write_hits=False,
+            write_map=False,
+            write_cov=False,
+            write_rcond=False,
+            keep_final_products=True,
         )
 
         # Make the map
@@ -625,6 +640,11 @@ class MapmakerTest(MPITestCase):
             solve_rcond_threshold=1.0e-4,
             map_rcond_threshold=1.0e-4,
             iter_max=50,
+            write_hits=False,
+            write_map=False,
+            write_cov=False,
+            write_rcond=False,
+            keep_final_products=True,
         )
 
         # Make the map

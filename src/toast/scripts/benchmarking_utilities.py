@@ -488,7 +488,6 @@ def estimate_memory_overhead(
     """
     # Start with 1GB for everything else
     base = 1024 ** 3
-    print(f"base = {base}")
 
     # Compute the bytes per pixel.  We have:
     #   hits (int64):  8 bytes
@@ -497,14 +496,11 @@ def estimate_memory_overhead(
     #   diagonal covariance (6 x float64):  48 bytes
     #   solved map (3 x float64):  24 bytes
     bytes_per_pixel = 8 + 24 + 8 + 48 + 24
-    print(f"bytes per pix = {bytes_per_pixel}")
 
     n_pixel_solve = sky_fraction * 12 * nside_solve ** 2
-    print(f"npix solve = {n_pixel_solve}")
     n_pixel_final = 0
     if nside_final is not None:
         n_pixel_final = sky_fraction * 12 * nside_final ** 2
-    print(f"npix_final = {n_pixel_final}")
 
     return base + (n_pixel_solve + n_pixel_final) * bytes_per_pixel
 
