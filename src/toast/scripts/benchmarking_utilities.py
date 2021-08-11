@@ -215,6 +215,7 @@ def maximize_nb_samples(
     group_nodes = 0
 
     # The estimated memory size of the configuration
+    overhead_bytes = n_procs * per_process_overhead_bytes
     memory_bytes = 0
 
     scan_samples = 0
@@ -222,7 +223,10 @@ def maximize_nb_samples(
         scan_samples += sample_rate * (sc.stop - sc.start).total_seconds()
         if total == 0:
             # First scan, compute number of detectors
-            while n_detector < max_n_detector and memory_bytes < available_memory_bytes:
+            while (
+                n_detector < max_n_detector
+                and (memory_bytes + overhead_bytes) < available_memory_bytes
+            ):
                 # Increment by whole pixels
                 n_detector += 2
                 det_samps = n_detector * scan_samples
@@ -241,13 +245,15 @@ def maximize_nb_samples(
             gs, bytes = get_minimum_memory_use(
                 n_detector, n_nodes, n_procs, det_samps, scans[: isc + 1], full_pointing
             )
-            if bytes > available_memory_bytes:
+            if (bytes + overhead_bytes) > available_memory_bytes:
                 break
             else:
                 group_nodes = gs
                 memory_bytes = bytes
                 total = det_samps
                 new_scans.append(copy.deepcopy(sc))
+
+    memory_bytes += overhead_bytes
 
     return (n_detector, new_scans, total, group_nodes, memory_bytes)
 
@@ -303,7 +309,7 @@ def get_from_samples(
     group_nodes = 0
 
     # The estimated memory size of the configuration
-    memory_bytes = 0
+    memory_bytes = n_procs * per_process_overhead_bytes
 
     scan_samples = 0
     for isc, sc in enumerate(scans):
@@ -316,7 +322,7 @@ def get_from_samples(
                 # Increment by whole pixels
                 n_detector += 2
                 det_samps = n_detector * scan_samples
-                group_nodes, memory_bytes = get_minimum_memory_use(
+                group_nodes, bytes = get_minimum_memory_use(
                     n_detector,
                     n_nodes,
                     n_procs,
@@ -324,6 +330,7 @@ def get_from_samples(
                     scans[: isc + 1],
                     full_pointing,
                 )
+            memory_bytes += bytes
             total = det_samps
             new_scans.append(copy.deepcopy(sc))
         else:
@@ -331,7 +338,7 @@ def get_from_samples(
             if det_samps > max_samples:
                 break
             else:
-                group_nodes, memory_bytes = get_minimum_memory_use(
+                group_nodes, bytes = get_minimum_memory_use(
                     n_detector,
                     n_nodes,
                     n_procs,
@@ -339,6 +346,7 @@ def get_from_samples(
                     scans[: isc + 1],
                     full_pointing,
                 )
+                memory_bytes += bytes
                 total = det_samps
                 new_scans.append(copy.deepcopy(sc))
 
@@ -414,13 +422,12 @@ def select_case(
         msg += f"  {args.n_detector} detectors and {len(new_scans)} observations\n"
         msg += f"  {args.total_samples} total samples\n"
         msg += f"  {args.group_nodes} groups of {n_nodes//args.group_nodes} nodes with {n_procs} processes each\n"
+        msg += f"  {memory_used_bytes / (1024 ** 3) :0.2f} GB predicted memory use\n"
         msg += f"  ('{args.case}' workflow size)"
         log.info_rank(msg, comm=world_comm)
 
         if memory_used_bytes >= available_memory_bytes:
             msg = f"The selected case, '{args.case}' might not fit in memory "
-            msg += f"(we predict a usage of about "
-            msg += f"{memory_used_bytes / (1024 ** 3) :0.2f} GB)."
             log.warning_rank(msg, comm=world_comm)
     else:
         msg = f"Using automatic workflow size selection (case='auto') with "
@@ -457,13 +464,49 @@ def select_case(
         msg += f"  {args.n_detector} detectors and {len(new_scans)} observations\n"
         msg += f"  {args.total_samples} total samples\n"
         msg += f"  {args.group_nodes} groups of {n_nodes//args.group_nodes} nodes with {n_procs} processes each\n"
+        msg += f"  {memory_used_bytes / (1024 ** 3) :0.2f} GB predicted memory use "
+        msg += f"  ({available_memory_bytes / (1024 ** 3) :0.2f} GB available)\n"
         msg += f"  ('{args.case}' workflow size)"
         log.info_rank(msg, comm=world_comm)
 
-        msg = f"We predict a usage of about {memory_used_bytes / (1024 ** 3) :0.2f} GB "
-        msg += f"which should be below the available "
-        msg += f"{available_memory_bytes / (1024 ** 3) :0.2f} GB."
-        log.info_rank(msg, comm=world_comm)
+
+def estimate_memory_overhead(
+    n_procs, n_nodes, sky_fraction, nside_solve, nside_final=None
+):
+    """Estimate bytes of memory used per-process for objects besides timestreams.
+
+    Args:
+        n_procs (int):  The number of MPI processes in the job.
+        n_nodes (int):  The number of nodes in the job.
+        sky_fraction (float):  The fraction of the sky covered by one process.
+        nside_solve (int):  The healpix NSIDE value for the solver.
+        nside_final (int):  The healpix NSIDE value for the final binning.
+
+    Returns:
+        (int):  The bytes used.
+
+    """
+    # Start with 1GB for everything else
+    base = 1024 ** 3
+    print(f"base = {base}")
+
+    # Compute the bytes per pixel.  We have:
+    #   hits (int64):  8 bytes
+    #   noise weighted map (3 x float64):  24 bytes
+    #   condition number map (1 x float64):  8 bytes
+    #   diagonal covariance (6 x float64):  48 bytes
+    #   solved map (3 x float64):  24 bytes
+    bytes_per_pixel = 8 + 24 + 8 + 48 + 24
+    print(f"bytes per pix = {bytes_per_pixel}")
+
+    n_pixel_solve = sky_fraction * 12 * nside_solve ** 2
+    print(f"npix solve = {n_pixel_solve}")
+    n_pixel_final = 0
+    if nside_final is not None:
+        n_pixel_final = sky_fraction * 12 * nside_final ** 2
+    print(f"npix_final = {n_pixel_final}")
+
+    return base + (n_pixel_solve + n_pixel_final) * bytes_per_pixel
 
 
 def make_focalplane(args, world_comm, log):
@@ -494,7 +537,7 @@ def make_focalplane(args, world_comm, log):
     if world_comm is not None:
         focalplane = world_comm.bcast(focalplane, root=0)
     log.info_rank(
-        f"Using {len(focalplane.detectors)} hexagon-packed pixels.", comm=world_comm
+        f"Using {len(focalplane.detectors)//2} hexagon-packed pixels.", comm=world_comm
     )
     return focalplane
 

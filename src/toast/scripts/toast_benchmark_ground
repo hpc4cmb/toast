@@ -24,6 +24,7 @@ from toast.scripts.benchmarking_utilities import (
     scan_map,
     run_mapmaker,
     compute_science_metric,
+    estimate_memory_overhead,
 )
 
 
@@ -243,6 +244,16 @@ def main():
     # Create the schedule, so that we know the total observing time.
     make_schedule(args, world_comm, site)
 
+    # Estimate per-process memory use from map domain objects and
+    # other sources.
+    nside_final = None
+    if ops.pointing_final.enabled:
+        nside_final = ops.pointing_final.nside
+    overhead_bytes = estimate_memory_overhead(
+        n_procs, n_nodes, 0.4, ops.pointing.nside, nside_final=nside_final
+    )
+    print(f"overhead = {overhead_bytes}")
+
     # selects appropriate case size
     select_case(
         args,
@@ -251,6 +262,7 @@ def main():
         avail_node_bytes,
         ops.binner.full_pointing,
         world_comm,
+        per_process_overhead_bytes=overhead_bytes,
     )
 
     # Creates the focalplane file.
