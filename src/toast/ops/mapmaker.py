@@ -124,17 +124,30 @@ class MapMaker(Operator):
     )
 
     write_map = Bool(True, help="If True, write the projected map")
+
     write_noiseweighted_map = Bool(
         False,
         help="If True, write the noise-weighted map",
     )
+
     write_hits = Bool(True, help="If True, write the hits map")
+
     write_cov = Bool(True, help="If True, write the white noise covariance matrices.")
+
     write_invcov = Bool(
         False,
         help="If True, write the inverse white noise covariance matrices.",
     )
+
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
+
+    keep_solver_products = Bool(
+        False, help="If True, keep the map domain solver products in data"
+    )
+
+    keep_final_products = Bool(
+        False, help="If True, keep the map domain products in data after write"
+    )
 
     mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
 
@@ -226,6 +239,22 @@ class MapMaker(Operator):
         if self.map_binning is None or not self.map_binning.enabled:
             # Use the same binning used in the solver.
             map_binning = self.binning
+
+        # Check for consistent writing options
+        writing_outputs = np.sum(
+            [
+                self.write_map,
+                self.write_noiseweighted_map,
+                self.write_hits,
+                self.write_cov,
+                self.write_invcov,
+                self.write_rcond,
+            ]
+        )
+        if writing_outputs > 0 and self.output_dir is None:
+            raise RuntimeError(
+                "output_dir must be specified if writing is enabled for any products"
+            )
 
         # We use the input binning operator to define the flags that the user has
         # specified.  We will save the name / bit mask for these and restore them later.
@@ -551,6 +580,19 @@ class MapMaker(Operator):
                 timer=timer,
             )
 
+        # Delete our solver products to save memory
+        if not self.mc_mode and not self.keep_solver_products:
+            for prod in [
+                self.solver_hits_name,
+                self.solver_cov_name,
+                self.solver_rcond_name,
+                self.solver_rcond_mask_name,
+                self.solver_rhs,
+                self.solver_bin,
+            ]:
+                data[prod].clear()
+                del data[prod]
+
         # Restore flag names and masks to binning operator, in case it is being used
         # for the final map making or for other external operations.
 
@@ -709,15 +751,18 @@ class MapMaker(Operator):
                 keys.append(self.noiseweighted_map_name)
             if self.write_hits:
                 keys.append(self.hits_name)
+            if self.write_rcond:
+                keys.append(self.rcond_name)
             if self.write_cov:
                 keys.append(self.cov_name)
             if self.write_invcov:
                 keys.append(self.invcov_name)
-            if self.write_rcond:
-                keys.append(self.rcond_name)
             for dkey in keys:
                 fname = os.path.join(self.output_dir, "{}.fits".format(dkey))
                 write_healpix_fits(data[dkey], fname, nest=map_binning.pointing.nest)
+                if not self.keep_final_products:
+                    data[dkey].clear()
+                    del data[dkey]
 
         log.info_rank(
             f"{log_prefix}  finished output write in",
