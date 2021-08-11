@@ -739,30 +739,29 @@ class MapMaker(Operator):
             timer=timer,
         )
 
-        # Write the outputs
+        # Write and delete the outputs
+
         # FIXME:  This all assumes the pointing operator is an instance of the
         # PointingHealpix class.  We need to generalize distributed pixel data
         # formats and associate them with the pointing operator.
-        if self.output_dir is not None:
-            keys = []
-            if self.write_map:
-                keys.append(self.map_name)
-            if self.write_noiseweighted_map:
-                keys.append(self.noiseweighted_map_name)
-            if self.write_hits:
-                keys.append(self.hits_name)
-            if self.write_rcond:
-                keys.append(self.rcond_name)
-            if self.write_cov:
-                keys.append(self.cov_name)
-            if self.write_invcov:
-                keys.append(self.invcov_name)
-            for dkey in keys:
-                fname = os.path.join(self.output_dir, "{}.fits".format(dkey))
-                write_healpix_fits(data[dkey], fname, nest=map_binning.pointing.nest)
-                if not self.keep_final_products:
-                    data[dkey].clear()
-                    del data[dkey]
+
+        write_del = list()
+        write_del.append((self.hits_name, self.write_hits))
+        write_del.append((self.rcond_name, self.write_rcond))
+        write_del.append((self.noiseweighted_map_name, self.write_noiseweighted_map))
+        write_del.append((self.map_name, self.write_map))
+        write_del.append((self.invcov_name, self.write_invcov))
+        write_del.append((self.cov_name, self.write_cov))
+        for prod_key, prod_write in write_del:
+            if prod_write:
+                fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
+                write_healpix_fits(
+                    data[prod_key], fname, nest=map_binning.pointing.nest
+                )
+            if not self.keep_final_products:
+                if prod_key in data:
+                    data[prod_key].clear()
+                    del data[prod_key]
 
         log.info_rank(
             f"{log_prefix}  finished output write in",
