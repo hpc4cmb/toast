@@ -149,7 +149,7 @@ double toast::atm_get_atmospheric_loading(double altitude,
     atm::SkyStatus ss = get_sky_status(altitude, temperature, pressure, freq);
     ss.setUserWH2O(pwv, "mm");
 
-    return ss.getTebbSky().get();
+    return ss.getTrjSky().get();
 }
 
 int toast::atm_get_atmospheric_loading_vec(double altitude,
@@ -172,7 +172,7 @@ int toast::atm_get_atmospheric_loading_vec(double altitude,
                                            freqmin, freqmax, nfreq);
     ss.setUserWH2O(pwv, "mm");
     for (size_t i = 0; i < nfreq; ++i) {
-        loading[i] = ss.getTebbSky(i).get();
+        loading[i] = ss.getTrjSky(i).get();
     }
 
     return 0;

@@ -15,15 +15,22 @@ import astropy.coordinates as coord
 
 from astropy.table import QTable, Column
 
+from scipy.constants import h, k
+import scipy.integrate
+
 import tomlkit
 
 from .timing import function_timer, Timer
 
 from . import qarray as qa
 
+from .noise_sim import AnalyticNoise
 from .utils import Logger, Environment, name_UID
 
 from . import qarray
+
+# CMB temperature
+TCMB = 2.72548
 
 
 class Site(object):
@@ -270,6 +277,89 @@ class SpaceSite(Site):
         return v
 
 
+class Bandpass(object):
+    """Class that contains the bandpass information for an entire focalplane."""
+
+    def __init__(self, bandcenters, bandwidths, nstep=1001):
+        """All units in GHz
+        Args :
+        bandcenters(dict) : Dictionary of bandpass centers
+        bandwidths(dict) : Dictionary of bandpass widths
+        nstep(int) : Number of interplation steps to use in `convolve()`
+        """
+        self.nstep = nstep
+        self.dets = []
+        self.fmin = {}
+        self.fmax = {}
+        for name in bandcenters:
+            self.dets.append(name)
+            center = bandcenters[name]
+            width = bandwidths[name]
+            self.fmin[name] = center - 0.5 * width
+            self.fmax[name] = center + 0.5 * width
+        # The interpolated bandpasses will be cached as needed
+        self.freqs = {}
+        self.bandpass = {}
+
+    def get_range(self):
+        """Return the maximum range of frequencies needed for convolution."""
+        fmin = None
+        fmax = None
+        for name in self.dets:
+            if fmin is None:
+                fmin = self.fmin[name]
+                fmax = self.fmax[name]
+            else:
+                fmin = min(fmin, self.fmin[name])
+                fmax = max(fmax, self.fmax[name])
+        return fmin, fmax
+
+    def convolve(self, det, freqs, spectrum, rj=False):
+        """Convolve the provided spectrum with the detector bandpass
+
+        Args:
+            det(str):  Detector name
+            freqs(array of floats):  Spectral bin locations
+            spectrum(array of floats):  Spectral bin values
+            rj(bool):  Input spectrum is in Rayleigh-Jeans units and
+                should be converted into thermal units for convolution
+        """
+        if det not in self.bandpass:
+            # Normalize and interpolate the bandpass
+            fmin_det = self.fmin[det].to_value(u.GHz)
+            fmax_det = self.fmax[det].to_value(u.GHz)
+            self.freqs[det] = np.linspace(fmin_det, fmax_det, self.nstep)
+            try:
+                # If we have a tabulated bandpass, interpolate it
+                self.bandpass[det] = np.interp(
+                    self.freqs[det], self.bins[det].to_value(u.GHz), self.values[det]
+                )
+            except AttributeError:
+                self.bandpass[det] = np.ones(self.nstep)
+
+            norm = scipy.integrate.simpson(self.bandpass[det], x=self.freqs[det])
+            if norm == 0:
+                raise RuntimeError("Bandpass cannot be normalized")
+            self.bandpass[det] /= norm
+
+        freqs_det = self.freqs[det]
+        bandpass_det = self.bandpass[det]
+
+        # Interpolate spectrum values to bandpass frequencies
+        spectrum_det = np.interp(freqs_det, freqs.to_value(u.GHz), spectrum)
+
+        if rj:
+            # From brightness to thermodynamic units
+            x = h * freqs_det * 1e9 / k / TCMB
+            rj2cmb = (x / (np.exp(x / 2) - np.exp(-x / 2))) ** -2
+            spectrum_det *= rj2cmb
+
+        # Average across the bandpass
+        convolved = scipy.integrate.simpson(spectrum_det * bandpass_det, x=freqs_det)
+
+        return convolved
+
+
 class Focalplane(object):
     """Class representing the focalplane for one observation.
 
@@ -355,6 +445,56 @@ class Focalplane(object):
             self._compute_fov()
         self._get_pol_angles()
         self._get_pol_efficiency()
+        self._get_noise()
+        self._get_bandpass()
+
+    def _get_noise(self):
+        """Use the noise parameters to instantiate an analytical noise model"""
+
+        model_available = False
+        noise_keys = "psd_fmin", "psd_fknee", "psd_alpha", "psd_net"
+        for key in noise_keys:
+            if key not in self.detector_data.colnames:
+                break
+        else:
+            model_available = True
+        if model_available:
+            dets = []
+            fmin = {}
+            fknee = {}
+            alpha = {}
+            NET = {}
+            rates = {}
+            for row in self.detector_data:
+                name = row["name"]
+                dets.append(name)
+                rates[name] = self.sample_rate
+                fmin[name] = row["psd_fmin"]
+                fknee[name] = row["psd_fknee"]
+                alpha[name] = row["psd_alpha"]
+                NET[name] = row["psd_net"]
+
+            self.noise = AnalyticNoise(
+                rate=rates, fmin=fmin, detectors=dets, fknee=fknee, alpha=alpha, NET=NET
+            )
+        else:
+            self.noise = None
+        return
+
+    def _get_bandpass(self):
+        """Use the bandpass parameters to instantiate a bandpass model"""
+
+        if "bandcenter" in self.detector_data.colnames:
+            bandcenter = {}
+            bandwidth = {}
+            for row in self.detector_data:
+                name = row["name"]
+                bandcenter[name] = row["bandcenter"]
+                bandwidth[name] = row["bandwidth"]
+            self.bandpass = Bandpass(bandcenter, bandwidth)
+        else:
+            self.bandpass = None
+        return
 
     def _compute_fov(self):
         """Compute the field of view"""

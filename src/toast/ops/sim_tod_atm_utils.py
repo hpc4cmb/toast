@@ -21,7 +21,7 @@ from .operator import Operator
 
 from ..utils import Environment, Logger
 
-from ..atm import AtmSim
+from ..atm import AtmSim, atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
 
 
 @trait_docs
@@ -115,6 +115,9 @@ class ObserveAtmosphere(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
+
+            # Bandpass-specific unit conversion, relative to 150GHz
+            absorption, loading = self._get_absorption_and_loading(ob, dets)
 
             # Make sure detector data output exists
             ob.detdata.ensure(self.det_data, detectors=dets)
@@ -294,11 +297,11 @@ class ObserveAtmosphere(Operator):
                                     ] = 255
                                     nbad_tot += nbad
 
-                    atmdata *= self.gain
+                    # Calibrate the atmopsheric fluctuations to appropriate bandpass
+                    atmdata *= self.gain * absorption[det]
 
-                    if self.absorption is not None:
-                        # Apply the frequency-dependent absorption-coefficient
-                        atmdata *= self.absorption
+                    # Add the elevation-dependent atmospheric loading
+                    atmdata += loading[det] / np.sin(el)
 
                     # Add polarization.  In our simple model, there is only Q-polarization
                     # and the polarization fraction is constant.
@@ -313,6 +316,45 @@ class ObserveAtmosphere(Operator):
                 log.error(
                     "{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
                 )
+
+    def _get_absorption_and_loading(self, obs, dets):
+        """Bandpass-specific unit conversion and loading"""
+
+        if obs.telescope.focalplane.bandpass is None:
+            raise RuntimeError("Focalplane does not define bandpass")
+        altitude = obs.telescope.site.earthloc.height
+        weather = obs.telescope.site.weather
+        bandpass = obs.telescope.focalplane.bandpass
+
+        freq_min, freq_max = bandpass.get_range()
+        n_freq = 100
+        absorption = atm_absorption_coefficient_vec(
+            altitude.to_value(u.meter),
+            weather.air_temperature.to_value(u.Kelvin),
+            weather.surface_pressure.to_value(u.Pa),
+            weather.pwv.to_value(u.mm),
+            freq_min.to_value(u.GHz),
+            freq_max.to_value(u.GHz),
+            n_freq,
+        )
+        loading = atm_atmospheric_loading_vec(
+            altitude.to_value(u.meter),
+            weather.air_temperature.to_value(u.Kelvin),
+            weather.surface_pressure.to_value(u.Pa),
+            weather.pwv.to_value(u.mm),
+            freq_min.to_value(u.GHz),
+            freq_max.to_value(u.GHz),
+            n_freq,
+        )
+
+        freqs = np.linspace(freq_min, freq_max, n_freq)
+        absorption_det = {}
+        loading_det = {}
+        for det in dets:
+            absorption_det[det] = bandpass.convolve(det, freqs, absorption, rj=True)
+            loading_det[det] = bandpass.convolve(det, freqs, absorption, rj=True)
+
+        return absorption_det, loading_det
 
     def _finalize(self, data, **kwargs):
         return

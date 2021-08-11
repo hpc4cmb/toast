@@ -322,10 +322,6 @@ class SimAtmosphere(Operator):
 
             key1, key2, counter1, counter2 = self._get_rng_keys(ob)
 
-            absorption, loading = self._get_absorption_and_loading(ob)
-
-            observe_atm.absorption = absorption
-
             cachedir = self._get_cache_dir(ob, comm)
 
             ob[atm_sim_key] = list()
@@ -506,37 +502,6 @@ class SimAtmosphere(Operator):
         counter2 = 0
 
         return key1, key2, counter1, counter2
-
-    @function_timer
-    def _get_absorption_and_loading(self, obs):
-        altitude = obs.telescope.site.earthloc.height.to_value(u.meter)
-        weather = obs.telescope.site.weather
-        absorption = None
-        loading = None
-        if self.freq is not None:
-            if not available_utils:
-                msg = (
-                    "TOAST not compiled with libaatm support- absorption and "
-                    "loading unavailable"
-                )
-                raise RuntimeError(msg)
-            from ..atm import atm_absorption_coefficient, atm_atmospheric_loading
-
-            absorption = atm_absorption_coefficient(
-                altitude,
-                weather.air_temperature.to_value(u.kelvin),
-                weather.surface_pressure,
-                weather.pwv,
-                self.freq.to_value(u.GHz),
-            )
-            loading = atm_atmospheric_loading(
-                altitude,
-                weather.air_temperature.to_value(u.kelvin),
-                weather.surface_pressure,
-                weather.pwv,
-                self.freq.to_value(u.GHz),
-            )
-        return absorption, loading
 
     def _get_cache_dir(self, obs, comm):
         obsid = obs.uid

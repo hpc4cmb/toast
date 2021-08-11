@@ -232,11 +232,11 @@ class SimWeather(Weather):
         # Use a separate RNG index for each data type
         self._varindex = {y: x for x, y in enumerate(self._data[0]["data"].keys())}
 
-        self._sim_ice_water = self._draw("TQI")
-        self._sim_liquid_water = self._draw("TQL")
-        self._sim_pwv = self._draw("TQV")
-        self._sim_humidity = self._draw("QV10M")
-        self._sim_surface_pressure = self._draw("PS")
+        self._sim_ice_water = self._draw("TQI") * u.mm
+        self._sim_liquid_water = self._draw("TQL") * u.mm
+        self._sim_pwv = self._draw("TQV") * u.mm
+        self._sim_humidity = self._draw("QV10M") * u.mm
+        self._sim_surface_pressure = self._draw("PS") * u.Pa
         self._sim_surface_temperature = self._draw("TS") * u.Kelvin
         self._sim_air_temperature = self._draw("T10M") * u.Kelvin
         self._sim_west_wind = self._draw("U10M") * (u.meter / u.second)
