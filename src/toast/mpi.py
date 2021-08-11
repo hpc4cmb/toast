@@ -275,6 +275,9 @@ def exception_guard(comm=None):
     try:
         yield
     except Exception:
+        # Note that the intention of this function is to handle *any* exception.
+        # The typical use case is to wrap main() and ensure that the job exits
+        # cleanly.
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         lines = [f"Proc {rank}: {x}" for x in lines]
