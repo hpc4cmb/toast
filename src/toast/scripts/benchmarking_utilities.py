@@ -220,7 +220,7 @@ def maximize_nb_samples(
 
     scan_samples = 0
     for isc, sc in enumerate(scans):
-        scan_samples += sample_rate * (sc.stop - sc.start).total_seconds()
+        scan_samples += int(sample_rate * (sc.stop - sc.start).total_seconds())
         if total == 0:
             # First scan, compute number of detectors
             while (
@@ -313,7 +313,7 @@ def get_from_samples(
 
     scan_samples = 0
     for isc, sc in enumerate(scans):
-        scan_samples += sample_rate * (sc.stop - sc.start).total_seconds()
+        scan_samples += int(sample_rate * (sc.stop - sc.start).total_seconds())
         if total == 0:
             # First scan, compute number of detectors
             while (n_detector < max_n_detector) and (
