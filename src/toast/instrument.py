@@ -16,6 +16,7 @@ import astropy.coordinates as coord
 from astropy.table import QTable, Column
 
 from scipy.constants import h, k
+
 try:
     from scipy.integrate import simpson
 except ImportError:
