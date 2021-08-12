@@ -221,6 +221,7 @@ def maximize_nb_samples(
     scan_samples = 0
     for isc, sc in enumerate(scans):
         scan_samples += int(sample_rate * (sc.stop - sc.start).total_seconds())
+        det_samps = n_detector * scan_samples
         if total == 0:
             # First scan, compute number of detectors
             while (
@@ -241,7 +242,6 @@ def maximize_nb_samples(
             total = det_samps
             new_scans.append(copy.deepcopy(sc))
         else:
-            det_samps = n_detector * scan_samples
             gs, bytes = get_minimum_memory_use(
                 n_detector, n_nodes, n_procs, det_samps, scans[: isc + 1], full_pointing
             )
@@ -314,6 +314,7 @@ def get_from_samples(
     scan_samples = 0
     for isc, sc in enumerate(scans):
         scan_samples += int(sample_rate * (sc.stop - sc.start).total_seconds())
+        det_samps = n_detector * scan_samples
         if total == 0:
             # First scan, compute number of detectors
             while (n_detector < max_n_detector) and (
@@ -334,7 +335,6 @@ def get_from_samples(
             total = det_samps
             new_scans.append(copy.deepcopy(sc))
         else:
-            det_samps = n_detector * scan_samples
             if det_samps > max_samples:
                 break
             else:
