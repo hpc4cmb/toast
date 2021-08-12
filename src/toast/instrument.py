@@ -18,7 +18,7 @@ from astropy.table import QTable, Column
 from scipy.constants import h, k
 try:
     from scipy.integrate import simpson
-except ModuleNotFoundError:
+except ImportError:
     from scipy.integrate import simps as simpson
 
 import tomlkit
