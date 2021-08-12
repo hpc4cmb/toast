@@ -16,7 +16,10 @@ import astropy.coordinates as coord
 from astropy.table import QTable, Column
 
 from scipy.constants import h, k
-from scipy.integrate import simpson
+try:
+    from scipy.integrate import simpson
+except ModuleNotFoundError:
+    from scipy.integrate import simps as simpson
 
 import tomlkit
 
