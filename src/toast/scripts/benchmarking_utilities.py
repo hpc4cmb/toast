@@ -446,7 +446,7 @@ def select_case(
             args.total_samples,
             args.group_nodes,
             memory_used_bytes,
-        ) = get_from_samples(
+        ) = maximize_nb_samples(
             n_nodes,
             n_procs,
             args.schedule.scans,
