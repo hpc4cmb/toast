@@ -29,13 +29,13 @@ void toast::rng_dist_uint64(size_t n, uint64_t key1, uint64_t key2,
         #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             data[i] = rng(
-                RNG::ctr_type({{counter1, counter2 + i}}),
+                RNG::ctr_type({{counter1, counter2 + i} }),
                 RNG::key_type(uk))[0];
         }
     } else {
         for (size_t i = 0; i < n; ++i) {
             data[i] = rng(
-                RNG::ctr_type({{counter1, counter2 + i}}),
+                RNG::ctr_type({{counter1, counter2 + i} }),
                 RNG::key_type(uk))[0];
         }
     }
@@ -54,13 +54,13 @@ void toast::rng_dist_uniform_01(size_t n,
         #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             data[i] = r123::u01 <double, uint64_t> (
-                rng(RNG::ctr_type({{counter1, counter2 + i}}),
+                rng(RNG::ctr_type({{counter1, counter2 + i} }),
                     RNG::key_type(uk))[0]);
         }
     } else {
         for (size_t i = 0; i < n; ++i) {
             data[i] = r123::u01 <double, uint64_t> (
-                rng(RNG::ctr_type({{counter1, counter2 + i}}),
+                rng(RNG::ctr_type({{counter1, counter2 + i} }),
                     RNG::key_type(uk))[0]);
         }
     }
@@ -80,13 +80,13 @@ void toast::rng_dist_uniform_11(size_t n,
         #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             data[i] = r123::uneg11 <double, uint64_t> (
-                rng(RNG::ctr_type({{counter1, counter2 + i}}),
+                rng(RNG::ctr_type({{counter1, counter2 + i} }),
                     RNG::key_type(uk))[0]);
         }
     } else {
         for (size_t i = 0; i < n; ++i) {
             data[i] = r123::uneg11 <double, uint64_t> (
-                rng(RNG::ctr_type({{counter1, counter2 + i}}),
+                rng(RNG::ctr_type({{counter1, counter2 + i} }),
                     RNG::key_type(uk))[0]);
         }
     }

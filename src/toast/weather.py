@@ -117,6 +117,11 @@ class Weather(object):
 def read_weather(file):
     """Helper function to read HDF5 format weather file.
 
+    On some filesystems, HDF5 uses a locking mechanism that fails even
+    when opening the file readonly.  We work around this by opening
+    the file as a binary stream in python and passing that file object
+    to h5py.
+
     Args:
         file (str):  Path to the file.
 
@@ -124,26 +129,26 @@ def read_weather(file):
         (dict):  Weather data dictionary.
 
     """
-    hf = h5py.File(file, "r")
-    result = OrderedDict()
-    for mn in range(12):
-        month_data = OrderedDict()
-        month = "month_{:02d}".format(mn)
-        meta = hf[month].attrs
-        for k, v in meta.items():
-            month_data[k] = v
-        # Build the index of the distribution
-        month_data["prob"] = np.linspace(
-            month_data["PROBSTRT"],
-            month_data["PROBSTOP"],
-            month_data["NSTEP"],
-        )
-        # Iterate over datasets, copying to regular numpy arrays
-        month_data["data"] = OrderedDict()
-        for dname, dat in hf[month].items():
-            month_data["data"][dname] = np.array(dat)
-        result[mn] = month_data
-    hf.close()
+    with open(file, "rb") as pf:
+        with h5py.File(pf, "r") as hf:
+            result = OrderedDict()
+            for mn in range(12):
+                month_data = OrderedDict()
+                month = "month_{:02d}".format(mn)
+                meta = hf[month].attrs
+                for k, v in meta.items():
+                    month_data[k] = v
+                # Build the index of the distribution
+                month_data["prob"] = np.linspace(
+                    month_data["PROBSTRT"],
+                    month_data["PROBSTOP"],
+                    month_data["NSTEP"],
+                )
+                # Iterate over datasets, copying to regular numpy arrays
+                month_data["data"] = OrderedDict()
+                for dname, dat in hf[month].items():
+                    month_data["data"][dname] = np.array(dat)
+                result[mn] = month_data
     return result
 
 

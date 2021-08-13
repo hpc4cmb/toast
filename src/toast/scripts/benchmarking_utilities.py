@@ -140,6 +140,9 @@ def get_minimum_memory_use(
     # The number of observations in the schedule
     num_obs = len(scans)
 
+    # The number of processes per node
+    node_procs = n_procs // n_nodes
+
     group_nodes_best = 1
     memory_used_bytes_best = np.inf
 
@@ -152,7 +155,7 @@ def get_minimum_memory_use(
                 # Too many small groups- we do not have enough observations to give at
                 # least one to each group.
                 continue
-            group_procs = n_procs // group_nodes
+            group_procs = node_procs * group_nodes
             if group_procs > n_detector:
                 # This group is too large for the number of detectors
                 continue
@@ -164,6 +167,10 @@ def get_minimum_memory_use(
             if memory_used_bytes < memory_used_bytes_best:
                 group_nodes_best = group_nodes
                 memory_used_bytes_best = memory_used_bytes
+
+    if np.isinf(memory_used_bytes_best):
+        raise RuntimeError("No compatible group size could be found")
+
     return (group_nodes_best, memory_used_bytes_best)
 
 
@@ -205,8 +212,9 @@ def maximize_nb_samples(
     # The output set of observation scans.
     new_scans = list()
 
-    # The number of detectors
-    n_detector = 0
+    # The number of detectors.  Start with at least enough
+    # detectors for the case of group_nodes == 1
+    n_detector = n_procs // n_nodes
 
     # The total samples
     total = 0
@@ -299,8 +307,9 @@ def get_from_samples(
     # The output set of observation scans.
     new_scans = list()
 
-    # The number of detectors
-    n_detector = 0
+    # The number of detectors.  Start with at least enough
+    # detectors for the case of group_nodes == 1
+    n_detector = n_procs // n_nodes
 
     # The total samples
     total = 0
@@ -381,8 +390,22 @@ def select_case(
     """
     log = toast.utils.Logger.get()
 
-    # computes the memory that is currently available
+    # Compute the aggregate memory that is currently available
     available_memory_bytes = n_nodes * avail_node_bytes
+
+    # Compare to the per-process overhead
+    overhead_bytes = n_procs * per_process_overhead_bytes
+    if overhead_bytes > available_memory_bytes:
+        msg = f"Per-process memory overhead is {n_procs} x "
+        msg += f"{per_process_overhead_bytes / (1024 ** 3) :0.2f} GB "
+        msg += f"= {overhead_bytes / (1024 ** 3) :0.2f} GB, which "
+        msg += f"is larger than the available memory "
+        msg += f"({available_memory_bytes / (1024 ** 3) :0.2f} GB)."
+        msg += f" Use fewer processes per node."
+        log.error_rank(msg, comm=world_comm)
+        # No need to raise the same error on every process
+        if world_comm is None or world_comm.rank == 0:
+            raise RuntimeError(msg)
 
     if args.case != "auto":
         # availaibles sizes
