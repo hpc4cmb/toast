@@ -96,7 +96,7 @@ class SimGround(Operator):
     )
 
     scan_rate_el = Quantity(
-        None, allow_none=True, help="The sky elevation scanning rate"
+        1.0 * u.degree / u.second, allow_none=True, help="The sky elevation scanning rate"
     )
 
     scan_accel_az = Quantity(
@@ -105,7 +105,7 @@ class SimGround(Operator):
     )
 
     scan_accel_el = Quantity(
-        None, allow_none=True, help="Mount elevation rate acceleration."
+        1.0 * u.degree / u.second ** 2, allow_none=True, help="Mount elevation rate acceleration."
     )
 
     scan_cosecant_modulation = Bool(
@@ -445,7 +445,9 @@ class SimGround(Operator):
             elnod_el = None
             elnod_az = None
             if len(self.elnods) > 0:
-                elnod_el = np.array([x.to_value(u.radian) for x in self.elnods])
+                elnod_el = np.array(
+                    [(scan.el + x).to_value(u.radian) for x in self.elnods]
+                )
                 elnod_az = np.zeros_like(elnod_el) + scan.az_min.to_value(u.radian)
 
             # Sample sets.  Although Observations support data distribution in any
@@ -465,7 +467,7 @@ class SimGround(Operator):
                     scan_min_el,
                     scan_max_el,
                 ) = simulate_elnod(
-                    scan.start,
+                    scan.start.timestamp(),
                     rate,
                     scan.az_min.to_value(u.radian),
                     scan.el.to_value(u.radian),

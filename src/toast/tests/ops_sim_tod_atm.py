@@ -326,3 +326,64 @@ class SimAtmTest(MPITestCase):
             pfrac = np.median(p[good] / i[good])
             if pfrac < 0.01:
                 raise RuntimeError("Simulated atmosphere is not polarized")
+
+    def test_loading(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        # Create fake observing of a small patch
+        data = create_ground_data(self.comm, el_nod=True)
+
+        # Simple detector pointing
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight="boresight_azel", quats="quats_azel"
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight="boresight_radec", quats="quats_radec"
+        )
+
+        # Create a noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel()
+        default_model.apply(data)
+
+        # Make an elevation-dependent noise model
+        el_model = ops.ElevationNoise(
+            noise_model="noise_model",
+            out_model="el_weighted",
+            detector_pointing=detpointing_azel,
+        )
+        el_model.apply(data)
+
+        # Simulate atmosphere signal
+        sim_atm = ops.SimAtmosphere(
+            detector_pointing=detpointing_azel,
+            gain=0,
+        )
+        sim_atm.apply(data)
+
+        if rank == 0:
+            import matplotlib.pyplot as plt
+
+            ob = data.obs[0]
+            det = ob.local_detectors[0]
+            times = np.array(ob.shared["times"])
+
+            fig = plt.figure(figsize=(12, 8), dpi=72)
+            ax = fig.add_subplot(1, 1, 1, aspect="auto")
+            ax.plot(times, ob.detdata["signal"][det])
+            ax.set_title(f"Detector {det} Atmospheric loadingg TOD")
+            outfile = os.path.join(self.outdir, f"{det}_atm_loading_tod.pdf")
+            plt.savefig(outfile)
+            plt.close()
+
+        # We simulated atmosphere with zero gain, so only atmospheric
+        # loading is included.  Confirm that all detectors are seeing
+        # a non-zero signal
+
+        for obs in data.obs:
+            for det in obs.local_detectors:
+                sig = obs.detdata["signal"][det]
+                assert np.std(sig) != 0
+
+        return

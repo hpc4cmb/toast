@@ -100,7 +100,7 @@ def scan_between(
     az_accel,
     el_rate,
     el_accel,
-    scanstep=10000,
+    nstep=10000,
 ):
     """Simulate motion between two coordinates.
 
@@ -113,12 +113,12 @@ def scan_between(
         (tuple):  The (times, az, el) arrays.
 
     """
-    az_time = self.scan_time(az1, az2, az_rate, az_accel)
-    el_time = self.scan_time(el1, el2, el_rate, el_accel)
+    az_time = scan_time(az1, az2, az_rate, az_accel)
+    el_time = scan_time(el1, el2, el_rate, el_accel)
     time_tot = max(az_time, el_time)
     times = np.linspace(0, time_tot, nstep)
-    az = self.scan_profile(az1, az2, az_rate, az_accel, times, nstep=scanstep)
-    el = self.scan_profile(el1, el2, el_rate, el_accel, times, nstep=scanstep)
+    az = scan_profile(az1, az2, az_rate, az_accel, times, nstep=nstep)
+    el = scan_profile(el1, el2, el_rate, el_accel, times, nstep=nstep)
     return times + time_start, az, el
 
 

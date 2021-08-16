@@ -352,7 +352,7 @@ class ObserveAtmosphere(Operator):
         loading_det = {}
         for det in dets:
             absorption_det[det] = bandpass.convolve(det, freqs, absorption, rj=True)
-            loading_det[det] = bandpass.convolve(det, freqs, absorption, rj=True)
+            loading_det[det] = bandpass.convolve(det, freqs, loading, rj=True)
 
         return absorption_det, loading_det
 

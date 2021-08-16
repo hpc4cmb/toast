@@ -580,7 +580,13 @@ def fake_flags(data, shared_name="flags", shared_val=1, det_name="flags", det_va
             ob.detdata[det_name][det, :half] |= det_val
 
 
-def create_ground_data(mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None):
+def create_ground_data(
+        mpicomm,
+        sample_rate=10.0 * u.Hz,
+        temp_dir=None,
+        el_nod=False,
+        el_nods=[-1 * u.degree, 1 * u.degree],
+):
     """Create a data object with a simple ground sim.
 
     Use the specified MPI communicator to attempt to create 2 process groups.  Create
@@ -651,6 +657,8 @@ def create_ground_data(mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None):
         hwp_rpm=1.0,
         weather="atacama",
         detset_key="pixel",
+        elnod_start=el_nod,
+        elnods=el_nods,
     )
     sim_ground.apply(data)
 
