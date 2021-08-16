@@ -201,9 +201,9 @@ class PolyFilterTest(MPITestCase):
         polyfilter = ops.PolyFilter2D(
             order=norder - 1,
             det_data="signal",
-            #det_flags="flags",
+            det_flags="flags",
             det_flag_mask=255,
-            #shared_flags="flags",
+            shared_flags="flags",
             shared_flag_mask=255,
             view=None,
             focalplane_key="wafer",
