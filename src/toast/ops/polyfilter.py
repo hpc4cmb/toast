@@ -273,11 +273,7 @@ class PolyFilter2D(Operator):
                         t = templates[good].T.copy() * mask
                         proj = np.dot(t, signals[good, isample] * mask)
                         ccinv = np.dot(t, t.T)
-                        try:
-                            cc = np.linalg.inv(ccinv)
-                            coeff[isample, igroup] = np.dot(cc, proj)
-                        except np.linalg.LinAlgError:
-                            coeff[isample, igroup] = 0
+                        coeff[isample, igroup] = np.linalg.lstsq(ccinv, proj)[0]
                 if comm is not None:
                     comm.allreduce(coeff)
                 t_solve += time() - t1
@@ -300,8 +296,8 @@ class PolyFilter2D(Operator):
                                 ).astype(views.detdata[self.det_flags][0].dtype)
 
                 coeff = np.transpose(
-                    coeff, [1, 2, 0]
-                ).copy()  # ngroup x nmode x nsample
+                    coeff, [1, 0, 2]
+                ).copy()  # ngroup x nsample x nmode
                 masks = masks.T.copy()  # ndet x nsample
                 for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
@@ -310,7 +306,7 @@ class PolyFilter2D(Operator):
                     ind = detector_index[det]
                     signal = views.detdata[self.det_data][iview][idet]
                     mask = masks[idet]
-                    signal -= np.sum(coeff[igroup] * templates[ind], 0) * mask
+                    signal -= np.sum(coeff[igroup] * templates[ind], 1) * mask
 
                 t_clean += time() - t1
 
