@@ -96,7 +96,9 @@ class SimGround(Operator):
     )
 
     scan_rate_el = Quantity(
-        1.0 * u.degree / u.second, allow_none=True, help="The sky elevation scanning rate"
+        1.0 * u.degree / u.second,
+        allow_none=True,
+        help="The sky elevation scanning rate",
     )
 
     scan_accel_az = Quantity(
@@ -105,7 +107,9 @@ class SimGround(Operator):
     )
 
     scan_accel_el = Quantity(
-        1.0 * u.degree / u.second ** 2, allow_none=True, help="Mount elevation rate acceleration."
+        1.0 * u.degree / u.second ** 2,
+        allow_none=True,
+        help="Mount elevation rate acceleration.",
     )
 
     scan_cosecant_modulation = Bool(

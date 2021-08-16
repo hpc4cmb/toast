@@ -581,11 +581,11 @@ def fake_flags(data, shared_name="flags", shared_val=1, det_name="flags", det_va
 
 
 def create_ground_data(
-        mpicomm,
-        sample_rate=10.0 * u.Hz,
-        temp_dir=None,
-        el_nod=False,
-        el_nods=[-1 * u.degree, 1 * u.degree],
+    mpicomm,
+    sample_rate=10.0 * u.Hz,
+    temp_dir=None,
+    el_nod=False,
+    el_nods=[-1 * u.degree, 1 * u.degree],
 ):
     """Create a data object with a simple ground sim.
 

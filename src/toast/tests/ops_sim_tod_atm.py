@@ -347,14 +347,6 @@ class SimAtmTest(MPITestCase):
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
 
-        # Make an elevation-dependent noise model
-        el_model = ops.ElevationNoise(
-            noise_model="noise_model",
-            out_model="el_weighted",
-            detector_pointing=detpointing_azel,
-        )
-        el_model.apply(data)
-
         # Simulate atmosphere signal
         sim_atm = ops.SimAtmosphere(
             detector_pointing=detpointing_azel,
@@ -372,7 +364,7 @@ class SimAtmTest(MPITestCase):
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect="auto")
             ax.plot(times, ob.detdata["signal"][det])
-            ax.set_title(f"Detector {det} Atmospheric loadingg TOD")
+            ax.set_title(f"Detector {det} Atmospheric loading TOD")
             outfile = os.path.join(self.outdir, f"{det}_atm_loading_tod.pdf")
             plt.savefig(outfile)
             plt.close()
@@ -385,5 +377,67 @@ class SimAtmTest(MPITestCase):
             for det in obs.local_detectors:
                 sig = obs.detdata["signal"][det]
                 assert np.std(sig) != 0
+
+        return
+
+    def test_bandpass(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        # Create fake observing of a small patch
+        data = create_ground_data(self.comm)
+
+        # Override the simulated bandpass
+        for obs in data.obs:
+            fp = obs.telescope.focalplane
+            fp.detector_data["bandcenter"] = 100 * u.GHz
+            fp.detector_data["bandwidth"] = 10 * u.GHz
+            fp._get_bandpass()
+
+        # Simple detector pointing
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight="boresight_azel", quats="quats_azel"
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight="boresight_radec", quats="quats_radec"
+        )
+
+        # Create a noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel()
+        default_model.apply(data)
+
+        cache_dir = os.path.join(self.outdir, "atm_cache")
+
+        # Simulate atmosphere signal
+        sim_atm = ops.SimAtmosphere(
+            detector_pointing=detpointing_azel,
+            cache_dir=cache_dir,
+        )
+        sim_atm.apply(data)
+
+        old_rms = {}
+        for obs in data.obs:
+            old_rms[obs.name] = {}
+            for det in obs.local_detectors:
+                sig = obs.detdata["signal"][det]
+                old_rms[obs.name][det] = np.std(sig)
+                sig[:] = 0
+
+        # Override the simulated bandpass again
+        for obs in data.obs:
+            fp = obs.telescope.focalplane
+            fp.detector_data["bandcenter"] = 150 * u.GHz
+            fp.detector_data["bandwidth"] = 15 * u.GHz
+            fp._get_bandpass()
+
+        # Simulate atmosphere signal again
+        sim_atm.apply(data)
+
+        # Check that the atmospheric fluctuations are stronger at higher frequency
+        for obs in data.obs:
+            for det in obs.local_detectors:
+                new_rms = np.std(obs.detdata["signal"][det])
+                assert new_rms > 1.1 * old_rms[obs.name][det]
 
         return
