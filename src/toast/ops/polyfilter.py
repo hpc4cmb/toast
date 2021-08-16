@@ -132,8 +132,10 @@ class PolyFilter2D(Operator):
 
             group_index = {}
             groups = {}
+            group_ids = {}
             if self.focalplane_key is None:
                 groups[None] = []
+                group_ids[None] = 0
                 ngroup = 1
                 for det in detectors:
                     group_index[det] = 0
@@ -146,6 +148,7 @@ class PolyFilter2D(Operator):
                     groups[value].append(det)
                 ngroup = len(groups)
                 for igroup, group in enumerate(sorted(groups)):
+                    group_ids[group] = igroup
                     for det in groups[group]:
                         group_index[det] = igroup
 
@@ -213,8 +216,11 @@ class PolyFilter2D(Operator):
 
                 # Accumulate the linear regression templates
 
-                templates = np.zeros([ndet, nmode, nsample])
-                proj = np.zeros([ngroup, nmode, nsample])
+                # templates = np.zeros([ndet, nmode, nsample])
+                templates = np.zeros([ndet, nmode])
+                masks = np.zeros([ndet, nsample], dtype=bool)
+                signals = np.zeros([ndet, nsample])
+                # proj = np.zeros([ngroup, nmode, nsample])
 
                 t1 = time()
 
@@ -239,36 +245,37 @@ class PolyFilter2D(Operator):
                         mask = shared_mask
 
                     template = detector_templates[ind_det]
-                    templates[ind_det] = np.outer(template, mask)
-                    proj[ind_group] += np.outer(template, signal * mask)
+                    templates[ind_det] = template
+                    masks[ind_det] = mask
+                    signals[ind_det] = signal * mask
 
                 t_template += time() - t1
 
                 t1 = time()
                 if comm is not None:
                     comm.allreduce(templates)
-                    comm.allreduce(proj)
+                    comm.allreduce(masks)
+                    comm.allreduce(signals)
                 t_get_norm += time() - t1
 
                 # Solve the linear regression amplitudes.  Each task
                 # inverts different template matrices
 
                 t1 = time()
-                templates = np.transpose(
-                    templates, [2, 0, 1]
-                ).copy()  # nsample x ndet x nmode
-                proj = np.transpose(proj, [2, 0, 1])  # nsample x ngroup x nmode
                 coeff = np.zeros([nsample, ngroup, nmode])
+                masks = masks.T.copy()  # nsample x ndet
                 for isample in range(nsample):
                     if comm is not None and isample % comm.size != comm.rank:
                         continue
-                    for igroup in range(ngroup):
+                    for group, igroup in group_ids.items():
                         good = group_det == igroup
-                        t = templates[isample][good].copy()
-                        ccinv = np.dot(t.T, t)
+                        mask = masks[isample, good]
+                        t = templates[good].T.copy() * mask
+                        proj = np.dot(t, signals[good, isample] * mask)
+                        ccinv = np.dot(t, t.T)
                         try:
                             cc = np.linalg.inv(ccinv)
-                            coeff[isample, igroup] = np.dot(cc, proj[isample, igroup])
+                            coeff[isample, igroup] = np.dot(cc, proj)
                         except np.linalg.LinAlgError:
                             coeff[isample, igroup] = 0
                 if comm is not None:
@@ -291,21 +298,19 @@ class PolyFilter2D(Operator):
                                 views.detdata[self.det_flags][iview][:, isample] |= (
                                     good * self.poly_flag_mask
                                 ).astype(views.detdata[self.det_flags][0].dtype)
-                templates = np.transpose(
-                    templates, [1, 2, 0]
-                ).copy()  # ndet x nmode x nsample
+
                 coeff = np.transpose(
                     coeff, [1, 2, 0]
                 ).copy()  # ngroup x nmode x nsample
-
+                masks = masks.T.copy()  # ndet x nsample
                 for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
                         continue
                     igroup = group_index[det]
                     ind = detector_index[det]
                     signal = views.detdata[self.det_data][iview][idet]
-                    for mode in range(nmode):
-                        signal -= coeff[igroup, mode] * templates[ind, mode]
+                    mask = masks[idet]
+                    signal -= np.sum(coeff[igroup] * templates[ind], 0) * mask
 
                 t_clean += time() - t1
 
