@@ -69,7 +69,7 @@ class PointingHealpix(Operator):
 
     nside_submap = Int(16, help="The NSIDE of the submap resolution")
 
-    nest = Bool(False, help="If True, used NESTED ordering instead of RING")
+    nest = Bool(False, help="If True, use NESTED ordering instead of RING")
 
     mode = Unicode("I", help="The Stokes weights to generate (I or IQU)")
 

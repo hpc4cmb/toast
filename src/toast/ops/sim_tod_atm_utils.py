@@ -44,6 +44,19 @@ class ObserveAtmosphere(Operator):
         help="Observation detdata key for detector quaternions",
     )
 
+    weights = Unicode(
+        None,
+        allow_none=True,
+        help="Observation detdata key for detector Stokes weights",
+    )
+
+    weights_mode = Unicode("IQU", help="Stokes weights mode (eg. 'I', 'IQU', 'QU')")
+
+    polarization_fraction = Float(
+        0,
+        help="Polarization fraction (only Q polarization).",
+    )
+
     view = Unicode(
         None, allow_none=True, help="Use this view of valid data in all observations"
     )
@@ -169,6 +182,23 @@ class ObserveAtmosphere(Operator):
                     # angles from the simulation.
                     theta, phi = qa.to_position(azel_quat)
 
+                    # Stokes weights for observing polarized atmosphere
+                    if self.weights is None:
+                        weights_I = 1
+                        weights_Q = 0
+                    else:
+                        weights = views.detdata[self.weights][vw][det][good]
+                        if "I" in self.weights_mode:
+                            ind = self.weights_mode.index("I")
+                            weights_I = weights[:, ind].copy()
+                        else:
+                            weights_I = 0
+                        if "Q" in self.weights_mode:
+                            ind = self.weights_mode.index("Q")
+                            weights_Q = weights[:, ind].copy()
+                        else:
+                            weights_Q = 0
+
                     # Azimuth is measured in the opposite direction
                     # than longitude
                     az = 2 * np.pi - phi
@@ -270,6 +300,11 @@ class ObserveAtmosphere(Operator):
                         # Apply the frequency-dependent absorption-coefficient
                         atmdata *= self.absorption
 
+                    # Add polarization.  In our simple model, there is only Q-polarization
+                    # and the polarization fraction is constant.
+                    pfrac = self.polarization_fraction
+                    atmdata *= weights_I + weights_Q * pfrac
+
                     # Add contribution to output
                     views.detdata[self.det_data][vw][det][good] += atmdata
 
@@ -300,6 +335,8 @@ class ObserveAtmosphere(Operator):
             req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
+        if self.weights is not None:
+            req["weights"].append(self.weights)
         if self.view is not None:
             req["intervals"].append(self.view)
         return req

@@ -62,6 +62,17 @@ class SimAtmosphere(Operator):
         help="Operator that translates boresight Az/El pointing into detector frame",
     )
 
+    detector_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Operator that translates boresight Az/El pointing into detector weights",
+    )
+
+    polarization_fraction = Float(
+        0,
+        help="Polarization fraction (only Q polarization).",
+    )
+
     shared_flags = Unicode(
         None, allow_none=True, help="Observation shared key for telescope flags to use"
     )
@@ -182,6 +193,25 @@ class SimAtmosphere(Operator):
                     raise traitlets.TraitError(msg)
         return detpointing
 
+    @traitlets.validate("detector_weights")
+    def _check_detector_weights(self, proposal):
+        detweights = proposal["value"]
+        if detweights is not None:
+            if not isinstance(detweights, Operator):
+                raise traitlets.TraitError(
+                    "detector_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in [
+                "view",
+                "quats",
+                "weights",
+            ]:
+                if not detweights.has_trait(trt):
+                    msg = f"detector_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return detweights
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -224,7 +254,11 @@ class SimAtmosphere(Operator):
             wind_view=wind_intervals,
             sim=atm_sim_key,
             gain=self.gain,
+            polarization_fraction=self.polarization_fraction,
         )
+        if self.detector_weights is not None:
+            observe_atm.weights_mode = self.detector_weights.mode
+            observe_atm.weights = self.detector_weights.weights
 
         for ob in data.obs:
             if ob.name is None:
@@ -412,13 +446,11 @@ class SimAtmosphere(Operator):
             pipe_data = Data(comm=data.comm)
             pipe_data._internal = data._internal
             pipe_data.obs.append(ob)
-            observe_pipe = Pipeline(
-                operators=[
-                    self.detector_pointing,
-                    observe_atm,
-                ],
-                detector_sets=["SINGLE"],
-            )
+            operators = [self.detector_pointing]
+            if self.detector_weights is not None:
+                operators.append(self.detector_weights)
+            operators.append(observe_atm)
+            observe_pipe = Pipeline(operators=operators, detector_sets=["SINGLE"])
             observe_pipe.apply(pipe_data)
             # Manually remove the weak reference to the observation, otherwise
             # deletion of pipe_data will trigger clearing of the observations.

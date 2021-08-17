@@ -177,6 +177,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
     ops.det_pointing_radec.boresight = ops.sim_ground.boresight_radec
 
+    ops.det_weights_azel.detector_pointing = ops.det_pointing_azel
+    ops.det_weights_azel.hwp_angle = ops.sim_ground.hwp_angle
+
     # Create the Elevation modulated noise model
 
     ops.elevation_model.noise_model = ops.default_model.noise_model
@@ -222,6 +225,8 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Simulate atmosphere
 
     ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
+    if ops.sim_atmosphere.polarization_fraction != 0:
+        ops.sim_atmosphere.detector_weights = ops.det_weights_azel
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
@@ -309,6 +314,11 @@ def main():
             out_model="el_noise_model",
         ),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
+        # In the future, `det_weights_azel` may be a dedicated operator that does not
+        # expand pixel numbers but just Stokes weights
+        toast.ops.PointingHealpix(
+            name="det_weights_azel", weights="weights_azel", mode="IQU"
+        ),
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
         ),
