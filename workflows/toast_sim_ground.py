@@ -188,7 +188,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
     ops.pointing.detector_pointing = ops.det_pointing_radec
+    ops.pointing.hwp_angle = ops.sim_ground.hwp_angle
     ops.pointing_final.detector_pointing = ops.det_pointing_radec
+    ops.pointing_final.hwp_angle = ops.sim_ground.hwp_angle
 
     ops.binner.pointing = ops.pointing
 
