@@ -286,10 +286,11 @@ class Bandpass(object):
 
     def __init__(self, bandcenters, bandwidths, nstep=1001):
         """All units in GHz
+
         Args :
-        bandcenters(dict) : Dictionary of bandpass centers
-        bandwidths(dict) : Dictionary of bandpass widths
-        nstep(int) : Number of interplation steps to use in `convolve()`
+            bandcenters(dict) : Dictionary of bandpass centers
+            bandwidths(dict) : Dictionary of bandpass widths
+            nstep(int) : Number of interplation steps to use in `convolve()`
         """
         self.nstep = nstep
         self.dets = []
@@ -327,6 +328,9 @@ class Bandpass(object):
             spectrum(array of floats):  Spectral bin values
             rj(bool):  Input spectrum is in Rayleigh-Jeans units and
                 should be converted into thermal units for convolution
+
+        Returns:
+            (array):  The bandpass-convolved spectrum
         """
         if det not in self.bandpass:
             # Normalize and interpolate the bandpass
