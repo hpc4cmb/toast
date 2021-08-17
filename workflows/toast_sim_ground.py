@@ -316,7 +316,9 @@ def main():
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
         # In the future, `det_weights_azel` may be a dedicated operator that does not
         # expand pixel numbers but just Stokes weights
-        toast.ops.PointingHealpix(name="det_weights_azel", mode="IQU"),
+        toast.ops.PointingHealpix(
+            name="det_weights_azel", weights="weights_azel", mode="IQU"
+        ),
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
         ),
