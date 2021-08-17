@@ -101,7 +101,7 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
     """Create a fake satellite telescope with at least one pixel per process."""
     npix = 1
     ring = 1
-    while npix < group_size * pixel_per_process:
+    while 2 * npix <= group_size * pixel_per_process:
         npix += 6 * ring
         ring += 1
     fp = fake_hexagon_focalplane(

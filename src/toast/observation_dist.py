@@ -71,15 +71,15 @@ class DistDetSamp(object):
             log.error(msg)
             raise RuntimeError(msg)
 
-        self.comm = comm
+        self.comm = None
         self.comm_size = 1
         self.comm_rank = 0
-        if self.comm is not None:
-            self.comm_size = self.comm.size
-            self.comm_rank = self.comm.rank
+        if comm is not None:
             # Duplicate the input communicator, to ensure that we keep a copy if the
             # the input is freed.
-            self.comm = MPI.Comm.Dup(self.comm)
+            self.comm = MPI.Comm.Dup(comm)
+            self.comm_size = self.comm.size
+            self.comm_rank = self.comm.rank
 
         if self.process_rows is None:
             if self.comm is None:
@@ -201,12 +201,12 @@ class DistDetSamp(object):
 
         if self.comm_rank == 0:
             # check that all processes have some data, otherwise print warning
-            for i, d in enumerate(self.dets):
-                if d[1] == 0:
+            for i, ds in enumerate(self.dets):
+                if len(ds) == 0:
                     msg = f"Process {i} has no detectors assigned."
                     log.warning(msg)
-            for i, d in enumerate(self.samps):
-                if d[1] == 0:
+            for i, ss in enumerate(self.samps):
+                if ss[1] == 0:
                     msg = f"Process {i} has no samples assigned."
                     log.warning(msg)
 

@@ -45,7 +45,7 @@ class SimSatelliteTest(MPITestCase):
 
         npix = 1
         ring = 1
-        while 2 * npix < self.toastcomm.group_size:
+        while 2 * npix <= self.toastcomm.group_size:
             npix += 6 * ring
             ring += 1
         self.npix = npix

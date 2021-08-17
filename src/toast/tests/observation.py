@@ -100,22 +100,17 @@ class ObservationTest(MPITestCase):
             else:
                 obs.shared["samp_A"][None] = None
 
-            self.comm.barrier()
-
             obs.shared.create(
                 "det_A",
                 shape=det_common.shape,
                 dtype=det_common.dtype,
                 comm=obs.comm_row,
             )
-            self.comm.barrier()
 
             if obs.comm_row_rank == 0:
                 obs.shared["det_A"][:, :, :, :] = det_common
             else:
                 obs.shared["det_A"][None] = None
-
-            self.comm.barrier()
 
             obs.shared.create(
                 "all_A",
@@ -128,8 +123,6 @@ class ObservationTest(MPITestCase):
             else:
                 obs.shared["all_A"][None] = None
 
-            self.comm.barrier()
-
             obs.shared.create(
                 "flg_A",
                 shape=flag_common.shape,
@@ -140,8 +133,6 @@ class ObservationTest(MPITestCase):
                 obs.shared["flg_A"][:] = flag_common
             else:
                 obs.shared["flg_A"][None] = None
-
-            self.comm.barrier()
 
             sh = MPIShared(sample_common.shape, sample_common.dtype, obs.comm_col)
 
@@ -516,9 +507,11 @@ class ObservationTest(MPITestCase):
             original.append(ob.duplicate(times="times"))
             ob.redistribute(1, times="times")
 
-        # Verify that the observations are no longer equal
-        for ob, orig in zip(data.obs, original):
-            self.assertFalse(ob == orig)
+        # Verify that the observations are no longer equal- only if we actually
+        # have more than one process per observation.
+        if data.comm.group_size > 1:
+            for ob, orig in zip(data.obs, original):
+                self.assertFalse(ob == orig)
 
         # Redistribute back and verify
         for ob, orig in zip(data.obs, original):
