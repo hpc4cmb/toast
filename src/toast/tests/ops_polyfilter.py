@@ -20,7 +20,12 @@ from ..vis import set_matplotlib_backend
 
 from ..pixels import PixelDistribution, PixelData
 
+from .. import qarray as qa
+
 from ._helpers import create_outdir, create_satellite_data, create_fake_sky, fake_flags
+
+
+XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 class PolyFilterTest(MPITestCase):
@@ -144,24 +149,35 @@ class PolyFilterTest(MPITestCase):
         )
         scanner.apply(data)
 
+        # Add 2D polynomial modes.  The number of modes is larger than the
+        # number of detectors to test handling of singular template matrices.
+        norder = 5
+        coeff = np.arange(norder ** 2)
+        for obs in data.obs:
+            for det in obs.local_detectors:
+                det_quat = obs.telescope.focalplane[det]["quat"]
+                x, y, z = qa.rotate(det_quat, ZAXIS)
+                theta, phi = np.arcsin([x, y])
+                signal = obs.detdata["signal"][det]
+                signal[:] = 0
+                icoeff = 0
+                for xorder in range(norder):
+                    for yorder in range(norder):
+                        signal += coeff[icoeff] * theta ** xorder * phi ** yorder
+                        icoeff += 1
+                # Add a different offset depending on the wafer
+                wafer = obs.telescope.focalplane[det]["wafer"]
+                signal += wafer
+
         # Make fake flags
         fake_flags(data)
 
         rms = dict()
         offset = None
         for ob in data.obs:
-            rms[ob.name] = dict()
-            times = ob.shared["times"].data
-            if offset is None:
-                offset = times[0]
-            for det in ob.local_detectors:
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
-                good = flags == 0
-                wafer = obs.telescope.focalplane[det]["wafer"]
-                # Replace signal with time stamps to get a common mode
-                ob.detdata["signal"][det] = times - offset + wafer * 1000
-                rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
+            good = ob.detdata["flags"].data == 0
+            good *= ob.shared["flags"].data == 0
+            rms[ob.name] = np.std(ob.detdata["signal"].data[good])
 
         # Plot unfiltered TOD
 
@@ -170,7 +186,7 @@ class PolyFilterTest(MPITestCase):
             import matplotlib.pyplot as plt
 
             fig = plt.figure(figsize=[18, 12])
-            ax = fig.add_subplot(1, 1, 1)
+            ax = fig.add_subplot(1, 2, 1)
             ob = data.obs[0]
             for idet, det in enumerate(ob.local_detectors):
                 flags = np.array(ob.shared["flags"])
@@ -178,12 +194,12 @@ class PolyFilterTest(MPITestCase):
                 good = flags == 0
                 signal = ob.detdata["signal"][det]
                 x = np.arange(signal.size)
-                ax.plot(x[good], signal[good], "-", label=det)
+                ax.plot(x[good], signal[good], "-", label=f"{det} unfiltered")
 
         # Filter
 
         polyfilter = ops.PolyFilter2D(
-            order=0,
+            order=norder - 1,
             det_data="signal",
             det_flags="flags",
             det_flag_mask=255,
@@ -194,27 +210,27 @@ class PolyFilterTest(MPITestCase):
         )
         polyfilter.apply(data)
 
-        for ob in data.obs:
-            for det in ob.local_detectors:
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
-                good = flags == 0
-                check_rms = np.std(ob.detdata["signal"][det][good])
-                # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(check_rms < 1e-3 * rms[ob.name][det])
-
         # Plot filtered TOD
 
         if data.comm.world_rank == 0:
+            ax = fig.add_subplot(1, 2, 2)
             for idet, det in enumerate(ob.local_detectors):
                 flags = np.array(ob.shared["flags"])
                 flags |= ob.detdata["flags"][det]
                 good = flags == 0
                 signal = ob.detdata["signal"][det]
                 x = np.arange(signal.size)
-                ax.plot(x[good], signal[good], ".", label=det)
+                ax.plot(x[good], signal[good], ".", label=f"{det} filtered")
+            plt.legend(loc="best")
             outfile = os.path.join(testdir, "2Dfiltered_tod.png")
             fig.savefig(outfile)
+
+        # Check that the filtering reduces RMS
+        for ob in data.obs:
+            good = ob.detdata["flags"].data == 0
+            good *= ob.shared["flags"].data == 0
+            check_rms = np.std(ob.detdata["signal"].data[good])
+            self.assertTrue(check_rms < 1e-3 * rms[ob.name])
 
         del data
         return
