@@ -10,7 +10,7 @@ import numpy as np
 from ..map import DistPixels
 from ..mpi import MPI
 from ..timing import function_timer, GlobalTimers
-from ..utils import Logger, Environment
+from ..utils import Logger
 
 from .. import qarray as qa
 
@@ -161,13 +161,14 @@ class OpSimScan(Operator):
     ):
         # Call the parent class constructor
         super().__init__()
-        if input_map is None:
-            raise RuntimeError("OpSimScan requires an input map")
         if distmap is not None:
-            warnings.warn(
+            log = Logger.get()
+            log.warn(
                 "`distmap` is deprecated, please use `input_map`", DeprecationWarning
             )
             self._input_map = distmap
+        elif input_map is None:
+            raise RuntimeError("OpSimScan requires an input map")
         else:
             self._input_map = input_map
         self._pixels = pixels
