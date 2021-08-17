@@ -101,6 +101,7 @@ class SimGroundTest(MPITestCase):
             name="sim_ground",
             telescope=tele,
             schedule=schedule,
+            hwp_angle="hwp_angle",
             hwp_rpm=1.0,
         )
         sim_ground.apply(data)
@@ -139,7 +140,7 @@ class SimGroundTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nest=True,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=sim_ground.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
