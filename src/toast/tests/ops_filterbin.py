@@ -99,8 +99,6 @@ class OpFilterBinTest(MPITestCase):
                     os.remove(fname)
                 except OSError:
                     pass
-        if self.comm is not None:
-            self.comm.barrier()
 
         self.nobs = 1
         self.data = create_distdata(self.comm, obs_per_group=self.nobs)
@@ -307,9 +305,6 @@ class OpFilterBinTest(MPITestCase):
 
             np.testing.assert_array_almost_equal(outmap, outmap_test)
 
-        if self.comm is not None:
-            self.comm.Barrier()
-
         return
 
     def test_filterbin_deproject(self):
@@ -394,8 +389,6 @@ class OpFilterBinTest(MPITestCase):
         if self.rank == 0:
             tmap = hp.read_map(self.inmapfile, nest=True)
             hp.write_map(dpmap_file, tmap, nest=True)
-        if self.comm is not None:
-            self.comm.Barrier()
 
         # Run FilterBin
 
@@ -448,8 +441,5 @@ class OpFilterBinTest(MPITestCase):
             outmap_test *= ratio
 
             np.testing.assert_array_almost_equal(outmap, outmap_test)
-
-        if self.comm is not None:
-            self.comm.Barrier()
 
         return
