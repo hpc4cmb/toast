@@ -35,7 +35,7 @@ from .sim_focalplane import (
 
 from .noise import Noise
 
-from .polyfilter import OpPolyFilter, OpPolyFilter2D
+from .polyfilter import OpPolyFilter, OpPolyFilter2D, OpCommonModeFilter
 
 from .gainscrambler import OpGainScrambler
 from .applygain import OpApplyGain, write_calibration_file

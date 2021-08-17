@@ -8,7 +8,14 @@ import os
 
 import numpy as np
 
-from ..tod import OpPolyFilter, AnalyticNoise, OpSimNoise, Interval
+from ..tod import (
+    OpPolyFilter,
+    OpPolyFilter2D,
+    OpCommonModeFilter,
+    AnalyticNoise,
+    OpSimNoise,
+    Interval,
+)
 from ..todmap import TODHpixSpiral
 
 from ._helpers import create_outdir, create_distdata, boresight_focalplane
@@ -91,7 +98,17 @@ class OpPolyFilterTest(MPITestCase):
         self.data.obs[0]["noise"] = nse
         self.data.obs[0]["intervals"] = intervals
 
-    def test_filter(self):
+        # Add a focalplane to the observation
+        focalplane = {}
+        for idet, (det, quat) in enumerate(dquat.items()):
+            focalplane[det] = {
+                "quat" : quat,
+                "tube" : f"{idet // 4:03}",
+                "wafer" : f"{idet // 2:03}",
+            }
+        self.data.obs[0]["focalplane"] = focalplane
+
+    def test_1D_filter(self):
         # generate timestreams
         op = OpSimNoise()
         op.exec(self.data)
@@ -130,7 +147,85 @@ class OpPolyFilterTest(MPITestCase):
                 old = orms[det]
                 if np.abs(rms / old) > 1e-6:
                     raise RuntimeError(
-                        "det {} old rms = {}, new rms = {}" "".format(det, old, rms)
+                        "det {} old rms = {}, new rms = {}".format(det, old, rms)
+                    )
+                del y
+        return
+
+    def test_2D_filter(self):
+        # generate timestreams
+        op = OpSimNoise()
+        op.exec(self.data)
+
+        # Replace the noise with time stamps (common for all detectors)
+        old_rms = []
+        for ob in self.data.obs:
+            tod = ob["tod"]
+            orms = {}
+            t = tod.read_times()
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                y[:] = t
+                orms[det] = np.std(y)
+                del y
+            old_rms.append(orms)
+
+        # Filter timestreams
+        op = OpPolyFilter2D(name="noise", order=self.order)
+        op.exec(self.data)
+
+        # Ensure all timestreams are zeroed out by the filter.
+
+        for ob, orms in zip(self.data.obs, old_rms):
+            tod = ob["tod"]
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                rms = np.std(y)
+                old = orms[det]
+                if np.abs(rms / old) > 1e-6:
+                    raise RuntimeError(
+                        "det {} old rms = {}, new rms = {}".format(det, old, rms)
+                    )
+                del y
+        return
+
+    def test_common_filter(self):
+        # generate timestreams
+        op = OpSimNoise()
+        op.exec(self.data)
+
+        # Replace the noise with time stamps (common for all detectors)
+        old_rms = []
+        for ob in self.data.obs:
+            tod = ob["tod"]
+            orms = {}
+            t = tod.read_times()
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                y[:] = t
+                orms[det] = np.std(y)
+                del y
+            old_rms.append(orms)
+
+        # Filter timestreams
+        op = OpCommonModeFilter(name="noise", focalplane_key="wafer")
+        op.exec(self.data)
+
+        # Ensure all timestreams are zeroed out by the filter.
+
+        for ob, orms in zip(self.data.obs, old_rms):
+            tod = ob["tod"]
+            for det in tod.local_dets:
+                cachename = "noise_{}".format(det)
+                y = tod.cache.reference(cachename)
+                rms = np.std(y)
+                old = orms[det]
+                if np.abs(rms / old) > 1e-6:
+                    raise RuntimeError(
+                        "det {} old rms = {}, new rms = {}".format(det, old, rms)
                     )
                 del y
         return

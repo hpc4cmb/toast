@@ -84,6 +84,25 @@ def combine_observation_matrix(rootname):
     return
 
 
+def make_input_map(lmax, nside, fname):
+    cl = np.ones([4, lmax + 1])
+    cl[:, 0:2] = 0
+    fwhm = np.radians(10)
+    inmap = hp.synfast(
+        cl,
+        nside,
+        lmax=lmax,
+        mmax=lmax,
+        pol=True,
+        pixwin=True,
+        fwhm=np.radians(30),
+        verbose=False,
+    )
+    inmap = hp.reorder(inmap, r2n=True)
+    hp.write_map(fname, inmap, overwrite=True, nest=True)
+    return
+
+
 class OpFilterBinTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -99,8 +118,6 @@ class OpFilterBinTest(MPITestCase):
                     os.remove(fname)
                 except OSError:
                     pass
-        if self.comm is not None:
-            self.comm.barrier()
 
         self.nobs = 1
         self.data = create_distdata(self.comm, obs_per_group=self.nobs)
@@ -217,27 +234,13 @@ class OpFilterBinTest(MPITestCase):
 
         # Synthesize an input map
         self.lmax = 2 * self.sim_nside
-        self.cl = np.ones([4, self.lmax + 1])
-        self.cl[:, 0:2] = 0
-        # self.cl[1:] = 0  # DEBUG
-        fwhm = np.radians(10)
-        self.inmap = hp.synfast(
-            self.cl,
-            self.sim_nside,
-            lmax=self.lmax,
-            mmax=self.lmax,
-            pol=True,
-            pixwin=True,
-            fwhm=np.radians(30),
-            verbose=False,
-        )
-        self.inmap = hp.reorder(self.inmap, r2n=True)
-        self.inmapfile = os.path.join(self.outdir, "input_map.fits")
-        hp.write_map(self.inmapfile, self.inmap, overwrite=True, nest=True)
 
         return
 
     def test_filterbin(self):
+
+        inmapfile = os.path.join(self.outdir, "input_map1.fits")
+        make_input_map(self.lmax, self.sim_nside, inmapfile)
 
         name = "testtod2"
         init = OpCacheInit(name=name, init_val=0)
@@ -259,7 +262,7 @@ class OpFilterBinTest(MPITestCase):
 
         # Scan the signal from a map
         distmap = DistPixels(self.data, nnz=self.nnz, dtype=np.float32)
-        distmap.read_healpix_fits(self.inmapfile)
+        distmap.read_healpix_fits(inmapfile)
 
         scansim = OpSimScan(input_map=distmap, out=name)
         scansim.exec(self.data)
@@ -302,17 +305,17 @@ class OpFilterBinTest(MPITestCase):
             fname = os.path.join(self.outdir, outprefix + "filtered.fits.gz")
             outmap = hp.read_map(fname, None, nest=True)
 
-            inmap = hp.read_map(self.inmapfile, None, nest=True)
+            inmap = hp.read_map(inmapfile, None, nest=True)
             outmap_test = obs_matrix.dot(inmap.ravel()).reshape([self.nnz, -1])
 
             np.testing.assert_array_almost_equal(outmap, outmap_test)
 
-        if self.comm is not None:
-            self.comm.Barrier()
-
         return
 
     def test_filterbin_deproject(self):
+
+        inmapfile = os.path.join(self.outdir, "input_map2.fits")
+        make_input_map(self.lmax, self.sim_nside, inmapfile)
 
         name = "testtod2"
         init = OpCacheInit(name=name, init_val=0)
@@ -335,7 +338,7 @@ class OpFilterBinTest(MPITestCase):
 
         # Scan the signal from a map
         distmap = DistPixels(self.data, nnz=self.nnz, dtype=np.float32)
-        distmap.read_healpix_fits(self.inmapfile)
+        distmap.read_healpix_fits(inmapfile)
 
         scansim = OpSimScan(input_map=distmap, out=name)
         scansim.exec(self.data)
@@ -392,10 +395,8 @@ class OpFilterBinTest(MPITestCase):
         # Make a deprojection template map
         dpmap_file = os.path.join(self.outdir, "deprojection_map.fits")
         if self.rank == 0:
-            tmap = hp.read_map(self.inmapfile, nest=True)
+            tmap = hp.read_map(inmapfile, nest=True)
             hp.write_map(dpmap_file, tmap, nest=True)
-        if self.comm is not None:
-            self.comm.Barrier()
 
         # Run FilterBin
 
@@ -439,7 +440,7 @@ class OpFilterBinTest(MPITestCase):
             fname = os.path.join(self.outdir, outprefix + "filtered.fits.gz")
             outmap = hp.read_map(fname, None, nest=True)
 
-            inmap = hp.read_map(self.inmapfile, None, nest=True)
+            inmap = hp.read_map(inmapfile, None, nest=True)
             outmap_test = obs_matrix.dot(inmap.ravel()).reshape([self.nnz, -1])
 
             # The gain fluctuations can change the overall calibration
@@ -448,8 +449,5 @@ class OpFilterBinTest(MPITestCase):
             outmap_test *= ratio
 
             np.testing.assert_array_almost_equal(outmap, outmap_test)
-
-        if self.comm is not None:
-            self.comm.Barrier()
 
         return
