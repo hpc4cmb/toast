@@ -319,6 +319,7 @@ class SimSatellite(Operator):
         # are using.
         detsets = None
         if self.detset_key is not None:
+            detsets = dict()
             dsets = focalplane.detector_groups(self.detset_key)
             for k, v in dsets.items():
                 detsets[k] = list()
