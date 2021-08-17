@@ -100,7 +100,7 @@ def make_input_map(lmax, nside, fname):
     )
     inmap = hp.reorder(inmap, r2n=True)
     hp.write_map(fname, inmap, overwrite=True, nest=True)
-    return inmapfile
+    return
 
 
 class OpFilterBinTest(MPITestCase):
