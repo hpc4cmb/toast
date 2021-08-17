@@ -292,6 +292,7 @@ def create_satellite_data_big(
         name="sim_sat",
         telescope=tele,
         schedule=sch,
+        hwp_angle="hwp_angle",
         hwp_rpm=10.0,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
