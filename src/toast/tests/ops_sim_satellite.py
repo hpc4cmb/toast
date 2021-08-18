@@ -79,6 +79,7 @@ class SimSatelliteTest(MPITestCase):
             name="sim_sat",
             telescope=tele,
             schedule=sch,
+            hwp_angle="hwp_angle",
             hwp_rpm=1.0,
             spin_angle=30.0 * u.degree,
             prec_angle=65.0 * u.degree,
@@ -90,7 +91,7 @@ class SimSatelliteTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nest=True,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=sim_sat.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )

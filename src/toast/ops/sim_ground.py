@@ -153,7 +153,9 @@ class SimGround(Operator):
         None, allow_none=True, help="Observation detdata key for flags to initialize"
     )
 
-    hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
+    hwp_angle = Unicode(
+        None, allow_none=True, help="Observation shared key for HWP angle"
+    )
 
     azimuth = Unicode("azimuth", help="Observation shared key for Azimuth")
 
@@ -243,10 +245,56 @@ class SimGround(Operator):
                 )
         return sch
 
+    # Cross-check HWP parameters
+
+    @traitlets.validate("hwp_angle")
+    def _check_hwp_angle(self, proposal):
+        hwp_angle = proposal["value"]
+        if hwp_angle is None:
+            if self.hwp_rpm is not None or self.hwp_step is not None:
+                raise traitlets.TraitError(
+                    "Cannot simulate HWP without a shared data key"
+                )
+        else:
+            if self.hwp_rpm is None and self.hwp_step is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_angle
+
+    @traitlets.validate("hwp_rpm")
+    def _check_hwp_rpm(self, proposal):
+        hwp_rpm = proposal["value"]
+        if hwp_rpm is not None:
+            if self.hwp_angle is None:
+                raise traitlets.TraitError(
+                    "Cannot simulate rotating HWP without a shared data key"
+                )
+            if self.hwp_step is not None:
+                raise traitlets.TraitError("HWP cannot rotate *and* step.")
+        else:
+            if self.hwp_angle is not None and self.hwp_step is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_rpm
+
+    @traitlets.validate("hwp_step")
+    def _check_hwp_step(self, proposal):
+        hwp_step = proposal["value"]
+        if hwp_step is not None:
+            if self.hwp_angle is None:
+                raise traitlets.TraitError(
+                    "Cannot simulate stepped HWP without a shared data key"
+                )
+            if self.hwp_rpm is not None:
+                raise traitlets.TraitError("HWP cannot rotate *and* step.")
+        else:
+            if self.hwp_angle is not None and self.hwp_rpm is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_step
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def _exec(self, data, detectors=None, **kwargs):
+
         log = Logger.get()
         if self.schedule is None:
             raise RuntimeError(
