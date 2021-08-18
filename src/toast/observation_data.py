@@ -373,7 +373,7 @@ class DetectorData(object):
         return not self.__eq__(other)
 
 
-class DetDataMgr(MutableMapping):
+class DetDataManager(MutableMapping):
     """Class used to manage DetectorData objects in an Observation.
 
     New objects can be created several ways.  The "create()" method:
@@ -683,7 +683,7 @@ class DetDataMgr(MutableMapping):
             self._internal[k].clear()
 
     def __repr__(self):
-        val = "<DetDataMgr {} local detectors, {} samples".format(
+        val = "<DetDataManager {} local detectors, {} samples".format(
             len(self.detectors), self.samples
         )
         for k in self._internal.keys():
@@ -714,7 +714,7 @@ class DetDataMgr(MutableMapping):
         return not self.__eq__(other)
 
 
-class SharedDataMgr(MutableMapping):
+class SharedDataManager(MutableMapping):
     """Class used to manage shared data objects in an Observation.
 
     New objects can be created with the "create()" method:
@@ -1000,7 +1000,7 @@ class SharedDataMgr(MutableMapping):
         return bytes
 
     def __repr__(self):
-        val = "<SharedDataMgr"
+        val = "<SharedDataManager"
         for k in self._internal.keys():
             val += "\n    {}: shape = {}, dtype = {}".format(
                 k, self._internal[k].shape, self._internal[k].dtype
@@ -1009,7 +1009,7 @@ class SharedDataMgr(MutableMapping):
         return val
 
 
-class IntervalMgr(MutableMapping):
+class IntervalsManager(MutableMapping):
     """Class for creating and storing interval lists in an observation.
 
     Named lists of intervals are accessed by dictionary style syntax ([] brackets).
@@ -1135,7 +1135,7 @@ class IntervalMgr(MutableMapping):
             self.clear()
 
     def __repr__(self):
-        val = "<IntervalMgr {} lists".format(len(self._internal))
+        val = "<IntervalsManager {} lists".format(len(self._internal))
         for k in self._internal.keys():
             val += "\n  {}: {} intervals".format(k, len(self._internal[k]))
         val += ">"

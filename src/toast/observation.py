@@ -29,9 +29,14 @@ from .utils import (
 
 from .cuda import use_pycuda
 
-from .observation_data import DetectorData, DetDataMgr, SharedDataMgr, IntervalMgr
+from .observation_data import (
+    DetectorData,
+    DetDataManager,
+    SharedDataManager,
+    IntervalsManager,
+)
 
-from .observation_view import DetDataView, SharedView, View, ViewMgr, ViewInterface
+from .observation_view import DetDataView, SharedView, View, ViewManager, ViewInterface
 
 from .observation_dist import (
     DistDetSamp,
@@ -140,9 +145,9 @@ class Observation(MutableMapping):
         self._internal = dict()
 
         # Set up the data managers
-        self.detdata = DetDataMgr(self.local_detectors, self.n_local_samples)
+        self.detdata = DetDataManager(self.local_detectors, self.n_local_samples)
 
-        self.shared = SharedDataMgr(
+        self.shared = SharedDataManager(
             len(self.local_detectors),
             self.n_local_samples,
             self.dist.comm,
@@ -150,7 +155,7 @@ class Observation(MutableMapping):
             self.dist.comm_col,
         )
 
-        self.intervals = IntervalMgr(
+        self.intervals = IntervalsManager(
             self.dist.comm, self.dist.comm_row, self.dist.comm_col
         )
 
@@ -302,8 +307,8 @@ class Observation(MutableMapping):
             return None
         else:
             ds = list()
-            for d in range(self.dist.det_sets[self.dist.comm_rank][1]):
-                off = self.dist.det_sets[self.dist.comm_rank][0]
+            for d in range(self.dist.det_sets[self.dist.comm_rank].n_elem):
+                off = self.dist.det_sets[self.dist.comm_rank].offset
                 ds.append(self.dist.detector_sets[off + d])
             return ds
 
@@ -319,14 +324,14 @@ class Observation(MutableMapping):
         """
         The first sample on this process, relative to the observation start.
         """
-        return self.dist.samps[self.dist.comm_rank][0]
+        return self.dist.samps[self.dist.comm_rank].offset
 
     @property
     def n_local_samples(self):
         """
         The number of local samples on this process.
         """
-        return self.dist.samps[self.dist.comm_rank][1]
+        return self.dist.samps[self.dist.comm_rank].n_elem
 
     # Sample set distribution
 
@@ -346,8 +351,8 @@ class Observation(MutableMapping):
             return None
         else:
             ss = list()
-            for s in range(self.dist.samp_sets[self.dist.comm_rank][1]):
-                off = self.dist.samp_sets[self.dist.comm_rank][0]
+            for s in range(self.dist.samp_sets[self.dist.comm_rank].n_elem):
+                off = self.dist.samp_sets[self.dist.comm_rank].offset
                 ss.append(self.dist.sample_sets[off + s])
             return ss
 
@@ -570,7 +575,7 @@ class Observation(MutableMapping):
         )
 
         # Do the actual redistribution
-        new_shr_mgr, new_det_mgr, new_ivl_mgr = redistribute_data(
+        new_shr_manager, new_det_manager, new_intervals_manager = redistribute_data(
             self.dist, new_dist, self.shared, self.detdata, self.intervals, times=times
         )
 
@@ -581,15 +586,15 @@ class Observation(MutableMapping):
 
         self.shared.clear()
         del self.shared
-        self.shared = new_shr_mgr
+        self.shared = new_shr_manager
 
         self.detdata.clear()
         del self.detdata
-        self.detdata = new_det_mgr
+        self.detdata = new_det_manager
 
         self.intervals.clear()
         del self.intervals
-        self.intervals = new_ivl_mgr
+        self.intervals = new_intervals_manager
 
     # Accelerator use
 

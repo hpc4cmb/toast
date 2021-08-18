@@ -4,9 +4,18 @@
 
 from collections.abc import MutableMapping
 
+from typing import NamedTuple
+
 import numpy as np
 
 from .mpi import Comm
+
+
+class DistRange(NamedTuple):
+    """The offset and number of elements in a distribution range."""
+
+    offset: int
+    n_elem: int
 
 
 # This is effectively the "Painter's Partition Problem".
@@ -53,10 +62,8 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
         breaks (list): List of hard breaks in the data distribution.
 
     Returns:
-        A list of tuples.  There is one tuple per group.
-        The first element of the tuple is the first item
-        assigned to the group, and the second element is
-        the number of items assigned to the group.
+        (list):  A list of DistRange tuples, one per group.
+
     """
     chunks = np.array(sizes, dtype=np.int64)
     weights = np.power(chunks.astype(np.float64), pow)
@@ -86,7 +93,7 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
     at_break = False
     for cur in range(0, weights.shape[0]):
         if curweight + weights[cur] > max_per_proc or at_break:
-            dist.append((off, cur - off))
+            dist.append(DistRange(off, cur - off))
             over = curweight - target
             curweight = weights[cur] + over
             off = cur
@@ -97,7 +104,7 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
             if cur + 1 in all_breaks:
                 at_break = True
 
-    dist.append((off, weights.shape[0] - off))
+    dist.append(DistRange(off, weights.shape[0] - off))
 
     if len(dist) != groups:
         raise RuntimeError(
@@ -119,9 +126,7 @@ def distribute_uniform(totalsize, groups, breaks=None):
         breaks (list): List of hard breaks in the data distribution.
 
     Returns:
-        (list): there is one tuple per group.  The first element of the tuple
-            is the first item assigned to the group, and the second element is
-            the number of items assigned to the group.
+        (list):  A list of DistRange tuples, one per group.
 
     """
     if breaks is not None:
@@ -167,7 +172,7 @@ def distribute_uniform(totalsize, groups, breaks=None):
                 off = i * myn
             else:
                 off = ((myn + 1) * leftover) + (myn * (i - leftover))
-            dist.append((offset + off, myn))
+            dist.append(DistRange(offset + off, myn))
         offset += groupsize
     return dist
 
@@ -208,10 +213,11 @@ def distribute_samples(
 
     Returns:
         (tuple):  4 lists are returned, and each has an entry for every process.  The
-            first list entries are the (first det, n_det) for each process.  The
-            second list is the (first det set, n_detset) for each process.  The third
-            list is the (first sample, n_sample) for each process and the last list
-            is the (first sample set, n_sample_set) for each process.
+            first list contains a list of detector names for each process.  The second
+            list contains a list of detector sets for each process.  The third list
+            contains the DistRange for the samples assigned to each process.  The
+            fourth list contains the DistRange for the sample sets assigned to each
+            process.
 
     """
     nproc = 1
@@ -241,10 +247,10 @@ def distribute_samples(
         detsizes = [len(x) for x in detsets]
         dist_detsets_col = distribute_discrete(detsizes, detranks)
         dist_dets_col = list()
-        for set_off, n_set in dist_detsets_col:
+        for set_range in dist_detsets_col:
             cur = list()
-            for ds in range(n_set):
-                cur.extend(detsets[set_off + ds])
+            for ds in range(set_range.n_elem):
+                cur.extend(detsets[set_range.offset + ds])
             dist_dets_col.append(cur)
 
     # Distribute samples either uniformly or by set.
@@ -268,8 +274,8 @@ def distribute_samples(
                 sset = sampsets[set_off + ds]  # One sample set
                 setsamp += np.sum(sset)
                 setchunk += len(sset)
-            dist_chunks_row.append((chunk_off, setchunk))
-            dist_samples_row.append((samp_off, setsamp))
+            dist_chunks_row.append(DistRange(chunk_off, setchunk))
+            dist_samples_row.append(DistRange(samp_off, setsamp))
             samp_off += setsamp
             chunk_off += setchunk
 

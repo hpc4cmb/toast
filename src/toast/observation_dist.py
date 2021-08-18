@@ -14,7 +14,7 @@ from pshmem.utils import mpi_data_type
 
 from .mpi import MPI, comm_equal, comm_equivalent
 
-from .dist import distribute_samples
+from .dist import distribute_samples, DistRange
 
 from .utils import (
     Logger,
@@ -23,9 +23,14 @@ from .utils import (
     AlignedI32,
 )
 
-from .observation_data import DetectorData, DetDataMgr, SharedDataMgr, IntervalMgr
+from .observation_data import (
+    DetectorData,
+    DetDataManager,
+    SharedDataManager,
+    IntervalsManager,
+)
 
-from .observation_view import DetDataView, SharedView, View, ViewMgr, ViewInterface
+from .observation_view import DetDataView, SharedView, View, ViewManager, ViewInterface
 
 
 class DistDetSamp(object):
@@ -195,7 +200,7 @@ class DistDetSamp(object):
         for ds in self.dets:
             dfirst = self.det_index[ds[0]]
             dlast = self.det_index[ds[-1]]
-            self.det_indices.append((dfirst, dlast - dfirst + 1))
+            self.det_indices.append(DistRange(dfirst, dlast - dfirst + 1))
 
         if self.comm_rank == 0:
             # check that all processes have some data, otherwise print warning
@@ -422,7 +427,7 @@ def redistribute_buffer(
 
 
 def redistribute_data(
-    old_dist, new_dist, shared_mgr, detdata_mgr, intervals_mgr, times=None
+    old_dist, new_dist, shared_manager, detdata_manager, intervals_manager, times=None
 ):
     """Helper function to redistribute data in an observation.
 
@@ -434,13 +439,15 @@ def redistribute_data(
     Args:
         old_dist (DistDetSamp):  The existing data distribution.
         new_dist (DistDetSamp):  The new data distribution.
-        shared_mgr (SharedDataMgr):  The existing shared manager instance.
-        detdata_mgr (DetectorDataMgr):  The existing detector data manager instance.
-        intervals_mgr (IntervalMgr):  The existing interval manager instance.
+        shared_manager (SharedDataManager):  The existing shared manager instance.
+        detdata_manager (DetectorDataManager):  The existing detector data manager
+            instance.
+        intervals_manager (IntervalsManager):  The existing interval manager instance.
         times (str):  The name of the shared object containing the timestamps.
 
     Returns:
-        (tuple):  The new (SharedDataMgr, DetDataMgr, IntervalsMgr) instances.
+        (tuple):  The new (SharedDataManager, DetDataManager, IntervalsManager)
+            instances.
 
     """
     log = Logger.get()
@@ -450,7 +457,7 @@ def redistribute_data(
     # so that we can rebuild them after the timestamps have been redistributed.
     # After reconstructing the time ranges, the input interval list is cleared.
 
-    if times is None and len(intervals_mgr.keys()) > 0:
+    if times is None and len(intervals_manager.keys()) > 0:
         if old_dist.comm_rank == 0:
             msg = "Time stamps not specified when redistributing observation."
             msg += "  Intervals will be deleted and not redistributed."
@@ -458,16 +465,16 @@ def redistribute_data(
 
     global_intervals = dict()
 
-    for iname in list(intervals_mgr.keys()):
-        ilist = [(x.start, x.stop, x.first, x.last) for x in intervals_mgr[iname]]
+    for iname in list(intervals_manager.keys()):
+        ilist = [(x.start, x.stop, x.first, x.last) for x in intervals_manager[iname]]
         all_ilist = None
         if old_dist.comm_row is None:
-            all_ilist = [(ilist, old_dist.samps[old_dist.comm_row_rank][1])]
+            all_ilist = [(ilist, old_dist.samps[old_dist.comm_row_rank].n_elem)]
         else:
             # Gather across the process row
             if old_dist.comm_col_rank == 0:
                 all_ilist = old_dist.comm_row.gather(
-                    (ilist, old_dist.samps[old_dist.comm_row_rank][1]), root=0
+                    (ilist, old_dist.samps[old_dist.comm_row_rank].n_elem), root=0
                 )
         del ilist
         if old_dist.comm_rank == 0:
@@ -502,7 +509,7 @@ def redistribute_data(
                 glist.append((last_start, last_stop))
             global_intervals[iname] = glist
 
-    intervals_mgr.clear()
+    intervals_manager.clear()
 
     # Redistribute detector data.  For purposes of redistribution, we require
     # that all DetectorData objects span the full set of local detectors.
@@ -512,31 +519,31 @@ def redistribute_data(
     # limitation, we could add more logic to handle the case of detdata fields with
     # subsets of local detectors.
 
-    new_detdata_mgr = DetDataMgr(
-        new_dist.dets[new_dist.comm_rank], new_dist.samps[new_dist.comm_rank][1]
+    new_detdata_manager = DetDataManager(
+        new_dist.dets[new_dist.comm_rank], new_dist.samps[new_dist.comm_rank].n_elem
     )
 
     # Compute the detector and sample ranges we are sending and receiving.  These are
     # common for all detdata objects.
 
-    old_det_off = old_dist.det_indices[old_dist.comm_rank][0]
-    old_det_n = old_dist.det_indices[old_dist.comm_rank][1]
+    old_det_off = old_dist.det_indices[old_dist.comm_rank].offset
+    old_det_n = old_dist.det_indices[old_dist.comm_rank].n_elem
     det_send_info = compute_1d_offsets(old_det_off, old_det_n, new_dist.det_indices)
-    old_samp_off = old_dist.samps[old_dist.comm_rank][0]
-    old_samp_n = old_dist.samps[old_dist.comm_rank][1]
+    old_samp_off = old_dist.samps[old_dist.comm_rank].offset
+    old_samp_n = old_dist.samps[old_dist.comm_rank].n_elem
     samp_send_info = compute_1d_offsets(old_samp_off, old_samp_n, new_dist.samps)
 
-    new_det_off = new_dist.det_indices[new_dist.comm_rank][0]
-    new_det_n = new_dist.det_indices[new_dist.comm_rank][1]
+    new_det_off = new_dist.det_indices[new_dist.comm_rank].offset
+    new_det_n = new_dist.det_indices[new_dist.comm_rank].n_elem
     det_recv_info = compute_1d_offsets(new_det_off, new_det_n, old_dist.det_indices)
-    new_samp_off = new_dist.samps[new_dist.comm_rank][0]
-    new_samp_n = new_dist.samps[new_dist.comm_rank][1]
+    new_samp_off = new_dist.samps[new_dist.comm_rank].offset
+    new_samp_n = new_dist.samps[new_dist.comm_rank].n_elem
     samp_recv_info = compute_1d_offsets(new_samp_off, new_samp_n, old_dist.samps)
 
     # Process every detdata object
 
-    for field in list(detdata_mgr.keys()):
-        field_dets = detdata_mgr[field].detectors
+    for field in list(detdata_manager.keys()):
+        field_dets = detdata_manager[field].detectors
         local_dets = old_dist.detectors[old_det_off : old_det_off + old_det_n]
         if not all([x == y for x, y in zip(field_dets, local_dets)]):
             msg = "Redistribution only supports detdata with all local detectors."
@@ -547,25 +554,27 @@ def redistribute_data(
             raise NotImplementedError(msg)
 
         # Buffer class to use
-        buffer_class, _ = dtype_to_aligned(detdata_mgr[field].dtype)
+        buffer_class, _ = dtype_to_aligned(detdata_manager[field].dtype)
 
         # Get MPI data type.  Note that in the case of no MPI, this function would
         # have returned at the very start.  So we know that we have a real
         # communicator at this point.
-        mpibytesize, mpitype = mpi_data_type(old_dist.comm, detdata_mgr[field].dtype)
+        mpibytesize, mpitype = mpi_data_type(
+            old_dist.comm, detdata_manager[field].dtype
+        )
 
         # Allocate new data
         sample_shape = None
         n_per_sample = 1
-        if len(detdata_mgr[field].detector_shape) > 1:
-            sample_shape = detdata_mgr[field].detector_shape[1:]
+        if len(detdata_manager[field].detector_shape) > 1:
+            sample_shape = detdata_manager[field].detector_shape[1:]
             for dim in sample_shape:
                 n_per_sample *= dim
 
-        new_detdata_mgr.create(
+        new_detdata_manager.create(
             field,
             sample_shape=sample_shape,
-            dtype=detdata_mgr[field].dtype,
+            dtype=detdata_manager[field].dtype,
         )
 
         # Redistribution send / recv slices
@@ -597,8 +606,8 @@ def redistribute_data(
             old_dist.comm,
             buffer_class,
             mpitype,
-            detdata_mgr[field].data,
-            new_detdata_mgr[field].data,
+            detdata_manager[field].data,
+            new_detdata_manager[field].data,
             send_info,
             recv_info,
         )
@@ -613,19 +622,19 @@ def redistribute_data(
     # column-shared objects).
 
     # Create the new shared manager.
-    new_shared_mgr = SharedDataMgr(
+    new_shared_manager = SharedDataManager(
         len(new_dist.dets[new_dist.comm_rank]),
-        new_dist.samps[new_dist.comm_rank][1],
+        new_dist.samps[new_dist.comm_rank].n_elem,
         new_dist.comm,
         new_dist.comm_row,
         new_dist.comm_col,
     )
 
-    for field in shared_mgr.keys():
-        shobj = shared_mgr[field]
+    for field in shared_manager.keys():
+        shobj = shared_manager[field]
         if comm_equal(shobj.comm, old_dist.comm):
             # Using full group communicator, just copy to the new data manager.
-            new_shared_mgr[field] = shobj
+            new_shared_manager[field] = shobj
         else:
             # Full shape of the object
             shp = shobj.shape
@@ -688,7 +697,7 @@ def redistribute_data(
                 if other_shape is not None:
                     new_shp.extend(other_shape)
 
-                new_shared_mgr.create(
+                new_shared_manager.create(
                     field, new_shp, dtype=shobj.dtype, comm=new_dist.comm_row
                 )
 
@@ -698,7 +707,7 @@ def redistribute_data(
                     buffer_class,
                     mpitype,
                     shobj.data,
-                    new_shared_mgr[field].data,
+                    new_shared_manager[field].data,
                     send_info,
                     recv_info,
                 )
@@ -742,7 +751,7 @@ def redistribute_data(
                 new_shp = [new_samp_n]
                 if other_shape is not None:
                     new_shp.extend(other_shape)
-                new_shared_mgr.create(
+                new_shared_manager.create(
                     field, new_shp, dtype=shobj.dtype, comm=new_dist.comm_col
                 )
 
@@ -752,7 +761,7 @@ def redistribute_data(
                     buffer_class,
                     mpitype,
                     shobj.data,
-                    new_shared_mgr[field].data,
+                    new_shared_manager[field].data,
                     send_info,
                     recv_info,
                 )
@@ -763,7 +772,9 @@ def redistribute_data(
                 raise RuntimeError(msg)
 
     # Re-create the intervals in the new data distribution.
-    new_intervals_mgr = IntervalMgr(new_dist.comm, new_dist.comm_row, new_dist.comm_col)
+    new_intervals_manager = IntervalsManager(
+        new_dist.comm, new_dist.comm_row, new_dist.comm_col
+    )
 
     # Communicate the field list
     ivl_fields = old_dist.comm.bcast(list(global_intervals.keys()), root=0)
@@ -772,8 +783,8 @@ def redistribute_data(
         glb = None
         if old_dist.comm_rank == 0:
             glb = global_intervals[field]
-        new_intervals_mgr.create(field, glb, new_shared_mgr[times], fromrank=0)
+        new_intervals_manager.create(field, glb, new_shared_manager[times], fromrank=0)
         # If there were intervals breaks due only to data distribution, join them now.
-        new_intervals_mgr[field].simplify()
+        new_intervals_manager[field].simplify()
 
-    return new_shared_mgr, new_detdata_mgr, new_intervals_mgr
+    return new_shared_manager, new_detdata_manager, new_intervals_manager
