@@ -614,37 +614,6 @@ def simulate_ces_scan(
             # interval is truncated
             ival[-1] = (last[0], times[-1])
 
-    # if self._el_mod_rate != 0:
-    #     new_min_el, new_max_el = oscillate_el(times, az_sample, el_sample)
-    # if self._el_mod_step != 0:
-    #     new_min_el, new_max_el = step_el(times, az_sample, el_sample)
-
-    # offset = self._times.size
-    # self._times = np.hstack([self._times, times])
-    # self._az = np.hstack([self._az, az_sample])
-    # self._el = np.hstack([self._el, el_sample])
-    # ind = np.searchsorted(tvec - tmin, (times - tmin) % tdelta)
-    # ind[ind == tvec.size] = tvec.size - 1
-    # self._commonflags = np.hstack([self._commonflags, flags[ind]]).astype(np.uint8)
-    #
-    # # Subscan start indices
-    #
-    # turnflags = flags[ind] & self.TURNAROUND
-    # self._stable_starts = (
-    #     np.argwhere(np.logical_and(turnflags[:-1] != 0, turnflags[1:] == 0)).ravel() + 1
-    # )
-    # if turnflags[0] == 0:
-    #     self._stable_starts = np.hstack([[0], self._stable_starts])
-    # self._stable_stops = (
-    #     np.argwhere(np.logical_and(turnflags[:-1] == 0, turnflags[1:] != 0)).ravel() + 2
-    # )
-    # if turnflags[-1] == 0:
-    #     self._stable_stops = np.hstack([self._stable_stops, [samples]])
-    # self._stable_starts += offset
-    # self._stable_stops += offset
-    #
-    # self._CES_stop = self._times[-1]
-
     return (
         times,
         az_sample,

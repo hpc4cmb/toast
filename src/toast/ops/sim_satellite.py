@@ -246,6 +246,12 @@ class SimSatellite(Operator):
         help="Distribute observation data along the time axis rather than detector axis",
     )
 
+    detset_key = Unicode(
+        None,
+        allow_none=True,
+        help="If specified, use this column of the focalplane detector_data to group detectors",
+    )
+
     times = Unicode("times", help="Observation shared key for timestamps")
 
     shared_flags = Unicode("flags", help="Observation shared key for common flags")
@@ -309,10 +315,41 @@ class SimSatellite(Operator):
                 if det in detectors:
                     pipedets.append(det)
 
-        if comm.group_size > len(pipedets):
-            if comm.world_rank == 0:
-                log.error("process group is too large for the number of detectors")
-                comm.comm_world.Abort()
+        # Group by detector sets and prune to include only the detectors we
+        # are using.
+        detsets = None
+        if self.detset_key is not None:
+            detsets = dict()
+            dsets = focalplane.detector_groups(self.detset_key)
+            for k, v in dsets.items():
+                detsets[k] = list()
+                for d in v:
+                    if d in pipedets:
+                        detsets[k].append(d)
+
+        # Data distribution in the detector direction
+        det_ranks = comm.group_size
+        if self.distribute_time:
+            det_ranks = 1
+
+        # Verify that we have enough data for all of our processes.  If we are
+        # distributing by time, we have no sample sets, so can accomodate any
+        # number of processes.  If we are distributing by detector, we must have
+        # at least one detector set for each process.
+
+        if not self.distribute_time:
+            # distributing by detector...
+            n_detset = None
+            if detsets is None:
+                # Every detector is independently distributed
+                n_detset = len(pipedets)
+            else:
+                n_detset = len(detsets)
+            if det_ranks > n_detset:
+                if comm.group_rank == 0:
+                    msg = f"Group {comm.group} has {comm.group_size} processes but {n_detset} detector sets."
+                    log.error(msg)
+                    raise RuntimeError(msg)
 
         # The global start is the beginning of the first scan
 
@@ -348,10 +385,6 @@ class SimSatellite(Operator):
 
         groupdist = distribute_discrete(scan_samples, comm.ngroups)
 
-        det_ranks = comm.group_size
-        if self.distribute_time:
-            det_ranks = 1
-
         # Every process group creates its observations
 
         group_firstobs = groupdist[comm.group][0]
@@ -366,6 +399,7 @@ class SimSatellite(Operator):
                 name=f"{scan.name}_{int(scan.start.timestamp())}",
                 uid=name_UID(scan.name),
                 comm=comm.comm_group,
+                detector_sets=detsets,
                 process_rows=det_ranks,
             )
 
