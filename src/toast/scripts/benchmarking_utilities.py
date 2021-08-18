@@ -616,17 +616,18 @@ def scan_map(args, rank, ops, data, log):
     Simulate sky signal from a map.
     We scan the sky with the "final" pointing model if that is different from the solver pointing model.
     """
-    # creates a map and puts it in args.input_map
-    create_input_maps(args.input_map, ops.pointing.nside, rank, log)
-
-    # adds the scan map operator
-    scan_map = toast.ops.ScanHealpix(
-        pixel_dist=ops.binner_final.pixel_dist,
-        pointing=ops.pointing_final,
-        save_pointing=ops.binner_final.full_pointing,
-        file=args.input_map,
-    )
-    scan_map.apply(data)
+    if ops.scan_map.enabled:
+        # Use the final pointing model if it is enabled
+        pointing = ops.pointing
+        if ops.pointing_final.enabled:
+            pointing = ops.pointing_final
+        # creates a map and puts it in args.input_map
+        create_input_maps(args.input_map, pointing.nside, rank, log)
+        ops.scan_map.pixel_dist = ops.binner_final.pixel_dist
+        ops.scan_map.pointing = pointing
+        ops.scan_map.save_pointing = ops.binner_final.full_pointing
+        ops.scan_map.file = args.input_map
+        ops.scan_map.apply(data)
 
 
 def run_mapmaker(ops, args, tmpls, data):
