@@ -506,6 +506,9 @@ class ObservationTest(MPITestCase):
         for ob in data.obs:
             original.append(ob.duplicate(times="times"))
             ob.redistribute(1, times="times")
+            self.assertTrue(ob.comm_col_size == 1)
+            self.assertTrue(ob.comm_row_size == data.comm.group_size)
+            self.assertTrue(ob.local_detectors == ob.all_detectors)
 
         # Verify that the observations are no longer equal- only if we actually
         # have more than one process per observation.
