@@ -21,7 +21,16 @@ from .operator import Operator
 
 from ..utils import Environment, Logger
 
-from ..atm import AtmSim, atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
+from ..atm import AtmSim
+
+have_atm_utils = None
+if have_atm_utils is None:
+    try:
+        from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
+
+        have_atm_utils = True
+    except ImportError:
+        have_atm_utils = False
 
 
 @trait_docs
@@ -99,6 +108,12 @@ class ObserveAtmosphere(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not have_atm_utils:
+            log = Logger.get()
+            msg = "TOAST was compiled without the libaatm library, which is "
+            msg += "required for observations of simulated atmosphere."
+            log.error(msg)
+            raise RuntimeError(msg)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
