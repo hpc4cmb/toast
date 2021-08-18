@@ -426,42 +426,22 @@ def redistribute_buffer(
     del recv_displ
 
 
-def redistribute_data(
-    old_dist, new_dist, shared_manager, detdata_manager, intervals_manager, times=None
-):
-    """Helper function to redistribute data in an observation.
+def extract_global_intervals(old_dist, intervals_manager):
+    """Helper function to reconstruct global interval timespans.
 
-    Given the old and new data distributions, redistribute all objects in the
-    shared, detdata, and intervals manager objects.  The input managers are cleared
-    upon return.  If times is None and there exist some intervals, a warning
-    will be given and the intervals will be deleted.
+    After an IntervalList is added, only the local intervals on each process are
+    kept.  We need to reconstruct the original timespans that were used and save,
+    so that we can rebuild them after the timestamps have been redistributed.
 
     Args:
         old_dist (DistDetSamp):  The existing data distribution.
-        new_dist (DistDetSamp):  The new data distribution.
-        shared_manager (SharedDataManager):  The existing shared manager instance.
-        detdata_manager (DetectorDataManager):  The existing detector data manager
-            instance.
         intervals_manager (IntervalsManager):  The existing interval manager instance.
-        times (str):  The name of the shared object containing the timestamps.
 
     Returns:
-        (tuple):  The new (SharedDataManager, DetDataManager, IntervalsManager)
-            instances.
+        (dict):  The dictionary of reconstructed global timespan intervals.
 
     """
     log = Logger.get()
-
-    # After an IntervalList is added, only the local intervals on each process are
-    # kept.  We need to reconstruct the original timespans that were used and save,
-    # so that we can rebuild them after the timestamps have been redistributed.
-    # After reconstructing the time ranges, the input interval list is cleared.
-
-    if times is None and len(intervals_manager.keys()) > 0:
-        if old_dist.comm_rank == 0:
-            msg = "Time stamps not specified when redistributing observation."
-            msg += "  Intervals will be deleted and not redistributed."
-            log.warning(msg)
 
     global_intervals = dict()
 
@@ -508,47 +488,58 @@ def redistribute_data(
                 # add final range
                 glist.append((last_start, last_stop))
             global_intervals[iname] = glist
+    return global_intervals
 
-    intervals_manager.clear()
 
-    # Redistribute detector data.  For purposes of redistribution, we require
-    # that all DetectorData objects span the full set of local detectors.
-    # In practice, smaller DetectorData objects are only used for intermediate data
-    # products.  Data redistribution is something that will happen infrequently at
-    # fixed points in a larger workflow.  If this ever becomes too much of a
-    # limitation, we could add more logic to handle the case of detdata fields with
-    # subsets of local detectors.
+def redistribute_detector_data(
+    old_dist,
+    new_dist,
+    detdata_manager,
+    old_local_dets,
+    det_send_info,
+    samp_send_info,
+    det_recv_info,
+    samp_recv_info,
+):
+    """Redistribute detector data.
+
+    For purposes of redistribution, we require that all DetectorData objects span the
+    full set of local detectors.  In practice, smaller DetectorData objects are only
+    used for intermediate data products.  Data redistribution is something that will
+    happen infrequently at fixed points in a larger workflow.  If this ever becomes too
+    much of a limitation, we could add more logic to handle the case of detdata fields
+    with subsets of local detectors.
+
+    Args:
+        old_dist (DistDetSamp):  The existing data distribution.
+        new_dist (DistDetSamp):  The new data distribution.
+        detdata_manager (DetectorDataManager):  The existing detector data manager
+            instance.
+        old_local_dets (list):  The local detectors in the old distribution.
+        det_send_info (list):  The send slices along the detector axis.
+        samp_send_info (list):  The send slices along the sample axis.
+        det_recv_info (list):  The receive slices along the detector axis.
+        samp_recv_info (list):  The receive slices along the sample axis.
+
+    Returns:
+        (tuple):  The new DetDataManager.
+
+    """
+    log = Logger.get()
 
     new_detdata_manager = DetDataManager(
         new_dist.dets[new_dist.comm_rank], new_dist.samps[new_dist.comm_rank].n_elem
     )
 
-    # Compute the detector and sample ranges we are sending and receiving.  These are
-    # common for all detdata objects.
-
-    old_det_off = old_dist.det_indices[old_dist.comm_rank].offset
-    old_det_n = old_dist.det_indices[old_dist.comm_rank].n_elem
-    det_send_info = compute_1d_offsets(old_det_off, old_det_n, new_dist.det_indices)
-    old_samp_off = old_dist.samps[old_dist.comm_rank].offset
-    old_samp_n = old_dist.samps[old_dist.comm_rank].n_elem
-    samp_send_info = compute_1d_offsets(old_samp_off, old_samp_n, new_dist.samps)
-
-    new_det_off = new_dist.det_indices[new_dist.comm_rank].offset
-    new_det_n = new_dist.det_indices[new_dist.comm_rank].n_elem
-    det_recv_info = compute_1d_offsets(new_det_off, new_det_n, old_dist.det_indices)
-    new_samp_off = new_dist.samps[new_dist.comm_rank].offset
-    new_samp_n = new_dist.samps[new_dist.comm_rank].n_elem
-    samp_recv_info = compute_1d_offsets(new_samp_off, new_samp_n, old_dist.samps)
-
     # Process every detdata object
 
     for field in list(detdata_manager.keys()):
         field_dets = detdata_manager[field].detectors
-        local_dets = old_dist.detectors[old_det_off : old_det_off + old_det_n]
-        if not all([x == y for x, y in zip(field_dets, local_dets)]):
+
+        if not all([x == y for x, y in zip(field_dets, old_local_dets)]):
             msg = "Redistribution only supports detdata with all local detectors."
             msg += " Field {} has {} dets instead of {}".format(
-                field, len(field_dets), len(local_dets)
+                field, len(field_dets), len(old_local_dets)
             )
             log.error(msg)
             raise NotImplementedError(msg)
@@ -611,15 +602,52 @@ def redistribute_data(
             send_info,
             recv_info,
         )
+    return new_detdata_manager
 
-    # Shared data.  If the data is shared across the observation (group) communicator,
-    # then no action is needed.  If it is shared across a row or column communicator,
-    # then only the rank zero processes in those communicators need to do anything.
 
-    # In order to determine how to split up and recombine shared objects, we require
-    # that the leading dimension of the object corresponds to either the number of
-    # local detectors (for row-shared objects) or the number of local samples (for
-    # column-shared objects).
+def redistribute_shared_data(
+    old_dist,
+    new_dist,
+    shared_manager,
+    old_det_n,
+    new_det_n,
+    old_samp_n,
+    new_samp_n,
+    det_send_info,
+    samp_send_info,
+    det_recv_info,
+    samp_recv_info,
+):
+    """Redistribute shared data.
+
+    Shared data.  If the data is shared across the observation (group) communicator,
+    then no action is needed.  If it is shared across a row or column communicator,
+    then only the rank zero processes in those communicators need to do anything.
+
+    In order to determine how to split up and recombine shared objects, we require
+    that the leading dimension of the object corresponds to either the number of
+    local detectors (for row-shared objects) or the number of local samples (for
+    column-shared objects).
+
+    Args:
+        old_dist (DistDetSamp):  The existing data distribution.
+        new_dist (DistDetSamp):  The new data distribution.
+        shared_manager (SharedManager):  The existing detector data manager
+            instance.
+        old_det_n (int):  The old number of local detectors.
+        new_det_n (int):  The new number of local detectors.
+        old_samp_n (int):  The old number of local samples.
+        new_samp_n (int):  The new number of local samples.
+        det_send_info (list):  The send slices along the detector axis.
+        samp_send_info (list):  The send slices along the sample axis.
+        det_recv_info (list):  The receive slices along the detector axis.
+        samp_recv_info (list):  The receive slices along the sample axis.
+
+    Returns:
+        (tuple):  The new DetDataManager.
+
+    """
+    log = Logger.get()
 
     # Create the new shared manager.
     new_shared_manager = SharedDataManager(
@@ -770,6 +798,95 @@ def redistribute_data(
                 msg += "communicators can be redistributed"
                 log.error(msg)
                 raise RuntimeError(msg)
+
+    return new_shared_manager
+
+
+def redistribute_data(
+    old_dist, new_dist, shared_manager, detdata_manager, intervals_manager, times=None
+):
+    """Helper function to redistribute data in an observation.
+
+    Given the old and new data distributions, redistribute all objects in the
+    shared, detdata, and intervals manager objects.  The input managers are cleared
+    upon return.  If times is None and there exist some intervals, a warning
+    will be given and the intervals will be deleted.
+
+    Args:
+        old_dist (DistDetSamp):  The existing data distribution.
+        new_dist (DistDetSamp):  The new data distribution.
+        shared_manager (SharedDataManager):  The existing shared manager instance.
+        detdata_manager (DetectorDataManager):  The existing detector data manager
+            instance.
+        intervals_manager (IntervalsManager):  The existing interval manager instance.
+        times (str):  The name of the shared object containing the timestamps.
+
+    Returns:
+        (tuple):  The new (SharedDataManager, DetDataManager, IntervalsManager)
+            instances.
+
+    """
+    log = Logger.get()
+
+    global_intervals = dict()
+    if times is None and len(intervals_manager.keys()) > 0:
+        if old_dist.comm_rank == 0:
+            msg = "Time stamps not specified when redistributing observation."
+            msg += "  Intervals will be deleted and not redistributed."
+            log.warning(msg)
+    else:
+        global_intervals = extract_global_intervals(old_dist, intervals_manager)
+
+    intervals_manager.clear()
+
+    # Compute the detector and sample ranges we are sending and receiving.  These are
+    # common for all detdata objects.
+
+    old_det_off = old_dist.det_indices[old_dist.comm_rank].offset
+    old_det_n = old_dist.det_indices[old_dist.comm_rank].n_elem
+    old_local_dets = old_dist.detectors[old_det_off : old_det_off + old_det_n]
+    det_send_info = compute_1d_offsets(old_det_off, old_det_n, new_dist.det_indices)
+
+    old_samp_off = old_dist.samps[old_dist.comm_rank].offset
+    old_samp_n = old_dist.samps[old_dist.comm_rank].n_elem
+    samp_send_info = compute_1d_offsets(old_samp_off, old_samp_n, new_dist.samps)
+
+    new_det_off = new_dist.det_indices[new_dist.comm_rank].offset
+    new_det_n = new_dist.det_indices[new_dist.comm_rank].n_elem
+    det_recv_info = compute_1d_offsets(new_det_off, new_det_n, old_dist.det_indices)
+
+    new_samp_off = new_dist.samps[new_dist.comm_rank].offset
+    new_samp_n = new_dist.samps[new_dist.comm_rank].n_elem
+    samp_recv_info = compute_1d_offsets(new_samp_off, new_samp_n, old_dist.samps)
+
+    # Redistribute detector data.
+
+    new_detdata_manager = redistribute_detector_data(
+        old_dist,
+        new_dist,
+        detdata_manager,
+        old_local_dets,
+        det_send_info,
+        samp_send_info,
+        det_recv_info,
+        samp_recv_info,
+    )
+
+    # Redistribute shared data
+
+    new_shared_manager = redistribute_shared_data(
+        old_dist,
+        new_dist,
+        shared_manager,
+        old_det_n,
+        new_det_n,
+        old_samp_n,
+        new_samp_n,
+        det_send_info,
+        samp_send_info,
+        det_recv_info,
+        samp_recv_info,
+    )
 
     # Re-create the intervals in the new data distribution.
     new_intervals_manager = IntervalsManager(
