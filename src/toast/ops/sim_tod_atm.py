@@ -322,10 +322,6 @@ class SimAtmosphere(Operator):
 
             key1, key2, counter1, counter2 = self._get_rng_keys(ob)
 
-            absorption, loading = self._get_absorption_and_loading(ob)
-
-            observe_atm.absorption = absorption
-
             cachedir = self._get_cache_dir(ob, comm)
 
             ob[atm_sim_key] = list()
@@ -507,37 +503,6 @@ class SimAtmosphere(Operator):
 
         return key1, key2, counter1, counter2
 
-    @function_timer
-    def _get_absorption_and_loading(self, obs):
-        altitude = obs.telescope.site.earthloc.height.to_value(u.meter)
-        weather = obs.telescope.site.weather
-        absorption = None
-        loading = None
-        if self.freq is not None:
-            if not available_utils:
-                msg = (
-                    "TOAST not compiled with libaatm support- absorption and "
-                    "loading unavailable"
-                )
-                raise RuntimeError(msg)
-            from ..atm import atm_absorption_coefficient, atm_atmospheric_loading
-
-            absorption = atm_absorption_coefficient(
-                altitude,
-                weather.air_temperature.to_value(u.kelvin),
-                weather.surface_pressure,
-                weather.pwv,
-                self.freq.to_value(u.GHz),
-            )
-            loading = atm_atmospheric_loading(
-                altitude,
-                weather.air_temperature.to_value(u.kelvin),
-                weather.surface_pressure,
-                weather.pwv,
-                self.freq.to_value(u.GHz),
-            )
-        return absorption, loading
-
     def _get_cache_dir(self, obs, comm):
         obsid = obs.uid
         if self.cache_dir is None:
@@ -571,14 +536,18 @@ class SimAtmosphere(Operator):
         # Read the extent of the AZ/EL boresight pointing, and use that
         # to compute the range of angles needed for simulating the slab.
 
-        # FIXME:  This is quite arbitrary and assumes that the boresight
-        # pointing has been created by the SimGround operator.  We should
-        # define the observation keys to use in some standard place and
-        # compute these limits from the data if they do not exist.
-        min_az_bore = obs["scan_min_az"].to_value(u.radian)
-        max_az_bore = obs["scan_max_az"].to_value(u.radian)
-        min_el_bore = obs["scan_min_el"].to_value(u.radian)
-        max_el_bore = obs["scan_max_el"].to_value(u.radian)
+        quats = obs.shared[self.detector_pointing.boresight]
+        theta, phi = qa.to_position(quats)
+        az = 2 * np.pi - phi
+        el = np.pi / 2 - theta
+        if self.shared_flags is not None:
+            good = (self.shared[self.shared_flags] & self.shared_flag_mask) == 0
+            az = az[good]
+            el = el[good]
+        min_az_bore = np.amin(az)
+        max_az_bore = np.amax(az)
+        min_el_bore = np.amin(el)
+        max_el_bore = np.amax(el)
 
         # Use a fixed focal plane radius so that changing the actual
         # set of detectors will not affect the simulated atmosphere.

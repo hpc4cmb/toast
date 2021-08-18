@@ -47,6 +47,67 @@ class InstrumentTest(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
+    def test_focalplane_full(self):
+        names = ["det_01a", "det_01b", "det_02a", "det_02b"]
+        quats = [np.array([0, 0, 0, 1], dtype=np.float64) for x in range(len(names))]
+        ndet = len(names)
+        # Noise parameters (optional)
+        psd_fmin = np.ones(ndet) * 1e-5 * u.Hz
+        psd_fknee = np.ones(ndet) * 1e-2 * u.Hz
+        psd_alpha = np.ones(ndet) * 1.0
+        psd_NET = np.ones(ndet) * 1e-3 * u.K * u.s ** 0.5
+        # Bandpass parameters (optional)
+        bandcenter = np.ones(ndet) * 1e2 * u.GHz
+        bandwidth = bandcenter * 0.1
+
+        detdata = QTable(
+            [
+                names,
+                quats,
+                psd_fmin,
+                psd_fknee,
+                psd_alpha,
+                psd_NET,
+                bandcenter,
+                bandwidth,
+            ],
+            names=[
+                "name",
+                "quat",
+                "psd_fmin",
+                "psd_fknee",
+                "psd_alpha",
+                "psd_net",
+                "bandcenter",
+                "bandwidth",
+            ],
+        )
+        fp = Focalplane(detector_data=detdata, sample_rate=10.0 * u.Hz)
+
+        fp_file = os.path.join(self.outdir, "focalplane_full.h5")
+        check_file = os.path.join(self.outdir, "check_full.h5")
+
+        if self.comm is None or self.comm.rank == 0:
+            fp.write(fp_file)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        newfp = Focalplane(file=fp_file)
+
+        # Test getting noise PSD
+        psd = newfp.noise.psd(names[-1])
+
+        # Test convolving with bandpass
+        freqs = np.linspace(50, 150, 100) * u.GHz
+        values = np.linspace(0, 1, 100)
+        result1 = newfp.bandpass.convolve(names[-1], freqs, values, rj=False)
+        result2 = newfp.bandpass.convolve(names[-1], freqs, values, rj=True)
+
+        if self.comm is None or self.comm.rank == 0:
+            newfp.write(check_file)
+        if self.comm is not None:
+            self.comm.barrier()
+
     def test_sim_focalplane(self):
         fp = fake_hexagon_focalplane(
             n_pix=7,

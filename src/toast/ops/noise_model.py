@@ -46,36 +46,9 @@ class DefaultNoiseModel(Operator):
         comm = data.comm
 
         for ob in data.obs:
-            # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
-
-            # The focalplane for this observation
-            focalplane = ob.telescope.focalplane
-
-            # Every process has a copy of the focalplane, and every process may want
-            # the noise model for all detectors (not just our local detectors).
-            # So we simply have every process generate the same noise model locally.
-
-            fmin = {}
-            fknee = {}
-            alpha = {}
-            NET = {}
-            rates = {}
-            for d in dets:
-                rates[d] = focalplane.sample_rate
-                fmin[d] = focalplane[d]["psd_fmin"]
-                fknee[d] = focalplane[d]["psd_fknee"]
-                alpha[d] = focalplane[d]["psd_alpha"]
-                NET[d] = focalplane[d]["psd_net"]
-
-            noise = AnalyticNoise(
-                rate=rates, fmin=fmin, detectors=dets, fknee=fknee, alpha=alpha, NET=NET
-            )
-
-            ob[self.noise_model] = noise
+            if ob.telescope.focalplane.noise is None:
+                raise RuntimeError("Focalplane does not have a noise model")
+            ob[self.noise_model] = ob.telescope.focalplane.noise
 
         return
 
