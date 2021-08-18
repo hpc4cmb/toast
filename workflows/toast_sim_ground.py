@@ -307,7 +307,7 @@ def main():
     # atmosphere simulation, filtering, other types of map-making, etc.
 
     operators = [
-        toast.ops.SimGround(name="sim_ground"),
+        toast.ops.SimGround(name="sim_ground", weather="atacama"),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(
             name="elevation_model",
@@ -322,16 +322,16 @@ def main():
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
         ),
-        toast.ops.ScanHealpix(name="scan_map"),
+        toast.ops.ScanHealpix(name="scan_map", enabled=False),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
-        toast.ops.Statistics(name="raw_statistics"),
-        toast.ops.Statistics(name="filtered_statistics"),
-        toast.ops.GroundFilter(name="groundfilter"),
+        toast.ops.Statistics(name="raw_statistics", enabled=False),
+        toast.ops.Statistics(name="filtered_statistics", enabled=False),
+        toast.ops.GroundFilter(name="groundfilter", enabled=False),
         toast.ops.PolyFilter(name="polyfilter1D"),
-        toast.ops.PolyFilter2D(name="polyfilter2D"),
-        toast.ops.CommonModeFilter(name="common_mode_filter"),
+        toast.ops.PolyFilter2D(name="polyfilter2D", enabled=False),
+        toast.ops.CommonModeFilter(name="common_mode_filter", enabled=False),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
