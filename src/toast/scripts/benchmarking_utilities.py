@@ -136,6 +136,7 @@ def get_minimum_memory_use(
             memory footprint.
 
     """
+    log = toast.utils.Logger.get()
 
     # The number of observations in the schedule
     num_obs = len(scans)
@@ -154,10 +155,18 @@ def get_minimum_memory_use(
             if n_group > num_obs:
                 # Too many small groups- we do not have enough observations to give at
                 # least one to each group.
+                msg = f"Rejecting possible group nodes = {group_nodes}, "
+                msg += f"since {n_group} groups is larger than the number of "
+                msg += f"observations ({num_obs})"
+                log.debug(msg)
                 continue
             group_procs = node_procs * group_nodes
             if group_procs > n_detector:
                 # This group is too large for the number of detectors
+                msg = f"Rejecting possible group nodes = {group_nodes}, "
+                msg += f"since {group_procs} processes per group is larger "
+                msg += f"than the number of detectors ({n_detector})"
+                log.debug(msg)
                 continue
 
             memory_used_bytes = memory_use(
