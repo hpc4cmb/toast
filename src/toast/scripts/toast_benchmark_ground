@@ -11,6 +11,7 @@ The workflow is tailored to the size of the communicator.
 
 import os
 import sys
+import shutil
 import traceback
 import argparse
 from astropy import units as u
@@ -168,52 +169,58 @@ def make_schedule(args, world_comm, site):
     """
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
-        schedule_file = os.path.join(args.out_dir, "ground_bench_schedule.txt")
-        sch_opts = [
-            "--site-name",
-            args.site_name,
-            "--telescope",
-            args.telescope_name,
-            "--site-lon",
-            f"{site.earthloc.lon.to_value(u.degree)}",
-            "--site-lat",
-            f"{site.earthloc.lat.to_value(u.degree)}",
-            "--site-alt",
-            f"{site.earthloc.height.to_value(u.meter)}",
-            "--patch-coord",
-            args.patch_coord,
-            "--el-min",
-            f"{args.el_min}",
-            "--el-max",
-            f"{args.el_max}",
-            "--sun-el-max",
-            f"{args.sun_el_max}",
-            "--sun-avoidance-angle",
-            f"{args.sun_avoidance_angle}",
-            "--moon-avoidance-angle",
-            f"{args.moon_avoidance_angle}",
-            "--gap-s",
-            f"{args.gap_s}",
-            "--gap-small-s",
-            f"{args.gap_small_s}",
-            "--ces-max-time",
-            f"{args.ces_max_time}",
-            "--boresight-angle-step",
-            f"{args.boresight_angle_step}",
-            "--boresight-angle-time",
-            f"{args.boresight_angle_time}",
-            "--start",
-            args.schedule_start,
-            "--stop",
-            args.schedule_stop,
-            "--out",
-            schedule_file,
-        ]
-        for patch in args.schedule_patches:
-            sch_opts.extend(["--patch", patch])
-        run_scheduler(opts=sch_opts)
+        schedule_file = "ground_bench_schedule.txt"
+        output_schedule = os.path.join(args.out_dir, "ground_bench_schedule.txt")
+        if not os.path.exists(schedule_file):
+            # Building the schedule is serial and takes a while, only generate it
+            # if needed.
+            sch_opts = [
+                "--site-name",
+                args.site_name,
+                "--telescope",
+                args.telescope_name,
+                "--site-lon",
+                f"{site.earthloc.lon.to_value(u.degree)}",
+                "--site-lat",
+                f"{site.earthloc.lat.to_value(u.degree)}",
+                "--site-alt",
+                f"{site.earthloc.height.to_value(u.meter)}",
+                "--patch-coord",
+                args.patch_coord,
+                "--el-min",
+                f"{args.el_min}",
+                "--el-max",
+                f"{args.el_max}",
+                "--sun-el-max",
+                f"{args.sun_el_max}",
+                "--sun-avoidance-angle",
+                f"{args.sun_avoidance_angle}",
+                "--moon-avoidance-angle",
+                f"{args.moon_avoidance_angle}",
+                "--gap-s",
+                f"{args.gap_s}",
+                "--gap-small-s",
+                f"{args.gap_small_s}",
+                "--ces-max-time",
+                f"{args.ces_max_time}",
+                "--boresight-angle-step",
+                f"{args.boresight_angle_step}",
+                "--boresight-angle-time",
+                f"{args.boresight_angle_time}",
+                "--start",
+                args.schedule_start,
+                "--stop",
+                args.schedule_stop,
+                "--out",
+                schedule_file,
+            ]
+            for patch in args.schedule_patches:
+                sch_opts.extend(["--patch", patch])
+            run_scheduler(opts=sch_opts)
+        # Copy the schedule into the output directory for reference
+        shutil.copy(schedule_file, output_schedule)
         schedule = toast.schedule.GroundSchedule()
-        schedule.read(schedule_file)
+        schedule.read(output_schedule)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
     args.schedule = schedule

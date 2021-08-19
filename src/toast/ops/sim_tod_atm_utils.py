@@ -11,7 +11,7 @@ from astropy import units as u
 
 import healpy as hp
 
-from ..timing import function_timer
+from ..timing import function_timer, GlobalTimers
 
 from .. import qarray as qa
 
@@ -119,6 +119,9 @@ class ObserveAtmosphere(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
+        gt = GlobalTimers.get()
+
+        gt.start("ObserveAtmosphere:  total")
 
         comm = data.comm.comm_group
         group = data.comm.group
@@ -131,6 +134,7 @@ class ObserveAtmosphere(Operator):
                 # Nothing to do for this observation
                 continue
 
+            gt.start("ObserveAtmosphere:  per-observation setup")
             # Bandpass-specific unit conversion, relative to 150GHz
             absorption, loading = self._get_absorption_and_loading(ob, dets)
 
@@ -149,6 +153,7 @@ class ObserveAtmosphere(Operator):
             ngood_tot = 0
             nbad_tot = 0
 
+            gt.stop("ObserveAtmosphere:  per-observation setup")
             for vw in range(len(views)):
                 # Determine the wind interval we are in, and hence which atmosphere
                 # simulation to use.  The wind intervals are already guaranteed
@@ -172,6 +177,7 @@ class ObserveAtmosphere(Operator):
                 sim_list = ob[self.sim][cur_wind]
 
                 for det in dets:
+                    gt.start("ObserveAtmosphere:  detector setup")
                     flags = None
                     if self.det_flags is not None:
                         flags = (
@@ -236,6 +242,8 @@ class ObserveAtmosphere(Operator):
 
                     atmdata = np.zeros(ngood, dtype=np.float64)
 
+                    gt.stop("ObserveAtmosphere:  detector setup")
+                    gt.start("ObserveAtmosphere:  detector AtmSim.observe")
                     for icur, cur_sim in enumerate(sim_list):
                         if (
                             not (
@@ -311,6 +319,8 @@ class ObserveAtmosphere(Operator):
                                         bad
                                     ] = 255
                                     nbad_tot += nbad
+                    gt.stop("ObserveAtmosphere:  detector AtmSim.observe")
+                    gt.start("ObserveAtmosphere:  detector accumulate")
 
                     # Calibrate the atmopsheric fluctuations to appropriate bandpass
                     atmdata *= self.gain * absorption[det]
@@ -325,13 +335,16 @@ class ObserveAtmosphere(Operator):
 
                     # Add contribution to output
                     views.detdata[self.det_data][vw][det][good] += atmdata
+                    gt.stop("ObserveAtmosphere:  detector accumulate")
 
             if nbad_tot > 0:
                 frac = nbad_tot / (ngood_tot + nbad_tot) * 100
                 log.error(
                     "{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
                 )
+        gt.stop("ObserveAtmosphere:  total")
 
+    @function_timer
     def _get_absorption_and_loading(self, obs, dets):
         """Bandpass-specific unit conversion and loading"""
 
