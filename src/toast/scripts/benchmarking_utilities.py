@@ -144,7 +144,7 @@ def get_minimum_memory_use(
     # The number of processes per node
     node_procs = n_procs // n_nodes
 
-    group_nodes_best = 1
+    group_nodes_best = 0
     memory_used_bytes_best = np.inf
 
     # what is the minimum memory we can use for the total number of samples?
@@ -158,7 +158,7 @@ def get_minimum_memory_use(
                 msg = f"Rejecting possible group nodes = {group_nodes}, "
                 msg += f"since {n_group} groups is larger than the number of "
                 msg += f"observations ({num_obs})"
-                log.debug(msg)
+                log.verbose_rank(msg)
                 continue
             group_procs = node_procs * group_nodes
             if group_procs > n_detector:
@@ -166,7 +166,7 @@ def get_minimum_memory_use(
                 msg = f"Rejecting possible group nodes = {group_nodes}, "
                 msg += f"since {group_procs} processes per group is larger "
                 msg += f"than the number of detectors ({n_detector})"
-                log.debug(msg)
+                log.verbose_rank(msg)
                 continue
 
             memory_used_bytes = memory_use(
@@ -176,9 +176,6 @@ def get_minimum_memory_use(
             if memory_used_bytes < memory_used_bytes_best:
                 group_nodes_best = group_nodes
                 memory_used_bytes_best = memory_used_bytes
-
-    if np.isinf(memory_used_bytes_best):
-        raise RuntimeError("No compatible group size could be found")
 
     return (group_nodes_best, memory_used_bytes_best)
 
@@ -218,6 +215,8 @@ def maximize_nb_samples(
             of the best configuration.
 
     """
+    log = toast.utils.Logger.get()
+
     # The output set of observation scans.
     new_scans = list()
 
@@ -256,12 +255,28 @@ def maximize_nb_samples(
                     scans[: isc + 1],
                     full_pointing,
                 )
+                if group_nodes == 0:
+                    # This distribution failed, ignore the returned memory use for the
+                    # next loop iteration
+                    memory_bytes = 0
+            if group_nodes == 0:
+                msg = f"At maximum detector count ({n_detector}), no compatible "
+                msg += f"group size could be found for {n_procs} processes "
+                msg += f"across {n_nodes} nodes"
+                raise RuntimeError(msg)
+            msg = f"Examining first observation, now using {n_detector} detectors"
+            log.debug_rank(msg)
             total = det_samps
             new_scans.append(copy.deepcopy(sc))
         else:
             gs, bytes = get_minimum_memory_use(
                 n_detector, n_nodes, n_procs, det_samps, scans[: isc + 1], full_pointing
             )
+            if gs == 0:
+                msg = f"For {n_detector} detectors and {det_samps} samples, "
+                msg += f"no compatible group size could be found for "
+                msg += f"{n_procs} processes across {n_nodes} nodes"
+                raise RuntimeError(msg)
             if (bytes + overhead_bytes) > available_memory_bytes:
                 break
             else:
@@ -313,6 +328,8 @@ def get_from_samples(
             of the best configuration.
 
     """
+    log = toast.utils.Logger.get()
+
     # The output set of observation scans.
     new_scans = list()
 
@@ -335,9 +352,8 @@ def get_from_samples(
         det_samps = n_detector * scan_samples
         if total == 0:
             # First scan, compute number of detectors
-            while (n_detector < max_n_detector) and (
-                n_detector * scan_samples < max_samples
-            ):
+            bytes = None
+            while (n_detector < max_n_detector) and (det_samps < max_samples):
                 # Increment by whole pixels
                 n_detector += 2
                 det_samps = n_detector * scan_samples
@@ -349,6 +365,13 @@ def get_from_samples(
                     scans[: isc + 1],
                     full_pointing,
                 )
+            if group_nodes == 0:
+                msg = f"At maximum detector count ({n_detector}), no compatible "
+                msg += f"group size could be found for {n_procs} processes "
+                msg += f"across {n_nodes} nodes"
+                raise RuntimeError(msg)
+            msg = f"Examining first observation, now using {n_detector} detectors"
+            log.debug_rank(msg)
             memory_bytes += bytes
             total = det_samps
             new_scans.append(copy.deepcopy(sc))
@@ -364,6 +387,11 @@ def get_from_samples(
                     scans[: isc + 1],
                     full_pointing,
                 )
+                if group_nodes == 0:
+                    msg = f"For {n_detector} detectors and {det_samps} samples, "
+                    msg += f"no compatible group size could be found for "
+                    msg += f"{n_procs} processes across {n_nodes} nodes"
+                    raise RuntimeError(msg)
                 memory_bytes += bytes
                 total = det_samps
                 new_scans.append(copy.deepcopy(sc))
