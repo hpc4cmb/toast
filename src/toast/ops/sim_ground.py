@@ -227,6 +227,10 @@ class SimGround(Operator):
 
     sun_close_distance = Quantity(45.0 * u.degree, help="'Sun close' flagging distance")
 
+    max_pwv = Quantity(
+        None, allow_none=True, help="Maximum PWV for the simulated weather."
+    )
+
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
         tele = proposal["value"]
@@ -624,10 +628,20 @@ class SimGround(Operator):
                 # realization.
                 mid_time = scan.start + (scan.stop - scan.start) / 2
                 try:
-                    weather = SimWeather(time=mid_time, name=self.weather)
+                    weather = SimWeather(
+                        time=mid_time,
+                        name=self.weather,
+                        site_uid=site.uid,
+                        max_pwv=self.max_pwv,
+                    )
                 except RuntimeError:
                     # must be a file
-                    weather = SimWeather(time=mid_time, file=self.weather)
+                    weather = SimWeather(
+                        time=mid_time,
+                        file=self.weather,
+                        site_uid=site.uid,
+                        max_pwv=self.max_pwv,
+                    )
                 site = copy.deepcopy(self.telescope.site)
                 site.weather = weather
 
