@@ -390,8 +390,9 @@ class ObserveAtmosphere(Operator):
         else:
             absorption, loading = [], []
 
-        absorption = np.hstack(comm.allgather(absorption))
-        loading = np.hstack(comm.allgather(loading))
+        if comm is not None:
+            absorption = np.hstack(comm.allgather(absorption))
+            loading = np.hstack(comm.allgather(loading))
 
         absorption_det = {}
         loading_det = {}
