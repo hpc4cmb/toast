@@ -136,7 +136,7 @@ class ObserveAtmosphere(Operator):
 
             gt.start("ObserveAtmosphere:  per-observation setup")
             # Bandpass-specific unit conversion, relative to 150GHz
-            absorption, loading = self._get_absorption_and_loading(ob, dets)
+            absorption, loading = self._get_absorption_and_loading(ob, dets, comm)
 
             # Make sure detector data output exists
             ob.detdata.ensure(self.det_data, detectors=dets)
@@ -345,7 +345,7 @@ class ObserveAtmosphere(Operator):
         gt.stop("ObserveAtmosphere:  total")
 
     @function_timer
-    def _get_absorption_and_loading(self, obs, dets):
+    def _get_absorption_and_loading(self, obs, dets, comm):
         """Bandpass-specific unit conversion and loading"""
 
         if obs.telescope.focalplane.bandpass is None:
@@ -356,26 +356,43 @@ class ObserveAtmosphere(Operator):
 
         freq_min, freq_max = bandpass.get_range()
         n_freq = 100
-        absorption = atm_absorption_coefficient_vec(
-            altitude.to_value(u.meter),
-            weather.air_temperature.to_value(u.Kelvin),
-            weather.surface_pressure.to_value(u.Pa),
-            weather.pwv.to_value(u.mm),
-            freq_min.to_value(u.GHz),
-            freq_max.to_value(u.GHz),
-            n_freq,
-        )
-        loading = atm_atmospheric_loading_vec(
-            altitude.to_value(u.meter),
-            weather.air_temperature.to_value(u.Kelvin),
-            weather.surface_pressure.to_value(u.Pa),
-            weather.pwv.to_value(u.mm),
-            freq_min.to_value(u.GHz),
-            freq_max.to_value(u.GHz),
-            n_freq,
-        )
-
         freqs = np.linspace(freq_min, freq_max, n_freq)
+        if comm is None:
+            ntask = 1
+            my_rank = 0
+        else:
+            ntask = comm.size
+            my_rank = comm.rank
+        n_freq_task = int(np.ceil(n_freq / ntask))
+        my_start = min(my_rank * n_freq_task, n_freq)
+        my_stop = min(my_start + n_freq_task, n_freq)
+        my_n_freq = my_stop - my_start
+
+        if my_n_freq > 0:
+            absorption = atm_absorption_coefficient_vec(
+                altitude.to_value(u.meter),
+                weather.air_temperature.to_value(u.Kelvin),
+                weather.surface_pressure.to_value(u.Pa),
+                weather.pwv.to_value(u.mm),
+                freqs[my_start].to_value(u.GHz),
+                freqs[my_stop - 1].to_value(u.GHz),
+                my_n_freq,
+            )
+            loading = atm_atmospheric_loading_vec(
+                altitude.to_value(u.meter),
+                weather.air_temperature.to_value(u.Kelvin),
+                weather.surface_pressure.to_value(u.Pa),
+                weather.pwv.to_value(u.mm),
+                freqs[my_start].to_value(u.GHz),
+                freqs[my_stop - 1].to_value(u.GHz),
+                my_n_freq,
+            )
+        else:
+            absorption, loading = [], []
+
+        absorption = np.hstack(comm.allgather(absorption))
+        loading = np.hstack(comm.allgather(loading))
+
         absorption_det = {}
         loading_det = {}
         for det in dets:
