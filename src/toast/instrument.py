@@ -677,9 +677,8 @@ class Focalplane(object):
             return False
         if self.detector_data.colnames != other.detector_data.colnames:
             return False
-        for cn in self.detector_data.colnames:
-            if not np.array_equal(self.detector_data[cn], other.detector_data[cn]):
-                return False
+        if not self.detector_data.values_equal(other.detector_data):
+            return False
         return True
 
     def __ne__(self, other):

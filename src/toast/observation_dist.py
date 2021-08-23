@@ -438,12 +438,15 @@ def extract_global_intervals(old_dist, intervals_manager):
         intervals_manager (IntervalsManager):  The existing interval manager instance.
 
     Returns:
-        (dict):  The dictionary of reconstructed global timespan intervals.
+        (dict):  The dictionary of reconstructed global timespan intervals on rank
+            zero of the observation, otherwise None.
 
     """
     log = Logger.get()
 
-    global_intervals = dict()
+    global_intervals = None
+    if old_dist.comm_rank == 0:
+        global_intervals = dict()
 
     for iname in list(intervals_manager.keys()):
         ilist = [(x.start, x.stop, x.first, x.last) for x in intervals_manager[iname]]
@@ -458,7 +461,9 @@ def extract_global_intervals(old_dist, intervals_manager):
                 )
         del ilist
         if old_dist.comm_rank == 0:
-            # Only one process builds the list of start / stop times.
+            # Only one process builds the list of start / stop times.  By definition,
+            # the rank zero process of the observation is also the process with rank
+            # zero along both the rows and columns.
             glist = list()
             last_continue = False
             last_start = 0
@@ -479,15 +484,17 @@ def extract_global_intervals(old_dist, intervals_manager):
                         last_start = start
                         last_stop = stop
 
-                    if last == pn - 1:
-                        last_continue = True
-                    else:
-                        glist.append((last_start, last_stop))
-                        last_continue = False
+                    glist.append((last_start, last_stop))
+                    # if last == pn - 1:
+                    #     last_continue = True
+                    # else:
+                    #     glist.append((last_start, last_stop))
+                    #     last_continue = False
             if last_continue:
                 # add final range
                 glist.append((last_start, last_stop))
             global_intervals[iname] = glist
+
     return global_intervals
 
 
@@ -527,9 +534,7 @@ def redistribute_detector_data(
     """
     log = Logger.get()
 
-    new_detdata_manager = DetDataManager(
-        new_dist.dets[new_dist.comm_rank], new_dist.samps[new_dist.comm_rank].n_elem
-    )
+    new_detdata_manager = DetDataManager(new_dist)
 
     # Process every detdata object
 
@@ -650,13 +655,7 @@ def redistribute_shared_data(
     log = Logger.get()
 
     # Create the new shared manager.
-    new_shared_manager = SharedDataManager(
-        len(new_dist.dets[new_dist.comm_rank]),
-        new_dist.samps[new_dist.comm_rank].n_elem,
-        new_dist.comm,
-        new_dist.comm_row,
-        new_dist.comm_col,
-    )
+    new_shared_manager = SharedDataManager(new_dist)
 
     for field in shared_manager.keys():
         shobj = shared_manager[field]
@@ -889,19 +888,18 @@ def redistribute_data(
     )
 
     # Re-create the intervals in the new data distribution.
-    new_intervals_manager = IntervalsManager(
-        new_dist.comm, new_dist.comm_row, new_dist.comm_col
-    )
+    new_intervals_manager = IntervalsManager(new_dist)
 
     # Communicate the field list
-    ivl_fields = old_dist.comm.bcast(list(global_intervals.keys()), root=0)
+    gkeys = None
+    if old_dist.comm_rank == 0:
+        gkeys = list(global_intervals.keys())
+    ivl_fields = old_dist.comm.bcast(gkeys, root=0)
 
     for field in ivl_fields:
         glb = None
         if old_dist.comm_rank == 0:
             glb = global_intervals[field]
         new_intervals_manager.create(field, glb, new_shared_manager[times], fromrank=0)
-        # If there were intervals breaks due only to data distribution, join them now.
-        new_intervals_manager[field].simplify()
 
     return new_shared_manager, new_detdata_manager, new_intervals_manager

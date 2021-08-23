@@ -5,8 +5,6 @@
 import re
 import copy
 
-import importlib
-
 from collections import OrderedDict
 
 import traitlets
@@ -29,6 +27,8 @@ from traitlets import (
 )
 
 from astropy import units as u
+
+from .utils import object_fullname, import_from_name
 
 
 class Quantity(Float):
@@ -53,14 +53,6 @@ class Quantity(Float):
         if self.allow_none and s == "None":
             return None
         return u.Quantity(s)
-
-
-def object_fullname(o):
-    """Return the fully qualified name of an object."""
-    module = o.__module__
-    if module is None or module == str.__module__:
-        return o.__qualname__
-    return "{}.{}".format(module, o.__qualname__)
 
 
 def trait_type_to_string(trait):
@@ -406,18 +398,8 @@ class TraitConfig(HasTraits):
             msg = "Property dictionary does not contain 'class' key"
             raise RuntimeError(msg)
         cls_path = props["class"]
-        cls_parts = cls_path.split(".")
-        cls_name = cls_parts.pop()
-        cls_mod_name = ".".join(cls_parts)
-        cls = None
-        try:
-            cls_mod = importlib.import_module(cls_mod_name)
-            cls = getattr(cls_mod, cls_name)
-        except:
-            msg = "Cannot import class '{}' from module '{}'".format(
-                cls_name, cls_mod_name
-            )
-            raise RuntimeError(msg)
+        cls = import_from_name(cls_path)
+
         # We got this far, so we have the class!  Perform any translation
         props = cls.translate(props)
 

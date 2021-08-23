@@ -190,19 +190,9 @@ class Observation(MutableMapping):
         self._internal = dict()
 
         # Set up the data managers
-        self.detdata = DetDataManager(self.local_detectors, self.n_local_samples)
-
-        self.shared = SharedDataManager(
-            len(self.local_detectors),
-            self.n_local_samples,
-            self.dist.comm,
-            self.dist.comm_row,
-            self.dist.comm_col,
-        )
-
-        self.intervals = IntervalsManager(
-            self.dist.comm, self.dist.comm_row, self.dist.comm_col
-        )
+        self.detdata = DetDataManager(self.dist)
+        self.shared = SharedDataManager(self.dist)
+        self.intervals = IntervalsManager(self.dist)
 
     # Fully clear the observation
 
@@ -465,9 +455,16 @@ class Observation(MutableMapping):
             log.verbose("Obs metadata keys not equal")
         for k, v in self._internal.items():
             if v != other._internal[k]:
-                fail = 1
-                log.verbose(f"Obs metadata[{k}]:  {v} != {other[k]}")
-                break
+                feq = True
+                try:
+                    feq = np.allclose(v, other._internal[k])
+                except Exception:
+                    # Not floating point data
+                    feq = False
+                if not feq:
+                    fail = 1
+                    log.verbose(f"Obs metadata[{k}]:  {v} != {other[k]}")
+                    break
         if self.shared != other.shared:
             fail = 1
             log.verbose("Obs shared data not equal")
