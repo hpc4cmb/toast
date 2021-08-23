@@ -125,7 +125,7 @@ class SimConviqtTest(MPITestCase):
             normalize_beam=True,
             fwhm=self.fwhm_sky,
         )
-        sim_conviqt.exec(data)
+        sim_conviqt.apply(data)
 
         # Bin a map to study
 
