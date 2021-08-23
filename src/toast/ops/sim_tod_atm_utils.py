@@ -23,15 +23,6 @@ from ..utils import Environment, Logger
 
 from ..atm import AtmSim
 
-have_atm_utils = None
-if have_atm_utils is None:
-    try:
-        from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
-
-        have_atm_utils = True
-    except ImportError:
-        have_atm_utils = False
-
 
 @trait_docs
 class ObserveAtmosphere(Operator):
@@ -88,9 +79,18 @@ class ObserveAtmosphere(Operator):
 
     sim = Unicode("atmsim", help="The observation key for the list of AtmSim objects")
 
-    gain = Float(1.0, help="Scaling applied to the simulated TOD")
+    absorption = Unicode(
+        None, allow_none=True, help="The observation key for the absorption"
+    )
 
-    absorption = Float(None, allow_none=True, help="Atmospheric absorption")
+    loading = Unicode(None, allow_none=True, help="The observation key for the loading")
+
+    n_bandpass_freqs = Int(
+        100,
+        help="The number of sampling frequencies used when convolving the bandpass with atmosphere absorption and loading",
+    )
+
+    gain = Float(1.0, help="Scaling applied to the simulated TOD")
 
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
@@ -108,12 +108,6 @@ class ObserveAtmosphere(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if not have_atm_utils:
-            log = Logger.get()
-            msg = "TOAST was compiled without the libaatm library, which is "
-            msg += "required for observations of simulated atmosphere."
-            log.error(msg)
-            raise RuntimeError(msg)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -136,7 +130,7 @@ class ObserveAtmosphere(Operator):
 
             gt.start("ObserveAtmosphere:  per-observation setup")
             # Bandpass-specific unit conversion, relative to 150GHz
-            absorption, loading = self._get_absorption_and_loading(ob, dets, comm)
+            absorption, loading = self._get_absorption_and_loading(ob, dets)
 
             # Make sure detector data output exists
             ob.detdata.ensure(self.det_data, detectors=dets)
@@ -345,54 +339,19 @@ class ObserveAtmosphere(Operator):
         gt.stop("ObserveAtmosphere:  total")
 
     @function_timer
-    def _get_absorption_and_loading(self, obs, dets, comm):
+    def _get_absorption_and_loading(self, obs, dets):
         """Bandpass-specific unit conversion and loading"""
 
         if obs.telescope.focalplane.bandpass is None:
             raise RuntimeError("Focalplane does not define bandpass")
-        altitude = obs.telescope.site.earthloc.height
-        weather = obs.telescope.site.weather
         bandpass = obs.telescope.focalplane.bandpass
 
         freq_min, freq_max = bandpass.get_range()
-        n_freq = 100
+        n_freq = self.n_bandpass_freqs
         freqs = np.linspace(freq_min, freq_max, n_freq)
-        if comm is None:
-            ntask = 1
-            my_rank = 0
-        else:
-            ntask = comm.size
-            my_rank = comm.rank
-        n_freq_task = int(np.ceil(n_freq / ntask))
-        my_start = min(my_rank * n_freq_task, n_freq)
-        my_stop = min(my_start + n_freq_task, n_freq)
-        my_n_freq = my_stop - my_start
 
-        if my_n_freq > 0:
-            absorption = atm_absorption_coefficient_vec(
-                altitude.to_value(u.meter),
-                weather.air_temperature.to_value(u.Kelvin),
-                weather.surface_pressure.to_value(u.Pa),
-                weather.pwv.to_value(u.mm),
-                freqs[my_start].to_value(u.GHz),
-                freqs[my_stop - 1].to_value(u.GHz),
-                my_n_freq,
-            )
-            loading = atm_atmospheric_loading_vec(
-                altitude.to_value(u.meter),
-                weather.air_temperature.to_value(u.Kelvin),
-                weather.surface_pressure.to_value(u.Pa),
-                weather.pwv.to_value(u.mm),
-                freqs[my_start].to_value(u.GHz),
-                freqs[my_stop - 1].to_value(u.GHz),
-                my_n_freq,
-            )
-        else:
-            absorption, loading = [], []
-
-        if comm is not None:
-            absorption = np.hstack(comm.allgather(absorption))
-            loading = np.hstack(comm.allgather(loading))
+        absorption = obs[self.absorption]
+        loading = obs[self.loading]
 
         absorption_det = {}
         loading_det = {}
