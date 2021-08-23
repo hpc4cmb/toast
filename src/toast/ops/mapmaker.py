@@ -20,6 +20,8 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..pixels_io import write_healpix_fits
 
+from ..observation import default_names as obs_names
+
 from .operator import Operator
 
 from .pipeline import Pipeline
@@ -83,7 +85,9 @@ class MapMaker(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key for the timestream data")
+    det_data = Unicode(
+        obs_names.det_data, help="Observation detdata key for the timestream data"
+    )
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
 

@@ -13,6 +13,8 @@ from ..vis import set_matplotlib_backend
 from .. import ops as ops
 from .. import rng
 
+from ..observation import default_names as obs_names
+
 from ..pixels import PixelDistribution, PixelData
 
 from ..pixels_io import write_healpix_fits
@@ -96,7 +98,7 @@ class SimGainTest(MPITestCase):
             detector_pointing=detpointing,
         )
         # Generate timestreams
-        key = "signal"
+        key = obs_names.det_data
         sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
         sim_dipole.apply(data)
 
@@ -169,7 +171,7 @@ class SimGainTest(MPITestCase):
             detector_pointing=detpointing,
         )
         # Generate timestreams
-        key = "signal"
+        key = obs_names.det_data
         sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
         sim_dipole.apply(data)
 
@@ -233,7 +235,7 @@ class SimGainTest(MPITestCase):
             detector_pointing=detpointing,
         )
         # Generate timestreams
-        key = "signal"
+        key = obs_names.det_data
         sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
         sim_dipole.apply(data)
 
@@ -297,7 +299,7 @@ class SimGainTest(MPITestCase):
             detector_pointing=detpointing,
         )
         # Generate timestreams
-        key = "signal"
+        key = obs_names.det_data
         sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
         sim_dipole.apply(data)
 

@@ -16,6 +16,8 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..pixels_io import read_healpix_fits
 
+from ..observation import default_names as obs_names
+
 from .operator import Operator
 
 from .scan_map import ScanMap
@@ -41,7 +43,9 @@ class ScanHealpix(Operator):
 
     file = Unicode(None, allow_none=True, help="Path to healpix FITS file")
 
-    det_data = Unicode("signal", help="Observation detdata key for accumulating output")
+    det_data = Unicode(
+        obs_names.det_data, help="Observation detdata key for accumulating output"
+    )
 
     subtract = Bool(
         False, help="If True, subtract the map timestream instead of accumulating"

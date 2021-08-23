@@ -20,6 +20,8 @@ from .operator import Operator
 
 from ..utils import Environment, Logger
 
+from ..observation import default_names as obs_names
+
 from ..dipole import dipole
 
 
@@ -47,16 +49,19 @@ class SimDipole(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        "signal", help="Observation detdata key for accumulating dipole timestreams"
+        obs_names.det_data,
+        help="Observation detdata key for accumulating dipole timestreams",
     )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
+    boresight = Unicode(
+        obs_names.boresight_radec, help="Observation shared key for boresight"
+    )
 
-    velocity = Unicode("velocity", help="Observation shared key for velocity")
+    velocity = Unicode(obs_names.velocity, help="Observation shared key for velocity")
 
     shared_flags = Unicode(
         None, allow_none=True, help="Observation shared key for telescope flags to use"

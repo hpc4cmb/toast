@@ -4,6 +4,8 @@
 
 import sys
 
+import types
+
 import copy
 
 import numbers
@@ -42,6 +44,47 @@ from .observation_dist import (
     DistDetSamp,
     redistribute_data,
 )
+
+
+default_names = None
+
+
+def set_default_names(names=None):
+    global default_names
+
+    default_values = {
+        "times": "times",
+        "shared_flags": "flags",
+        "det_data": "signal",
+        "det_flags": "flags",
+        "hwp_angle": "hwp_angle",
+        "azimuth": "azimuth",
+        "elevation": "elevation",
+        "boresight_azel": "boresight_azel",
+        "boresight_radec": "boresight_radec",
+        "position": "position",
+        "velocity": "velocity",
+        "pixels": "pixels",
+        "weights": "weights",
+        "quats": "quats",
+    }
+
+    defaults = dict()
+    if names is None:
+        for k, v in default_values.items():
+            defaults[k] = v
+    else:
+        for k in default_values.keys():
+            if k in names:
+                # We have an override for this name
+                defaults[k] = names[k]
+            else:
+                defaults[k] = default_values[k]
+    default_names = types.SimpleNamespace(**defaults)
+
+
+if default_names is None:
+    set_default_names()
 
 
 class Observation(MutableMapping):

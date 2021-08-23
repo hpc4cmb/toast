@@ -16,6 +16,8 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..covariance import covariance_invert
 
+from ..observation import default_names as obs_names
+
 from .._libtoast import (
     cov_accum_zmap,
     cov_accum_diag_hits,
@@ -76,7 +78,7 @@ class BuildHitMap(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
-    pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
+    pixels = Unicode(obs_names.pixels, help="Observation detdata key for pixel indices")
 
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"

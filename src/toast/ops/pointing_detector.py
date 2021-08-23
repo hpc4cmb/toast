@@ -12,6 +12,8 @@ from ..traits import trait_docs, Int, Unicode, Bool
 
 from ..timing import function_timer
 
+from ..observation import default_names as obs_names
+
 from .. import qarray as qa
 
 from .operator import Operator
@@ -35,7 +37,9 @@ class PointingDetectorSimple(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional flagging")
 
-    boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
+    boresight = Unicode(
+        obs_names.boresight_radec, help="Observation shared key for boresight"
+    )
 
     quats = Unicode(
         None,

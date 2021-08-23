@@ -16,6 +16,8 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..covariance import covariance_apply
 
+from ..observation import default_names as obs_names
+
 from .operator import Operator
 
 from .pipeline import Pipeline
@@ -59,7 +61,9 @@ class BinMap(Operator):
         help="The Data key where the noiseweighted map should be stored",
     )
 
-    det_data = Unicode("signal", help="Observation detdata key for the timestream data")
+    det_data = Unicode(
+        obs_names.det_data, help="Observation detdata key for the timestream data"
+    )
 
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to use"

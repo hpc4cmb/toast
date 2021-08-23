@@ -30,6 +30,8 @@ from ..utils import Environment, Logger, Timer
 
 from .._libtoast import bin_templates, add_templates, legendre
 
+from ..observation import default_names as obs_names
+
 
 @trait_docs
 class GroundFilter(Operator):
@@ -40,7 +42,8 @@ class GroundFilter(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        "signal", help="Observation detdata key for accumulating atmosphere timestreams"
+        obs_names.det_data,
+        help="Observation detdata key for accumulating atmosphere timestreams",
     )
 
     view = Unicode(
@@ -64,11 +67,11 @@ class GroundFilter(Operator):
     )
 
     azimuth = Unicode(
-        "azimuth", allow_none=True, help="Observation shared key for Azimuth"
+        obs_names.azimuth, allow_none=True, help="Observation shared key for Azimuth"
     )
 
     boresight_azel = Unicode(
-        "boresight_azel",
+        obs_names.boresight_azel,
         allow_none=True,
         help="Observation shared key for boresight Az/El",
     )

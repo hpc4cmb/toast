@@ -21,6 +21,8 @@ from .operator import Operator
 
 from ..utils import Environment, Logger
 
+from ..observation import default_names as obs_names
+
 from ..atm import AtmSim
 
 
@@ -32,10 +34,11 @@ class ObserveAtmosphere(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
 
     det_data = Unicode(
-        "signal", help="Observation detdata key for accumulating dipole timestreams"
+        obs_names.det_data,
+        help="Observation detdata key for accumulating dipole timestreams",
     )
 
     quats = Unicode(

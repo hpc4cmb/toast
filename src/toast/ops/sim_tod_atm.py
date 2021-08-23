@@ -30,6 +30,8 @@ from ..utils import Environment, Logger, Timer
 
 from ..atm import AtmSim, available_utils
 
+from ..observation import default_names as obs_names
+
 from .sim_tod_atm_utils import ObserveAtmosphere
 
 have_atm_utils = None
@@ -55,10 +57,11 @@ class SimAtmosphere(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
 
     det_data = Unicode(
-        "signal", help="Observation detdata key for accumulating atmosphere timestreams"
+        obs_names.det_data,
+        help="Observation detdata key for accumulating atmosphere timestreams",
     )
 
     view = Unicode(

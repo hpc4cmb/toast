@@ -17,6 +17,8 @@ from ..noise import Noise
 
 from .. import ops as ops
 
+from ..observation import default_names as obs_names
+
 from ..pixels import PixelDistribution, PixelData
 
 from ._helpers import create_outdir, create_satellite_data
@@ -54,7 +56,7 @@ class MapmakerUtilsTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
@@ -100,7 +102,7 @@ class MapmakerUtilsTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
@@ -118,7 +120,7 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Simulate noise using both models
 
-        sim_noise = ops.SimNoise(noise_model="noise_model", det_data="noise")
+        sim_noise = ops.SimNoise(noise_model="noise_model", det_data=obs_names.det_data)
         sim_noise.apply(data)
 
         sim_noise_corr = ops.SimNoise(
@@ -162,9 +164,9 @@ class MapmakerUtilsTest(MPITestCase):
                 detweight = noise.detector_weight(det)
                 detweight_corr = noise_corr.detector_weight(det)
 
-                wt = ob.detdata["weights"][det]
+                wt = ob.detdata[obs_names.weights][det]
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
-                    ob.detdata["pixels"][det]
+                    ob.detdata[obs_names.pixels][det]
                 )
                 for i in range(ob.n_local_samples):
                     if local_pix[i] < 0:
@@ -217,7 +219,7 @@ class MapmakerUtilsTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
@@ -277,9 +279,9 @@ class MapmakerUtilsTest(MPITestCase):
             noise = ob["noise_model"]
             noise_corr = ob["noise_model_corr"]
             for det in ob.local_detectors:
-                wt = ob.detdata["weights"][det]
+                wt = ob.detdata[obs_names.weights][det]
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
-                    ob.detdata["pixels"][det]
+                    ob.detdata[obs_names.pixels][det]
                 )
 
                 for i in range(ob.n_local_samples):

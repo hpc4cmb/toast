@@ -17,6 +17,8 @@ from pshmem import MPIShared
 
 from ..observation import DetectorData, Observation
 
+from ..observation import default_names as obs_names
+
 from ..mpi import Comm, MPI
 
 from ._helpers import create_outdir, create_satellite_empty, create_ground_data

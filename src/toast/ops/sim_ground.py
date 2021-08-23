@@ -41,6 +41,8 @@ from ..coordinates import azel_to_radec
 
 from ..healpix import ang2vec
 
+from ..observation import default_names as obs_names
+
 from .operator import Operator
 
 from .sim_hwp import simulate_hwp_response
@@ -145,9 +147,11 @@ class SimGround(Operator):
         help="If specified, use this column of the focalplane detector_data to group detectors",
     )
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
 
-    shared_flags = Unicode("flags", help="Observation shared key for common flags")
+    shared_flags = Unicode(
+        obs_names.shared_flags, help="Observation shared key for common flags"
+    )
 
     det_data = Unicode(
         None, allow_none=True, help="Observation detdata key to initialize"
@@ -161,21 +165,23 @@ class SimGround(Operator):
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
 
-    azimuth = Unicode("azimuth", help="Observation shared key for Azimuth")
+    azimuth = Unicode(obs_names.azimuth, help="Observation shared key for Azimuth")
 
-    elevation = Unicode("elevation", help="Observation shared key for Elevation")
+    elevation = Unicode(
+        obs_names.elevation, help="Observation shared key for Elevation"
+    )
 
     boresight_azel = Unicode(
-        "boresight_azel", help="Observation shared key for boresight AZ/EL"
+        obs_names.boresight_azel, help="Observation shared key for boresight AZ/EL"
     )
 
     boresight_radec = Unicode(
-        "boresight_radec", help="Observation shared key for boresight RA/DEC"
+        obs_names.boresight_radec, help="Observation shared key for boresight RA/DEC"
     )
 
-    position = Unicode("position", help="Observation shared key for position")
+    position = Unicode(obs_names.position, help="Observation shared key for position")
 
-    velocity = Unicode("velocity", help="Observation shared key for velocity")
+    velocity = Unicode(obs_names.velocity, help="Observation shared key for velocity")
 
     hwp_rpm = Float(None, allow_none=True, help="The rate (in RPM) of the HWP rotation")
 
