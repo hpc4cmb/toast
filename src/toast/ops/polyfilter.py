@@ -218,7 +218,7 @@ class PolyFilter2D(Operator):
 
                 # templates = np.zeros([ndet, nmode, nsample])
                 templates = np.zeros([ndet, nmode])
-                masks = np.zeros([ndet, nsample], dtype=bool)
+                masks = np.zeros([ndet, nsample], dtype=np.uint8)
                 signals = np.zeros([ndet, nsample])
                 # proj = np.zeros([ngroup, nmode, nsample])
 
@@ -246,16 +246,16 @@ class PolyFilter2D(Operator):
 
                     template = detector_templates[ind_det]
                     templates[ind_det] = template
-                    masks[ind_det] = mask
+                    masks[ind_det][:] = mask
                     signals[ind_det] = signal * mask
 
                 t_template += time() - t1
 
                 t1 = time()
                 if comm is not None:
-                    comm.allreduce(templates)
-                    comm.allreduce(masks)
-                    comm.allreduce(signals)
+                    comm.Allreduce(MPI.IN_PLACE, templates, op=MPI.SUM)
+                    comm.Allreduce(MPI.IN_PLACE, masks, op=MPI.SUM)
+                    comm.Allreduce(MPI.IN_PLACE, signals, op=MPI.SUM)
                 t_get_norm += time() - t1
 
                 # Solve the linear regression amplitudes.  Each task
@@ -273,27 +273,35 @@ class PolyFilter2D(Operator):
                         t = templates[good].T.copy() * mask
                         proj = np.dot(t, signals[good, isample] * mask)
                         ccinv = np.dot(t, t.T)
-                        coeff[isample, igroup] = np.linalg.lstsq(ccinv, proj)[0]
+                        coeff[isample, igroup] = np.linalg.lstsq(
+                            ccinv, proj, rcond=None
+                        )[0]
                 if comm is not None:
-                    comm.allreduce(coeff)
+                    comm.Allreduce(MPI.IN_PLACE, coeff, op=MPI.SUM)
                 t_solve += time() - t1
 
                 t1 = time()
 
                 for igroup in range(ngroup):
                     local_dets = obs.local_detectors
-                    good = np.zeros(len(local_dets), dtype=np.bool)
+                    dets_in_group = np.zeros(len(local_dets), dtype=np.bool)
                     for idet, det in enumerate(local_dets):
                         if group_index[det] == igroup:
-                            good[idet] = True
-                    if not np.any(good):
+                            dets_in_group[idet] = True
+                    if not np.any(dets_in_group):
                         continue
                     if self.det_flags is not None:
+                        sample_flags = np.ones(
+                            len(local_dets),
+                            dtype=views.detdata[self.det_flags][0].dtype,
+                        )
+                        sample_flags *= self.poly_flag_mask
+                        sample_flags *= dets_in_group
                         for isample in range(nsample):
                             if np.all(coeff[isample, igroup] == 0):
-                                views.detdata[self.det_flags][iview][:, isample] |= (
-                                    good * self.poly_flag_mask
-                                ).astype(views.detdata[self.det_flags][0].dtype)
+                                views.detdata[self.det_flags][iview][
+                                    :, isample
+                                ] |= sample_flags
 
                 coeff = np.transpose(
                     coeff, [1, 0, 2]

@@ -116,7 +116,7 @@ class PolyFilterTest(MPITestCase):
             os.makedirs(testdir)
 
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm, pixel_per_process=2)
+        data = create_satellite_data(self.comm, pixel_per_process=4)
 
         # Add wafer IDs for filtering
         for obs in data.obs:
@@ -159,7 +159,7 @@ class PolyFilterTest(MPITestCase):
                 x, y, z = qa.rotate(det_quat, ZAXIS)
                 theta, phi = np.arcsin([x, y])
                 signal = obs.detdata["signal"][det]
-                signal[:] = 0
+                # signal[:] = 0
                 icoeff = 0
                 for xorder in range(norder):
                     for yorder in range(norder):
@@ -194,7 +194,9 @@ class PolyFilterTest(MPITestCase):
                 good = flags == 0
                 signal = ob.detdata["signal"][det]
                 x = np.arange(signal.size)
-                ax.plot(x[good], signal[good], "-", label=f"{det} unfiltered")
+                ax.plot(x, signal, "-", label=f"{det} unfiltered")
+                ax.plot(x, good, "-", label=f"{det} input good samples")
+            ax.legend(loc="best")
 
         # Filter
 
@@ -220,8 +222,9 @@ class PolyFilterTest(MPITestCase):
                 good = flags == 0
                 signal = ob.detdata["signal"][det]
                 x = np.arange(signal.size)
-                ax.plot(x[good], signal[good], ".", label=f"{det} filtered")
-            plt.legend(loc="best")
+                ax.plot(x, signal, ".", label=f"{det} filtered")
+                ax.plot(x, good, "-", label=f"{det} new good samples")
+            ax.legend(loc="best")
             outfile = os.path.join(testdir, "2Dfiltered_tod.png")
             fig.savefig(outfile)
 
