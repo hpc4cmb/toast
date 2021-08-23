@@ -32,6 +32,15 @@ from ..atm import AtmSim, available_utils
 
 from .sim_tod_atm_utils import ObserveAtmosphere
 
+have_atm_utils = None
+if have_atm_utils is None:
+    try:
+        from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
+
+        have_atm_utils = True
+    except ImportError:
+        have_atm_utils = False
+
 
 @trait_docs
 class SimAtmosphere(Operator):
@@ -140,6 +149,11 @@ class SimAtmosphere(Operator):
 
     nelem_sim_max = Int(10000, help="Controls the size of the simulation slices")
 
+    n_bandpass_freqs = Int(
+        100,
+        help="The number of sampling frequencies used when convolving the bandpass with atmosphere absorption and loading",
+    )
+
     cache_dir = Unicode(
         None,
         allow_none=True,
@@ -214,6 +228,12 @@ class SimAtmosphere(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not have_atm_utils:
+            log = Logger.get()
+            msg = "TOAST was compiled without the libaatm library, which is "
+            msg += "required for observations of simulated atmosphere."
+            log.error(msg)
+            raise RuntimeError(msg)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -239,7 +259,11 @@ class SimAtmosphere(Operator):
         wind_intervals = "wind"
 
         # Observation key for storing the atmosphere sims
-        atm_sim_key = "atm_sim"
+        atm_sim_key = f"{self.name}_atm_sim"
+
+        # Observation key for storing absorption and loading
+        absorption_key = f"{self.name}_absorption"
+        loading_key = f"{self.name}_loading"
 
         # Set up the observing operator
         observe_atm = ObserveAtmosphere(
@@ -253,6 +277,9 @@ class SimAtmosphere(Operator):
             det_flag_mask=self.det_flag_mask,
             wind_view=wind_intervals,
             sim=atm_sim_key,
+            absorption=absorption_key,
+            loading=loading_key,
+            n_bandpass_freqs=self.n_bandpass_freqs,
             gain=self.gain,
             polarization_fraction=self.polarization_fraction,
         )
@@ -333,6 +360,9 @@ class SimAtmosphere(Operator):
                 log.debug(msg)
 
             scan_range = self._get_scan_range(ob, comm, log_prefix)
+
+            # Compute the absorption and loading for this observation
+            self._compute_absorption_and_loading(ob, absorption_key, loading_key, comm)
 
             # Loop over the time span in "wind_time"-sized chunks.
             # wind_time is intended to reflect the correlation length
@@ -502,6 +532,58 @@ class SimAtmosphere(Operator):
         counter2 = 0
 
         return key1, key2, counter1, counter2
+
+    @function_timer
+    def _compute_absorption_and_loading(self, obs, absorption_key, loading_key, comm):
+        """Compute the (common) absorption and loading prior to bandpass convolution."""
+
+        if obs.telescope.focalplane.bandpass is None:
+            raise RuntimeError("Focalplane does not define bandpass")
+        altitude = obs.telescope.site.earthloc.height
+        weather = obs.telescope.site.weather
+        bandpass = obs.telescope.focalplane.bandpass
+
+        freq_min, freq_max = bandpass.get_range()
+        n_freq = self.n_bandpass_freqs
+        freqs = np.linspace(freq_min, freq_max, n_freq)
+        if comm is None:
+            ntask = 1
+            my_rank = 0
+        else:
+            ntask = comm.size
+            my_rank = comm.rank
+        n_freq_task = int(np.ceil(n_freq / ntask))
+        my_start = min(my_rank * n_freq_task, n_freq)
+        my_stop = min(my_start + n_freq_task, n_freq)
+        my_n_freq = my_stop - my_start
+
+        if my_n_freq > 0:
+            absorption = atm_absorption_coefficient_vec(
+                altitude.to_value(u.meter),
+                weather.air_temperature.to_value(u.Kelvin),
+                weather.surface_pressure.to_value(u.Pa),
+                weather.pwv.to_value(u.mm),
+                freqs[my_start].to_value(u.GHz),
+                freqs[my_stop - 1].to_value(u.GHz),
+                my_n_freq,
+            )
+            loading = atm_atmospheric_loading_vec(
+                altitude.to_value(u.meter),
+                weather.air_temperature.to_value(u.Kelvin),
+                weather.surface_pressure.to_value(u.Pa),
+                weather.pwv.to_value(u.mm),
+                freqs[my_start].to_value(u.GHz),
+                freqs[my_stop - 1].to_value(u.GHz),
+                my_n_freq,
+            )
+        else:
+            absorption, loading = [], []
+
+        if comm is not None:
+            absorption = np.hstack(comm.allgather(absorption))
+            loading = np.hstack(comm.allgather(loading))
+        obs[absorption_key] = absorption
+        obs[loading_key] = loading
 
     def _get_cache_dir(self, obs, comm):
         obsid = obs.uid
