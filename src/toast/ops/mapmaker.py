@@ -123,6 +123,32 @@ class MapMaker(Operator):
         help="Binning operator for final map making.  Default is same as solver",
     )
 
+    write_map = Bool(True, help="If True, write the projected map")
+
+    write_noiseweighted_map = Bool(
+        False,
+        help="If True, write the noise-weighted map",
+    )
+
+    write_hits = Bool(True, help="If True, write the hits map")
+
+    write_cov = Bool(True, help="If True, write the white noise covariance matrices.")
+
+    write_invcov = Bool(
+        False,
+        help="If True, write the inverse white noise covariance matrices.",
+    )
+
+    write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
+
+    keep_solver_products = Bool(
+        False, help="If True, keep the map domain solver products in data"
+    )
+
+    keep_final_products = Bool(
+        False, help="If True, keep the map domain products in data after write"
+    )
+
     mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
 
     mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
@@ -136,9 +162,8 @@ class MapMaker(Operator):
     )
 
     output_dir = Unicode(
-        None,
-        allow_none=True,
-        help="If specified, write output data products to this directory",
+        ".",
+        help="Write output data products to this directory",
     )
 
     @traitlets.validate("binning")
@@ -243,11 +268,13 @@ class MapMaker(Operator):
 
         self.hits_name = "{}_hits".format(self.name)
         self.cov_name = "{}_cov".format(self.name)
+        self.invcov_name = "{}_invcov".format(self.name)
         self.rcond_name = "{}_rcond".format(self.name)
         self.flag_name = "{}_flags".format(self.name)
 
         self.clean_name = "{}_cleaned".format(mc_root)
         self.map_name = "{}_map".format(mc_root)
+        self.noiseweighted_map_name = "{}_noiseweighted_map".format(mc_root)
 
         timer.start()
 
@@ -536,6 +563,20 @@ class MapMaker(Operator):
                 timer=timer,
             )
 
+        # Delete our solver products to save memory
+        if not self.mc_mode and not self.keep_solver_products:
+            for prod in [
+                self.solver_hits_name,
+                self.solver_cov_name,
+                self.solver_rcond_name,
+                self.solver_rcond_mask_name,
+                self.solver_rhs,
+                self.solver_bin,
+            ]:
+                if prod in data:
+                    data[prod].clear()
+                    del data[prod]
+
         # Restore flag names and masks to binning operator, in case it is being used
         # for the final map making or for other external operations.
 
@@ -576,6 +617,7 @@ class MapMaker(Operator):
             final_cov = CovarianceAndHits(
                 pixel_dist=map_binning.pixel_dist,
                 covariance=map_binning.covariance,
+                inverse_covariance=self.invcov_name,
                 hits=self.hits_name,
                 rcond=self.rcond_name,
                 det_flags=map_binning.det_flags,
@@ -606,6 +648,8 @@ class MapMaker(Operator):
         )
 
         pre_pipe = None
+        if self.write_noiseweighted_map:
+            map_binning.noiseweighted = self.noiseweighted_map_name
         map_binning.binned = self.map_name
 
         if n_enabled_templates != 0:
@@ -679,15 +723,29 @@ class MapMaker(Operator):
             timer=timer,
         )
 
-        # Write the outputs
+        # Write and delete the outputs
+
         # FIXME:  This all assumes the pointing operator is an instance of the
         # PointingHealpix class.  We need to generalize distributed pixel data
         # formats and associate them with the pointing operator.
-        if self.output_dir is not None:
-            for prod in ["map", "hits", "cov", "rcond"]:
-                dkey = "{}_{}".format(self.name, prod)
-                file = os.path.join(self.output_dir, "{}.fits".format(dkey))
-                write_healpix_fits(data[dkey], file, nest=map_binning.pointing.nest)
+
+        write_del = list()
+        write_del.append((self.hits_name, self.write_hits))
+        write_del.append((self.rcond_name, self.write_rcond))
+        write_del.append((self.noiseweighted_map_name, self.write_noiseweighted_map))
+        write_del.append((self.map_name, self.write_map))
+        write_del.append((self.invcov_name, self.write_invcov))
+        write_del.append((self.cov_name, self.write_cov))
+        for prod_key, prod_write in write_del:
+            if prod_write:
+                fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
+                write_healpix_fits(
+                    data[prod_key], fname, nest=map_binning.pointing.nest
+                )
+            if not self.keep_final_products:
+                if prod_key in data:
+                    data[prod_key].clear()
+                    del data[prod_key]
 
         log.info_rank(
             f"{log_prefix}  finished output write in",

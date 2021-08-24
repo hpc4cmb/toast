@@ -12,7 +12,7 @@ import numpy as np
 
 
 class DetDataView(MutableMapping):
-    """Class that applies views to a DetDataMgr instance."""
+    """Class that applies views to a DetDataManager instance."""
 
     def __init__(self, obj, slices):
         self.obj = obj
@@ -55,7 +55,7 @@ class DetDataView(MutableMapping):
 
 
 class SharedView(MutableMapping):
-    """Class that applies views to a SharedDataMgr instance."""
+    """Class that applies views to a SharedDataManager instance."""
 
     def __init__(self, obj, slices):
         self.obj = obj
@@ -133,7 +133,7 @@ class View(Sequence):
         return s
 
 
-class ViewMgr(MutableMapping):
+class ViewManager(MutableMapping):
     """Internal class to manage views into observation data objects."""
 
     def __init__(self, obj):
@@ -201,7 +201,7 @@ class ViewInterface(object):
             return self
         else:
             if not hasattr(obj, "_viewmgr"):
-                obj._viewmgr = ViewMgr(obj)
+                obj._viewmgr = ViewManager(obj)
             return obj._viewmgr
 
     def __set__(self, obj, value):

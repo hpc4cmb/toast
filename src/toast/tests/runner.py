@@ -44,6 +44,7 @@ from . import ops_sim_tod_conviqt as test_ops_sim_tod_conviqt
 
 from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
 
+from . import ops_statistics as test_ops_statistics
 from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 from . import ops_mapmaker_binning as test_ops_mapmaker_binning
 from . import ops_mapmaker_solve as test_ops_mapmaker_solve
@@ -169,6 +170,7 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_totalconvolve))
 
+        suite.addTest(loader.loadTestsFromModule(test_ops_statistics))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_utils))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_binning))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_solve))

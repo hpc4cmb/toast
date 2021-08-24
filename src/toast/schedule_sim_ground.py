@@ -442,6 +442,7 @@ class SSOPatch(Patch):
 class CoolerCyclePatch(Patch):
     def __init__(
         self,
+        name,
         weight,
         power,
         hold_time_min,
@@ -452,7 +453,7 @@ class CoolerCyclePatch(Patch):
         last_cycle_end,
     ):
         # Standardized name for cooler cycles
-        self.name = "cooler_cycle"
+        self.name = name
         self.hold_time_min = hold_time_min * 3600
         self.hold_time_max = hold_time_max * 3600
         self.cycle_time = cycle_time * 3600
@@ -2592,6 +2593,7 @@ def parse_patch_sso(args, parts):
 def parse_patch_cooler(args, parts, last_cycle_end):
     log = Logger.get()
     log.info("Cooler cycle format")
+    name = parts[0]
     weight = float(parts[2])
     power = float(parts[3])
     hold_time_min = float(parts[4])  # in hours
@@ -2600,7 +2602,15 @@ def parse_patch_cooler(args, parts, last_cycle_end):
     az = float(parts[7])
     el = float(parts[8])
     patch = CoolerCyclePatch(
-        weight, power, hold_time_min, hold_time_max, cycle_time, az, el, last_cycle_end
+        name,
+        weight,
+        power,
+        hold_time_min,
+        hold_time_max,
+        cycle_time,
+        az,
+        el,
+        last_cycle_end,
     )
     return patch
 
@@ -2847,10 +2857,11 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         total_weight += patch.weight
         patches.append(patch)
 
-        log.debug(
-            "Highest possible observing elevation: {:.2f} degrees."
-            " Sky fraction = {:.4f}".format(patches[-1].el_max0 / degree, patch._area)
-        )
+        if patches[-1].el_max0 is not None:
+            el_max = patches[-1].el_max0 / degree
+            log.debug(f"Highest possible observing elevation: {el_max:.2f} deg.")
+        if patches[-1]._area is not None:
+            log.debug(f"Sky fraction = {patch._area:.4f}")
 
     if args.debug:
         import matplotlib.pyplot as plt

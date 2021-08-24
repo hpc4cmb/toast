@@ -11,7 +11,7 @@ from astropy import units as u
 
 import healpy as hp
 
-from ..timing import function_timer
+from ..timing import function_timer, GlobalTimers
 
 from .. import qarray as qa
 
@@ -44,6 +44,19 @@ class ObserveAtmosphere(Operator):
         help="Observation detdata key for detector quaternions",
     )
 
+    weights = Unicode(
+        None,
+        allow_none=True,
+        help="Observation detdata key for detector Stokes weights",
+    )
+
+    weights_mode = Unicode("IQU", help="Stokes weights mode (eg. 'I', 'IQU', 'QU')")
+
+    polarization_fraction = Float(
+        0,
+        help="Polarization fraction (only Q polarization).",
+    )
+
     view = Unicode(
         None, allow_none=True, help="Use this view of valid data in all observations"
     )
@@ -66,9 +79,18 @@ class ObserveAtmosphere(Operator):
 
     sim = Unicode("atmsim", help="The observation key for the list of AtmSim objects")
 
-    gain = Float(1.0, help="Scaling applied to the simulated TOD")
+    absorption = Unicode(
+        None, allow_none=True, help="The observation key for the absorption"
+    )
 
-    absorption = Float(None, allow_none=True, help="Atmospheric absorption")
+    loading = Unicode(None, allow_none=True, help="The observation key for the loading")
+
+    n_bandpass_freqs = Int(
+        100,
+        help="The number of sampling frequencies used when convolving the bandpass with atmosphere absorption and loading",
+    )
+
+    gain = Float(1.0, help="Scaling applied to the simulated TOD")
 
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
@@ -91,6 +113,9 @@ class ObserveAtmosphere(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
+        gt = GlobalTimers.get()
+
+        gt.start("ObserveAtmosphere:  total")
 
         comm = data.comm.comm_group
         group = data.comm.group
@@ -102,6 +127,10 @@ class ObserveAtmosphere(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
+
+            gt.start("ObserveAtmosphere:  per-observation setup")
+            # Bandpass-specific unit conversion, relative to 150GHz
+            absorption, loading = self._get_absorption_and_loading(ob, dets)
 
             # Make sure detector data output exists
             ob.detdata.ensure(self.det_data, detectors=dets)
@@ -118,6 +147,7 @@ class ObserveAtmosphere(Operator):
             ngood_tot = 0
             nbad_tot = 0
 
+            gt.stop("ObserveAtmosphere:  per-observation setup")
             for vw in range(len(views)):
                 # Determine the wind interval we are in, and hence which atmosphere
                 # simulation to use.  The wind intervals are already guaranteed
@@ -141,6 +171,7 @@ class ObserveAtmosphere(Operator):
                 sim_list = ob[self.sim][cur_wind]
 
                 for det in dets:
+                    gt.start("ObserveAtmosphere:  detector setup")
                     flags = None
                     if self.det_flags is not None:
                         flags = (
@@ -169,6 +200,23 @@ class ObserveAtmosphere(Operator):
                     # angles from the simulation.
                     theta, phi = qa.to_position(azel_quat)
 
+                    # Stokes weights for observing polarized atmosphere
+                    if self.weights is None:
+                        weights_I = 1
+                        weights_Q = 0
+                    else:
+                        weights = views.detdata[self.weights][vw][det][good]
+                        if "I" in self.weights_mode:
+                            ind = self.weights_mode.index("I")
+                            weights_I = weights[:, ind].copy()
+                        else:
+                            weights_I = 0
+                        if "Q" in self.weights_mode:
+                            ind = self.weights_mode.index("Q")
+                            weights_Q = weights[:, ind].copy()
+                        else:
+                            weights_Q = 0
+
                     # Azimuth is measured in the opposite direction
                     # than longitude
                     az = 2 * np.pi - phi
@@ -188,6 +236,8 @@ class ObserveAtmosphere(Operator):
 
                     atmdata = np.zeros(ngood, dtype=np.float64)
 
+                    gt.stop("ObserveAtmosphere:  detector setup")
+                    gt.start("ObserveAtmosphere:  detector AtmSim.observe")
                     for icur, cur_sim in enumerate(sim_list):
                         if (
                             not (
@@ -263,21 +313,53 @@ class ObserveAtmosphere(Operator):
                                         bad
                                     ] = 255
                                     nbad_tot += nbad
+                    gt.stop("ObserveAtmosphere:  detector AtmSim.observe")
+                    gt.start("ObserveAtmosphere:  detector accumulate")
 
-                    atmdata *= self.gain
+                    # Calibrate the atmopsheric fluctuations to appropriate bandpass
+                    atmdata *= self.gain * absorption[det]
 
-                    if self.absorption is not None:
-                        # Apply the frequency-dependent absorption-coefficient
-                        atmdata *= self.absorption
+                    # Add the elevation-dependent atmospheric loading
+                    atmdata += loading[det] / np.sin(el)
+
+                    # Add polarization.  In our simple model, there is only Q-polarization
+                    # and the polarization fraction is constant.
+                    pfrac = self.polarization_fraction
+                    atmdata *= weights_I + weights_Q * pfrac
 
                     # Add contribution to output
                     views.detdata[self.det_data][vw][det][good] += atmdata
+                    gt.stop("ObserveAtmosphere:  detector accumulate")
 
             if nbad_tot > 0:
                 frac = nbad_tot / (ngood_tot + nbad_tot) * 100
                 log.error(
                     "{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
                 )
+        gt.stop("ObserveAtmosphere:  total")
+
+    @function_timer
+    def _get_absorption_and_loading(self, obs, dets):
+        """Bandpass-specific unit conversion and loading"""
+
+        if obs.telescope.focalplane.bandpass is None:
+            raise RuntimeError("Focalplane does not define bandpass")
+        bandpass = obs.telescope.focalplane.bandpass
+
+        freq_min, freq_max = bandpass.get_range()
+        n_freq = self.n_bandpass_freqs
+        freqs = np.linspace(freq_min, freq_max, n_freq)
+
+        absorption = obs[self.absorption]
+        loading = obs[self.loading]
+
+        absorption_det = {}
+        loading_det = {}
+        for det in dets:
+            absorption_det[det] = bandpass.convolve(det, freqs, absorption, rj=True)
+            loading_det[det] = bandpass.convolve(det, freqs, loading, rj=True)
+
+        return absorption_det, loading_det
 
     def _finalize(self, data, **kwargs):
         return
@@ -300,6 +382,8 @@ class ObserveAtmosphere(Operator):
             req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
+        if self.weights is not None:
+            req["weights"].append(self.weights)
         if self.view is not None:
             req["intervals"].append(self.view)
         return req

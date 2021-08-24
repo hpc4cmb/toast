@@ -11,19 +11,21 @@ The workflow is tailored to the size of the communicator.
 
 import os
 import sys
+import shutil
 import traceback
 import argparse
 from astropy import units as u
 import toast
 from toast.schedule_sim_ground import run_scheduler
 from toast.timing import gather_timers, dump
-from benchmarking_utilities import (
+from toast.scripts.benchmarking_utilities import (
     get_mpi_settings,
     select_case,
     make_focalplane,
     scan_map,
     run_mapmaker,
     compute_science_metric,
+    estimate_memory_overhead,
 )
 
 
@@ -89,9 +91,24 @@ def parse_arguments():
         toast.ops.ScanHealpix(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=1024),
+        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=4096),
+        toast.ops.Statistics(name="raw_statistics"),
+        toast.ops.Statistics(name="filtered_statistics"),
+        toast.ops.GroundFilter(name="groundfilter"),
+        toast.ops.PolyFilter(name="polyfilter1D"),
+        toast.ops.PolyFilter2D(name="polyfilter2D"),
+        toast.ops.CommonModeFilter(name="common_mode_filter"),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
-        toast.ops.MapMaker(name="mapmaker", solve_rcond_threshold=1e-3),
+        toast.ops.MapMaker(
+            name="mapmaker",
+            solve_rcond_threshold=1e-3,
+            write_map=True,
+            write_noiseweighted_map=False,
+            write_hits=True,
+            write_cov=False,
+            write_invcov=False,
+            write_rcond=False,
+        ),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
@@ -108,23 +125,38 @@ def parse_arguments():
 
     # hardcoded arguments
     # focal plane
-    args.sample_rate = 100  # sample_rate is nb sample per second, we do (60 * obs_minutes * sample_rate) sample for one observation of one detector in a minute
+    args.sample_rate = 100  # sample_rate is nb sample per second.
     args.max_detector = (
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10
-    args.obs_minutes = 60
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
+
     # schedule, site and telescope parameters
-    args.telescope_name = "telescope"
+    args.telescope_name = "LAT"
     args.site_name = "atacama"
     args.site_lon = " -67:47:10"
     args.site_lat = " -22:57:30"
     args.site_alt = 5200.0 * u.meter
-    args.schedule_patch = "tile000,1,40,0,60,-40"
-    args.schedule_start = "2020-01-01 00:00:00"
-    args.schedule_stop = "2020-01-01 12:00:00"
+    args.patch_coord = "C"
+    args.el_min = 30.0
+    args.el_max = 70.0
+    args.sun_el_max = 90.0
+    args.sun_avoidance_angle = 0.0
+    args.moon_avoidance_angle = 0.0
+    args.gap_s = 60.0
+    args.gap_small_s = 0.0
+    args.ces_max_time = 1200.0
+    args.boresight_angle_step = 180.0
+    args.boresight_angle_time = 1440.0
+    args.schedule_patches = [
+        "RISING_SCAN_35,HORIZONTAL,1.00,30.00,150.00,35.00,1500",
+        "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
+    ]
+    args.schedule_start = "2027-06-01 00:00:00"
+    args.schedule_stop = "2027-06-30 00:00:00"
+
     # scan map
     args.input_map = "fake_input_sky.fits"
 
@@ -137,21 +169,44 @@ def make_schedule(args, world_comm, site):
     """
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
-        schedule_file = os.path.join(args.out_dir, "ground_bench_schedule.txt")
-        run_scheduler(
-            opts=[
+        schedule_file = "ground_bench_schedule.txt"
+        output_schedule = os.path.join(args.out_dir, "ground_bench_schedule.txt")
+        if not os.path.exists(schedule_file):
+            # Building the schedule is serial and takes a while, only generate it
+            # if needed.
+            sch_opts = [
                 "--site-name",
                 args.site_name,
                 "--telescope",
                 args.telescope_name,
                 "--site-lon",
-                "{}".format(site.earthloc.lon.to_value(u.degree)),
+                f"{site.earthloc.lon.to_value(u.degree)}",
                 "--site-lat",
-                "{}".format(site.earthloc.lat.to_value(u.degree)),
+                f"{site.earthloc.lat.to_value(u.degree)}",
                 "--site-alt",
-                "{}".format(site.earthloc.height.to_value(u.meter)),
-                "--patch",
-                args.schedule_patch,
+                f"{site.earthloc.height.to_value(u.meter)}",
+                "--patch-coord",
+                args.patch_coord,
+                "--el-min",
+                f"{args.el_min}",
+                "--el-max",
+                f"{args.el_max}",
+                "--sun-el-max",
+                f"{args.sun_el_max}",
+                "--sun-avoidance-angle",
+                f"{args.sun_avoidance_angle}",
+                "--moon-avoidance-angle",
+                f"{args.moon_avoidance_angle}",
+                "--gap-s",
+                f"{args.gap_s}",
+                "--gap-small-s",
+                f"{args.gap_small_s}",
+                "--ces-max-time",
+                f"{args.ces_max_time}",
+                "--boresight-angle-step",
+                f"{args.boresight_angle_step}",
+                "--boresight-angle-time",
+                f"{args.boresight_angle_time}",
                 "--start",
                 args.schedule_start,
                 "--stop",
@@ -159,12 +214,16 @@ def make_schedule(args, world_comm, site):
                 "--out",
                 schedule_file,
             ]
-        )
+            for patch in args.schedule_patches:
+                sch_opts.extend(["--patch", patch])
+            run_scheduler(opts=sch_opts)
+        # Copy the schedule into the output directory for reference
+        shutil.copy(schedule_file, output_schedule)
         schedule = toast.schedule.GroundSchedule()
-        schedule.read(schedule_file)
+        schedule.read(output_schedule)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
-    return schedule
+    args.schedule = schedule
 
 
 def main():
@@ -193,6 +252,23 @@ def main():
         outlog = os.path.join(args.out_dir, "config_log.toml")
         toast.config.dump_toml(outlog, config)
 
+    # Observing site
+    site = toast.instrument.GroundSite(
+        args.site_name, args.site_lat, args.site_lon, args.site_alt
+    )
+
+    # Create the schedule, so that we know the total observing time.
+    make_schedule(args, world_comm, site)
+
+    # Estimate per-process memory use from map domain objects and
+    # other sources.
+    nside_final = None
+    if ops.pointing_final.enabled:
+        nside_final = ops.pointing_final.nside
+    overhead_bytes = estimate_memory_overhead(
+        n_procs, n_nodes, 0.4, ops.pointing.nside, nside_final=nside_final
+    )
+
     # selects appropriate case size
     select_case(
         args,
@@ -201,7 +277,7 @@ def main():
         avail_node_bytes,
         ops.binner.full_pointing,
         world_comm,
-        log,
+        per_process_overhead_bytes=overhead_bytes,
     )
 
     # Creates the focalplane file.
@@ -215,22 +291,16 @@ def main():
         sys.exit(0)
 
     # Create a telescope for the simulation.
-    site = toast.instrument.GroundSite(
-        args.site_name, args.site_lat, args.site_lon, args.site_alt
-    )
     telescope = toast.instrument.Telescope(
         args.telescope_name, focalplane=focalplane, site=site
     )
-
-    # Load the schedule file
-    schedule = make_schedule(args, world_comm, site)
 
     # Find the group size for this job, either from command-line overrides or
     # by estimating the data volume.
     group_size = toast.job_group_size(
         world_comm,
         jobargs,
-        schedule=schedule,
+        schedule=args.schedule,
         focalplane=focalplane,
         full_pointing=ops.binner.full_pointing,
     )
@@ -247,7 +317,7 @@ def main():
 
     # Simulate the telescope pointing
     ops.sim_ground.telescope = telescope
-    ops.sim_ground.schedule = schedule
+    ops.sim_ground.schedule = args.schedule
     ops.sim_ground.weather = telescope.site.name
     ops.sim_ground.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
@@ -297,6 +367,24 @@ def main():
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
+    # Collect signal statistics before filtering
+    ops.raw_statistics.output_dir = args.out_dir
+    ops.raw_statistics.apply(data)
+
+    # Apply the filter stack
+    ops.groundfilter.apply(data)
+    log.info_rank("Finished ground-filtering in", comm=world_comm, timer=timer)
+    ops.polyfilter1D.apply(data)
+    log.info_rank("Finished 1D-poly-filtering in", comm=world_comm, timer=timer)
+    ops.polyfilter2D.apply(data)
+    log.info_rank("Finished 2D-poly-filtering in", comm=world_comm, timer=timer)
+    ops.common_mode_filter.apply(data)
+    log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
+
+    # Collect signal statistics after filtering
+    ops.filtered_statistics.output_dir = args.out_dir
+    ops.filtered_statistics.apply(data)
+
     # Build up our map-making operation.
     run_mapmaker(ops, args, job.templates, data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
@@ -310,7 +398,6 @@ def main():
     compute_science_metric(args, runtime, n_nodes, rank, log)
 
     # dumps all the timing information
-
     timer.stop()
     timer.clear()
     timer.start()
@@ -325,17 +412,6 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = [f"Proc {rank}: {x}" for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()

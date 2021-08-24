@@ -15,15 +15,26 @@ import astropy.coordinates as coord
 
 from astropy.table import QTable, Column
 
+from scipy.constants import h, k
+
+try:
+    from scipy.integrate import simpson
+except ImportError:
+    from scipy.integrate import simps as simpson
+
 import tomlkit
 
 from .timing import function_timer, Timer
 
 from . import qarray as qa
 
+from .noise_sim import AnalyticNoise
 from .utils import Logger, Environment, name_UID
 
 from . import qarray
+
+# CMB temperature
+TCMB = 2.72548
 
 
 class Site(object):
@@ -100,6 +111,16 @@ class Site(object):
     def __repr__(self):
         value = "<Site '{}' : uid = {}>".format(self.name, self.uid)
         return value
+
+    def __eq__(self, other):
+        if self.name != other.name:
+            return False
+        if self.uid != other.uid:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class GroundSite(Site):
@@ -260,6 +281,93 @@ class SpaceSite(Site):
         return v
 
 
+class Bandpass(object):
+    """Class that contains the bandpass information for an entire focalplane."""
+
+    def __init__(self, bandcenters, bandwidths, nstep=1001):
+        """All units in GHz
+
+        Args :
+            bandcenters(dict) : Dictionary of bandpass centers
+            bandwidths(dict) : Dictionary of bandpass widths
+            nstep(int) : Number of interplation steps to use in `convolve()`
+        """
+        self.nstep = nstep
+        self.dets = []
+        self.fmin = {}
+        self.fmax = {}
+        for name in bandcenters:
+            self.dets.append(name)
+            center = bandcenters[name]
+            width = bandwidths[name]
+            self.fmin[name] = center - 0.5 * width
+            self.fmax[name] = center + 0.5 * width
+        # The interpolated bandpasses will be cached as needed
+        self.freqs = {}
+        self.bandpass = {}
+
+    def get_range(self):
+        """Return the maximum range of frequencies needed for convolution."""
+        fmin = None
+        fmax = None
+        for name in self.dets:
+            if fmin is None:
+                fmin = self.fmin[name]
+                fmax = self.fmax[name]
+            else:
+                fmin = min(fmin, self.fmin[name])
+                fmax = max(fmax, self.fmax[name])
+        return fmin, fmax
+
+    def convolve(self, det, freqs, spectrum, rj=False):
+        """Convolve the provided spectrum with the detector bandpass
+
+        Args:
+            det(str):  Detector name
+            freqs(array of floats):  Spectral bin locations
+            spectrum(array of floats):  Spectral bin values
+            rj(bool):  Input spectrum is in Rayleigh-Jeans units and
+                should be converted into thermal units for convolution
+
+        Returns:
+            (array):  The bandpass-convolved spectrum
+        """
+        if det not in self.bandpass:
+            # Normalize and interpolate the bandpass
+            fmin_det = self.fmin[det].to_value(u.GHz)
+            fmax_det = self.fmax[det].to_value(u.GHz)
+            self.freqs[det] = np.linspace(fmin_det, fmax_det, self.nstep)
+            try:
+                # If we have a tabulated bandpass, interpolate it
+                self.bandpass[det] = np.interp(
+                    self.freqs[det], self.bins[det].to_value(u.GHz), self.values[det]
+                )
+            except AttributeError:
+                self.bandpass[det] = np.ones(self.nstep)
+
+            norm = simpson(self.bandpass[det], x=self.freqs[det])
+            if norm == 0:
+                raise RuntimeError("Bandpass cannot be normalized")
+            self.bandpass[det] /= norm
+
+        freqs_det = self.freqs[det]
+        bandpass_det = self.bandpass[det]
+
+        # Interpolate spectrum values to bandpass frequencies
+        spectrum_det = np.interp(freqs_det, freqs.to_value(u.GHz), spectrum)
+
+        if rj:
+            # From brightness to thermodynamic units
+            x = h * freqs_det * 1e9 / k / TCMB
+            rj2cmb = (x / (np.exp(x / 2) - np.exp(-x / 2))) ** -2
+            spectrum_det *= rj2cmb
+
+        # Average across the bandpass
+        convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
+
+        return convolved
+
+
 class Focalplane(object):
     """Class representing the focalplane for one observation.
 
@@ -293,6 +401,9 @@ class Focalplane(object):
             DefaultNoiseModel operator.
         "psd_alpha":  Quantity used to create a synthetic noise model with the
             DefaultNoiseModel operator.
+        "elevation_noise_a" and "elevation_noise_c":  Parameters of elevation scaling
+            noise model: PSD_{out} = PSD_{ref} * (a / sin(el) + c)^2.  Only applicable
+            to ground data.
 
     Args:
         detector_data (QTable):  Table of detector properties.
@@ -342,6 +453,56 @@ class Focalplane(object):
             self._compute_fov()
         self._get_pol_angles()
         self._get_pol_efficiency()
+        self._get_noise()
+        self._get_bandpass()
+
+    def _get_noise(self):
+        """Use the noise parameters to instantiate an analytical noise model"""
+
+        model_available = False
+        noise_keys = "psd_fmin", "psd_fknee", "psd_alpha", "psd_net"
+        for key in noise_keys:
+            if key not in self.detector_data.colnames:
+                break
+        else:
+            model_available = True
+        if model_available:
+            dets = []
+            fmin = {}
+            fknee = {}
+            alpha = {}
+            NET = {}
+            rates = {}
+            for row in self.detector_data:
+                name = row["name"]
+                dets.append(name)
+                rates[name] = self.sample_rate
+                fmin[name] = row["psd_fmin"]
+                fknee[name] = row["psd_fknee"]
+                alpha[name] = row["psd_alpha"]
+                NET[name] = row["psd_net"]
+
+            self.noise = AnalyticNoise(
+                rate=rates, fmin=fmin, detectors=dets, fknee=fknee, alpha=alpha, NET=NET
+            )
+        else:
+            self.noise = None
+        return
+
+    def _get_bandpass(self):
+        """Use the bandpass parameters to instantiate a bandpass model"""
+
+        if "bandcenter" in self.detector_data.colnames:
+            bandcenter = {}
+            bandwidth = {}
+            for row in self.detector_data:
+                name = row["name"]
+                bandcenter[name] = row["bandcenter"]
+                bandwidth[name] = row["bandwidth"]
+            self.bandpass = Bandpass(bandcenter, bandwidth)
+        else:
+            self.bandpass = None
+        return
 
     def _compute_fov(self):
         """Compute the field of view"""
@@ -370,12 +531,9 @@ class Focalplane(object):
             )
             for row in self.detector_data:
                 quat = row["quat"]
-                theta, phi = qarray.to_position(quat)
-                yrot = qarray.rotation(self.YAXIS, -theta)
-                zrot = qarray.rotation(self.ZAXIS, -phi)
-                rot = qarray.norm(qarray.mult(yrot, zrot))
-                pol_rot = qarray.mult(rot, quat)
-                pol_angle = qarray.to_angles(pol_rot)[2]
+                a = quat[3]
+                d = quat[2]
+                pol_angle = np.arctan2(2 * a * d, a ** 2 - d ** 2) % np.pi
                 row["pol_angle"] = pol_angle * u.radian
 
     def _get_pol_efficiency(self):
@@ -471,6 +629,35 @@ class Focalplane(object):
     def keys(self):
         return self.detectors
 
+    def detector_groups(self, column):
+        """Group detectors by a common value in one property.
+
+        This returns a dictionary whose keys are the unique values of the specified
+        detector_data column.  The values for each key are a list of detectors that
+        have that value.  This can be useful for creating detector sets for data
+        distribution or for considering detectors with correlations.
+
+        Since the column values will be used for dictionary keys, the column must
+        be a data type which is hashable.
+
+        Args:
+            column (str):  The detector_data column.
+
+        Returns:
+            (dict):  The detector names grouped by unique column values.
+
+        """
+        if column not in self.detector_data.colnames:
+            raise RuntimeError(f"'{column}' is not a valid det data column")
+        detgroups = dict()
+        for d in self.detectors:
+            indx = self._det_to_row[d]
+            val = self.detector_data[column][indx]
+            if val not in detgroups:
+                detgroups[val] = list()
+            detgroups[val].append(d)
+        return detgroups
+
     def __repr__(self):
         value = "<Focalplane: {} detectors, sample_rate = {} Hz, FOV = {} deg, detectors = [".format(
             len(self.detector_data),
@@ -480,6 +667,23 @@ class Focalplane(object):
         value += "{} .. {}".format(self.detectors[0], self.detectors[-1])
         value += "]>"
         return value
+
+    def __eq__(self, other):
+        if self.sample_rate != other.sample_rate:
+            return False
+        if self.field_of_view != other.field_of_view:
+            return False
+        if self.detectors != other.detectors:
+            return False
+        if self.detector_data.colnames != other.detector_data.colnames:
+            return False
+        for cn in self.detector_data.colnames:
+            if not np.array_equal(self.detector_data[cn], other.detector_data[cn]):
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def read(self, file, comm=None):
         if comm is None or comm.rank == 0:
@@ -538,3 +742,17 @@ class Telescope(object):
         value += self.focalplane.__repr__()
         value += ">"
         return value
+
+    def __eq__(self, other):
+        if self.name != other.name:
+            return False
+        if self.uid != other.uid:
+            return False
+        if self.site != other.site:
+            return False
+        if self.focalplane != other.focalplane:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)

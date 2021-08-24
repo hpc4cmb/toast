@@ -32,6 +32,15 @@ from ..atm import AtmSim, available_utils
 
 from .sim_tod_atm_utils import ObserveAtmosphere
 
+have_atm_utils = None
+if have_atm_utils is None:
+    try:
+        from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
+
+        have_atm_utils = True
+    except ImportError:
+        have_atm_utils = False
+
 
 @trait_docs
 class SimAtmosphere(Operator):
@@ -60,6 +69,17 @@ class SimAtmosphere(Operator):
         klass=Operator,
         allow_none=True,
         help="Operator that translates boresight Az/El pointing into detector frame",
+    )
+
+    detector_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Operator that translates boresight Az/El pointing into detector weights",
+    )
+
+    polarization_fraction = Float(
+        0,
+        help="Polarization fraction (only Q polarization).",
     )
 
     shared_flags = Unicode(
@@ -129,6 +149,11 @@ class SimAtmosphere(Operator):
 
     nelem_sim_max = Int(10000, help="Controls the size of the simulation slices")
 
+    n_bandpass_freqs = Int(
+        100,
+        help="The number of sampling frequencies used when convolving the bandpass with atmosphere absorption and loading",
+    )
+
     cache_dir = Unicode(
         None,
         allow_none=True,
@@ -182,8 +207,33 @@ class SimAtmosphere(Operator):
                     raise traitlets.TraitError(msg)
         return detpointing
 
+    @traitlets.validate("detector_weights")
+    def _check_detector_weights(self, proposal):
+        detweights = proposal["value"]
+        if detweights is not None:
+            if not isinstance(detweights, Operator):
+                raise traitlets.TraitError(
+                    "detector_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in [
+                "view",
+                "quats",
+                "weights",
+            ]:
+                if not detweights.has_trait(trt):
+                    msg = f"detector_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return detweights
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not have_atm_utils:
+            log = Logger.get()
+            msg = "TOAST was compiled without the libaatm library, which is "
+            msg += "required for observations of simulated atmosphere."
+            log.error(msg)
+            raise RuntimeError(msg)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -209,7 +259,11 @@ class SimAtmosphere(Operator):
         wind_intervals = "wind"
 
         # Observation key for storing the atmosphere sims
-        atm_sim_key = "atm_sim"
+        atm_sim_key = f"{self.name}_atm_sim"
+
+        # Observation key for storing absorption and loading
+        absorption_key = f"{self.name}_absorption"
+        loading_key = f"{self.name}_loading"
 
         # Set up the observing operator
         observe_atm = ObserveAtmosphere(
@@ -223,8 +277,15 @@ class SimAtmosphere(Operator):
             det_flag_mask=self.det_flag_mask,
             wind_view=wind_intervals,
             sim=atm_sim_key,
+            absorption=absorption_key,
+            loading=loading_key,
+            n_bandpass_freqs=self.n_bandpass_freqs,
             gain=self.gain,
+            polarization_fraction=self.polarization_fraction,
         )
+        if self.detector_weights is not None:
+            observe_atm.weights_mode = self.detector_weights.mode
+            observe_atm.weights = self.detector_weights.weights
 
         for ob in data.obs:
             if ob.name is None:
@@ -288,10 +349,6 @@ class SimAtmosphere(Operator):
 
             key1, key2, counter1, counter2 = self._get_rng_keys(ob)
 
-            absorption, loading = self._get_absorption_and_loading(ob)
-
-            observe_atm.absorption = absorption
-
             cachedir = self._get_cache_dir(ob, comm)
 
             ob[atm_sim_key] = list()
@@ -303,6 +360,9 @@ class SimAtmosphere(Operator):
                 log.debug(msg)
 
             scan_range = self._get_scan_range(ob, comm, log_prefix)
+
+            # Compute the absorption and loading for this observation
+            self._compute_absorption_and_loading(ob, absorption_key, loading_key, comm)
 
             # Loop over the time span in "wind_time"-sized chunks.
             # wind_time is intended to reflect the correlation length
@@ -412,13 +472,11 @@ class SimAtmosphere(Operator):
             pipe_data = Data(comm=data.comm)
             pipe_data._internal = data._internal
             pipe_data.obs.append(ob)
-            observe_pipe = Pipeline(
-                operators=[
-                    self.detector_pointing,
-                    observe_atm,
-                ],
-                detector_sets=["SINGLE"],
-            )
+            operators = [self.detector_pointing]
+            if self.detector_weights is not None:
+                operators.append(self.detector_weights)
+            operators.append(observe_atm)
+            observe_pipe = Pipeline(operators=operators, detector_sets=["SINGLE"])
             observe_pipe.apply(pipe_data)
             # Manually remove the weak reference to the observation, otherwise
             # deletion of pipe_data will trigger clearing of the observations.
@@ -476,35 +534,56 @@ class SimAtmosphere(Operator):
         return key1, key2, counter1, counter2
 
     @function_timer
-    def _get_absorption_and_loading(self, obs):
-        altitude = obs.telescope.site.earthloc.height.to_value(u.meter)
-        weather = obs.telescope.site.weather
-        absorption = None
-        loading = None
-        if self.freq is not None:
-            if not available_utils:
-                msg = (
-                    "TOAST not compiled with libaatm support- absorption and "
-                    "loading unavailable"
-                )
-                raise RuntimeError(msg)
-            from ..atm import atm_absorption_coefficient, atm_atmospheric_loading
+    def _compute_absorption_and_loading(self, obs, absorption_key, loading_key, comm):
+        """Compute the (common) absorption and loading prior to bandpass convolution."""
 
-            absorption = atm_absorption_coefficient(
-                altitude,
-                weather.air_temperature.to_value(u.kelvin),
-                weather.surface_pressure,
-                weather.pwv,
-                self.freq.to_value(u.GHz),
+        if obs.telescope.focalplane.bandpass is None:
+            raise RuntimeError("Focalplane does not define bandpass")
+        altitude = obs.telescope.site.earthloc.height
+        weather = obs.telescope.site.weather
+        bandpass = obs.telescope.focalplane.bandpass
+
+        freq_min, freq_max = bandpass.get_range()
+        n_freq = self.n_bandpass_freqs
+        freqs = np.linspace(freq_min, freq_max, n_freq)
+        if comm is None:
+            ntask = 1
+            my_rank = 0
+        else:
+            ntask = comm.size
+            my_rank = comm.rank
+        n_freq_task = int(np.ceil(n_freq / ntask))
+        my_start = min(my_rank * n_freq_task, n_freq)
+        my_stop = min(my_start + n_freq_task, n_freq)
+        my_n_freq = my_stop - my_start
+
+        if my_n_freq > 0:
+            absorption = atm_absorption_coefficient_vec(
+                altitude.to_value(u.meter),
+                weather.air_temperature.to_value(u.Kelvin),
+                weather.surface_pressure.to_value(u.Pa),
+                weather.pwv.to_value(u.mm),
+                freqs[my_start].to_value(u.GHz),
+                freqs[my_stop - 1].to_value(u.GHz),
+                my_n_freq,
             )
-            loading = atm_atmospheric_loading(
-                altitude,
-                weather.air_temperature.to_value(u.kelvin),
-                weather.surface_pressure,
-                weather.pwv,
-                self.freq.to_value(u.GHz),
+            loading = atm_atmospheric_loading_vec(
+                altitude.to_value(u.meter),
+                weather.air_temperature.to_value(u.Kelvin),
+                weather.surface_pressure.to_value(u.Pa),
+                weather.pwv.to_value(u.mm),
+                freqs[my_start].to_value(u.GHz),
+                freqs[my_stop - 1].to_value(u.GHz),
+                my_n_freq,
             )
-        return absorption, loading
+        else:
+            absorption, loading = [], []
+
+        if comm is not None:
+            absorption = np.hstack(comm.allgather(absorption))
+            loading = np.hstack(comm.allgather(loading))
+        obs[absorption_key] = absorption
+        obs[loading_key] = loading
 
     def _get_cache_dir(self, obs, comm):
         obsid = obs.uid
@@ -539,14 +618,18 @@ class SimAtmosphere(Operator):
         # Read the extent of the AZ/EL boresight pointing, and use that
         # to compute the range of angles needed for simulating the slab.
 
-        # FIXME:  This is quite arbitrary and assumes that the boresight
-        # pointing has been created by the SimGround operator.  We should
-        # define the observation keys to use in some standard place and
-        # compute these limits from the data if they do not exist.
-        min_az_bore = obs["scan_min_az"].to_value(u.radian)
-        max_az_bore = obs["scan_max_az"].to_value(u.radian)
-        min_el_bore = obs["scan_min_el"].to_value(u.radian)
-        max_el_bore = obs["scan_max_el"].to_value(u.radian)
+        quats = obs.shared[self.detector_pointing.boresight]
+        theta, phi = qa.to_position(quats)
+        az = 2 * np.pi - phi
+        el = np.pi / 2 - theta
+        if self.shared_flags is not None:
+            good = (self.shared[self.shared_flags] & self.shared_flag_mask) == 0
+            az = az[good]
+            el = el[good]
+        min_az_bore = np.amin(az)
+        max_az_bore = np.amax(az)
+        min_el_bore = np.amin(el)
+        max_el_bore = np.amax(el)
 
         # Use a fixed focal plane radius so that changing the actual
         # set of detectors will not affect the simulated atmosphere.

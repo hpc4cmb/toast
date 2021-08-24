@@ -177,6 +177,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
     ops.det_pointing_radec.boresight = ops.sim_ground.boresight_radec
 
+    ops.det_weights_azel.detector_pointing = ops.det_pointing_azel
+    ops.det_weights_azel.hwp_angle = ops.sim_ground.hwp_angle
+
     # Create the Elevation modulated noise model
 
     ops.elevation_model.noise_model = ops.default_model.noise_model
@@ -188,7 +191,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
     ops.pointing.detector_pointing = ops.det_pointing_radec
+    ops.pointing.hwp_angle = ops.sim_ground.hwp_angle
     ops.pointing_final.detector_pointing = ops.det_pointing_radec
+    ops.pointing_final.hwp_angle = ops.sim_ground.hwp_angle
 
     ops.binner.pointing = ops.pointing
 
@@ -222,6 +227,8 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Simulate atmosphere
 
     ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
+    if ops.sim_atmosphere.polarization_fraction != 0:
+        ops.sim_atmosphere.detector_weights = ops.det_weights_azel
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
@@ -239,6 +246,11 @@ def reduce_data(job, args, data):
     timer = toast.timing.Timer()
     timer.start()
 
+    # Collect signal statistics before filtering
+
+    ops.raw_statistics.output_dir = args.out_dir
+    ops.raw_statistics.apply(data)
+
     # Apply the filter stack
 
     ops.groundfilter.apply(data)
@@ -249,6 +261,11 @@ def reduce_data(job, args, data):
     log.info_rank("Finished 2D-poly-filtering in", comm=world_comm, timer=timer)
     ops.common_mode_filter.apply(data)
     log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
+
+    # Collect signal statistics after filtering
+
+    ops.filtered_statistics.output_dir = args.out_dir
+    ops.filtered_statistics.apply(data)
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -292,24 +309,31 @@ def main():
     # atmosphere simulation, filtering, other types of map-making, etc.
 
     operators = [
-        toast.ops.SimGround(name="sim_ground"),
+        toast.ops.SimGround(name="sim_ground", weather="atacama"),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(
             name="elevation_model",
             out_model="el_noise_model",
         ),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
+        # In the future, `det_weights_azel` may be a dedicated operator that does not
+        # expand pixel numbers but just Stokes weights
+        toast.ops.PointingHealpix(
+            name="det_weights_azel", weights="weights_azel", mode="IQU"
+        ),
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
         ),
-        toast.ops.ScanHealpix(name="scan_map"),
+        toast.ops.ScanHealpix(name="scan_map", enabled=False),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
-        toast.ops.GroundFilter(name="groundfilter"),
+        toast.ops.Statistics(name="raw_statistics", enabled=False),
+        toast.ops.Statistics(name="filtered_statistics", enabled=False),
+        toast.ops.GroundFilter(name="groundfilter", enabled=False),
         toast.ops.PolyFilter(name="polyfilter1D"),
-        toast.ops.PolyFilter2D(name="polyfilter2D"),
-        toast.ops.CommonModeFilter(name="common_mode_filter"),
+        toast.ops.PolyFilter2D(name="polyfilter2D", enabled=False),
+        toast.ops.CommonModeFilter(name="common_mode_filter", enabled=False),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
@@ -351,17 +375,6 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = ["Proc {}: {}".format(rank, x) for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()

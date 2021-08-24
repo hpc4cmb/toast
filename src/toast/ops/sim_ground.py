@@ -96,7 +96,9 @@ class SimGround(Operator):
     )
 
     scan_rate_el = Quantity(
-        None, allow_none=True, help="The sky elevation scanning rate"
+        1.0 * u.degree / u.second,
+        allow_none=True,
+        help="The sky elevation scanning rate",
     )
 
     scan_accel_az = Quantity(
@@ -105,7 +107,9 @@ class SimGround(Operator):
     )
 
     scan_accel_el = Quantity(
-        None, allow_none=True, help="Mount elevation rate acceleration."
+        1.0 * u.degree / u.second ** 2,
+        allow_none=True,
+        help="Mount elevation rate acceleration.",
     )
 
     scan_cosecant_modulation = Bool(
@@ -135,6 +139,12 @@ class SimGround(Operator):
         help="Distribute observation data along the time axis rather than detector axis",
     )
 
+    detset_key = Unicode(
+        None,
+        allow_none=True,
+        help="If specified, use this column of the focalplane detector_data to group detectors",
+    )
+
     times = Unicode("times", help="Observation shared key for timestamps")
 
     shared_flags = Unicode("flags", help="Observation shared key for common flags")
@@ -147,7 +157,9 @@ class SimGround(Operator):
         None, allow_none=True, help="Observation detdata key for flags to initialize"
     )
 
-    hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
+    hwp_angle = Unicode(
+        None, allow_none=True, help="Observation shared key for HWP angle"
+    )
 
     azimuth = Unicode("azimuth", help="Observation shared key for Azimuth")
 
@@ -237,10 +249,57 @@ class SimGround(Operator):
                 )
         return sch
 
+    # Cross-check HWP parameters
+
+    @traitlets.validate("hwp_angle")
+    def _check_hwp_angle(self, proposal):
+        hwp_angle = proposal["value"]
+        if hwp_angle is None:
+            if self.hwp_rpm is not None or self.hwp_step is not None:
+                raise traitlets.TraitError(
+                    "Cannot simulate HWP without a shared data key"
+                )
+        else:
+            if self.hwp_rpm is None and self.hwp_step is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_angle
+
+    @traitlets.validate("hwp_rpm")
+    def _check_hwp_rpm(self, proposal):
+        hwp_rpm = proposal["value"]
+        if hwp_rpm is not None:
+            if self.hwp_angle is None:
+                raise traitlets.TraitError(
+                    "Cannot simulate rotating HWP without a shared data key"
+                )
+            if self.hwp_step is not None:
+                raise traitlets.TraitError("HWP cannot rotate *and* step.")
+        else:
+            if self.hwp_angle is not None and self.hwp_step is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_rpm
+
+    @traitlets.validate("hwp_step")
+    def _check_hwp_step(self, proposal):
+        hwp_step = proposal["value"]
+        if hwp_step is not None:
+            if self.hwp_angle is None:
+                raise traitlets.TraitError(
+                    "Cannot simulate stepped HWP without a shared data key"
+                )
+            if self.hwp_rpm is not None:
+                raise traitlets.TraitError("HWP cannot rotate *and* step.")
+        else:
+            if self.hwp_angle is not None and self.hwp_rpm is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_step
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
+
         log = Logger.get()
         if self.schedule is None:
             raise RuntimeError(
@@ -251,6 +310,13 @@ class SimGround(Operator):
         rate = focalplane.sample_rate.to_value(u.Hz)
         comm = data.comm
 
+        # Data distribution in the detector and sample directions
+        det_ranks = comm.group_size
+        samp_ranks = 1
+        if self.distribute_time:
+            det_ranks = 1
+            samp_ranks = comm.group_size
+
         # List of detectors in this pipeline
         pipedets = None
         if detectors is None:
@@ -260,6 +326,37 @@ class SimGround(Operator):
             for det in focalplane.detectors:
                 if det in detectors:
                     pipedets.append(det)
+
+        # Group by detector sets and prune to include only the detectors we
+        # are using.
+        detsets = None
+        if self.detset_key is not None:
+            detsets = dict()
+            dsets = focalplane.detector_groups(self.detset_key)
+            for k, v in dsets.items():
+                detsets[k] = list()
+                for d in v:
+                    if d in pipedets:
+                        detsets[k].append(d)
+
+        # Verify that we have enough detector data for all of our processes.  If we are
+        # distributing by time, we check the sample sets on a per-observation basis
+        # later.  If we are distributing by detector, we must have at least one
+        # detector set for each process.
+
+        if not self.distribute_time:
+            # distributing by detector...
+            n_detset = None
+            if detsets is None:
+                # Every detector is independently distributed
+                n_detset = len(pipedets)
+            else:
+                n_detset = len(detsets)
+            if det_ranks > n_detset:
+                if comm.group_rank == 0:
+                    msg = f"Group {comm.group} with {comm.group_size} processes cannot distribute {n_detset} detector sets."
+                    log.error(msg)
+                    raise RuntimeError(msg)
 
         # Check valid combinations of options
 
@@ -305,10 +402,6 @@ class SimGround(Operator):
         # weight it by the duration in samples.
 
         groupdist = distribute_discrete(scan_samples, comm.ngroups)
-
-        det_ranks = comm.group_size
-        if self.distribute_time:
-            det_ranks = 1
 
         # Every process group creates its observations
 
@@ -357,8 +450,16 @@ class SimGround(Operator):
             elnod_el = None
             elnod_az = None
             if len(self.elnods) > 0:
-                elnod_el = np.array([x.to_value(u.radian) for x in self.elnods])
+                elnod_el = np.array(
+                    [(scan.el + x).to_value(u.radian) for x in self.elnods]
+                )
                 elnod_az = np.zeros_like(elnod_el) + scan.az_min.to_value(u.radian)
+
+            # Sample sets.  Although Observations support data distribution in any
+            # shape process grid, this operator only supports 2 cases:  distributing
+            # by detector and distributing by time.  We want to ensure that
+
+            sample_sets = list()
 
             # Do starting El nod.  We do this before the start of the scheduled scan.
             if self.elnod_start:
@@ -371,7 +472,7 @@ class SimGround(Operator):
                     scan_min_el,
                     scan_max_el,
                 ) = simulate_elnod(
-                    scan.start,
+                    scan.start.timestamp(),
                     rate,
                     scan.az_min.to_value(u.radian),
                     scan.el.to_value(u.radian),
@@ -389,6 +490,7 @@ class SimGround(Operator):
                 if len(elnod_times) > 0:
                     # Shift these elnod times so that they end one sample before the
                     # start of the scan.
+                    sample_sets.append([len(elnod_times)])
                     t_elnod = elnod_times[-1] - elnod_times[0]
                     elnod_times -= t_elnod + incr
                     times.append(elnod_times)
@@ -447,6 +549,16 @@ class SimGround(Operator):
                     self.el_mod_step.to_value(u.radian),
                 )
 
+            # When distributing data, ensure that each process has a whole number of
+            # complete scans.
+            scan_indices = np.searchsorted(
+                scan_times, [x[0] for x in ival_scan_leftright], side="left"
+            )
+            sample_sets.extend([[x] for x in scan_indices[1:] - scan_indices[:-1]])
+            remainder = len(scan_times) - scan_indices[-1]
+            if remainder > 0:
+                sample_sets.append([remainder])
+
             times.append(scan_times)
             az.append(scan_az_data)
             el.append(scan_el_data)
@@ -481,6 +593,7 @@ class SimGround(Operator):
                     scan_max_el,
                 )
                 if len(elnod_times) > 0:
+                    sample_sets.append([len(elnod_times)])
                     times.append(elnod_times)
                     az.append(elnod_az_data)
                     el.append(elnod_el_data)
@@ -489,6 +602,15 @@ class SimGround(Operator):
             times = np.hstack(times)
             az = np.hstack(az)
             el = np.hstack(el)
+
+            # If we are distributing by time, ensure we have enough sample sets for the
+            # number of processes.
+            if self.distribute_time:
+                if samp_ranks > len(sample_sets):
+                    if comm.group_rank == 0:
+                        msg = f"Group {comm.group} with {comm.group_size} processes cannot distribute {len(sample_sets)} sample sets."
+                        log.error(msg)
+                        raise RuntimeError(msg)
 
             # Create the observation, now that we know the total number of samples.
             # We copy the original site information and add weather information for
@@ -525,7 +647,9 @@ class SimGround(Operator):
                 name=name,
                 uid=name_UID(name),
                 comm=comm.comm_group,
+                detector_sets=detsets,
                 process_rows=det_ranks,
+                sample_sets=sample_sets,
             )
 
             # Scan limits

@@ -11,13 +11,15 @@ import traceback
 import numpy as np
 import numpy.testing as nt
 
+from astropy import units as u
+
 from pshmem import MPIShared
 
 from ..observation import DetectorData, Observation
 
 from ..mpi import Comm, MPI
 
-from ._helpers import create_outdir, create_satellite_empty
+from ._helpers import create_outdir, create_satellite_empty, create_ground_data
 
 
 class ObservationTest(MPITestCase):
@@ -84,7 +86,7 @@ class ObservationTest(MPITestCase):
 
             sample_common = np.ravel(np.random.random((n_samp, 3))).reshape(-1, 3)
             flag_common = np.zeros(n_samp, dtype=np.uint8)
-            det_common = np.random.random((3, 4, 5))
+            det_common = np.random.random((n_det, 3, 4, 5))
             all_common = np.random.random((2, 3, 4))
 
             obs.shared.create(
@@ -97,16 +99,19 @@ class ObservationTest(MPITestCase):
                 obs.shared["samp_A"][:, :] = sample_common
             else:
                 obs.shared["samp_A"][None] = None
+
             obs.shared.create(
                 "det_A",
                 shape=det_common.shape,
                 dtype=det_common.dtype,
                 comm=obs.comm_row,
             )
+
             if obs.comm_row_rank == 0:
-                obs.shared["det_A"][:, :, :] = det_common
+                obs.shared["det_A"][:, :, :, :] = det_common
             else:
                 obs.shared["det_A"][None] = None
+
             obs.shared.create(
                 "all_A",
                 shape=all_common.shape,
@@ -147,7 +152,7 @@ class ObservationTest(MPITestCase):
 
             sh = MPIShared(det_common.shape, det_common.dtype, obs.comm_row)
             if obs.comm_row_rank == 0:
-                sh[:, :, :] = det_common
+                sh[:, :, :, :] = det_common
             else:
                 sh[None] = None
             obs.shared["det_B"] = sh
@@ -437,40 +442,11 @@ class ObservationTest(MPITestCase):
         # Populate the observations
         np.random.seed(12345)
         rms = 10.0
-        data = create_satellite_empty(self.comm, obs_per_group=1, samples=100)
+        data = create_ground_data(self.comm, sample_rate=10 * u.Hz)
         for obs in data.obs:
             n_samp = obs.n_local_samples
             dets = obs.local_detectors
             n_det = len(dets)
-
-            fake_bore = np.ravel(np.random.random((n_samp, 4))).reshape(-1, 4)
-            fake_flags = np.random.uniform(low=0, high=2, size=n_samp).astype(
-                np.uint8, copy=True
-            )
-            bore = None
-            common_flags = None
-            times = None
-            if obs.comm_col_rank == 0:
-                bore = fake_bore
-                common_flags = fake_flags
-                times = np.arange(n_samp, dtype=np.float64)
-
-            # Construct some default shared objects from local buffers
-            obs.shared.create("boresight_azel", shape=(n_samp, 4), comm=obs.comm_col)
-            obs.shared["boresight_azel"][:, :] = bore
-
-            obs.shared.create("boresight_radec", shape=(n_samp, 4), comm=obs.comm_col)
-            obs.shared["boresight_radec"][:, :] = bore
-
-            obs.shared.create(
-                "flags", shape=(n_samp,), dtype=np.uint8, comm=obs.comm_col
-            )
-            obs.shared["flags"][:] = common_flags
-
-            obs.shared.create(
-                "timestamps", shape=(n_samp,), dtype=np.float64, comm=obs.comm_col
-            )
-            obs.shared["timestamps"][:] = times
 
             # Create some shared objects over the whole comm
             local_array = None
@@ -486,7 +462,6 @@ class ObservationTest(MPITestCase):
             obs.detdata["calibration"] = np.ones(
                 (len(obs.local_detectors), obs.n_local_samples), dtype=np.float64
             )
-
             obs.detdata["sim_noise"] = np.zeros(
                 (obs.n_local_samples,), dtype=np.float64
             )
@@ -502,7 +477,9 @@ class ObservationTest(MPITestCase):
                 obs.detdata["sim_noise"][det] = np.random.normal(
                     loc=0.0, scale=rms, size=n_samp
                 )
-                obs.detdata["flags"][det] = fake_flags
+                obs.detdata["flags"][det] = np.random.uniform(
+                    low=0, high=2, size=n_samp
+                ).astype(np.uint8, copy=True)
 
             # Make some shared objects, one per detector, shared across the process
             # rows.
@@ -524,10 +501,22 @@ class ObservationTest(MPITestCase):
                     beam_data, offset=(didx, 0, 0), fromrank=0
                 )
 
-        # Redistribute
+        # Redistribute, and make a copy for verification later
+        original = list()
         for ob in data.obs:
-            ob.redistribute(1, times="timestamps")
+            original.append(ob.duplicate(times="times"))
+            ob.redistribute(1, times="times")
+            self.assertTrue(ob.comm_col_size == 1)
+            self.assertTrue(ob.comm_row_size == data.comm.group_size)
+            self.assertTrue(ob.local_detectors == ob.all_detectors)
 
-        # # ... and back
-        # for ob in data.obs:
-        #     ob.redistribute(ob.comm_size, times="timestamps")
+        # Verify that the observations are no longer equal- only if we actually
+        # have more than one process per observation.
+        if data.comm.group_size > 1:
+            for ob, orig in zip(data.obs, original):
+                self.assertFalse(ob == orig)
+
+        # Redistribute back and verify
+        for ob, orig in zip(data.obs, original):
+            ob.redistribute(orig.comm_size, times="times")
+            self.assertTrue(ob == orig)

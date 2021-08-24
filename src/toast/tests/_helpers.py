@@ -101,7 +101,7 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
     """Create a fake satellite telescope with at least one pixel per process."""
     npix = 1
     ring = 1
-    while npix < group_size * pixel_per_process:
+    while 2 * npix <= group_size * pixel_per_process:
         npix += 6 * ring
         ring += 1
     fp = fake_hexagon_focalplane(
@@ -120,7 +120,7 @@ def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proce
     """Create a fake ground telescope with at least one detector per process."""
     npix = 1
     ring = 1
-    while 2 * npix < group_size * pixel_per_process:
+    while 2 * npix <= group_size * pixel_per_process:
         npix += 6 * ring
         ring += 1
     fp = fake_hexagon_focalplane(
@@ -216,9 +216,11 @@ def create_satellite_data(
         name="sim_sat",
         telescope=tele,
         schedule=sch,
+        hwp_angle="hwp_angle",
         hwp_rpm=10.0,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
+        detset_key="pixel",
     )
     sim_sat.apply(data)
 
@@ -291,9 +293,11 @@ def create_satellite_data_big(
         name="sim_sat",
         telescope=tele,
         schedule=sch,
+        hwp_angle="hwp_angle",
         hwp_rpm=10.0,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
+        detset_key="pixel",
     )
     sim_sat.apply(data)
 
@@ -576,7 +580,13 @@ def fake_flags(data, shared_name="flags", shared_val=1, det_name="flags", det_va
             ob.detdata[det_name][det, :half] |= det_val
 
 
-def create_ground_data(mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None):
+def create_ground_data(
+    mpicomm,
+    sample_rate=10.0 * u.Hz,
+    temp_dir=None,
+    el_nod=False,
+    el_nods=[-1 * u.degree, 1 * u.degree],
+):
     """Create a data object with a simple ground sim.
 
     Use the specified MPI communicator to attempt to create 2 process groups.  Create
@@ -643,8 +653,12 @@ def create_ground_data(mpicomm, sample_rate=10.0 * u.Hz, temp_dir=None):
         name="sim_ground",
         telescope=tele,
         schedule=schedule,
+        hwp_angle="hwp_angle",
         hwp_rpm=1.0,
         weather="atacama",
+        detset_key="pixel",
+        elnod_start=el_nod,
+        elnods=el_nods,
     )
     sim_ground.apply(data)
 

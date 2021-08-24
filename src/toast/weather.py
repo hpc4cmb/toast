@@ -117,6 +117,11 @@ class Weather(object):
 def read_weather(file):
     """Helper function to read HDF5 format weather file.
 
+    On some filesystems, HDF5 uses a locking mechanism that fails even
+    when opening the file readonly.  We work around this by opening
+    the file as a binary stream in python and passing that file object
+    to h5py.
+
     Args:
         file (str):  Path to the file.
 
@@ -124,26 +129,26 @@ def read_weather(file):
         (dict):  Weather data dictionary.
 
     """
-    hf = h5py.File(file, "r")
-    result = OrderedDict()
-    for mn in range(12):
-        month_data = OrderedDict()
-        month = "month_{:02d}".format(mn)
-        meta = hf[month].attrs
-        for k, v in meta.items():
-            month_data[k] = v
-        # Build the index of the distribution
-        month_data["prob"] = np.linspace(
-            month_data["PROBSTRT"],
-            month_data["PROBSTOP"],
-            month_data["NSTEP"],
-        )
-        # Iterate over datasets, copying to regular numpy arrays
-        month_data["data"] = OrderedDict()
-        for dname, dat in hf[month].items():
-            month_data["data"][dname] = np.array(dat)
-        result[mn] = month_data
-    hf.close()
+    with open(file, "rb") as pf:
+        with h5py.File(pf, "r") as hf:
+            result = OrderedDict()
+            for mn in range(12):
+                month_data = OrderedDict()
+                month = "month_{:02d}".format(mn)
+                meta = hf[month].attrs
+                for k, v in meta.items():
+                    month_data[k] = v
+                # Build the index of the distribution
+                month_data["prob"] = np.linspace(
+                    month_data["PROBSTRT"],
+                    month_data["PROBSTOP"],
+                    month_data["NSTEP"],
+                )
+                # Iterate over datasets, copying to regular numpy arrays
+                month_data["data"] = OrderedDict()
+                for dname, dat in hf[month].items():
+                    month_data["data"][dname] = np.array(dat)
+                result[mn] = month_data
     return result
 
 
@@ -227,11 +232,11 @@ class SimWeather(Weather):
         # Use a separate RNG index for each data type
         self._varindex = {y: x for x, y in enumerate(self._data[0]["data"].keys())}
 
-        self._sim_ice_water = self._draw("TQI")
-        self._sim_liquid_water = self._draw("TQL")
-        self._sim_pwv = self._draw("TQV")
-        self._sim_humidity = self._draw("QV10M")
-        self._sim_surface_pressure = self._draw("PS")
+        self._sim_ice_water = self._draw("TQI") * u.mm
+        self._sim_liquid_water = self._draw("TQL") * u.mm
+        self._sim_pwv = self._draw("TQV") * u.mm
+        self._sim_humidity = self._draw("QV10M") * u.mm
+        self._sim_surface_pressure = self._draw("PS") * u.Pa
         self._sim_surface_temperature = self._draw("TS") * u.Kelvin
         self._sim_air_temperature = self._draw("T10M") * u.Kelvin
         self._sim_west_wind = self._draw("U10M") * (u.meter / u.second)

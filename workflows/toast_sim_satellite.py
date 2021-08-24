@@ -169,7 +169,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
     ops.pointing.detector_pointing = ops.det_pointing
+    ops.pointing.hwp_angle = ops.sim_satellite.hwp_angle
     ops.pointing_final.detector_pointing = ops.det_pointing
+    ops.pointing_final.hwp_angle = ops.sim_satellite.hwp_angle
 
     ops.binner.pointing = ops.pointing
 
@@ -300,17 +302,6 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = ["Proc {}: {}".format(rank, x) for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()
