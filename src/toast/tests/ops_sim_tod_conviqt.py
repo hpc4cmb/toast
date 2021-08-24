@@ -98,7 +98,7 @@ class SimConviqtTest(MPITestCase):
             )
 
         if self.comm is not None:
-            self.comm.Barrier()
+            self.comm.barrier()
 
         return
 
@@ -162,16 +162,31 @@ class SimConviqtTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
-        write_healpix_fits(data[binner.binned], toast_bin_path, nest=False)
+        write_healpix_fits(data[binner.binned], toast_bin_path, nest=pointing.nest)
+
+        toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
+        write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pointing.nest)
 
         fail = False
 
         if self.rank == 0:
+            set_matplotlib_backend()
 
             import matplotlib.pyplot as plt
 
+            hitsfile = os.path.join(self.outdir, "toast_hits.fits")
+            hdata = hp.read_map(hitsfile)
+
+            hp.mollview(hdata, xsize=1600)
+            plt.savefig(os.path.join(self.outdir, "toast_hits.png"))
+            plt.close()
+
             mapfile = os.path.join(self.outdir, "toast_bin.fits")
-            mdata = hp.read_map(mapfile, nest=False)
+            mdata = hp.read_map(mapfile)
+
+            hp.mollview(mdata, xsize=1600)
+            plt.savefig(os.path.join(self.outdir, "toast_bin.png"))
+            plt.close()
 
             deconv = 1 / hp.gauss_beam(
                 self.fwhm_sky.to_value(u.radian),
@@ -201,45 +216,46 @@ class SimConviqtTest(MPITestCase):
                 pol=False,
             )
 
-            if self.comm is None or self.comm.size == 1:
-                sky = hp.alm2map(self.slm[0], self.nside, lmax=self.lmax, verbose=False)
-                beam = hp.alm2map(
-                    self.blm[0],
-                    self.nside,
-                    lmax=self.lmax,
-                    mmax=self.mmax,
-                    verbose=False,
-                )
+            sky = hp.alm2map(self.slm[0], self.nside, lmax=self.lmax, verbose=False)
+            beam = hp.alm2map(
+                self.blm[0],
+                self.nside,
+                lmax=self.lmax,
+                mmax=self.mmax,
+                verbose=False,
+            )
 
-                fig = plt.figure(figsize=[12, 8])
-                nrow, ncol = 2, 3
-                hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
-                hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
-                hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
-                hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
+            fig = plt.figure(figsize=[12, 8])
+            nrow, ncol = 2, 3
+            hp.mollview(sky, title="input sky", sub=[nrow, ncol, 1])
+            hp.mollview(mdata, title="output sky", sub=[nrow, ncol, 2])
+            hp.mollview(smoothed, title="smoothed sky", sub=[nrow, ncol, 3])
+            hp.mollview(beam, title="beam", sub=[nrow, ncol, 4], rot=[0, 90])
 
-                ell = np.arange(self.lmax + 1)
-                ax = fig.add_subplot(nrow, ncol, 5)
-                ax.plot(ell[1:], cl_in[1:], label="input")
-                ax.plot(ell[1:], cl_smoothed[1:], label="smoothed")
-                ax.plot(ell[1:], blsq[1:], label="beam")
-                ax.plot(ell[1:], gauss_blsq[1:], label="gauss beam")
-                ax.plot(ell[1:], 1 / deconv[1:] ** 2, label="1 / deconv")
-                ax.plot(
-                    ell[1:],
-                    cl_in[1:] * blsq[1:] * deconv[1:] ** 2,
-                    label="input x beam x deconv",
-                )
-                ax.plot(ell[1:], cl_out[1:], label="output")
-                ax.legend(loc="best")
-                ax.set_xscale("log")
-                ax.set_yscale("log")
-                ax.set_ylim([1e-20, 1e1])
+            ell = np.arange(self.lmax + 1)
+            ax = fig.add_subplot(nrow, ncol, 5)
+            ax.plot(ell[1:], cl_in[1:], label="input")
+            ax.plot(ell[1:], cl_smoothed[1:], label="smoothed")
+            ax.plot(ell[1:], blsq[1:], label="beam")
+            ax.plot(ell[1:], gauss_blsq[1:], label="gauss beam")
+            ax.plot(ell[1:], 1 / deconv[1:] ** 2, label="1 / deconv")
+            ax.plot(
+                ell[1:],
+                cl_in[1:] * blsq[1:] * deconv[1:] ** 2,
+                label="input x beam x deconv",
+            )
+            ax.plot(ell[1:], cl_out[1:], label="output")
+            ax.legend(loc="best")
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.set_ylim([1e-20, 1e1])
 
-                # For some reason, matplotlib hangs with multiple tasks,
-                # even if only one writes.
-                outfile = os.path.join(self.outdir, "cl_comparison.png")
-                fig.savefig(outfile)
+            # For some reason, matplotlib hangs with multiple tasks,
+            # even if only one writes.  Uncomment these lines when debugging.
+            #
+            # outfile = os.path.join(self.outdir, "cl_comparison.png")
+            # plt.savefig(outfile)
+            # plt.close()
 
             compare = blsq > 1e-5
             ref = cl_in[compare] * blsq[compare] * deconv[compare] ** 2
@@ -250,7 +266,6 @@ class SimConviqtTest(MPITestCase):
                 rtol=1e-5,
                 atol=1e-5,
             ):
-                print(f"expect = {norm * ref}, output = {cl_out[compare]}")
                 fail = True
 
         if self.comm is not None:

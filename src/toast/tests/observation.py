@@ -15,13 +15,18 @@ from astropy import units as u
 
 from pshmem import MPIShared
 
-from ..observation import DetectorData, Observation
+from ..observation import DetectorData, Observation, set_default_names
 
 from ..observation import default_names as obs_names
 
 from ..mpi import Comm, MPI
 
-from ._helpers import create_outdir, create_satellite_empty, create_ground_data
+from ._helpers import (
+    create_outdir,
+    create_satellite_empty,
+    create_ground_data,
+    fake_flags,
+)
 
 
 class ObservationTest(MPITestCase):
@@ -522,3 +527,73 @@ class ObservationTest(MPITestCase):
         for ob, orig in zip(data.obs, original):
             ob.redistribute(orig.comm_size, times="times")
             self.assertTrue(ob == orig)
+
+    # The code below is here for reference, but we cannot actually test this
+    # within the unit test framework.  The reason is that the operator classes
+    # have already been imported by other tests (the trait defaults for those classes
+    # are set at first import).  In order to swap default names, it must be done
+    # before importing toast.ops
+
+    # def test_default_names(self):
+    #     # Change defaults
+    #     custom = {
+    #         "times": "custom_times",
+    #         "shared_flags": "custom_flags",
+    #         "det_data": "custom_signal",
+    #         "det_flags": "custom_flags",
+    #         "hwp_angle": "custom_hwp_angle",
+    #         "azimuth": "custom_azimuth",
+    #         "elevation": "custom_elevation",
+    #         "boresight_azel": "custom_boresight_azel",
+    #         "boresight_radec": "custom_boresight_radec",
+    #         "position": "custom_position",
+    #         "velocity": "custom_velocity",
+    #         "pixels": "custom_pixels",
+    #         "weights": "custom_weights",
+    #         "quats": "custom_quats",
+    #     }
+    #     set_default_names(custom)
+
+    #     from .. import ops as ops
+
+    #     # Create all the data objects
+    #     np.random.seed(12345)
+    #     rms = 10.0
+    #     data = create_ground_data(self.comm, sample_rate=10 * u.Hz)
+
+    #     detpointing = ops.PointingDetectorSimple()
+    #     detpointing.apply(data)
+
+    #     default_model = ops.DefaultNoiseModel()
+    #     default_model.apply(data)
+
+    #     sim_noise = ops.SimNoise(noise_model=default_model.noise_model)
+    #     sim_noise.apply(data)
+
+    #     pointing = ops.PointingHealpix(
+    #         nside=64,
+    #         mode="IQU",
+    #         hwp_angle=obs_names.hwp_angle,
+    #         detector_pointing=detpointing,
+    #     )
+    #     pointing.apply(data)
+
+    #     fake_flags(data)
+
+    #     # Verify names
+    #     for ob in data.obs:
+    #         print(ob)
+    #         self.assertTrue(custom["times"] in ob.shared)
+    #         self.assertTrue(custom["shared_flags"] in ob.shared)
+    #         self.assertTrue(custom["hwp_angle"] in ob.shared)
+    #         self.assertTrue(custom["azimuth"] in ob.shared)
+    #         self.assertTrue(custom["elevation"] in ob.shared)
+    #         self.assertTrue(custom["boresight_azel"] in ob.shared)
+    #         self.assertTrue(custom["boresight_radec"] in ob.shared)
+    #         self.assertTrue(custom["position"] in ob.shared)
+    #         self.assertTrue(custom["velocity"] in ob.shared)
+    #         self.assertTrue(custom["det_data"] in ob.detdata)
+    #         self.assertTrue(custom["det_flags"] in ob.detdata)
+    #         self.assertTrue(custom["pixels"] in ob.detdata)
+    #         self.assertTrue(custom["weights"] in ob.detdata)
+    #         self.assertTrue(custom["quats"] in ob.detdata)

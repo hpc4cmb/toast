@@ -306,12 +306,14 @@ def create_satellite_data_big(
 
 
 def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
-    """Create a toast data object with one boresight sample per healpix pixel.
+    """Create data with boresight samples centered on healpix pixels.
 
     Use the specified MPI communicator to attempt to create 2 process groups,
     each with some empty observations.  Use a space telescope for each observation.
     Create fake boresight pointing that cycles through every healpix RING ordered
     pixel one time.
+
+    All detectors are placed at the boresight.
 
     Args:
         mpicomm (MPI.Comm): the MPI communicator (or None).
@@ -331,6 +333,11 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         oname = "test-{}-{}".format(toastcomm.group, obs)
         oid = obs_per_group * toastcomm.group + obs
         tele = create_space_telescope(toastcomm.group_size)
+
+        # Move all detectors to the boresight
+        for row in tele.focalplane.detector_data:
+            row["quat"] = np.array([0, 0, 0, 1], dtype=np.float64)
+
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
         ob = Observation(
