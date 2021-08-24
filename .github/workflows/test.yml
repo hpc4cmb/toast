@@ -31,7 +31,7 @@ jobs:
       - name: Run Serial Tests
         run: docker run -e MPI_DISABLE=1 test_runner:py37 python -c 'import toast.tests; toast.tests.run()'
       - name: Run MPI Tests
-        run: docker run test_runner:py37 mpirun -np 4 python -c 'import toast.tests; toast.tests.run()'
+        run: docker run test_runner:py37 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
   py38:
     name: Python 3.8
     runs-on: ubuntu-latest
@@ -51,7 +51,7 @@ jobs:
       - name: Run Serial Tests
         run: docker run -e MPI_DISABLE=1 test_runner:py38 python -c 'import toast.tests; toast.tests.run()'
       - name: Run MPI Tests
-        run: docker run test_runner:py38 mpirun -np 4 python -c 'import toast.tests; toast.tests.run()'
+        run: docker run test_runner:py38 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
   py39:
     name: Python 3.9
     runs-on: ubuntu-latest
@@ -71,4 +71,4 @@ jobs:
       - name: Run Serial Tests
         run: docker run -e MPI_DISABLE=1 test_runner:py39 python -c 'import toast.tests; toast.tests.run()'
       - name: Run MPI Tests
-        run: docker run test_runner:py39 mpirun -np 4 python -c 'import toast.tests; toast.tests.run()'
+        run: docker run test_runner:py39 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
