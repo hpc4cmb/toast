@@ -207,7 +207,7 @@ class ElevationNoise(Operator):
 
                 # Scale the PSD
                 el_factor = noise_a / np.sin(el) + noise_c
-                psd[:] *= el_factor ** 2
+                out_noise.psd(det)[:] *= el_factor ** 2
         return
 
     def _finalize(self, data, **kwargs):
