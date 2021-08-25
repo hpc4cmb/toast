@@ -50,6 +50,15 @@ default_names = None
 
 
 def set_default_names(names=None):
+    """Update default names for common Observation objects.
+
+    Args:
+        names (dict):  The dictionary specifying any name overrides.
+
+    Returns:
+        None
+
+    """
     global default_names
 
     default_values = {
@@ -70,16 +79,9 @@ def set_default_names(names=None):
     }
 
     defaults = dict()
-    if names is None:
-        for k, v in default_values.items():
-            defaults[k] = v
-    else:
-        for k in default_values.keys():
-            if k in names:
-                # We have an override for this name
-                defaults[k] = names[k]
-            else:
-                defaults[k] = default_values[k]
+    defaults.update(default_values)
+    if names is not None:
+        defaults.update(names)
     default_names = types.SimpleNamespace(**defaults)
 
 

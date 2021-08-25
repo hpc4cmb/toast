@@ -32,7 +32,7 @@ class GainScrambler(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key apply the gain error to"
+        obs_names.det_data, help="Observation detdata key to apply the gain error to"
     )
 
     pattern = Unicode(
