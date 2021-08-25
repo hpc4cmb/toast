@@ -127,6 +127,8 @@ class SimGroundTest(MPITestCase):
             noise_model="noise_model",
             out_model="el_weighted",
             detector_pointing=detpointing,
+            noise_a=0.5,
+            noise_c=0.5,
         )
         el_model.apply(data)
 
