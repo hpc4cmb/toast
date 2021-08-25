@@ -691,7 +691,7 @@ class SimAtmosphere(Operator):
             while istop < len(times) and times[istop] < tmax:
                 istop += 1
             iturn = 0
-            while iturn < len(obs.intervals[self.turnaround_interval] - 1) and (
+            while iturn < len(obs.intervals[self.turnaround_interval]) - 1 and (
                 times[istop] > obs.intervals[self.turnaround_interval][iturn].stop
             ):
                 iturn += 1
