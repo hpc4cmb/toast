@@ -19,6 +19,8 @@ from ..vis import set_matplotlib_backend
 
 from ..pixels import PixelDistribution, PixelData
 
+from ..observation import default_names as obs_names
+
 from ._helpers import create_outdir, create_satellite_data, create_fake_sky, fake_flags
 
 
@@ -41,7 +43,7 @@ class MadamTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
@@ -52,7 +54,7 @@ class MadamTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data="signal",
+            det_data=obs_names.det_data,
             pixels=pointing.pixels,
             weights=pointing.weights,
             map_key="fake_map",
@@ -92,7 +94,7 @@ class MadamTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise from this model
-        sim_noise = ops.SimNoise(noise_model="noise_model", out="signal")
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=obs_names.det_data)
         sim_noise.apply(data)
 
         # Make fake flags
@@ -132,12 +134,12 @@ class MadamTest(MPITestCase):
         for ob in data.obs:
             rms[ob.name] = dict()
             for det in ob.local_detectors:
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
+                flags = np.array(ob.shared[obs_names.shared_flags])
+                flags |= ob.detdata[obs_names.det_flags][det]
                 good = flags == 0
                 # Add an offset to the data
-                ob.detdata["signal"][det] += 500.0
-                rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
+                ob.detdata[obs_names.det_data][det] += 500.0
+                rms[ob.name][det] = np.std(ob.detdata[obs_names.det_data][det][good])
 
         # if data.comm.world_rank == 0:
         #     set_matplotlib_backend()
@@ -193,7 +195,7 @@ class MadamTest(MPITestCase):
 
         madam = ops.Madam(
             params=pars,
-            det_data="signal",
+            det_data=obs_names.det_data,
             pixels=pointing.pixels,
             weights=pointing.weights,
             pixels_nested=pointing.nest,
@@ -204,9 +206,9 @@ class MadamTest(MPITestCase):
             purge_pointing=True,
             restore_det_data=False,
             restore_pointing=True,
-            shared_flags="flags",
+            shared_flags=obs_names.shared_flags,
             shared_flag_mask=1,
-            det_flags="flags",
+            det_flags=obs_names.det_flags,
             det_flag_mask=1,
         )
         madam.apply(data)
@@ -241,8 +243,8 @@ class MadamTest(MPITestCase):
 
         for ob in data.obs:
             for det in ob.local_detectors:
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
+                flags = np.array(ob.shared[obs_names.shared_flags])
+                flags |= ob.detdata[obs_names.det_flags][det]
                 good = flags == 0
                 check_rms = np.std(ob.detdata["destriped"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")

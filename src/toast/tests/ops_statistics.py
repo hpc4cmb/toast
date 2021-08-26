@@ -16,6 +16,8 @@ from ..vis import set_matplotlib_backend
 
 from .. import ops as ops
 
+from ..observation import default_names as obs_names
+
 from ._helpers import create_outdir, create_satellite_data
 
 
@@ -66,7 +68,7 @@ class StatisticsTest(MPITestCase):
             # Test the statistics
             for det in obs.local_detectors:
                 idet = detectors.index(det)
-                sig = obs.detdata["signal"][det]
+                sig = obs.detdata[obs_names.det_data][det]
                 # Test variance
                 np.testing.assert_approx_equal(var[idet], np.var(sig), significant=6)
                 # Test skewness

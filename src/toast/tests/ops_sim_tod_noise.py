@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import sys
 
 import numpy as np
 
@@ -73,7 +74,6 @@ class SimNoiseTest(MPITestCase):
             data1[compoff : compoff + ncomp],
             data3[compoff - 300 : compoff - 300 + ncomp],
         )
-        return
 
     def test_sim_once(self):
         # Test the uncorrelated noise generation.
@@ -174,11 +174,11 @@ class SimNoiseTest(MPITestCase):
             for idet, det in enumerate(ob.local_detectors):
                 dfreq = nse.rate(det).to_value(u.Hz) / float(fftlen)
                 (pytod, freqs[det], psds[det]) = sim_noise_timestream(
-                    realization=0,
+                    realization=sim_noise.realization,
                     telescope=ob.telescope.uid,
-                    component=0,
+                    component=sim_noise.component,
                     obsindx=ob.uid,
-                    detindx=idet,
+                    detindx=nse.index(det),
                     rate=nse.rate(det).to_value(u.Hz),
                     firstsamp=ob.local_index_offset,
                     samples=ob.n_local_samples,
@@ -187,7 +187,6 @@ class SimNoiseTest(MPITestCase):
                     psd=nse.psd(det).to_value(u.K ** 2 * u.second),
                     py=True,
                 )
-
                 np.testing.assert_array_almost_equal(
                     pytod, ob.detdata[sim_noise.det_data][det], decimal=2
                 )
@@ -201,7 +200,9 @@ class SimNoiseTest(MPITestCase):
                         self.outdir, "out_{}_interppsd_{}.txt".format(ob.name, det)
                     )
                     np.savetxt(
-                        savefile, np.transpose([freqs[det], psds[det]]), delimiter=" "
+                        savefile,
+                        np.transpose([freqs[det], psds[det]]),
+                        delimiter=" ",
                     )
 
                     fig = plt.figure(figsize=(12, 8), dpi=72)
@@ -242,9 +243,6 @@ class SimNoiseTest(MPITestCase):
                     )
                     plt.savefig(savefile)
                     plt.close()
-
-            if ob.comm is not None:
-                ob.comm.barrier()
 
         # For some reason not deleting here (and relying on garbage collection) causes
         # a hang in the case of multiple groups.  Removed after this is understood.
@@ -554,4 +552,3 @@ class SimNoiseTest(MPITestCase):
 
         # np.testing.assert_almost_equal(np.std(total), 0)
         del data
-        return

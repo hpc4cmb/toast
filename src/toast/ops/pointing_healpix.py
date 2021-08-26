@@ -18,6 +18,8 @@ from .. import qarray as qa
 
 from ..pixels import PixelDistribution
 
+from ..observation import default_names as obs_names
+
 from .._libtoast import pointing_matrix_healpix
 
 from .operator import Operator
@@ -81,9 +83,13 @@ class PointingHealpix(Operator):
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
 
-    pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
+    pixels = Unicode(
+        obs_names.pixels, help="Observation detdata key for output pixel indices"
+    )
 
-    weights = Unicode("weights", help="Observation detdata key for output weights")
+    weights = Unicode(
+        obs_names.weights, help="Observation detdata key for output weights"
+    )
 
     quats = Unicode(
         None,

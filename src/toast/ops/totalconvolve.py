@@ -17,6 +17,8 @@ from ..timing import function_timer
 from ..traits import trait_docs, Int, Float, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 
+from ..observation import default_names as obs_names
+
 
 totalconvolve = None
 
@@ -69,7 +71,7 @@ class SimTotalconvolve(Operator):
     )
 
     det_data = Unicode(
-        "signal",
+        obs_names.det_data,
         allow_none=False,
         help="Observation detdata key for accumulating convolved timestreams",
     )
@@ -815,7 +817,7 @@ class SimTotalconvolve(Operator):
 
     def _provides(self):
         prov = self.detector_pointing.provides()
-        prob["detdata"].append(self.det_data)
+        prov["detdata"].append(self.det_data)
         return prov
 
     def _accelerators(self):

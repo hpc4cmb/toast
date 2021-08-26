@@ -26,8 +26,6 @@ from . import instrument
 
 from .traits import TraitConfig
 
-from . import ops as ops
-
 
 def build_config(objects):
     """Build a configuration of current values.

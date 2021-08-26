@@ -29,6 +29,7 @@ from ..noise_sim import AnalyticNoise
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
 from ..observation import Observation
+from ..observation import default_names as obs_names
 
 from ..instrument import Telescope
 
@@ -252,19 +253,23 @@ class SimSatellite(Operator):
         help="If specified, use this column of the focalplane detector_data to group detectors",
     )
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
 
-    shared_flags = Unicode("flags", help="Observation shared key for common flags")
+    shared_flags = Unicode(
+        obs_names.shared_flags, help="Observation shared key for common flags"
+    )
 
     hwp_angle = Unicode(
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
 
-    boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
+    boresight = Unicode(
+        obs_names.boresight_radec, help="Observation shared key for boresight"
+    )
 
-    position = Unicode("position", help="Observation shared key for position")
+    position = Unicode(obs_names.position, help="Observation shared key for position")
 
-    velocity = Unicode("velocity", help="Observation shared key for velocity")
+    velocity = Unicode(obs_names.velocity, help="Observation shared key for velocity")
 
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):

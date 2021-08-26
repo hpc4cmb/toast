@@ -18,6 +18,8 @@ from .. import qarray as qa
 
 from .. import ops as ops
 
+from ..observation import default_names as obs_names
+
 from ..pixels_io import write_healpix_fits
 
 from ..dipole import dipole
@@ -41,10 +43,10 @@ class SimAtmTest(MPITestCase):
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight="boresight_azel", quats="quats_azel"
+            boresight=obs_names.boresight_azel, quats="quats_azel"
         )
         detpointing_radec = ops.PointingDetectorSimple(
-            boresight="boresight_radec", quats="quats_radec"
+            boresight=obs_names.boresight_radec, quats="quats_radec"
         )
 
         # Create a noise model from focalplane detector properties
@@ -69,11 +71,11 @@ class SimAtmTest(MPITestCase):
 
             ob = data.obs[0]
             det = ob.local_detectors[0]
-            times = np.array(ob.shared["times"])
+            times = np.array(ob.shared[obs_names.times])
 
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect="auto")
-            ax.plot(times, ob.detdata["signal"][det])
+            ax.plot(times, ob.detdata[obs_names.det_data][det])
             ax.set_title(f"Detector {det} Noise TOD")
             outfile = os.path.join(self.outdir, f"{det}_noise_tod.pdf")
             plt.savefig(outfile)
@@ -90,11 +92,11 @@ class SimAtmTest(MPITestCase):
 
             ob = data.obs[0]
             det = ob.local_detectors[0]
-            times = np.array(ob.shared["times"])
+            times = np.array(ob.shared[obs_names.times])
 
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect="auto")
-            ax.plot(times, ob.detdata["signal"][det])
+            ax.plot(times, ob.detdata[obs_names.det_data][det])
             ax.set_title(f"Detector {det} Atmosphere + Noise TOD")
             outfile = os.path.join(self.outdir, f"{det}_atm-noise_tod.pdf")
             plt.savefig(outfile)
@@ -184,17 +186,17 @@ class SimAtmTest(MPITestCase):
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight="boresight_azel", quats="quats_azel"
+            boresight=obs_names.boresight_azel, quats="quats_azel"
         )
         detpointing_radec = ops.PointingDetectorSimple(
-            boresight="boresight_radec", quats="quats_radec"
+            boresight=obs_names.boresight_radec, quats="quats_radec"
         )
 
         # Detector weights
         detweights_azel = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing_azel,
         )
 
@@ -220,11 +222,11 @@ class SimAtmTest(MPITestCase):
 
             ob = data.obs[0]
             det = ob.local_detectors[0]
-            times = np.array(ob.shared["times"])
+            times = np.array(ob.shared[obs_names.times])
 
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect="auto")
-            ax.plot(times, ob.detdata["signal"][det])
+            ax.plot(times, ob.detdata[obs_names.det_data][det])
             ax.set_title(f"Detector {det} Noise TOD")
             outfile = os.path.join(self.outdir, f"{det}_noise_tod.pdf")
             plt.savefig(outfile)
@@ -243,11 +245,11 @@ class SimAtmTest(MPITestCase):
 
             ob = data.obs[0]
             det = ob.local_detectors[0]
-            times = np.array(ob.shared["times"])
+            times = np.array(ob.shared[obs_names.times])
 
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect="auto")
-            ax.plot(times, ob.detdata["signal"][det])
+            ax.plot(times, ob.detdata[obs_names.det_data][det])
             ax.set_title(f"Detector {det} Atmosphere + Noise TOD")
             outfile = os.path.join(self.outdir, f"{det}_atm-noise_tod.pdf")
             plt.savefig(outfile)
@@ -337,10 +339,10 @@ class SimAtmTest(MPITestCase):
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight="boresight_azel", quats="quats_azel"
+            boresight=obs_names.boresight_azel, quats="quats_azel"
         )
         detpointing_radec = ops.PointingDetectorSimple(
-            boresight="boresight_radec", quats="quats_radec"
+            boresight=obs_names.boresight_radec, quats="quats_radec"
         )
 
         # Create a noise model from focalplane detector properties
@@ -359,11 +361,11 @@ class SimAtmTest(MPITestCase):
 
             ob = data.obs[0]
             det = ob.local_detectors[0]
-            times = np.array(ob.shared["times"])
+            times = np.array(ob.shared[obs_names.times])
 
             fig = plt.figure(figsize=(12, 8), dpi=72)
             ax = fig.add_subplot(1, 1, 1, aspect="auto")
-            ax.plot(times, ob.detdata["signal"][det])
+            ax.plot(times, ob.detdata[obs_names.det_data][det])
             ax.set_title(f"Detector {det} Atmospheric loading TOD")
             outfile = os.path.join(self.outdir, f"{det}_atm_loading_tod.pdf")
             plt.savefig(outfile)
@@ -375,7 +377,7 @@ class SimAtmTest(MPITestCase):
 
         for obs in data.obs:
             for det in obs.local_detectors:
-                sig = obs.detdata["signal"][det]
+                sig = obs.detdata[obs_names.det_data][det]
                 assert np.std(sig) != 0
 
         return
@@ -397,10 +399,10 @@ class SimAtmTest(MPITestCase):
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight="boresight_azel", quats="quats_azel"
+            boresight=obs_names.boresight_azel, quats="quats_azel"
         )
         detpointing_radec = ops.PointingDetectorSimple(
-            boresight="boresight_radec", quats="quats_radec"
+            boresight=obs_names.boresight_radec, quats="quats_radec"
         )
 
         # Create a noise model from focalplane detector properties
@@ -420,7 +422,7 @@ class SimAtmTest(MPITestCase):
         for obs in data.obs:
             old_rms[obs.name] = {}
             for det in obs.local_detectors:
-                sig = obs.detdata["signal"][det]
+                sig = obs.detdata[obs_names.det_data][det]
                 old_rms[obs.name][det] = np.std(sig)
                 sig[:] = 0
 
@@ -437,7 +439,7 @@ class SimAtmTest(MPITestCase):
         # Check that the atmospheric fluctuations are stronger at higher frequency
         for obs in data.obs:
             for det in obs.local_detectors:
-                new_rms = np.std(obs.detdata["signal"][det])
+                new_rms = np.std(obs.detdata[obs_names.det_data][det])
                 assert new_rms > 1.1 * old_rms[obs.name][det]
 
         return
