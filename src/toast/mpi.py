@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import time
 
 use_mpi = None
 MPI = None
@@ -264,17 +265,14 @@ class Comm(object):
 
 @contextmanager
 def exception_guard(comm=None):
-    """Ensure that if one MPI process raises an un-caught exception, all of them do.
+    """Ensure that, if one MPI process raises an un-caught exception, the program shuts down properly.
 
     Args:
         comm (mpi4py.MPI.Comm): The MPI communicator or None.
 
     """
     log = Logger.get()
-    failed = 0
-    rank = 0
-    if comm is not None:
-        rank = comm.rank
+    rank = 0 if comm is None else comm.rank
     try:
         yield
     except Exception:
@@ -287,19 +285,13 @@ def exception_guard(comm=None):
         msg = "".join(lines)
         log.error(msg)
         failed = 1
-
-    failcount = failed
-    if comm is not None:
-        failcount = comm.allreduce(failed, op=MPI.SUM)
-    if failcount > 0:
-        if rank == 0:
-            log.error(f"{failcount} process(es) raised an exception")
-            if comm is None:
-                os._exit(1)
-            else:
-                comm.Abort()
-
-    return
+        # gives other processes a bit of time to see wether they encounter the same error
+        time.sleep(30)
+        # kills the job
+        if comm is None:
+            os._exit(1)
+        else:
+            comm.Abort()
 
 
 def comm_equal(comm_a, comm_b):
