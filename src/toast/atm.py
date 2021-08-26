@@ -233,6 +233,14 @@ class AtmSim(object):
     def elmax(self):
         return self._elmax
 
+    @property
+    def tmin(self):
+        return self._tmin
+
+    @property
+    def tmax(self):
+        return self._tmax
+
     @function_timer
     def simulate(self, use_cache=False, smooth=False):
         """Perform the simulation.
@@ -419,8 +427,6 @@ class AtmSim(object):
         timer.start()
 
         nsamp = len(times)
-
-        status = 0
 
         status = atm_sim_observe(
             times,

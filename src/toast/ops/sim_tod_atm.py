@@ -261,6 +261,12 @@ class SimAtmosphere(Operator):
         # Name of the intervals for ranges valid for a given wind chunk
         wind_intervals = "wind"
 
+        # A view that combines user input and wind breaks
+        if self.view is None and self.detector_pointing.view is None:
+            temporary_view = wind_intervals
+        else:
+            temporary_view = "temporary_view"
+
         # Observation key for storing the atmosphere sims
         atm_sim_key = f"{self.name}_atm_sim"
 
@@ -273,7 +279,7 @@ class SimAtmosphere(Operator):
             times=self.times,
             det_data=self.det_data,
             quats=self.detector_pointing.quats,
-            view=self.view,
+            view=temporary_view,
             shared_flags=self.shared_flags,
             shared_flag_mask=self.shared_flag_mask,
             det_flags=self.det_flags,
@@ -463,6 +469,12 @@ class SimAtmosphere(Operator):
             # Create the wind intervals
             ob.intervals.create_col(wind_intervals, wind_times, ob.shared[self.times])
 
+            # Create temporary intervals by combining views
+            if temporary_view != wind_intervals:
+                ob.intervals[temporary_view] = (
+                    ob.intervals[view] & ob.intervals[wind_intervals]
+                )
+
             # Observation pipeline.  We do not want to store persistent detector
             # pointing, so we build a small pipeline that runs one detector at a time
             # on only the current observation.
@@ -496,6 +508,9 @@ class SimAtmosphere(Operator):
                 log.debug(
                     f"{log_prefix}Simulate and observe atmosphere:  {tmr.seconds()} seconds"
                 )
+
+            if temporary_view != wind_intervals:
+                del ob.intervals[temporary_view]
 
     def _get_rng_keys(self, obs):
         """Get random number keys and counters for an observation.

@@ -152,14 +152,16 @@ class ObserveAtmosphere(Operator):
 
             gt.stop("ObserveAtmosphere:  per-observation setup")
             for vw in range(len(views)):
+                times = views.shared[self.times][vw]
+
                 # Determine the wind interval we are in, and hence which atmosphere
                 # simulation to use.  The wind intervals are already guaranteed
                 # by the calling code to break on the data view boundaries.
                 if len(views) > 1:
                     while (
                         cur_wind < (len(ob.view[self.wind_view]) - 1)
-                        and views.shared[self.times][vw][0]
-                        <= ob.view[self.wind_view].shared[self.times][cur_wind][0]
+                        and times[0]
+                        > ob.view[self.wind_view].shared[self.times][cur_wind][-1]
                     ):
                         cur_wind += 1
 
@@ -235,6 +237,9 @@ class ObserveAtmosphere(Operator):
                     elmin_det = np.amin(el)
                     elmax_det = np.amax(el)
 
+                    tmin_det = times[good][0]
+                    tmax_det = times[good][-1]
+
                     # Integrate detector signal across all slabs at different altitudes
 
                     atmdata = np.zeros(ngood, dtype=np.float64)
@@ -242,6 +247,16 @@ class ObserveAtmosphere(Operator):
                     gt.stop("ObserveAtmosphere:  detector setup")
                     gt.start("ObserveAtmosphere:  detector AtmSim.observe")
                     for icur, cur_sim in enumerate(sim_list):
+                        if cur_sim.tmin > tmin_det or cur_sim.tmax < tmax_det:
+                            msg = f"{log_prefix} : {det} "
+                            msg += "Detector time: [{:.1f}, {:.1f}], ".format(
+                                tmin_det, tmax_det
+                            )
+                            msg += "is not contained in [{:.1f}, {:.1f}]".format(
+                                cur_sim.tmin,
+                                cur_sim.tmax,
+                            )
+                            raise RuntimeError(msg)
                         if (
                             not (
                                 cur_sim.azmin <= azmin_det
@@ -254,25 +269,6 @@ class ObserveAtmosphere(Operator):
                         ) or not (
                             cur_sim.elmin <= elmin_det and elmin_det <= cur_sim.elmax
                         ):
-                            # DEBUG begin
-                            import pickle
-
-                            with open(
-                                f"bad_quats_{rank}_{det}_{cur_wind}_{icur}.pck", "wb"
-                            ) as fout:
-                                pickle.dump(
-                                    [
-                                        cur_sim.azmin,
-                                        cur_sim.azmax,
-                                        cur_sim.elmin,
-                                        cur_sim.elmax,
-                                        az,
-                                        el,
-                                        azel_quat,
-                                    ],
-                                    fout,
-                                )
-                            # DEBUG end
                             msg = f"{log_prefix} : {det} "
                             msg += "Detector Az/El: [{:.5f}, {:.5f}], ".format(
                                 azmin_det, azmax_det
@@ -288,9 +284,7 @@ class ObserveAtmosphere(Operator):
                             )
                             raise RuntimeError(msg)
 
-                        err = cur_sim.observe(
-                            views.shared[self.times][vw][good], az, el, atmdata, -1.0
-                        )
+                        err = cur_sim.observe(times[good], az, el, atmdata, -1.0)
                         if err != 0:
                             # Observing failed
                             bad = np.abs(atmdata) < 1e-30
