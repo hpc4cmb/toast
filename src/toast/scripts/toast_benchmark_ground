@@ -12,10 +12,10 @@ The workflow is tailored to the size of the communicator.
 import os
 import sys
 import shutil
-import traceback
 import argparse
 from astropy import units as u
 import toast
+import toast.ops
 from toast.schedule_sim_ground import run_scheduler
 from toast.timing import gather_timers, dump
 from toast.scripts.benchmarking_utilities import (
@@ -74,6 +74,13 @@ def parse_arguments():
         ],
         type=str,
         help="Size of the worflow to be run: 'tiny' (1GB), 'xsmall' (10GB), 'small' (100GB), 'medium' (1TB), 'large' (10TB), 'xlarge' (100TB), 'heroic' (1000TB) or 'auto' (deduced from MPI parameters).",
+    )
+    parser.add_argument(
+        "--print_input_map",
+        required=False,
+        default=False,
+        type=bool,
+        help="Should the healpy input map be exported as a PNG for debugging purposes.",
     )
 
     # The operators we want to configure from the command line or a parameter file.
@@ -238,7 +245,7 @@ def main():
 
     # Instantiate our objects that were configured from the command line / files
     job = toast.create_from_config(config)
-    ops = job.operators
+    job_ops = job.operators
 
     # gets the MPI parameters
     world_comm, n_procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(
@@ -263,10 +270,10 @@ def main():
     # Estimate per-process memory use from map domain objects and
     # other sources.
     nside_final = None
-    if ops.pointing_final.enabled:
-        nside_final = ops.pointing_final.nside
+    if job_ops.pointing_final.enabled:
+        nside_final = job_ops.pointing_final.nside
     overhead_bytes = estimate_memory_overhead(
-        n_procs, n_nodes, 0.4, ops.pointing.nside, nside_final=nside_final
+        n_procs, n_nodes, 0.4, job_ops.pointing.nside, nside_final=nside_final
     )
 
     # selects appropriate case size
@@ -275,7 +282,7 @@ def main():
         n_procs,
         n_nodes,
         avail_node_bytes,
-        ops.binner.full_pointing,
+        job_ops.binner.full_pointing,
         world_comm,
         per_process_overhead_bytes=overhead_bytes,
     )
@@ -302,7 +309,7 @@ def main():
         jobargs,
         schedule=args.schedule,
         focalplane=focalplane,
-        full_pointing=ops.binner.full_pointing,
+        full_pointing=job_ops.binner.full_pointing,
     )
 
     # Create the toast communicator
@@ -316,77 +323,77 @@ def main():
     timer.start()
 
     # Simulate the telescope pointing
-    ops.sim_ground.telescope = telescope
-    ops.sim_ground.schedule = args.schedule
-    ops.sim_ground.weather = telescope.site.name
-    ops.sim_ground.apply(data)
+    job_ops.sim_ground.telescope = telescope
+    job_ops.sim_ground.schedule = args.schedule
+    job_ops.sim_ground.weather = telescope.site.name
+    job_ops.sim_ground.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
     # Set up detector pointing in both Az/El and RA/DEC
-    ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
-    ops.det_pointing_radec.boresight = ops.sim_ground.boresight_radec
+    job_ops.det_pointing_azel.boresight = job_ops.sim_ground.boresight_azel
+    job_ops.det_pointing_radec.boresight = job_ops.sim_ground.boresight_radec
 
     # Construct a "perfect" noise model just from the focalplane parameters
-    ops.default_model.apply(data)
+    job_ops.default_model.apply(data)
     log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
 
     # Create the Elevation modulated noise model
-    ops.elevation_model.noise_model = ops.default_model.noise_model
-    ops.elevation_model.detector_pointing = ops.det_pointing_azel
-    ops.elevation_model.view = ops.det_pointing_azel.view
-    ops.elevation_model.apply(data)
+    job_ops.elevation_model.noise_model = job_ops.default_model.noise_model
+    job_ops.elevation_model.detector_pointing = job_ops.det_pointing_azel
+    job_ops.elevation_model.view = job_ops.det_pointing_azel.view
+    job_ops.elevation_model.apply(data)
     log.info_rank("Created elevation noise model in", comm=world_comm, timer=timer)
 
     # Set the pointing matrix operators to use the detector pointing
-    ops.pointing.detector_pointing = ops.det_pointing_radec
-    ops.pointing_final.detector_pointing = ops.det_pointing_radec
+    job_ops.pointing.detector_pointing = job_ops.det_pointing_radec
+    job_ops.pointing_final.detector_pointing = job_ops.det_pointing_radec
 
     # If we are not using a different pointing matrix for our final binning, then
     # use the same one as the solve.
-    ops.binner.pointing = ops.pointing
-    if not ops.pointing_final.enabled:
-        ops.pointing_final = ops.pointing
+    job_ops.binner.pointing = job_ops.pointing
+    if not job_ops.pointing_final.enabled:
+        job_ops.pointing_final = job_ops.pointing
 
     # If we are not using a different binner for our final binning, use the same one
     # as the solve.
-    ops.binner_final.pointing = ops.pointing_final
-    if not ops.binner_final.enabled:
-        ops.binner_final = ops.binner
+    job_ops.binner_final.pointing = job_ops.pointing_final
+    if not job_ops.binner_final.enabled:
+        job_ops.binner_final = job_ops.binner
 
     # Simulate sky signal from a map.
-    scan_map(args, rank, ops, data, log)
+    scan_map(args, rank, job_ops, data, log)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
     # Simulate detector noise
-    ops.sim_noise.noise_model = ops.elevation_model.out_model
-    ops.sim_noise.apply(data)
+    job_ops.sim_noise.noise_model = job_ops.elevation_model.out_model
+    job_ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
     # Simulate atmosphere signal
-    ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
-    ops.sim_atmosphere.apply(data)
+    job_ops.sim_atmosphere.detector_pointing = job_ops.det_pointing_azel
+    job_ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
     # Collect signal statistics before filtering
-    ops.raw_statistics.output_dir = args.out_dir
-    ops.raw_statistics.apply(data)
+    job_ops.raw_statistics.output_dir = args.out_dir
+    job_ops.raw_statistics.apply(data)
 
     # Apply the filter stack
-    ops.groundfilter.apply(data)
+    job_ops.groundfilter.apply(data)
     log.info_rank("Finished ground-filtering in", comm=world_comm, timer=timer)
-    ops.polyfilter1D.apply(data)
+    job_ops.polyfilter1D.apply(data)
     log.info_rank("Finished 1D-poly-filtering in", comm=world_comm, timer=timer)
-    ops.polyfilter2D.apply(data)
+    job_ops.polyfilter2D.apply(data)
     log.info_rank("Finished 2D-poly-filtering in", comm=world_comm, timer=timer)
-    ops.common_mode_filter.apply(data)
+    job_ops.common_mode_filter.apply(data)
     log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
 
     # Collect signal statistics after filtering
-    ops.filtered_statistics.output_dir = args.out_dir
-    ops.filtered_statistics.apply(data)
+    job_ops.filtered_statistics.output_dir = args.out_dir
+    job_ops.filtered_statistics.apply(data)
 
     # Build up our map-making operation.
-    run_mapmaker(ops, args, job.templates, data)
+    run_mapmaker(job_ops, args, job.templates, data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # end of the computations, sync and computes efficiency

@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 from astropy.table import QTable
 import toast
+import toast.ops
 from toast.job import job_size, get_node_mem
 from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
@@ -598,7 +599,7 @@ def make_focalplane(args, world_comm, log):
     return focalplane
 
 
-def create_input_maps(input_map_path, nside, rank, log):
+def create_input_maps(input_map_path, nside, rank, log, should_print_input_map_png=False):
     """
     Creates a *completely* fake map for scan_map
     (just to have something on the sky besides zeros)
@@ -639,50 +640,51 @@ def create_input_maps(input_map_path, nside, rank, log):
     healpy.write_map(input_map_path, maps, nest=True, fits_IDL=False, dtype=np.float32)
 
     # displays the map as a picture on file
-    healpy.mollview(maps[0])
-    plt.savefig(f"{input_map_path}_fake-T.png")
-    plt.close()
+    if should_print_input_map_png:
+        healpy.mollview(maps[0])
+        plt.savefig(f"{input_map_path}_fake-T.png")
+        plt.close()
 
-    healpy.mollview(maps[1])
-    plt.savefig(f"{input_map_path}_fake-E.png")
-    plt.close()
+        healpy.mollview(maps[1])
+        plt.savefig(f"{input_map_path}_fake-E.png")
+        plt.close()
 
 
-def scan_map(args, rank, ops, data, log):
+def scan_map(args, rank, job_ops, data, log):
     """
     Simulate sky signal from a map.
     We scan the sky with the "final" pointing model if that is different from the solver pointing model.
     """
-    if ops.scan_map.enabled:
+    if job_ops.scan_map.enabled:
         # Use the final pointing model if it is enabled
-        pointing = ops.pointing
-        if ops.pointing_final.enabled:
-            pointing = ops.pointing_final
+        pointing = job_ops.pointing
+        if job_ops.pointing_final.enabled:
+            pointing = job_ops.pointing_final
         # creates a map and puts it in args.input_map
-        create_input_maps(args.input_map, pointing.nside, rank, log)
-        ops.scan_map.pixel_dist = ops.binner_final.pixel_dist
-        ops.scan_map.pointing = pointing
-        ops.scan_map.save_pointing = ops.binner_final.full_pointing
-        ops.scan_map.file = args.input_map
-        ops.scan_map.apply(data)
+        create_input_maps(args.input_map, pointing.nside, rank, log, args.print_input_map)
+        job_ops.scan_map.pixel_dist = job_ops.binner_final.pixel_dist
+        job_ops.scan_map.pointing = pointing
+        job_ops.scan_map.save_pointing = job_ops.binner_final.full_pointing
+        job_ops.scan_map.file = args.input_map
+        job_ops.scan_map.apply(data)
 
 
-def run_mapmaker(ops, args, tmpls, data):
+def run_mapmaker(job_ops, args, tmpls, data):
     """
     Build up our map-making operation from the pieces- both operators configured from user options and other operators.
     """
 
-    ops.binner.noise_model = ops.default_model.noise_model
-    ops.binner_final.noise_model = ops.default_model.noise_model
+    job_ops.binner.noise_model = job_ops.default_model.noise_model
+    job_ops.binner_final.noise_model = job_ops.default_model.noise_model
 
-    ops.mapmaker.binning = ops.binner
-    ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
-    ops.mapmaker.map_binning = ops.binner_final
-    ops.mapmaker.det_data = ops.sim_noise.det_data
-    ops.mapmaker.output_dir = args.out_dir
+    job_ops.mapmaker.binning = job_ops.binner
+    job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
+    job_ops.mapmaker.map_binning = job_ops.binner_final
+    job_ops.mapmaker.det_data = job_ops.sim_noise.det_data
+    job_ops.mapmaker.output_dir = args.out_dir
 
     # Run the map making
-    ops.mapmaker.apply(data)
+    job_ops.mapmaker.apply(data)
 
 
 def compute_science_metric(args, runtime, n_nodes, rank, log):

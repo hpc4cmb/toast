@@ -13,11 +13,11 @@ total_sample = num_obs * obs_minutes * sample_rate * n_detector
 
 import os
 import sys
-import traceback
 import argparse
 from datetime import datetime
 from astropy import units as u
 import toast
+import toast.ops
 from toast.timing import gather_timers, dump
 from toast.schedule_sim_satellite import create_satellite_schedule
 from toast.scripts.benchmarking_utilities import (
@@ -76,6 +76,13 @@ def parse_arguments():
         ],
         type=str,
         help="Size of the worflow to be run: 'tiny' (1GB), 'xsmall' (10GB), 'small' (100GB), 'medium' (1TB), 'large' (10TB), 'xlarge' (100TB), 'heroic' (1000TB) or 'auto' (deduced from MPI parameters).",
+    )
+    parser.add_argument(
+        "--print_input_map",
+        required=False,
+        default=False,
+        type=bool,
+        help="Should the healpy input map be exported as a PNG for debugging purposes.",
     )
 
     # The operators we want to configure from the command line or a parameter file.
@@ -163,7 +170,7 @@ def main():
 
     # Instantiate our objects that were configured from the command line / files
     job = toast.create_from_config(config)
-    ops = job.operators
+    job_ops = job.operators
 
     # gets the MPI parameters
     world_comm, n_procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(
@@ -183,10 +190,10 @@ def main():
     # Estimate per-process memory use from map domain objects and
     # other sources.
     nside_final = None
-    if ops.pointing_final.enabled:
-        nside_final = ops.pointing_final.nside
+    if job_ops.pointing_final.enabled:
+        nside_final = job_ops.pointing_final.nside
     overhead_bytes = estimate_memory_overhead(
-        n_procs, n_nodes, 0.4, ops.pointing.nside, nside_final=nside_final
+        n_procs, n_nodes, 0.4, job_ops.pointing.nside, nside_final=nside_final
     )
 
     # selects appropriate case size
@@ -195,7 +202,7 @@ def main():
         n_procs,
         n_nodes,
         avail_node_bytes,
-        ops.binner.full_pointing,
+        job_ops.binner.full_pointing,
         world_comm,
         per_process_overhead_bytes=overhead_bytes,
     )
@@ -223,7 +230,7 @@ def main():
         jobargs,
         schedule=args.schedule,
         focalplane=focalplane,
-        full_pointing=ops.binner.full_pointing,
+        full_pointing=job_ops.binner.full_pointing,
     )
 
     # Create the toast communicator
@@ -237,41 +244,41 @@ def main():
     timer.start()
 
     # Simulate the telescope pointing
-    ops.sim_satellite.telescope = telescope
-    ops.sim_satellite.schedule = args.schedule
-    ops.sim_satellite.apply(data)
+    job_ops.sim_satellite.telescope = telescope
+    job_ops.sim_satellite.schedule = args.schedule
+    job_ops.sim_satellite.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
     # Construct a "perfect" noise model just from the focalplane parameters
-    ops.default_model.apply(data)
+    job_ops.default_model.apply(data)
     log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
 
     # Set the pointing matrix operators to use the detector pointing
-    ops.pointing.detector_pointing = ops.det_pointing
-    ops.pointing_final.detector_pointing = ops.det_pointing
+    job_ops.pointing.detector_pointing = job_ops.det_pointing
+    job_ops.pointing_final.detector_pointing = job_ops.det_pointing
 
     # If we are not using a different pointing matrix for our final binning, then
     # use the same one as the solve.
-    ops.binner.pointing = ops.pointing
-    if not ops.pointing_final.enabled:
-        ops.pointing_final = ops.pointing
+    job_ops.binner.pointing = job_ops.pointing
+    if not job_ops.pointing_final.enabled:
+        job_ops.pointing_final = job_ops.pointing
 
     # If we are not using a different binner for our final binning, use the same one
     # as the solve.
-    ops.binner_final.pointing = ops.pointing_final
-    if not ops.binner_final.enabled:
-        ops.binner_final = ops.binner
+    job_ops.binner_final.pointing = job_ops.pointing_final
+    if not job_ops.binner_final.enabled:
+        job_ops.binner_final = job_ops.binner
 
     # Simulate sky signal from a map.
-    scan_map(args, rank, ops, data, log)
+    scan_map(args, rank, job_ops, data, log)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
     # Simulate detector noise
-    ops.sim_noise.apply(data)
+    job_ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
     # Build up our map-making operation.
-    run_mapmaker(ops, args, job.templates, data)
+    run_mapmaker(job_ops, args, job.templates, data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # end of the computations, sync and computes efficiency
