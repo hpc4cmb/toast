@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 from astropy.table import QTable
 import toast
+import toast.ops
 from toast.job import job_size, get_node_mem
 from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
@@ -677,7 +678,7 @@ def run_mapmaker(job_ops, args, tmpls, data):
     job_ops.binner_final.noise_model = job_ops.default_model.noise_model
 
     job_ops.mapmaker.binning = job_ops.binner
-    job_ops.mapmaker.template_matrix = toast.job_ops.TemplateMatrix(templates=[tmpls.baselines])
+    job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
     job_ops.mapmaker.map_binning = job_ops.binner_final
     job_ops.mapmaker.det_data = job_ops.sim_noise.det_data
     job_ops.mapmaker.output_dir = args.out_dir
