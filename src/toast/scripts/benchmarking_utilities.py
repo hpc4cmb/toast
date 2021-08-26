@@ -660,7 +660,7 @@ def scan_map(args, rank, ops, data, log):
         if ops.pointing_final.enabled:
             pointing = ops.pointing_final
         # creates a map and puts it in args.input_map
-        create_input_maps(args.input_map, pointing.nside, rank, log, args.should_print_input_map_png)
+        create_input_maps(args.input_map, pointing.nside, rank, log, args.print_input_map)
         ops.scan_map.pixel_dist = ops.binner_final.pixel_dist
         ops.scan_map.pointing = pointing
         ops.scan_map.save_pointing = ops.binner_final.full_pointing
