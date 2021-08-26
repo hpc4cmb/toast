@@ -55,11 +55,8 @@ from . import ops_madam as test_ops_madam
 
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
-<<<<<<< HEAD
 from . import ops_polyfilter as test_ops_polyfilter
 from . import ops_groundfilter as test_ops_groundfilter
-=======
->>>>>>> 4c54e765c60a830089882d14571e033a45af4529
 from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
 
 

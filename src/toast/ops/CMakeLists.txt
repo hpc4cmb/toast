@@ -40,7 +40,7 @@ install(FILES
     totalconvolve.py
     polyfilter.py
     groundfilter.py
-    sim_cosmic_rays.py 
+    sim_cosmic_rays.py
     statistics.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
