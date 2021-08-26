@@ -77,6 +77,13 @@ def parse_arguments():
         type=str,
         help="Size of the worflow to be run: 'tiny' (1GB), 'xsmall' (10GB), 'small' (100GB), 'medium' (1TB), 'large' (10TB), 'xlarge' (100TB), 'heroic' (1000TB) or 'auto' (deduced from MPI parameters).",
     )
+    parser.add_argument(
+        "--print_input_map",
+        required=False,
+        default=False,
+        type=bool,
+        help="Should the input map be exported as a PNG for debugging purposes.",
+    )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.

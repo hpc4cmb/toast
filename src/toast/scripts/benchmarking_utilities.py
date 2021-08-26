@@ -598,7 +598,7 @@ def make_focalplane(args, world_comm, log):
     return focalplane
 
 
-def create_input_maps(input_map_path, nside, rank, log):
+def create_input_maps(input_map_path, nside, rank, log, should_print_input_map_png=False):
     """
     Creates a *completely* fake map for scan_map
     (just to have something on the sky besides zeros)
@@ -639,13 +639,14 @@ def create_input_maps(input_map_path, nside, rank, log):
     healpy.write_map(input_map_path, maps, nest=True, fits_IDL=False, dtype=np.float32)
 
     # displays the map as a picture on file
-    healpy.mollview(maps[0])
-    plt.savefig(f"{input_map_path}_fake-T.png")
-    plt.close()
+    if should_print_input_map_png:
+        healpy.mollview(maps[0])
+        plt.savefig(f"{input_map_path}_fake-T.png")
+        plt.close()
 
-    healpy.mollview(maps[1])
-    plt.savefig(f"{input_map_path}_fake-E.png")
-    plt.close()
+        healpy.mollview(maps[1])
+        plt.savefig(f"{input_map_path}_fake-E.png")
+        plt.close()
 
 
 def scan_map(args, rank, ops, data, log):
@@ -659,7 +660,7 @@ def scan_map(args, rank, ops, data, log):
         if ops.pointing_final.enabled:
             pointing = ops.pointing_final
         # creates a map and puts it in args.input_map
-        create_input_maps(args.input_map, pointing.nside, rank, log)
+        create_input_maps(args.input_map, pointing.nside, rank, log, args.should_print_input_map_png)
         ops.scan_map.pixel_dist = ops.binner_final.pixel_dist
         ops.scan_map.pointing = pointing
         ops.scan_map.save_pointing = ops.binner_final.full_pointing
