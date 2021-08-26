@@ -189,7 +189,9 @@ class IntervalList(Sequence):
                     # Construct intervals from sample ranges
                     for i in range(len(samplespans) - 1):
                         if samplespans[i][1] >= samplespans[i + 1][0]:
-                            raise RuntimeError("Sample spans must be sorted and disjoint")
+                            raise RuntimeError(
+                                "Sample spans must be sorted and disjoint"
+                            )
                     self._internal = list()
                     for first, last in samplespans:
                         if last < 0 or first >= len(self.timestamps):

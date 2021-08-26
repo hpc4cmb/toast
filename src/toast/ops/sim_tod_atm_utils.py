@@ -249,9 +249,7 @@ class ObserveAtmosphere(Operator):
                             msg += "Detector time: [{:.1f}, {:.1f}], ".format(
                                 tmin_det, tmax_det
                             )
-                            msg += "is not contained in ".format(
-                            )
-                            msg += "[{:.1f}, {:.1f}]".format(
+                            msg += "is not contained in [{:.1f}, {:.1f}]".format(
                                 cur_sim.tmin,
                                 cur_sim.tmax,
                             )

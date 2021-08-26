@@ -468,7 +468,9 @@ class SimAtmosphere(Operator):
 
             # Create temporary intervals by combining views
             if temporary_view != wind_intervals:
-                ob.intervals[temporary_view] = ob.intervals[view] & ob.intervals[wind_intervals]
+                ob.intervals[temporary_view] = (
+                    ob.intervals[view] & ob.intervals[wind_intervals]
+                )
 
             # Observation pipeline.  We do not want to store persistent detector
             # pointing, so we build a small pipeline that runs one detector at a time

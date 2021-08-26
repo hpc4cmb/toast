@@ -118,7 +118,7 @@ class GroundFilter(Operator):
     def _check_filter_order(self, proposal):
         check = proposal["value"]
         if check < 0:
-            raise traitlets.TraitError("Filtere order should be a non-negative integer")
+            raise traitlets.TraitError("Filter order should be a non-negative integer")
         return check
 
     def __init__(self, **kwargs):
