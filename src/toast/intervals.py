@@ -165,6 +165,9 @@ class IntervalList(Sequence):
                     self._internal = list()
                 else:
                     # Construct intervals from time ranges
+                    for i in range(len(timespans) - 1):
+                        if timespans[i][1] > timespans[i + 1][0]:
+                            raise RuntimeErrors("Timespans must be sorted and disjoint")
                     indices = self._find_indices(timespans)
                     self._internal = [
                         Interval(
@@ -184,6 +187,9 @@ class IntervalList(Sequence):
                     self._internal = list()
                 else:
                     # Construct intervals from sample ranges
+                    for i in range(len(samplespans) - 1):
+                        if samplespans[i][1] >= samplespans[i + 1][0]:
+                            raise RuntimeError("Sample spans must be sorted and disjoint")
                     self._internal = list()
                     for first, last in samplespans:
                         if last < 0 or first >= len(self.timestamps):
@@ -209,6 +215,11 @@ class IntervalList(Sequence):
             self.timestamps, [x[1] for x in timespans], side="right"
         )
         stop_indx -= 1
+        # Remove accidental overlap caused by timespan boundary occurring
+        # exactly over a time stamp.
+        for i in range(start_indx.size - 1):
+            if stop_indx[i] == start_indx[i + 1]:
+                stop_indx[i] -= 1
         out = list()
         for start, stop in zip(start_indx, stop_indx):
             if stop < 0 or start >= len(self.timestamps):
@@ -373,7 +384,6 @@ class IntervalList(Sequence):
                 curother += 1
 
         result = IntervalList(self.timestamps, intervals=result)
-        result.simplify()
         return result
 
     def __or__(self, other):
