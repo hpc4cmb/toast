@@ -12,10 +12,10 @@ The workflow is tailored to the size of the communicator.
 import os
 import sys
 import shutil
-import traceback
 import argparse
 from astropy import units as u
 import toast
+import toast.ops
 from toast.schedule_sim_ground import run_scheduler
 from toast.timing import gather_timers, dump
 from toast.scripts.benchmarking_utilities import (
@@ -80,7 +80,7 @@ def parse_arguments():
         required=False,
         default=False,
         type=bool,
-        help="Should the input map be exported as a PNG for debugging purposes.",
+        help="Should the healpy input map be exported as a PNG for debugging purposes.",
     )
 
     # The operators we want to configure from the command line or a parameter file.
