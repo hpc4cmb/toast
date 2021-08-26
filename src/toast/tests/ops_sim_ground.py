@@ -103,6 +103,7 @@ class SimGroundTest(MPITestCase):
             schedule=schedule,
             hwp_angle="hwp_angle",
             hwp_rpm=1.0,
+            max_pwv=5 * u.mm,
         )
         sim_ground.apply(data)
 

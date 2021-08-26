@@ -203,10 +203,13 @@ class SimWeather(Weather):
         file (str):  Alternative file to load in the same format as the bundled data.
         site_uid (int):  The Unique ID for the site, used for random draw of parameters.
         realization (int):  The realization index used for random draw of parameters.
+        max_pwv (quantity):  Maximum PWV to draw.
 
     """
 
-    def __init__(self, time=None, name=None, file=None, site_uid=0, realization=0):
+    def __init__(
+        self, time=None, name=None, file=None, site_uid=0, realization=0, max_pwv=None
+    ):
         if time is None:
             raise RuntimeError("you must specify the time")
         self._name = name
@@ -219,19 +222,44 @@ class SimWeather(Weather):
         else:
             self._data = load_package_weather(self._name)
 
-        self._site_uid = site_uid
-        self._realization = realization
-
-        self._date = time
-        self._doy = self._date.timetuple().tm_yday
-        self._year = self._date.year
-        self._hour = self._date.hour
-        # This is the definition of month used in the weather files
-        self._month = int((self._doy - 1) // 30.5)
+        if max_pwv is not None:
+            self._truncate_distributions("TQV", max_pwv)
 
         # Use a separate RNG index for each data type
         self._varindex = {y: x for x, y in enumerate(self._data[0]["data"].keys())}
 
+        self.set(time=time, realization=realization, site_uid=site_uid)
+
+        super().__init__()
+
+    def _truncate_distributions(self, name, max_value):
+        # Truncate all distributions, since user may change the time
+        for month in range(12):
+            prob = self._data[month]["prob"]
+            for hour in range(24):
+                cdf = self._data[month]["data"][name][hour]
+                ind = cdf <= max_value.to_value("mm")
+                if np.sum(ind) < 2:
+                    raise RuntimeError(f"Cannot truncate {name} to <= {max_value}")
+                new_cdf = np.interp(prob, prob[ind] / np.amax(prob[ind]), cdf[ind])
+                cdf[:] = new_cdf
+        return
+
+    def set(self, time=None, realization=None, site_uid=None):
+        if time is not None:
+            self._date = time
+            self._doy = time.timetuple().tm_yday
+            self._year = time.year
+            self._hour = time.hour
+            # This is the definition of month used in the weather files
+            self._month = int((self._doy - 1) // 30.5)
+        if realization is not None:
+            self._realization = realization
+        if site_uid is not None:
+            self._site_uid = site_uid
+        self._draw_values()
+
+    def _draw_values(self):
         self._sim_ice_water = self._draw("TQI") * u.mm
         self._sim_liquid_water = self._draw("TQL") * u.mm
         self._sim_pwv = self._draw("TQV") * u.mm
@@ -241,7 +269,6 @@ class SimWeather(Weather):
         self._sim_air_temperature = self._draw("T10M") * u.Kelvin
         self._sim_west_wind = self._draw("U10M") * (u.meter / u.second)
         self._sim_south_wind = self._draw("V10M") * (u.meter / u.second)
-        super().__init__()
 
     def _draw(self, name):
         """Return a random parameter value.
