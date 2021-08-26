@@ -166,7 +166,7 @@ class InjectCosmicRays(Operator):
                     key=(key1, key2),
                     counter=(counter1, counter2),
                 )
-                counter2+=size
+                counter2 += size
                 filename = self.crfile.replace("detector", f"det{kk}")
                 data_dic = self.load_cosmic_ray_data(filename)
                 lownoise_params = data_dic["low_noise"]
@@ -229,7 +229,7 @@ class InjectCosmicRays(Operator):
                         key=(key1, key2),
                         counter=(counter1, counter2),
                     )
-                    counter2+=n_events
+                    counter2 += n_events
                     # draw n_events uniformly from a continuous distribution
                     # you want the events to happen during one observation
                     # we also make sure that the glitch is injected at most
@@ -241,7 +241,7 @@ class InjectCosmicRays(Operator):
                         key=(key1, key2),
                         counter=(counter1, counter2),
                     )
-                    counter2+=n_events
+                    counter2 += n_events
 
                     time_glitches = (obstime_seconds - glitch_seconds) * rngunif
                     assert time_glitches.max() < obstime_seconds
