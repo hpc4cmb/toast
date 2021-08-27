@@ -47,5 +47,6 @@ install(FILES
     save_spt3g.py
     run_spt3g.py
     cadence_map.py
+    flag_sso.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
