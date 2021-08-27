@@ -57,7 +57,7 @@ from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
 from . import ops_polyfilter as test_ops_polyfilter
 from . import ops_groundfilter as test_ops_groundfilter
-
+from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
 
 from . import covariance as test_covariance
 
@@ -178,6 +178,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))
         suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 

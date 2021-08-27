@@ -45,5 +45,6 @@ install(FILES
     ops_sim_gaindrifts.py
     ops_polyfilter.py
     ops_groundfilter.py
+    ops_sim_cosmic_rays.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
