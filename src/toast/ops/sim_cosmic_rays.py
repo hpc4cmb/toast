@@ -93,12 +93,8 @@ class InjectCosmicRays(Operator):
 
         return data_dic
 
-<<<<<<< HEAD
-    def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter ):
-=======
-    def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter):
->>>>>>> c8c34f032307f85b9f3b1b01969a9d5b3169cb32
 
+    def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter):
         resampled = np.zeros((Nresamples, arr.shape[1]))
 
         for ii in range(arr.shape[1]):
@@ -209,7 +205,7 @@ class InjectCosmicRays(Operator):
                         key=(key1, key2),
                         counter=(detid_common, counter2),
                     )
-
+                    counter2 += size
                     cr_common_mode = (
                         np.sqrt(var_corr) * rngdata_common + data_common["low_noise"][0]
                     )
@@ -252,7 +248,7 @@ class InjectCosmicRays(Operator):
                     assert time_glitches.max() < obstime_seconds
 
                     # otherwise we've problems in downsampling
-                     
+
 
                     # estimate the timestamps rounding off the events in seconds
                     time_stamp_glitches = np.int_(np.around(time_glitches * samplerate))
