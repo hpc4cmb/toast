@@ -673,6 +673,7 @@ class SimGround(Operator):
             )
 
             # Scan limits
+            ob["scan_el"] = scan.el  # Nominal elevation
             ob["scan_min_az"] = scan_min_az * u.radian
             ob["scan_max_az"] = scan_max_az * u.radian
             ob["scan_min_el"] = scan_min_el * u.radian
