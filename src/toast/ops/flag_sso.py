@@ -30,18 +30,7 @@ from .pipeline import Pipeline
 
 from ..utils import Environment, Logger, Timer
 
-"""
-import os
-import numpy as np
-from toast.utils import Logger
-from toast.timing import function_timer, Timer
-from toast.op import Operator
-import ephem
-from astropy import constants
-from toast.mpi import MPI
-import toast.qarray as qa
-import healpy as hp
-"""
+from ..observation import default_names as obs_names
 
 
 def to_JD(t):
@@ -71,20 +60,22 @@ class FlagSSO(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
     quats_azel = Unicode(
-        None,
+        obs_names.quats_azel,
         allow_none=True,
         help="Observation detdata key for Az/El detector quaternions",
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(1, help="Bit mask to raise flags with")
