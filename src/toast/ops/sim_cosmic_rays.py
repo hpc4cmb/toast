@@ -93,7 +93,6 @@ class InjectCosmicRays(Operator):
 
         return data_dic
 
-
     def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter):
         resampled = np.zeros((Nresamples, arr.shape[1]))
 
@@ -114,12 +113,12 @@ class InjectCosmicRays(Operator):
             CDF = np.cumsum(binned) / binned.sum()
 
             pinv = interpolate.interp1d(CDF, xb, fill_value="extrapolate")
-            #r = np.random.rand(Nresamples)
-            r =  rng.random(
+            # r = np.random.rand(Nresamples)
+            r = rng.random(
                 Nresamples,
                 sampler="uniform_01",
-                key=key ,
-                counter=counter ,
+                key=key,
+                counter=counter,
             )
 
             resampled[:, ii] = pinv(r)
@@ -194,7 +193,7 @@ class InjectCosmicRays(Operator):
                         log.warning(
                             "Correlation matrix not provided for common mode, assuming 50% correlation "
                         )
-                        corr_frac  = 0.5
+                        corr_frac = 0.5
 
                     var_corr = corr_frac * data_common["low_noise"][1] ** 2
                     var0 = var_tot - var_corr
@@ -248,7 +247,6 @@ class InjectCosmicRays(Operator):
                     assert time_glitches.max() < obstime_seconds
 
                     # otherwise we've problems in downsampling
-
 
                     # estimate the timestamps rounding off the events in seconds
                     time_stamp_glitches = np.int_(np.around(time_glitches * samplerate))
