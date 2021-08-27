@@ -93,7 +93,11 @@ class InjectCosmicRays(Operator):
 
         return data_dic
 
+<<<<<<< HEAD
     def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter ):
+=======
+    def resample_cosmic_ray_statistics(self, arr, Nresamples, key, counter):
+>>>>>>> c8c34f032307f85b9f3b1b01969a9d5b3169cb32
 
         resampled = np.zeros((Nresamples, arr.shape[1]))
 
@@ -221,7 +225,6 @@ class InjectCosmicRays(Operator):
                     # we approximate the number of samples to the closest integer
                     nsamples_high = np.int_(np.around(glitch_seconds * fsampl_sims))
                     nsamples_low = np.int_(np.around(glitch_seconds * samplerate))
-
                     # import pdb; pdb.set_trace()
                     # np.random.seed( obsindx//1e3  +detindx//1e3 )
                     n_events = np.random.poisson(n_events_expected)
