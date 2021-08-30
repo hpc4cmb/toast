@@ -95,7 +95,7 @@ def memory_use(n_detector, group_nodes, total_samples, full_pointing):
         (int):  The bytes of allocated memory.
 
     """
-    # detector timestream  # pixel index and 3 IQU weights
+    # detector timestream, pixel index and 3 IQU weights
     detector_timestream_cost = (1 + 4) if full_pointing else 1
 
     det_bytes_per_sample = 2 * (  # At most 2 detector data copies.
@@ -112,6 +112,10 @@ def memory_use(n_detector, group_nodes, total_samples, full_pointing):
     bytes_per_samp = (
         n_detector * det_bytes_per_sample + group_nodes * common_bytes_per_sample
     )
+
+    # Upper bound on non-acounted-for per sample overhead
+    bytes_per_samp *= 2
+
     return bytes_per_samp * (total_samples // n_detector)
 
 
@@ -559,9 +563,7 @@ def estimate_memory_overhead(
     bytes_per_pixel = 8 + 24 + 8 + 48 + 24
 
     n_pixel_solve = sky_fraction * 12 * nside_solve ** 2
-    n_pixel_final = 0
-    if nside_final is not None:
-        n_pixel_final = sky_fraction * 12 * nside_final ** 2
+    n_pixel_final = 0 if nside_final is None else sky_fraction * 12 * nside_final ** 2
 
     return base + (n_pixel_solve + n_pixel_final) * bytes_per_pixel
 
