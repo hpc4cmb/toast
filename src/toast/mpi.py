@@ -284,12 +284,14 @@ def exception_guard(comm=None):
         lines = [f"Proc {rank}: {x}" for x in lines]
         msg = "".join(lines)
         log.error(msg)
-        # gives other processes a bit of time to see wether they encounter the same error
-        time.sleep(30)
         # kills the job
         if comm is None:
             os._exit(1)
         else:
+            if comm.size > 1:
+                # gives other processes a bit of time to see whether
+                # they encounter the same error
+                time.sleep(30)
             comm.Abort()
 
 
