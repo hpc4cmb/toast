@@ -131,7 +131,7 @@ class TimeConstantTest(MPITestCase):
                 signal = obs.detdata["signal"][det]
                 rms = np.std(signal0 - signal) / np.std(signal)
                 assert rms < 1e-2
-                assert rms > 1e-3
+                assert rms > 1e-6
 
         del data
         return
