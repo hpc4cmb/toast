@@ -58,6 +58,28 @@ class TimeConstant(Operator):
         super().__init__(**kwargs)
         return
 
+    def _get_tau(self, obs):
+        focalplane = obs.telescope.focalplane
+        if self.tau is None:
+            tau = focalplane[det][self.tau_name]
+        else:
+            tau = self.tau
+        if self.tau_sigma:
+            # randomize tau in a reproducible manner
+            counter1 = obs.uid
+            counter2 = self.realization
+            key1 = focalplane[det]["uid"]
+            key2 = 123456
+
+            x = rng.random(
+                1,
+                sampler="gaussian",
+                key=(key1, key2),
+                counter=(counter1, counter2),
+            )[0]
+            tau *= 1 + x * self.tau_sigma
+        return tau
+
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
@@ -69,40 +91,20 @@ class TimeConstant(Operator):
             dets = obs.select_local_detectors(detectors)
             if len(dets) == 0:
                 continue
-            focalplane = obs.telescope.focalplane
-            fsample = focalplane.sample_rate
+            fsample = obs.telescope.focalplane.sample_rate
 
             nsample = obs.n_local_samples
             freqs = np.fft.rfftfreq(nsample, 1 / fsample.to_value(u.Hz))
 
             for det in dets:
                 signal = obs.detdata[self.det_data][det]
-                if self.tau is None:
-                    tau = obs.telescope.focalplane[det][self.tau_name]
-                else:
-                    tau = self.tau
-                if self.tau_sigma:
-                    # randomize tau in a reproducible manner
-                    counter1 = obs.uid
-                    counter2 = self.realization
-                    key1 = focalplane[det]["uid"]
-                    key2 = 123456
 
-                    x = rng.random(
-                        1,
-                        sampler="gaussian",
-                        key=(key1, key2),
-                        counter=(counter1, counter2),
-                    )[0]
-                    tau *= 1 + x * self.tau_sigma
+                tau = self._get_tau(obs)
                 if self.deconvolve:
                     taufilter = (1 + 2.0j * np.pi * freqs * tau.to_value(u.s))
                 else:
                     taufilter = 1.0 / (1 + 2.0j * np.pi * freqs * tau.to_value(u.s))
 
-                # We filter the entire TOD buffer, even if the filter
-                # kernel would fit in a shorter buffer.  This implies a log(n)
-                # performance penalty.
                 signal[:] = np.fft.irfft(taufilter * np.fft.rfft(signal), n=nsample)
 
         return
