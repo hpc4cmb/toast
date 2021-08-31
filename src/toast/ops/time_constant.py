@@ -10,8 +10,9 @@ from ..mpi import MPI, MPI_Comm, use_mpi, Comm
 
 from .operator import Operator
 from .. import qarray as qa
+from .. import rng
 from ..timing import function_timer
-from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
+from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Float
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 from ..observation import default_names as obs_names
 
@@ -34,7 +35,7 @@ class TimeConstant(Operator):
         help="Time constant to apply to all detectors.  Overrides `tau_name`",
     )
 
-    tau_sigma = Quantity(
+    tau_sigma = Float(
         None,
         allow_none=True,
         help="Randomized fractional error to add to each time constant."
@@ -58,7 +59,7 @@ class TimeConstant(Operator):
         super().__init__(**kwargs)
         return
 
-    def _get_tau(self, obs):
+    def _get_tau(self, obs, det):
         focalplane = obs.telescope.focalplane
         if self.tau is None:
             tau = focalplane[det][self.tau_name]
@@ -99,7 +100,7 @@ class TimeConstant(Operator):
             for det in dets:
                 signal = obs.detdata[self.det_data][det]
 
-                tau = self._get_tau(obs)
+                tau = self._get_tau(obs, det)
                 if self.deconvolve:
                     taufilter = (1 + 2.0j * np.pi * freqs * tau.to_value(u.s))
                 else:

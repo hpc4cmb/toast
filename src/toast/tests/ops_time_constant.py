@@ -87,3 +87,51 @@ class TimeConstantTest(MPITestCase):
 
         del data
         return
+
+    def test_time_constant_error(self):
+
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model
+        sim_noise = ops.SimNoise(noise_model="noise_model", out="signal")
+        sim_noise.apply(data)
+
+        # Copy the signal for reference
+        for obs in data.obs:
+            obs.detdata.ensure("signal0")
+            for det in obs.local_detectors:
+                obs.detdata["signal0"][det][:] = obs.detdata["signal"][det]
+
+        # Convolve
+
+        time_constant = ops.TimeConstant(
+            tau=1 * u.ms,
+            det_data="signal",
+        )
+        time_constant.apply(data)
+
+        # Convolve with error
+
+        time_constant = ops.TimeConstant(
+            tau=1 * u.ms,
+            tau_sigma=0.01,
+            det_data="signal0",
+        )
+        time_constant.apply(data)
+
+        # Verify that the signal is different
+        for obs in data.obs:
+            for det in obs.local_detectors:
+                signal0 = obs.detdata["signal0"][det]
+                signal = obs.detdata["signal"][det]
+                rms = np.std(signal0 - signal) / np.std(signal)
+                assert rms < 1e-2
+                assert rms > 1e-4
+
+        del data
+        return
