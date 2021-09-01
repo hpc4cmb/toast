@@ -139,7 +139,7 @@ def memory_use(n_detector, group_nodes, total_samples, full_pointing):
 
 
 def get_minimum_memory_use(
-    n_detector, n_nodes, n_procs, total_samples, scans, full_pointing, min_proc_dets=20
+    n_detector, n_nodes, n_procs, total_samples, scans, full_pointing, min_proc_dets=1
 ):
     """Compute the group size that minimizes the aggregate memory use.
 
@@ -215,6 +215,7 @@ def maximize_nb_samples(
     full_pointing,
     available_memory_bytes,
     per_process_overhead_bytes=1024 ** 3,
+    min_proc_dets=20,
 ):
     """Finds the largest number of samples that can fit in the available memory.
 
@@ -235,6 +236,7 @@ def maximize_nb_samples(
             memory.
         available_memory_bytes (int):  The total aggregate memory in the job.
         per_process_overhead_bytes (int):  The memory overhead per process.
+        min_proc_dets (int):  The minimum number of detectors per process.
 
     Returns:
         (tuple):  The (n_detector, new_scans, total_samples, group_nodes, memory_bytes)
@@ -262,10 +264,12 @@ def maximize_nb_samples(
 
     scan_samples = 0
     for isc, sc in enumerate(scans):
+        if isc + 1 < n_nodes:
+            continue
         scan_samples += int(sample_rate * (sc.stop - sc.start).total_seconds())
         det_samps = n_detector * scan_samples
         if total == 0:
-            # First scan, compute number of detectors
+            # First iteration, compute number of detectors
             while (
                 n_detector < max_n_detector
                 and (memory_bytes + overhead_bytes) < available_memory_bytes
@@ -280,6 +284,7 @@ def maximize_nb_samples(
                     det_samps,
                     scans[: isc + 1],
                     full_pointing,
+                    min_proc_dets=1,
                 )
                 if group_nodes == 0:
                     # This distribution failed, ignore the returned memory use for the
@@ -296,7 +301,13 @@ def maximize_nb_samples(
             new_scans.append(copy.deepcopy(sc))
         else:
             gs, bytes = get_minimum_memory_use(
-                n_detector, n_nodes, n_procs, det_samps, scans[: isc + 1], full_pointing
+                n_detector,
+                n_nodes,
+                n_procs,
+                det_samps,
+                scans[: isc + 1],
+                full_pointing,
+                min_proc_dets=min_proc_dets,
             )
             if gs == 0:
                 msg = f"For {n_detector} detectors and {det_samps} samples, "
@@ -325,6 +336,7 @@ def get_from_samples(
     full_pointing,
     max_samples,
     per_process_overhead_bytes=1024 ** 3,
+    min_proc_dets=20,
 ):
     """Finds the best configuration for a fixed number of samples.
 
@@ -348,6 +360,7 @@ def get_from_samples(
             memory.
         max_samples (int):  The maximum number of samples.
         per_process_overhead_bytes (int):  The memory overhead per process.
+        min_proc_dets (int):  The minimum number of detectors per process.
 
     Returns:
         (tuple):  The (n_detector, new_scans, total_samples, group_nodes, memory_bytes)
@@ -374,10 +387,12 @@ def get_from_samples(
 
     scan_samples = 0
     for isc, sc in enumerate(scans):
+        if isc + 1 < n_nodes:
+            continue
         scan_samples += int(sample_rate * (sc.stop - sc.start).total_seconds())
         det_samps = n_detector * scan_samples
         if total == 0:
-            # First scan, compute number of detectors
+            # First iteration, compute number of detectors
             bytes = None
             while (n_detector < max_n_detector) and (det_samps < max_samples):
                 # Increment by whole pixels
@@ -390,6 +405,7 @@ def get_from_samples(
                     det_samps,
                     scans[: isc + 1],
                     full_pointing,
+                    min_proc_dets=1,
                 )
             if group_nodes == 0:
                 msg = f"At maximum detector count ({n_detector}), no compatible "
@@ -412,6 +428,7 @@ def get_from_samples(
                     det_samps,
                     scans[: isc + 1],
                     full_pointing,
+                    min_proc_dets=min_proc_dets,
                 )
                 if group_nodes == 0:
                     msg = f"For {n_detector} detectors and {det_samps} samples, "
