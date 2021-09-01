@@ -24,6 +24,25 @@ from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
 
 
+def python_startup_time(rank):
+    """Compute the python interpreter start time."""
+    if rank == 0:
+        log = toast.utils.Logger.get()
+        if "TOAST_PYTHON_START" in os.environ:
+            tinit = datetime.strptime(os.getenv("TOAST_PYTHON_START"), "%Y%m%d-%H%M%S")
+            tnow = datetime.now()
+            dt = tnow - tinit
+            minutes = dt.seconds / 60.0
+            msg = f"Python interpreter startup took {minutes:0.2f} minutes"
+            log.info(msg)
+        else:
+            msg = f"To print python startup time, in the calling environment do:\n"
+            msg += (
+                f"            TOAST_PYTHON_START=$(date '+%Y%m%d-%H%M%S') <script> ..."
+            )
+            log.info(msg)
+
+
 def get_mpi_settings(args, log, env):
     """
     Getting the MPI settings
@@ -120,7 +139,7 @@ def memory_use(n_detector, group_nodes, total_samples, full_pointing):
 
 
 def get_minimum_memory_use(
-    n_detector, n_nodes, n_procs, total_samples, scans, full_pointing
+    n_detector, n_nodes, n_procs, total_samples, scans, full_pointing, min_proc_dets=20
 ):
     """Compute the group size that minimizes the aggregate memory use.
 
@@ -135,6 +154,7 @@ def get_minimum_memory_use(
         scans (list):  The list of observing scans.
         full_pointing (bool):  If True, we are storing full detector pointing in
             memory.
+        min_proc_dets (int):  The minimum number of detectors per process.
 
     Returns:
         (tuple):  The (group_nodes, memory_bytes) of the case with the smallest
@@ -166,10 +186,11 @@ def get_minimum_memory_use(
                 log.verbose_rank(msg)
                 continue
             group_procs = node_procs * group_nodes
-            if group_procs > n_detector:
+            if group_procs * min_proc_dets > n_detector:
                 # This group is too large for the number of detectors
                 msg = f"Rejecting possible group nodes = {group_nodes}, "
-                msg += f"since {group_procs} processes per group is larger "
+                msg += f"since {group_procs} processes per group times "
+                msg += f"{min_proc_dets} minimum dets per process is larger "
                 msg += f"than the number of detectors ({n_detector})"
                 log.verbose_rank(msg)
                 continue
@@ -601,7 +622,9 @@ def make_focalplane(args, world_comm, log):
     return focalplane
 
 
-def create_input_maps(input_map_path, nside, rank, log, should_print_input_map_png=False):
+def create_input_maps(
+    input_map_path, nside, rank, log, should_print_input_map_png=False
+):
     """
     Creates a *completely* fake map for scan_map
     (just to have something on the sky besides zeros)
@@ -663,7 +686,9 @@ def scan_map(args, rank, job_ops, data, log):
         if job_ops.pointing_final.enabled:
             pointing = job_ops.pointing_final
         # creates a map and puts it in args.input_map
-        create_input_maps(args.input_map, pointing.nside, rank, log, args.print_input_map)
+        create_input_maps(
+            args.input_map, pointing.nside, rank, log, args.print_input_map
+        )
         job_ops.scan_map.pixel_dist = job_ops.binner_final.pixel_dist
         job_ops.scan_map.pointing = pointing
         job_ops.scan_map.save_pointing = job_ops.binner_final.full_pointing
@@ -680,7 +705,9 @@ def run_mapmaker(job_ops, args, tmpls, data):
     job_ops.binner_final.noise_model = job_ops.default_model.noise_model
 
     job_ops.mapmaker.binning = job_ops.binner
-    job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
+    job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(
+        templates=[tmpls.baselines]
+    )
     job_ops.mapmaker.map_binning = job_ops.binner_final
     job_ops.mapmaker.det_data = job_ops.sim_noise.det_data
     job_ops.mapmaker.output_dir = args.out_dir
