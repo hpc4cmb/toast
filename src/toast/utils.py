@@ -298,22 +298,26 @@ def astropy_control(max_future=None, offline=False, node_local=False):
 try:
     import psutil
 
-    def memreport(msg="", comm=None):
+    def memreport(msg="", comm=None, silent=False):
         """Gather and report the amount of allocated, free and swapped system memory"""
         if psutil is None:
             return
         vmem = psutil.virtual_memory()._asdict()
         gc.collect()
         vmem2 = psutil.virtual_memory()._asdict()
-        memstr = "Memory usage {}\n".format(msg)
+        memstr = None
+        if comm is None or comm.rank == 0:
+            memstr = "Memory usage {}\n".format(msg)
         for key, value in vmem.items():
             value2 = vmem2[key]
+            vlist = None
+            vlist2 = None
             if comm is None:
                 vlist = [value]
                 vlist2 = [value2]
             else:
-                vlist = comm.gather(value)
-                vlist2 = comm.gather(value2)
+                vlist = comm.gather(value, root=0)
+                vlist2 = comm.gather(value2, root=0)
             if comm is None or comm.rank == 0:
                 vlist = np.array(vlist, dtype=np.float64)
                 vlist2 = np.array(vlist2, dtype=np.float64)
@@ -370,10 +374,11 @@ try:
                             )
                         )
         if comm is None or comm.rank == 0:
-            print(memstr, flush=True)
+            if not silent:
+                print(memstr, flush=True)
         if comm is not None:
             comm.Barrier()
-        return
+        return memstr
 
 
 except ImportError:
