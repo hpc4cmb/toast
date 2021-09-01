@@ -26,6 +26,7 @@ from toast.scripts.benchmarking_utilities import (
     run_mapmaker,
     compute_science_metric,
     estimate_memory_overhead,
+    python_startup_time,
 )
 
 
@@ -436,5 +437,6 @@ def main():
 
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()
+    python_startup_time(rank)
     with toast.mpi.exception_guard(comm=world):
         main()
