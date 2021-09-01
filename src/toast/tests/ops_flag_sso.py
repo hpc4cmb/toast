@@ -54,7 +54,7 @@ class FlagSSOTest(MPITestCase):
 
         # Flag
         flag_sso = ops.FlagSSO(
-            quats_azel=detpointing_azel.quats,
+            detector_pointing=detpointing_azel,
             det_flags="flags",
             sso_names=["Sun", "Moon"],
             sso_radii=[93 * u.deg, 5 * u.deg],

@@ -264,7 +264,7 @@ def reduce_data(job, args, data):
     timer.start()
 
     # Flag Sun, Moon and the planets
-    ops.flag_sso.quats_azel = ops.det_pointing_azel.quats_azel
+    ops.flag_sso.detector_pointing = ops.det_pointing_azel
     ops.flag_sso.apply(data)
 
     # Collect signal statistics before filtering

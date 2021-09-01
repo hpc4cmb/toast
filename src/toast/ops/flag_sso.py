@@ -66,10 +66,10 @@ class FlagSSO(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    quats_azel = Unicode(
-        obs_names.quats_azel,
+    detector_pointing = Instance(
+        klass=Operator,
         allow_none=True,
-        help="Observation detdata key for Az/El detector quaternions",
+        help="Operator that translates boresight Az/El pointing into detector frame",
     )
 
     det_flags = Unicode(
@@ -87,12 +87,37 @@ class FlagSSO(Operator):
         help="Names of the SSOs, must be recognized by pyEphem",
     )
 
-    sso_radii = List(
-        default_value=[45 * u.deg, 5 * u.deg],
-        trait=Quantity,
+    # FIXME: Once TOAST supports Lists of Quantities,
+    # FIXME: we can use astropy units here
+    sso_radii_deg = List(
+        default_value=["45.0", "5.0"],
+        trait=Unicode,  # Only type supported by TOAST for now
         allow_none=True,
-        help="Radii around the sources to flag",
+        help="Radii (in degrees) around the sources to flag",
     )
+
+    @traitlets.validate("detector_pointing")
+    def _check_detector_pointing(self, proposal):
+        detpointing = proposal["value"]
+        if detpointing is not None:
+            if not isinstance(detpointing, Operator):
+                raise traitlets.TraitError(
+                    "detector_pointing should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in [
+                "view",
+                "boresight",
+                "shared_flags",
+                "shared_flag_mask",
+                "quats",
+                "coord_in",
+                "coord_out",
+            ]:
+                if not detpointing.has_trait(trt):
+                    msg = f"detector_pointing operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return detpointing
 
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
@@ -108,7 +133,7 @@ class FlagSSO(Operator):
         env = Environment.get()
         log = Logger.get()
 
-        if len(self.sso_names) != len(self.sso_radii):
+        if len(self.sso_names) != len(self.sso_radii_deg):
             raise RuntimeError("Each SSO must have a radius")
 
         self.ssos = []
@@ -135,7 +160,7 @@ class FlagSSO(Operator):
             times = obs.shared[self.times].data
             sso_azs, sso_els = self._get_sso_positions(times, observer)
 
-            self._flag_ssos(obs, dets, sso_azs, sso_els)
+            self._flag_ssos(data, obs, dets, sso_azs, sso_els)
 
         return
 
@@ -176,7 +201,7 @@ class FlagSSO(Operator):
         return sso_azs, sso_els
 
     @function_timer
-    def _flag_ssos(self, obs, dets, sso_azs, sso_els):
+    def _flag_ssos(self, data, obs, dets, sso_azs, sso_els):
         """
         Flag the SSO for each detector in tod
         """
@@ -184,8 +209,18 @@ class FlagSSO(Operator):
         obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
 
         for det in dets:
-            # Detector Az / El quaternions
-            quats = obs.detdata[self.quats_azel][det]
+            try:
+                # Use cached detector quaternions
+                quats = obs.detdata[self.detector_pointing.quats][det]
+            except KeyError:
+                # Compute the detector quaternions
+                obs_data = Data(comm=data.comm)
+                obs_data._internal = data._internal
+                obs_data.obs = [obs]
+                self.detector_pointing.apply(obs_data, detectors=[det])
+                obs_data.obs.clear()
+                del obs_data
+                quats = obs.detdata[self.detector_pointing.quats][det]
 
             # Convert Az/El quaternion of the detector into angles
             theta, phi = qa.to_position(quats)
@@ -198,20 +233,21 @@ class FlagSSO(Operator):
             flags = obs.detdata[self.det_flags][det]
 
             cosel = np.cos(el)
-            for sso_az, sso_el, sso_radius in zip(sso_azs, sso_els, self.sso_radii):
+            for sso_az, sso_el, sso_radius in zip(sso_azs, sso_els, self.sso_radii_deg):
+                radius = np.radians(float(sso_radius))
                 # Flag samples within search radius.
-                if sso_radius > 15 * u.deg:
+                if radius > np.radians(15):
                     # Exact formula for cosine of the angular distance
                     rcos = np.sin(el) * np.sin(sso_el) + np.cos(el) * np.cos(
                         sso_el
                     ) * np.cos(az - sso_az)
-                    inside = rcos > np.cos(sso_radius.to_value(u.radian))
+                    inside = rcos > np.cos(radius)
                 else:
                     # This is the planar approximation for squared angular distance
                     x = (az - sso_az) * cosel
                     y = el - sso_el
                     rsquared = x ** 2 + y ** 2
-                    inside = rsquared < sso_radius.to_value(u.radian) ** 2
+                    inside = rsquared < radius ** 2
                 flags[inside] |= self.det_flag_mask
 
         return
