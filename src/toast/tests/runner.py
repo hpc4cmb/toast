@@ -62,6 +62,7 @@ from . import ops_groundfilter as test_ops_groundfilter
 from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
 from . import ops_time_constant as test_ops_time_constant
 from . import ops_cadence_map as test_ops_cadence_map
+from . import ops_crosslinking as test_ops_crosslinking
 
 from . import covariance as test_covariance
 
@@ -187,6 +188,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
         suite.addTest(loader.loadTestsFromModule(test_ops_time_constant))
         suite.addTest(loader.loadTestsFromModule(test_ops_cadence_map))
+        suite.addTest(loader.loadTestsFromModule(test_ops_crosslinking))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
