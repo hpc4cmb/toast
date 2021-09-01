@@ -137,6 +137,7 @@ def parse_arguments():
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
+        toast.ops.MemoryCounter(name="mem_count"),
     ]
 
     # Templates we want to configure from the command line or a parameter file.
@@ -339,12 +340,18 @@ def main():
     timer = toast.timing.Timer()
     timer.start()
 
+    job_ops.mem_count.prefix = "Before Simulation"
+    job_ops.mem_count.apply(data)
+
     # Simulate the telescope pointing
     job_ops.sim_ground.telescope = telescope
     job_ops.sim_ground.schedule = args.schedule
     job_ops.sim_ground.weather = telescope.site.name
     job_ops.sim_ground.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
+
+    job_ops.mem_count.prefix = "After Scan Simulation"
+    job_ops.mem_count.apply(data)
 
     # Set up detector pointing in both Az/El and RA/DEC
     job_ops.det_pointing_azel.boresight = job_ops.sim_ground.boresight_azel
@@ -377,19 +384,31 @@ def main():
     if not job_ops.binner_final.enabled:
         job_ops.binner_final = job_ops.binner
 
+    job_ops.mem_count.prefix = "After Noise and Pointing Setup"
+    job_ops.mem_count.apply(data)
+
     # Simulate sky signal from a map.
     scan_map(args, rank, job_ops, data, log)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
+
+    job_ops.mem_count.prefix = "After Map Scanning"
+    job_ops.mem_count.apply(data)
 
     # Simulate detector noise
     job_ops.sim_noise.noise_model = job_ops.elevation_model.out_model
     job_ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
+    job_ops.mem_count.prefix = "After Noise Simulation"
+    job_ops.mem_count.apply(data)
+
     # Simulate atmosphere signal
     job_ops.sim_atmosphere.detector_pointing = job_ops.det_pointing_azel
     job_ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
+
+    job_ops.mem_count.prefix = "After Atmosphere Simulation"
+    job_ops.mem_count.apply(data)
 
     # Collect signal statistics before filtering
     job_ops.raw_statistics.output_dir = args.out_dir
@@ -405,6 +424,9 @@ def main():
     job_ops.common_mode_filter.apply(data)
     log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
 
+    job_ops.mem_count.prefix = "After Filtering"
+    job_ops.mem_count.apply(data)
+
     # Collect signal statistics after filtering
     job_ops.filtered_statistics.output_dir = args.out_dir
     job_ops.filtered_statistics.apply(data)
@@ -412,6 +434,9 @@ def main():
     # Build up our map-making operation.
     run_mapmaker(job_ops, args, job.templates, data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
+
+    job_ops.mem_count.prefix = "After Map Making"
+    job_ops.mem_count.apply(data)
 
     # end of the computations, sync and computes efficiency
     global_timer.stop_all()

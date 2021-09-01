@@ -6,13 +6,13 @@ import numpy as np
 
 import traitlets
 
-from ..utils import Environment, Logger
+from ..utils import Environment, Logger, memreport
 
 from ..timing import function_timer, Timer
 
 from ..noise_sim import AnalyticNoise
 
-from ..traits import trait_docs, Int, Bool
+from ..traits import trait_docs, Int, Bool, Unicode
 
 from .operator import Operator
 
@@ -36,6 +36,8 @@ class MemoryCounter(Operator):
         help="If True, return the memory used but do not log the result",
     )
 
+    prefix = Unicode("", help="Prefix for log messages")
+
     def __init__(self, **kwargs):
         self.total_bytes = 0
         super().__init__(**kwargs)
@@ -43,6 +45,9 @@ class MemoryCounter(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         for ob in data.obs:
             self.total_bytes += ob.memory_use()
+        self.sys_mem_str = memreport(
+            msg="(whole node)", comm=data.comm.comm_world, silent=True
+        )
         return
 
     def _finalize(self, data, **kwargs):
@@ -52,7 +57,8 @@ class MemoryCounter(Operator):
                 msg = "Total timestream memory use = {:0.2f} GB".format(
                     self.total_bytes / 1024 ** 3
                 )
-                log.info(msg)
+                log.info(f"{self.prefix}:  {msg}")
+                log.info(f"{self.prefix}:  {self.sys_mem_str}")
         return self.total_bytes
 
     def _requires(self):

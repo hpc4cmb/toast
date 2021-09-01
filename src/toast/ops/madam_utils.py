@@ -8,7 +8,7 @@ import numpy as np
 
 import healpy as hp
 
-from ..utils import Logger, Timer, GlobalTimers, dtype_to_aligned
+from ..utils import Logger, Timer, GlobalTimers, dtype_to_aligned, memreport
 
 from ..timing import function_timer
 
@@ -43,7 +43,7 @@ def log_time_memory(
             )
             log.debug(msg)
         if full_mem:
-            memreport(msg="{} {}".format(prefix, mem_msg), comm=comm)
+            _ = memreport(msg="{} {}".format(prefix, mem_msg), comm=comm)
     if restart:
         timer.start()
 
