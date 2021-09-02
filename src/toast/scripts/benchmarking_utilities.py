@@ -206,6 +206,64 @@ def get_minimum_memory_use(
     return (group_nodes_best, memory_used_bytes_best)
 
 
+def select_group_nodes(n_detector, n_nodes, n_procs, scans, min_proc_dets=1):
+    """Choose a group size that load balances across both detectors and observations.
+
+    Search the allowable values of the group size for one which
+
+    Args:
+        n_detector (int):  The number of detectors.
+        n_nodes (int):  The number of nodes in the job.
+        n_procs (int):  The number of MPI processes in the job.
+        total_samples (int):  The total number of detector samples in the job.
+        scans (list):  The list of observing scans.
+        full_pointing (bool):  If True, we are storing full detector pointing in
+            memory.
+        min_proc_dets (int):  The minimum number of detectors per process.
+
+    Returns:
+        (tuple):  The (group_nodes, memory_bytes) of the case with the smallest
+            memory footprint.
+
+    """
+    log = toast.utils.Logger.get()
+
+    # The number of observations in the schedule
+    num_obs = len(scans)
+
+    # The number of processes per node
+    node_procs = n_procs // n_nodes
+
+    group_nodes_best = None
+
+    # what is the minimum memory we can use for the total number of samples?
+    for group_nodes in range(1, n_nodes + 1):
+        if n_nodes % group_nodes != 0:
+            continue
+        # This is a valid group size.
+        n_group = n_nodes // group_nodes
+        if n_group > num_obs:
+            # Too many small groups- we do not have enough observations to give at
+            # least one to each group.
+            msg = f"Rejecting possible group nodes = {group_nodes}, "
+            msg += f"since {n_group} groups is larger than the number of "
+            msg += f"observations ({num_obs})"
+            log.verbose_rank(msg)
+            continue
+        group_procs = node_procs * group_nodes
+        if group_procs * min_proc_dets > n_detector:
+            # This group is too large for the number of detectors
+            msg = f"Rejecting possible group nodes = {group_nodes}, "
+            msg += f"since {group_procs} processes per group times "
+            msg += f"{min_proc_dets} minimum dets per process is larger "
+            msg += f"than the number of detectors ({n_detector})"
+            log.verbose_rank(msg)
+            continue
+        group_nodes_best = group_nodes
+        break
+    return group_nodes_best
+
+
 def maximize_nb_samples(
     n_nodes,
     n_procs,
