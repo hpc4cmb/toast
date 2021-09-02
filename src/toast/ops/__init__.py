@@ -83,3 +83,5 @@ from .load_spt3g import LoadSpt3g
 from .save_spt3g import SaveSpt3g
 
 from .run_spt3g import RunSpt3g
+
+from .cadence_map import CadenceMap

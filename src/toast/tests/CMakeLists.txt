@@ -49,5 +49,6 @@ install(FILES
     ops_sim_cosmic_rays.py
     ops_time_constant.py
     spt3g.py
+    ops_cadence_map.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
