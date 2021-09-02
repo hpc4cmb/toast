@@ -57,12 +57,6 @@ class CrossLinking(Operator):
         "Used exclusively for pixel numbers, not pointing weights.",
     )
 
-    quats = Unicode(
-        None,
-        allow_none=True,
-        help="Observation detdata key for output quaternions",
-    )
-
     pixel_dist = Unicode(
         "pixel_dist",
         help="The Data key where the PixelDist object should be stored",
