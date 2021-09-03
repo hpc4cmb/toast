@@ -102,7 +102,9 @@ class CrossLinking(Operator):
             if not isinstance(pntg, Operator):
                 raise traitlets.TraitError("pointing should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["pixels", "weights", "create_dist", "view"]:
+            for trt in [
+                    "pixels", "weights", "create_dist", "view", "detector_pointing"
+            ]:
                 if not pntg.has_trait(trt):
                     msg = "pointing operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
