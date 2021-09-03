@@ -179,8 +179,8 @@ def parse_arguments():
         "RISING_SCAN_35,HORIZONTAL,1.00,30.00,150.00,35.00,1500",
         "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
     ]
-    args.schedule_start = "2027-06-01 00:00:00"
-    args.schedule_stop = "2027-06-30 00:00:00"
+    args.schedule_start = "2027-01-01 00:00:00"
+    args.schedule_stop = "2027-12-31 00:00:00"
 
     # scan map
     args.input_map = "fake_input_sky.fits"
