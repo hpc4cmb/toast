@@ -94,6 +94,9 @@ class TimeConstant(Operator):
                 continue
             fsample = obs.telescope.focalplane.sample_rate
 
+            # FIXME : if the FFTs here ever become a bottle neck, we will
+            # need to switch to using the TOAST batched FFT instead.
+
             nsample = obs.n_local_samples
             freqs = np.fft.rfftfreq(nsample, 1 / fsample.to_value(u.Hz))
 
