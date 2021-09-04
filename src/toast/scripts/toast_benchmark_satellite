@@ -91,7 +91,10 @@ def parse_arguments():
     # The "name" of each operator instance controls what the commandline and config
     # file options will be called.
     operators = [
-        toast.ops.SimSatellite(name="sim_satellite"),
+        toast.ops.SimSatellite(
+            name="sim_satellite",
+            detset_key="pixel",
+        ),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),

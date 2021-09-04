@@ -15,6 +15,8 @@ from astropy import units as u
 
 from ..utils import Environment, Logger, import_from_name
 
+from ..timing import function_timer
+
 from ..instrument import Focalplane, GroundSite, SpaceSite
 
 from ..weather import SimWeather
@@ -213,6 +215,7 @@ class import_obs_meta(object):
             ]
         )
 
+    @function_timer
     def __call__(self, frames):
         """Process metadata frames.
 
@@ -392,8 +395,6 @@ class import_obs_data(object):
         shared_names (list):  The observation shared objects to import.
         det_names (list):  The observation detdata objects to import.
         interval_names (list):  The observation intervals to import.
-        frame_intervals (str):  The name of the intervals to create for the
-            frame boundaries.
 
     """
 
@@ -403,14 +404,13 @@ class import_obs_data(object):
         shared_names=list(),
         det_names=list(),
         interval_names=list(),
-        frame_intervals="frames",
     ):
         self._timestamp_names = timestamp_names
         self._shared_names = shared_names
         self._det_names = det_names
         self._interval_names = interval_names
-        self._frame_intervals = frame_intervals
 
+    @function_timer
     def __call__(self, obs, frames):
         log = Logger.get()
         # Sanity check that the lengths of the frames correspond the number of local
@@ -482,7 +482,6 @@ class import_obs_data(object):
 
         for frame_field, obs_field in self._interval_names:
             obs.intervals.create_col(obs_field, list(), obs.shared[obs_times])
-        obs.intervals.create_col(self._frame_intervals, list(), obs.shared[obs_times])
 
         # Go through each frame and copy the shared and detector data into the
         # observation.
@@ -529,11 +528,6 @@ class import_obs_data(object):
             for frame_field, obs_field in self._interval_names:
                 import_intervals(obs, obs_field, obs_times, frm[frame_field])
             offset += nsamp
-
-        obs.intervals[self._frame_intervals] = IntervalList(
-            obs.shared[obs_times],
-            samplespans=sample_spans,
-        )
 
 
 class import_obs(object):
@@ -583,6 +577,7 @@ class import_obs(object):
     def import_rank(self):
         return self._import_rank
 
+    @function_timer
     def __call__(self, frames):
         """Copy spt3g frames into a toast Observation.
 

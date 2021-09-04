@@ -543,11 +543,11 @@ def redistribute_detector_data(
 
         if not all([x == y for x, y in zip(field_dets, old_local_dets)]):
             msg = "Redistribution only supports detdata with all local detectors."
-            msg += " Field {} has {} dets instead of {}".format(
-                field, len(field_dets), len(old_local_dets)
-            )
-            log.error(msg)
-            raise NotImplementedError(msg)
+            msg += f" Field {field} has {len(field_dets)} dets instead of "
+            msg += f"{len(old_local_dets)}.  Deleting."
+            log.warning_rank(msg, comm=old_dist.comm)
+            del detdata_manager[field]
+            continue
 
         # Buffer class to use
         buffer_class, _ = dtype_to_aligned(detdata_manager[field].dtype)

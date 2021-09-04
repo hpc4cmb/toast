@@ -29,6 +29,8 @@ from .utils import (
     name_UID,
 )
 
+from .timing import function_timer
+
 from .cuda import use_pycuda
 
 from .observation_data import (
@@ -582,6 +584,7 @@ class Observation(MutableMapping):
 
     # Redistribution
 
+    @function_timer
     def redistribute(self, process_rows, times=None):
         """Take the currently allocated observation and redistribute in place.
 

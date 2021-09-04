@@ -265,7 +265,7 @@ def main():
     # operator is disabled by default.
 
     operators = [
-        toast.ops.SimSatellite(name="sim_satellite"),
+        toast.ops.SimSatellite(name="sim_satellite", detset_key="pixel"),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ScanHealpix(name="scan_map"),
         toast.ops.TimeConstant(

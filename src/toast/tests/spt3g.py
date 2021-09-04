@@ -155,27 +155,16 @@ class Spt3gTest(MPITestCase):
                 (len(ob.local_detectors), ob.n_local_samples)
             )
 
-        # Make a new interval list that defines the desired frame boundaries.
         # Store the number of frames for each observation and use for a check
         # after exporting.
         ob_n_frames = dict()
         for ob in data.obs:
-            timespans = list()
-            offset = 0
             n_frames = 0
             first_set = ob.dist.samp_sets[ob.comm_rank].offset
             n_set = ob.dist.samp_sets[ob.comm_rank].n_elem
             for sset in range(first_set, first_set + n_set):
                 for chunk in ob.dist.sample_sets[sset]:
-                    timespans.append(
-                        (
-                            ob.shared["times"][offset],
-                            ob.shared["times"][offset + chunk - 1],
-                        )
-                    )
                     n_frames += 1
-                    offset += chunk
-            ob.intervals.create_col("frames", timespans, ob.shared["times"])
             if ob.comm_row is not None:
                 n_frames = ob.comm_row.allreduce(n_frames, op=MPI.SUM)
             ob_n_frames[ob.name] = n_frames
@@ -197,7 +186,6 @@ class Spt3gTest(MPITestCase):
             ]
         )
         data_exporter = export_obs_data(
-            frame_intervals="frames",
             shared_names=self.export_shared_names,
             det_names=self.export_det_names,
             interval_names=self.export_interval_names,
@@ -219,7 +207,6 @@ class Spt3gTest(MPITestCase):
             shared_names=self.import_shared_names,
             det_names=self.import_det_names,
             interval_names=self.import_interval_names,
-            frame_intervals="frames",
         )
         importer = import_obs(
             comm=data.comm.comm_group,
@@ -266,6 +253,8 @@ class Spt3gTest(MPITestCase):
 
         # Verify
         for ob, orig in zip(check_data.obs, original):
+            if ob != orig:
+                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
 
     def test_save_load_nocomp(self):
@@ -283,7 +272,6 @@ class Spt3gTest(MPITestCase):
             ]
         )
         data_exporter = export_obs_data(
-            frame_intervals="frames",
             shared_names=self.export_shared_names,
             det_names=self.export_det_names,
             interval_names=self.export_interval_names,
@@ -306,7 +294,6 @@ class Spt3gTest(MPITestCase):
             shared_names=self.import_shared_names,
             det_names=self.import_det_names,
             interval_names=self.import_interval_names,
-            frame_intervals="frames",
         )
         importer = import_obs(
             comm=data.comm.comm_group,
@@ -357,7 +344,6 @@ class Spt3gTest(MPITestCase):
             ]
         )
         data_exporter = export_obs_data(
-            frame_intervals="frames",
             shared_names=self.export_shared_names,
             det_names=self.export_det_names,
             interval_names=self.export_interval_names,
@@ -379,7 +365,6 @@ class Spt3gTest(MPITestCase):
             shared_names=self.import_shared_names,
             det_names=self.import_det_names,
             interval_names=self.import_interval_names,
-            frame_intervals="frames",
         )
         importer = import_obs(
             comm=data.comm.comm_group,

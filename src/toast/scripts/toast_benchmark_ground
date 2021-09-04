@@ -16,6 +16,7 @@ import argparse
 from astropy import units as u
 import toast
 import toast.ops
+from toast import spt3g as t3g
 from toast.schedule_sim_ground import run_scheduler
 from toast.timing import gather_timers, dump
 from toast.scripts.benchmarking_utilities import (
@@ -28,6 +29,9 @@ from toast.scripts.benchmarking_utilities import (
     estimate_memory_overhead,
     python_startup_time,
 )
+
+if t3g.available:
+    from spt3g import core as c3g
 
 
 def parse_arguments():
@@ -83,13 +87,23 @@ def parse_arguments():
         type=bool,
         help="Should the healpy input map be exported as a PNG for debugging purposes.",
     )
+    parser.add_argument(
+        "--save_spt3g",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Save simulated data to SPT3G format.",
+    )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
     # The "name" of each operator instance controls what the commandline and config
     # file options will be called.
     operators = [
-        toast.ops.SimGround(name="sim_ground"),
+        toast.ops.SimGround(
+            name="sim_ground",
+            detset_key="pixel",
+        ),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(name="elevation_model", out_model="el_noise_model"),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
@@ -251,6 +265,70 @@ def make_schedule(args, world_comm, site):
     args.schedule = schedule
 
 
+def dump_spt3g(args, job_ops, data):
+    """Save data to SPT3G format."""
+    if not t3g.available:
+        raise RuntimeError("SPT3G is not available, cannot save to that format")
+    save_dir = os.path.join(args.out_dir, "data_spt3g")
+    meta_exporter = t3g.export_obs_meta(
+        noise_models=[
+            (job_ops.default_model.noise_model, job_ops.default_model.noise_model),
+            (job_ops.elevation_model.out_model, job_ops.elevation_model.out_model),
+        ]
+    )
+    # Note that we export detector flags below to a float64 G3TimestreamMap
+    # in order to use FLAC compression.
+    data_exporter = t3g.export_obs_data(
+        shared_names=[
+            (
+                job_ops.sim_ground.boresight_azel,
+                job_ops.sim_ground.boresight_azel,
+                c3g.G3VectorQuat,
+            ),
+            (
+                job_ops.sim_ground.boresight_radec,
+                job_ops.sim_ground.boresight_radec,
+                c3g.G3VectorQuat,
+            ),
+            (job_ops.sim_ground.position, job_ops.sim_ground.position, None),
+            (job_ops.sim_ground.velocity, job_ops.sim_ground.velocity, None),
+            (job_ops.sim_ground.azimuth, job_ops.sim_ground.azimuth, None),
+            (job_ops.sim_ground.elevation, job_ops.sim_ground.elevation, None),
+            # (job_ops.sim_ground.hwp_angle, job_ops.sim_ground.hwp_angle, None),
+            (job_ops.sim_ground.shared_flags, "telescope_flags", None),
+        ],
+        det_names=[
+            (
+                job_ops.sim_noise.det_data,
+                job_ops.sim_noise.det_data,
+                c3g.G3TimestreamMap,
+            ),
+            # ("flags", "detector_flags", c3g.G3TimestreamMap),
+        ],
+        interval_names=[
+            (job_ops.sim_ground.scan_leftright_interval, "intervals_scan_leftright"),
+            (job_ops.sim_ground.turn_leftright_interval, "intervals_turn_leftright"),
+            (job_ops.sim_ground.scan_rightleft_interval, "intervals_scan_rightleft"),
+            (job_ops.sim_ground.turn_rightleft_interval, "intervals_turn_rightleft"),
+            (job_ops.sim_ground.elnod_interval, "intervals_elnod"),
+            (job_ops.sim_ground.scanning_interval, "intervals_scanning"),
+            (job_ops.sim_ground.turnaround_interval, "intervals_turnaround"),
+            (job_ops.sim_ground.sun_up_interval, "intervals_sun_up"),
+            (job_ops.sim_ground.sun_close_interval, "intervals_sun_close"),
+        ],
+        compress=True,
+    )
+    exporter = t3g.export_obs(
+        meta_export=meta_exporter,
+        data_export=data_exporter,
+        export_rank=0,
+    )
+    dumper = toast.ops.SaveSpt3g(
+        directory=save_dir, framefile_mb=500, obs_export=exporter
+    )
+    dumper.apply(data)
+
+
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()
@@ -408,6 +486,14 @@ def main():
 
     job_ops.mem_count.prefix = "After Atmosphere Simulation"
     job_ops.mem_count.apply(data)
+
+    # Optionally save data to SPT3G format.  This is expensive and the configuration
+    # is specific to this particular workflow, which is why the details are not
+    # configurable from the command line / parameter file and why this is not enabled
+    # by default.
+    if args.save_spt3g:
+        dump_spt3g(args, job_ops, data)
+        log.info_rank("Saved data to SPT3G format in", comm=world_comm, timer=timer)
 
     # Collect signal statistics before filtering
     job_ops.raw_statistics.output_dir = args.out_dir

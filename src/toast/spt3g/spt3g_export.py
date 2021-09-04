@@ -13,6 +13,8 @@ from astropy import units as u
 
 from ..utils import Environment, Logger, object_fullname
 
+from ..timing import function_timer
+
 from ..intervals import IntervalList
 
 from ..instrument import GroundSite, SpaceSite
@@ -229,6 +231,7 @@ class export_obs_meta(object):
         self._meta_arrays = meta_arrays
         self._noise_models = noise_models
 
+    @function_timer
     def __call__(self, obs):
         # Construct observation frame
         ob = c3g.G3Frame(c3g.G3FrameType.Observation)
@@ -359,9 +362,33 @@ class export_obs_data(object):
         self._interval_names = interval_names
         self._compress = compress
 
+    @function_timer
     def __call__(self, obs):
+        frame_intervals = self._frame_intervals
+        if frame_intervals is None:
+            # We are using the sample set distribution for our frame boundaries.
+            frame_intervals = "frames"
+            timespans = list()
+            offset = 0
+            n_frames = 0
+            first_set = obs.dist.samp_sets[obs.comm_rank].offset
+            n_set = obs.dist.samp_sets[obs.comm_rank].n_elem
+            for sset in range(first_set, first_set + n_set):
+                for chunk in obs.dist.sample_sets[sset]:
+                    timespans.append(
+                        (
+                            obs.shared[self._timestamp_names[0]][offset],
+                            obs.shared[self._timestamp_names[0]][offset + chunk - 1],
+                        )
+                    )
+                    n_frames += 1
+                    offset += chunk
+            obs.intervals.create_col(
+                frame_intervals, timespans, obs.shared[self._timestamp_names[0]]
+            )
+
         output = list()
-        frame_view = obs.view[self._frame_intervals]
+        frame_view = obs.view[frame_intervals]
         for ivw, tview in enumerate(frame_view.shared[self._timestamp_names[0]]):
             # Construct the Scan frame
             frame = c3g.G3Frame(c3g.G3FrameType.Scan)
@@ -369,7 +396,7 @@ class export_obs_data(object):
             frame[self._timestamp_names[1]] = export_shared(
                 obs,
                 self._timestamp_names[0],
-                view_name=self._frame_intervals,
+                view_name=frame_intervals,
                 view_index=ivw,
                 g3t=c3g.G3VectorTime,
             )
@@ -377,7 +404,7 @@ class export_obs_data(object):
                 frame[shr_val] = export_shared(
                     obs,
                     shr_key,
-                    view_name=self._frame_intervals,
+                    view_name=frame_intervals,
                     view_index=ivw,
                     g3t=shr_type,
                 )
@@ -385,7 +412,7 @@ class export_obs_data(object):
                 frame[det_val], gunits, compression = export_detdata(
                     obs,
                     det_key,
-                    view_name=self._frame_intervals,
+                    view_name=frame_intervals,
                     view_index=ivw,
                     g3t=det_type,
                     times=self._timestamp_names[0],
@@ -409,10 +436,13 @@ class export_obs_data(object):
                     obs,
                     ivl_key,
                     self._timestamp_names[0],
-                    view_name=self._frame_intervals,
+                    view_name=frame_intervals,
                     view_index=ivw,
                 )
             output.append(frame)
+        # Delete our temporary frame interval if we created it
+        if self._frame_intervals is None:
+            del obs.intervals[frame_intervals]
 
         return output
 
@@ -460,6 +490,7 @@ class export_obs(object):
     def export_rank(self):
         return self._export_rank
 
+    @function_timer
     def __call__(self, obs):
         """Generate spt3g frames from an Observation.
 
