@@ -19,8 +19,7 @@ from ..observation import default_names as obs_names
 
 @trait_docs
 class TimeConstant(Operator):
-    """ Simple time constant filtering without flag checks.
-    """
+    """Simple time constant filtering without flag checks."""
 
     API = Int(0, help="Internal interface version for this operator")
 
@@ -28,7 +27,7 @@ class TimeConstant(Operator):
         obs_names.det_data,
         help="Observation detdata key apply filtering to",
     )
-    
+
     tau = Quantity(
         None,
         allow_none=True,
@@ -38,7 +37,7 @@ class TimeConstant(Operator):
     tau_sigma = Float(
         None,
         allow_none=True,
-        help="Randomized fractional error to add to each time constant."
+        help="Randomized fractional error to add to each time constant.",
     )
 
     tau_name = Unicode(
@@ -47,13 +46,9 @@ class TimeConstant(Operator):
         help="Key to use to find time constants in the Focalplane.",
     )
 
-    deconvolve = Bool(
-        False, help="Deconvolve the time constant instead."
-    )
+    deconvolve = Bool(False, help="Deconvolve the time constant instead.")
 
-    realization = Int(
-        0, help="Realization ID, only used if tau_sigma is nonzero"
-    )
+    realization = Int(0, help="Realization ID, only used if tau_sigma is nonzero")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -105,7 +100,7 @@ class TimeConstant(Operator):
 
                 tau = self._get_tau(obs, det)
                 if self.deconvolve:
-                    taufilter = (1 + 2.0j * np.pi * freqs * tau.to_value(u.s))
+                    taufilter = 1 + 2.0j * np.pi * freqs * tau.to_value(u.s)
                 else:
                     taufilter = 1.0 / (1 + 2.0j * np.pi * freqs * tau.to_value(u.s))
 
