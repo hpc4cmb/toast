@@ -47,10 +47,7 @@ class TimeConstantTest(MPITestCase):
         sim_noise.apply(data)
 
         # Copy the signal for reference
-        for obs in data.obs:
-            obs.detdata.ensure("signal0")
-            for det in obs.local_detectors:
-                obs.detdata["signal0"][det][:] = obs.detdata["signal"][det]
+        ops.Copy(detdata=[("signal", "signal0")]).apply(data)
 
         # Convolve
 
@@ -102,10 +99,7 @@ class TimeConstantTest(MPITestCase):
         sim_noise.apply(data)
 
         # Copy the signal for reference
-        for obs in data.obs:
-            obs.detdata.ensure("signal0")
-            for det in obs.local_detectors:
-                obs.detdata["signal0"][det][:] = obs.detdata["signal"][det]
+        ops.Copy(detdata=[("signal", "signal0")]).apply(data)
 
         # Convolve
 
