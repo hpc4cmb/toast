@@ -46,5 +46,6 @@ install(FILES
     ops_polyfilter.py
     ops_groundfilter.py
     ops_sim_cosmic_rays.py
+    ops_time_constant.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

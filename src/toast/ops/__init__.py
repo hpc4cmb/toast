@@ -74,3 +74,5 @@ from .polyfilter import PolyFilter, PolyFilter2D, CommonModeFilter
 from .groundfilter import GroundFilter
 
 from .statistics import Statistics
+
+from .time_constant import TimeConstant

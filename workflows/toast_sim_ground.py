@@ -35,6 +35,7 @@ import numpy as np
 from astropy import units as u
 
 import toast
+import toast.ops
 
 from toast.mpi import MPI
 
@@ -218,12 +219,6 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.scan_map.apply(data)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
-    # Simulate detector noise
-
-    ops.sim_noise.noise_model = ops.elevation_model.out_model
-    ops.sim_noise.apply(data)
-    log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
-
     # Simulate atmosphere
 
     ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
@@ -231,6 +226,17 @@ def simulate_data(job, toast_comm, telescope, schedule):
         ops.sim_atmosphere.detector_weights = ops.det_weights_azel
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
+
+    # Apply a time constant
+
+    ops.convolve_time_constant.apply(data)
+    log.info_rank("Convolved time constant in", comm=world_comm, timer=timer)
+
+    # Simulate detector noise
+
+    ops.sim_noise.noise_model = ops.elevation_model.out_model
+    ops.sim_noise.apply(data)
+    log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
     return data
 
@@ -250,6 +256,12 @@ def reduce_data(job, args, data):
 
     ops.raw_statistics.output_dir = args.out_dir
     ops.raw_statistics.apply(data)
+    log.info_rank("Calculated raw statistics in", comm=world_comm, timer=timer)
+
+    # Deconvolve a time constant
+
+    ops.deconvolve_time_constant.apply(data)
+    log.info_rank("Deconvolved time constant in", comm=world_comm, timer=timer)
 
     # Apply the filter stack
 
@@ -266,6 +278,7 @@ def reduce_data(job, args, data):
 
     ops.filtered_statistics.output_dir = args.out_dir
     ops.filtered_statistics.apply(data)
+    log.info_rank("Calculated filtered statistics in", comm=world_comm, timer=timer)
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -325,15 +338,21 @@ def main():
             name="det_pointing_radec", quats="quats_radec"
         ),
         toast.ops.ScanHealpix(name="scan_map", enabled=False),
-        toast.ops.SimNoise(name="sim_noise"),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
+        toast.ops.TimeConstant(
+            name="convolve_time_constant", deconvolve=False, enabled=False
+        ),
+        toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
         toast.ops.Statistics(name="raw_statistics", enabled=False),
-        toast.ops.Statistics(name="filtered_statistics", enabled=False),
+        toast.ops.TimeConstant(
+            name="deconvolve_time_constant", deconvolve=True, enabled=False
+        ),
         toast.ops.GroundFilter(name="groundfilter", enabled=False),
         toast.ops.PolyFilter(name="polyfilter1D"),
         toast.ops.PolyFilter2D(name="polyfilter2D", enabled=False),
         toast.ops.CommonModeFilter(name="common_mode_filter", enabled=False),
+        toast.ops.Statistics(name="filtered_statistics", enabled=False),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
