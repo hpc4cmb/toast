@@ -129,15 +129,20 @@ class CrossTalk(Operator):
                 for ip in procs :
                     #send and recv data
 
-                    comm.send(ob.detdata[self.det_data].detectors ,
+                    comm.isend(ob.detdata[self.det_data].detectors ,
                                 dest=ip , tag= rank*10+   ip   )
-                    detlist= np.array(comm.recv( source=ip ,
-                                    tag=  ip*10+  rank    )).tolist()
-
-                    intersect = np.intersect1d( detlist,xtalklist)
+                    req= comm.irecv(  source=ip ,
+                                    tag=  ip*10+  rank    )
+                    detlist=  req.wait()
+                    print (detlist, "detlist" , rank , ip )
+                    intersect =  list(set(detlist ).intersection(set(xtalklist )))
+                    print(intersect, "intersect", rank , ip )
+                    #intersect = np.intersect1d( detlist,xtalklist)
                     ## we make sure that we communicate the samples
                     # ONLY in case some of the  detectors sent by a rank  xtalking with det
-                    if intersect.size ==0: continue
+                    #if intersect.size ==0: continue
+                    if len(intersect)  ==0: continue
+
                     #define the indices of Xtalk coefficients and of detdata
 
                     ind1 = [ xtalklist.index(k ) for  k in  intersect]
@@ -145,10 +150,12 @@ class CrossTalk(Operator):
                     xtalk_weights = np.array([self.xtalk_mat[det][kk] for kk in np.array(xtalklist)[ind1]])
 
                     #send and recv detdata
-                    comm.send(ob.detdata[self.det_data].data ,
+
+                    comm.isend(ob.detdata[self.det_data].data ,
                                 dest=ip , tag= rank*10 + ip   )
-                    detdata= comm.recv( source=ip ,
+                    req= comm.irecv( source=ip ,
                                     tag=  ip*10+  rank    )
+                    detdata = req.wait()
 
                     tmp[idet]  += np.dot( xtalk_weights,  detdata[ind2])
 
