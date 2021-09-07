@@ -291,7 +291,15 @@ def main():
     if job_ops.pointing_final.enabled:
         nside_final = job_ops.pointing_final.nside
     overhead_bytes = estimate_memory_overhead(
-        n_procs, n_nodes, 0.4, job_ops.pointing.nside, nside_final=nside_final
+        n_procs,
+        n_nodes,
+        0.4,
+        job_ops.pointing.nside,
+        world_comm,
+        nside_final=nside_final,
+        sim_atmosphere=job_ops.sim_atmosphere,
+        ces_max_time=args.ces_max_time,
+        fov=args.radius,
     )
 
     # selects appropriate case size

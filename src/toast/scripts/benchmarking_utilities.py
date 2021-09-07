@@ -22,6 +22,7 @@ import toast.ops
 from toast.job import job_size, get_node_mem
 from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
+from ..utils import Environment, Logger, Timer
 
 
 def python_startup_time(rank):
@@ -497,7 +498,15 @@ def select_case(
 
 
 def estimate_memory_overhead(
-    n_procs, n_nodes, sky_fraction, nside_solve, nside_final=None
+        n_procs,
+        n_nodes,
+        sky_fraction,
+        nside_solve,
+        world_comm,
+        nside_final=None,
+        sim_atmosphere=None,
+        ces_max_time=None,
+        fov=None,
 ):
     """Estimate bytes of memory used per-process for objects besides timestreams.
 
@@ -506,12 +515,17 @@ def estimate_memory_overhead(
         n_nodes (int):  The number of nodes in the job.
         sky_fraction (float):  The fraction of the sky covered by one process.
         nside_solve (int):  The healpix NSIDE value for the solver.
+        world_comm (MPI_Comm):  World communicator
         nside_final (int):  The healpix NSIDE value for the final binning.
+        sim_atmosphere (Operator):  Atmospheric simulation operator
+        ces_max_time (float):  Maximum length of an observation.
+        fov (float):  Field of view in degrees
 
     Returns:
         (int):  The bytes used.
 
     """
+    log = toast.utils.Logger.get()
     # Start with 1GB for everything else
     # base = 1024 ** 3
     base = 0
@@ -527,7 +541,50 @@ def estimate_memory_overhead(
     n_pixel_solve = sky_fraction * 12 * nside_solve ** 2
     n_pixel_final = 0 if nside_final is None else sky_fraction * 12 * nside_final ** 2
 
-    return base + (n_pixel_solve + n_pixel_final) * bytes_per_pixel
+    overhead = base + (n_pixel_solve + n_pixel_final) * bytes_per_pixel
+
+    if sim_atmosphere is not None and sim_atmosphere.enabled:
+        # Compute a pessimistic estimate of the size of an atmospheric realization
+        if ces_max_time is None:
+            raise RuntimeError("Cannot calculate atmospheric overhead without CES max time")
+        if fov is None:
+            raise RuntimeError("Cannot calculate atmospheric overhead without FOV")
+        zmax = sim_atmosphere.zmax.to_value(u.m)
+        # Volume element size
+        xstep = sim_atmosphere.xstep.to_value(u.m)
+        ystep = sim_atmosphere.ystep.to_value(u.m)
+        zstep = sim_atmosphere.zstep.to_value(u.m)
+        # Boresight elevation
+        elevation = np.radians(45)
+        # Field of view
+        radius = np.radians(fov) / 2
+        windspeed = 10  # m/s
+        # Maximum distance
+        rmax = 100
+        # Scale factor between simulations
+        scale = 10
+        # Jump straight to the third (largest) iteration
+        rmax *= scale ** 2
+        xstep *= scale
+        ystep *= scale
+        zstep *= scale
+        # Height of the slab
+        zmax = min(zmax, rmax * np.sin(elevation + radius))
+        # Length of the slab
+        xmax = rmax * np.cos(elevation - radius)
+        # Width of the slab
+        ymax = min(sim_atmosphere.wind_dist, ces_max_time * windspeed)
+        n_elem_tot = xmax * ymax * zmax / (xstep * ystep * zstep)
+        # Maximum memory is allocated when building the boolean
+        # compression table.  Assume 1 byte per bool
+        max_mem = n_elem_tot * 1
+        if overhead - base < max_mem:
+            msg = f"WARNING: Atmospheric overhead ({max_mem / 2 ** 30:.3f} GB) "
+            msg += "exceeds local map overhead ({(overhead - base) / 2 ** 30:.3f} GB)."
+            log.warning_rank(msg, comm=world_comm)
+            overhead = base + max_mem
+
+    return overhead
 
 
 def make_focalplane(args, world_comm, log):
