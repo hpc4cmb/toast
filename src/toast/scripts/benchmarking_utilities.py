@@ -154,6 +154,7 @@ def select_distribution(
     max_samples=None,
     max_memory_bytes=None,
     target_proc_dets=20,
+    force_group_nodes=None,
 ):
     """Choose a group size that load balances across both detectors and observations.
 
@@ -183,6 +184,8 @@ def select_distribution(
         max_memory_bytes (int):  The maximum memory to use in bytes, or None.
         target_proc_dets (int):  The approximate number of detectors per process
             to attempt.
+        force_group_nodes (int):  If not None, force the selection of the group
+            size to be this number of nodes.
 
     Returns:
         (tuple):  The (group_nodes, memory_bytes) of the case with the smallest
@@ -268,27 +271,13 @@ def select_distribution(
             msg = f"  {test_samples} samples > {max_samples}, break"
             log.verbose_rank(msg, comm=world_comm)
             break
-        test_nodes_best = None
-        test_bytes_best = None
-        for test_nodes in range(n_nodes, 0, -1):
-            if n_nodes % test_nodes != 0:
-                # Not a whole number of groups
-                continue
-            n_group = n_nodes // test_nodes
-            if n_group > isc + 1:
-                # More groups than we have observations
-                msg = f"  test group nodes = {test_nodes} ({n_group} groups): "
-                msg += f"too many groups for {isc + 1} observations"
-                log.verbose_rank(msg, comm=world_comm)
-                continue
-            group_procs = test_nodes * node_procs
-            if test_nodes < n_nodes and group_procs * target_proc_dets < n_detector:
-                # This group is too small
-                msg = f"  test group nodes = {test_nodes} ({group_procs} processes): "
-                msg += f"group too small for {n_detector} dets and {target_proc_dets} "
-                msg += f"dets per process"
-                log.verbose_rank(msg, comm=world_comm)
-                continue
+
+        if force_group_nodes is not None:
+            # We will only test the requested group size
+            test_nodes_best = None
+            test_bytes_best = None
+
+            test_nodes = force_group_nodes
             test_bytes = overhead_bytes + memory_use(
                 n_detector, test_nodes, test_samples, full_pointing
             )
@@ -297,12 +286,51 @@ def select_distribution(
                 msg = f"  test group nodes = {test_nodes}: "
                 msg += f"{test_bytes} bytes larger than maximum ({max_memory_bytes})"
                 log.verbose_rank(msg, comm=world_comm)
-                continue
-            msg = f"  test group nodes = {test_nodes}: "
-            msg += f"accept with {test_bytes} total bytes"
-            log.verbose_rank(msg, comm=world_comm)
-            test_nodes_best = test_nodes
-            test_bytes_best = test_bytes
+            else:
+                test_nodes_best = test_nodes
+                test_bytes_best = test_bytes
+        else:
+            test_nodes_best = None
+            test_bytes_best = None
+            for test_nodes in range(n_nodes, 0, -1):
+                if n_nodes % test_nodes != 0:
+                    # Not a whole number of groups
+                    continue
+                n_group = n_nodes // test_nodes
+                if n_group > isc + 1:
+                    # More groups than we have observations
+                    msg = f"  test group nodes = {test_nodes} ({n_group} groups): "
+                    msg += f"too many groups for {isc + 1} observations"
+                    log.verbose_rank(msg, comm=world_comm)
+                    continue
+                group_procs = test_nodes * node_procs
+                if test_nodes < n_nodes and group_procs * target_proc_dets < n_detector:
+                    # This group is too small
+                    msg = (
+                        f"  test group nodes = {test_nodes} ({group_procs} processes): "
+                    )
+                    msg += (
+                        f"group too small for {n_detector} dets and {target_proc_dets} "
+                    )
+                    msg += f"dets per process"
+                    log.verbose_rank(msg, comm=world_comm)
+                    continue
+                test_bytes = overhead_bytes + memory_use(
+                    n_detector, test_nodes, test_samples, full_pointing
+                )
+                if test_bytes > max_memory_bytes:
+                    # Too much memory use
+                    msg = f"  test group nodes = {test_nodes}: "
+                    msg += (
+                        f"{test_bytes} bytes larger than maximum ({max_memory_bytes})"
+                    )
+                    log.verbose_rank(msg, comm=world_comm)
+                    continue
+                msg = f"  test group nodes = {test_nodes}: "
+                msg += f"accept with {test_bytes} total bytes"
+                log.verbose_rank(msg, comm=world_comm)
+                test_nodes_best = test_nodes
+                test_bytes_best = test_bytes
         if test_nodes_best is None:
             # We failed to find any group size that works.  Likely this is due
             # to exceeding memory limits
@@ -321,6 +349,7 @@ def select_distribution(
 
 def select_case(
     args,
+    jobargs,
     n_procs,
     n_nodes,
     avail_node_bytes,
@@ -339,6 +368,12 @@ def select_case(
 
     """
     log = toast.utils.Logger.get()
+
+    # See if the user is overriding the group size
+    force_group_nodes = None
+    if jobargs.group_size is not None:
+        n_group = n_procs // jobargs.group_size
+        force_group_nodes = n_nodes // n_group
 
     # Compute the aggregate memory that is currently available
     available_memory_bytes = n_nodes * avail_node_bytes
@@ -389,24 +424,25 @@ def select_case(
             max_samples=max_samples,
             max_memory_bytes=None,
             target_proc_dets=target_proc_dets,
+            force_group_nodes=force_group_nodes,
         )
 
         # Update the schedule to use only our subset of scans
         args.schedule.scans = new_scans
 
-        n_group = n_nodes // args.group_nodes
-        group_procs = n_procs // n_group
+        args.n_group = n_nodes // args.group_nodes
+        args.group_procs = n_procs // args.n_group
 
         msg = f"Distribution using:\n"
         msg += f"  {args.n_detector} detectors and {len(new_scans)} observations\n"
         msg += f"  {args.total_samples} total samples\n"
-        msg += f"  {n_group} groups of {args.group_nodes} nodes with {group_procs} processes each\n"
+        msg += f"  {args.n_group} groups of {args.group_nodes} nodes with {args.group_procs} processes each\n"
         msg += f"  {memory_used_bytes / (1024 ** 3) :0.2f} GB predicted memory use\n"
         msg += f"  ('{args.case}' workflow size)"
         log.info_rank(msg, comm=world_comm)
 
-        if args.n_detector < group_procs:
-            msg = f"Only {args.n_detector} detectors for {group_procs} processes- "
+        if args.n_detector < args.group_procs:
+            msg = f"Only {args.n_detector} detectors for {args.group_procs} processes- "
             msg += "some processes will be idle!"
             log.warning_rank(msg, comm=world_comm)
 
@@ -441,18 +477,19 @@ def select_case(
             max_samples=None,
             max_memory_bytes=available_memory_bytes,
             target_proc_dets=target_proc_dets,
+            force_group_nodes=force_group_nodes,
         )
 
         # Update the schedule to use only our subset of scans
         args.schedule.scans = new_scans
 
-        n_group = n_nodes // args.group_nodes
-        group_procs = n_procs // n_group
+        args.n_group = n_nodes // args.group_nodes
+        args.group_procs = n_procs // args.n_group
 
         msg = f"Distribution using:\n"
         msg += f"  {args.n_detector} detectors and {len(new_scans)} observations\n"
         msg += f"  {args.total_samples} total samples\n"
-        msg += f"  {n_group} groups of {args.group_nodes} nodes with {group_procs} processes each\n"
+        msg += f"  {args.n_group} groups of {args.group_nodes} nodes with {args.group_procs} processes each\n"
         msg += f"  {memory_used_bytes / (1024 ** 3) :0.2f} GB predicted memory use "
         msg += f"  ({available_memory_bytes / (1024 ** 3) :0.2f} GB available)\n"
         msg += f"  ('{args.case}' workflow size)"

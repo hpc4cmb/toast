@@ -200,6 +200,7 @@ def main():
     # selects appropriate case size
     select_case(
         args,
+        jobargs,
         n_procs,
         n_nodes,
         avail_node_bytes,
@@ -224,18 +225,8 @@ def main():
         "satellite", focalplane=focalplane, site=site
     )
 
-    # Find the group size for this job, either from command-line overrides or
-    # by estimating the data volume.
-    group_size = toast.job_group_size(
-        world_comm,
-        jobargs,
-        schedule=args.schedule,
-        focalplane=focalplane,
-        full_pointing=job_ops.binner.full_pointing,
-    )
-
     # Create the toast communicator
-    comm = toast.Comm(world=world_comm, groupsize=group_size)
+    comm = toast.Comm(world=world_comm, groupsize=args.group_procs)
 
     # Create the (initially empty) data
     data = toast.Data(comm=comm)
