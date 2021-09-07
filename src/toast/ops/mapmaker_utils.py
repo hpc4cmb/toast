@@ -145,7 +145,7 @@ class BuildHitMap(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(selection=detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -347,7 +347,7 @@ class BuildInverseCovariance(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(selection=detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -584,7 +584,7 @@ class BuildNoiseWeighted(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(selection=detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

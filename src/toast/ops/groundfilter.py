@@ -24,8 +24,6 @@ from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
 
 from .operator import Operator
 
-from .pipeline import Pipeline
-
 from ..utils import Environment, Logger, Timer
 
 from .._libtoast import bin_templates, add_templates, legendre
