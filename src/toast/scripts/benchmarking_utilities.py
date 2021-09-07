@@ -573,7 +573,7 @@ def estimate_memory_overhead(
         # Length of the slab
         xmax = rmax * np.cos(elevation - radius)
         # Width of the slab
-        ymax = min(sim_atmosphere.wind_dist, ces_max_time * windspeed)
+        ymax = min(sim_atmosphere.wind_dist.to_value(u.m), ces_max_time * windspeed)
         n_elem_tot = xmax * ymax * zmax / (xstep * ystep * zstep)
         # Maximum memory is allocated when building the boolean
         # compression table.  Assume 1 byte per bool
