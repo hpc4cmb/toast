@@ -296,7 +296,7 @@ class SimAtmosphere(Operator):
             observe_atm.weights_mode = self.detector_weights.mode
             observe_atm.weights = self.detector_weights.weights
 
-        for ob in data.obs:
+        for iobs, ob in enumerate(data.obs):
             if ob.name is None:
                 msg = "Atmosphere simulation requires each observation to have a name"
                 raise RuntimeError(msg)
@@ -479,24 +479,15 @@ class SimAtmosphere(Operator):
             # pointing, so we build a small pipeline that runs one detector at a time
             # on only the current observation.
 
-            # FIXME: this is currently the only case in toast where we want to run
-            # a pipeline on a single observation doing one detector at a time.  We are
-            # making a shallow copy of the Data object with a reference to the single
-            # observation and the Data metadata.  If we find we need to do this in
-            # other cases, we should support this generally at the Pipeline level.
-            pipe_data = Data(comm=data.comm)
-            pipe_data._internal = data._internal
-            pipe_data.obs.append(ob)
+            pipe_data = data.select(obs_index=iobs)
+
             operators = [self.detector_pointing]
             if self.detector_weights is not None:
                 operators.append(self.detector_weights)
             operators.append(observe_atm)
+
             observe_pipe = Pipeline(operators=operators, detector_sets=["SINGLE"])
             observe_pipe.apply(pipe_data)
-            # Manually remove the weak reference to the observation, otherwise
-            # deletion of pipe_data will trigger clearing of the observations.
-            pipe_data.obs.clear()
-            del pipe_data
 
             # Delete the atmosphere slabs for this observation
             del ob[atm_sim_key]

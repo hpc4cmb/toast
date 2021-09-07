@@ -5,9 +5,12 @@
 from .mpi import MPITestCase
 
 import os
+import re
 
 import numpy as np
 import numpy.testing as nt
+
+from astropy import units as u
 
 from ..dist import distribute_uniform, distribute_discrete
 from ..data import Data
@@ -18,7 +21,8 @@ from ._helpers import (
     create_outdir,
     create_satellite_empty,
     create_comm,
-    create_space_telescope,
+    create_ground_telescope,
+    create_satellite_data,
 )
 
 
@@ -155,28 +159,107 @@ class DataTest(MPITestCase):
                 for d in dist_disc3:
                     f.write("{:04d} = ({}, {})\n".format(indx, d[0], d[1]))
                     indx += 1
-        return
 
-    def test_split(self):
+    def test_view(self):
+        data = create_satellite_data(
+            self.comm, obs_per_group=1, obs_time=10.0 * u.minute
+        )
+        # Add some metadata to the data dictionary and every observation
+        data["meta1"] = "foo"
+        data["meta2"] = "bar"
+        for ob in data.obs:
+            ob["special"] = "value"
+
+        # Select all observations, which makes a data view that has a reference to
+        # the metadata and all observations
+        alt_data = data.select(obs_key="special")
+
+        # Verify that changing metadata modifies the original
+        alt_data["meta1"] = "blat"
+        self.assertTrue(data["meta1"] == "blat")
+
+        # Verify that deleting our selection does not clear the original
+        alt_data.clear()
+        del alt_data
+        self.assertTrue("boresight_radec" in data.obs[0].shared)
+
+    def test_select(self):
         toastcomm = create_comm(self.comm)
-        # FIXME:  it does not matter for this test, but change to the ground helper
-        # function once implemented.
-        tele = create_space_telescope(toastcomm.group_size)
+        tele = create_ground_telescope(toastcomm.group_size)
         data = Data(toastcomm)
+        get_uid = None
         for season in range(3):
-            data.obs.append(Observation(tele, 10, comm=toastcomm.comm_group))
+            data.obs.append(
+                Observation(
+                    tele, 10, name=f"atacama-{season:02d}", comm=toastcomm.comm_group
+                )
+            )
             data.obs[-1]["site"] = "Atacama"
             data.obs[-1]["season"] = season
+            get_uid = data.obs[-1].uid
         for season in range(3):
-            data.obs.append(Observation(tele, 10, comm=toastcomm.comm_group))
+            data.obs.append(
+                Observation(
+                    tele, 10, name=f"pole-{season:02d}", comm=toastcomm.comm_group
+                )
+            )
             data.obs[-1]["site"] = "Pole"
             data.obs[-1]["season"] = season
 
-        datasplit_site = data.split("site")
-        datasplit_season = data.split("season")
+        selected_indx = data.select(obs_index=1)
+        self.assertTrue(len(selected_indx.obs) == 1)
 
-        nt.assert_equal(len(datasplit_site), 2)
-        nt.assert_equal(len(datasplit_season), 3)
+        selected_uid = data.select(obs_uid=get_uid)
+        self.assertTrue(len(selected_uid.obs) == 1)
+
+        name_pat = re.compile(r"pole-.*")
+        selected_namepat = data.select(obs_name=name_pat)
+        self.assertTrue(len(selected_namepat.obs) == 3)
+
+        selected_name = data.select(obs_name="atacama-00")
+        self.assertTrue(len(selected_name.obs) == 1)
+
+        selected_key = data.select(obs_key="season")
+        self.assertTrue(len(selected_key.obs) == 6)
+
+        selected_keyval = data.select(obs_key="season", obs_val=1)
+        self.assertTrue(len(selected_keyval.obs) == 2)
+
+    def test_split(self):
+        toastcomm = create_comm(self.comm)
+        tele = create_ground_telescope(toastcomm.group_size)
+        data = Data(toastcomm)
+        for season in range(3):
+            data.obs.append(
+                Observation(
+                    tele, 10, name=f"atacama-{season:02d}", comm=toastcomm.comm_group
+                )
+            )
+            data.obs[-1]["site"] = "Atacama"
+            data.obs[-1]["season"] = season
+        for season in range(3):
+            data.obs.append(
+                Observation(
+                    tele, 10, name=f"pole-{season:02d}", comm=toastcomm.comm_group
+                )
+            )
+            data.obs[-1]["site"] = "Pole"
+            data.obs[-1]["season"] = season
+
+        datasplit_indx = data.split(obs_index=True, require_full=True)
+        self.assertTrue(len(datasplit_indx) == 6)
+
+        datasplit_name = data.split(obs_name=True, require_full=True)
+        self.assertTrue(len(datasplit_name) == 6)
+
+        datasplit_uid = data.split(obs_uid=True, require_full=True)
+        self.assertTrue(len(datasplit_uid) == 6)
+
+        datasplit_site = data.split(obs_key="site")
+        datasplit_season = data.split(obs_key="season")
+
+        self.assertTrue(len(datasplit_site) == 2)
+        self.assertTrue(len(datasplit_season) == 3)
 
         # Verify that the observations are shared
 
@@ -193,7 +276,6 @@ class DataTest(MPITestCase):
                 sum2 += obs["var1"]
 
         nt.assert_equal(sum1, sum2)
-        return
 
     def test_none(self):
         # test that Comm with None argument returns a None communicator

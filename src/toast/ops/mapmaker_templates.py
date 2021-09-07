@@ -161,17 +161,7 @@ class TemplateMatrix(Operator):
         # We loop over detectors.  Internally, each template loops over observations
         # and ignores observations where the detector does not exist.
 
-        all_dets = None
-        if detectors is None:
-            # We don't have an explicit list of detectors- build our superset.
-            all_dets = OrderedDict()
-            for ob in data.obs:
-                for d in ob.local_detectors:
-                    if d not in all_dets:
-                        all_dets[d] = None
-            all_dets = list(all_dets.keys())
-        else:
-            all_dets = detectors
+        all_dets = data.all_local_detectors(selection=detectors)
 
         if self.transpose:
             if self.amplitudes not in data:
@@ -196,7 +186,7 @@ class TemplateMatrix(Operator):
             # Ensure that our output detector data exists in each observation
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
+                dets = ob.select_local_detectors(selection=detectors)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
