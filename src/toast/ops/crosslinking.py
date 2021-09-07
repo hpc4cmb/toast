@@ -133,12 +133,8 @@ class CrossLinking(Operator):
                 quat = obs.detdata[self.pointing.detector_pointing.quats][det]
             except KeyError:
                 # Compute the detector quaternions
-                obs_data = Data(comm=data.comm)
-                obs_data._internal = data._internal
-                obs_data.obs = [obs]
+                obs_data = data.select(obs_uid=obs.uid)
                 self.pointing.detector_pointing.apply(obs_data, detectors=[det])
-                obs_data.obs.clear()
-                del obs_data
                 quat = obs.detdata[self.pointing.detector_pointing.quats][det]
             # measure the scan direction wrt the local meridian
             # for each sample
@@ -230,7 +226,7 @@ class CrossLinking(Operator):
 
         # Write out the results
 
-        fname = os.path.join(self.output_dir, "crosslinking.fits")
+        fname = os.path.join(self.output_dir, f"{self.name}.fits")
         write_healpix_fits(
             data[self.crosslinking_map], fname, nest=self.pointing.nest
         )

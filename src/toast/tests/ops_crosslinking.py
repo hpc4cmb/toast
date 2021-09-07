@@ -53,7 +53,6 @@ class CrossLinkingTest(MPITestCase):
             detector_pointing=detpointing,
             pixels=obs_names.pixels,
         )
-        pointing.apply(data)
 
         # Crosslinking
         crosslinking = ops.CrossLinking(
@@ -61,6 +60,45 @@ class CrossLinkingTest(MPITestCase):
             noise_model="noise_model",
             pixel_dist="pixel_dist",
             det_flags=None,
+            output_dir=self.outdir,
+        )
+        crosslinking.apply(data)
+
+        del data
+        return
+
+    def test_crosslinking_cached(self):
+        np.random.seed(123456)
+
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Pointing operator
+        detpointing = ops.PointingDetectorSimple()
+
+        pointing = ops.PointingHealpix(
+            nside=64,
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+            pixels=obs_names.pixels,
+        )
+
+        # Cache pointing
+        pointing.apply(data)
+
+        # Crosslinking
+        crosslinking = ops.CrossLinking(
+            name="cached_crosslinking",
+            pointing=pointing,
+            noise_model="noise_model",
+            pixel_dist="pixel_dist",
+            det_flags=None,
+            output_dir=self.outdir,
         )
         crosslinking.apply(data)
 
