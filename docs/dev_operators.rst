@@ -94,8 +94,6 @@ There are also times when we need to run an operator inside the "loop over detec
                 op_B.apply(temp_data, detectors=[det])
 
 
-
-
 One Detector at a Time
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -107,13 +105,67 @@ This pattern is used when there is an expensive operation that occurs for each d
         all_dets = data.all_local_detectors(selection=detectors)
 
         for det in all_dets:
-            # Loop over all local detectors
-            #
             # (Some expensive operation for this detector).
-            #
             for ob in data.obs:
-                # Loop over observations
                 if det not in ob.local_detectors:
                     # This observation does not have this detector
                     continue
                 # (Do something for this observation)
+
+And if we are running sub-operators for each detector and all observations we can do that as well:
+
+.. code-block:: python
+    def _exec(self, data, detectors=None, **kwargs):
+        op_A = OperatorA()
+        op_B = OperatorB()
+
+        # Get the superset of local detectors across all observations
+        all_dets = data.all_local_detectors(selection=detectors)
+
+        for det in all_dets:
+            # Run op_A on all observations for this detector
+            op_A.apply(data, detectors=[det])
+
+            # (Some expensive operation for this detector).
+            for ob in data.obs:
+                if det not in ob.local_detectors:
+                    # This observation does not have this detector
+                    continue
+                # (Do something for this observation)
+
+            # Run op_B on all observations for this detector
+            op_B.apply(data, detectors=[det])
+
+And we can also run other operators on single observations for each detector:
+
+.. code-block:: python
+    def _exec(self, data, detectors=None, **kwargs):
+        op_A = OperatorA()
+        op_B = OperatorB()
+
+        # Get the superset of local detectors across all observations
+        all_dets = data.all_local_detectors(selection=detectors)
+
+        for det in all_dets:
+            # (Some expensive operation for this detector).
+            for iobs, ob in data.obs:
+                if det not in ob.local_detectors:
+                    # This observation does not have this detector
+                    continue
+                # Temporary data object with just this observation
+                temp_data = data.select(obs_index=iobs)
+
+                # Run op_A on one observation for this detector
+                op_A.apply(temp_data, detectors=[det])
+
+                # (Do something for this observation)
+
+                # Run op_B on one observation for this detector
+                op_B.apply(temp_data, detectors=[det])
+
+
+Using the Pipeline Operator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the previous examples we were interspersing our new code with the use of other operators.
+
