@@ -299,7 +299,7 @@ def main():
         nside_final=nside_final,
         sim_atmosphere=job_ops.sim_atmosphere,
         ces_max_time=args.ces_max_time,
-        fov=args.radius,
+        fov=args.width,
     )
 
     # selects appropriate case size
