@@ -154,11 +154,15 @@ class SimGround(Operator):
     )
 
     det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key to initialize"
+        obs_names.det_data,
+        allow_none=True,
+        help="Observation detdata key to initialize",
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to initialize"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to initialize",
     )
 
     hwp_angle = Unicode(

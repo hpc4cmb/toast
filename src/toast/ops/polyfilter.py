@@ -18,7 +18,7 @@ from .. import qarray as qa
 from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
-
+from ..observation import default_names as obs_names
 
 from .._libtoast import filter_polynomial
 
@@ -32,7 +32,10 @@ class PolyFilter2D(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
+    det_data = Unicode(
+        obs_names.det_data,
+        help="Observation detdata key apply filtering to",
+    )
 
     pattern = Unicode(
         f".*",
@@ -44,7 +47,9 @@ class PolyFilter2D(Operator):
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use"
     )
 
     det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
@@ -52,7 +57,9 @@ class PolyFilter2D(Operator):
     poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        obs_names.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(1, help="Bit mask value for optional shared flagging")
@@ -370,7 +377,9 @@ class PolyFilter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
+    det_data = Unicode(
+        obs_names.det_data, help="Observation detdata key apply filtering to"
+    )
 
     pattern = Unicode(
         f".*",
@@ -382,7 +391,9 @@ class PolyFilter(Operator):
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
@@ -390,7 +401,9 @@ class PolyFilter(Operator):
     poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        obs_names.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
@@ -507,7 +520,9 @@ class CommonModeFilter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
+    det_data = Unicode(
+        obs_names.det_data, help="Observation detdata key apply filtering to"
+    )
 
     pattern = Unicode(
         f".*",
@@ -519,7 +534,9 @@ class CommonModeFilter(Operator):
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
@@ -527,7 +544,9 @@ class CommonModeFilter(Operator):
     poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        obs_names.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
