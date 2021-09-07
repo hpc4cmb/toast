@@ -300,8 +300,12 @@ class Data(MutableMapping):
                 a subset of observations.
 
         """
+        log = Logger.get()
         if obs_val is not None and obs_key is None:
             raise RuntimeError("If you specify obs_val, you must also specify obs_key")
+
+        group_rank = self.comm.group_rank
+        group_comm = self.comm.comm_group
 
         new_data = Data(comm=self._comm, view=True)
 
@@ -320,6 +324,18 @@ class Data(MutableMapping):
             if obs_uid is not None and ob.uid is not None and obs_uid == ob.uid:
                 new_data.obs.append(ob)
             if obs_key is not None and obs_key in ob:
+                # Get the values from all processes in the group and check
+                # for consistency.
+                group_vals = None
+                if group_comm is None:
+                    group_vals = [ob[obs_key]]
+                else:
+                    group_vals = group_comm.allgather(ob[obs_key])
+                if group_vals.count(group_vals[0]) != len(group_vals):
+                    msg = f"observation {iob}, key '{obs_key}' has inconsistent values across processes"
+                    log.error_rank(msg, comm=group_comm)
+                    raise RuntimeError(msg)
+
                 if obs_val is None:
                     # We have the key, and are accepting any value
                     new_data.obs.append(ob)

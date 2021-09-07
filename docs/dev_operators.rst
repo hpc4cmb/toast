@@ -136,7 +136,7 @@ And if we are running sub-operators for each detector and all observations we ca
             # Run op_B on all observations for this detector
             op_B.apply(data, detectors=[det])
 
-And we can also run other operators on single observations for each detector:
+We can also run other operators on single observations for each detector:
 
 .. code-block:: python
     def _exec(self, data, detectors=None, **kwargs):
@@ -167,5 +167,7 @@ And we can also run other operators on single observations for each detector:
 Using the Pipeline Operator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In the previous examples we were interspersing our new code with the use of other operators.
+In the previous examples we were interspersing our new code with the use of other operators...
+
+.. todo::  Discuss benefits of Pipelining code, automatic GPU memory staging, etc.
 
