@@ -461,9 +461,12 @@ class ObservationTest(MPITestCase):
                 local_array = np.arange(100, dtype=np.int16)
             obs.shared["everywhere"] = local_array
 
-            # Allocate the default detector data and flags
-            obs.detdata.create("signal", dtype=np.float64)
-            obs.detdata.create("flags", sample_shape=(), dtype=np.uint16)
+            # Allocate the default detector data
+            obs.detdata.ensure("signal", dtype=np.float64)
+            # and flags.  Default data type (np.uint8) is incompatible
+            if "flags" in obs.detdata:
+                del obs.detdata["flags"]
+            obs.detdata.ensure("flags", sample_shape=(), dtype=np.uint16)
 
             # Allocate some other detector data
             obs.detdata["calibration"] = np.ones(

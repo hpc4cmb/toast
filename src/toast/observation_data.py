@@ -504,6 +504,7 @@ class DetDataManager(MutableMapping):
             None
 
         """
+        log = Logger.get()
         if detectors is None:
             detectors = self.detectors
         else:
