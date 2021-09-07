@@ -129,7 +129,7 @@ class SimAtmTest(MPITestCase):
             import matplotlib.pyplot as plt
 
             mapfile = os.path.join(self.outdir, f"{mapmaker.name}_hits.fits")
-            mdata = hp.read_map(mapfile, nest=False)
+            mdata = hp.read_map(mapfile, nest=False, dtype=float)
             mdata[mdata == 0] = hp.UNSEEN
 
             outfile = "{}.png".format(mapfile)
@@ -281,7 +281,7 @@ class SimAtmTest(MPITestCase):
             import matplotlib.pyplot as plt
 
             mapfile = os.path.join(self.outdir, f"{mapmaker.name}_hits.fits")
-            mdata = hp.read_map(mapfile, nest=False)
+            mdata = hp.read_map(mapfile, nest=False, dtype=float)
             mdata[mdata == 0] = hp.UNSEEN
 
             outfile = "{}.png".format(mapfile)
