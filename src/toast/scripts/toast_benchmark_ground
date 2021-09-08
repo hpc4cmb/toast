@@ -277,7 +277,9 @@ def dump_spt3g(args, job_ops, data):
         ]
     )
     # Note that we export detector flags below to a float64 G3TimestreamMap
-    # in order to use FLAC compression.
+    # in order to use FLAC compression.  See documentation for the
+    # toast.spt3g.export_obs_data class for a description of the constructor
+    # arguments.
     data_exporter = t3g.export_obs_data(
         shared_names=[
             (
@@ -303,7 +305,7 @@ def dump_spt3g(args, job_ops, data):
                 job_ops.sim_noise.det_data,
                 c3g.G3TimestreamMap,
             ),
-            # ("flags", "detector_flags", c3g.G3TimestreamMap),
+            (job_ops.sim_ground.det_flags, "detector_flags", c3g.G3TimestreamMap),
         ],
         interval_names=[
             (job_ops.sim_ground.scan_leftright_interval, "intervals_scan_leftright"),
