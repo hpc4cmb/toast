@@ -78,6 +78,7 @@ def set_default_names(names=None):
         "pixels": "pixels",
         "weights": "weights",
         "quats": "quats",
+        "quats_azel": "quats_azel",
     }
 
     defaults = dict()

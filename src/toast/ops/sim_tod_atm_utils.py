@@ -41,8 +41,8 @@ class ObserveAtmosphere(Operator):
         help="Observation detdata key for accumulating dipole timestreams",
     )
 
-    quats = Unicode(
-        None,
+    quats_azel = Unicode(
+        obs_names.quats_azel,
         allow_none=True,
         help="Observation detdata key for detector quaternions",
     )
@@ -199,7 +199,7 @@ class ObserveAtmosphere(Operator):
                     ngood_tot += ngood
 
                     # Detector Az / El quaternions for good samples
-                    azel_quat = views.detdata[self.quats][vw][det][good]
+                    azel_quat = views.detdata[self.quats_azel][vw][det][good]
 
                     # Convert Az/El quaternion of the detector back into
                     # angles from the simulation.
@@ -369,7 +369,7 @@ class ObserveAtmosphere(Operator):
             ],
             "detdata": [
                 self.det_data,
-                self.quats,
+                self.quats_azel,
             ],
             "intervals": [
                 self.wind_view,

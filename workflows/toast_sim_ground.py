@@ -263,6 +263,10 @@ def reduce_data(job, args, data):
     timer = toast.timing.Timer()
     timer.start()
 
+    # Flag Sun, Moon and the planets
+    ops.flag_sso.detector_pointing = ops.det_pointing_azel
+    ops.flag_sso.apply(data)
+
     # Collect signal statistics before filtering
 
     ops.raw_statistics.output_dir = args.out_dir
@@ -419,6 +423,7 @@ def main():
         ),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
+        toast.ops.FlagSSO(name="flag_sso", enabled=False),
         toast.ops.Statistics(name="raw_statistics", enabled=False),
         toast.ops.TimeConstant(
             name="deconvolve_time_constant", deconvolve=True, enabled=False

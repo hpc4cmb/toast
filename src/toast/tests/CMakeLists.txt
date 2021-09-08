@@ -27,6 +27,7 @@ install(FILES
     ops_sim_tod_atm.py
     ops_sim_tod_conviqt.py
     ops_sim_tod_totalconvolve.py
+    ops_flag_sso.py
     ops_statistics.py
     ops_mapmaker_utils.py
     ops_mapmaker_binning.py

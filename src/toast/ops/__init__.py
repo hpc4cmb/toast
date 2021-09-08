@@ -85,3 +85,5 @@ from .save_spt3g import SaveSpt3g
 from .run_spt3g import RunSpt3g
 
 from .cadence_map import CadenceMap
+
+from .flag_sso import FlagSSO
