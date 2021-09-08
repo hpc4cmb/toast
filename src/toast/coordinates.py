@@ -6,7 +6,7 @@ import os
 
 from collections import OrderedDict
 
-import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 
