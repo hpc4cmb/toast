@@ -214,12 +214,8 @@ class FlagSSO(Operator):
                 quats = obs.detdata[self.detector_pointing.quats][det]
             except KeyError:
                 # Compute the detector quaternions
-                obs_data = Data(comm=data.comm)
-                obs_data._internal = data._internal
-                obs_data.obs = [obs]
+                obs_data = data.select(obs_uid=obs.uid)
                 self.detector_pointing.apply(obs_data, detectors=[det])
-                obs_data.obs.clear()
-                del obs_data
                 quats = obs.detdata[self.detector_pointing.quats][det]
 
             # Convert Az/El quaternion of the detector into angles
