@@ -1330,48 +1330,51 @@ def scan_patch_pole(
     tstop = t
     tstep = 60
     azmins, azmaxs, aztimes = [], [], []
-    if args.pole_raster_scan:
-        scan_time, azmin_raster, azmax_raster = get_pole_raster_scan(
-            args, el, t, patch, fp_radius, observer
-        )
+    observer.date = to_DJD(t)
+    azs, els = patch.corner_coordinates(observer)
+    # Check if el is above the target.  If so, there is nothing to do.
+    if np.amax(els) + fp_radius < el:
+        not_visible.append((patch.name, "Patch below {:.2f}".format(el / degree)))
+        log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
     else:
-        scan_time = args.pole_ces_time_s
-    while True:
-        if tstop - t > scan_time - 1:
-            # Succesfully scanned the maximum time
-            if len(azmins) > 0:
-                success = True
-            else:
+        if args.pole_raster_scan:
+            scan_time, azmin_raster, azmax_raster = get_pole_raster_scan(
+                args, el, t, patch, fp_radius, observer
+            )
+        else:
+            scan_time = args.pole_ces_time_s
+        while True:
+            if tstop - t > scan_time - 1:
+                # Succesfully scanned the maximum time
+                if len(azmins) > 0:
+                    success = True
+                else:
+                    not_visible.append(
+                        (patch.name, "No overlap at {:.2f}".format(el / degree))
+                    )
+                    log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+                break
+            if tstop > stop_timestamp or tstop - t > 86400:
+                not_visible.append((patch.name, "Ran out of time"))
+                log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+                break
+            observer.date = to_DJD(tstop)
+            sun.compute(observer)
+            if sun.alt > sun_el_max:
                 not_visible.append(
-                    (patch.name, "No overlap at {:.2f}".format(el / degree))
+                    (patch.name, "Sun too high {:.2f}".format(sun.alt / degree))
                 )
                 log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
-            break
-        if tstop > stop_timestamp or tstop - t > 86400:
-            not_visible.append((patch.name, "Ran out of time"))
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
-            break
-        observer.date = to_DJD(tstop)
-        sun.compute(observer)
-        if sun.alt > sun_el_max:
-            not_visible.append(
-                (patch.name, "Sun too high {:.2f}".format(sun.alt / degree))
+                break
+            azs, els = patch.corner_coordinates(observer)
+            radius = max(np.radians(1), fp_radius)
+            current_extent_pole(
+                azmins, azmaxs, aztimes, patch.corners, radius, el, azs, els, tstop
             )
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
-            break
-        azs, els = patch.corner_coordinates(observer)
-        if np.amax(els) + fp_radius < el:
-            not_visible.append((patch.name, "Patch below {:.2f}".format(el / degree)))
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
-            break
-        radius = max(np.radians(1), fp_radius)
-        current_extent_pole(
-            azmins, azmaxs, aztimes, patch.corners, radius, el, azs, els, tstop
-        )
-        tstop += tstep
-    if args.pole_raster_scan:
-        azmins = np.ones(len(aztimes)) * azmin_raster
-        azmaxs = np.ones(len(aztimes)) * azmax_raster
+            tstop += tstep
+        if args.pole_raster_scan:
+            azmins = np.ones(len(aztimes)) * azmin_raster
+            azmaxs = np.ones(len(aztimes)) * azmax_raster
     return success, azmins, azmaxs, aztimes, tstop
 
 
