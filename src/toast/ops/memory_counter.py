@@ -59,7 +59,9 @@ class MemoryCounter(Operator):
                 )
                 log.info(f"{self.prefix}:  {msg}")
                 log.info(f"{self.prefix}:  {self.sys_mem_str}")
-        return self.total_bytes
+        total = self.total_bytes
+        self.total_bytes = 0
+        return total
 
     def _requires(self):
         return dict()

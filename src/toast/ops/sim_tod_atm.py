@@ -490,6 +490,9 @@ class SimAtmosphere(Operator):
             observe_pipe.apply(pipe_data)
 
             # Delete the atmosphere slabs for this observation
+            for wind_slabs in ob[atm_sim_key]:
+                for slab in wind_slabs:
+                    slab.close()
             del ob[atm_sim_key]
 
             if comm is not None:
