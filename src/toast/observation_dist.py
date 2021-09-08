@@ -12,18 +12,25 @@ import numpy as np
 
 from pshmem.utils import mpi_data_type
 
-from .mpi import MPI
+from .mpi import MPI, comm_equal, comm_equivalent
 
-from .dist import distribute_samples
+from .dist import distribute_samples, DistRange
 
 from .utils import (
     Logger,
     name_UID,
+    dtype_to_aligned,
+    AlignedI32,
 )
 
-from .observation_data import DetectorData, DetDataMgr, SharedDataMgr, IntervalMgr
+from .observation_data import (
+    DetectorData,
+    DetDataManager,
+    SharedDataManager,
+    IntervalsManager,
+)
 
-from .observation_view import DetDataView, SharedView, View, ViewMgr, ViewInterface
+from .observation_view import DetDataView, SharedView, View, ViewManager, ViewInterface
 
 
 class DistDetSamp(object):
@@ -33,8 +40,10 @@ class DistDetSamp(object):
 
     Args:
         samples (int):  The total number of samples.
-        detectors (list):  The list of detector names.
-        detector_sets (list):  (Optional) List of lists containing detector names.
+        detectors (list):  The full list of detector names.  Note that detector_sets
+            may be used to prune this full list to only include a subset of detectors.
+        detector_sets (list or dict):  (Optional) List of lists containing detector
+            names or dictionary of lists with detector names (the keys are irrelevant).
             These discrete detector sets are used to distribute detectors- a detector
             set will always be within a single row of the process grid.  If None,
             every detector is a set of one.
@@ -67,10 +76,11 @@ class DistDetSamp(object):
             log.error(msg)
             raise RuntimeError(msg)
 
-        self.comm = comm
+        self.comm = None
         self.comm_size = 1
         self.comm_rank = 0
-        if self.comm is not None:
+        if comm is not None:
+            self.comm = comm
             self.comm_size = self.comm.size
             self.comm_rank = self.comm.rank
 
@@ -109,35 +119,57 @@ class DistDetSamp(object):
             # Split the main communicator into process row and column
             # communicators.
 
-            if self.process_cols > 1:
+            if self.process_cols == 1:
+                self.comm_row = MPI.Comm.Dup(MPI.COMM_SELF)
+            else:
                 self.comm_row = self.comm.Split(self.comm_col_rank, self.comm_row_rank)
                 self.comm_row_size = self.comm_row.size
 
-            if self.process_rows > 1:
+            if self.process_rows == 1:
+                self.comm_col = MPI.Comm.Dup(MPI.COMM_SELF)
+            else:
                 self.comm_col = self.comm.Split(self.comm_row_rank, self.comm_col_rank)
                 self.comm_col_size = self.comm_col.size
 
         # If detector_sets is specified, check consistency.
 
         if self.detector_sets is not None:
-            test = 0
-            for ds in self.detector_sets:
-                test += len(ds)
-                for d in ds:
-                    if d not in self.detectors:
-                        msg = (
-                            "Detector {} in detector_sets but not in detectors".format(
-                                d
+            # We have some detector sets.  Verify that every det set contains detectors
+            # in the full list.  Make a new list of detectors including only those in
+            # the det sets.
+            new_dets = list()
+            detsets = list()
+            if isinstance(self.detector_sets, list):
+                # We have a list of lists
+                for ds in self.detector_sets:
+                    for d in ds:
+                        if d not in self.detectors:
+                            raise RuntimeError(
+                                f"detector {d} in a detset but not in detector list"
                             )
-                        )
-                        log.error(msg)
-                        raise RuntimeError(msg)
-            if test != len(detectors):
-                msg = "{} detectors given, but detector_sets has {}".format(
-                    len(detectors), test
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
+                        new_dets.append(d)
+                    detsets.append(list(ds))
+            elif isinstance(self.detector_sets, dict):
+                # We have a detector group dictionary
+                for ds in self.detector_sets.values():
+                    for d in ds:
+                        if d not in self.detectors:
+                            raise RuntimeError(
+                                f"detector {d} in a detset but not in detector list"
+                            )
+                        new_dets.append(d)
+                    detsets.append(list(ds))
+            else:
+                raise RuntimeError("detector_sets should be a list or dict")
+
+            # Replace original detector list with only those found in detsets.
+            # Replace detector_sets with the structure needed by the low level
+            # distribution code.
+            self.detectors = new_dets
+            self.detector_sets = detsets
+
+        # Detector name to index
+        self.det_index = {y: x for x, y in enumerate(self.detectors)}
 
         # If sample_sets is specified, it must be consistent with
         # the total number of samples.
@@ -164,171 +196,274 @@ class DistDetSamp(object):
             sampsets=self.sample_sets,
         )
 
+        self.det_indices = list()
+        for ds in self.dets:
+            dfirst = self.det_index[ds[0]]
+            dlast = self.det_index[ds[-1]]
+            self.det_indices.append(DistRange(dfirst, dlast - dfirst + 1))
 
-def compute_1d_offsets(off, n, new_dist):
+        if self.comm_rank == 0:
+            # check that all processes have some data, otherwise print warning
+            for i, ds in enumerate(self.dets):
+                if len(ds) == 0:
+                    msg = f"Process {i} has no detectors assigned."
+                    log.warning(msg)
+            for i, ss in enumerate(self.samps):
+                if ss[1] == 0:
+                    msg = f"Process {i} has no samples assigned."
+                    log.warning(msg)
+
+    def close(self):
+        # Explicitly free communicators if needed
+        if hasattr(self, "comm_row") and (self.comm_row is not None):
+            self.comm_row.Free()
+            self.comm_row = None
+        if hasattr(self, "comm_col") and (self.comm_col is not None):
+            self.comm_col.Free()
+            self.comm_col = None
+        return
+
+    def __del__(self):
+        self.close()
+
+    def __eq__(self, other):
+        log = Logger.get()
+        fail = 0
+        if self.process_rows != other.process_rows:
+            fail = 1
+            log.verbose(f"  process_rows {self.process_rows} != {other.process_rows}")
+        if not comm_equivalent(self.comm, other.comm):
+            fail = 1
+            log.verbose(f"  obs comm not equivalent")
+        if not comm_equivalent(self.comm_row, other.comm_row):
+            fail = 1
+            log.verbose(f"  obs comm_row not equivalent")
+        if not comm_equivalent(self.comm_col, other.comm_col):
+            fail = 1
+            log.verbose(f"  obs comm_col not equivalent")
+        # Test the resulting distribution quantities, rather than the
+        # inputs passed to the constructor, in case those are slightly
+        # different types.
+        if self.dets != other.dets:
+            fail = 1
+            log.verbose(f"  dist dets {self.dets} != {other.dets}")
+        if self.det_sets != other.det_sets:
+            fail = 1
+            log.verbose(f"  dist detsets {self.det_sets} != {other.det_sets}")
+        if self.samps != other.samps:
+            fail = 1
+            log.verbose(f"  dist samps {self.samps} != {other.samps}")
+        if self.samp_sets != other.samp_sets:
+            fail = 1
+            log.verbose(f"  dist samp_sets {self.samp_sets} != {other.samp_sets}")
+        if self.comm is not None:
+            fail = self.comm.allreduce(fail, op=MPI.SUM)
+        return fail == 0
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+def compute_1d_offsets(off, n, target_dist):
     """Helper function to compute slices along one dimension.
 
     Args:
-        off (int):  The local offset.
+        off (int):  The offset of the local data.
         n (int):  The local number of elements.
-        new_dist (list):  A list of tuples, one per process, with the local offset and
-            number of elements for that process.
+        target_dist (list):  A list of tuples, one per process, with the offset
+            and number of elements for that process in the new distribution.
 
     Returns:
-        (list):  A list of tuples (one per process) containing information about which
-            local samples map to each target process in new_dist.  Each tuple contains:
-            (target process, local_offset, global_offset, num_elements).
+        (list):  A list of slices (one per process) with the slice of local data
+            that overlaps the data on the target process.  If there is no overlap
+            a None value is returned.
 
     """
-    pnew = list()
-    for ip, p in enumerate(new_dist):
-        poff = p[0]
-        pend = p[0] + p[1]
-        if poff >= off + n:
+    out = list()
+    for ip, p in enumerate(target_dist):
+        toff = p[0]
+        tend = p[0] + p[1]
+        if toff >= off + n:
+            out.append(None)
             continue
-        if pend <= off:
+        if tend <= off:
+            out.append(None)
             continue
-        new_off = off
-        if poff > off:
-            new_off = poff
-        new_n = off + n - new_off
-        if pend < off + n:
-            new_n = pend - new_off
-        pnew.append((ip, new_off - off, new_off, new_n))
-    return pnew
+        local_off = 0
+        target_off = 0
+        if toff >= off:
+            local_off = toff - off
+        else:
+            target_off = off - toff
+        tnum = n - local_off
+        if tend < off + n:
+            tnum = tend - local_off
+        out.append(slice(local_off, local_off + tnum, 1))
+    return out
 
 
-def compute_det_sample_offsets(all_dets, old_dist, new_dist):
-    """ """
-    det_order = {y: x for x, y in enumerate(all_dets)}
+def redistribute_buffer(
+    comm,
+    buffer_class,
+    mpi_type,
+    input,
+    output,
+    send_info,
+    recv_info,
+):
+    """Low-level Alltoallv redistribution of multidimensional buffers.
 
-    old_dets = list()
-    for pdet in old_dist.dets:
-        dfirst = det_order[pdet[0]]
-        dlast = det_order[pdet[-1]]
-        old_dets.append((dfirst, dlast - dfirst + 1))
-
-    new_dets = list()
-    for pdet in new_dist.dets:
-        dfirst = det_order[pdet[0]]
-        dlast = det_order[pdet[-1]]
-        new_dets.append((dfirst, dlast - dfirst + 1))
-
-    # Every process figures out its send and receive information
-
-    send_row = compute_1d(self.local_index_offset, self.n_local_samples, newdist.samps)
-    det_first = det_order[self.local_detectors[0]]
-    det_last = det_order[self.local_detectors[-1]]
-    send_col = compute_1d(det_first, det_last - det_first + 1, newdets)
-    send_info = list()
-    for sc in send_col:
-        for sr in send_row:
-            psend = sc[0] * newdist.comm_row_size + sr[0]
-            send_info.append((psend, sc[1], sc[2], sc[3], sr[1], sr[2], sr[3]))
-
-    msg = "Proc {} det send:  {}".format(self.comm_rank, send_info)
-    print(msg, flush=True)
-
-    recv_row = compute_1d(
-        newdist.samps[newdist.comm_row_rank][0],
-        newdist.samps[newdist.comm_row_rank][1],
-        self.dist.samps,
-    )
-    det_first = det_order[newdist.dets[newdist.comm_col_rank][0]]
-    det_last = det_order[newdist.dets[newdist.comm_col_rank][-1]]
-    recv_col = compute_1d(det_first, det_last - det_first + 1, olddets)
-    recv_info = list()
-    for rc in recv_col:
-        for rr in recv_row:
-            precv = rc[0] * self.dist.comm_row_size + rr[0]
-            recv_info.append((precv, rc[1], rc[2], rc[3], rr[1], rr[2], rr[3]))
-
-    msg = "Proc {} det recv:  {}".format(self.comm_rank, recv_info)
-    print(msg, flush=True)
-
-
-def redistribute(self, process_rows, times=None):
-    """Take the currently allocated observation and redistribute in place.
-
-    This changes the data distribution within the observation.  After
-    re-assigning all detectors and samples, the currently allocated shared data
-    objects and detector data objects are redistributed using the observation
-    communicator.
+    The send and receive slices for each process are used to construct flat-packed
+    buffers and copy data into and out of them.
 
     Args:
-        process_rows (int):  The size of the new process grid in the detector
-            direction.  This number must evenly divide into the size of the
-            observation communicator.
-        times (str):  The shared data field representing the timestamps.  This
-            is used to recompute the intervals after redistribution.
+        comm (mpi4py.Comm):  The communicator
+        buffer_class (object):  The AlignedXX class used for the send and receive
+            buffers.
+        mpi_type (MPI.Type):  The MPI data type.
+        input (array-like):  The multidimensional local piece of the input.
+        output (array-like):  The multidimensional local piece of the output.
+        send_info (list):  A list of tuples, one per process, with the send slices.
+        recv_info (list):  A list of tuples, one per process, with the receive slices.
 
     Returns:
         None
 
     """
-    log = Logger.get()
-    if process_rows == self.dist.process_rows:
-        # Nothing to do!
-        return
+    # Per-process send and receive information in terms of the flat
+    # packed buffers.
+    send_counts = AlignedI32(comm.size)
+    recv_counts = AlignedI32(comm.size)
+    send_displ = AlignedI32(comm.size)
+    recv_displ = AlignedI32(comm.size)
 
-    # Construct the new distribution
-    newdist = DistDetSamp(
-        self._samples,
-        self._telescope.focalplane.detectors,
-        self._sample_sets,
-        self._detector_sets,
-        self._comm,
-        process_rows,
+    off = 0
+    send_shape = list()
+    for iproc, send_slc in enumerate(send_info):
+        send_displ[iproc] = off
+        n_elem = 0
+        if send_slc is not None:
+            n_elem = 1
+            ss = list()
+            for slc in send_slc:
+                slen = slc.stop - slc.start
+                n_elem *= slen
+                ss.append(slen)
+            send_shape.append(tuple(ss))
+        else:
+            send_shape.append(None)
+        send_counts[iproc] = n_elem
+        off += n_elem
+    send_n_elem = off
+
+    off = 0
+    recv_shape = list()
+    for iproc, recv_slc in enumerate(recv_info):
+        recv_displ[iproc] = off
+        n_elem = 0
+        if recv_slc is not None:
+            n_elem = 1
+            rs = list()
+            for slc in recv_slc:
+                rlen = slc.stop - slc.start
+                n_elem *= rlen
+                rs.append(rlen)
+            recv_shape.append(tuple(rs))
+        else:
+            recv_shape.append(None)
+        recv_counts[iproc] = n_elem
+        off += n_elem
+    recv_n_elem = off
+
+    # Set up the send / receive buffers
+    send_buf = buffer_class(send_n_elem)
+    recv_buf = buffer_class(recv_n_elem)
+
+    # Copy data into the send buffer
+    for iproc, send_slc in enumerate(send_info):
+        off = send_displ[iproc]
+        n_elem = send_counts[iproc]
+        if n_elem > 0:
+            send_buf[off : off + n_elem] = input[send_slc].flatten()
+
+    # Communicate data
+    comm.Alltoallv(
+        [
+            send_buf,
+            send_counts,
+            send_displ,
+            mpi_type,
+        ],
+        [
+            recv_buf,
+            recv_counts,
+            recv_displ,
+            mpi_type,
+        ],
     )
 
-    det_order = {y: x for x, y in enumerate(self.all_detectors)}
+    # Copy data to output
+    for iproc, recv_slc in enumerate(recv_info):
+        off = recv_displ[iproc]
+        n_elem = recv_counts[iproc]
+        if n_elem > 0:
+            output[recv_slc] = (
+                recv_buf[off : off + n_elem].array().reshape(recv_shape[iproc])
+            )
 
-    if newdist.comm_rank == 0:
-        # check that all processes have some data, otherwise print warning
-        for d in range(newdist.process_rows):
-            if len(newdist.dets[d]) == 0:
-                msg = "WARNING: process row rank {} has no detectors"
-                " assigned in new distribution.".format(d)
-                log.warning(msg)
-        for r in range(newdist.process_cols):
-            if newdist.samps[r][1] <= 0:
-                msg = "WARNING: process column rank {} has no data assigned "
-                "in new distribution.".format(r)
-                log.warning(msg)
+    # Delete buffers
+    send_buf.clear()
+    del send_buf
+    recv_buf.clear()
+    del recv_buf
+    send_counts.clear()
+    del send_counts
+    send_displ.clear()
+    del send_displ
+    recv_counts.clear()
+    del recv_counts
+    recv_displ.clear()
+    del recv_displ
 
-    # Clear all views, since they depend on the intervals we are about to
-    # delete.  Views are re-created on demand.
 
-    print("clearing views", flush=True)
-    self.view.clear()
+def extract_global_intervals(old_dist, intervals_manager):
+    """Helper function to reconstruct global interval timespans.
 
-    # After an IntervalList is added, only the local intervals on each process are
-    # kept.  We need to construct the original timespans that were used and save,
-    # so that we can rebuild them after the timestamps have been redistributed.
+    After an IntervalList is added, only the local intervals on each process are
+    kept.  We need to reconstruct the original timespans that were used and save,
+    so that we can rebuild them after the timestamps have been redistributed.
 
-    if times is None:
-        if self.comm_rank == 0:
-            msg = "Time stamps not specified when redistributing observation {}."
-            msg += "  Intervals will be deleted and not redistributed."
-            log.warning(msg)
+    Args:
+        old_dist (DistDetSamp):  The existing data distribution.
+        intervals_manager (IntervalsManager):  The existing interval manager instance.
+
+    Returns:
+        (dict):  The dictionary of reconstructed global timespan intervals on rank
+            zero of the observation, otherwise None.
+
+    """
+    log = Logger.get()
 
     global_intervals = None
-    if self.comm_rank == 0:
+    if old_dist.comm_rank == 0:
         global_intervals = dict()
 
-    for iname in list(self.intervals.keys()):
-        print("gathering interval {}".format(iname), flush=True)
-        ilist = self.intervals[iname]
+    for iname in list(intervals_manager.keys()):
+        ilist = [(x.start, x.stop, x.first, x.last) for x in intervals_manager[iname]]
         all_ilist = None
-        if self.comm_row is None:
-            all_ilist = [(ilist, self.n_local_samples)]
+        if old_dist.comm_row is None:
+            all_ilist = [(ilist, old_dist.samps[old_dist.comm_row_rank].n_elem)]
         else:
             # Gather across the process row
-            if self.comm_col_rank == 0:
-                all_ilist = self.comm_row.gather((ilist, self.n_local_samples), root=0)
+            if old_dist.comm_col_rank == 0:
+                all_ilist = old_dist.comm_row.gather(
+                    (ilist, old_dist.samps[old_dist.comm_row_rank].n_elem), root=0
+                )
         del ilist
-        if self.comm_rank == 0:
-            # Only one process builds the list of start / stop times.
+        if old_dist.comm_rank == 0:
+            # Only one process builds the list of start / stop times.  By definition,
+            # the rank zero process of the observation is also the process with rank
+            # zero along both the rows and columns.
             glist = list()
             last_continue = False
             last_start = 0
@@ -336,128 +471,435 @@ def redistribute(self, process_rows, times=None):
             for pdata, pn in all_ilist:
                 if len(pdata) == 0:
                     continue
-
-                for intvl in pdata:
+                for start, stop, first, last in pdata:
                     if last_continue:
-                        if invl.first == 0:
-                            last_stop = intvl.stop
+                        if first == 0:
+                            last_stop = stop
                         else:
                             glist.append((last_start, last_stop))
                             last_continue = False
-                            last_start = intvl.start
-                            last_stop = intvl.stop
+                            last_start = start
+                            last_stop = stop
                     else:
-                        last_start = intvl.start
-                        last_stop = intvl.stop
+                        last_start = start
+                        last_stop = stop
 
-                    if intvl.last == pn - 1:
-                        last_continue = True
-                    else:
-                        glist.append((last_start, last_stop))
-                        last_continue = False
+                    glist.append((last_start, last_stop))
+                    # if last == pn - 1:
+                    #     last_continue = True
+                    # else:
+                    #     glist.append((last_start, last_stop))
+                    #     last_continue = False
             if last_continue:
                 # add final range
                 glist.append((last_start, last_stop))
-        global_intervals[iname] = glist
-        print("purging interval {}".format(iname), flush=True)
-        del self.intervals[iname]
+            global_intervals[iname] = glist
 
-    # Create the new detdata manager
+    return global_intervals
 
-    newdetdata = DetDataMgr(
-        newdist.dets[newdist.comm_col_rank],
-        newdist.samps[newdist.comm_row_rank][1],
-    )
 
-    # Redistribute detector data.  For purposes of redistribution, we require
-    # that all DetectorData objects span the full set of local detectors.  This
-    # allows all detectors to determine (without further communication) the new
-    # and old distribution of all the data.
-    #
-    # In practice, smaller DetectorData objects are only used for intermediate data
-    # products.  Data redistribution is something that will happen infrequently at
-    # fixed points in a larger workflow.  If this ever becomes too much of a
-    # limitation, we could add more logic to handle the case of detdata fields with
-    # subsets of local detectors.
+def redistribute_detector_data(
+    old_dist,
+    new_dist,
+    detdata_manager,
+    old_local_dets,
+    det_send_info,
+    samp_send_info,
+    det_recv_info,
+    samp_recv_info,
+):
+    """Redistribute detector data.
 
-    send_counts = np.zeros(self.comm_size, dtype=np.int32)
-    recv_counts = np.zeros(self.comm_size, dtype=np.int32)
-    send_displ = np.zeros(self.comm_size, dtype=np.int32)
-    recv_displ = np.zeros(self.comm_size, dtype=np.int32)
+    For purposes of redistribution, we require that all DetectorData objects span the
+    full set of local detectors.  In practice, smaller DetectorData objects are only
+    used for intermediate data products.  Data redistribution is something that will
+    happen infrequently at fixed points in a larger workflow.  If this ever becomes too
+    much of a limitation, we could add more logic to handle the case of detdata fields
+    with subsets of local detectors.
 
-    for field in list(self.detdata.keys()):
-        field_dets = self.detdata[field].detectors
-        if field_dets != self.local_detectors:
+    Args:
+        old_dist (DistDetSamp):  The existing data distribution.
+        new_dist (DistDetSamp):  The new data distribution.
+        detdata_manager (DetectorDataManager):  The existing detector data manager
+            instance.
+        old_local_dets (list):  The local detectors in the old distribution.
+        det_send_info (list):  The send slices along the detector axis.
+        samp_send_info (list):  The send slices along the sample axis.
+        det_recv_info (list):  The receive slices along the detector axis.
+        samp_recv_info (list):  The receive slices along the sample axis.
+
+    Returns:
+        (tuple):  The new DetDataManager.
+
+    """
+    log = Logger.get()
+
+    new_detdata_manager = DetDataManager(new_dist)
+
+    # Process every detdata object
+
+    for field in list(detdata_manager.keys()):
+        field_dets = detdata_manager[field].detectors
+
+        if not all([x == y for x, y in zip(field_dets, old_local_dets)]):
             msg = "Redistribution only supports detdata with all local detectors."
-            msg += " Field {} has {} dets instead of {}".format(
-                field, len(field_dets), len(self.local_detectors)
-            )
-            raise NotImplementedError(msg)
+            msg += f" Field {field} has {len(field_dets)} dets instead of "
+            msg += f"{len(old_local_dets)}.  Deleting."
+            log.warning_rank(msg, comm=old_dist.comm)
+            del detdata_manager[field]
+            continue
+
+        # Buffer class to use
+        buffer_class, _ = dtype_to_aligned(detdata_manager[field].dtype)
 
         # Get MPI data type.  Note that in the case of no MPI, this function would
         # have returned at the very start.  So we know that we have a real
         # communicator at this point.
-        mpibytesize, mpitype = mpi_data_type(self.comm, self.detdata[field].dtype)
+        mpibytesize, mpitype = mpi_data_type(
+            old_dist.comm, detdata_manager[field].dtype
+        )
 
         # Allocate new data
         sample_shape = None
-        if len(self.detdata[field].detector_shape) == 1:
-            # One number per sample
-            sample_shape = (1,)
-        else:
-            sample_shape = self.detdata[field].detector_shape[1:]
+        n_per_sample = 1
+        if len(detdata_manager[field].detector_shape) > 1:
+            sample_shape = detdata_manager[field].detector_shape[1:]
+            for dim in sample_shape:
+                n_per_sample *= dim
 
-        newdetdata.create(
+        new_detdata_manager.create(
             field,
             sample_shape=sample_shape,
-            dtype=self.detdata[field].dtype,
-            detectors=None,
+            dtype=detdata_manager[field].dtype,
         )
 
-        # Set up the send / receive counts and displacements
+        # Redistribution send / recv slices
+        samp_slices = None
+        if sample_shape is not None:
+            samp_slices = [slice(0, x, 1) for x in sample_shape]
+        send_info = list()
+        for dinfo, sinfo in zip(det_send_info, samp_send_info):
+            proc_slices = None
+            if dinfo is not None and sinfo is not None:
+                proc_slices = [dinfo, sinfo]
+                if samp_slices is not None:
+                    proc_slices.extend(samp_slices)
+                proc_slices = tuple(proc_slices)
+            send_info.append(proc_slices)
 
-        send_counts[:] = 0
-        send_displ[:] = 0
-        for (
-            p,
-            loc_det_off,
-            glob_det_off,
-            n_det,
-            loc_samp_off,
-            glob_samp_off,
-            n_samp,
-        ) in send_info:
-            pass
+        recv_info = list()
+        for dinfo, sinfo in zip(det_recv_info, samp_recv_info):
+            proc_slices = None
+            if dinfo is not None and sinfo is not None:
+                proc_slices = [dinfo, sinfo]
+                if samp_slices is not None:
+                    proc_slices.extend(samp_slices)
+                proc_slices = tuple(proc_slices)
+            recv_info.append(proc_slices)
 
-        # Communicate data
-
-        self._dist.comm.Alltoallv(
-            [
-                self.detdata[field].flatdata,
-                self._send_counts,
-                self._send_displ,
-                mpitype,
-            ],
-            [
-                newdetdata[field].flatdata,
-                self._recv_counts,
-                self._recv_displ,
-                mpitype,
-            ],
+        # Redistribute
+        redistribute_buffer(
+            old_dist.comm,
+            buffer_class,
+            mpitype,
+            detdata_manager[field].data,
+            new_detdata_manager[field].data,
+            send_info,
+            recv_info,
         )
+    return new_detdata_manager
 
-        del self.detdata[field]
 
-    # # Redistribute shared data
-    #
-    # newshared = SharedDataMgr(
-    #     self._comm,
-    #     newdist.comm_row,
-    #     newdist.comm_col,
-    # )
-    #
-    # # Redistribute intervals
-    #
-    # newintervals = IntervalMgr(self._comm, newdist.comm_row, newdist.comm_col)
+def redistribute_shared_data(
+    old_dist,
+    new_dist,
+    shared_manager,
+    old_det_n,
+    new_det_n,
+    old_samp_n,
+    new_samp_n,
+    det_send_info,
+    samp_send_info,
+    det_recv_info,
+    samp_recv_info,
+):
+    """Redistribute shared data.
 
-    # Swap new data objects into place
+    Shared data.  If the data is shared across the observation (group) communicator,
+    then no action is needed.  If it is shared across a row or column communicator,
+    then only the rank zero processes in those communicators need to do anything.
+
+    In order to determine how to split up and recombine shared objects, we require
+    that the leading dimension of the object corresponds to either the number of
+    local detectors (for row-shared objects) or the number of local samples (for
+    column-shared objects).
+
+    Args:
+        old_dist (DistDetSamp):  The existing data distribution.
+        new_dist (DistDetSamp):  The new data distribution.
+        shared_manager (SharedManager):  The existing detector data manager
+            instance.
+        old_det_n (int):  The old number of local detectors.
+        new_det_n (int):  The new number of local detectors.
+        old_samp_n (int):  The old number of local samples.
+        new_samp_n (int):  The new number of local samples.
+        det_send_info (list):  The send slices along the detector axis.
+        samp_send_info (list):  The send slices along the sample axis.
+        det_recv_info (list):  The receive slices along the detector axis.
+        samp_recv_info (list):  The receive slices along the sample axis.
+
+    Returns:
+        (tuple):  The new DetDataManager.
+
+    """
+    log = Logger.get()
+
+    # Create the new shared manager.
+    new_shared_manager = SharedDataManager(new_dist)
+
+    for field in shared_manager.keys():
+        shobj = shared_manager[field]
+        if comm_equal(shobj.comm, old_dist.comm):
+            # Using full group communicator, just copy to the new data manager.
+            new_shared_manager[field] = shobj
+        else:
+            # Full shape of the object
+            shp = shobj.shape
+
+            # Buffer type
+            buffer_class, _ = dtype_to_aligned(shobj.dtype)
+            mpibytesize, mpitype = mpi_data_type(shobj.comm, shobj.dtype)
+
+            # Shape of the non-leading dimensions
+            other_shape = None
+            n_per_leading = 1
+            if len(shp) > 1:
+                other_shape = shp[1:]
+                for dim in other_shape:
+                    n_per_leading *= dim
+
+            # slices for non-leading dimensions
+            dim_slices = None
+            if other_shape is not None:
+                dim_slices = [slice(0, x, 1) for x in other_shape]
+
+            if comm_equal(shobj.comm, old_dist.comm_row):
+                # Shared in the sample direction.
+                if shp[0] != old_det_n:
+                    msg = f"Shared object {field} uses the row communicator, "
+                    msg += f"but has leading dimension {shp[0]} rather than the "
+                    msg += f"number of local detectors ({old_det_n}).  "
+                    msg += f"Cannot redistribute."
+                    raise RuntimeError(msg)
+
+                # Redistribution send / recv slices
+                send_info = [None for x in range(shobj.comm.size)]
+                recv_info = [None for x in range(shobj.comm.size)]
+
+                if old_dist.comm_row_rank == 0:
+                    # We are sending something
+                    send_info = list()
+                    for rproc, sinfo in enumerate(det_send_info):
+                        proc_slices = None
+                        if sinfo is not None and rproc % new_dist.comm_row_size == 0:
+                            proc_slices = [sinfo]
+                            if dim_slices is not None:
+                                proc_slices.extend(dim_slices)
+                            proc_slices = tuple(proc_slices)
+                        send_info.append(proc_slices)
+                if new_dist.comm_row_rank == 0:
+                    # We are receiving something
+                    recv_info = list()
+                    for sproc, rinfo in enumerate(det_recv_info):
+                        proc_slices = None
+                        if rinfo is not None and sproc % old_dist.comm_row_size == 0:
+                            proc_slices = [rinfo]
+                            if dim_slices is not None:
+                                proc_slices.extend(dim_slices)
+                            proc_slices = tuple(proc_slices)
+                        recv_info.append(proc_slices)
+
+                # Create the new object
+                new_shp = [new_det_n]
+                if other_shape is not None:
+                    new_shp.extend(other_shape)
+
+                new_shared_manager.create(
+                    field, new_shp, dtype=shobj.dtype, comm=new_dist.comm_row
+                )
+
+                # Redistribute
+                redistribute_buffer(
+                    old_dist.comm,
+                    buffer_class,
+                    mpitype,
+                    shobj.data,
+                    new_shared_manager[field].data,
+                    send_info,
+                    recv_info,
+                )
+            elif comm_equal(shobj.comm, old_dist.comm_col):
+                # Shared in the detector direction
+                shp = shobj.shape
+                if shp[0] != old_samp_n:
+                    msg = f"Shared object {field} uses the column communicator, "
+                    msg += f"but has leading dimension {shp[0]} rather than the "
+                    msg += f"number of local samples {old_samp_n}.  "
+                    msg += f"Cannot redistribute."
+                    raise RuntimeError(msg)
+
+                # Redistribution send / recv slices
+                send_info = [None for x in range(shobj.comm.size)]
+                recv_info = [None for x in range(shobj.comm.size)]
+                if old_dist.comm_col_rank == 0:
+                    # We are sending something
+                    send_info = list()
+                    for rproc, sinfo in enumerate(samp_send_info):
+                        proc_slices = None
+                        if sinfo is not None and rproc % new_dist.comm_col_size == 0:
+                            proc_slices = [sinfo]
+                            if dim_slices is not None:
+                                proc_slices.extend(dim_slices)
+                            proc_slices = tuple(proc_slices)
+                        send_info.append(proc_slices)
+                if new_dist.comm_col_rank == 0:
+                    # We are receiving something
+                    recv_info = list()
+                    for sproc, rinfo in enumerate(samp_recv_info):
+                        proc_slices = None
+                        if rinfo is not None and sproc % old_dist.comm_col_size == 0:
+                            proc_slices = [rinfo]
+                            if dim_slices is not None:
+                                proc_slices.extend(dim_slices)
+                            proc_slices = tuple(proc_slices)
+                        recv_info.append(proc_slices)
+
+                # Create the new object
+                new_shp = [new_samp_n]
+                if other_shape is not None:
+                    new_shp.extend(other_shape)
+                new_shared_manager.create(
+                    field, new_shp, dtype=shobj.dtype, comm=new_dist.comm_col
+                )
+
+                # Redistribute
+                redistribute_buffer(
+                    old_dist.comm,
+                    buffer_class,
+                    mpitype,
+                    shobj.data,
+                    new_shared_manager[field].data,
+                    send_info,
+                    recv_info,
+                )
+            else:
+                msg = "Only shared objects using the group, row, and column "
+                msg += "communicators can be redistributed"
+                log.error(msg)
+                raise RuntimeError(msg)
+
+    return new_shared_manager
+
+
+def redistribute_data(
+    old_dist, new_dist, shared_manager, detdata_manager, intervals_manager, times=None
+):
+    """Helper function to redistribute data in an observation.
+
+    Given the old and new data distributions, redistribute all objects in the
+    shared, detdata, and intervals manager objects.  The input managers are cleared
+    upon return.  If times is None and there exist some intervals, a warning
+    will be given and the intervals will be deleted.
+
+    Args:
+        old_dist (DistDetSamp):  The existing data distribution.
+        new_dist (DistDetSamp):  The new data distribution.
+        shared_manager (SharedDataManager):  The existing shared manager instance.
+        detdata_manager (DetectorDataManager):  The existing detector data manager
+            instance.
+        intervals_manager (IntervalsManager):  The existing interval manager instance.
+        times (str):  The name of the shared object containing the timestamps.
+
+    Returns:
+        (tuple):  The new (SharedDataManager, DetDataManager, IntervalsManager)
+            instances.
+
+    """
+    log = Logger.get()
+
+    global_intervals = dict()
+    if times is None and len(intervals_manager.keys()) > 0:
+        if old_dist.comm_rank == 0:
+            msg = "Time stamps not specified when redistributing observation."
+            msg += "  Intervals will be deleted and not redistributed."
+            log.warning(msg)
+    else:
+        global_intervals = extract_global_intervals(old_dist, intervals_manager)
+
+    intervals_manager.clear()
+
+    # Compute the detector and sample ranges we are sending and receiving.  These are
+    # common for all detdata objects.
+
+    old_det_off = old_dist.det_indices[old_dist.comm_rank].offset
+    old_det_n = old_dist.det_indices[old_dist.comm_rank].n_elem
+    old_local_dets = old_dist.detectors[old_det_off : old_det_off + old_det_n]
+    det_send_info = compute_1d_offsets(old_det_off, old_det_n, new_dist.det_indices)
+
+    old_samp_off = old_dist.samps[old_dist.comm_rank].offset
+    old_samp_n = old_dist.samps[old_dist.comm_rank].n_elem
+    samp_send_info = compute_1d_offsets(old_samp_off, old_samp_n, new_dist.samps)
+
+    new_det_off = new_dist.det_indices[new_dist.comm_rank].offset
+    new_det_n = new_dist.det_indices[new_dist.comm_rank].n_elem
+    det_recv_info = compute_1d_offsets(new_det_off, new_det_n, old_dist.det_indices)
+
+    new_samp_off = new_dist.samps[new_dist.comm_rank].offset
+    new_samp_n = new_dist.samps[new_dist.comm_rank].n_elem
+    samp_recv_info = compute_1d_offsets(new_samp_off, new_samp_n, old_dist.samps)
+
+    # Redistribute detector data.
+
+    new_detdata_manager = redistribute_detector_data(
+        old_dist,
+        new_dist,
+        detdata_manager,
+        old_local_dets,
+        det_send_info,
+        samp_send_info,
+        det_recv_info,
+        samp_recv_info,
+    )
+
+    # Redistribute shared data
+
+    new_shared_manager = redistribute_shared_data(
+        old_dist,
+        new_dist,
+        shared_manager,
+        old_det_n,
+        new_det_n,
+        old_samp_n,
+        new_samp_n,
+        det_send_info,
+        samp_send_info,
+        det_recv_info,
+        samp_recv_info,
+    )
+
+    # Re-create the intervals in the new data distribution.
+    new_intervals_manager = IntervalsManager(new_dist)
+
+    # Communicate the field list
+    gkeys = None
+    if old_dist.comm_rank == 0:
+        gkeys = list(global_intervals.keys())
+    ivl_fields = old_dist.comm.bcast(gkeys, root=0)
+
+    for field in ivl_fields:
+        glb = None
+        if old_dist.comm_rank == 0:
+            glb = global_intervals[field]
+        new_intervals_manager.create(field, glb, new_shared_manager[times], fromrank=0)
+
+    return new_shared_manager, new_detdata_manager, new_intervals_manager

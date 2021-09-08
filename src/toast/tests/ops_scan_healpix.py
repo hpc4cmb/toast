@@ -13,6 +13,8 @@ from .mpi import MPITestCase
 
 from .. import ops as ops
 
+from ..observation import default_names as obs_names
+
 from ..pixels import PixelData
 
 from ..pixels_io import write_healpix_fits
@@ -35,7 +37,7 @@ class ScanHealpixTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
@@ -50,7 +52,7 @@ class ScanHealpixTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data="signal",
+            det_data=obs_names.det_data,
             pixels=pointing.pixels,
             weights=pointing.weights,
             map_key="fake_map",
@@ -71,7 +73,7 @@ class ScanHealpixTest(MPITestCase):
         for ob in data.obs:
             for det in ob.local_detectors:
                 np.testing.assert_almost_equal(
-                    ob.detdata["test"][det], ob.detdata["signal"][det]
+                    ob.detdata["test"][det], ob.detdata[obs_names.det_data][det]
                 )
 
         del data

@@ -19,6 +19,7 @@ install(FILES
     timing.py
     pixels.py
     weather.py
+    noise.py
     ops_sim_satellite.py
     ops_sim_ground.py
     ops_sim_tod_noise.py
@@ -26,6 +27,7 @@ install(FILES
     ops_sim_tod_atm.py
     ops_sim_tod_conviqt.py
     ops_sim_tod_totalconvolve.py
+    ops_statistics.py
     ops_mapmaker_utils.py
     ops_mapmaker_binning.py
     ops_mapmaker_solve.py
@@ -45,5 +47,8 @@ install(FILES
     ops_sim_crosstalk.py
     ops_polyfilter.py
     ops_groundfilter.py
+    ops_sim_cosmic_rays.py
+    ops_time_constant.py
+    spt3g.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

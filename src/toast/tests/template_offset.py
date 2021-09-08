@@ -15,6 +15,8 @@ from ..utils import rate_from_times
 
 from .. import ops
 
+from ..observation import default_names as obs_names
+
 from ..templates import Offset
 
 from ._helpers import create_outdir, create_satellite_data
@@ -36,16 +38,19 @@ class TemplateOffsetTest(MPITestCase):
 
         # Create some empty detector data
         for ob in data.obs:
-            ob.detdata.create("signal", dtype=np.float64)
+            ob.detdata.create(obs_names.det_data, dtype=np.float64)
 
         # Use 1/10 of an observation as the baseline length.  Make it not evenly
         # divisible in order to test handling of the final amplitude.
-        ob_time = data.obs[0].shared["times"][-1] - data.obs[0].shared["times"][0]
+        ob_time = (
+            data.obs[0].shared[obs_names.times][-1]
+            - data.obs[0].shared[obs_names.times][0]
+        )
         step_seconds = float(int(ob_time / 10.0))
 
         tmpl = Offset(
-            det_data="signal",
-            times="times",
+            det_data=obs_names.det_data,
+            times=obs_names.times,
             noise_model=noise_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -64,7 +69,7 @@ class TemplateOffsetTest(MPITestCase):
         # Verify
         for ob in data.obs:
             for det in ob.local_detectors:
-                np.testing.assert_equal(ob.detdata["signal"][det], 1.0)
+                np.testing.assert_equal(ob.detdata[obs_names.det_data][det], 1.0)
 
         # Accumulate amplitudes
         for det in tmpl.detectors():
@@ -74,7 +79,9 @@ class TemplateOffsetTest(MPITestCase):
         # Verify
         for ob in data.obs:
             # Get the step boundaries
-            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(ob.shared["times"])
+            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
+                ob.shared[obs_names.times]
+            )
             step_samples = int(step_seconds * rate)
             n_step = ob.n_local_samples // step_samples
             slices = [
@@ -88,7 +95,7 @@ class TemplateOffsetTest(MPITestCase):
             for det in ob.local_detectors:
                 for slc, sz in zip(slices, sizes):
                     np.testing.assert_equal(
-                        np.sum(ob.detdata["signal"][det, slc]), 1.0 * sz
+                        np.sum(ob.detdata[obs_names.det_data][det, slc]), 1.0 * sz
                     )
 
         del data

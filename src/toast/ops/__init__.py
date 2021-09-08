@@ -67,7 +67,20 @@ from .conviqt import SimConviqt, SimWeightedConviqt
 from .sim_gaindrifts import GainDrifter
 from .sim_crosstalk import CrossTalk
 
+from .sim_cosmic_rays import InjectCosmicRays
+
 from .totalconvolve import SimTotalconvolve
 
 from .polyfilter import PolyFilter, PolyFilter2D, CommonModeFilter
+
 from .groundfilter import GroundFilter
+
+from .statistics import Statistics
+
+from .time_constant import TimeConstant
+
+from .load_spt3g import LoadSpt3g
+
+from .save_spt3g import SaveSpt3g
+
+from .run_spt3g import RunSpt3g

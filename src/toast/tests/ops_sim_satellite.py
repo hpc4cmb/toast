@@ -19,6 +19,8 @@ from ..mpi import Comm, MPI
 
 from ..data import Data
 
+from ..observation import default_names as obs_names
+
 from ..instrument import Focalplane, Telescope, SpaceSite
 
 from ..instrument_sim import fake_hexagon_focalplane
@@ -45,7 +47,7 @@ class SimSatelliteTest(MPITestCase):
 
         npix = 1
         ring = 1
-        while 2 * npix < self.toastcomm.group_size:
+        while 2 * npix <= self.toastcomm.group_size:
             npix += 6 * ring
             ring += 1
         self.npix = npix
@@ -79,6 +81,7 @@ class SimSatelliteTest(MPITestCase):
             name="sim_sat",
             telescope=tele,
             schedule=sch,
+            hwp_angle=obs_names.hwp_angle,
             hwp_rpm=1.0,
             spin_angle=30.0 * u.degree,
             prec_angle=65.0 * u.degree,
@@ -90,7 +93,7 @@ class SimSatelliteTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nest=True,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=sim_sat.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )

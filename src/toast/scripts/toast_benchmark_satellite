@@ -13,20 +13,22 @@ total_sample = num_obs * obs_minutes * sample_rate * n_detector
 
 import os
 import sys
-import traceback
 import argparse
 from datetime import datetime
 from astropy import units as u
 import toast
+import toast.ops
 from toast.timing import gather_timers, dump
 from toast.schedule_sim_satellite import create_satellite_schedule
-from benchmarking_utilities import (
+from toast.scripts.benchmarking_utilities import (
     get_mpi_settings,
     select_case,
     make_focalplane,
     scan_map,
     run_mapmaker,
     compute_science_metric,
+    estimate_memory_overhead,
+    python_startup_time,
 )
 
 
@@ -76,19 +78,37 @@ def parse_arguments():
         type=str,
         help="Size of the worflow to be run: 'tiny' (1GB), 'xsmall' (10GB), 'small' (100GB), 'medium' (1TB), 'large' (10TB), 'xlarge' (100TB), 'heroic' (1000TB) or 'auto' (deduced from MPI parameters).",
     )
+    parser.add_argument(
+        "--print_input_map",
+        required=False,
+        default=False,
+        type=bool,
+        help="Should the healpy input map be exported as a PNG for debugging purposes.",
+    )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
     # The "name" of each operator instance controls what the commandline and config
     # file options will be called.
     operators = [
-        toast.ops.SimSatellite(name="sim_satellite"),
+        toast.ops.SimSatellite(
+            name="sim_satellite",
+            detset_key="pixel",
+        ),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=1024),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
-        toast.ops.MapMaker(name="mapmaker"),
+        toast.ops.MapMaker(
+            name="mapmaker",
+            write_map=True,
+            write_noiseweighted_map=False,
+            write_hits=True,
+            write_cov=False,
+            write_invcov=False,
+            write_rcond=False,
+        ),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
@@ -110,6 +130,7 @@ def parse_arguments():
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10
+    args.num_obs = 4320  # 6 months of one-hour observations
     args.obs_minutes = 60
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
@@ -138,7 +159,7 @@ def make_schedule(args, world_comm):
         )
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
-    return schedule
+    args.schedule = schedule
 
 
 def main():
@@ -153,7 +174,7 @@ def main():
 
     # Instantiate our objects that were configured from the command line / files
     job = toast.create_from_config(config)
-    ops = job.operators
+    job_ops = job.operators
 
     # gets the MPI parameters
     world_comm, n_procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(
@@ -167,15 +188,28 @@ def main():
         outlog = os.path.join(args.out_dir, "config_log.toml")
         toast.config.dump_toml(outlog, config)
 
+    # Create the schedule, so that we know the total maximum observing time.
+    make_schedule(args, world_comm)
+
+    # Estimate per-process memory use from map domain objects and
+    # other sources.
+    nside_final = None
+    if job_ops.pointing_final.enabled:
+        nside_final = job_ops.pointing_final.nside
+    overhead_bytes = estimate_memory_overhead(
+        n_procs, n_nodes, 0.4, job_ops.pointing.nside, nside_final=nside_final
+    )
+
     # selects appropriate case size
     select_case(
         args,
+        jobargs,
         n_procs,
         n_nodes,
         avail_node_bytes,
-        ops.binner.full_pointing,
+        job_ops.binner.full_pointing,
         world_comm,
-        log,
+        per_process_overhead_bytes=overhead_bytes,
     )
 
     # Creates the focalplane file.
@@ -194,21 +228,8 @@ def main():
         "satellite", focalplane=focalplane, site=site
     )
 
-    # Load the schedule file
-    schedule = make_schedule(args, world_comm)
-
-    # Find the group size for this job, either from command-line overrides or
-    # by estimating the data volume.
-    group_size = toast.job_group_size(
-        world_comm,
-        jobargs,
-        schedule=schedule,
-        focalplane=focalplane,
-        full_pointing=ops.binner.full_pointing,
-    )
-
     # Create the toast communicator
-    comm = toast.Comm(world=world_comm, groupsize=group_size)
+    comm = toast.Comm(world=world_comm, groupsize=args.group_procs)
 
     # Create the (initially empty) data
     data = toast.Data(comm=comm)
@@ -218,41 +239,41 @@ def main():
     timer.start()
 
     # Simulate the telescope pointing
-    ops.sim_satellite.telescope = telescope
-    ops.sim_satellite.schedule = schedule
-    ops.sim_satellite.apply(data)
+    job_ops.sim_satellite.telescope = telescope
+    job_ops.sim_satellite.schedule = args.schedule
+    job_ops.sim_satellite.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
     # Construct a "perfect" noise model just from the focalplane parameters
-    ops.default_model.apply(data)
+    job_ops.default_model.apply(data)
     log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
 
     # Set the pointing matrix operators to use the detector pointing
-    ops.pointing.detector_pointing = ops.det_pointing
-    ops.pointing_final.detector_pointing = ops.det_pointing
+    job_ops.pointing.detector_pointing = job_ops.det_pointing
+    job_ops.pointing_final.detector_pointing = job_ops.det_pointing
 
     # If we are not using a different pointing matrix for our final binning, then
     # use the same one as the solve.
-    ops.binner.pointing = ops.pointing
-    if not ops.pointing_final.enabled:
-        ops.pointing_final = ops.pointing
+    job_ops.binner.pointing = job_ops.pointing
+    if not job_ops.pointing_final.enabled:
+        job_ops.pointing_final = job_ops.pointing
 
     # If we are not using a different binner for our final binning, use the same one
     # as the solve.
-    ops.binner_final.pointing = ops.pointing_final
-    if not ops.binner_final.enabled:
-        ops.binner_final = ops.binner
+    job_ops.binner_final.pointing = job_ops.pointing_final
+    if not job_ops.binner_final.enabled:
+        job_ops.binner_final = job_ops.binner
 
     # Simulate sky signal from a map.
-    scan_map(args, rank, ops, data, log)
+    scan_map(args, rank, job_ops, data, log)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
     # Simulate detector noise
-    ops.sim_noise.apply(data)
+    job_ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
     # Build up our map-making operation.
-    run_mapmaker(ops, args, job.templates, data)
+    run_mapmaker(job_ops, args, job.templates, data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # end of the computations, sync and computes efficiency
@@ -279,17 +300,7 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    python_startup_time(rank)
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = [f"Proc {rank}: {x}" for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()

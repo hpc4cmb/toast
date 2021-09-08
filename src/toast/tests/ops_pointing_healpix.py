@@ -17,6 +17,8 @@ from ..healpix import HealpixPixels
 
 from .. import ops as ops
 
+from ..observation import default_names as obs_names
+
 from ..intervals import Interval, IntervalList
 
 from ._helpers import create_outdir, create_satellite_data
@@ -231,7 +233,7 @@ class PointingHealpixTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
         )
         pointing.apply(data)
@@ -253,7 +255,7 @@ class PointingHealpixTest(MPITestCase):
         full_intervals = "full_intervals"
         half_intervals = "half_intervals"
         for obs in data.obs:
-            times = obs.shared["times"]
+            times = obs.shared[obs_names.times]
             nsample = len(times)
             intervals1 = [
                 Interval(
@@ -278,7 +280,7 @@ class PointingHealpixTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
             view=full_intervals,
         )
@@ -289,7 +291,7 @@ class PointingHealpixTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
             view=half_intervals,
         )

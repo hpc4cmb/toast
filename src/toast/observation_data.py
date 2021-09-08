@@ -12,7 +12,7 @@ from astropy import units as u
 
 from pshmem import MPIShared
 
-from .mpi import MPI
+from .mpi import MPI, comm_equivalent, comm_equal
 
 from .utils import (
     Logger,
@@ -69,18 +69,19 @@ class DetectorData(object):
             data.  The only supported types are 1, 2, 4, and 8 byte signed and unsigned
             integers, 4 and 8 byte floating point numbers, and 4 and 8 byte complex
             numbers.
-        unit (Unit):  Optional scalar unit associated with this data.
+        units (Unit):  Optional scalar unit associated with this data.
         view_data (array):  (Internal use only) This makes it possible to create
             DetectorData instances that act as a view on an existing array.
 
     """
 
     def __init__(
-        self, detectors, shape, dtype, unit=u.dimensionless_unscaled, view_data=None
+        self, detectors, shape, dtype, units=u.dimensionless_unscaled, view_data=None
     ):
         log = Logger.get()
 
         self._set_detectors(detectors)
+        self._units = units
 
         (
             self._storage_class,
@@ -153,6 +154,10 @@ class DetectorData(object):
     @property
     def dtype(self):
         return self._dtype
+
+    @property
+    def units(self):
+        return self._units
 
     @property
     def shape(self):
@@ -358,8 +363,24 @@ class DetectorData(object):
         val += "\n>"
         return val
 
+    def __eq__(self, other):
+        if self.detectors != other.detectors:
+            return False
+        if self.dtype.char != other.dtype.char:
+            return False
+        if self.shape != other.shape:
+            return False
+        if self.units != other.units:
+            return False
+        if not np.allclose(self.data, other.data):
+            return False
+        return True
 
-class DetDataMgr(MutableMapping):
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+class DetDataManager(MutableMapping):
     """Class used to manage DetectorData objects in an Observation.
 
     New objects can be created several ways.  The "create()" method:
@@ -409,9 +430,9 @@ class DetDataMgr(MutableMapping):
 
     """
 
-    def __init__(self, detectors, samples):
-        self.samples = samples
-        self.detectors = detectors
+    def __init__(self, dist):
+        self.samples = dist.samps[dist.comm_rank].n_elem
+        self.detectors = dist.dets[dist.comm_rank]
         self._internal = dict()
 
     def _data_shape(self, sample_shape):
@@ -424,7 +445,14 @@ class DetDataMgr(MutableMapping):
             dshape = (self.samples,) + sample_shape
         return dshape
 
-    def create(self, name, sample_shape=None, dtype=np.float64, detectors=None):
+    def create(
+        self,
+        name,
+        sample_shape=None,
+        dtype=np.float64,
+        detectors=None,
+        units=u.dimensionless_unscaled,
+    ):
         """Create a local DetectorData buffer on this process.
 
         This method can be used to create arrays of detector data for storing signal,
@@ -443,6 +471,7 @@ class DetDataMgr(MutableMapping):
             detectors (list):  Only construct a data object for this set of detectors.
                 This is useful if creating temporary data within a pipeline working
                 on a subset of detectors.
+            units (Unit):  Optional scalar unit associated with this data.
 
         Returns:
             None
@@ -466,11 +495,18 @@ class DetDataMgr(MutableMapping):
             raise RuntimeError(msg)
 
         # Create the data object
-        self._internal[name] = DetectorData(detectors, data_shape, dtype)
+        self._internal[name] = DetectorData(detectors, data_shape, dtype, units=units)
 
         return
 
-    def ensure(self, name, sample_shape=None, dtype=np.float64, detectors=None):
+    def ensure(
+        self,
+        name,
+        sample_shape=None,
+        dtype=np.float64,
+        detectors=None,
+        units=u.dimensionless_unscaled,
+    ):
         """Ensure that the observation has the named detector data.
 
         If the named detdata object does not exist, it is created.  If it does exist
@@ -485,11 +521,13 @@ class DetDataMgr(MutableMapping):
                 Use None or an empty tuple if you want one element per sample.
             dtype (np.dtype): Use this dtype for each element.
             detectors (list):  Ensure that these detectors exist in the object.
+            units (Unit):  Optional scalar unit associated with this data.
 
         Returns:
             None
 
         """
+        log = Logger.get()
         if detectors is None:
             detectors = self.detectors
         else:
@@ -515,6 +553,12 @@ class DetDataMgr(MutableMapping):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
+            if units != self._internal[name].units:
+                msg = "Detector data '{}' already exists with units {}.".format(
+                    name, self._internal[name].units
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
             # Ok, we can re-use this.  Are the detectors already included in the data?
             change = False
             for d in detectors:
@@ -525,7 +569,11 @@ class DetDataMgr(MutableMapping):
         else:
             # Create the data object
             self.create(
-                name, sample_shape=sample_shape, dtype=dtype, detectors=detectors
+                name,
+                sample_shape=sample_shape,
+                dtype=dtype,
+                detectors=detectors,
+                units=units,
             )
 
     # Mapping methods
@@ -669,7 +717,7 @@ class DetDataMgr(MutableMapping):
             self._internal[k].clear()
 
     def __repr__(self):
-        val = "<DetDataMgr {} local detectors, {} samples".format(
+        val = "<DetDataManager {} local detectors, {} samples".format(
             len(self.detectors), self.samples
         )
         for k in self._internal.keys():
@@ -679,8 +727,31 @@ class DetDataMgr(MutableMapping):
         val += ">"
         return val
 
+    def __eq__(self, other):
+        log = Logger.get()
+        if self.detectors != other.detectors:
+            log.verbose(f"  detectors {self.detectors} != {other.detectors}")
+            return False
+        if self.samples != other.samples:
+            log.verbose(f"  samples {self.samples} != {other.samples}")
+            return False
+        if set(self._internal.keys()) != set(other._internal.keys()):
+            log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
+            return False
+        for k in self._internal.keys():
+            # if self._internal[k] != other._internal[k]:
+            if not np.allclose(self._internal[k], other._internal[k]):
+                log.verbose(
+                    f"  detector data {k} not equal:  {self._internal[k]} != {other._internal[k]}"
+                )
+                return False
+        return True
 
-class SharedDataMgr(MutableMapping):
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+class SharedDataManager(MutableMapping):
     """Class used to manage shared data objects in an Observation.
 
     New objects can be created with the "create()" method:
@@ -730,10 +801,12 @@ class SharedDataMgr(MutableMapping):
 
     """
 
-    def __init__(self, comm, comm_row, comm_col):
-        self.comm = comm
-        self.comm_row = comm_row
-        self.comm_col = comm_col
+    def __init__(self, dist):
+        self.n_detectors = len(dist.dets[dist.comm_rank])
+        self.n_samples = dist.samps[dist.comm_rank].n_elem
+        self.comm = dist.comm
+        self.comm_row = dist.comm_row
+        self.comm_col = dist.comm_col
         self._internal = dict()
 
     def create(self, name, shape, dtype=None, comm=None):
@@ -767,6 +840,34 @@ class SharedDataMgr(MutableMapping):
             # Use the observation communicator.
             shared_comm = self.comm
 
+        if comm_equal(self.comm, shared_comm):
+            # This is shared over the whole observation communicator, so it
+            # may have any shape.
+            pass
+        elif comm_equal(self.comm_row, shared_comm):
+            # This is shared over the row communicator, so the leading
+            # dimension must be the number of local detectors.
+            if shape[0] != self.n_detectors:
+                msg = f"When creating shared data '{name}' on the row communicator, "
+                msg += f"the leading dimension should be the number of local "
+                msg += f"detectors ({self.n_detectors}).  Shape given = {shape}."
+                log.error(msg)
+                raise RuntimeError(msg)
+        elif comm_equal(self.comm_col, shared_comm):
+            # This is shared over the column communicator, so the leading
+            # dimension must be the number of local samples.
+            if shape[0] != self.n_samples:
+                msg = f"When creating shared data '{name}' on the column communicator, "
+                msg += f"the leading dimension should be the number of local "
+                msg += f"samples ({self.n_samples}).  Shape given = {shape}"
+                log.error(msg)
+                raise RuntimeError(msg)
+        else:
+            msg = f"When creating shared data '{name}', you must use either the "
+            msg += "observation communicator or the row or column communicators."
+            log.error(msg)
+            raise RuntimeError(msg)
+
         shared_dtype = dtype
 
         # Use defaults for dtype if not set
@@ -789,13 +890,25 @@ class SharedDataMgr(MutableMapping):
             del self._internal[key]
 
     def __setitem__(self, key, value):
+        log = Logger.get()
         if isinstance(value, MPIShared):
             # This is an existing shared object.
             if key not in self._internal:
-                self.create(key, shape=value.shape, dtype=value.dtype, comm=value.comm)
+                self.create(key, shape=value.shape, dtype=value.dtype, comm=self.comm)
             else:
                 # Verify that communicators and dimensions match
-                pass
+                if value.shape != self._internal[key].shape:
+                    msg = "Direct assignment of shared object must have the same shape."
+                    log.error(msg)
+                    raise RuntimeError(msg)
+                if value.dtype != self._internal[key].dtype:
+                    msg = "Direct assignment of shared object must have the same dtype."
+                    log.error(msg)
+                    raise RuntimeError(msg)
+                if not comm_equivalent(value.comm, self._internal[key].comm):
+                    msg = "Direct assignment object must have equivalent communicator."
+                    log.error(msg)
+                    raise RuntimeError(msg)
             # Assign from just one process.
             offset = None
             dval = None
@@ -826,10 +939,11 @@ class SharedDataMgr(MutableMapping):
                     self.comm.Allreduce(check_rank, check_result, op=MPI.SUM)
                     tot = np.sum(check_result)
                     if tot > 1:
-                        if self.comm.rank == 0:
-                            msg = "When creating shared data with [] notation, only one process may have a non-None value for the data"
-                            print(msg, flush=True)
-                            self.comm.Abort()
+                        msg = "When creating shared data with [] notation, only "
+                        msg += "one process may have a non-None value for the data"
+                        log.error_rank(msg)
+                        raise RuntimeError(msg)
+
                     from_rank = np.where(check_result == 1)[0][0]
                     shp = self.comm.bcast(shp, root=from_rank)
                     dt = self.comm.bcast(dt, root=from_rank)
@@ -863,6 +977,45 @@ class SharedDataMgr(MutableMapping):
         if hasattr(self, "_internal"):
             self.clear()
 
+    def __eq__(self, other):
+        log = Logger.get()
+        if self.n_detectors != other.n_detectors:
+            log.verbose(f"  n_detectors {self.n_detectors} != {other.n_detectors}")
+            return False
+        if self.n_samples != other.n_samples:
+            log.verbose(f"  n_detectors {self.n_samples} != {other.n_samples}")
+            return False
+        if not comm_equivalent(self.comm, other.comm):
+            log.verbose(f"  comm not equivalent")
+            return False
+        if not comm_equivalent(self.comm_row, other.comm_row):
+            log.verbose(f"  comm_row not equivalent")
+            return False
+        if not comm_equivalent(self.comm_col, other.comm_col):
+            log.verbose(f"  comm_col not equivalent")
+            return False
+        if set(self._internal.keys()) != set(other._internal.keys()):
+            log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
+            return False
+        for k in self._internal.keys():
+            if self._internal[k].shape != other._internal[k].shape:
+                log.verbose(
+                    f"  key {k} shape {self._internal[k].shape} != {other._internal[k].shape}"
+                )
+                return False
+            if self._internal[k].dtype != other._internal[k].dtype:
+                log.verbose(
+                    f"  key {k} dtype {self._internal[k].dtype} != {other._internal[k].dtype}"
+                )
+                return False
+            if not comm_equivalent(self._internal[k].comm, other._internal[k].comm):
+                log.verbose(f"  key {k} shape comms not equivalent")
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def memory_use(self):
         bytes = 0
         for k in self._internal.keys():
@@ -884,7 +1037,7 @@ class SharedDataMgr(MutableMapping):
         return bytes
 
     def __repr__(self):
-        val = "<SharedDataMgr"
+        val = "<SharedDataManager"
         for k in self._internal.keys():
             val += "\n    {}: shape = {}, dtype = {}".format(
                 k, self._internal[k].shape, self._internal[k].dtype
@@ -893,7 +1046,7 @@ class SharedDataMgr(MutableMapping):
         return val
 
 
-class IntervalMgr(MutableMapping):
+class IntervalsManager(MutableMapping):
     """Class for creating and storing interval lists in an observation.
 
     Named lists of intervals are accessed by dictionary style syntax ([] brackets).
@@ -902,16 +1055,14 @@ class IntervalMgr(MutableMapping):
     given a global set of ranges.
 
     Args:
-        comm (mpi4py.MPI.Comm):  The observation communicator.
-        comm_row (mpi4py.MPI.Comm):  The process row communicator.
-        comm_col (mpi4py.MPI.Comm):  The process column communicator.
+        dist (DistDetSamp):  The observation data distribution.
 
     """
 
-    def __init__(self, comm, comm_row, comm_col):
-        self.comm = comm
-        self.comm_col = comm_col
-        self.comm_row = comm_row
+    def __init__(self, dist):
+        self.comm = dist.comm
+        self.comm_col = dist.comm_col
+        self.comm_row = dist.comm_row
         self._internal = dict()
         self._del_callbacks = dict()
 
@@ -936,7 +1087,10 @@ class IntervalMgr(MutableMapping):
             # Broadcast to all processes in this column
             global_timespans = self.comm_col.bcast(global_timespans, root=fromrank)
         # Every process creates local intervals
-        self._internal[name] = IntervalList(local_times, timespans=global_timespans)
+        lt = local_times
+        if isinstance(lt, MPIShared):
+            lt = local_times.data
+        self._internal[name] = IntervalList(lt, timespans=global_timespans)
 
     def create(self, name, global_timespans, local_times, fromrank=0):
         """Create local interval lists from global time ranges on one process.
@@ -1016,8 +1170,31 @@ class IntervalMgr(MutableMapping):
             self.clear()
 
     def __repr__(self):
-        val = "<IntervalMgr {} lists".format(len(self._internal))
+        val = "<IntervalsManager {} lists".format(len(self._internal))
         for k in self._internal.keys():
             val += "\n  {}: {} intervals".format(k, len(self._internal[k]))
         val += ">"
         return val
+
+    def __eq__(self, other):
+        log = Logger.get()
+        if not comm_equivalent(self.comm, other.comm):
+            log.verbose(f"  comm not equivalent")
+            return False
+        if not comm_equivalent(self.comm_row, other.comm_row):
+            log.verbose(f"  comm_row not equivalent")
+            return False
+        if not comm_equivalent(self.comm_col, other.comm_col):
+            log.verbose(f"  comm_col not equivalent")
+            return False
+        if set(self._internal.keys()) != set(other._internal.keys()):
+            log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
+            return False
+        for k in self._internal.keys():
+            if self._internal[k] != other._internal[k]:
+                log.verbose(f"  key {k} interval lists not equal")
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)

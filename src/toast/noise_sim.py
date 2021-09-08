@@ -6,6 +6,8 @@ import numpy as np
 
 from astropy import units as u
 
+import h5py
+
 from .noise import Noise
 
 
@@ -26,8 +28,16 @@ class AnalyticNoise(Noise):
 
     """
 
-    def __init__(self, *, detectors, rate, fmin, fknee, alpha, NET, indices=None):
-
+    def __init__(
+        self,
+        detectors=list(),
+        rate=dict(),
+        fmin=dict(),
+        fknee=dict(),
+        alpha=dict(),
+        NET=dict(),
+        indices=None,
+    ):
         self._rate = rate
         self._fmin = fmin
         self._fknee = fknee
@@ -107,3 +117,62 @@ class AnalyticNoise(Noise):
 
     def _detector_weight(self, det):
         return 1.0 / (self._NET[det] ** 2).to_value(u.K ** 2 * u.second)
+
+    def _save_hdf5(self, handle, **kwargs):
+        """Internal method which can be overridden by derived classes."""
+        with h5py.File(handle, "w") as hf:
+            # Store all the base class info
+            self._save_base_hdf5(hf)
+            # Write the noise model parameters as attributes in each
+            # detector dataset
+            for d in self._dets:
+                hf[d].attrs["fmin"] = self._fmin[d].to_value(u.Hz)
+                hf[d].attrs["fknee"] = self._fknee[d].to_value(u.Hz)
+                hf[d].attrs["alpha"] = self._alpha[d]
+                hf[d].attrs["NET"] = self._NET[d].to_value(
+                    u.K * np.sqrt(1.0 * u.second)
+                )
+
+    def _load_hdf5(self, handle, **kwargs):
+        """Internal method which can be overridden by derived classes."""
+        with h5py.File(handle, "r") as hf:
+            # Load the base class info
+            self._load_base_hdf5(hf)
+            # get noise model paramters
+            self._rate = dict()
+            self._fmin = dict()
+            self._fknee = dict()
+            self._alpha = dict()
+            self._NET = dict()
+            for d in self._dets:
+                self._rate[d] = u.Quantity(hf[d].attrs["rate"], u.Hz)
+                self._fmin[d] = u.Quantity(hf[d].attrs["fmin"], u.Hz)
+                self._fknee[d] = u.Quantity(hf[d].attrs["fknee"], u.Hz)
+                self._alpha[d] = hf[d].attrs["alpha"]
+                self._NET[d] = u.Quantity(
+                    hf[d].attrs["NET"], u.K * np.sqrt(1.0 * u.second)
+                )
+
+    def __repr__(self):
+        value = f"<AnalyticNoise model with {len(self._dets)} detectors"
+        value += ">"
+        return value
+
+    def __eq__(self, other):
+        if not super().__eq__(other):
+            # Base class values not equal
+            return False
+        if self._rate != other._rate:
+            return False
+        if self._fmin != other._fmin:
+            return False
+        if self._fknee != other._fknee:
+            return False
+        if self._alpha != other._alpha:
+            return False
+        if self._NET != other._NET:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)

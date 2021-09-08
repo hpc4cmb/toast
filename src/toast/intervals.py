@@ -123,8 +123,12 @@ class Interval(object):
 class IntervalList(Sequence):
     """An list of Intervals which supports logical operations.
 
+    The timestamps define the valid local range of intervals.  When constructing
+    from intervals, timespans, or samplespans, the inputs are truncated to the
+    allowed range given by the timestamps.
+
     Args:
-        timestamps (array):  Array of sample times, required.
+        timestamps (array):  Array of local sample times, required.
         intervals (list):  A list of Interval objects.
         timespans (list):  A list of tuples containing start and stop times.
         samplespans (list):  A list of tuples containing first and last (inclusive)
@@ -134,13 +138,23 @@ class IntervalList(Sequence):
 
     def __init__(self, timestamps, intervals=None, timespans=None, samplespans=None):
         self.timestamps = timestamps
-        self._internal = None
+        self._internal = list()
         if intervals is not None:
             if timespans is not None or samplespans is not None:
                 raise RuntimeError(
                     "If constructing from intervals, other spans should be None"
                 )
-            self._internal = list(intervals)
+            timespans = [(x.start, x.stop) for x in intervals]
+            indices = self._find_indices(timespans)
+            self._internal = [
+                Interval(
+                    start=self.timestamps[x[0]],
+                    stop=self.timestamps[x[1]],
+                    first=x[0],
+                    last=x[1],
+                )
+                for x in indices
+            ]
         else:
             if timespans is not None:
                 if samplespans is not None:
@@ -151,21 +165,18 @@ class IntervalList(Sequence):
                     self._internal = list()
                 else:
                     # Construct intervals from time ranges
-                    start_indx = np.searchsorted(
-                        timestamps, [x[0] for x in timespans], side="left"
-                    )
-                    stop_indx = np.searchsorted(
-                        timestamps, [x[1] for x in timespans], side="right"
-                    )
-                    stop_indx -= 1
+                    for i in range(len(timespans) - 1):
+                        if timespans[i][1] > timespans[i + 1][0]:
+                            raise RuntimeError("Timespans must be sorted and disjoint")
+                    indices = self._find_indices(timespans)
                     self._internal = [
                         Interval(
-                            start=timestamps[x[0]],
-                            stop=timestamps[x[1]],
+                            start=self.timestamps[x[0]],
+                            stop=self.timestamps[x[1]],
                             first=x[0],
                             last=x[1],
                         )
-                        for x in zip(start_indx, stop_indx)
+                        for x in indices
                     ]
             else:
                 if samplespans is None:
@@ -176,15 +187,47 @@ class IntervalList(Sequence):
                     self._internal = list()
                 else:
                     # Construct intervals from sample ranges
-                    self._internal = [
-                        Interval(
-                            start=timestamps[x[0]],
-                            stop=timestamps[x[1]],
-                            first=x[0],
-                            last=x[1],
+                    for i in range(len(samplespans) - 1):
+                        if samplespans[i][1] >= samplespans[i + 1][0]:
+                            raise RuntimeError(
+                                "Sample spans must be sorted and disjoint"
+                            )
+                    self._internal = list()
+                    for first, last in samplespans:
+                        if last < 0 or first >= len(self.timestamps):
+                            continue
+                        if first < 0:
+                            first = 0
+                        if last >= len(self.timestamps):
+                            last = len(self.timestamps) - 1
+                        self._internal.append(
+                            Interval(
+                                start=timestamps[first],
+                                stop=timestamps[last],
+                                first=first,
+                                last=last,
+                            )
                         )
-                        for x in samplespans
-                    ]
+
+    def _find_indices(self, timespans):
+        start_indx = np.searchsorted(
+            self.timestamps, [x[0] for x in timespans], side="left"
+        )
+        stop_indx = np.searchsorted(
+            self.timestamps, [x[1] for x in timespans], side="right"
+        )
+        stop_indx -= 1
+        # Remove accidental overlap caused by timespan boundary occurring
+        # exactly over a time stamp.
+        for i in range(start_indx.size - 1):
+            if stop_indx[i] == start_indx[i + 1]:
+                stop_indx[i] -= 1
+        out = list()
+        for start, stop in zip(start_indx, stop_indx):
+            if stop < 0 or start >= len(self.timestamps):
+                continue
+            out.append((start, stop))
+        return out
 
     def __getitem__(self, key):
         return self._internal[key]
@@ -343,7 +386,6 @@ class IntervalList(Sequence):
                 curother += 1
 
         result = IntervalList(self.timestamps, intervals=result)
-        result.simplify()
         return result
 
     def __or__(self, other):
@@ -368,7 +410,7 @@ class IntervalList(Sequence):
         curself = 0
         curother = 0
 
-        # Walk both sequences, building up the largest contiguous chunks possible.
+        # Walk both sequences.
         done_self = False
         done_other = False
         while (not done_self) or (not done_other):
@@ -395,7 +437,10 @@ class IntervalList(Sequence):
                 res_first = next.first
                 res_last = next.last
             else:
-                if next.first <= res_last + 1:
+                # We use '<' here instead of '<=', so that intervals which are next to
+                # each other (but not overlapping) are not combined.  If the combination
+                # is desired, the simplify() method can be used.
+                if next.first < res_last + 1:
                     # We overlap last interval
                     if next.last > res_last:
                         # This interval extends beyond the last interval

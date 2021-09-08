@@ -169,7 +169,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
     ops.pointing.detector_pointing = ops.det_pointing
+    ops.pointing.hwp_angle = ops.sim_satellite.hwp_angle
     ops.pointing_final.detector_pointing = ops.det_pointing
+    ops.pointing_final.hwp_angle = ops.sim_satellite.hwp_angle
 
     ops.binner.pointing = ops.pointing
 
@@ -194,6 +196,11 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.scan_map.apply(data)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
+    # Apply a time constant
+
+    ops.convolve_time_constant.apply(data)
+    log.info_rank("Convolved time constant in", comm=world_comm, timer=timer)
+
     # Simulate detector noise
 
     ops.sim_noise.noise_model = ops.default_model.noise_model
@@ -213,6 +220,11 @@ def reduce_data(job, args, data):
     # Timer for reporting the progress
     timer = toast.timing.Timer()
     timer.start()
+
+    # Deconvolve a time constant
+
+    ops.deconvolve_time_constant.apply(data)
+    log.info_rank("Deconvolved time constant in", comm=world_comm, timer=timer)
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -253,12 +265,18 @@ def main():
     # operator is disabled by default.
 
     operators = [
-        toast.ops.SimSatellite(name="sim_satellite"),
+        toast.ops.SimSatellite(name="sim_satellite", detset_key="pixel"),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ScanHealpix(name="scan_map"),
+        toast.ops.TimeConstant(
+            name="convolve_time_constant", deconvolve=False, enabled=False
+        ),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
+        toast.ops.TimeConstant(
+            name="deconvolve_time_constant", deconvolve=True, enabled=False
+        ),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
@@ -300,17 +318,6 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = ["Proc {}: {}".format(rank, x) for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()

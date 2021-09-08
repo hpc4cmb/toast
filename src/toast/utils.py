@@ -7,6 +7,8 @@ import gc
 import hashlib
 import warnings
 
+import importlib
+
 import datetime
 
 import numpy as np
@@ -298,22 +300,26 @@ def astropy_control(max_future=None, offline=False, node_local=False):
 try:
     import psutil
 
-    def memreport(msg="", comm=None):
+    def memreport(msg="", comm=None, silent=False):
         """Gather and report the amount of allocated, free and swapped system memory"""
         if psutil is None:
             return
         vmem = psutil.virtual_memory()._asdict()
         gc.collect()
         vmem2 = psutil.virtual_memory()._asdict()
-        memstr = "Memory usage {}\n".format(msg)
+        memstr = None
+        if comm is None or comm.rank == 0:
+            memstr = "Memory usage {}\n".format(msg)
         for key, value in vmem.items():
             value2 = vmem2[key]
+            vlist = None
+            vlist2 = None
             if comm is None:
                 vlist = [value]
                 vlist2 = [value2]
             else:
-                vlist = comm.gather(value)
-                vlist2 = comm.gather(value2)
+                vlist = comm.gather(value, root=0)
+                vlist2 = comm.gather(value2, root=0)
             if comm is None or comm.rank == 0:
                 vlist = np.array(vlist, dtype=np.float64)
                 vlist2 = np.array(vlist2, dtype=np.float64)
@@ -370,10 +376,11 @@ try:
                             )
                         )
         if comm is None or comm.rank == 0:
-            print(memstr, flush=True)
+            if not silent:
+                print(memstr, flush=True)
         if comm is not None:
             comm.Barrier()
-        return
+        return memstr
 
 
 except ImportError:
@@ -596,3 +603,26 @@ def dtype_to_aligned(dt):
 def array_dot(u, v):
     """Dot product of each row of two 2D arrays"""
     return np.sum(u * v, axis=1).reshape((-1, 1))
+
+
+def object_fullname(o):
+    """Return the fully qualified name of an object."""
+    module = o.__module__
+    if module is None or module == str.__module__:
+        return o.__qualname__
+    return "{}.{}".format(module, o.__qualname__)
+
+
+def import_from_name(name):
+    """Import a class from its full name."""
+    cls_parts = name.split(".")
+    cls_name = cls_parts.pop()
+    cls_mod_name = ".".join(cls_parts)
+    cls = None
+    try:
+        cls_mod = importlib.import_module(cls_mod_name)
+        cls = getattr(cls_mod, cls_name)
+    except:
+        msg = f"Cannot import class '{cls_name}' from module '{cls_mod_name}'"
+        raise RuntimeError(msg)
+    return cls

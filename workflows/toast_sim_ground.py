@@ -35,8 +35,14 @@ import numpy as np
 from astropy import units as u
 
 import toast
+import toast.ops
 
 from toast.mpi import MPI
+
+from toast import spt3g as t3g
+
+if t3g.available:
+    from spt3g import core as c3g
 
 
 def parse_config(operators, templates, comm):
@@ -58,14 +64,20 @@ def parse_config(operators, templates, comm):
         "--schedule", required=True, default=None, help="Input observing schedule"
     )
 
-    # FIXME: Add weather name / path here
-
     parser.add_argument(
         "--out_dir",
         required=False,
         type=str,
         default="toast_sim_ground_out",
         help="The output directory",
+    )
+
+    parser.add_argument(
+        "--save_spt3g",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Save simulated data to SPT3G format.",
     )
 
     # Build a config dictionary starting from the operator defaults, overriding with any
@@ -177,6 +189,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
     ops.det_pointing_radec.boresight = ops.sim_ground.boresight_radec
 
+    ops.det_weights_azel.detector_pointing = ops.det_pointing_azel
+    ops.det_weights_azel.hwp_angle = ops.sim_ground.hwp_angle
+
     # Create the Elevation modulated noise model
 
     ops.elevation_model.noise_model = ops.default_model.noise_model
@@ -188,7 +203,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
     ops.pointing.detector_pointing = ops.det_pointing_radec
+    ops.pointing.hwp_angle = ops.sim_ground.hwp_angle
     ops.pointing_final.detector_pointing = ops.det_pointing_radec
+    ops.pointing_final.hwp_angle = ops.sim_ground.hwp_angle
 
     ops.binner.pointing = ops.pointing
 
@@ -213,17 +230,24 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.scan_map.apply(data)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
+    # Simulate atmosphere
+
+    ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
+    if ops.sim_atmosphere.polarization_fraction != 0:
+        ops.sim_atmosphere.detector_weights = ops.det_weights_azel
+    ops.sim_atmosphere.apply(data)
+    log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
+
+    # Apply a time constant
+
+    ops.convolve_time_constant.apply(data)
+    log.info_rank("Convolved time constant in", comm=world_comm, timer=timer)
+
     # Simulate detector noise
 
     ops.sim_noise.noise_model = ops.elevation_model.out_model
     ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
-
-    # Simulate atmosphere
-
-    ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
-    ops.sim_atmosphere.apply(data)
-    log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
     return data
 
@@ -239,6 +263,17 @@ def reduce_data(job, args, data):
     timer = toast.timing.Timer()
     timer.start()
 
+    # Collect signal statistics before filtering
+
+    ops.raw_statistics.output_dir = args.out_dir
+    ops.raw_statistics.apply(data)
+    log.info_rank("Calculated raw statistics in", comm=world_comm, timer=timer)
+
+    # Deconvolve a time constant
+
+    ops.deconvolve_time_constant.apply(data)
+    log.info_rank("Deconvolved time constant in", comm=world_comm, timer=timer)
+
     # Apply the filter stack
 
     ops.groundfilter.apply(data)
@@ -249,6 +284,12 @@ def reduce_data(job, args, data):
     log.info_rank("Finished 2D-poly-filtering in", comm=world_comm, timer=timer)
     ops.common_mode_filter.apply(data)
     log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
+
+    # Collect signal statistics after filtering
+
+    ops.filtered_statistics.output_dir = args.out_dir
+    ops.filtered_statistics.apply(data)
+    log.info_rank("Calculated filtered statistics in", comm=world_comm, timer=timer)
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -271,6 +312,73 @@ def reduce_data(job, args, data):
         log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
 
 
+def dump_spt3g(job, args, data):
+    """Save data to SPT3G format."""
+    if not t3g.available:
+        raise RuntimeError("SPT3G is not available, cannot save to that format")
+    ops = job.operators
+    save_dir = os.path.join(args.out_dir, "spt3g")
+    meta_exporter = t3g.export_obs_meta(
+        noise_models=[
+            (ops.default_model.noise_model, ops.default_model.noise_model),
+            (ops.elevation_model.out_model, ops.elevation_model.out_model),
+        ]
+    )
+    # Note that we export detector flags below to a float64 G3TimestreamMap
+    # in order to use FLAC compression.
+    # FIXME:  This workflow currently does not use any operators that create
+    # detector flags.  Once it does, add that back below.
+    data_exporter = t3g.export_obs_data(
+        shared_names=[
+            (
+                ops.sim_ground.boresight_azel,
+                ops.sim_ground.boresight_azel,
+                c3g.G3VectorQuat,
+            ),
+            (
+                ops.sim_ground.boresight_radec,
+                ops.sim_ground.boresight_radec,
+                c3g.G3VectorQuat,
+            ),
+            (ops.sim_ground.position, ops.sim_ground.position, None),
+            (ops.sim_ground.velocity, ops.sim_ground.velocity, None),
+            (ops.sim_ground.azimuth, ops.sim_ground.azimuth, None),
+            (ops.sim_ground.elevation, ops.sim_ground.elevation, None),
+            # (ops.sim_ground.hwp_angle, ops.sim_ground.hwp_angle, None),
+            (ops.sim_ground.shared_flags, "telescope_flags", None),
+        ],
+        det_names=[
+            (
+                ops.sim_noise.det_data,
+                ops.sim_noise.det_data,
+                c3g.G3TimestreamMap,
+            ),
+            # ("flags", "detector_flags", c3g.G3TimestreamMap),
+        ],
+        interval_names=[
+            (ops.sim_ground.scan_leftright_interval, "intervals_scan_leftright"),
+            (ops.sim_ground.turn_leftright_interval, "intervals_turn_leftright"),
+            (ops.sim_ground.scan_rightleft_interval, "intervals_scan_rightleft"),
+            (ops.sim_ground.turn_rightleft_interval, "intervals_turn_rightleft"),
+            (ops.sim_ground.elnod_interval, "intervals_elnod"),
+            (ops.sim_ground.scanning_interval, "intervals_scanning"),
+            (ops.sim_ground.turnaround_interval, "intervals_turnaround"),
+            (ops.sim_ground.sun_up_interval, "intervals_sun_up"),
+            (ops.sim_ground.sun_close_interval, "intervals_sun_close"),
+        ],
+        compress=True,
+    )
+    exporter = t3g.export_obs(
+        meta_export=meta_exporter,
+        data_export=data_exporter,
+        export_rank=0,
+    )
+    dumper = toast.ops.SaveSpt3g(
+        directory=save_dir, framefile_mb=500, obs_export=exporter
+    )
+    dumper.apply(data)
+
+
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()
@@ -288,28 +396,38 @@ def main():
     # We can also set some default values here for the traits, including whether an
     # operator is disabled by default.
 
-    # FIXME:  This example workflow will eventually include other operators for
-    # atmosphere simulation, filtering, other types of map-making, etc.
-
     operators = [
-        toast.ops.SimGround(name="sim_ground"),
+        toast.ops.SimGround(name="sim_ground", weather="atacama", detset_key="pixel"),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(
             name="elevation_model",
             out_model="el_noise_model",
         ),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
+        # In the future, `det_weights_azel` may be a dedicated operator that does not
+        # expand pixel numbers but just Stokes weights
+        toast.ops.PointingHealpix(
+            name="det_weights_azel", weights="weights_azel", mode="IQU"
+        ),
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
         ),
-        toast.ops.ScanHealpix(name="scan_map"),
-        toast.ops.SimNoise(name="sim_noise"),
+        toast.ops.ScanHealpix(name="scan_map", enabled=False),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
+        toast.ops.TimeConstant(
+            name="convolve_time_constant", deconvolve=False, enabled=False
+        ),
+        toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
-        toast.ops.GroundFilter(name="groundfilter"),
+        toast.ops.Statistics(name="raw_statistics", enabled=False),
+        toast.ops.TimeConstant(
+            name="deconvolve_time_constant", deconvolve=True, enabled=False
+        ),
+        toast.ops.GroundFilter(name="groundfilter", enabled=False),
         toast.ops.PolyFilter(name="polyfilter1D"),
-        toast.ops.PolyFilter2D(name="polyfilter2D"),
-        toast.ops.CommonModeFilter(name="common_mode_filter"),
+        toast.ops.PolyFilter2D(name="polyfilter2D", enabled=False),
+        toast.ops.CommonModeFilter(name="common_mode_filter", enabled=False),
+        toast.ops.Statistics(name="filtered_statistics", enabled=False),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
@@ -340,6 +458,10 @@ def main():
     # Create simulated data
     data = simulate_data(job, toast_comm, telescope, schedule)
 
+    # Optionally save to spt3g format
+    if args.save_spt3g:
+        dump_spt3g(job, args, data)
+
     # Reduce the data
     reduce_data(job, args, data)
 
@@ -351,17 +473,6 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = ["Proc {}: {}".format(rank, x) for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()

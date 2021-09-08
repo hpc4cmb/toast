@@ -18,7 +18,7 @@ from .. import qarray as qa
 from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
-
+from ..observation import default_names as obs_names
 
 from .._libtoast import filter_polynomial
 
@@ -32,7 +32,10 @@ class PolyFilter2D(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
+    det_data = Unicode(
+        obs_names.det_data,
+        help="Observation detdata key apply filtering to",
+    )
 
     pattern = Unicode(
         f".*",
@@ -44,7 +47,9 @@ class PolyFilter2D(Operator):
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use"
     )
 
     det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
@@ -52,7 +57,9 @@ class PolyFilter2D(Operator):
     poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        obs_names.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(1, help="Bit mask value for optional shared flagging")
@@ -132,8 +139,10 @@ class PolyFilter2D(Operator):
 
             group_index = {}
             groups = {}
+            group_ids = {}
             if self.focalplane_key is None:
                 groups[None] = []
+                group_ids[None] = 0
                 ngroup = 1
                 for det in detectors:
                     group_index[det] = 0
@@ -146,6 +155,7 @@ class PolyFilter2D(Operator):
                     groups[value].append(det)
                 ngroup = len(groups)
                 for igroup, group in enumerate(sorted(groups)):
+                    group_ids[group] = igroup
                     for det in groups[group]:
                         group_index[det] = igroup
 
@@ -213,8 +223,11 @@ class PolyFilter2D(Operator):
 
                 # Accumulate the linear regression templates
 
-                templates = np.zeros([ndet, nmode, nsample])
-                proj = np.zeros([ngroup, nmode, nsample])
+                # templates = np.zeros([ndet, nmode, nsample])
+                templates = np.zeros([ndet, nmode])
+                masks = np.zeros([ndet, nsample], dtype=np.uint8)
+                signals = np.zeros([ndet, nsample])
+                # proj = np.zeros([ngroup, nmode, nsample])
 
                 t1 = time()
 
@@ -239,73 +252,76 @@ class PolyFilter2D(Operator):
                         mask = shared_mask
 
                     template = detector_templates[ind_det]
-                    templates[ind_det] = np.outer(template, mask)
-                    proj[ind_group] += np.outer(template, signal * mask)
+                    templates[ind_det] = template
+                    masks[ind_det][:] = mask
+                    signals[ind_det] = signal * mask
 
                 t_template += time() - t1
 
                 t1 = time()
                 if comm is not None:
-                    comm.allreduce(templates)
-                    comm.allreduce(proj)
+                    comm.Allreduce(MPI.IN_PLACE, templates, op=MPI.SUM)
+                    comm.Allreduce(MPI.IN_PLACE, masks, op=MPI.SUM)
+                    comm.Allreduce(MPI.IN_PLACE, signals, op=MPI.SUM)
                 t_get_norm += time() - t1
 
                 # Solve the linear regression amplitudes.  Each task
                 # inverts different template matrices
 
                 t1 = time()
-                templates = np.transpose(
-                    templates, [2, 0, 1]
-                ).copy()  # nsample x ndet x nmode
-                proj = np.transpose(proj, [2, 0, 1])  # nsample x ngroup x nmode
                 coeff = np.zeros([nsample, ngroup, nmode])
+                masks = masks.T.copy()  # nsample x ndet
                 for isample in range(nsample):
                     if comm is not None and isample % comm.size != comm.rank:
                         continue
-                    for igroup in range(ngroup):
+                    for group, igroup in group_ids.items():
                         good = group_det == igroup
-                        t = templates[isample][good].copy()
-                        ccinv = np.dot(t.T, t)
-                        try:
-                            cc = np.linalg.inv(ccinv)
-                            coeff[isample, igroup] = np.dot(cc, proj[isample, igroup])
-                        except np.linalg.LinAlgError:
-                            coeff[isample, igroup] = 0
+                        mask = masks[isample, good]
+                        t = templates[good].T.copy() * mask
+                        proj = np.dot(t, signals[good, isample] * mask)
+                        ccinv = np.dot(t, t.T)
+                        coeff[isample, igroup] = np.linalg.lstsq(
+                            ccinv, proj, rcond=None
+                        )[0]
                 if comm is not None:
-                    comm.allreduce(coeff)
+                    comm.Allreduce(MPI.IN_PLACE, coeff, op=MPI.SUM)
                 t_solve += time() - t1
 
                 t1 = time()
 
                 for igroup in range(ngroup):
                     local_dets = obs.local_detectors
-                    good = np.zeros(len(local_dets), dtype=np.bool)
+                    dets_in_group = np.zeros(len(local_dets), dtype=np.bool)
                     for idet, det in enumerate(local_dets):
                         if group_index[det] == igroup:
-                            good[idet] = True
-                    if not np.any(good):
+                            dets_in_group[idet] = True
+                    if not np.any(dets_in_group):
                         continue
                     if self.det_flags is not None:
+                        sample_flags = np.ones(
+                            len(local_dets),
+                            dtype=views.detdata[self.det_flags][0].dtype,
+                        )
+                        sample_flags *= self.poly_flag_mask
+                        sample_flags *= dets_in_group
                         for isample in range(nsample):
                             if np.all(coeff[isample, igroup] == 0):
-                                views.detdata[self.det_flags][iview][:, isample] |= (
-                                    good * self.poly_flag_mask
-                                ).astype(views.detdata[self.det_flags][0].dtype)
-                templates = np.transpose(
-                    templates, [1, 2, 0]
-                ).copy()  # ndet x nmode x nsample
-                coeff = np.transpose(
-                    coeff, [1, 2, 0]
-                ).copy()  # ngroup x nmode x nsample
+                                views.detdata[self.det_flags][iview][
+                                    :, isample
+                                ] |= sample_flags
 
+                coeff = np.transpose(
+                    coeff, [1, 0, 2]
+                ).copy()  # ngroup x nsample x nmode
+                masks = masks.T.copy()  # ndet x nsample
                 for idet, det in enumerate(obs.local_detectors):
                     if det not in detector_index:
                         continue
                     igroup = group_index[det]
                     ind = detector_index[det]
                     signal = views.detdata[self.det_data][iview][idet]
-                    for mode in range(nmode):
-                        signal -= coeff[igroup, mode] * templates[ind, mode]
+                    mask = masks[idet]
+                    signal -= np.sum(coeff[igroup] * templates[ind], 1) * mask
 
                 t_clean += time() - t1
 
@@ -361,7 +377,9 @@ class PolyFilter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
+    det_data = Unicode(
+        obs_names.det_data, help="Observation detdata key apply filtering to"
+    )
 
     pattern = Unicode(
         f".*",
@@ -373,7 +391,9 @@ class PolyFilter(Operator):
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
@@ -381,7 +401,9 @@ class PolyFilter(Operator):
     poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        obs_names.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
@@ -442,7 +464,7 @@ class PolyFilter(Operator):
                     obs.shared[self.shared_flags].data & self.shared_flag_mask
                 )
             else:
-                shared_flags = np.zeros(obs.n_local_sample, dtype=np.uint8)
+                shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             for idet, det in enumerate(dets):
                 # Test the detector pattern
@@ -498,7 +520,9 @@ class CommonModeFilter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode("signal", help="Observation detdata key apply filtering to")
+    det_data = Unicode(
+        obs_names.det_data, help="Observation detdata key apply filtering to"
+    )
 
     pattern = Unicode(
         f".*",
@@ -510,7 +534,9 @@ class CommonModeFilter(Operator):
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
@@ -518,7 +544,9 @@ class CommonModeFilter(Operator):
     poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        obs_names.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")

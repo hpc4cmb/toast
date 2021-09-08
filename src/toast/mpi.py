@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import time
 
 use_mpi = None
 MPI = None
@@ -47,6 +48,7 @@ if use_mpi is None:
 import sys
 import itertools
 from contextlib import contextmanager
+import traceback
 
 import numpy as np
 
@@ -166,7 +168,10 @@ class Comm(object):
         if self._ngroups == 1:
             # We just have one group with all processes.
             self._gcomm = self._wcomm
-            self._rcomm = None
+            if use_mpi:
+                self._rcomm = MPI.COMM_SELF
+            else:
+                self._rcomm = None
         else:
             # We need to split the communicator.  This code is never executed
             # unless MPI is enabled and we have multiple groups.
@@ -260,30 +265,95 @@ class Comm(object):
 
 @contextmanager
 def exception_guard(comm=None):
-    """Ensure that if one MPI process raises an un-caught exception, all of them do.
+    """Ensure that, if one MPI process raises an un-caught exception, the program shuts down properly.
 
     Args:
         comm (mpi4py.MPI.Comm): The MPI communicator or None.
 
     """
     log = Logger.get()
-    failed = 0
+    rank = 0 if comm is None else comm.rank
     try:
         yield
-    except:
-        msg = "Exception on process {}:\n".format(comm.rank)
+    except Exception:
+        # Note that the intention of this function is to handle *any* exception.
+        # The typical use case is to wrap main() and ensure that the job exits
+        # cleanly.
         exc_type, exc_value, exc_traceback = sys.exc_info()
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        msg += "\n".join(lines)
+        lines = [f"Proc {rank}: {x}" for x in lines]
+        msg = "".join(lines)
         log.error(msg)
-        failed = 1
+        # kills the job
+        if comm is None:
+            os._exit(1)
+        else:
+            if comm.size > 1:
+                # gives other processes a bit of time to see whether
+                # they encounter the same error
+                time.sleep(30)
+            comm.Abort()
 
-    failcount = None
-    if comm is None:
-        failcount = failed
+
+def comm_equal(comm_a, comm_b):
+    """Compare communicators for equality.
+
+    Returns True if both communicators are None, or if they are identical
+    (e.g. the compare as MPI.IDENT).
+
+    Args:
+        comm_a (MPI.Comm):  First communicator, or None.
+        comm_b (MPI.Comm):  Second communicator, or None.
+
+    Returns:
+        (bool):  The result
+
+    """
+    if comm_a is None:
+        if comm_b is None:
+            return True
+        else:
+            return False
     else:
-        failcount = comm.allreduce(failed, op=MPI.SUM)
-    if failcount > 0:
-        raise RuntimeError("One or more MPI processes raised an exception")
+        if comm_b is None:
+            return False
+        else:
+            fail = 0
+            if MPI.Comm.Compare(comm_a, comm_b) != MPI.IDENT:
+                fail = 1
+            fail = comm_a.allreduce(fail, op=MPI.SUM)
+            return fail == 0
 
-    return
+
+def comm_equivalent(comm_a, comm_b):
+    """Compare communicators.
+
+    Returns True if both communicators are None, or if they have the same size
+    and ordering of ranks.
+
+    Args:
+        comm_a (MPI.Comm):  First communicator, or None.
+        comm_b (MPI.Comm):  Second communicator, or None.
+
+    Returns:
+        (bool):  The result
+
+    """
+    if comm_a is None:
+        if comm_b is None:
+            return True
+        else:
+            return False
+    else:
+        if comm_b is None:
+            return False
+        else:
+            fail = 0
+            if comm_a.size != comm_b.size:
+                fail = 1
+            if comm_a.rank != comm_b.rank:
+                fail = 1
+            if MPI.Comm.Compare(comm_a, comm_b) not in [MPI.IDENT, MPI.CONGRUENT]:
+                fail = 1
+            fail = comm_a.allreduce(fail, op=MPI.SUM)
+            return fail == 0

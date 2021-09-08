@@ -13,6 +13,8 @@ from .mpi import MPITestCase
 
 from .. import ops as ops
 
+from ..observation import default_names as obs_names
+
 from ..pixels import PixelData
 
 from ._helpers import create_outdir, create_satellite_data, create_fake_sky
@@ -33,7 +35,7 @@ class ScanMapTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
@@ -44,7 +46,7 @@ class ScanMapTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data="signal",
+            det_data=obs_names.det_data,
             pixels=pointing.pixels,
             weights=pointing.weights,
             map_key="fake_map",
@@ -66,7 +68,9 @@ class ScanMapTest(MPITestCase):
                     val = 0.0
                     for j in range(3):
                         val += wt[i, j] * map_data.data[local_sm[i], local_pix[i], j]
-                    np.testing.assert_almost_equal(val, ob.detdata["signal"][det, i])
+                    np.testing.assert_almost_equal(
+                        val, ob.detdata[obs_names.det_data][det, i]
+                    )
 
         del data
         return
@@ -80,7 +84,7 @@ class ScanMapTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
@@ -93,7 +97,7 @@ class ScanMapTest(MPITestCase):
         # zero option.
 
         scanner = ops.ScanMap(
-            det_data="signal",
+            det_data=obs_names.det_data,
             pixels=pointing.pixels,
             weights=pointing.weights,
             map_key="fake_map",
@@ -103,7 +107,7 @@ class ScanMapTest(MPITestCase):
         rms = list()
         for ob in data.obs:
             for det in ob.local_detectors:
-                rms.append(np.std(ob.detdata["signal"][det]))
+                rms.append(np.std(ob.detdata[obs_names.det_data][det]))
         rms = np.array(rms)
 
         scanner.zero = True
@@ -112,7 +116,7 @@ class ScanMapTest(MPITestCase):
         trms = list()
         for ob in data.obs:
             for det in ob.local_detectors:
-                trms.append(np.std(ob.detdata["signal"][det]))
+                trms.append(np.std(ob.detdata[obs_names.det_data][det]))
         trms = np.array(trms)
 
         np.testing.assert_equal(trms, rms)
@@ -124,7 +128,7 @@ class ScanMapTest(MPITestCase):
         trms = list()
         for ob in data.obs:
             for det in ob.local_detectors:
-                trms.append(np.std(ob.detdata["signal"][det]))
+                trms.append(np.std(ob.detdata[obs_names.det_data][det]))
         trms = np.array(trms)
 
         np.testing.assert_equal(trms, np.zeros_like(trms))
@@ -141,7 +145,7 @@ class ScanMapTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nside=64,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )

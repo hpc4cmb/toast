@@ -26,6 +26,7 @@ from . import instrument as test_instrument
 from . import intervals as test_intervals
 from . import pixels as test_pixels
 from . import weather as test_weather
+from . import noise as test_noise
 
 from . import observation as test_observation
 
@@ -44,6 +45,7 @@ from . import ops_sim_tod_conviqt as test_ops_sim_tod_conviqt
 
 from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
 
+from . import ops_statistics as test_ops_statistics
 from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 from . import ops_mapmaker_binning as test_ops_mapmaker_binning
 from . import ops_mapmaker_solve as test_ops_mapmaker_solve
@@ -57,7 +59,8 @@ from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
 from . import ops_sim_crosstalk as test_ops_sim_crosstalk
 from . import ops_polyfilter as test_ops_polyfilter
 from . import ops_groundfilter as test_ops_groundfilter
-
+from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
+from . import ops_time_constant as test_ops_time_constant
 
 
 from . import covariance as test_covariance
@@ -98,11 +101,11 @@ from . import template_subharmonic as test_template_subharmonic
 # testtidas = None
 # tidas_available = False
 #
-# # from ..tod import spt3g_available
-# # if spt3g_available:
-# #     from . import spt3g as testspt3g
-# testspt3g = None
-# spt3g_available = False
+
+from ..spt3g import available as spt3g_available
+
+if spt3g_available:
+    from . import spt3g as test_spt3g
 
 
 def test(name=None, verbosity=2):
@@ -147,6 +150,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_fft))
         suite.addTest(loader.loadTestsFromModule(test_healpix))
         suite.addTest(loader.loadTestsFromModule(test_qarray))
+        suite.addTest(loader.loadTestsFromModule(test_noise))
         suite.addTest(loader.loadTestsFromModule(test_intervals))
         suite.addTest(loader.loadTestsFromModule(test_instrument))
         suite.addTest(loader.loadTestsFromModule(test_pixels))
@@ -167,6 +171,7 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_totalconvolve))
 
+        suite.addTest(loader.loadTestsFromModule(test_ops_statistics))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_utils))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_binning))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_solve))
@@ -179,6 +184,9 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_crosstalk))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
+        suite.addTest(loader.loadTestsFromModule(test_ops_time_constant))
+
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
@@ -211,25 +219,23 @@ def test(name=None, verbosity=2):
         #
         # if tidas_available:
         #     suite.addTest(loader.loadTestsFromModule(testtidas))
-        # if spt3g_available:
-        #     suite.addTest(loader.loadTestsFromModule(testspt3g))
+
+        if spt3g_available:
+            suite.addTest(loader.loadTestsFromModule(test_spt3g))
     elif name != "libtoast":
-        # if (name == "tidas") and (not tidas_available):
-        #     print("Cannot run TIDAS tests- package not available")
-        #     return
-        # elif (name == "spt3g") and (not spt3g_available):
-        #     print("Cannot run SPT3G tests- package not available")
-        #     return
-        # else:
-        modname = "toast.tests.{}".format(name)
-        if modname not in sys.modules:
-            result = '"{}" is not a valid test.  Try'.format(name)
-            for name in sys.modules:
-                if name.startswith("toast.tests."):
-                    result += '\n  - "{}"'.format(name.replace("toast.tests.", ""))
-            result += "\n"
-            raise RuntimeError(result)
-        suite.addTest(loader.loadTestsFromModule(sys.modules[modname]))
+        if (name == "spt3g") and (not spt3g_available):
+            print("Cannot run SPT3G tests- package not available")
+            return
+        else:
+            modname = "toast.tests.{}".format(name)
+            if modname not in sys.modules:
+                result = '"{}" is not a valid test.  Try'.format(name)
+                for name in sys.modules:
+                    if name.startswith("toast.tests."):
+                        result += '\n  - "{}"'.format(name.replace("toast.tests.", ""))
+                result += "\n"
+                raise RuntimeError(result)
+            suite.addTest(loader.loadTestsFromModule(sys.modules[modname]))
 
     ret = 0
     _ret = mpirunner.run(suite)

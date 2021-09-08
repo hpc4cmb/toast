@@ -11,20 +11,27 @@ The workflow is tailored to the size of the communicator.
 
 import os
 import sys
-import traceback
+import shutil
 import argparse
 from astropy import units as u
 import toast
+import toast.ops
+from toast import spt3g as t3g
 from toast.schedule_sim_ground import run_scheduler
 from toast.timing import gather_timers, dump
-from benchmarking_utilities import (
+from toast.scripts.benchmarking_utilities import (
     get_mpi_settings,
     select_case,
     make_focalplane,
     scan_map,
     run_mapmaker,
     compute_science_metric,
+    estimate_memory_overhead,
+    python_startup_time,
 )
+
+if t3g.available:
+    from spt3g import core as c3g
 
 
 def parse_arguments():
@@ -73,13 +80,30 @@ def parse_arguments():
         type=str,
         help="Size of the worflow to be run: 'tiny' (1GB), 'xsmall' (10GB), 'small' (100GB), 'medium' (1TB), 'large' (10TB), 'xlarge' (100TB), 'heroic' (1000TB) or 'auto' (deduced from MPI parameters).",
     )
+    parser.add_argument(
+        "--print_input_map",
+        required=False,
+        default=False,
+        type=bool,
+        help="Should the healpy input map be exported as a PNG for debugging purposes.",
+    )
+    parser.add_argument(
+        "--save_spt3g",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Save simulated data to SPT3G format.",
+    )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
     # The "name" of each operator instance controls what the commandline and config
     # file options will be called.
     operators = [
-        toast.ops.SimGround(name="sim_ground"),
+        toast.ops.SimGround(
+            name="sim_ground",
+            detset_key="pixel",
+        ),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(name="elevation_model", out_model="el_noise_model"),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
@@ -88,14 +112,46 @@ def parse_arguments():
         ),
         toast.ops.ScanHealpix(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
-        toast.ops.SimAtmosphere(name="sim_atmosphere"),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=1024),
+        toast.ops.SimAtmosphere(
+            name="sim_atmosphere",
+            lmin_center=0.001 * u.meter,
+            lmin_sigma=0.0 * u.meter,
+            lmax_center=1.0 * u.meter,
+            lmax_sigma=0.0 * u.meter,
+            gain=1.0e-4,
+            zatm=40000 * u.meter,
+            zmax=200 * u.meter,
+            xstep=5 * u.meter,
+            ystep=5 * u.meter,
+            zstep=5 * u.meter,
+            nelem_sim_max=10000,
+            wind_dist=3000 * u.meter,
+            z0_center=2000 * u.meter,
+            z0_sigma=0 * u.meter,
+        ),
+        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=4096),
+        toast.ops.Statistics(name="raw_statistics"),
+        toast.ops.Statistics(name="filtered_statistics"),
+        toast.ops.GroundFilter(name="groundfilter"),
+        toast.ops.PolyFilter(name="polyfilter1D"),
+        toast.ops.PolyFilter2D(name="polyfilter2D"),
+        toast.ops.CommonModeFilter(name="common_mode_filter"),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
-        toast.ops.MapMaker(name="mapmaker", solve_rcond_threshold=1e-3),
+        toast.ops.MapMaker(
+            name="mapmaker",
+            solve_rcond_threshold=1e-3,
+            write_map=True,
+            write_noiseweighted_map=False,
+            write_hits=True,
+            write_cov=False,
+            write_invcov=False,
+            write_rcond=False,
+        ),
         toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
+        toast.ops.MemoryCounter(name="mem_count"),
     ]
 
     # Templates we want to configure from the command line or a parameter file.
@@ -108,23 +164,38 @@ def parse_arguments():
 
     # hardcoded arguments
     # focal plane
-    args.sample_rate = 100  # sample_rate is nb sample per second, we do (60 * obs_minutes * sample_rate) sample for one observation of one detector in a minute
+    args.sample_rate = 100  # sample_rate is nb sample per second.
     args.max_detector = (
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10
-    args.obs_minutes = 60
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
+
     # schedule, site and telescope parameters
-    args.telescope_name = "telescope"
+    args.telescope_name = "LAT"
     args.site_name = "atacama"
     args.site_lon = " -67:47:10"
     args.site_lat = " -22:57:30"
     args.site_alt = 5200.0 * u.meter
-    args.schedule_patch = "tile000,1,40,0,60,-40"
-    args.schedule_start = "2020-01-01 00:00:00"
-    args.schedule_stop = "2020-01-01 12:00:00"
+    args.patch_coord = "C"
+    args.el_min = 30.0
+    args.el_max = 70.0
+    args.sun_el_max = 90.0
+    args.sun_avoidance_angle = 0.0
+    args.moon_avoidance_angle = 0.0
+    args.gap_s = 60.0
+    args.gap_small_s = 0.0
+    args.ces_max_time = 1200.0
+    args.boresight_angle_step = 180.0
+    args.boresight_angle_time = 1440.0
+    args.schedule_patches = [
+        "RISING_SCAN_35,HORIZONTAL,1.00,30.00,150.00,35.00,1500",
+        "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
+    ]
+    args.schedule_start = "2027-01-01 00:00:00"
+    args.schedule_stop = "2027-12-31 00:00:00"
+
     # scan map
     args.input_map = "fake_input_sky.fits"
 
@@ -137,21 +208,44 @@ def make_schedule(args, world_comm, site):
     """
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
-        schedule_file = os.path.join(args.out_dir, "ground_bench_schedule.txt")
-        run_scheduler(
-            opts=[
+        schedule_file = "ground_bench_schedule.txt"
+        output_schedule = os.path.join(args.out_dir, "ground_bench_schedule.txt")
+        if not os.path.exists(schedule_file):
+            # Building the schedule is serial and takes a while, only generate it
+            # if needed.
+            sch_opts = [
                 "--site-name",
                 args.site_name,
                 "--telescope",
                 args.telescope_name,
                 "--site-lon",
-                "{}".format(site.earthloc.lon.to_value(u.degree)),
+                f"{site.earthloc.lon.to_value(u.degree)}",
                 "--site-lat",
-                "{}".format(site.earthloc.lat.to_value(u.degree)),
+                f"{site.earthloc.lat.to_value(u.degree)}",
                 "--site-alt",
-                "{}".format(site.earthloc.height.to_value(u.meter)),
-                "--patch",
-                args.schedule_patch,
+                f"{site.earthloc.height.to_value(u.meter)}",
+                "--patch-coord",
+                args.patch_coord,
+                "--el-min",
+                f"{args.el_min}",
+                "--el-max",
+                f"{args.el_max}",
+                "--sun-el-max",
+                f"{args.sun_el_max}",
+                "--sun-avoidance-angle",
+                f"{args.sun_avoidance_angle}",
+                "--moon-avoidance-angle",
+                f"{args.moon_avoidance_angle}",
+                "--gap-s",
+                f"{args.gap_s}",
+                "--gap-small-s",
+                f"{args.gap_small_s}",
+                "--ces-max-time",
+                f"{args.ces_max_time}",
+                "--boresight-angle-step",
+                f"{args.boresight_angle_step}",
+                "--boresight-angle-time",
+                f"{args.boresight_angle_time}",
                 "--start",
                 args.schedule_start,
                 "--stop",
@@ -159,12 +253,82 @@ def make_schedule(args, world_comm, site):
                 "--out",
                 schedule_file,
             ]
-        )
+            for patch in args.schedule_patches:
+                sch_opts.extend(["--patch", patch])
+            run_scheduler(opts=sch_opts)
+        # Copy the schedule into the output directory for reference
+        shutil.copy(schedule_file, output_schedule)
         schedule = toast.schedule.GroundSchedule()
-        schedule.read(schedule_file)
+        schedule.read(output_schedule)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
-    return schedule
+    args.schedule = schedule
+
+
+def dump_spt3g(args, job_ops, data):
+    """Save data to SPT3G format."""
+    if not t3g.available:
+        raise RuntimeError("SPT3G is not available, cannot save to that format")
+    save_dir = os.path.join(args.out_dir, "data_spt3g")
+    meta_exporter = t3g.export_obs_meta(
+        noise_models=[
+            (job_ops.default_model.noise_model, job_ops.default_model.noise_model),
+            (job_ops.elevation_model.out_model, job_ops.elevation_model.out_model),
+        ]
+    )
+    # Note that we export detector flags below to a float64 G3TimestreamMap
+    # in order to use FLAC compression.  See documentation for the
+    # toast.spt3g.export_obs_data class for a description of the constructor
+    # arguments.
+    data_exporter = t3g.export_obs_data(
+        shared_names=[
+            (
+                job_ops.sim_ground.boresight_azel,
+                job_ops.sim_ground.boresight_azel,
+                c3g.G3VectorQuat,
+            ),
+            (
+                job_ops.sim_ground.boresight_radec,
+                job_ops.sim_ground.boresight_radec,
+                c3g.G3VectorQuat,
+            ),
+            (job_ops.sim_ground.position, job_ops.sim_ground.position, None),
+            (job_ops.sim_ground.velocity, job_ops.sim_ground.velocity, None),
+            (job_ops.sim_ground.azimuth, job_ops.sim_ground.azimuth, None),
+            (job_ops.sim_ground.elevation, job_ops.sim_ground.elevation, None),
+            # (job_ops.sim_ground.hwp_angle, job_ops.sim_ground.hwp_angle, None),
+            (job_ops.sim_ground.shared_flags, "telescope_flags", None),
+        ],
+        det_names=[
+            (
+                job_ops.sim_noise.det_data,
+                job_ops.sim_noise.det_data,
+                c3g.G3TimestreamMap,
+            ),
+            (job_ops.sim_ground.det_flags, "detector_flags", c3g.G3TimestreamMap),
+        ],
+        interval_names=[
+            (job_ops.sim_ground.scan_leftright_interval, "intervals_scan_leftright"),
+            (job_ops.sim_ground.turn_leftright_interval, "intervals_turn_leftright"),
+            (job_ops.sim_ground.scan_rightleft_interval, "intervals_scan_rightleft"),
+            (job_ops.sim_ground.turn_rightleft_interval, "intervals_turn_rightleft"),
+            (job_ops.sim_ground.elnod_interval, "intervals_elnod"),
+            (job_ops.sim_ground.scanning_interval, "intervals_scanning"),
+            (job_ops.sim_ground.turnaround_interval, "intervals_turnaround"),
+            (job_ops.sim_ground.sun_up_interval, "intervals_sun_up"),
+            (job_ops.sim_ground.sun_close_interval, "intervals_sun_close"),
+        ],
+        compress=True,
+    )
+    exporter = t3g.export_obs(
+        meta_export=meta_exporter,
+        data_export=data_exporter,
+        export_rank=0,
+    )
+    dumper = toast.ops.SaveSpt3g(
+        directory=save_dir, framefile_mb=500, obs_export=exporter
+    )
+    dumper.apply(data)
 
 
 def main():
@@ -179,7 +343,7 @@ def main():
 
     # Instantiate our objects that were configured from the command line / files
     job = toast.create_from_config(config)
-    ops = job.operators
+    job_ops = job.operators
 
     # gets the MPI parameters
     world_comm, n_procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(
@@ -193,15 +357,41 @@ def main():
         outlog = os.path.join(args.out_dir, "config_log.toml")
         toast.config.dump_toml(outlog, config)
 
+    # Observing site
+    site = toast.instrument.GroundSite(
+        args.site_name, args.site_lat, args.site_lon, args.site_alt
+    )
+
+    # Create the schedule, so that we know the total observing time.
+    make_schedule(args, world_comm, site)
+
+    # Estimate per-process memory use from map domain objects and
+    # other sources.
+    nside_final = None
+    if job_ops.pointing_final.enabled:
+        nside_final = job_ops.pointing_final.nside
+    overhead_bytes = estimate_memory_overhead(
+        n_procs,
+        n_nodes,
+        0.4,
+        job_ops.pointing.nside,
+        world_comm,
+        nside_final=nside_final,
+        sim_atmosphere=job_ops.sim_atmosphere,
+        ces_max_time=args.ces_max_time,
+        fov=args.width,
+    )
+
     # selects appropriate case size
     select_case(
         args,
+        jobargs,
         n_procs,
         n_nodes,
         avail_node_bytes,
-        ops.binner.full_pointing,
+        job_ops.binner.full_pointing,
         world_comm,
-        log,
+        per_process_overhead_bytes=overhead_bytes,
     )
 
     # Creates the focalplane file.
@@ -215,28 +405,12 @@ def main():
         sys.exit(0)
 
     # Create a telescope for the simulation.
-    site = toast.instrument.GroundSite(
-        args.site_name, args.site_lat, args.site_lon, args.site_alt
-    )
     telescope = toast.instrument.Telescope(
         args.telescope_name, focalplane=focalplane, site=site
     )
 
-    # Load the schedule file
-    schedule = make_schedule(args, world_comm, site)
-
-    # Find the group size for this job, either from command-line overrides or
-    # by estimating the data volume.
-    group_size = toast.job_group_size(
-        world_comm,
-        jobargs,
-        schedule=schedule,
-        focalplane=focalplane,
-        full_pointing=ops.binner.full_pointing,
-    )
-
     # Create the toast communicator
-    comm = toast.Comm(world=world_comm, groupsize=group_size)
+    comm = toast.Comm(world=world_comm, groupsize=args.group_procs)
 
     # Create the (initially empty) data
     data = toast.Data(comm=comm)
@@ -245,61 +419,111 @@ def main():
     timer = toast.timing.Timer()
     timer.start()
 
+    job_ops.mem_count.prefix = "Before Simulation"
+    job_ops.mem_count.apply(data)
+
     # Simulate the telescope pointing
-    ops.sim_ground.telescope = telescope
-    ops.sim_ground.schedule = schedule
-    ops.sim_ground.weather = telescope.site.name
-    ops.sim_ground.apply(data)
+    job_ops.sim_ground.telescope = telescope
+    job_ops.sim_ground.schedule = args.schedule
+    job_ops.sim_ground.weather = telescope.site.name
+    job_ops.sim_ground.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
+    job_ops.mem_count.prefix = "After Scan Simulation"
+    job_ops.mem_count.apply(data)
+
     # Set up detector pointing in both Az/El and RA/DEC
-    ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
-    ops.det_pointing_radec.boresight = ops.sim_ground.boresight_radec
+    job_ops.det_pointing_azel.boresight = job_ops.sim_ground.boresight_azel
+    job_ops.det_pointing_radec.boresight = job_ops.sim_ground.boresight_radec
 
     # Construct a "perfect" noise model just from the focalplane parameters
-    ops.default_model.apply(data)
+    job_ops.default_model.apply(data)
     log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
 
     # Create the Elevation modulated noise model
-    ops.elevation_model.noise_model = ops.default_model.noise_model
-    ops.elevation_model.detector_pointing = ops.det_pointing_azel
-    ops.elevation_model.view = ops.det_pointing_azel.view
-    ops.elevation_model.apply(data)
+    job_ops.elevation_model.noise_model = job_ops.default_model.noise_model
+    job_ops.elevation_model.detector_pointing = job_ops.det_pointing_azel
+    job_ops.elevation_model.view = job_ops.det_pointing_azel.view
+    job_ops.elevation_model.apply(data)
     log.info_rank("Created elevation noise model in", comm=world_comm, timer=timer)
 
     # Set the pointing matrix operators to use the detector pointing
-    ops.pointing.detector_pointing = ops.det_pointing_radec
-    ops.pointing_final.detector_pointing = ops.det_pointing_radec
+    job_ops.pointing.detector_pointing = job_ops.det_pointing_radec
+    job_ops.pointing_final.detector_pointing = job_ops.det_pointing_radec
 
     # If we are not using a different pointing matrix for our final binning, then
     # use the same one as the solve.
-    ops.binner.pointing = ops.pointing
-    if not ops.pointing_final.enabled:
-        ops.pointing_final = ops.pointing
+    job_ops.binner.pointing = job_ops.pointing
+    if not job_ops.pointing_final.enabled:
+        job_ops.pointing_final = job_ops.pointing
 
     # If we are not using a different binner for our final binning, use the same one
     # as the solve.
-    ops.binner_final.pointing = ops.pointing_final
-    if not ops.binner_final.enabled:
-        ops.binner_final = ops.binner
+    job_ops.binner_final.pointing = job_ops.pointing_final
+    if not job_ops.binner_final.enabled:
+        job_ops.binner_final = job_ops.binner
+
+    job_ops.mem_count.prefix = "After Noise and Pointing Setup"
+    job_ops.mem_count.apply(data)
 
     # Simulate sky signal from a map.
-    scan_map(args, rank, ops, data, log)
+    scan_map(args, rank, job_ops, data, log)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
+    job_ops.mem_count.prefix = "After Map Scanning"
+    job_ops.mem_count.apply(data)
+
     # Simulate detector noise
-    ops.sim_noise.noise_model = ops.elevation_model.out_model
-    ops.sim_noise.apply(data)
+    job_ops.sim_noise.noise_model = job_ops.elevation_model.out_model
+    job_ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
+    job_ops.mem_count.prefix = "After Noise Simulation"
+    job_ops.mem_count.apply(data)
+
     # Simulate atmosphere signal
-    ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
-    ops.sim_atmosphere.apply(data)
+    job_ops.sim_atmosphere.detector_pointing = job_ops.det_pointing_azel
+    job_ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
+    job_ops.mem_count.prefix = "After Atmosphere Simulation"
+    job_ops.mem_count.apply(data)
+
+    # Optionally save data to SPT3G format.  This is expensive and the configuration
+    # is specific to this particular workflow, which is why the details are not
+    # configurable from the command line / parameter file and why this is not enabled
+    # by default.
+    if args.save_spt3g:
+        dump_spt3g(args, job_ops, data)
+        log.info_rank("Saved data to SPT3G format in", comm=world_comm, timer=timer)
+
+    # Collect signal statistics before filtering
+    job_ops.raw_statistics.output_dir = args.out_dir
+    job_ops.raw_statistics.apply(data)
+
+    # Apply the filter stack
+    job_ops.groundfilter.apply(data)
+    log.info_rank("Finished ground-filtering in", comm=world_comm, timer=timer)
+    job_ops.polyfilter1D.apply(data)
+    log.info_rank("Finished 1D-poly-filtering in", comm=world_comm, timer=timer)
+    job_ops.polyfilter2D.apply(data)
+    log.info_rank("Finished 2D-poly-filtering in", comm=world_comm, timer=timer)
+    job_ops.common_mode_filter.apply(data)
+    log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
+
+    job_ops.mem_count.prefix = "After Filtering"
+    job_ops.mem_count.apply(data)
+
+    # Collect signal statistics after filtering
+    job_ops.filtered_statistics.output_dir = args.out_dir
+    job_ops.filtered_statistics.apply(data)
+
     # Build up our map-making operation.
-    run_mapmaker(ops, args, job.templates, data)
+    run_mapmaker(job_ops, args, job.templates, data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
+
+    job_ops.mem_count.prefix = "After Map Making"
+    job_ops.mem_count.apply(data)
 
     # end of the computations, sync and computes efficiency
     global_timer.stop_all()
@@ -310,7 +534,6 @@ def main():
     compute_science_metric(args, runtime, n_nodes, rank, log)
 
     # dumps all the timing information
-
     timer.stop()
     timer.clear()
     timer.start()
@@ -325,17 +548,7 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
+    world, procs, rank = toast.mpi.get_world()
+    python_startup_time(rank)
+    with toast.mpi.exception_guard(comm=world):
         main()
-    except Exception:
-        # We have an unhandled exception on at least one process.  Print a stack
-        # trace for this process and then abort so that all processes terminate.
-        mpiworld, procs, rank = toast.get_world()
-        if procs == 1:
-            raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        lines = [f"Proc {rank}: {x}" for x in lines]
-        print("".join(lines), flush=True)
-        if mpiworld is not None:
-            mpiworld.Abort()

@@ -117,6 +117,11 @@ class Weather(object):
 def read_weather(file):
     """Helper function to read HDF5 format weather file.
 
+    On some filesystems, HDF5 uses a locking mechanism that fails even
+    when opening the file readonly.  We work around this by opening
+    the file as a binary stream in python and passing that file object
+    to h5py.
+
     Args:
         file (str):  Path to the file.
 
@@ -124,26 +129,26 @@ def read_weather(file):
         (dict):  Weather data dictionary.
 
     """
-    hf = h5py.File(file, "r")
-    result = OrderedDict()
-    for mn in range(12):
-        month_data = OrderedDict()
-        month = "month_{:02d}".format(mn)
-        meta = hf[month].attrs
-        for k, v in meta.items():
-            month_data[k] = v
-        # Build the index of the distribution
-        month_data["prob"] = np.linspace(
-            month_data["PROBSTRT"],
-            month_data["PROBSTOP"],
-            month_data["NSTEP"],
-        )
-        # Iterate over datasets, copying to regular numpy arrays
-        month_data["data"] = OrderedDict()
-        for dname, dat in hf[month].items():
-            month_data["data"][dname] = np.array(dat)
-        result[mn] = month_data
-    hf.close()
+    with open(file, "rb") as pf:
+        with h5py.File(pf, "r") as hf:
+            result = OrderedDict()
+            for mn in range(12):
+                month_data = OrderedDict()
+                month = "month_{:02d}".format(mn)
+                meta = hf[month].attrs
+                for k, v in meta.items():
+                    month_data[k] = v
+                # Build the index of the distribution
+                month_data["prob"] = np.linspace(
+                    month_data["PROBSTRT"],
+                    month_data["PROBSTOP"],
+                    month_data["NSTEP"],
+                )
+                # Iterate over datasets, copying to regular numpy arrays
+                month_data["data"] = OrderedDict()
+                for dname, dat in hf[month].items():
+                    month_data["data"][dname] = np.array(dat)
+                result[mn] = month_data
     return result
 
 
@@ -198,10 +203,13 @@ class SimWeather(Weather):
         file (str):  Alternative file to load in the same format as the bundled data.
         site_uid (int):  The Unique ID for the site, used for random draw of parameters.
         realization (int):  The realization index used for random draw of parameters.
+        max_pwv (quantity):  Maximum PWV to draw.
 
     """
 
-    def __init__(self, time=None, name=None, file=None, site_uid=0, realization=0):
+    def __init__(
+        self, time=None, name=None, file=None, site_uid=0, realization=0, max_pwv=None
+    ):
         if time is None:
             raise RuntimeError("you must specify the time")
         self._name = name
@@ -214,29 +222,90 @@ class SimWeather(Weather):
         else:
             self._data = load_package_weather(self._name)
 
-        self._site_uid = site_uid
-        self._realization = realization
-
-        self._date = time
-        self._doy = self._date.timetuple().tm_yday
-        self._year = self._date.year
-        self._hour = self._date.hour
-        # This is the definition of month used in the weather files
-        self._month = int((self._doy - 1) // 30.5)
+        self._max_pwv = max_pwv
+        if max_pwv is not None:
+            self._truncate_distributions("TQV", max_pwv)
 
         # Use a separate RNG index for each data type
         self._varindex = {y: x for x, y in enumerate(self._data[0]["data"].keys())}
 
-        self._sim_ice_water = self._draw("TQI")
-        self._sim_liquid_water = self._draw("TQL")
-        self._sim_pwv = self._draw("TQV")
-        self._sim_humidity = self._draw("QV10M")
-        self._sim_surface_pressure = self._draw("PS")
+        self.set(time=time, realization=realization, site_uid=site_uid)
+
+        super().__init__()
+
+    def _truncate_distributions(self, name, max_value):
+        # Truncate all distributions, since user may change the time
+        for month in range(12):
+            prob = self._data[month]["prob"]
+            for hour in range(24):
+                cdf = self._data[month]["data"][name][hour]
+                ind = cdf <= max_value.to_value("mm")
+                if np.sum(ind) < 2:
+                    raise RuntimeError(f"Cannot truncate {name} to <= {max_value}")
+                new_cdf = np.interp(prob, prob[ind] / np.amax(prob[ind]), cdf[ind])
+                cdf[:] = new_cdf
+        return
+
+    def set(self, time=None, realization=0, site_uid=0):
+        """Set new parameters for weather simulation.
+
+        This (re-)sets the time, realization, and site_uid for drawing random weather
+        parameters.
+
+        Args:
+            time (datetime):  A python date/time in UTC.
+            realization (int):  The realization index used for random draw of
+                parameters.
+            site_uid (int):  The Unique ID for the site, used for random draw of
+                parameters.
+
+        Returns:
+            None
+
+        """
+        if time is not None:
+            self._date = time
+            self._doy = time.timetuple().tm_yday
+            self._year = time.year
+            self._hour = time.hour
+            # This is the definition of month used in the weather files
+            self._month = int((self._doy - 1) // 30.5)
+        if realization is not None:
+            self._realization = realization
+        if site_uid is not None:
+            self._site_uid = site_uid
+        self._draw_values()
+
+    @property
+    def name(self):
+        """The name of the internal weather object or file."""
+        return self._name
+
+    @property
+    def realization(self):
+        """The current realization."""
+        return self._realization
+
+    @property
+    def site_uid(self):
+        """The current site UID."""
+        return self._site_uid
+
+    @property
+    def max_pwv(self):
+        """The maximum PWV used to truncate the distribution."""
+        return self._max_pwv
+
+    def _draw_values(self):
+        self._sim_ice_water = self._draw("TQI") * u.mm
+        self._sim_liquid_water = self._draw("TQL") * u.mm
+        self._sim_pwv = self._draw("TQV") * u.mm
+        self._sim_humidity = self._draw("QV10M") * u.mm
+        self._sim_surface_pressure = self._draw("PS") * u.Pa
         self._sim_surface_temperature = self._draw("TS") * u.Kelvin
         self._sim_air_temperature = self._draw("T10M") * u.Kelvin
         self._sim_west_wind = self._draw("U10M") * (u.meter / u.second)
         self._sim_south_wind = self._draw("V10M") * (u.meter / u.second)
-        super().__init__()
 
     def _draw(self, name):
         """Return a random parameter value.
@@ -307,3 +376,21 @@ class SimWeather(Weather):
             self._realization,
         )
         return value
+
+    def __eq__(self, other):
+        if self._name != other._name:
+            return False
+        if self._year != other._year:
+            return False
+        if self._month != other._month:
+            return False
+        if self._hour != other._hour:
+            return False
+        if self._site_uid != other._site_uid:
+            return False
+        if self._realization != other._realization:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)

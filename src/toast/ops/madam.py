@@ -20,6 +20,8 @@ from ..traits import trait_docs, Int, Unicode, Bool, Dict
 
 from ..timing import function_timer
 
+from ..observation import default_names as obs_names
+
 from .operator import Operator
 
 from .memory_counter import MemoryCounter
@@ -61,9 +63,11 @@ class Madam(Operator):
         None, allow_none=True, help="Read madam parameters from this file"
     )
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
 
-    det_data = Unicode("signal", help="Observation detdata key for the timestream data")
+    det_data = Unicode(
+        obs_names.det_data, help="Observation detdata key for the timestream data"
+    )
 
     det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for flags to use"
@@ -77,9 +81,13 @@ class Madam(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
 
-    pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
+    pixels = Unicode(
+        obs_names.pixels, help="Observation detdata key for output pixel indices"
+    )
 
-    weights = Unicode("weights", help="Observation detdata key for output weights")
+    weights = Unicode(
+        obs_names.weights, help="Observation detdata key for output weights"
+    )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"

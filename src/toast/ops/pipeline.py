@@ -37,18 +37,6 @@ class Pipeline(Operator):
         help="List of detector sets.  ['ALL'] and ['SINGLE'] are also valid values.",
     )
 
-    observation_key = Unicode(
-        None,
-        allow_none=True,
-        help="Only process observations which have this key defined",
-    )
-
-    observation_value = Unicode(
-        None,
-        allow_none=True,
-        help="Only process observations where the key has this value",
-    )
-
     @traitlets.validate("detector_sets")
     def _check_detsets(self, proposal):
         detsets = proposal["value"]
@@ -82,17 +70,6 @@ class Pipeline(Operator):
                 )
         return ops
 
-    @traitlets.validate("observation_value")
-    def _check_observation_value(self, proposal):
-        val = proposal["value"]
-        if val is None:
-            return val
-        if self.observation_key is None:
-            raise traitlets.TraitError(
-                "observation_key must be set before observation_value"
-            )
-        return val
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -107,121 +84,54 @@ class Pipeline(Operator):
             # All our operators support CUDA.  Stage any required data
             pass
 
-        # Select the observations we will use
-        data_sets = [data]
+        if len(data.obs) == 0:
+            # No observations for this group
+            msg = f"Pipeline data, group {data.comm.group} has no observations."
+            log.verbose_rank(msg, comm=data.comm.comm_group)
 
-        if self.observation_key is not None:
-            data_sets = list()
-            split_data = data.split(self.observation_key)
-            if self.observation_value is None:
-                # We are using all values of the key
-                for val, d in split_data.items():
-                    data_sets.append(d)
-            else:
-                # We are using only one value of the key
-                if self.observation_value not in split_data:
-                    msg = "input data has no observations where '{}' == '{}'".format(
-                        self.observation_key, self.observation_value
-                    )
-                    if data.comm.world_rank == 0:
-                        log.warning(msg)
-                else:
-                    data_sets.append(split_data[self.observation_value])
-
-        for ds_indx, ds in enumerate(data_sets):
-            if len(ds.obs) == 0:
-                # No observations for this group
-                msg = "Pipeline starting data set {}, group {} has no observations.\n".format(
-                    ds_indx, ds.comm.group
+        if len(self.detector_sets) == 1 and self.detector_sets[0] == "ALL":
+            # Run the operators with all detectors at once
+            for op in self.operators:
+                msg = "{} Pipeline calling operator '{}' exec() with ALL dets".format(
+                    pstr, op.name
                 )
-                if data.comm.group_rank == 0:
+                log.verbose(msg)
+                op.exec(data, detectors=None)
+        elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
+            # Get superset of detectors across all observations
+            all_local_dets = data.all_local_detectors(selection=detectors)
+            # Run operators one detector at a time
+            for det in all_local_dets:
+                msg = "{} Pipeline SINGLE detector {}".format(pstr, det)
+                log.verbose(msg)
+                for op in self.operators:
+                    msg = "{} Pipeline   calling operator '{}' exec()".format(
+                        pstr, op.name
+                    )
                     log.verbose(msg)
+                    op.exec(data, detectors=[det])
+        else:
+            # We have explicit detector sets
             for det_set in self.detector_sets:
-                if det_set == "ALL":
-                    # If this is given, then there should be only one entry
-                    if len(self.detector_sets) != 1:
-                        raise RuntimeError(
-                            "If using 'ALL' for a detector set, there should only be one set"
-                        )
-                    # The superset of detectors across all observations.
-                    all_local_dets = OrderedDict()
-                    for ob in ds.obs:
-                        for det in ob.local_detectors:
-                            all_local_dets[det] = None
-                    all_local_dets = list(all_local_dets.keys())
-
-                    # If we have no detectors at all across all observations, it
-                    # means that one of our operators is going to create observations.
-                    # pass None for the list of detectors.
-                    selected_dets = None
-                    if len(all_local_dets) > 0:
-                        selected_dets = all_local_dets
-                        # If we were given a more restrictive list, prune the global
-                        # list
-                        if detectors is not None:
-                            selected_dets = list()
-                            for det in all_local_dets:
-                                if det in detectors:
-                                    selected_dets.append(det)
-
-                    # Run the operators with this full list
-                    for op in self.operators:
-                        msg = "{} Pipeline calling operator '{}' exec() with ALL dets".format(
-                            pstr, op.name
-                        )
-                        log.verbose(msg)
-                        op.exec(ds, detectors=selected_dets)
-                elif det_set == "SINGLE":
-                    # If this is given, then there should be only one entry
-                    if len(self.detector_sets) != 1:
-                        raise RuntimeError(
-                            "If using 'SINGLE' for a detector set, there should only be one set"
-                        )
-
-                    # We are running one detector at a time.  We will loop over all
-                    # detectors in the superset of detectors across all observations.
-                    all_local_dets = OrderedDict()
-                    for ob in ds.obs:
-                        for det in ob.local_detectors:
-                            all_local_dets[det] = None
-                    all_local_dets = list(all_local_dets.keys())
-
-                    # If we were given a more restrictive list, prune the global list
-                    selected_dets = all_local_dets
-                    if detectors is not None:
-                        selected_dets = list()
-                        for det in all_local_dets:
-                            if det in detectors:
-                                selected_dets.append(det)
-
-                    for det in selected_dets:
-                        msg = "{} Pipeline SINGLE detector {}".format(pstr, det)
-                        log.verbose(msg)
-                        for op in self.operators:
-                            msg = "{} Pipeline   calling operator '{}' exec()".format(
-                                pstr, op.name
-                            )
-                            log.verbose(msg)
-                            op.exec(ds, detectors=[det])
-                else:
-                    # We are running sets of detectors at once.  For this detector
-                    # set, we prune to just the restricted list passed to exec().
-                    selected_set = det_set
-                    if detectors is not None:
-                        selected_set = list()
-                        for det in det_set:
-                            if det in detectors:
-                                selected_set.append(det)
-                    msg = "{} Pipeline detector set {}".format(pstr, selected_set)
+                selected_set = det_set
+                if detectors is not None:
+                    selected_set = list()
+                    for det in det_set:
+                        if det in detectors:
+                            selected_set.append(det)
+                if len(selected_set) == 0:
+                    # Nothing in this detector set is being used, skip it
+                    continue
+                msg = "{} Pipeline detector set {}".format(pstr, selected_set)
+                log.verbose(msg)
+                for op in self.operators:
+                    msg = "{} Pipeline   calling operator '{}' exec()".format(
+                        pstr, op.name
+                    )
                     log.verbose(msg)
-                    for op in self.operators:
-                        msg = "{} Pipeline   calling operator '{}' exec()".format(
-                            pstr, op.name
-                        )
-                        log.verbose(msg)
-                        op.exec(ds, detectors=selected_set)
+                    op.exec(data, detectors=selected_set)
 
-        # Copy to / from accelerator...
+        # Copy from accelerator...
 
         return
 

@@ -29,6 +29,7 @@ from ..noise_sim import AnalyticNoise
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
 from ..observation import Observation
+from ..observation import default_names as obs_names
 
 from ..instrument import Telescope
 
@@ -246,17 +247,29 @@ class SimSatellite(Operator):
         help="Distribute observation data along the time axis rather than detector axis",
     )
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    detset_key = Unicode(
+        None,
+        allow_none=True,
+        help="If specified, use this column of the focalplane detector_data to group detectors",
+    )
 
-    shared_flags = Unicode("flags", help="Observation shared key for common flags")
+    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
 
-    hwp_angle = Unicode("hwp_angle", help="Observation shared key for HWP angle")
+    shared_flags = Unicode(
+        obs_names.shared_flags, help="Observation shared key for common flags"
+    )
 
-    boresight = Unicode("boresight_radec", help="Observation shared key for boresight")
+    hwp_angle = Unicode(
+        None, allow_none=True, help="Observation shared key for HWP angle"
+    )
 
-    position = Unicode("position", help="Observation shared key for position")
+    boresight = Unicode(
+        obs_names.boresight_radec, help="Observation shared key for boresight"
+    )
 
-    velocity = Unicode("velocity", help="Observation shared key for velocity")
+    position = Unicode(obs_names.position, help="Observation shared key for position")
+
+    velocity = Unicode(obs_names.velocity, help="Observation shared key for velocity")
 
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
@@ -279,6 +292,49 @@ class SimSatellite(Operator):
                     "schedule must be an instance of a SatelliteSchedule"
                 )
         return sch
+
+    @traitlets.validate("hwp_angle")
+    def _check_hwp_angle(self, proposal):
+        hwp_angle = proposal["value"]
+        if hwp_angle is None:
+            if self.hwp_rpm is not None or self.hwp_step is not None:
+                raise traitlets.TraitError(
+                    "Cannot simulate HWP without a shared data key"
+                )
+        else:
+            if self.hwp_rpm is None and self.hwp_step is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_angle
+
+    @traitlets.validate("hwp_rpm")
+    def _check_hwp_rpm(self, proposal):
+        hwp_rpm = proposal["value"]
+        if hwp_rpm is not None:
+            if self.hwp_angle is None:
+                raise traitlets.TraitError(
+                    "Cannot simulate rotating HWP without a shared data key"
+                )
+            if self.hwp_step is not None:
+                raise traitlets.TraitError("HWP cannot rotate *and* step.")
+        else:
+            if self.hwp_angle is not None and self.hwp_step is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_rpm
+
+    @traitlets.validate("hwp_step")
+    def _check_hwp_step(self, proposal):
+        hwp_step = proposal["value"]
+        if hwp_step is not None:
+            if self.hwp_angle is None:
+                raise traitlets.TraitError(
+                    "Cannot simulate stepped HWP without a shared data key"
+                )
+            if self.hwp_rpm is not None:
+                raise traitlets.TraitError("HWP cannot rotate *and* step.")
+        else:
+            if self.hwp_angle is not None and self.hwp_rpm is None:
+                raise traitlets.TraitError("Cannot simulate HWP without parameters")
+        return hwp_step
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -309,10 +365,41 @@ class SimSatellite(Operator):
                 if det in detectors:
                     pipedets.append(det)
 
-        if comm.group_size > len(pipedets):
-            if comm.world_rank == 0:
-                log.error("process group is too large for the number of detectors")
-                comm.comm_world.Abort()
+        # Group by detector sets and prune to include only the detectors we
+        # are using.
+        detsets = None
+        if self.detset_key is not None:
+            detsets = dict()
+            dsets = focalplane.detector_groups(self.detset_key)
+            for k, v in dsets.items():
+                detsets[k] = list()
+                for d in v:
+                    if d in pipedets:
+                        detsets[k].append(d)
+
+        # Data distribution in the detector direction
+        det_ranks = comm.group_size
+        if self.distribute_time:
+            det_ranks = 1
+
+        # Verify that we have enough data for all of our processes.  If we are
+        # distributing by time, we have no sample sets, so can accomodate any
+        # number of processes.  If we are distributing by detector, we must have
+        # at least one detector set for each process.
+
+        if not self.distribute_time:
+            # distributing by detector...
+            n_detset = None
+            if detsets is None:
+                # Every detector is independently distributed
+                n_detset = len(pipedets)
+            else:
+                n_detset = len(detsets)
+            if det_ranks > n_detset:
+                if comm.group_rank == 0:
+                    msg = f"Group {comm.group} has {comm.group_size} processes but {n_detset} detector sets."
+                    log.error(msg)
+                    raise RuntimeError(msg)
 
         # The global start is the beginning of the first scan
 
@@ -348,10 +435,6 @@ class SimSatellite(Operator):
 
         groupdist = distribute_discrete(scan_samples, comm.ngroups)
 
-        det_ranks = comm.group_size
-        if self.distribute_time:
-            det_ranks = 1
-
         # Every process group creates its observations
 
         group_firstobs = groupdist[comm.group][0]
@@ -366,6 +449,7 @@ class SimSatellite(Operator):
                 name=f"{scan.name}_{int(scan.start.timestamp())}",
                 uid=name_UID(scan.name),
                 comm=comm.comm_group,
+                detector_sets=detsets,
                 process_rows=det_ranks,
             )
 

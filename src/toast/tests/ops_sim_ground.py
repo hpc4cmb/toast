@@ -19,6 +19,8 @@ from ..mpi import Comm, MPI
 
 from ..data import Data
 
+from ..observation import default_names as obs_names
+
 from ..instrument import Focalplane, Telescope, GroundSite
 
 from ..instrument_sim import fake_hexagon_focalplane
@@ -101,7 +103,9 @@ class SimGroundTest(MPITestCase):
             name="sim_ground",
             telescope=tele,
             schedule=schedule,
+            hwp_angle=obs_names.hwp_angle,
             hwp_rpm=1.0,
+            max_pwv=5 * u.mm,
         )
         sim_ground.apply(data)
 
@@ -126,11 +130,15 @@ class SimGroundTest(MPITestCase):
             noise_model="noise_model",
             out_model="el_weighted",
             detector_pointing=detpointing,
+            noise_a=0.5,
+            noise_c=0.5,
         )
         el_model.apply(data)
 
         # Simulate noise and accumulate to signal
-        sim_noise = ops.SimNoise(noise_model=el_model.out_model, det_data="signal")
+        sim_noise = ops.SimNoise(
+            noise_model=el_model.out_model, det_data=obs_names.det_data
+        )
         sim_noise.apply(data)
 
         # Expand pointing and make a hit map.
@@ -139,7 +147,7 @@ class SimGroundTest(MPITestCase):
         pointing = ops.PointingHealpix(
             nest=True,
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=sim_ground.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )

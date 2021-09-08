@@ -16,6 +16,8 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..covariance import covariance_invert
 
+from ..observation import default_names as obs_names
+
 from .._libtoast import (
     cov_accum_zmap,
     cov_accum_diag_hits,
@@ -76,7 +78,7 @@ class BuildHitMap(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
-    pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
+    pixels = Unicode(obs_names.pixels, help="Observation detdata key for pixel indices")
 
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
@@ -143,7 +145,7 @@ class BuildHitMap(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(selection=detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -345,7 +347,7 @@ class BuildInverseCovariance(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(selection=detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -582,7 +584,7 @@ class BuildNoiseWeighted(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(selection=detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -718,6 +720,12 @@ class CovarianceAndHits(Operator):
         help="The Data key where the covariance should be stored",
     )
 
+    inverse_covariance = Unicode(
+        None,
+        allow_none=True,
+        help="The Data key where the inverse covariance should be stored",
+    )
+
     hits = Unicode(
         "hits",
         help="The Data key where the hit map should be stored",
@@ -725,7 +733,7 @@ class CovarianceAndHits(Operator):
 
     rcond = Unicode(
         "rcond",
-        help="The Data key where the inverse condition number should be stored",
+        help="The Data key where the reciprocal condition number should be stored",
     )
 
     det_flags = Unicode(
@@ -858,6 +866,10 @@ class CovarianceAndHits(Operator):
         accum.operators = [self.pointing, build_hits, build_invcov]
 
         pipe_out = accum.apply(data, detectors=detectors)
+
+        # Optionally, store the inverse covariance
+        if self.inverse_covariance is not None:
+            data[self.inverse_covariance] = data[self.covariance].duplicate()
 
         # Extract the results
         hits = data[self.hits]

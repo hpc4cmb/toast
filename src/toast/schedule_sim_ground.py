@@ -442,6 +442,7 @@ class SSOPatch(Patch):
 class CoolerCyclePatch(Patch):
     def __init__(
         self,
+        name,
         weight,
         power,
         hold_time_min,
@@ -452,7 +453,7 @@ class CoolerCyclePatch(Patch):
         last_cycle_end,
     ):
         # Standardized name for cooler cycles
-        self.name = "cooler_cycle"
+        self.name = name
         self.hold_time_min = hold_time_min * 3600
         self.hold_time_max = hold_time_max * 3600
         self.cycle_time = cycle_time * 3600
@@ -1224,6 +1225,89 @@ def unwind_angle(alpha, beta, multiple=2 * np.pi):
 
 
 @function_timer
+def get_pole_raster_scan(
+    args,
+    el_start,
+    t_start,
+    patch,
+    fp_radius,
+    observer,
+):
+    """Determine the time it takes to perform Az-locked scanning with
+    elevation steps after each half scan pair.
+    """
+    el_stop = el_start + np.radians(args.pole_el_step_deg)
+    el_step = np.radians(args.pole_raster_el_step_deg)
+    az_rate_sky = np.radians(args.az_rate_sky_deg)
+    az_accel_mount = np.radians(args.az_accel_mount_deg)
+    el_rate = np.radians(args.el_rate_deg)
+    el_accel = np.radians(args.el_accel_deg)
+
+    # Time it takes to perform one elevation step
+    t_accel_el = el_rate / el_accel  # acceleration time
+    if el_accel * t_accel_el ** 2 > el_step:
+        # Telescope does not reach constant el_rate during the step.
+        # The step is made of acceleration and deceleration
+        t_el_step = 2 * np.sqrt(el_step / el_accel)
+    else:
+        # length of constant elevation rate scan
+        el_scan = el_step - el_accel * t_accel ** 2
+        # The elevation step is made of acceleration,
+        # constant scan and deceleration
+        t_el_step = 2 * t_accel_el + el_scan / el_rate
+
+    nstep = int((el_stop - el_start) / el_step)
+    el = el_start
+    t_stop = t_start
+    radius = max(np.radians(1), fp_radius)
+    azmins, azmaxs, aztimes = [], [], []
+    elevations = []
+    az_ranges = []
+    scan_started = False
+    for istep in range(nstep):
+        observer.date = to_DJD(t_stop)
+        azs, els = patch.corner_coordinates(observer)
+        has_extent = current_extent_pole(
+            azmins, azmaxs, aztimes, patch.corners, radius, el, azs, els, t_stop
+        )
+        if has_extent:
+            scan_started = True
+        elif scan_started:
+            nstep = istep + 1
+            break
+        # Get time to scan the half scan pair, including turnarounds
+        if has_extent:
+            az_range = azmaxs[-1] - azmins[-1]
+        else:
+            az_range = 0
+        az_ranges.append(az_range)
+        elevations.append(el)
+        scan_time = np.cos(el) * az_range / az_rate_sky
+        az_rate_mount = az_rate_sky / np.cos(el)
+        turnaround_time = az_rate_mount / az_accel_mount * 2
+        t_stop += 2 * scan_time + 2 * turnaround_time
+        if istep < nstep - 1:
+            el += el_step
+            t_stop += t_el_step
+
+    # Now extend the half scans so they are azimuth-locked
+    azmin = np.amin(azmins)
+    azmax = np.amax(azmaxs)
+    az_range_full = azmax - azmin
+    # t_old = t_stop
+    for az_range, el in zip(az_ranges, elevations):
+        delta = az_range_full - az_range
+        t_stop += np.cos(el) * delta / az_rate_sky * 2
+
+    # FIXME : the additional time needed to extend the scans
+    # adds a small amount of sky rotation.  We could extend the
+    # azimuthal range to counter the sky rotation and increase
+    # the scanning time accordingly but the effect is small.
+
+    return t_stop - t_start, azmin, azmax
+
+
+@function_timer
 def scan_patch_pole(
     args,
     el,
@@ -1246,39 +1330,51 @@ def scan_patch_pole(
     tstop = t
     tstep = 60
     azmins, azmaxs, aztimes = [], [], []
-    while True:
-        if tstop - t > args.pole_ces_time_s - 1:
-            # Succesfully scanned the maximum time
-            if len(azmins) > 0:
-                success = True
-            else:
+    observer.date = to_DJD(t)
+    azs, els = patch.corner_coordinates(observer)
+    # Check if el is above the target.  If so, there is nothing to do.
+    if np.amax(els) + fp_radius < el:
+        not_visible.append((patch.name, "Patch below {:.2f}".format(el / degree)))
+        log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+    else:
+        if args.pole_raster_scan:
+            scan_time, azmin_raster, azmax_raster = get_pole_raster_scan(
+                args, el, t, patch, fp_radius, observer
+            )
+        else:
+            scan_time = args.pole_ces_time_s
+        while True:
+            if tstop - t > scan_time - 1:
+                # Succesfully scanned the maximum time
+                if len(azmins) > 0:
+                    success = True
+                else:
+                    not_visible.append(
+                        (patch.name, "No overlap at {:.2f}".format(el / degree))
+                    )
+                    log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+                break
+            if tstop > stop_timestamp or tstop - t > 86400:
+                not_visible.append((patch.name, "Ran out of time"))
+                log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+                break
+            observer.date = to_DJD(tstop)
+            sun.compute(observer)
+            if sun.alt > sun_el_max:
                 not_visible.append(
-                    (patch.name, "No overlap at {:.2f}".format(el / degree))
+                    (patch.name, "Sun too high {:.2f}".format(sun.alt / degree))
                 )
                 log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
-            break
-        if tstop > stop_timestamp or tstop - t > 86400:
-            not_visible.append((patch.name, "Ran out of time"))
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
-            break
-        observer.date = to_DJD(tstop)
-        sun.compute(observer)
-        if sun.alt > sun_el_max:
-            not_visible.append(
-                (patch.name, "Sun too high {:.2f}".format(sun.alt / degree))
+                break
+            azs, els = patch.corner_coordinates(observer)
+            radius = max(np.radians(1), fp_radius)
+            current_extent_pole(
+                azmins, azmaxs, aztimes, patch.corners, radius, el, azs, els, tstop
             )
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
-            break
-        azs, els = patch.corner_coordinates(observer)
-        if np.amax(els) + fp_radius < el:
-            not_visible.append((patch.name, "Patch below {:.2f}".format(el / degree)))
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
-            break
-        radius = max(np.radians(1), fp_radius)
-        current_extent_pole(
-            azmins, azmaxs, aztimes, patch.corners, radius, el, azs, els, tstop
-        )
-        tstop += tstep
+            tstop += tstep
+        if args.pole_raster_scan:
+            azmins = np.ones(len(aztimes)) * azmin_raster
+            azmaxs = np.ones(len(aztimes)) * azmax_raster
     return success, azmins, azmaxs, aztimes, tstop
 
 
@@ -1333,7 +1429,10 @@ def current_extent_pole(
         azmins.append(azmin)
         azmaxs.append(azmax)
         aztimes.append(tstop)
-    return
+        has_extent = True
+    else:
+        has_extent = False
+    return has_extent
 
 
 @function_timer
@@ -1539,7 +1638,7 @@ def add_scan(
                 raise MoonTooClose
 
         # Do not schedule observations shorter than a second
-        too_short = t1 + 1 > t2
+        too_short = t2 - t1 < 1
 
         if not too_short:
             observer.date = to_DJD(t2)
@@ -2389,6 +2488,49 @@ def parse_args(opts=None):
         help="Allow partials scans when full scans are not available.",
     )
     parser.set_defaults(allow_partial_scans=False)
+    # Pole raster scan arguments
+    parser.add_argument(
+        "--pole-raster-scan",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Pole raster scan mode",
+    )
+    parser.add_argument(
+        "--pole-raster-el-step-deg",
+        required=False,
+        default=1 / 60,
+        type=np.float,
+        help="Elevation step in pole raster scheduling mode [deg]",
+    )
+    parser.add_argument(
+        "--az-rate-sky-deg",
+        required=False,
+        default=1.0,
+        type=np.float,
+        help="Azimuthal rate in pole raster scheduling mode [deg]",
+    )
+    parser.add_argument(
+        "--az-accel-mount-deg",
+        required=False,
+        default=1.0,
+        type=np.float,
+        help="Azimuthal accleration in pole raster scheduling mode [deg]",
+    )
+    parser.add_argument(
+        "--el-rate-deg",
+        required=False,
+        default=1.0,
+        type=np.float,
+        help="Elevation rate in pole raster scheduling mode [deg]",
+    )
+    parser.add_argument(
+        "--el-accel-deg",
+        required=False,
+        default=1.0,
+        type=np.float,
+        help="Elevation accleration in pole raster scheduling mode [deg]",
+    )
 
     args = None
     if opts is None:
@@ -2454,6 +2596,7 @@ def parse_patch_sso(args, parts):
 def parse_patch_cooler(args, parts, last_cycle_end):
     log = Logger.get()
     log.info("Cooler cycle format")
+    name = parts[0]
     weight = float(parts[2])
     power = float(parts[3])
     hold_time_min = float(parts[4])  # in hours
@@ -2462,7 +2605,15 @@ def parse_patch_cooler(args, parts, last_cycle_end):
     az = float(parts[7])
     el = float(parts[8])
     patch = CoolerCyclePatch(
-        weight, power, hold_time_min, hold_time_max, cycle_time, az, el, last_cycle_end
+        name,
+        weight,
+        power,
+        hold_time_min,
+        hold_time_max,
+        cycle_time,
+        az,
+        el,
+        last_cycle_end,
     )
     return patch
 
@@ -2709,10 +2860,11 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         total_weight += patch.weight
         patches.append(patch)
 
-        log.debug(
-            "Highest possible observing elevation: {:.2f} degrees."
-            " Sky fraction = {:.4f}".format(patches[-1].el_max0 / degree, patch._area)
-        )
+        if patches[-1].el_max0 is not None:
+            el_max = patches[-1].el_max0 / degree
+            log.debug(f"Highest possible observing elevation: {el_max:.2f} deg.")
+        if patches[-1]._area is not None:
+            log.debug(f"Sky fraction = {patch._area:.4f}")
 
     if args.debug:
         import matplotlib.pyplot as plt

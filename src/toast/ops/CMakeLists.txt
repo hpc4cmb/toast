@@ -41,5 +41,11 @@ install(FILES
     totalconvolve.py
     polyfilter.py
     groundfilter.py
+    statistics.py
+    sim_cosmic_rays.py
+    time_constant.py
+    load_spt3g.py
+    save_spt3g.py
+    run_spt3g.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

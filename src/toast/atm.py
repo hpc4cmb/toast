@@ -217,6 +217,24 @@ class AtmSim(object):
         self._cached = False
         self._nelem = None
 
+    def close(self):
+        """Explicitly free memory."""
+        if hasattr(self, "_compressed_index") and self._compressed_index is not None:
+            self._compressed_index.close()
+            del self._compressed_index
+            self._compressed_index = None
+        if hasattr(self, "_full_index") and self._full_index is not None:
+            self._full_index.close()
+            del self._full_index
+            self._full_index = None
+        if hasattr(self, "_realization") and self._realization is not None:
+            self._realization.close()
+            del self._realization
+            self._realization = None
+
+    def __del__(self):
+        self.close()
+
     @property
     def azmin(self):
         return self._azmin
@@ -232,6 +250,14 @@ class AtmSim(object):
     @property
     def elmax(self):
         return self._elmax
+
+    @property
+    def tmin(self):
+        return self._tmin
+
+    @property
+    def tmax(self):
+        return self._tmax
 
     @function_timer
     def simulate(self, use_cache=False, smooth=False):
@@ -419,8 +445,6 @@ class AtmSim(object):
         timer.start()
 
         nsamp = len(times)
-
-        status = 0
 
         status = atm_sim_observe(
             times,
