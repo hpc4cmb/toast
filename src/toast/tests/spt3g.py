@@ -43,6 +43,20 @@ if available:
     from spt3g import core as c3g
 
 
+class FramePrinter(object):
+    def __init__(self, rank):
+        self._rank = rank
+
+    def __call__(self, frame):
+        if frame is not None and frame.type != c3g.G3FrameType.EndProcessing:
+            if frame.type == c3g.G3FrameType.Observation:
+                frame_info = str(frame["observation_name"])
+                print(
+                    f"World rank {self._rank} processing frames for observation {frame_info}"
+                )
+        return frame
+
+
 class Spt3gTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -373,19 +387,6 @@ class Spt3gTest(MPITestCase):
         )
 
         # Create a trivial G3 Pipeline for testing
-
-        class FramePrinter(object):
-            def __init__(self, rank):
-                self._rank = rank
-
-            def __call__(self, frame):
-                if frame is not None and frame.type != c3g.G3FrameType.EndProcessing:
-                    if frame.type == c3g.G3FrameType.Observation:
-                        frame_info = str(frame["observation_name"])
-                        print(
-                            f"World rank {self._rank} processing frames for observation {frame_info}"
-                        )
-                return frame
 
         fprinter = FramePrinter(data.comm.world_rank)
 
