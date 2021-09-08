@@ -20,18 +20,7 @@ from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 from ..observation import default_names as obs_names
-
-
-def to_JD(t):
-    # Unix time stamp to Julian date
-    # (days since -4712-01-01 12:00:00 UTC)
-    return t / 86400.0 + 2440587.5
-
-
-def to_MJD(t):
-    # Convert Unix time stamp to modified Julian date
-    # (days since 1858-11-17 00:00:00 UTC)
-    return to_JD(t) - 2400000.5
+from ..coordinates import to_MJD
 
 
 @trait_docs
