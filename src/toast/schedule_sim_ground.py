@@ -26,6 +26,7 @@ import healpy as hp
 from .utils import Logger
 from . import qarray as qa
 from .timing import function_timer
+from .coordinates import to_DJD, to_MJD, to_UTC, DJDtoUNIX
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
@@ -605,49 +606,6 @@ class HorizontalPatch(Patch):
             self.current_el_min = self.el_min
             self.current_el_max = self.el_max
         return in_view, msg
-
-
-def to_UTC(t):
-    # Convert UNIX time stamp to a date string
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def to_JD(t):
-    # Unix time stamp to Julian date
-    # (days since -4712-01-01 12:00:00 UTC)
-    return t / 86400.0 + 2440587.5
-
-
-def to_MJD(t):
-    # Convert Unix time stamp to modified Julian date
-    # (days since 1858-11-17 00:00:00 UTC)
-    return to_JD(t) - 2400000.5
-
-
-def to_DJD(t):
-    # Convert Unix time stamp to Dublin Julian date
-    # (days since 1899-12-31 12:00:00)
-    # This is the time format used by PyEphem
-    return to_JD(t) - 2415020
-
-
-def DJDtoUNIX(djd):
-    # Convert Dublin Julian date to a UNIX time stamp
-    return ((djd + 2415020) - 2440587.5) * 86400.0
-
-
-def patch_is_rising(patch):
-    try:
-        # Horizontal patch definition
-        rising = patch.rising
-    except:
-        rising = True
-        for corner in patch.corners:
-            if corner.alt > 0 and corner.az > np.pi:
-                # The patch is setting
-                rising = False
-                break
-    return rising
 
 
 @function_timer
