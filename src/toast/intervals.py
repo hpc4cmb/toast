@@ -439,7 +439,7 @@ class IntervalList(Sequence):
             else:
                 # We use '<' here instead of '<=', so that intervals which are next to
                 # each other (but not overlapping) are not combined.  If the combination
-                # is desired, the simply() method can be used.
+                # is desired, the simplify() method can be used.
                 if next.first < res_last + 1:
                     # We overlap last interval
                     if next.last > res_last:

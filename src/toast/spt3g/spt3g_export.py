@@ -78,8 +78,8 @@ def export_detdata(
 
     Args:
         obs (Observation):  The parent observation.
-        name (str):  The name of the shared object.
-        view_name (str):  If specified, use this view of the shared object.
+        name (str):  The name of the detdata object.
+        view_name (str):  If specified, use this view of the detdata object.
         view_index (int):  Export this element of the list of data views.
         g3t (G3Object):  The specific G3Object type to use, or None.
         times (str):  If g3t is G3TimestreamMap, use this shared name for the
@@ -160,7 +160,7 @@ def export_intervals(obs, name, times, view_name=None, view_index=0):
         obs (Observation):  The parent observation.
         name (str):  The name of the intervals.
         times (str):  The shared name for the timestamps.
-        view_name (str):  If specified, use this view of the shared object.
+        view_name (str):  If specified, use this view of the data.
         view_index (int):  Export this element of the list of data views.
 
     Returns:

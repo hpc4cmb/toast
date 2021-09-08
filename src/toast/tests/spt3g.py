@@ -250,20 +250,11 @@ class Spt3gTest(MPITestCase):
         # Import the data
         check_data = Data(comm=data.comm)
 
-        try:
-            for obframes in g3data:
-                check_data.obs.append(importer(obframes))
+        for obframes in g3data:
+            check_data.obs.append(importer(obframes))
 
-            for ob in check_data.obs:
-                ob.redistribute(ob.comm_size, times="times")
-        except Exception as e:
-            import sys
-            import traceback
-
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-            lines = [f"Proc {data.comm.world_rank}: {x}" for x in lines]
-            print("".join(lines), flush=True)
+        for ob in check_data.obs:
+            ob.redistribute(ob.comm_size, times="times")
 
         # Verify
         for ob, orig in zip(check_data.obs, original):
@@ -271,7 +262,7 @@ class Spt3gTest(MPITestCase):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
 
-    def test_save_load_nocomp(self):
+    def test_save_load_no_compression(self):
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
@@ -324,18 +315,9 @@ class Spt3gTest(MPITestCase):
         )
         loader = ops.LoadSpt3g(directory=save_dir, obs_import=importer)
 
-        try:
-            dumper.apply(data)
-            check_data = Data(comm=data.comm)
-            loader.apply(check_data)
-        except Exception as e:
-            import sys
-            import traceback
-
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-            lines = [f"Proc {data.comm.world_rank}: {x}" for x in lines]
-            print("".join(lines), flush=True)
+        dumper.apply(data)
+        check_data = Data(comm=data.comm)
+        loader.apply(check_data)
 
         # Verify
         for ob, orig in zip(check_data.obs, data.obs):
@@ -395,13 +377,4 @@ class Spt3gTest(MPITestCase):
             obs_export=exporter, obs_import=importer, modules=[(fprinter, None)]
         )
 
-        try:
-            runner.apply(data)
-        except Exception as e:
-            import sys
-            import traceback
-
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-            lines = [f"Proc {data.comm.world_rank}: {x}" for x in lines]
-            print("".join(lines), flush=True)
+        runner.apply(data)
