@@ -69,18 +69,19 @@ class DetectorData(object):
             data.  The only supported types are 1, 2, 4, and 8 byte signed and unsigned
             integers, 4 and 8 byte floating point numbers, and 4 and 8 byte complex
             numbers.
-        unit (Unit):  Optional scalar unit associated with this data.
+        units (Unit):  Optional scalar unit associated with this data.
         view_data (array):  (Internal use only) This makes it possible to create
             DetectorData instances that act as a view on an existing array.
 
     """
 
     def __init__(
-        self, detectors, shape, dtype, unit=u.dimensionless_unscaled, view_data=None
+        self, detectors, shape, dtype, units=u.dimensionless_unscaled, view_data=None
     ):
         log = Logger.get()
 
         self._set_detectors(detectors)
+        self._units = units
 
         (
             self._storage_class,
@@ -153,6 +154,10 @@ class DetectorData(object):
     @property
     def dtype(self):
         return self._dtype
+
+    @property
+    def units(self):
+        return self._units
 
     @property
     def shape(self):
@@ -365,6 +370,8 @@ class DetectorData(object):
             return False
         if self.shape != other.shape:
             return False
+        if self.units != other.units:
+            return False
         if not np.allclose(self.data, other.data):
             return False
         return True
@@ -423,9 +430,9 @@ class DetDataManager(MutableMapping):
 
     """
 
-    def __init__(self, detectors, samples):
-        self.samples = samples
-        self.detectors = detectors
+    def __init__(self, dist):
+        self.samples = dist.samps[dist.comm_rank].n_elem
+        self.detectors = dist.dets[dist.comm_rank]
         self._internal = dict()
 
     def _data_shape(self, sample_shape):
@@ -438,7 +445,14 @@ class DetDataManager(MutableMapping):
             dshape = (self.samples,) + sample_shape
         return dshape
 
-    def create(self, name, sample_shape=None, dtype=np.float64, detectors=None):
+    def create(
+        self,
+        name,
+        sample_shape=None,
+        dtype=np.float64,
+        detectors=None,
+        units=u.dimensionless_unscaled,
+    ):
         """Create a local DetectorData buffer on this process.
 
         This method can be used to create arrays of detector data for storing signal,
@@ -457,6 +471,7 @@ class DetDataManager(MutableMapping):
             detectors (list):  Only construct a data object for this set of detectors.
                 This is useful if creating temporary data within a pipeline working
                 on a subset of detectors.
+            units (Unit):  Optional scalar unit associated with this data.
 
         Returns:
             None
@@ -480,11 +495,18 @@ class DetDataManager(MutableMapping):
             raise RuntimeError(msg)
 
         # Create the data object
-        self._internal[name] = DetectorData(detectors, data_shape, dtype)
+        self._internal[name] = DetectorData(detectors, data_shape, dtype, units=units)
 
         return
 
-    def ensure(self, name, sample_shape=None, dtype=np.float64, detectors=None):
+    def ensure(
+        self,
+        name,
+        sample_shape=None,
+        dtype=np.float64,
+        detectors=None,
+        units=u.dimensionless_unscaled,
+    ):
         """Ensure that the observation has the named detector data.
 
         If the named detdata object does not exist, it is created.  If it does exist
@@ -499,6 +521,7 @@ class DetDataManager(MutableMapping):
                 Use None or an empty tuple if you want one element per sample.
             dtype (np.dtype): Use this dtype for each element.
             detectors (list):  Ensure that these detectors exist in the object.
+            units (Unit):  Optional scalar unit associated with this data.
 
         Returns:
             None
@@ -530,6 +553,12 @@ class DetDataManager(MutableMapping):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
+            if units != self._internal[name].units:
+                msg = "Detector data '{}' already exists with units {}.".format(
+                    name, self._internal[name].units
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
             # Ok, we can re-use this.  Are the detectors already included in the data?
             change = False
             for d in detectors:
@@ -540,7 +569,11 @@ class DetDataManager(MutableMapping):
         else:
             # Create the data object
             self.create(
-                name, sample_shape=sample_shape, dtype=dtype, detectors=detectors
+                name,
+                sample_shape=sample_shape,
+                dtype=dtype,
+                detectors=detectors,
+                units=units,
             )
 
     # Mapping methods
@@ -706,8 +739,11 @@ class DetDataManager(MutableMapping):
             log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
             return False
         for k in self._internal.keys():
-            if self._internal[k] != other._internal[k]:
-                log.verbose(f"  detector data {k} not equal")
+            # if self._internal[k] != other._internal[k]:
+            if not np.allclose(self._internal[k], other._internal[k]):
+                log.verbose(
+                    f"  detector data {k} not equal:  {self._internal[k]} != {other._internal[k]}"
+                )
                 return False
         return True
 
@@ -765,12 +801,12 @@ class SharedDataManager(MutableMapping):
 
     """
 
-    def __init__(self, n_detectors, n_samples, comm, comm_row, comm_col):
-        self.n_detectors = n_detectors
-        self.n_samples = n_samples
-        self.comm = comm
-        self.comm_row = comm_row
-        self.comm_col = comm_col
+    def __init__(self, dist):
+        self.n_detectors = len(dist.dets[dist.comm_rank])
+        self.n_samples = dist.samps[dist.comm_rank].n_elem
+        self.comm = dist.comm
+        self.comm_row = dist.comm_row
+        self.comm_col = dist.comm_col
         self._internal = dict()
 
     def create(self, name, shape, dtype=None, comm=None):
@@ -1019,16 +1055,14 @@ class IntervalsManager(MutableMapping):
     given a global set of ranges.
 
     Args:
-        comm (mpi4py.MPI.Comm):  The observation communicator.
-        comm_row (mpi4py.MPI.Comm):  The process row communicator.
-        comm_col (mpi4py.MPI.Comm):  The process column communicator.
+        dist (DistDetSamp):  The observation data distribution.
 
     """
 
-    def __init__(self, comm, comm_row, comm_col):
-        self.comm = comm
-        self.comm_col = comm_col
-        self.comm_row = comm_row
+    def __init__(self, dist):
+        self.comm = dist.comm
+        self.comm_col = dist.comm_col
+        self.comm_row = dist.comm_row
         self._internal = dict()
         self._del_callbacks = dict()
 

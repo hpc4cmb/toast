@@ -19,6 +19,7 @@ install(FILES
     timing.py
     pixels.py
     weather.py
+    noise.py
     ops_sim_satellite.py
     ops_sim_ground.py
     ops_sim_tod_noise.py
@@ -47,5 +48,6 @@ install(FILES
     ops_groundfilter.py
     ops_sim_cosmic_rays.py
     ops_time_constant.py
+    spt3g.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

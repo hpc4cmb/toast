@@ -7,6 +7,8 @@ import numpy as np
 
 from astropy import units as u
 
+import h5py
+
 
 class Noise(object):
     """Noise objects act as containers for noise PSDs.
@@ -39,7 +41,9 @@ class Noise(object):
 
     """
 
-    def __init__(self, detectors, freqs, psds, mixmatrix=None, indices=None):
+    def __init__(
+        self, detectors=list(), freqs=list(), psds=list(), mixmatrix=None, indices=None
+    ):
         self._dets = list(sorted(detectors))
         if mixmatrix is None:
             # Default diagonal mixing matrix
@@ -191,3 +195,127 @@ class Noise(object):
 
         """
         return self._detector_weight(det)
+
+    def _save_base_hdf5(self, hf):
+        """Write internal data to an open HDF5 file."""
+        for k in self._freqs.keys():
+            # Create a dataset for this key
+            ds = hf.create_dataset(
+                k,
+                data=np.stack(
+                    [
+                        self._freqs[k].to_value(u.Hz),
+                        self._psds[k].to_value(u.K ** 2 * u.second),
+                    ],
+                    axis=-1,
+                ),
+            )
+            # Store the rate and index as attributes
+            ds.attrs["rate"] = self._rates[k].to_value(u.Hz)
+            ds.attrs["index"] = self._indices[k]
+        # Now store the mixing matrix as a separate dataset
+        mixdata = list()
+        maxstr = 0
+        for k, v in self._mixmatrix.items():
+            if len(k) > maxstr:
+                maxstr = len(k)
+            for other, val in v.items():
+                if len(other) > maxstr:
+                    maxstr = len(other)
+                mixdata.append((k, other, val))
+        maxstr += 1
+        mixdata = np.array(mixdata, dtype=np.dtype(f"a{maxstr}, a{maxstr}, f8"))
+        hf.create_dataset("mixing_matrix", data=mixdata)
+
+    def _save_hdf5(self, handle, **kwargs):
+        """Internal method which can be overridden by derived classes."""
+        with h5py.File(handle, "w") as hf:
+            self._save_base_hdf5(hf)
+
+    def save_hdf5(self, handle, **kwargs):
+        """Save the noise object to an HDF5 file.
+
+        Args:
+            handle (str, file object):  This can be any object accepted by the h5py
+                package.
+
+        Returns:
+            None
+
+        """
+        self._save_hdf5(handle, **kwargs)
+
+    def _load_base_hdf5(self, hf):
+        """Read internal data from an open HDF5 file"""
+        self._freqs = dict()
+        self._psds = dict()
+        self._rates = dict()
+        self._indices = dict()
+        self._mixmatrix = dict()
+        for dsname, ds in hf.items():
+            if dsname == "mixing_matrix":
+                dets = set()
+                keys = set()
+                for det, key, val in ds:
+                    det = det.decode("utf-8")
+                    key = key.decode("utf-8")
+                    dets.add(det)
+                    keys.add(key)
+                    if det not in self._mixmatrix:
+                        self._mixmatrix[det] = dict()
+                    self._mixmatrix[det][key] = val
+                self._keys = list(sorted(keys))
+                self._dets = list(sorted(dets))
+            else:
+                self._rates[dsname] = ds.attrs["rate"] * u.Hz
+                self._indices[dsname] = ds.attrs["index"]
+                self._freqs[dsname] = u.Quantity(ds[:, 0], u.Hz)
+                self._psds[dsname] = u.Quantity(ds[:, 1], u.K ** 2 * u.second)
+
+    def _load_hdf5(self, handle, **kwargs):
+        """Internal method which can be overridden by derived classes."""
+        with h5py.File(handle, "r") as hf:
+            self._load_base_hdf5(hf)
+
+    def load_hdf5(self, handle, **kwargs):
+        """Load the noise object from an HDF5 file.
+
+        Args:
+            handle (str, file object):  This can be any object accepted by the h5py
+                package.
+
+        Returns:
+            None
+
+        """
+        self._load_hdf5(handle, **kwargs)
+
+    def __repr__(self):
+        mix_min = np.min([len(y) for x, y in self._mixmatrix.items()])
+        mix_max = np.max([len(y) for x, y in self._mixmatrix.items()])
+        value = f"<Noise model with {len(self._dets)} detectors each built from "
+        value += f"between {mix_min} and {mix_max} independent streams"
+        value += ">"
+        return value
+
+    def __eq__(self, other):
+        if self._dets != other._dets:
+            return False
+        if self._keys != other._keys:
+            return False
+        if self._rates != other._rates:
+            return False
+        if self._indices != other._indices:
+            return False
+        if self._mixmatrix != other._mixmatrix:
+            return False
+        for k, v in self._freqs.items():
+            if not np.allclose(v, other._freqs[k]):
+                return False
+        for k, v in self._psds.items():
+            if not np.allclose(v, other._psds[k]):
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)

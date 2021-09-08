@@ -19,6 +19,8 @@ from ..observation import DetectorData, Observation, set_default_names
 
 from ..observation import default_names as obs_names
 
+from ..observation import default_names as obs_names
+
 from ..mpi import Comm, MPI
 
 from ._helpers import (
@@ -510,6 +512,12 @@ class ObservationTest(MPITestCase):
                 obs.shared["beam_profile"].set(
                     beam_data, offset=(didx, 0, 0), fromrank=0
                 )
+
+            # Test the redistribution of intervals that align with scanning pattern
+            obs.intervals["frames"] = (
+                obs.intervals["scanning"] | obs.intervals["turnaround"]
+            )
+            obs.intervals["frames"] |= obs.intervals["elnod"]
 
         # Redistribute, and make a copy for verification later
         original = list()

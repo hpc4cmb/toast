@@ -167,7 +167,7 @@ class IntervalList(Sequence):
                     # Construct intervals from time ranges
                     for i in range(len(timespans) - 1):
                         if timespans[i][1] > timespans[i + 1][0]:
-                            raise RuntimeErrors("Timespans must be sorted and disjoint")
+                            raise RuntimeError("Timespans must be sorted and disjoint")
                     indices = self._find_indices(timespans)
                     self._internal = [
                         Interval(
@@ -410,7 +410,7 @@ class IntervalList(Sequence):
         curself = 0
         curother = 0
 
-        # Walk both sequences, building up the largest contiguous chunks possible.
+        # Walk both sequences.
         done_self = False
         done_other = False
         while (not done_self) or (not done_other):
@@ -437,7 +437,10 @@ class IntervalList(Sequence):
                 res_first = next.first
                 res_last = next.last
             else:
-                if next.first <= res_last + 1:
+                # We use '<' here instead of '<=', so that intervals which are next to
+                # each other (but not overlapping) are not combined.  If the combination
+                # is desired, the simplify() method can be used.
+                if next.first < res_last + 1:
                     # We overlap last interval
                     if next.last > res_last:
                         # This interval extends beyond the last interval

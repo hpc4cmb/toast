@@ -673,6 +673,9 @@ def create_ground_data(
         detset_key="pixel",
         elnod_start=el_nod,
         elnods=el_nods,
+        det_flags="flags",
+        det_data="signal",
+        shared_flags="flags",
     )
     sim_ground.apply(data)
 

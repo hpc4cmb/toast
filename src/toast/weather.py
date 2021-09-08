@@ -222,6 +222,7 @@ class SimWeather(Weather):
         else:
             self._data = load_package_weather(self._name)
 
+        self._max_pwv = max_pwv
         if max_pwv is not None:
             self._truncate_distributions("TQV", max_pwv)
 
@@ -245,7 +246,23 @@ class SimWeather(Weather):
                 cdf[:] = new_cdf
         return
 
-    def set(self, time=None, realization=None, site_uid=None):
+    def set(self, time=None, realization=0, site_uid=0):
+        """Set new parameters for weather simulation.
+
+        This (re-)sets the time, realization, and site_uid for drawing random weather
+        parameters.
+
+        Args:
+            time (datetime):  A python date/time in UTC.
+            realization (int):  The realization index used for random draw of
+                parameters.
+            site_uid (int):  The Unique ID for the site, used for random draw of
+                parameters.
+
+        Returns:
+            None
+
+        """
         if time is not None:
             self._date = time
             self._doy = time.timetuple().tm_yday
@@ -258,6 +275,26 @@ class SimWeather(Weather):
         if site_uid is not None:
             self._site_uid = site_uid
         self._draw_values()
+
+    @property
+    def name(self):
+        """The name of the internal weather object or file."""
+        return self._name
+
+    @property
+    def realization(self):
+        """The current realization."""
+        return self._realization
+
+    @property
+    def site_uid(self):
+        """The current site UID."""
+        return self._site_uid
+
+    @property
+    def max_pwv(self):
+        """The maximum PWV used to truncate the distribution."""
+        return self._max_pwv
 
     def _draw_values(self):
         self._sim_ice_water = self._draw("TQI") * u.mm
@@ -339,3 +376,21 @@ class SimWeather(Weather):
             self._realization,
         )
         return value
+
+    def __eq__(self, other):
+        if self._name != other._name:
+            return False
+        if self._year != other._year:
+            return False
+        if self._month != other._month:
+            return False
+        if self._hour != other._hour:
+            return False
+        if self._site_uid != other._site_uid:
+            return False
+        if self._realization != other._realization:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)

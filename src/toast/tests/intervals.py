@@ -94,10 +94,11 @@ class IntervalTest(MPITestCase):
         neg = ~ival
 
         full = ival | neg
+        full.simplify()
         # print("full = ", full)
-        self.assertTrue(
-            full[0] == Interval(start=stamps[0], stop=stamps[-1], first=0, last=99)
-        )
+        check = Interval(start=stamps[0], stop=stamps[-1], first=0, last=99)
+        # print(f"check = {check}")
+        self.assertTrue(full[0] == check)
 
         empty = ival & neg
         # print("empty = ", empty)

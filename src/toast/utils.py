@@ -7,6 +7,8 @@ import gc
 import hashlib
 import warnings
 
+import importlib
+
 import datetime
 
 import numpy as np
@@ -601,3 +603,26 @@ def dtype_to_aligned(dt):
 def array_dot(u, v):
     """Dot product of each row of two 2D arrays"""
     return np.sum(u * v, axis=1).reshape((-1, 1))
+
+
+def object_fullname(o):
+    """Return the fully qualified name of an object."""
+    module = o.__module__
+    if module is None or module == str.__module__:
+        return o.__qualname__
+    return "{}.{}".format(module, o.__qualname__)
+
+
+def import_from_name(name):
+    """Import a class from its full name."""
+    cls_parts = name.split(".")
+    cls_name = cls_parts.pop()
+    cls_mod_name = ".".join(cls_parts)
+    cls = None
+    try:
+        cls_mod = importlib.import_module(cls_mod_name)
+        cls = getattr(cls_mod, cls_name)
+    except:
+        msg = f"Cannot import class '{cls_name}' from module '{cls_mod_name}'"
+        raise RuntimeError(msg)
+    return cls

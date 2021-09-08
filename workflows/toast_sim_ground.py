@@ -39,6 +39,11 @@ import toast.ops
 
 from toast.mpi import MPI
 
+from toast import spt3g as t3g
+
+if t3g.available:
+    from spt3g import core as c3g
+
 
 def parse_config(operators, templates, comm):
     """Parse command line arguments and load any config files.
@@ -59,14 +64,20 @@ def parse_config(operators, templates, comm):
         "--schedule", required=True, default=None, help="Input observing schedule"
     )
 
-    # FIXME: Add weather name / path here
-
     parser.add_argument(
         "--out_dir",
         required=False,
         type=str,
         default="toast_sim_ground_out",
         help="The output directory",
+    )
+
+    parser.add_argument(
+        "--save_spt3g",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Save simulated data to SPT3G format.",
     )
 
     # Build a config dictionary starting from the operator defaults, overriding with any
@@ -301,6 +312,73 @@ def reduce_data(job, args, data):
         log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
 
 
+def dump_spt3g(job, args, data):
+    """Save data to SPT3G format."""
+    if not t3g.available:
+        raise RuntimeError("SPT3G is not available, cannot save to that format")
+    ops = job.operators
+    save_dir = os.path.join(args.out_dir, "spt3g")
+    meta_exporter = t3g.export_obs_meta(
+        noise_models=[
+            (ops.default_model.noise_model, ops.default_model.noise_model),
+            (ops.elevation_model.out_model, ops.elevation_model.out_model),
+        ]
+    )
+    # Note that we export detector flags below to a float64 G3TimestreamMap
+    # in order to use FLAC compression.
+    # FIXME:  This workflow currently does not use any operators that create
+    # detector flags.  Once it does, add that back below.
+    data_exporter = t3g.export_obs_data(
+        shared_names=[
+            (
+                ops.sim_ground.boresight_azel,
+                ops.sim_ground.boresight_azel,
+                c3g.G3VectorQuat,
+            ),
+            (
+                ops.sim_ground.boresight_radec,
+                ops.sim_ground.boresight_radec,
+                c3g.G3VectorQuat,
+            ),
+            (ops.sim_ground.position, ops.sim_ground.position, None),
+            (ops.sim_ground.velocity, ops.sim_ground.velocity, None),
+            (ops.sim_ground.azimuth, ops.sim_ground.azimuth, None),
+            (ops.sim_ground.elevation, ops.sim_ground.elevation, None),
+            # (ops.sim_ground.hwp_angle, ops.sim_ground.hwp_angle, None),
+            (ops.sim_ground.shared_flags, "telescope_flags", None),
+        ],
+        det_names=[
+            (
+                ops.sim_noise.det_data,
+                ops.sim_noise.det_data,
+                c3g.G3TimestreamMap,
+            ),
+            # ("flags", "detector_flags", c3g.G3TimestreamMap),
+        ],
+        interval_names=[
+            (ops.sim_ground.scan_leftright_interval, "intervals_scan_leftright"),
+            (ops.sim_ground.turn_leftright_interval, "intervals_turn_leftright"),
+            (ops.sim_ground.scan_rightleft_interval, "intervals_scan_rightleft"),
+            (ops.sim_ground.turn_rightleft_interval, "intervals_turn_rightleft"),
+            (ops.sim_ground.elnod_interval, "intervals_elnod"),
+            (ops.sim_ground.scanning_interval, "intervals_scanning"),
+            (ops.sim_ground.turnaround_interval, "intervals_turnaround"),
+            (ops.sim_ground.sun_up_interval, "intervals_sun_up"),
+            (ops.sim_ground.sun_close_interval, "intervals_sun_close"),
+        ],
+        compress=True,
+    )
+    exporter = t3g.export_obs(
+        meta_export=meta_exporter,
+        data_export=data_exporter,
+        export_rank=0,
+    )
+    dumper = toast.ops.SaveSpt3g(
+        directory=save_dir, framefile_mb=500, obs_export=exporter
+    )
+    dumper.apply(data)
+
+
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()
@@ -318,11 +396,8 @@ def main():
     # We can also set some default values here for the traits, including whether an
     # operator is disabled by default.
 
-    # FIXME:  This example workflow will eventually include other operators for
-    # atmosphere simulation, filtering, other types of map-making, etc.
-
     operators = [
-        toast.ops.SimGround(name="sim_ground", weather="atacama"),
+        toast.ops.SimGround(name="sim_ground", weather="atacama", detset_key="pixel"),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(
             name="elevation_model",
@@ -382,6 +457,10 @@ def main():
 
     # Create simulated data
     data = simulate_data(job, toast_comm, telescope, schedule)
+
+    # Optionally save to spt3g format
+    if args.save_spt3g:
+        dump_spt3g(job, args, data)
 
     # Reduce the data
     reduce_data(job, args, data)
