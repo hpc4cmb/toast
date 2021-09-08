@@ -39,10 +39,6 @@ class CrossLinkingTest(MPITestCase):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
-        # Create an uncorrelated noise model from focalplane detector properties
-        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
-        default_model.apply(data)
-
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
 
@@ -57,12 +53,24 @@ class CrossLinkingTest(MPITestCase):
         # Crosslinking
         crosslinking = ops.CrossLinking(
             pointing=pointing,
-            noise_model="noise_model",
             pixel_dist="pixel_dist",
             det_flags=None,
             output_dir=self.outdir,
         )
         crosslinking.apply(data)
+
+        # Check that the total number of samples makes sense
+        nsample = 0
+        for obs in data.obs:
+            nsample += obs.n_local_samples * len(obs.local_detectors)
+        if self.comm is not None:
+            nsample = self.comm.reduce(nsample)
+
+        if self.comm is None or self.comm.rank == 0:
+            fname = os.path.join(crosslinking.output_dir, f"{crosslinking.name}.fits")
+            m = hp.read_map(fname)
+            nhit = np.sum(m)
+            assert nhit == nsample
 
         del data
         return
@@ -72,10 +80,6 @@ class CrossLinkingTest(MPITestCase):
 
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
-
-        # Create an uncorrelated noise model from focalplane detector properties
-        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
-        default_model.apply(data)
 
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
@@ -95,12 +99,24 @@ class CrossLinkingTest(MPITestCase):
         crosslinking = ops.CrossLinking(
             name="cached_crosslinking",
             pointing=pointing,
-            noise_model="noise_model",
             pixel_dist="pixel_dist",
             det_flags=None,
             output_dir=self.outdir,
         )
         crosslinking.apply(data)
+
+        # Check that the total number of samples makes sense
+        nsample = 0
+        for obs in data.obs:
+            nsample += obs.n_local_samples * len(obs.local_detectors)
+        if self.comm is not None:
+            nsample = self.comm.reduce(nsample)
+
+        if self.comm is None or self.comm.rank == 0:
+            fname = os.path.join(crosslinking.output_dir, f"{crosslinking.name}.fits")
+            m = hp.read_map(fname)
+            nhit = np.sum(m)
+            assert nhit == nsample
 
         del data
         return

@@ -36,9 +36,16 @@ from .copy import Copy
 
 from .arithmetic import Subtract
 
+from .pointing import BuildPixelDistribution
+
 from .pointing_healpix import PointingHealpix
 
 from .mapmaker_utils import BuildNoiseWeighted
+
+
+class UniformNoise:
+    def detector_weight(self, det):
+        return 1.0
 
 
 @trait_docs
@@ -83,17 +90,22 @@ class CrossLinking(Operator):
         help="Write output data products to this directory",
     )
 
-    noise_model = Unicode(
-        "noise_model", help="Observation key containing the noise model"
-    )
+    #noise_model = Unicode(
+    #    "noise_model", help="Observation key containing the noise model"
+    #)
 
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
+    save_pointing = Bool(
+        False, help="If True, do not clear detector pointing matrices after use"
+    )
+
     signal = "dummy_signal"
     weights = "crosslinking_weights"
     crosslinking_map = "crosslinking_map"
+    noise_model = "uniform_noise_weights"
 
     @traitlets.validate("pointing")
     def _check_pointing(self, proposal):
@@ -113,55 +125,46 @@ class CrossLinking(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _get_weights(self, data, obs, detectors):
+    def _get_weights(self, obs_data, det):
         """ Evaluate the special pointing matrix
         """
 
-        nsample = obs.n_local_samples
-        focalplane = obs.telescope.focalplane
-        dets = obs.select_local_detectors(detectors)
-
-        obs.detdata.ensure(self.signal, detectors=dets)
-        obs.detdata.ensure(self.weights, sample_shape=(3,), detectors=dets)
+        obs = obs_data.obs[0]
+        obs.detdata.ensure(self.signal, detectors=[det])
+        obs.detdata.ensure(self.weights, sample_shape=(3,), detectors=[det])
         
-        for det in dets:
-            signal = obs.detdata[self.signal][det]
-            signal[:] = 1
-            weights = obs.detdata[self.weights][det]
-            try:
-                # Use cached detector quaternions
-                quat = obs.detdata[self.pointing.detector_pointing.quats][det]
-            except KeyError:
-                # Compute the detector quaternions
-                obs_data = data.select(obs_uid=obs.uid)
-                self.pointing.detector_pointing.apply(obs_data, detectors=[det])
-                quat = obs.detdata[self.pointing.detector_pointing.quats][det]
-            # measure the scan direction wrt the local meridian
-            # for each sample
-            theta, phi = qa.to_position(quat)
-            theta = np.pi / 2 - theta
-            # scan direction across the reference sample
-            dphi = (np.roll(phi, -1) - np.roll(phi, 1))
-            dtheta = np.roll(theta, -1) - np.roll(theta, 1)
-            # except first and last sample
-            for dx, x in (dphi, phi), (dtheta, theta):
-                dx[0] = x[1] - x[0]
-                dx[-1] = x[-1] - x[-2]
-            # scale dphi to on-sky
-            dphi *= np.cos(theta)
-            # Avoid overflows
-            tiny = np.abs(dphi) < 1e-30
-            if np.any(tiny):
-                ang = np.zeros(nsample)
-                ang[tiny] = np.sign(dtheta) * np.sign(dphi) * np.pi / 2
-                not_tiny = np.logical_not(tiny)
-                ang[not_tiny] = np.arctan(dtheta[not_tiny] / dphi[not_tiny])
-            else:
-                ang = np.arctan(dtheta / dphi)
+        signal = obs.detdata[self.signal][det]
+        signal[:] = 1
+        weights = obs.detdata[self.weights][det]
+        # Compute the detector quaternions
+        self.pointing.detector_pointing.apply(obs_data, detectors=[det])
+        quat = obs.detdata[self.pointing.detector_pointing.quats][det]
+        # measure the scan direction wrt the local meridian for each sample
+        theta, phi = qa.to_position(quat)
+        theta = np.pi / 2 - theta
+        # scan direction across the reference sample
+        dphi = (np.roll(phi, -1) - np.roll(phi, 1))
+        dtheta = np.roll(theta, -1) - np.roll(theta, 1)
+        # except first and last sample
+        for dx, x in (dphi, phi), (dtheta, theta):
+            dx[0] = x[1] - x[0]
+            dx[-1] = x[-1] - x[-2]
+        # scale dphi to on-sky
+        dphi *= np.cos(theta)
+        # Avoid overflows
+        tiny = np.abs(dphi) < 1e-30
+        if np.any(tiny):
+            ang = np.zeros(signal.size)
+            ang[tiny] = np.sign(dtheta) * np.sign(dphi) * np.pi / 2
+            not_tiny = np.logical_not(tiny)
+            ang[not_tiny] = np.arctan(dtheta[not_tiny] / dphi[not_tiny])
+        else:
+            ang = np.arctan(dtheta / dphi)
 
-            weights[:] = np.vstack(
-                [np.ones(nsample), np.cos(2 * ang), np.sin(2 * ang)]
-            ).T
+        weights[:] = np.vstack(
+            [np.ones(signal.size), np.cos(2 * ang), np.sin(2 * ang)]
+        ).T
+
         return
 
     def _purge_weights(self, obs):
@@ -177,30 +180,24 @@ class CrossLinking(Operator):
         if data.comm.world_rank == 0:
             os.makedirs(self.output_dir, exist_ok=True)
 
-        # Get detector weights
-
+        # Establish uniform noise weights
+        noise_model = UniformNoise()
         for obs in data.obs:
-            self._get_weights(data, obs, detectors)
-        
-        # To accumulate, need the pixel numbers and distribution.
+            obs[self.noise_model] = noise_model
 
-        create_dist_save = self.pointing.create_dist
-        if self.pixel_dist in data:
-            # Pixel distribution exists, we can expand pointing
-            # one detector at a time
-            self.pointing.create_dist = None
-        else:
-            self.pointing.create_dist = self.pixel_dist
+        # To accumulate, we need the pixel distribution.
 
-        if self.pointing.create_dist:
-            # Need the pixel distribution so might as well cache the pixel
-            # numbers in the process.  Otherwise they get expanded twice.
-            self.pointing.apply(data, detectors=detectors)
-            operators = []
-        else:
-            # Expand pixel numbers on the fly.
-            # If they already exist, the operator does nothing.
-            operators = [self.pointing]
+        if self.pixel_dist not in data:
+            pix_dist = BuildPixelDistribution(
+                pixel_dist=self.pixel_dist,
+                pointing=self.pointing,
+                shared_flags=self.shared_flags,
+                shared_flag_mask=self.shared_flag_mask,
+                save_pointing=self.save_pointing,
+            )
+            pix_dist.apply(data)
+
+        # Accumulation operator
 
         build_zmap = BuildNoiseWeighted(
             pixel_dist=self.pixel_dist,
@@ -217,12 +214,18 @@ class CrossLinking(Operator):
             sync_type=self.sync_type,
         )
 
-        operators.append(build_zmap)
-        Pipeline(
-            operators=operators, detector_sets=["SINGLE"],
-        ).apply(data, detectors=detectors)
+        for obs in data.obs:
+            obs_data = data.select(obs_uid=obs.uid)
+            dets = obs.select_local_detectors(detectors)
+            for det in dets:
+                # Pointing weights
+                self._get_weights(obs_data, det)
+                # Pixel numbers
+                self.pointing.apply(obs_data, detectors=[det])
+                # Accumulate
+                build_zmap.exec(obs_data, detectors=[det])
 
-        self.pointing.create_dist = create_dist_save
+        build_zmap.finalize(data)
 
         # Write out the results
 
