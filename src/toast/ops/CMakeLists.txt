@@ -48,5 +48,6 @@ install(FILES
     run_spt3g.py
     cadence_map.py
     flag_sso.py
+    crosslinking.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
