@@ -32,24 +32,7 @@ from ..utils import Environment, Logger, Timer
 
 from ..observation import default_names as obs_names
 
-
-def to_JD(t):
-    # Unix time stamp to Julian date
-    # (days since -4712-01-01 12:00:00 UTC)
-    return t / 86400.0 + 2440587.5
-
-
-def to_MJD(t):
-    # Convert Unix time stamp to modified Julian date
-    # (days since 1858-11-17 00:00:00 UTC)
-    return to_JD(t) - 2400000.5
-
-
-def to_DJD(t):
-    # Convert Unix time stamp to Dublin Julian date
-    # (days since 1899-12-31 12:00:00)
-    # This is the time format used by PyEphem
-    return to_JD(t) - 2415020
+from ..coordinates import to_DJD
 
 
 @trait_docs
