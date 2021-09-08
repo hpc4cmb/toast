@@ -178,6 +178,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))
         suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_crosstalk))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
