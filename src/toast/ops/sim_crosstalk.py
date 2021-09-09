@@ -17,8 +17,31 @@ from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
 from .operator import Operator
 
+
+
 @function_timer
-def init_xtalk ( data , detectors=None
+def read_xtalk_matrix( filename, data , detectors=None ):
+    """
+    Read Xtalk matrix from disc.
+    the  file to be in numpy binary format,
+    i.e. `*.npz`.
+    In case we want to run on a subset of detectors
+    """
+
+    matrix = np.load(filename)['matrix']
+
+    xtalk_mat={}
+
+    for ob in data.obs:
+        Ndets= len(ob.telescope.focalplane.detectors )
+        dets = ob.select_local_detectors(detectors )
+        alldets = ob.telescope.focalplane.detectors
+        for   idet,det in   enumerate(dets) :
+            xtalk_mat [det ]= {d : v for d,v in zip(alldets ,matrix[idet,:])}
+    return xtalk_mat
+
+@function_timer
+def init_xtalk_matrix ( data , detectors=None
                     ,realization=0):
 
     xtalk_mat={}
@@ -44,6 +67,23 @@ def init_xtalk ( data , detectors=None
             xtalk_mat[det][det]=0.
     return xtalk_mat
 
+"""
+from ..vis import set_matplotlib_backend
+import os
+import matplotlib.pyplot as plt
+
+def plot_xtalk_mat(  matdic ):
+    dets= list(matdic.keys() )
+    ndet = len (dets )
+    M = np.zeros((ndet,ndet ))
+    for  ii,  det  in enumerate(dets  ):
+        M[ii,:]= np.array(list (matdic[det].values() ))
+    set_matplotlib_backend()
+    outfile = os.path.join(  "xtalk_matrix.png")
+    #plt.imshow(M,cmap='Greys'); plt.show ()
+    #plt.savefig(outfile)
+    #plt.close()
+"""
 
 @trait_docs
 class CrossTalk(Operator):
@@ -91,11 +131,11 @@ class CrossTalk(Operator):
 
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def exec_roundrobin(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
         if self.xtalk_mat_file is None :
-            self.xtalk_mat =init_xtalk(data , detectors ,
+            self.xtalk_mat =init_xtalk_matrix(data , detectors ,
                             realization=self.realization     )
 
         for ob in data.obs:
@@ -105,13 +145,14 @@ class CrossTalk(Operator):
             if Ndets == 0: continue
             comm = ob.comm
             rank = ob.comm_rank
-
             ob.detdata.ensure(self.det_data, detectors=dets)
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
             #we loop over all the procs except rank
-            procs= np.arange(comm.size )
+
+            procs= np.arange(ob.comm_size )
+            #procs= np.arange(ob.comm.size )
             procs= procs[procs != rank]
             tmp= np.zeros_like(ob.detdata[self.det_data].data)
             for idet, det in enumerate(dets):
@@ -153,8 +194,11 @@ class CrossTalk(Operator):
 
                     comm.isend(ob.detdata[self.det_data].data ,
                                 dest=ip , tag= rank*10 + ip   )
-                    req= comm.irecv( source=ip ,
+                    #buf = bytearray(1<<20) # 1 MB buffer, make it larger if needed.
+                    #req= comm.irecv( buf=buf,source=ip ,
+                    req= comm.irecv(  source=ip ,
                                     tag=  ip*10+  rank    )
+#                    success,detdata = req.test()
                     detdata = req.wait()
 
                     tmp[idet]  += np.dot( xtalk_weights,  detdata[ind2])
@@ -166,6 +210,61 @@ class CrossTalk(Operator):
 
                 ob.detdata[self.det_data][det]+=tmp[idet]
 
+
+
+        return
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        env = Environment.get()
+        log = Logger.get()
+        if self.xtalk_mat_file is None :
+            self.xtalk_mat =init_xtalk_matrix(data , detectors ,
+                            realization=self.realization     )
+        else:
+            self.xtalk_mat= read_xtalk_matrix(self.xtalk_mat_file, data , detectors)
+
+        for ob in data.obs:
+            # Get the detectors we are using for this observation
+            dets = ob.select_local_detectors(detectors)
+            Ndets=len(dets)
+            if Ndets == 0: continue
+            comm = ob.comm
+            rank = ob.comm_rank
+            ob.detdata.ensure(self.det_data, detectors=dets)
+            obsindx = ob.uid
+            telescope = ob.telescope.uid
+            focalplane = ob.telescope.focalplane
+
+            # Detdata are usually distributed by detectors,
+            # to crosstalk is more convenient to  redistribute them by time,
+            # so that   each process has the samples from all detectors at a given
+            # time stamp.
+
+            ob.redistribute(1, times=ob.shared["times"])
+            #Now ob.local_detectors == ob.all_detectors and
+            # the number of local samples is some small slice of the total
+
+            #assert ob.local_detectors == ob.all_detectors
+
+            # we store the crosstalked data into a temporary array
+            tmp= np.zeros_like(ob.detdata[self.det_data].data)
+            for idet, det in enumerate(dets):
+                # for a given detector only a subset
+                # of detectors can be crosstalking
+                xtalklist = list( self.xtalk_mat[det].keys())
+                intersect_local = np.intersect1d(ob.local_detectors ,xtalklist)
+                ind1 =[ xtalklist.index(k ) for  k in intersect_local ]
+                ind2 = [ ob.detdata[self.det_data].detectors .index(k)  for  k in intersect_local]
+                xtalk_weights = np.array([self.xtalk_mat[det][kk] for kk in np.array(xtalklist)[ind1]])
+                tmp[idet]  += np.dot( xtalk_weights,  ob.detdata[self.det_data].data[ind2,:])
+
+            for idet, det in enumerate(dets):
+                ob.detdata[self.det_data][det]+=tmp[idet]
+
+            # We distribute the data back to the previous distribution
+
+            ob.redistribute(ob.comm_size , times=ob.shared["times"])
 
 
         return
