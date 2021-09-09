@@ -21,6 +21,7 @@ from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 from ..observation import default_names as obs_names
 from ..coordinates import to_MJD
+from .pointing import BuildPixelDistribution
 
 
 @trait_docs
@@ -65,6 +66,10 @@ class CadenceMap(Operator):
         help="Write output data products to this directory",
     )
 
+    save_pointing = Bool(
+        False, help="If True, do not clear detector pointing matrices after use"
+    )
+
     @traitlets.validate("pointing")
     def _check_pointing(self, proposal):
         pntg = proposal["value"]
@@ -85,19 +90,26 @@ class CadenceMap(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        if self.pixel_dist is None:
-            raise RuntimeError(
-                "You must set the 'pixel_dist' trait before calling exec()"
-            )
-        elif self.pixel_dist not in data:
-            raise RuntimeError(
-                f"Pixel distribution '{self.pixel_dist}' does not exist in data."
-            )
+        for trait in "pointing", "pixel_dist":
+            if not hasattr(self, trait):
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
         comm = data.comm.comm_world
         rank = data.comm.world_rank
 
-        # Get the total number of pixels from the pixel distribution
+        # We need the pixel distribution to know total number of pixels
+
+        if self.pixel_dist not in data:
+            pix_dist = BuildPixelDistribution(
+                pixel_dist=self.pixel_dist,
+                pointing=self.pointing,
+                shared_flags=self.shared_flags,
+                shared_flag_mask=self.shared_flag_mask,
+                save_pointing=self.save_pointing,
+            )
+            log.info_rank("Caching pixel distribution", comm=data.comm.comm_world)
+            pix_dist.apply(data)
 
         npix = data[self.pixel_dist].n_pix
 
@@ -138,6 +150,7 @@ class CadenceMap(Operator):
                 )
             buf[:, :] = False
             for obs in data.obs:
+                obs_data = data.select(obs_uid=obs.uid)
                 dets = obs.select_local_detectors(detectors)
                 times = obs.shared[self.times].data
                 days = to_MJD(times).astype(int)
@@ -158,17 +171,12 @@ class CadenceMap(Operator):
                     for det in dets:
                         if self.det_flags:
                             # ... even by detector flags
-                            flag = obs.detdata[self.det_flags][det] & self.flag_mask
+                            flag = obs.detdata[self.det_flags][det] & self.det_flag_mask
                             mask = np.logical_and(good, flag == 0)
                         else:
                             mask = good
                         # Compute pixel numbers.  Will do nothing if they already exist.
-                        obs_data = Data(comm=data.comm)
-                        obs_data._internal = data._internal
-                        obs_data.obs = [obs]
                         self.pointing.apply(obs_data, detectors=[det])
-                        obs_data.obs.clear()
-                        del obs_data
                         # Flag the hit pixels
                         pixels = obs.detdata[self.pointing.pixels][det]
                         mask[pixels < 0] = False
@@ -181,7 +189,7 @@ class CadenceMap(Operator):
             day_start = day_stop
 
         if rank == 0:
-            fname = os.path.join(self.output_dir, f"{self.name}_cadence.h5")
+            fname = os.path.join(self.output_dir, f"{self.name}.h5")
             with h5py.File(fname, "w") as f:
                 dset = f.create_dataset("cadence", data=all_hit)
                 dset.attrs["MJDSTART"] = MJD_start

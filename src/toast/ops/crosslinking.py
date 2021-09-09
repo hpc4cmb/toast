@@ -50,8 +50,7 @@ class UniformNoise:
 
 @trait_docs
 class CrossLinking(Operator):
-    """ Evaluate an ACT-style crosslinking map
-    """
+    """Evaluate an ACT-style crosslinking map"""
 
     # Class traits
 
@@ -90,10 +89,6 @@ class CrossLinking(Operator):
         help="Write output data products to this directory",
     )
 
-    #noise_model = Unicode(
-    #    "noise_model", help="Observation key containing the noise model"
-    #)
-
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
@@ -115,7 +110,11 @@ class CrossLinking(Operator):
                 raise traitlets.TraitError("pointing should be an Operator instance")
             # Check that this operator has the traits we expect
             for trt in [
-                    "pixels", "weights", "create_dist", "view", "detector_pointing"
+                "pixels",
+                "weights",
+                "create_dist",
+                "view",
+                "detector_pointing",
             ]:
                 if not pntg.has_trait(trt):
                     msg = "pointing operator should have a '{}' trait".format(trt)
@@ -127,13 +126,12 @@ class CrossLinking(Operator):
 
     @function_timer
     def _get_weights(self, obs_data, det):
-        """ Evaluate the special pointing matrix
-        """
+        """Evaluate the special pointing matrix"""
 
         obs = obs_data.obs[0]
         obs.detdata.ensure(self.signal, detectors=[det])
         obs.detdata.ensure(self.weights, sample_shape=(3,), detectors=[det])
-        
+
         signal = obs.detdata[self.signal][det]
         signal[:] = 1
         weights = obs.detdata[self.weights][det]
@@ -144,7 +142,7 @@ class CrossLinking(Operator):
         theta, phi = qa.to_position(quat)
         theta = np.pi / 2 - theta
         # scan direction across the reference sample
-        dphi = (np.roll(phi, -1) - np.roll(phi, 1))
+        dphi = np.roll(phi, -1) - np.roll(phi, 1)
         dtheta = np.roll(theta, -1) - np.roll(theta, 1)
         # except first and last sample
         for dx, x in (dphi, phi), (dtheta, theta):
@@ -169,8 +167,7 @@ class CrossLinking(Operator):
         return
 
     def _purge_weights(self, obs):
-        """ Discard special pointing matrix and dummy signal
-        """
+        """Discard special pointing matrix and dummy signal"""
         del obs.detdata[self.signal]
         del obs.detdata[self.weights]
         return
@@ -178,6 +175,11 @@ class CrossLinking(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        for trait in "pointing", "pixel_dist":
+            if not hasattr(self, trait):
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
         if data.comm.world_rank == 0:
             os.makedirs(self.output_dir, exist_ok=True)
@@ -197,6 +199,7 @@ class CrossLinking(Operator):
                 shared_flag_mask=self.shared_flag_mask,
                 save_pointing=self.save_pointing,
             )
+            log.info_rank("Caching pixel distribution", comm=data.comm.comm_world)
             pix_dist.apply(data)
 
         # Accumulation operator
@@ -232,12 +235,11 @@ class CrossLinking(Operator):
         # Write out the results
 
         fname = os.path.join(self.output_dir, f"{self.name}.fits")
-        write_healpix_fits(
-            data[self.crosslinking_map], fname, nest=self.pointing.nest
-        )
+        write_healpix_fits(data[self.crosslinking_map], fname, nest=self.pointing.nest)
+        log.info_rank(f"Wrote crosslinking to {fname}", comm=data.comm.comm_world)
         data[self.crosslinking_map].clear()
         del data[self.crosslinking_map]
-                    
+
         for obs in data.obs:
             self._purge_weights(obs)
 
@@ -251,8 +253,7 @@ class CrossLinking(Operator):
         return req
 
     def _provides(self):
-        return {
-        }
+        return {}
 
     def _accelerators(self):
         return list()

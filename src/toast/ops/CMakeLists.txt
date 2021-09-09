@@ -49,5 +49,6 @@ install(FILES
     cadence_map.py
     flag_sso.py
     crosslinking.py
+    sss.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

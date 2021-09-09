@@ -238,6 +238,12 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
+    # Simulate scan-synchronous signal
+
+    ops.sim_sss.detector_pointing = ops.det_pointing_azel
+    ops.sim_sss.apply(data)
+    log.info_rank("Simulated Scan-synchronous signal", comm=world_comm, timer=timer)
+
     # Apply a time constant
 
     ops.convolve_time_constant.apply(data)
@@ -264,8 +270,24 @@ def reduce_data(job, args, data):
     timer.start()
 
     # Flag Sun, Moon and the planets
+
     ops.flag_sso.detector_pointing = ops.det_pointing_azel
     ops.flag_sso.apply(data)
+    log.info_rank("Flagged SSOs in", comm=world_comm, timer=timer)
+
+    # Optional geometric factors
+
+    ops.cadence_map.pointing = ops.pointing_final
+    ops.cadence_map.pixel_dist = ops.binner_final.pixel_dist
+    ops.cadence_map.output_dir = args.out_dir
+    ops.cadence_map.apply(data)
+    log.info_rank("Calculated cadence map in", comm=world_comm, timer=timer)
+
+    ops.crosslinking.pointing = ops.pointing_final
+    ops.crosslinking.pixel_dist = ops.binner_final.pixel_dist
+    ops.crosslinking.output_dir = args.out_dir
+    ops.crosslinking.apply(data)
+    log.info_rank("Calculated crosslinking in", comm=world_comm, timer=timer)
 
     # Collect signal statistics before filtering
 
@@ -418,12 +440,15 @@ def main():
         ),
         toast.ops.ScanHealpix(name="scan_map", enabled=False),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
+        toast.ops.SimScanSynchronousSignal(name="sim_sss", enabled=False),
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, enabled=False
         ),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
         toast.ops.FlagSSO(name="flag_sso", enabled=False),
+        toast.ops.CadenceMap(name="cadence_map", enabled=False),
+        toast.ops.CrossLinking(name="crosslinking", enabled=False),
         toast.ops.Statistics(name="raw_statistics", enabled=False),
         toast.ops.TimeConstant(
             name="deconvolve_time_constant", deconvolve=True, enabled=False
