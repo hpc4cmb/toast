@@ -90,10 +90,6 @@ class CrossLinking(Operator):
         help="Write output data products to this directory",
     )
 
-    #noise_model = Unicode(
-    #    "noise_model", help="Observation key containing the noise model"
-    #)
-
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
@@ -132,7 +128,7 @@ class CrossLinking(Operator):
         obs = obs_data.obs[0]
         obs.detdata.ensure(self.signal, detectors=[det])
         obs.detdata.ensure(self.weights, sample_shape=(3,), detectors=[det])
-        
+
         signal = obs.detdata[self.signal][det]
         signal[:] = 1
         weights = obs.detdata[self.weights][det]
@@ -177,6 +173,11 @@ class CrossLinking(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        for trait in "pointing", "pixel_dist":
+            if not hasattr(self, trait):
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
+
         if data.comm.world_rank == 0:
             os.makedirs(self.output_dir, exist_ok=True)
 
@@ -195,6 +196,7 @@ class CrossLinking(Operator):
                 shared_flag_mask=self.shared_flag_mask,
                 save_pointing=self.save_pointing,
             )
+            log.info_rank("Caching pixel distribution", comm=data.comm.comm_world)
             pix_dist.apply(data)
 
         # Accumulation operator
@@ -233,9 +235,10 @@ class CrossLinking(Operator):
         write_healpix_fits(
             data[self.crosslinking_map], fname, nest=self.pointing.nest
         )
+        log.info_rank(f"Wrote crosslinking to {fname}", comm=data.comm.comm_world)
         data[self.crosslinking_map].clear()
         del data[self.crosslinking_map]
-                    
+
         for obs in data.obs:
             self._purge_weights(obs)
 

@@ -264,8 +264,24 @@ def reduce_data(job, args, data):
     timer.start()
 
     # Flag Sun, Moon and the planets
+
     ops.flag_sso.detector_pointing = ops.det_pointing_azel
     ops.flag_sso.apply(data)
+    log.info_rank("Flagged SSOs in", comm=world_comm, timer=timer)
+
+    # Optional geometric factors
+
+    ops.cadence_map.pointing = ops.pointing_final
+    ops.cadence_map.pixel_dist = ops.binner_final.pixel_dist
+    ops.cadence_map.output_dir = args.out_dir
+    ops.cadence_map.apply(data)
+    log.info_rank("Calculated cadence map in", comm=world_comm, timer=timer)
+
+    ops.crosslinking.pointing = ops.pointing_final
+    ops.crosslinking.pixel_dist = ops.binner_final.pixel_dist
+    ops.crosslinking.output_dir = args.out_dir
+    ops.crosslinking.apply(data)
+    log.info_rank("Calculated crosslinking in", comm=world_comm, timer=timer)
 
     # Collect signal statistics before filtering
 
@@ -424,6 +440,8 @@ def main():
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingHealpix(name="pointing", mode="IQU"),
         toast.ops.FlagSSO(name="flag_sso", enabled=False),
+        toast.ops.CadenceMap(name="cadence_map", enabled=False),
+        toast.ops.CrossLinking(name="crosslinking", enabled=False),
         toast.ops.Statistics(name="raw_statistics", enabled=False),
         toast.ops.TimeConstant(
             name="deconvolve_time_constant", deconvolve=True, enabled=False
