@@ -136,7 +136,7 @@ class SimScanSynchronousSignal(Operator):
         key1 = realization * 2^32 + telescope * 2^16 + component
         key2 = obsindx * 2^32
         counter1 = hierarchical cone counter
-        counter2 = sample in stream (incremented internally in the atm code)
+        counter2 = sample in stream
         """
         telescope = obs.telescope.uid
         site = obs.telescope.site.uid
