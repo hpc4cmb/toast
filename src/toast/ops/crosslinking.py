@@ -50,8 +50,7 @@ class UniformNoise:
 
 @trait_docs
 class CrossLinking(Operator):
-    """ Evaluate an ACT-style crosslinking map
-    """
+    """Evaluate an ACT-style crosslinking map"""
 
     # Class traits
 
@@ -111,7 +110,11 @@ class CrossLinking(Operator):
                 raise traitlets.TraitError("pointing should be an Operator instance")
             # Check that this operator has the traits we expect
             for trt in [
-                    "pixels", "weights", "create_dist", "view", "detector_pointing"
+                "pixels",
+                "weights",
+                "create_dist",
+                "view",
+                "detector_pointing",
             ]:
                 if not pntg.has_trait(trt):
                     msg = "pointing operator should have a '{}' trait".format(trt)
@@ -122,8 +125,7 @@ class CrossLinking(Operator):
         super().__init__(**kwargs)
 
     def _get_weights(self, obs_data, det):
-        """ Evaluate the special pointing matrix
-        """
+        """Evaluate the special pointing matrix"""
 
         obs = obs_data.obs[0]
         obs.detdata.ensure(self.signal, detectors=[det])
@@ -139,7 +141,7 @@ class CrossLinking(Operator):
         theta, phi = qa.to_position(quat)
         theta = np.pi / 2 - theta
         # scan direction across the reference sample
-        dphi = (np.roll(phi, -1) - np.roll(phi, 1))
+        dphi = np.roll(phi, -1) - np.roll(phi, 1)
         dtheta = np.roll(theta, -1) - np.roll(theta, 1)
         # except first and last sample
         for dx, x in (dphi, phi), (dtheta, theta):
@@ -164,8 +166,7 @@ class CrossLinking(Operator):
         return
 
     def _purge_weights(self, obs):
-        """ Discard special pointing matrix and dummy signal
-        """
+        """Discard special pointing matrix and dummy signal"""
         del obs.detdata[self.signal]
         del obs.detdata[self.weights]
         return
@@ -232,9 +233,7 @@ class CrossLinking(Operator):
         # Write out the results
 
         fname = os.path.join(self.output_dir, f"{self.name}.fits")
-        write_healpix_fits(
-            data[self.crosslinking_map], fname, nest=self.pointing.nest
-        )
+        write_healpix_fits(data[self.crosslinking_map], fname, nest=self.pointing.nest)
         log.info_rank(f"Wrote crosslinking to {fname}", comm=data.comm.comm_world)
         data[self.crosslinking_map].clear()
         del data[self.crosslinking_map]
@@ -252,8 +251,7 @@ class CrossLinking(Operator):
         return req
 
     def _provides(self):
-        return {
-        }
+        return {}
 
     def _accelerators(self):
         return list()

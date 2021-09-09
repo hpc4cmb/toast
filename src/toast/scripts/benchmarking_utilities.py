@@ -498,15 +498,15 @@ def select_case(
 
 
 def estimate_memory_overhead(
-        n_procs,
-        n_nodes,
-        sky_fraction,
-        nside_solve,
-        world_comm,
-        nside_final=None,
-        sim_atmosphere=None,
-        ces_max_time=None,
-        fov=None,
+    n_procs,
+    n_nodes,
+    sky_fraction,
+    nside_solve,
+    world_comm,
+    nside_final=None,
+    sim_atmosphere=None,
+    ces_max_time=None,
+    fov=None,
 ):
     """Estimate bytes of memory used per-process for objects besides timestreams.
 
@@ -546,7 +546,9 @@ def estimate_memory_overhead(
     if sim_atmosphere is not None and sim_atmosphere.enabled:
         # Compute a pessimistic estimate of the size of an atmospheric realization
         if ces_max_time is None:
-            raise RuntimeError("Cannot calculate atmospheric overhead without CES max time")
+            raise RuntimeError(
+                "Cannot calculate atmospheric overhead without CES max time"
+            )
         if fov is None:
             raise RuntimeError("Cannot calculate atmospheric overhead without FOV")
         zmax = sim_atmosphere.zmax.to_value(u.m)

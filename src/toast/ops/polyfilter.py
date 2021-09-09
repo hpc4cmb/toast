@@ -49,7 +49,7 @@ class PolyFilter2D(Operator):
     det_flags = Unicode(
         obs_names.det_flags,
         allow_none=True,
-        help="Observation detdata key for flags to use"
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")

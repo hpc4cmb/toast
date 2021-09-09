@@ -39,8 +39,7 @@ from ..coordinates import to_DJD
 
 @trait_docs
 class SimScanSynchronousSignal(Operator):
-    """Operator which generates scan-synchronous signal timestreams.
-    """
+    """Operator which generates scan-synchronous signal timestreams."""
 
     # Class traits
 
@@ -115,7 +114,7 @@ class SimScanSynchronousSignal(Operator):
 
             site = obs.telescope.site
             weather = site.weather
-            
+
             key1, key2, counter1, counter2 = self._get_rng_keys(obs)
 
             log.debug_rank(f"{log_prefix}Simulating SSS", comm=comm)
