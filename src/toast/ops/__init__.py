@@ -89,3 +89,5 @@ from .cadence_map import CadenceMap
 from .flag_sso import FlagSSO
 
 from .crosslinking import CrossLinking
+
+from .sss import SimScanSynchronousSignal

@@ -238,6 +238,12 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
+    # Simulate scan-synchronous signal
+
+    ops.sim_sss.detector_pointing = ops.det_pointing_azel
+    ops.sim_sss.apply(data)
+    log.info_rank("Simulated Scan-synchronous signal", comm=world_comm, timer=timer)
+
     # Apply a time constant
 
     ops.convolve_time_constant.apply(data)
@@ -434,6 +440,7 @@ def main():
         ),
         toast.ops.ScanHealpix(name="scan_map", enabled=False),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
+        toast.ops.SimScanSynchronousSignal(name="sim_sss", enabled=False),
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, enabled=False
         ),

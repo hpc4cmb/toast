@@ -52,5 +52,6 @@ install(FILES
     spt3g.py
     ops_cadence_map.py
     ops_crosslinking.py
+    ops_sss.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
