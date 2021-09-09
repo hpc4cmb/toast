@@ -76,6 +76,7 @@ class TimeConstant(Operator):
             tau *= 1 + x * self.tau_sigma
         return tau
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()

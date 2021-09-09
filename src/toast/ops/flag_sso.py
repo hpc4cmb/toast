@@ -112,6 +112,7 @@ class FlagSSO(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
