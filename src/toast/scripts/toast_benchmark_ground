@@ -129,8 +129,18 @@ def parse_arguments():
             z0_center=2000 * u.meter,
             z0_sigma=0 * u.meter,
         ),
+        toast.ops.TimeConstant(
+            name="convolve_time_constant", deconvolve=False, tau=5 * u.ms
+        ),
         toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=4096),
+        toast.ops.FlagSSO(name="flag_sso"),
         toast.ops.Statistics(name="raw_statistics"),
+        toast.ops.TimeConstant(
+            name="deconvolve_time_constant",
+            deconvolve=True,
+            tau=5 * u.ms,
+            tau_sigma=0.01,
+        ),
         toast.ops.Statistics(name="filtered_statistics"),
         toast.ops.GroundFilter(name="groundfilter"),
         toast.ops.PolyFilter(name="polyfilter1D"),
@@ -489,6 +499,10 @@ def main():
     job_ops.mem_count.prefix = "After Atmosphere Simulation"
     job_ops.mem_count.apply(data)
 
+    # Apply a time constant
+    job_ops.convolve_time_constant.apply(data)
+    log.info_rank("Convolved time constant in", comm=world_comm, timer=timer)
+
     # Optionally save data to SPT3G format.  This is expensive and the configuration
     # is specific to this particular workflow, which is why the details are not
     # configurable from the command line / parameter file and why this is not enabled
@@ -500,6 +514,16 @@ def main():
     # Collect signal statistics before filtering
     job_ops.raw_statistics.output_dir = args.out_dir
     job_ops.raw_statistics.apply(data)
+    log.info_rank("Calculated raw statistics in", comm=world_comm, timer=timer)
+
+    # Deconvolve a time constant
+    job_ops.deconvolve_time_constant.apply(data)
+    log.info_rank("Deconvolved time constant in", comm=world_comm, timer=timer)
+
+    # Flag Sun, Moon and the planets
+    job_ops.flag_sso.detector_pointing = job_ops.det_pointing_azel
+    job_ops.flag_sso.apply(data)
+    log.info_rank("Flagged Solar system objects in", comm=world_comm, timer=timer)
 
     # Apply the filter stack
     job_ops.groundfilter.apply(data)
