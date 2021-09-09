@@ -82,6 +82,7 @@ void toast::atm_sim_kolmogorov_init_rank(
 
     int64_t nkappa_task = nkappa / ntask + 1;
     int64_t first_kappa = nkappa_task * rank;
+    if (first_kappa > nkappa - 1) return;
     int64_t last_kappa = first_kappa + nkappa_task;
     if (last_kappa > nkappa) last_kappa = nkappa;
 
