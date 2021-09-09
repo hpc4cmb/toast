@@ -43,7 +43,7 @@ class SSSTest(MPITestCase):
             boresight=obs_names.boresight_azel, quats="quats_azel"
         )
 
-        # Flag
+        # Simulate
         sss = ops.SimScanSynchronousSignal(
             detector_pointing=detpointing_azel,
         )
