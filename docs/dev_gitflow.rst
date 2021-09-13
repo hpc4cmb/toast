@@ -22,6 +22,7 @@ Staying Up to Date
 As you work on branches in your local clone, you should periodically synchronize the main development branch between the upstream repo and your forked repo.  You can do this with:
 
 .. code-block:: bash
+
     # Switch to your local checkout of main
     git checkout main
     # Fetch a copy of all the branches in your fork.
@@ -45,6 +46,7 @@ As you work on branches in your local clone, you should periodically synchronize
 This sequence should always work, since you should never be committing things directly to main.  All work should occur in a branch (see below).  Since the above set of commands is tedious, you can create a shell alias for these (except for the first line)if you like.  For example, putting this in ``~/.bashrc`` (name it whatever you like):
 
 .. code-block:: bash
+
     git-sync-main () {
         # Check that we are on the main branch so that we
         # do not rebase on the wrong local branch
@@ -65,6 +67,7 @@ This sequence should always work, since you should never be committing things di
 Now you can synchronize your local copy of main (and also keep your clone directory tidy) with:
 
 .. code-block:: bash
+
     git checkout main
     git-sync-main
 
@@ -81,12 +84,14 @@ Whether you are hacking on a long-term development project or making a small pul
 You should periodically rebase your branch off of main in order to keep up to date with other upstream changes, and also to resolve any conflicts as they come up- rather than dealing with them all at once at the end when you open a pull request.  First, commit any changes on your branch and then synchronize your local checkout of main (using the shell function described previously, or manually):
 
 .. code-block:: bash
+
     git checkout main
     git-sync-main
 
 Now rebase your branch against your local checkout of main:
 
 .. code-block:: bash
+
     git checkout mybranch
     git rebase main
     # If there are some small conflicts, open the conflicting files
@@ -125,6 +130,7 @@ Sometimes attempting to rebase a branch against main causes repeated conflicts. 
 If you are new to doing interactive rebasing (in order to squash), then I recommend first making a copy of your working branch:
 
 .. code-block:: bash
+
     # Switch to your branch
     git checkout mybranch
     # Checkout a new branch that is a copy of this
@@ -133,6 +139,7 @@ If you are new to doing interactive rebasing (in order to squash), then I recomm
 Now type ``git log`` and find the commit hash that was just before your first commit.  Copy this hash.  Now interactively rebase your branch against this starting point:
 
 .. code-block:: bash
+
     git rebase -i <commit hash before your first commit>
     # Follow instructions and in your editor, mark the first
     # commit in the list as one to keep, and mark the rest
@@ -144,6 +151,7 @@ Now type ``git log`` and find the commit hash that was just before your first co
 Now if you type ``git log`` you will see all of your work as one big commit with your new detailed commit message.  Now that your work is contained in one large commit, we can try to rebase this against main:
 
 .. code-block:: bash
+
     git rebase main
 
 Now resolve any conflicts.  You will only have to resolve these once, since there is only one commit now.  If you started this work on a copy of your original branch, now you can push your copied branch and open a new pull request from this copy.  Once it is merged, you can clean up both the copy and the original from your local clone.

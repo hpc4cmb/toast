@@ -35,6 +35,7 @@ One Observation at a Time
 This pattern is used when there is an expensive (in terms of either calculation or memory use) operation that occurs within an observation and which can then be used by multiple detectors.  Some example operations like this might be simulating atmosphere that is common to all detectors or calculating planet locations for the timespan covered by an observation.
 
 .. code-block:: python
+
     def _exec(self, data, detectors=None, **kwargs):
         for ob in data.obs:
             # (Some expensive operation here which is needed by all detectors.)
@@ -49,6 +50,7 @@ This pattern is used when there is an expensive (in terms of either calculation 
 This works fine for simple operators but what if we want use other, lower-level operators within our operator?  We can do this by calling the other operator's ``exec()`` and ``finalize()`` methods (or the shortcut ``apply()`` method) at the appropriate places.  First, imagine we want to run one operator before our code and another afterwards, for each observation:
 
 .. code-block:: python
+
     def _exec(self, data, detectors=None, **kwargs):
         op_A = OperatorA()
         op_B = OperatorB()
@@ -73,6 +75,7 @@ This works fine for simple operators but what if we want use other, lower-level 
 There are also times when we need to run an operator inside the "loop over detectors".  For example, if we are doing a small operation like computing the detector quaternion rotations from the boresight.  That scenario looks like this:
 
 .. code-block:: python
+
     def _exec(self, data, detectors=None, **kwargs):
         op_A = OperatorA()
         op_B = OperatorB()
@@ -100,6 +103,7 @@ One Detector at a Time
 This pattern is used when there is an expensive operation that occurs for each detector, and we want to make use of that result for all observations before moving on to the next detector.  An example would be simulating detector band-pass or beam convolution.
 
 .. code-block:: python
+
     def _exec(self, data, detectors=None, **kwargs):
         # Get the superset of local detectors across all observations
         all_dets = data.all_local_detectors(selection=detectors)
@@ -115,6 +119,7 @@ This pattern is used when there is an expensive operation that occurs for each d
 And if we are running sub-operators for each detector and all observations we can do that as well:
 
 .. code-block:: python
+
     def _exec(self, data, detectors=None, **kwargs):
         op_A = OperatorA()
         op_B = OperatorB()
@@ -139,6 +144,7 @@ And if we are running sub-operators for each detector and all observations we ca
 We can also run other operators on single observations for each detector:
 
 .. code-block:: python
+
     def _exec(self, data, detectors=None, **kwargs):
         op_A = OperatorA()
         op_B = OperatorB()
