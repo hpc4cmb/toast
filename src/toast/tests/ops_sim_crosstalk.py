@@ -29,8 +29,6 @@ class SimCrossTalkTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
 
 
-
-
     def test_xtalk_matrices(self):
 
         # Create a fake satellite data set for testing
@@ -63,6 +61,7 @@ class SimCrossTalkTest(MPITestCase):
             invM.dot(M) , np.eye(ndet ), decimal=4)
 
         return
+
     def test_xtalk(self):
 
         # Create a fake satellite data set for testing
@@ -80,15 +79,13 @@ class SimCrossTalkTest(MPITestCase):
 
         xtalk  = ops.CrossTalk (det_data=key )
         xtalk .apply(data)
-
         invxtalk  = ops.MitigateCrossTalk (det_data=key )
         invxtalk .apply(data)
+
         np.testing.assert_almost_equal(
              detdata_old , data.obs[0].detdata[key].data , decimal=8)
 
-
         return
-
 
     def test_xtalk_big(self):
 
@@ -118,13 +115,13 @@ class SimCrossTalkTest(MPITestCase):
 
 
         return
-"""
 
+    """
     def test_xtalk_file(self):
 
         # Create a fake satellite data set for testing
-        data = create_satellite_data_big (
-            self.comm, pixel_per_process=7)
+        data = create_satellite_data  (
+            self.comm )
 
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
@@ -133,10 +130,28 @@ class SimCrossTalkTest(MPITestCase):
         key = "my_signal"
         sim_noise = ops.SimNoise(det_data=key)
         sim_noise.apply(data)
+        detdata_old = data.obs[0].detdata[key].data.copy()
 
-        xtalk  = ops.CrossTalk (det_data=key,xtalk_mat_file='/Users/peppe/work/satellite_sims/crosstalk/lb_sim_191212.npz' )
+        xtalk  = ops.CrossTalk (det_data=key,
+            xtalk_mat_file='/Users/peppe/work/satellite_sims/crosstalk/lb_sim_191212.npz' )
         xtalk .apply(data)
 
+        invxtalk  = ops.MitigateCrossTalk (det_data=key,
+            xtalk_mat_file='/Users/peppe/work/satellite_sims/crosstalk/lb_sim_191212.npz' )
+        invxtalk .apply(data)
+        dets= list(xtalk.xtalk_mat.keys() )
+        ndet = len (dets )
+        M = np.zeros((ndet,ndet ))
+        invM = np.zeros((ndet,ndet ))
+        for ii,det in enumerate( dets ) :
+            M[ii,:]= np.array(list (xtalk.xtalk_mat[det].values() ))
+            M[ii,ii]=1
+            invM[ii,:]= np.array(list (invxtalk.inv_xtalk_mat[det].values() ))
+        np.testing.assert_almost_equal(
+            invM.dot(M) , np.eye(ndet ), decimal=4)
+
+        np.testing.assert_almost_equal(
+             detdata_old , data.obs[0].detdata[key].data , decimal=8)
 
         return
-"""
+    """

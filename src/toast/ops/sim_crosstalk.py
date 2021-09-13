@@ -122,23 +122,6 @@ def invert_xtalk_mat(  matdic ):
 
 
 
-"""
-from ..vis import set_matplotlib_backend
-import os
-import matplotlib.pyplot as plt
-
-def plot_xtalk_mat(  matdic ):
-    dets= list(matdic.keys() )
-    ndet = len (dets )
-    M = np.zeros((ndet,ndet ))
-    for  ii,  det  in enumerate(dets  ):
-        M[ii,:]= np.array(list (matdic[det].values() ))
-    set_matplotlib_backend()
-    outfile = os.path.join(  "xtalk_matrix.png")
-    #plt.imshow(M,cmap='Greys'); plt.show ()
-    #plt.savefig(outfile)
-    #plt.close()
-"""
 
 @trait_docs
 class CrossTalk(Operator):
@@ -275,19 +258,12 @@ class CrossTalk(Operator):
             self.xtalk_mat =init_xtalk_matrix(data  ,
                             realization=self.realization     )
         else:
-            self.xtalk_mat= read_xtalk_matrix(self.xtalk_mat_file, data , detectors)
+            self.xtalk_mat= read_xtalk_matrix(self.xtalk_mat_file, data)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
-            Ndets=len(dets)
-            if Ndets == 0: continue
             comm = ob.comm
             rank = ob.comm_rank
-            ob.detdata.ensure(self.det_data, detectors=dets)
-            obsindx = ob.uid
-            telescope = ob.telescope.uid
-            focalplane = ob.telescope.focalplane
             # Detdata are usually distributed by detectors,
             # to crosstalk is more convenient to  redistribute them by time,
             # so that   each process has the samples from all detectors at a given
@@ -303,18 +279,18 @@ class CrossTalk(Operator):
 
             # we store the crosstalked data into a temporary array
             tmp= np.zeros_like(ob.detdata[self.det_data].data)
-
-            for idet, det in enumerate(dets):
-                # for a given detector only a subset
+            for idet, det in enumerate(ob.all_detectors):
+                # for a given detector we assume that only a subset
                 # of detectors can be crosstalking
                 xtalklist = list( self.xtalk_mat[det].keys())
-                intersect_local = np.intersect1d(ob.local_detectors ,xtalklist)
+                intersect_local = np.intersect1d(ob.all_detectors ,xtalklist)
                 ind1 =[ xtalklist.index(k ) for  k in intersect_local ]
-                ind2 = [ ob.detdata[self.det_data].detectors .index(k)  for  k in intersect_local]
+                #ind2 = [ ob.detdata[self.det_data].detectors .index(k)  for  k in intersect_local]
+                ind2 = [ ob.all_detectors .index(k)  for  k in intersect_local]
                 xtalk_weights = np.array([self.xtalk_mat[det][kk] for kk in np.array(xtalklist)[ind1]])
                 tmp[idet]  += np.dot( xtalk_weights,  ob.detdata[self.det_data].data[ind2,:])
 
-            for idet, det in enumerate(dets):
+            for idet, det in enumerate(ob.all_detectors):
                 ob.detdata[self.det_data][det]+=tmp[idet]
 
             # We distribute the data back to the previous distribution
@@ -406,7 +382,7 @@ class MitigateCrossTalk(Operator):
             self.xtalk_mat =init_xtalk_matrix(data  ,
                             realization=self.realization     )
         else:
-            self.xtalk_mat= read_xtalk_matrix(self.xtalk_mat_file, data , detectors)
+            self.xtalk_mat= read_xtalk_matrix(self.xtalk_mat_file, data )
 
         if self.error_coefficients:
             self.xtalk_mat= inject_error_in_xtalk_matrix(self.xtalk_mat, self.error_coefficients,
@@ -418,15 +394,8 @@ class MitigateCrossTalk(Operator):
         for ob in data.obs:
 
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
-            Ndets=len(dets)
-            if Ndets == 0: continue
             comm = ob.comm
             rank = ob.comm_rank
-            ob.detdata.ensure(self.det_data, detectors=dets)
-            obsindx = ob.uid
-            telescope = ob.telescope.uid
-            focalplane = ob.telescope.focalplane
             #Redistribute data as in CrossTalk operator
             if ob.comm_size>1:
                 old_data_shape = ob.detdata[self.det_data].data.shape
@@ -437,21 +406,20 @@ class MitigateCrossTalk(Operator):
             # we store the crosstalked data into a temporary array
             tmp= np.zeros_like(ob.detdata[self.det_data].data)
 
-            for idet, det in enumerate(dets):
+            for idet, det in enumerate(ob.all_detectors):
                 # for a given detector only a subset
                 # of detectors can be crosstalking
 
                 xtalklist = list( self.xtalk_mat[det].keys())
-                intersect_local = np.intersect1d(ob.local_detectors ,xtalklist)
+                intersect_local = np.intersect1d(ob.all_detectors ,xtalklist)
                 ind1 =[ xtalklist.index(k ) for  k in intersect_local ]
                 ind2 = [ ob.detdata[self.det_data].detectors .index(k)  for  k in intersect_local]
 
                 xtalk_weights = np.array([self.inv_xtalk_mat[det][kk] for kk in np.array(xtalklist)[ind1]])
                 tmp[idet]  += np.dot( xtalk_weights,  ob.detdata[self.det_data].data[ind2,:])
 
-            for idet, det in enumerate(dets):
+            for idet, det in enumerate(ob.all_detectors):
                 ob.detdata[self.det_data][det]=tmp[idet]
-
             # We distribute the data back to the previous distribution
             if ob.comm_size>1:
                 ob.redistribute(ob.comm_size , times=ob.shared["times"])
