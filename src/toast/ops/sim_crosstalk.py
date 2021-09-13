@@ -91,7 +91,7 @@ def inject_error_in_xtalk_matrix (xtalk_mat,epsilon,  realization=0):
                  key=(key1, key2),
                  counter=(counter1, counter2),
              )
-        xtalk_mat_bias  [det ]= { k[0] : (1+ rngdata[0][i] *epsilon ) * k[1]   for i,k in enumerate(xtalk_mat[det].items())}
+        xtalk_mat_bias  [det ]= { k[0] : (1+ rngdata[i] *epsilon ) * k[1]   for i,k in enumerate(xtalk_mat[det].items())}
 
 
     return xtalk_mat_bias
@@ -251,9 +251,11 @@ class CrossTalk(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, **kwargs):
         env = Environment.get()
         log = Logger.get()
+        ## Read the XTalk matrix from file or initialize it randomly
+
         if self.xtalk_mat_file is None :
             self.xtalk_mat =init_xtalk_matrix(data  ,
                             realization=self.realization     )
@@ -375,19 +377,23 @@ class MitigateCrossTalk(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data,   **kwargs):
         env = Environment.get()
         log = Logger.get()
+
+        ## Read the XTalk matrix from file or initialize it randomly
         if self.xtalk_mat_file is None :
             self.xtalk_mat =init_xtalk_matrix(data  ,
                             realization=self.realization     )
         else:
+
             self.xtalk_mat= read_xtalk_matrix(self.xtalk_mat_file, data )
 
+        ## Inject an error to the matrix coefficients
         if self.error_coefficients:
             self.xtalk_mat= inject_error_in_xtalk_matrix(self.xtalk_mat, self.error_coefficients,
                                                     realization=self.realization )
-
+        # invert the Xtalk matrix (encoding the error )
         self.inv_xtalk_mat  = invert_xtalk_mat(self.xtalk_mat  )
 
 

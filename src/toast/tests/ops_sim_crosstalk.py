@@ -116,6 +116,34 @@ class SimCrossTalkTest(MPITestCase):
 
         return
 
+    def test_xtalk_errors(self):
+
+        # Create a fake satellite data set for testing
+        data = create_satellite_data  (
+            self.comm )
+
+        # Create a noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel()
+        default_model.apply(data)
+        # Simulate noise using this model
+        key = "my_signal"
+        sim_noise = ops.SimNoise(det_data=key)
+        sim_noise.apply(data)
+
+        xtalk  = ops.CrossTalk (det_data=key )
+        xtalk .apply(data)
+        detdata_old = data.obs[0].detdata[key].data.copy()
+
+        xtalk  = ops.CrossTalk (det_data=key )
+        xtalk .apply(data)
+        epsilon = 1e-3
+        invxtalk  = ops.MitigateCrossTalk (det_data=key,error_coefficients=epsilon  )
+        invxtalk .apply(data)
+        np.testing.assert_almost_equal(
+             detdata_old , data.obs[0].detdata[key].data , decimal=2 )
+
+
+        return
     """
     def test_xtalk_file(self):
 
