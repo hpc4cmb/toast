@@ -1,12 +1,12 @@
 .. _dev_ops:
 
 Developing Operators
-=======================
+############################
 
 The ``Operator`` class is the building block for assembling workflows that simulate, reduce, or otherwise manipulate ``Data`` objects.
 
 Overall Structure
------------------------
+**************************
 
 Operators are classes which must have several required methods.  Operators must also be configured using class "traits" from the ``traitlets`` package.  Traits can be set at construction time or afterwards.  The constructor should take no additional parameters- everything should be a trait.  Using traits allows us to automate several things:
 
@@ -25,12 +25,12 @@ Operator classes typically require some input data fields in each observation an
 Over time, the traits used by an operator may change.  If an old configuration file is used to construct a "newer" version of the operator, the operator can simply raise an exception or it can attempt to translate this configuration.  Each configuration dumped from operator traits includes an "API" trait.  Each operator has this integer trait and can increment it whenever incompatible changes are made to its traits.  To support older versions of the API, the operator can define a ``translate()`` method that takes an older version of the configuration and translates it to the latest version of the configuration.
 
 Data Processing Patterns
---------------------------------
+********************************
 
 Different data processing operations require passing through the data in different ways.  Additionally, there are cases when an operator will use other operators on subsets of data as part of the higher-level operation.  Here we go through some common patterns.
 
 One Observation at a Time
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+===============================
 
 This pattern is used when there is an expensive (in terms of either calculation or memory use) operation that occurs within an observation and which can then be used by multiple detectors.  Some example operations like this might be simulating atmosphere that is common to all detectors or calculating planet locations for the timespan covered by an observation.
 
@@ -95,7 +95,7 @@ There are also times when we need to run an operator inside the "loop over detec
 
 
 One Detector at a Time
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+===============================
 
 This pattern is used when there is an expensive operation that occurs for each detector, and we want to make use of that result for all observations before moving on to the next detector.  An example would be simulating detector band-pass or beam convolution.
 
@@ -165,7 +165,7 @@ We can also run other operators on single observations for each detector:
 
 
 Using the Pipeline Operator
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+======================================
 
 In the previous examples we were interspersing our new code with the use of other operators...
 
