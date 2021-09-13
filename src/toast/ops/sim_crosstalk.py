@@ -20,52 +20,107 @@ from .operator import Operator
 
 
 @function_timer
-def read_xtalk_matrix( filename, data , detectors=None ):
+def read_xtalk_matrix( filename, data ):
     """
     Read Xtalk matrix from disc.
     the  file to be in numpy binary format,
     i.e. `*.npz`.
-    In case we want to run on a subset of detectors
+
     """
 
     matrix = np.load(filename)['matrix']
 
     xtalk_mat={}
+    ob=data.obs[0]
+    alldets = ob.telescope.focalplane.detectors
+    Ndets= len(alldets )
+    if Ndets >matrix.shape[0]:
+        raise ValueError(f"Input Crosstalk matrix too small,  {matrix.shape} wrt  {Ndet} detectors to simulate.")
 
-    for ob in data.obs:
-        Ndets= len(ob.telescope.focalplane.detectors )
-        dets = ob.select_local_detectors(detectors )
-        alldets = ob.telescope.focalplane.detectors
-        for   idet,det in   enumerate(dets) :
-            xtalk_mat [det ]= {d : v for d,v in zip(alldets ,matrix[idet,:])}
+    for   idet,det in   enumerate(alldets) :
+        xtalk_mat [det ]= {d : v for d,v in zip(alldets ,matrix[idet,:])}
     return xtalk_mat
 
 @function_timer
-def init_xtalk_matrix ( data , detectors=None
-                    ,realization=0):
-
+def init_xtalk_matrix ( data,realization=0):
+    """
+    Initialize randomly a Xtalk matrix, with uniform values in [0,1].
+    the matrix is the same for all the observations.
+    """
     xtalk_mat={}
-
-    for ob in data.obs:
-        obsindx = ob.uid
-        key1 = ( 65536 +  realization  )
-        key2 = obsindx
-        counter1 = 0
-        counter2 = 1234567
-        Ndets= len(ob.telescope.focalplane.detectors )
-
-        rngdata = rng.random(
+    key1 = ( 65536 +  realization  )
+    counter1 = 0
+    counter2 = 1234567
+    ob = data.obs[0]
+    alldets = ob.telescope.focalplane.detectors
+    key2 = ob.uid
+    Ndets= len(alldets)
+    rngdata = rng.random(
              Ndets ,
              sampler="uniform_01",
              key=(key1, key2),
              counter=(counter1, counter2),
          )
-        dets = ob.select_local_detectors(detectors )
-        alldets = ob.telescope.focalplane.detectors
-        for   det in   dets :
-            xtalk_mat [det ]= {d : v for d,v in zip(alldets ,rngdata)}
-            xtalk_mat[det][det]=0.
+    #  assuming  we have a unique Xtalk matrix
+    # for all the observations
+    for   det in   alldets :
+        xtalk_mat [det ]= {d : v for d,v in zip(alldets ,rngdata)}
+        # Xtalk matrices have 0 diagonal
+        xtalk_mat[det][det]=0.
+
     return xtalk_mat
+
+
+@function_timer
+def inject_error_in_xtalk_matrix (xtalk_mat,epsilon,  realization=0):
+    """
+    Initialize randomly a Xtalk matrix, with uniform values in [0,1].
+    the matrix is the same for all the observations.
+    """
+    key1 = ( 65536 +  realization  )
+    counter1 = 0
+    counter2 = 1234567
+    key2 = 9876
+    xtalk_mat_bias ={}
+    for det in xtalk_mat.keys():
+        Ndets = len( xtalk_mat[det].keys() )
+
+        rngdata = rng.random(
+                 Ndets ,
+                 sampler="uniform_01",
+                 key=(key1, key2),
+                 counter=(counter1, counter2),
+             )
+        xtalk_mat_bias  [det ]= { k[0] : (1+ rngdata[0][i] *epsilon ) * k[1]   for i,k in enumerate(xtalk_mat[det].items())}
+
+
+    return xtalk_mat_bias
+
+def invert_xtalk_mat(  matdic ):
+    """
+    To mitigate the Crosstalk we assume we have an  estimate
+    of the crosstalk matrix,M. Then to correct for  Xtalk we evalute the
+    inverse `Minv` defined as `Minv = inverse(1+M )`.
+
+
+    """
+
+    dets= list(matdic.keys() )
+    ndet = len (dets )
+    M = np.zeros((ndet,ndet ))
+
+    for  ii,  det  in enumerate(dets  ):
+        M[ii,:]= np.array(list (matdic[det].values() ))
+
+        M[ii,ii]=1
+    Minv =np.linalg.inv(M)
+    invdic ={}
+    for  ii,  det  in enumerate(dets  ):
+        invdic[det]={d:Minv [ii,jj ] for jj, d in enumerate(matdic[det].keys() )}
+
+    return  invdic
+
+
 
 """
 from ..vis import set_matplotlib_backend
@@ -121,8 +176,6 @@ class CrossTalk(Operator):
     detector_ordering=Unicode(
             "random", help="Initialize Crosstalk matrix with detector ordering: `random, gap,constant` default `random` ")
 
-    xtalk_mat_value= Float(1. , help ="constant value to fill all the Cross Talk matrix elements, default=`1` ")
-
     realization = Int(0, help="integer to set a different random seed ")
 
     def __init__(self, **kwargs):
@@ -135,7 +188,7 @@ class CrossTalk(Operator):
         env = Environment.get()
         log = Logger.get()
         if self.xtalk_mat_file is None :
-            self.xtalk_mat =init_xtalk_matrix(data , detectors ,
+            self.xtalk_mat =init_xtalk_matrix(data  ,
                             realization=self.realization     )
 
         for ob in data.obs:
@@ -219,7 +272,7 @@ class CrossTalk(Operator):
         env = Environment.get()
         log = Logger.get()
         if self.xtalk_mat_file is None :
-            self.xtalk_mat =init_xtalk_matrix(data , detectors ,
+            self.xtalk_mat =init_xtalk_matrix(data  ,
                             realization=self.realization     )
         else:
             self.xtalk_mat= read_xtalk_matrix(self.xtalk_mat_file, data , detectors)
@@ -235,20 +288,22 @@ class CrossTalk(Operator):
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
-
             # Detdata are usually distributed by detectors,
             # to crosstalk is more convenient to  redistribute them by time,
             # so that   each process has the samples from all detectors at a given
-            # time stamp.
-
-            ob.redistribute(1, times=ob.shared["times"])
-            #Now ob.local_detectors == ob.all_detectors and
-            # the number of local samples is some small slice of the total
-
-            #assert ob.local_detectors == ob.all_detectors
+            # time stamp
+            if ob.comm_size>1:
+                old_data_shape = ob.detdata[self.det_data].data.shape
+                ob.redistribute(1, times=ob.shared["times"])
+                # Now ob.local_detectors == ob.all_detectors and
+                # the number of local samples is some small slice of the total
+                new_data_shape = ob.detdata[self.det_data].data.shape
+                assert   old_data_shape !=new_data_shape
+                assert  new_data_shape[0]== len(ob.all_detectors)
 
             # we store the crosstalked data into a temporary array
             tmp= np.zeros_like(ob.detdata[self.det_data].data)
+
             for idet, det in enumerate(dets):
                 # for a given detector only a subset
                 # of detectors can be crosstalking
@@ -263,8 +318,143 @@ class CrossTalk(Operator):
                 ob.detdata[self.det_data][det]+=tmp[idet]
 
             # We distribute the data back to the previous distribution
+            if ob.comm_size>1:
+                ob.redistribute(ob.comm_size , times=ob.shared["times"])
 
-            ob.redistribute(ob.comm_size , times=ob.shared["times"])
+
+        return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": list(),
+            "shared": [
+                self.boresight,
+            ],
+            "detdata": list(),
+            "intervals": list(),
+        }
+        if self.view is not None:
+            req["intervals"].append(self.view)
+        return req
+
+    def _provides(self):
+        prov = {
+            "meta": list(),
+            "shared": list(),
+            "detdata": [
+                self.det_data,
+            ],
+        }
+        return prov
+
+    def _accelerators(self):
+        return list()
+
+
+
+
+
+
+
+@trait_docs
+class MitigateCrossTalk(Operator):
+    """
+    1.  The cross talk matrix can just be a dictionary of
+    dictionaries of values (i.e. a sparse matrix) on every process.
+    It does not need to be a dense matrix loaded from an HDF5 file.
+    The calling code can create this however it likes.
+
+    2. Each process has a DetectorData object representing the local data for some
+    detectors and some timespan (e.g. obs.detdata["signal"]).
+    It can make a copy of this and pass it to the next rank in the grid column.
+    Each process receives a copy from the previous process in the column,
+    accumulates to its local detectors, and passes it along.
+    This continues until every process has accumulated the data
+    from the other processes in the column.
+    """
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
+    det_data = Unicode(
+        None, allow_none=True, help="Observation detdata key for the timestream data"
+    )
+
+    xtalk_mat_file = Unicode(
+        None, allow_none=True, help="CrossTalk matrix dictionary of dictionaries"
+    )
+
+    realization = Int(0, help="integer to set a different random seed ")
+    error_coefficients = Float(0, help="relative amplitude to simulate crosstalk errors on the inverse matrix ")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        env = Environment.get()
+        log = Logger.get()
+        if self.xtalk_mat_file is None :
+            self.xtalk_mat =init_xtalk_matrix(data  ,
+                            realization=self.realization     )
+        else:
+            self.xtalk_mat= read_xtalk_matrix(self.xtalk_mat_file, data , detectors)
+
+        if self.error_coefficients:
+            self.xtalk_mat= inject_error_in_xtalk_matrix(self.xtalk_mat, self.error_coefficients,
+                                                    realization=self.realization )
+
+        self.inv_xtalk_mat  = invert_xtalk_mat(self.xtalk_mat  )
+
+
+        for ob in data.obs:
+
+            # Get the detectors we are using for this observation
+            dets = ob.select_local_detectors(detectors)
+            Ndets=len(dets)
+            if Ndets == 0: continue
+            comm = ob.comm
+            rank = ob.comm_rank
+            ob.detdata.ensure(self.det_data, detectors=dets)
+            obsindx = ob.uid
+            telescope = ob.telescope.uid
+            focalplane = ob.telescope.focalplane
+            #Redistribute data as in CrossTalk operator
+            if ob.comm_size>1:
+                old_data_shape = ob.detdata[self.det_data].data.shape
+                ob.redistribute(1, times=ob.shared["times"])
+                new_data_shape = ob.detdata[self.det_data].data.shape
+                assert  new_data_shape[0]== len(ob.all_detectors)
+
+            # we store the crosstalked data into a temporary array
+            tmp= np.zeros_like(ob.detdata[self.det_data].data)
+
+            for idet, det in enumerate(dets):
+                # for a given detector only a subset
+                # of detectors can be crosstalking
+
+                xtalklist = list( self.xtalk_mat[det].keys())
+                intersect_local = np.intersect1d(ob.local_detectors ,xtalklist)
+                ind1 =[ xtalklist.index(k ) for  k in intersect_local ]
+                ind2 = [ ob.detdata[self.det_data].detectors .index(k)  for  k in intersect_local]
+
+                xtalk_weights = np.array([self.inv_xtalk_mat[det][kk] for kk in np.array(xtalklist)[ind1]])
+                tmp[idet]  += np.dot( xtalk_weights,  ob.detdata[self.det_data].data[ind2,:])
+
+            for idet, det in enumerate(dets):
+                ob.detdata[self.det_data][det]=tmp[idet]
+
+            # We distribute the data back to the previous distribution
+            if ob.comm_size>1:
+                ob.redistribute(ob.comm_size , times=ob.shared["times"])
 
 
         return
