@@ -92,3 +92,5 @@ from .flag_sso import FlagSSO
 from .crosslinking import CrossLinking
 
 from .sss import SimScanSynchronousSignal
+
+from .demodulation import Demodulate

@@ -51,5 +51,6 @@ install(FILES
     flag_sso.py
     crosslinking.py
     sss.py
+    demodulation.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

@@ -42,7 +42,7 @@ class Noise(object):
     """
 
     def __init__(
-        self, detectors=list(), freqs=list(), psds=list(), mixmatrix=None, indices=None
+        self, detectors=list(), freqs=dict(), psds=dict(), mixmatrix=None, indices=None
     ):
         self._dets = list(sorted(detectors))
         if mixmatrix is None:

@@ -54,5 +54,6 @@ install(FILES
     ops_cadence_map.py
     ops_crosslinking.py
     ops_sss.py
+    ops_demodulate.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
