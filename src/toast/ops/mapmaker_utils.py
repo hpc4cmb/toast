@@ -332,15 +332,16 @@ class BuildInverseCovariance(Operator):
             cov_nnz = invcov.n_value
             weight_nnz = int((np.sqrt(1 + 8 * cov_nnz) - 1) // 2)
         else:
-            # The first global process checks its data shape and broadcasts
-            if data.comm.world_rank == 0:
+            try:
                 first_detwt = data.obs[0].detdata[self.weights][0]
                 if len(first_detwt.shape) == 1:
                     weight_nnz = 1
                 else:
                     weight_nnz = first_detwt.shape[1]
+            except KeyError:
+                weight_nnz = 0
             if data.comm.comm_world is not None:
-                weight_nnz = data.comm.comm_world.bcast(weight_nnz, root=0)
+                weight_nnz = np.amax(data.comm.comm_world.allgather(weight_nnz))
             cov_nnz = int(weight_nnz * (weight_nnz + 1) // 2)
             data[self.inverse_covariance] = PixelData(dist, np.float64, n_value=cov_nnz)
             invcov = data[self.inverse_covariance]
@@ -570,15 +571,16 @@ class BuildNoiseWeighted(Operator):
             zmap = data[self.zmap]
             weight_nnz = zmap.n_value
         else:
-            # The first global process checks its data shape and broadcasts
-            if data.comm.world_rank == 0:
+            try:
                 first_detwt = data.obs[0].detdata[self.weights][0]
                 if len(first_detwt.shape) == 1:
                     weight_nnz = 1
                 else:
                     weight_nnz = first_detwt.shape[1]
+            except KeyError:
+                weight_nnz = 0
             if data.comm.comm_world is not None:
-                weight_nnz = data.comm.comm_world.bcast(weight_nnz, root=0)
+                weight_nnz = np.amax(data.comm.comm_world.allgather(weight_nnz))
             data[self.zmap] = PixelData(dist, np.float64, n_value=weight_nnz)
             zmap = data[self.zmap]
 
