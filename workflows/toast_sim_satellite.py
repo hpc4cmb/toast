@@ -213,6 +213,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     return data
 
+
 def apply_madam(job, args, data):
     """ Run the Madam mapmaker with the same parameters as the TOAST mapmaker
     """
@@ -223,22 +224,25 @@ def apply_madam(job, args, data):
     timer = toast.timing.Timer()
     timer.start()
 
+    pixels = ops.pixels_final
+    weights = ops.weights
+
     # Cache pixel numbers and Stokes weights
-    if not ops.pixels_final.nest:
-        toast.ops.Delete(detdata=[ops.pixels_final.pixels]).apply(data)
+    if not pixels.nest:
+        toast.ops.Delete(detdata=[pixels.pixels]).apply(data)
         log.info_rank("Purged pixel numbers in", comm=world_comm, timer=timer)
-        ops.pixels_final.nest = True
-    ops.pixels_final.apply(data)
+        pixels.nest = True
+    pixels.apply(data)
     log.info_rank("Cached pixel numbers in", comm=world_comm, timer=timer)
-    ops.weights.apply(data)
+    weights.apply(data)
     log.info_rank("Cached Stokes weights in", comm=world_comm, timer=timer)
 
     # Configure Madam
-    ops.madam.pixels_nested = ops.pixels.nest
+    ops.madam.pixels_nested = pixels.nest
     ops.madam.params = {
-        "nside_cross" : ops.pixels.nside,
-        "nside_map" : ops.pixels_final.nside,
-        "nside_submap" : ops.pixels_final.nside_submap,
+        "nside_cross" : pixels.nside,
+        "nside_map" : pixels.nside,
+        "nside_submap" : pixels.nside_submap,
         "path_output" : args.out_dir,
         "base_first" : tmpls.baselines.step_time.to_value(u.s),
         "precond_width_min" : tmpls.baselines.precond_width,
