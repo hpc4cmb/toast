@@ -199,8 +199,7 @@ class StokesWeights(Operator):
                         log.verbose(msg)
                     continue
 
-            # Create (or re-use) output data for the weights and optionally the
-            # detector quaternions.
+            # Create (or re-use) output data for the weights
 
             if self.single_precision:
                 ob.detdata.ensure(

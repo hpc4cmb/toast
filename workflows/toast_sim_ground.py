@@ -261,6 +261,56 @@ def simulate_data(job, toast_comm, telescope, schedule):
     return data
 
 
+def apply_madam(job, args, data):
+    """ Run the Madam mapmaker with the same parameters as the TOAST mapmaker
+    """
+    log = toast.utils.Logger.get()
+    ops = job.operators
+    tmpls = job.templates
+    world_comm = data.comm.comm_world
+    timer = toast.timing.Timer()
+    timer.start()
+
+    pixels = ops.pixels_radec_final
+    weights = ops.weights_radec
+
+    # Cache pixel numbers and Stokes weights
+    if not pixels.nest:
+        toast.ops.Delete(detdata=[pixels.pixels]).apply(data)
+        log.info_rank("Purged pixel numbers in", comm=world_comm, timer=timer)
+        pixels.nest = True
+    pixels.apply(data)
+    log.info_rank("Cached pixel numbers in", comm=world_comm, timer=timer)
+    weights.apply(data)
+    log.info_rank("Cached Stokes weights in", comm=world_comm, timer=timer)
+
+    # Configure Madam
+    ops.madam.pixels_nested = pixels.nest
+    ops.madam.params = {
+        "nside_cross" : pixels.nside,
+        "nside_map" : pixels.nside,
+        "nside_submap" : pixels.nside_submap,
+        "path_output" : args.out_dir,
+        "base_first" : tmpls.baselines.step_time.to_value(u.s),
+        "precond_width_min" : tmpls.baselines.precond_width,
+        "precond_width_max" : tmpls.baselines.precond_width,
+        "good_baseline_fraction" : tmpls.baselines.good_fraction,
+        "kfilter" : tmpls.baselines.use_noise_prior,
+        "kfirst" : tmpls.baselines.enabled,
+        "write_hits" : ops.mapmaker.write_hits,
+        "write_matrix" : ops.mapmaker.write_invcov,
+        "write_wcov" : ops.mapmaker.write_cov,
+        "write_mask" : ops.mapmaker.write_rcond,
+        "info" : 3,
+    }
+
+    # Run
+    ops.madam.apply(data)
+    log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+
+    return
+
+
 def reduce_data(job, args, data):
     log = toast.utils.Logger.get()
     ops = job.operators
@@ -336,9 +386,9 @@ def reduce_data(job, args, data):
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # Optionally run Madam
+
     if toast.ops.madam.available():
-        ops.madam.apply(data)
-        log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+        apply_madam(job, args, data)
 
 
 def dump_spt3g(job, args, data):
@@ -447,9 +497,7 @@ def main():
         ),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PixelsHealpix(name="pixels_radec"),
-        toast.ops.StokesWeights(
-            name="weights_radec", weights="weights_radec", mode="IQU"
-        ),
+        toast.ops.StokesWeights(name="weights_radec", mode="IQU"),
         toast.ops.FlagSSO(name="flag_sso", enabled=False),
         toast.ops.CadenceMap(name="cadence_map", enabled=False),
         toast.ops.CrossLinking(name="crosslinking", enabled=False),
