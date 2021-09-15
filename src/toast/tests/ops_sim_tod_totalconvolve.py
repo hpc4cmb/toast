@@ -167,20 +167,25 @@ class SimTotalconvolveTest(MPITestCase):
 
         # Bin both signals into maps
 
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=self.nside,
             nest=False,
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
             mode="I",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        weights.apply(data)
 
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
 
         cov_and_hits = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
@@ -191,7 +196,8 @@ class SimTotalconvolveTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=totalconvolve_key,
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
@@ -203,7 +209,8 @@ class SimTotalconvolveTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=conviqt_key,
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
@@ -310,20 +317,25 @@ class SimTotalconvolveTest(MPITestCase):
 
         # Bin a map to study
 
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=self.nside,
             nest=False,
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
             mode="I",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        weights.apply(data)
 
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
 
         cov_and_hits = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
@@ -334,7 +346,8 @@ class SimTotalconvolveTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=key,
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )

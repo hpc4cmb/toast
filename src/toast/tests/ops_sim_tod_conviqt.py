@@ -129,20 +129,25 @@ class SimConviqtTest(MPITestCase):
 
         # Bin a map to study
 
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=self.nside,
             nest=False,
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
             mode="I",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        weights.apply(data)
 
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
 
         cov_and_hits = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
@@ -153,7 +158,8 @@ class SimConviqtTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=key,
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
@@ -162,10 +168,10 @@ class SimConviqtTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
-        write_healpix_fits(data[binner.binned], toast_bin_path, nest=pointing.nest)
+        write_healpix_fits(data[binner.binned], toast_bin_path, nest=pixels.nest)
 
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
-        write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pointing.nest)
+        write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
 
         fail = False
 

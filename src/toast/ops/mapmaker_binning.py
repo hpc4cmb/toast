@@ -158,6 +158,11 @@ class BinMap(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        for trait in "pixel_pointing", "stokes_weights":
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
+
         if data.comm.world_rank == 0:
             log.verbose("  BinMap building pipeline")
 

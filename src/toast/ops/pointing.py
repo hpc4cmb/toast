@@ -84,6 +84,11 @@ class BuildPixelDistribution(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        for trait in "pixel_pointing", :
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
+
         if self.pixel_dist in data:
             msg = f"pixel distribution `{self.pixel_dist}` already exists"
             raise RuntimeError(msg)

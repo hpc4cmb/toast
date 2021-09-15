@@ -97,9 +97,12 @@ class SimDipoleTest(MPITestCase):
 
         # make a simple pointing matrix
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=self.nside,
             nest=False,
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
             mode="I",
             detector_pointing=detpointing,
         )
@@ -111,7 +114,8 @@ class SimDipoleTest(MPITestCase):
         # Build the covariance and hits
         cov_and_hits = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
@@ -124,7 +128,8 @@ class SimDipoleTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=sim_dipole.det_data,
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )

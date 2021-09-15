@@ -836,6 +836,11 @@ class CovarianceAndHits(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        for trait in "pixel_pointing", "stokes_weights":
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
+
         # Construct the pointing distribution if it does not already exist
 
         if self.pixel_dist not in data:

@@ -103,9 +103,13 @@ class SimAtmTest(MPITestCase):
             plt.close()
 
         # Pointing matrix
-        pointing = ops.PointingHealpix(
+
+        pixels = ops.PixelsHealpix(
             nside=self.nside,
             nest=False,
+            detector_pointing=detpointing_radec,
+        )
+        weights = ops.StokesWeights(
             mode="IQU",
             detector_pointing=detpointing_radec,
         )
@@ -113,7 +117,8 @@ class SimAtmTest(MPITestCase):
         # Make a binned map
 
         binner = ops.BinMap(
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=el_model.out_model,
         )
 
@@ -193,8 +198,7 @@ class SimAtmTest(MPITestCase):
         )
 
         # Detector weights
-        detweights_azel = ops.PointingHealpix(
-            nside=64,
+        azel_weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing_azel,
@@ -235,7 +239,7 @@ class SimAtmTest(MPITestCase):
         # Simulate atmosphere signal and accumulate
         sim_atm = ops.SimAtmosphere(
             detector_pointing=detpointing_azel,
-            detector_weights=detweights_azel,
+            detector_weights=azel_weights,
             polarization_fraction=0.2,
         )
         sim_atm.apply(data)
@@ -256,9 +260,13 @@ class SimAtmTest(MPITestCase):
             plt.close()
 
         # Pointing matrix
-        pointing = ops.PointingHealpix(
+
+        pixels = ops.PixelsHealpix(
             nside=self.nside,
             nest=False,
+            detector_pointing=detpointing_radec,
+        )
+        weights = ops.StokesWeights(
             mode="IQU",
             detector_pointing=detpointing_radec,
         )
@@ -266,7 +274,8 @@ class SimAtmTest(MPITestCase):
         # Make a binned map
 
         binner = ops.BinMap(
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=el_model.out_model,
         )
 
