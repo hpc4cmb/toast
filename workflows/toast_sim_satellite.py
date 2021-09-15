@@ -213,6 +213,52 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     return data
 
+def apply_madam(job, args, data):
+    """ Run the Madam mapmaker with the same parameters as the TOAST mapmaker
+    """
+    log = toast.utils.Logger.get()
+    ops = job.operators
+    tmpls = job.templates
+    world_comm = data.comm.comm_world
+    timer = toast.timing.Timer()
+    timer.start()
+
+    # Cache pixel numbers and Stokes weights
+    if not ops.pixels_final.nest:
+        toast.ops.Delete(detdata=[ops.pixels_final.pixels]).apply(data)
+        log.info_rank("Purged pixel numbers in", comm=world_comm, timer=timer)
+        ops.pixels_final.nest = True
+    ops.pixels_final.apply(data)
+    log.info_rank("Cached pixel numbers in", comm=world_comm, timer=timer)
+    ops.weights.apply(data)
+    log.info_rank("Cached Stokes weights in", comm=world_comm, timer=timer)
+
+    # Configure Madam
+    ops.madam.pixels_nested = ops.pixels.nest
+    ops.madam.params = {
+        "nside_cross" : ops.pixels.nside,
+        "nside_map" : ops.pixels_final.nside,
+        "nside_submap" : ops.pixels_final.nside_submap,
+        "path_output" : args.out_dir,
+        "base_first" : tmpls.baselines.step_time.to_value(u.s),
+        "precond_width_min" : tmpls.baselines.precond_width,
+        "precond_width_max" : tmpls.baselines.precond_width,
+        "good_baseline_fraction" : tmpls.baselines.good_fraction,
+        "kfilter" : tmpls.baselines.use_noise_prior,
+        "kfirst" : tmpls.baselines.enabled,
+        "write_hits" : ops.mapmaker.write_hits,
+        "write_matrix" : ops.mapmaker.write_invcov,
+        "write_wcov" : ops.mapmaker.write_cov,
+        "write_mask" : ops.mapmaker.write_rcond,
+        "info" : 3,
+    }
+
+    # Run
+    ops.madam.apply(data)
+    log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+
+    return
+
 
 def reduce_data(job, args, data):
     log = toast.utils.Logger.get()
