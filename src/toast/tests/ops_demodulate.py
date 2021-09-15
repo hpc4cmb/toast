@@ -48,25 +48,22 @@ class DemodulateTest(MPITestCase):
 
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
         )
 
-        # Demodulate
-
-        demod = ops.Demodulate(pointing=pointing)
-        demod_data = demod.apply(data)
-
         # Bin signal
-
-        pointing.hwp_angle = None
 
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
         )
 
@@ -82,18 +79,19 @@ class DemodulateTest(MPITestCase):
             output_dir=self.outdir,
         )
 
-        # Make maps
-
         mapper.name = "modulated"
         mapper.apply(data)
 
+        # Demodulate
+
+        demod = ops.Demodulate(stokes_weights=weights)
+        demod_data = demod.apply(data)
+
+        #ops.Delete(detdata=[obs_names.weights]).apply(demod_data)
+
+        # Map again
+
         mapper.name = "demodulated"
-        pointing.hwp_angle = None
-        mapper.apply(demod_data)
-
-        # Test demodulation weights
-
-        ops.Delete(detdata=[obs_names.weights]).apply(demod_data)
-
         demod_weights = ops.StokesWeightsDemod()
-        demod_weights.apply(demod_data)
+        binner.stokes_weights = demod_weights
+        mapper.apply(demod_data)

@@ -51,14 +51,18 @@ class MapmakerTest(MPITestCase):
 
         # Create some sky signal timestreams.
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -66,16 +70,16 @@ class MapmakerTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
-        delete_pointing = ops.Delete(detdata=[pointing.pixels, pointing.weights])
+        delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights])
         delete_pointing.apply(data)
-        pointing.create_dist = None
+        pixels.create_dist = None
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -90,7 +94,8 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
         )
 
@@ -128,7 +133,8 @@ class MapmakerTest(MPITestCase):
         mapper.apply(data)
 
         # Check that we can also run in full-memory mode
-        pointing.apply(data)
+        pixels.apply(data)
+        weights.apply(data)
         binner.full_pointing = True
         mapper.name = "test2"
         mapper.apply(data)
@@ -152,15 +158,19 @@ class MapmakerTest(MPITestCase):
 
         # Create some sky signal timestreams.
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=16,
             nest=True,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -168,16 +178,16 @@ class MapmakerTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
-        delete_pointing = ops.Delete(detdata=[pointing.pixels, pointing.weights])
+        delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights])
         delete_pointing.apply(data)
-        pointing.create_dist = None
+        pixels.create_dist = None
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -192,7 +202,8 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
         )
 
@@ -253,9 +264,9 @@ class MapmakerTest(MPITestCase):
         pars["iter_max"] = 10
         pars["base_first"] = step_seconds
         pars["fsample"] = sample_rate
-        pars["nside_map"] = pointing.nside
-        pars["nside_cross"] = pointing.nside
-        pars["nside_submap"] = min(8, pointing.nside)
+        pars["nside_map"] = pixels.nside
+        pars["nside_cross"] = pixels.nside
+        pars["nside_submap"] = min(8, pixels.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
         pars["pixlim_cross"] = 1.0e-6
         pars["pixlim_map"] = 1.0e-6
@@ -271,14 +282,15 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
-            pixels_nested=pointing.nest,
+            pixels=pixels.pixels,
+            weights=weights.weights,
+            pixels_nested=pixels.nest,
             noise_model="noise_model",
         )
 
         # Generate persistent pointing
-        pointing.apply(data)
+        pixels.apply(data)
+        weights.apply(data)
 
         # Run Madam
         madam.apply(data)
@@ -361,15 +373,19 @@ class MapmakerTest(MPITestCase):
 
         # Create some sky signal timestreams.
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=16,
             nest=True,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -377,16 +393,16 @@ class MapmakerTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
-        delete_pointing = ops.Delete(detdata=[pointing.pixels, pointing.weights])
+        delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights])
         delete_pointing.apply(data)
-        pointing.create_dist = None
+        pixels.create_dist = None
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -401,7 +417,8 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
         )
 
@@ -465,9 +482,9 @@ class MapmakerTest(MPITestCase):
         pars["iter_max"] = 50
         pars["base_first"] = step_seconds
         pars["fsample"] = sample_rate
-        pars["nside_map"] = pointing.nside
-        pars["nside_cross"] = pointing.nside
-        pars["nside_submap"] = min(8, pointing.nside)
+        pars["nside_map"] = pixels.nside
+        pars["nside_cross"] = pixels.nside
+        pars["nside_submap"] = min(8, pixels.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
         pars["pixlim_cross"] = 1.0e-4
         pars["pixlim_map"] = 1.0e-4
@@ -487,14 +504,15 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
-            pixels_nested=pointing.nest,
+            pixels=pixels.pixels,
+            weights=weights.weights,
+            pixels_nested=pixels.nest,
             noise_model="noise_model",
         )
 
         # Generate persistent pointing
-        pointing.apply(data)
+        pixels.apply(data)
+        weights.apply(data)
 
         # Run Madam
         madam.apply(data)
@@ -581,15 +599,19 @@ class MapmakerTest(MPITestCase):
 
         # Create some sky signal timestreams.
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=16,
             nest=True,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -597,16 +619,16 @@ class MapmakerTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
-        delete_pointing = ops.Delete(detdata=[pointing.pixels, pointing.weights])
+        delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights])
         delete_pointing.apply(data)
-        pointing.create_dist = None
+        pixels.create_dist = None
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -621,7 +643,8 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
         )
 
@@ -685,9 +708,9 @@ class MapmakerTest(MPITestCase):
         pars["iter_max"] = 50
         pars["base_first"] = step_seconds
         pars["fsample"] = sample_rate
-        pars["nside_map"] = pointing.nside
-        pars["nside_cross"] = pointing.nside
-        pars["nside_submap"] = min(8, pointing.nside)
+        pars["nside_map"] = pixels.nside
+        pars["nside_cross"] = pixels.nside
+        pars["nside_submap"] = min(8, pixels.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
         pars["pixlim_cross"] = 1.0e-4
         pars["pixlim_map"] = 1.0e-4
@@ -707,14 +730,15 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
-            pixels_nested=pointing.nest,
+            pixels=pixels.pixels,
+            weights=weights.weights,
+            pixels_nested=pixels.nest,
             noise_model="noise_model",
         )
 
         # Generate persistent pointing
-        pointing.apply(data)
+        pixels.apply(data)
+        weights.apply(data)
 
         # Run Madam
         madam.apply(data)

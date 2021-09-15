@@ -34,27 +34,31 @@ class ScanHealpixTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
 
         # Write this to a file
         hpix_file = os.path.join(self.outdir, "fake.fits")
-        write_healpix_fits(data["fake_map"], hpix_file, nest=pointing.nest)
+        write_healpix_fits(data["fake_map"], hpix_file, nest=pixels.nest)
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
@@ -64,7 +68,8 @@ class ScanHealpixTest(MPITestCase):
         scan_hpix = ops.ScanHealpix(
             file=hpix_file,
             det_data="test",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
         )
         scan_hpix.apply(data)
 

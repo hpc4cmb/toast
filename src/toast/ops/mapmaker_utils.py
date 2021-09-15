@@ -701,7 +701,7 @@ class CovarianceAndHits(Operator):
     and the inverse covariance and then inverts this with a threshold on the condition
     number in each pixel.
 
-    NOTE:  The pointing operator must have the "pixels", "weights", and "create_dist"
+    NOTE:  The pixel pointing operator must have the "pixels", "create_dist"
     traits, which will be set by this operator during execution.
 
     Output PixelData objects are stored in the Data dictionary.
@@ -750,10 +750,16 @@ class CovarianceAndHits(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
-    pointing = Instance(
+    pixel_pointing = Instance(
         klass=Operator,
         allow_none=True,
         help="This must be an instance of a pointing operator",
+    )
+
+    stokes_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a Stokes weights operator",
     )
 
     noise_model = Unicode(
@@ -793,18 +799,35 @@ class CovarianceAndHits(Operator):
             raise traitlets.TraitError("Invalid communication algorithm")
         return check
 
-    @traitlets.validate("pointing")
-    def _check_pointing(self, proposal):
-        pntg = proposal["value"]
-        if pntg is not None:
-            if not isinstance(pntg, Operator):
-                raise traitlets.TraitError("pointing should be an Operator instance")
+    @traitlets.validate("pixel_pointing")
+    def _check_pixel_pointing(self, proposal):
+        pixels = proposal["value"]
+        if pixels is not None:
+            if not isinstance(pixels, Operator):
+                raise traitlets.TraitError(
+                    "pixel_pointing should be an Operator instance"
+                )
             # Check that this operator has the traits we expect
-            for trt in ["pixels", "weights", "create_dist", "view"]:
-                if not pntg.has_trait(trt):
-                    msg = "pointing operator should have a '{}' trait".format(trt)
+            for trt in ["pixels", "create_dist", "view"]:
+                if not pixels.has_trait(trt):
+                    msg = f"pixel_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
-        return pntg
+        return pixels
+
+    @traitlets.validate("stokes_weights")
+    def _check_stokes_weights(self, proposal):
+        weights = proposal["value"]
+        if weights is not None:
+            if not isinstance(weights, Operator):
+                raise traitlets.TraitError(
+                    "stokes_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["weights", "view"]:
+                if not weights.has_trait(trt):
+                    msg = f"stokes_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return weights
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -818,7 +841,7 @@ class CovarianceAndHits(Operator):
         if self.pixel_dist not in data:
             pix_dist = BuildPixelDistribution(
                 pixel_dist=self.pixel_dist,
-                pointing=self.pointing,
+                pixel_pointing=self.pixel_pointing,
                 shared_flags=self.shared_flags,
                 shared_flag_mask=self.shared_flag_mask,
                 save_pointing=self.save_pointing,
@@ -830,8 +853,8 @@ class CovarianceAndHits(Operator):
         build_hits = BuildHitMap(
             pixel_dist=self.pixel_dist,
             hits=self.hits,
-            view=self.pointing.view,
-            pixels=self.pointing.pixels,
+            view=self.pixel_pointing.view,
+            pixels=self.pixel_pointing.pixels,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,
@@ -845,9 +868,9 @@ class CovarianceAndHits(Operator):
         build_invcov = BuildInverseCovariance(
             pixel_dist=self.pixel_dist,
             inverse_covariance=self.covariance,
-            view=self.pointing.view,
-            pixels=self.pointing.pixels,
-            weights=self.pointing.weights,
+            view=self.pixel_pointing.view,
+            pixels=self.pixel_pointing.pixels,
+            weights=self.stokes_weights.weights,
             noise_model=self.noise_model,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
@@ -865,7 +888,9 @@ class CovarianceAndHits(Operator):
         else:
             # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
-        accum.operators = [self.pointing, build_hits, build_invcov]
+        accum.operators = [
+            self.pixel_pointing, self.stokes_weights, build_hits, build_invcov
+        ]
 
         pipe_out = accum.apply(data, detectors=detectors)
 
@@ -895,7 +920,8 @@ class CovarianceAndHits(Operator):
         return
 
     def _requires(self):
-        req = self.pointing.requires()
+        req = self.pixel_pointing.requires()
+        req.update(self.stokes_weights.requires())
         req["meta"].append(self.noise_model)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)

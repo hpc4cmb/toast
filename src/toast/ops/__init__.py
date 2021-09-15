@@ -94,3 +94,7 @@ from .crosslinking import CrossLinking
 from .sss import SimScanSynchronousSignal
 
 from .demodulation import Demodulate, StokesWeightsDemod
+
+from .stokes_weights import StokesWeights
+
+from .pixels_healpix import PixelsHealpix

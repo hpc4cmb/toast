@@ -180,7 +180,8 @@ class MapMaker(Operator):
             for trt in [
                 "det_data",
                 "pixel_dist",
-                "pointing",
+                "pixel_pointing",
+                "stokes_weights",
                 "binned",
                 "covariance",
                 "det_flags",
@@ -206,7 +207,8 @@ class MapMaker(Operator):
             for trt in [
                 "det_data",
                 "pixel_dist",
-                "pointing",
+                "pixel_pointing",
+                "stokes_weights",
                 "binned",
                 "covariance",
                 "det_flags",
@@ -328,7 +330,7 @@ class MapMaker(Operator):
                 )
 
                 # Use the same data view as the pointing operator in binning
-                solve_view = self.binning.pointing.view
+                solve_view = self.binning.pixel_pointing.view
 
                 for ob in data.obs:
                     # Get the detectors we are using for this observation
@@ -379,7 +381,7 @@ class MapMaker(Operator):
                 # the pixel distribution.
 
                 # Use the same pointing operator as the binning
-                scan_pointing = self.binning.pointing
+                scan_pointing = self.binning.pixel_pointing
 
                 scanner = ScanMask(
                     det_flags=self.flag_name,
@@ -440,7 +442,8 @@ class MapMaker(Operator):
                     rcond=self.solver_rcond_name,
                     det_flags=self.flag_name,
                     det_flag_mask=255,
-                    pointing=self.binning.pointing,
+                    pixel_pointing=self.binning.pixel_pointing,
+                    stokes_weights=self.binning.stokes_weights,
                     noise_model=self.binning.noise_model,
                     rcond_threshold=self.solve_rcond_threshold,
                     sync_type=self.binning.sync_type,
@@ -628,7 +631,8 @@ class MapMaker(Operator):
                 det_flag_mask=map_binning.det_flag_mask,
                 shared_flags=map_binning.shared_flags,
                 shared_flag_mask=map_binning.shared_flag_mask,
-                pointing=map_binning.pointing,
+                pixel_pointing=map_binning.pixel_pointing,
+                stokes_weights=map_binning.stokes_weights,
                 noise_model=map_binning.noise_model,
                 rcond_threshold=self.map_rcond_threshold,
                 sync_type=map_binning.sync_type,
@@ -744,7 +748,7 @@ class MapMaker(Operator):
             if prod_write:
                 fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
                 write_healpix_fits(
-                    data[prod_key], fname, nest=map_binning.pointing.nest
+                    data[prod_key], fname, nest=map_binning.pixel_pointing.nest
                 )
             if not self.keep_final_products:
                 if prod_key in data:

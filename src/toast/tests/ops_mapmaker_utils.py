@@ -53,14 +53,12 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
 
         hits = dict()
         for stype in ["allreduce", "alltoallv"]:
@@ -99,14 +97,18 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -216,14 +218,18 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")

@@ -62,11 +62,10 @@ class Demodulate(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    pointing = Instance(
+    stokes_weights = Instance(
         klass=Operator,
         allow_none=True,
-        help="This must be an instance of a pointing operator.  "
-        "Used exclusively for pointing weights, not pixel numbers.",
+        help="This must be an instance of a Stokes weights operator",
     )
 
     times = Unicode(
@@ -117,13 +116,30 @@ class Demodulate(Operator):
 
     nskip = Int(3, help="Downsampling factor")
 
-    window = Unicode("hamming", help="Window function name recognized by scipy.signal.firwin")
+    window = Unicode(
+        "hamming", help="Window function name recognized by scipy.signal.firwin"
+    )
 
     purge = Bool(False, help="Remove inputs after demodulation")
 
     do_2f = Bool(False, help="also cache the 2f-demodulated signal")
 
     # Intervals?
+
+    @traitlets.validate("stokes_weights")
+    def _check_stokes_weights(self, proposal):
+        weights = proposal["value"]
+        if weights is not None:
+            if not isinstance(weights, Operator):
+                raise traitlets.TraitError(
+                    "stokes_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["weights", "view"]:
+                if not weights.has_trait(trt):
+                    msg = f"stokes_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return weights
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -134,7 +150,7 @@ class Demodulate(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        for trait in "noise_model", "pointing":
+        for trait in "noise_model", "stokes_weights":
             if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
@@ -396,8 +412,8 @@ class Demodulate(Operator):
             signal = obs.detdata[self.det_data][det]
             # Get weights
             obs_data = data.select(obs_uid=obs.uid)
-            self.pointing.apply(obs_data, dets=[det])
-            weights = obs.detdata[self.pointing.weights][det]
+            self.stokes_weights.apply(obs_data, dets=[det])
+            weights = obs.detdata[self.stokes_weights.weights][det]
             # iweights = 1
             # qweights = eta * cos(2 * psi_det + 4 * psi_hwp)
             # uweights = eta * sin(2 * psi_det + 4 * psi_hwp)
@@ -614,9 +630,15 @@ class StokesWeightsDemod(Operator):
 
     mode = Unicode("IQU", help="The Stokes weights to generate")
 
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
     weights = Unicode(
         obs_names.weights, help="Observation detdata key for output weights"
     )
+
+    single_precision = Bool(False, help="If True, use 32bit float in output")
 
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
@@ -634,21 +656,30 @@ class StokesWeightsDemod(Operator):
 
         nnz = len(self.mode)
 
+        if self.single_precision:
+            dtype = np.float32
+        else:
+            dtype = np.float64
+
         for obs in data.obs:
             dets = obs.select_local_detectors(detectors)
 
             obs.detdata.ensure(
                 self.weights,
                 sample_shape=(nnz,),
-                dtype=np.float32,
+                dtype=dtype,
                 detectors=dets,
             )
             nsample = obs.n_local_samples
-            ones = np.ones(nsample, dtype=np.float32)
-            zeros = np.zeros(nsample, dtype=np.float32)
+            ones = np.ones(nsample, dtype=dtype)
+            zeros = np.zeros(nsample, dtype=dtype)
             weights = obs.detdata[self.weights]
             for det in dets:
-                eta = obs.telescope.focalplane[det]["pol_efficiency"]
+                props = obs.telescope.focalplane[det]
+                if "pol_efficiency" in props.colnames:
+                    eta = props["pol_efficiency"]
+                else:
+                    eta = 1.0
                 if det.startswith("demod0"):
                     # Stokes I only
                     weights[det] = np.column_stack([ones, zeros, zeros])

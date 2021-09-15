@@ -52,5 +52,7 @@ install(FILES
     crosslinking.py
     sss.py
     demodulation.py
+    stokes_weights.py
+    pixels_healpix.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
