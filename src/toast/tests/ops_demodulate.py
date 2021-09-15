@@ -90,3 +90,10 @@ class DemodulateTest(MPITestCase):
         mapper.name = "demodulated"
         pointing.hwp_angle = None
         mapper.apply(demod_data)
+
+        # Test demodulation weights
+
+        ops.Delete(detdata=[obs_names.weights]).apply(demod_data)
+
+        demod_weights = ops.StokesWeightsDemod()
+        demod_weights.apply(demod_data)

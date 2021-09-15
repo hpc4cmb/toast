@@ -510,10 +510,6 @@ class Demodulate(Operator):
         for demodkey in ["demod0", "demod4r", "demod4i"]:
             demod_name = "pixels_{}_{}".format(demodkey, det)
             tod.cache.put(demod_name, pixels, replace=True)
-
-        if self.purge:
-            tod.cache.destroy("{}_{}".format("weights", det))
-            tod.cache.destroy("{}_{}".format("pixels", det))
         """
         return
 
@@ -553,7 +549,9 @@ class Demodulate(Operator):
                 # Lowpass
                 if prefix == "demod0":
                     # lowpass psd
-                    psd_out = psd_in * np.interp(freq_in.to_value(u.Hz), lpf_freq, lpf_value)
+                    psd_out = psd_in * np.interp(
+                        freq_in.to_value(u.Hz), lpf_freq, lpf_value
+                    )
                 elif prefix.startswith("demod2"):
                     # get noise at 2f
                     psd_out = np.zeros_like(psd_in)
@@ -602,6 +600,80 @@ class Demodulate(Operator):
 
     def _provides(self):
         return dict()
+
+    def _accelerators(self):
+        return list()
+
+
+@trait_docs
+class StokesWeightsDemod(Operator):
+    """ Compute the Stokes pointing weights for demodulated data
+    """
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    mode = Unicode("IQU", help="The Stokes weights to generate")
+
+    weights = Unicode(
+        obs_names.weights, help="Observation detdata key for output weights"
+    )
+
+    @traitlets.validate("mode")
+    def _check_mode(self, proposal):
+        mode = proposal["value"]
+        if mode not in ["IQU"]:
+            raise traitlets.TraitError("Invalid mode (must be 'IQU')")
+        return mode
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
+
+        nnz = len(self.mode)
+
+        for obs in data.obs:
+            dets = obs.select_local_detectors(detectors)
+
+            obs.detdata.ensure(
+                self.weights,
+                sample_shape=(nnz,),
+                dtype=np.float32,
+                detectors=dets,
+            )
+            nsample = obs.n_local_samples
+            ones = np.ones(nsample, dtype=np.float32)
+            zeros = np.zeros(nsample, dtype=np.float32)
+            weights = obs.detdata[self.weights]
+            for det in dets:
+                eta = obs.telescope.focalplane[det]["pol_efficiency"]
+                if det.startswith("demod0"):
+                    # Stokes I only
+                    weights[det] = np.column_stack([ones, zeros, zeros])
+                elif det.startswith("demod4r"):
+                    # Stokes Q only
+                    weights[det] = np.column_stack([zeros, eta * ones, zeros])
+                elif det.startswith("demod4i"):
+                    # Stokes U only
+                    weights[det] = np.column_stack([zeros, zeros, eta * ones])
+                else:
+                    # 2f, systematics only
+                    weights[det] = np.column_stack([zeros, zeros, zeros])
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "shared": list(),
+            "detdata": list(),
+        }
+        return req
+
+    def _provides(self):
+        return {"detdata" : self.weights}
 
     def _accelerators(self):
         return list()

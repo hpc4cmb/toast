@@ -93,4 +93,4 @@ from .crosslinking import CrossLinking
 
 from .sss import SimScanSynchronousSignal
 
-from .demodulation import Demodulate
+from .demodulation import Demodulate, StokesWeightsDemod
