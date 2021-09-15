@@ -35,6 +35,7 @@ import numpy as np
 from astropy import units as u
 
 import toast
+import toast.ops
 
 from toast.mpi import MPI
 
@@ -168,19 +169,21 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
-    ops.pointing.detector_pointing = ops.det_pointing
-    ops.pointing.hwp_angle = ops.sim_satellite.hwp_angle
-    ops.pointing_final.detector_pointing = ops.det_pointing
-    ops.pointing_final.hwp_angle = ops.sim_satellite.hwp_angle
+    ops.pixels.detector_pointing = ops.det_pointing
+    ops.weights.detector_pointing = ops.det_pointing
+    ops.weights.hwp_angle = ops.sim_satellite.hwp_angle
+    ops.pixels_final.detector_pointing = ops.det_pointing
 
-    ops.binner.pointing = ops.pointing
+    ops.binner.pixel_pointing = ops.pixels
+    ops.binner.stokes_weights = ops.weights
 
     # If we are not using a different pointing matrix for our final binning, then
     # use the same one as the solve.
-    if not ops.pointing_final.enabled:
-        ops.pointing_final = ops.pointing
+    if not ops.pixels_final.enabled:
+        ops.pixels_final = ops.pixels
 
-    ops.binner_final.pointing = ops.pointing_final
+    ops.binner_final.pixel_pointing = ops.pixels_final
+    ops.binner_final.stokes_weights = ops.weights
 
     # If we are not using a different binner for our final binning, use the same one
     # as the solve.
@@ -191,7 +194,8 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # in case that is different from the solver pointing model.
 
     ops.scan_map.pixel_dist = ops.binner_final.pixel_dist
-    ops.scan_map.pointing = ops.pointing_final
+    ops.scan_map.pixel_pointing = ops.pixels_final
+    ops.scan_map.stokes_weights = ops.weights
     ops.scan_map.save_pointing = use_full_pointing(job)
     ops.scan_map.apply(data)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
@@ -208,6 +212,52 @@ def simulate_data(job, toast_comm, telescope, schedule):
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
     return data
+
+def apply_madam(job, args, data):
+    """ Run the Madam mapmaker with the same parameters as the TOAST mapmaker
+    """
+    log = toast.utils.Logger.get()
+    ops = job.operators
+    tmpls = job.templates
+    world_comm = data.comm.comm_world
+    timer = toast.timing.Timer()
+    timer.start()
+
+    # Cache pixel numbers and Stokes weights
+    if not ops.pixels_final.nest:
+        toast.ops.Delete(detdata=[ops.pixels_final.pixels]).apply(data)
+        log.info_rank("Purged pixel numbers in", comm=world_comm, timer=timer)
+        ops.pixels_final.nest = True
+    ops.pixels_final.apply(data)
+    log.info_rank("Cached pixel numbers in", comm=world_comm, timer=timer)
+    ops.weights.apply(data)
+    log.info_rank("Cached Stokes weights in", comm=world_comm, timer=timer)
+
+    # Configure Madam
+    ops.madam.pixels_nested = ops.pixels.nest
+    ops.madam.params = {
+        "nside_cross" : ops.pixels.nside,
+        "nside_map" : ops.pixels_final.nside,
+        "nside_submap" : ops.pixels_final.nside_submap,
+        "path_output" : args.out_dir,
+        "base_first" : tmpls.baselines.step_time.to_value(u.s),
+        "precond_width_min" : tmpls.baselines.precond_width,
+        "precond_width_max" : tmpls.baselines.precond_width,
+        "good_baseline_fraction" : tmpls.baselines.good_fraction,
+        "kfilter" : tmpls.baselines.use_noise_prior,
+        "kfirst" : tmpls.baselines.enabled,
+        "write_hits" : ops.mapmaker.write_hits,
+        "write_matrix" : ops.mapmaker.write_invcov,
+        "write_wcov" : ops.mapmaker.write_cov,
+        "write_mask" : ops.mapmaker.write_rcond,
+        "info" : 3,
+    }
+
+    # Run
+    ops.madam.apply(data)
+    log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+
+    return
 
 
 def reduce_data(job, args, data):
@@ -242,9 +292,11 @@ def reduce_data(job, args, data):
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # Optionally run Madam
+
     if toast.ops.madam.available():
-        ops.madam.apply(data)
-        log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+        apply_madam(job, args, data)
+
+    return
 
 
 def main():
@@ -267,19 +319,20 @@ def main():
     operators = [
         toast.ops.SimSatellite(name="sim_satellite", detset_key="pixel"),
         toast.ops.DefaultNoiseModel(name="default_model"),
-        toast.ops.ScanHealpix(name="scan_map"),
+        toast.ops.ScanHealpix(name="scan_map", enabled=False),
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, enabled=False
         ),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU"),
+        toast.ops.PixelsHealpix(name="pixels"),
+        toast.ops.StokesWeights(name="weights", mode="IQU"),
         toast.ops.TimeConstant(
             name="deconvolve_time_constant", deconvolve=True, enabled=False
         ),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
-        toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
+        toast.ops.PixelsHealpix(name="pixels_final", enabled=False),
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),

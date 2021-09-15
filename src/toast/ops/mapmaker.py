@@ -750,6 +750,7 @@ class MapMaker(Operator):
                 write_healpix_fits(
                     data[prod_key], fname, nest=map_binning.pixel_pointing.nest
                 )
+                log.info_rank(f"Wrote {fname} in", comm=comm, timer=timer)
             if not self.keep_final_products:
                 if prod_key in data:
                     data[prod_key].clear()
