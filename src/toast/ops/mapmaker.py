@@ -234,7 +234,7 @@ class MapMaker(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, reset_pix_dist=False, **kwargs):
         log = Logger.get()
         timer = Timer()
         log_prefix = "MapMaker"
