@@ -311,10 +311,10 @@ def apply_madam(job, args, data):
         "write_mask" : ops.mapmaker.write_rcond,
         "info" : 3,
         "fsample" : data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz),
-        "iter_max" : job_ops.mapmaker.iter_max,
-        "pixlim_cross" : job_ops.mapmaker.solve_rcond_threshold,
-        "pixlim_map" : job_ops.mapmaker.map_rcond_threshold,
-        "cglimit" : job_ops.mapmaker.convergence,
+        "iter_max" : ops.mapmaker.iter_max,
+        "pixlim_cross" : ops.mapmaker.solve_rcond_threshold,
+        "pixlim_map" : ops.mapmaker.map_rcond_threshold,
+        "cglimit" : ops.mapmaker.convergence,
     }
     sync_type = ops.binner_final.sync_type
     if sync_type == "allreduce":
