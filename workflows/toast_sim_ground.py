@@ -295,7 +295,7 @@ def apply_madam(job, args, data):
     # Configure Madam
     ops.madam.pixels_nested = pixels.nest
     ops.madam.params = {
-        "nside_cross" : pixels.nside,
+        "nside_cross" : ops.pixels_radec.nside,
         "nside_map" : pixels.nside,
         "nside_submap" : pixels.nside_submap,
         "path_output" : args.out_dir,
@@ -310,7 +310,21 @@ def apply_madam(job, args, data):
         "write_wcov" : ops.mapmaker.write_cov,
         "write_mask" : ops.mapmaker.write_rcond,
         "info" : 3,
+        "fsample" : data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz),
+        "iter_max" : job_ops.mapmaker.iter_max,
+        "pixlim_cross" : job_ops.mapmaker.solve_rcond_threshold,
+        "pixlim_map" : job_ops.mapmaker.map_rcond_threshold,
+        "cglimit" : job_ops.mapmaker.convergence,
     }
+    sync_type = ops.binner_final.sync_type
+    if sync_type == "allreduce":
+        ops.madam.params["allreduce"] = True
+    elif sync_type == "alltoallv":
+        ops.madam.params["concatenate_messages"] = True
+        ops.madam.params["reassign_submaps"] = True
+    else:
+        msg = f"Unknown sync_type: {sync_type}"
+        raise RuntimeError(msg)
 
     # Run
     ops.madam.apply(data)
