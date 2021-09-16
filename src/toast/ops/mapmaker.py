@@ -228,7 +228,7 @@ class MapMaker(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, reset_pix_dist=False, **kwargs):
         log = Logger.get()
         timer = Timer()
         log_prefix = "MapMaker"
@@ -244,6 +244,14 @@ class MapMaker(Operator):
         if self.map_binning is None or not self.map_binning.enabled:
             # Use the same binning used in the solver.
             map_binning = self.binning
+
+        # Optionally destroy existing pixel distributions (useful if calling
+        # repeatedly with different data objects)
+        if reset_pix_dist:
+            if self.binning.pixel_dist in data:
+                del data[self.binning.pixel_dist]
+            if self.map_binning.pixel_dist in data:
+                del data[self.map_binning.pixel_dist]
 
         # We use the input binning operator to define the flags that the user has
         # specified.  We will save the name / bit mask for these and restore them later.

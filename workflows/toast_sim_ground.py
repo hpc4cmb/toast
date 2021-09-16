@@ -37,7 +37,7 @@ from astropy import units as u
 import toast
 import toast.ops
 
-from toast.mpi import MPI
+from toast.mpi import MPI, Comm
 
 from toast import spt3g as t3g
 
@@ -78,6 +78,14 @@ def parse_config(operators, templates, comm):
         default=False,
         action="store_true",
         help="Save simulated data to SPT3G format.",
+    )
+
+    parser.add_argument(
+        "--obsmaps",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Map each observation separately.",
     )
 
     # Build a config dictionary starting from the operator defaults, overriding with any
@@ -301,6 +309,8 @@ def apply_madam(job, args, data):
         "write_matrix" : ops.mapmaker.write_invcov,
         "write_wcov" : ops.mapmaker.write_cov,
         "write_mask" : ops.mapmaker.write_rcond,
+        "write_binmap" : not tmpls.baselines.enabled,
+        "write_map" : tmpls.baselines.enabled,
         "info" : 3,
         "fsample" : data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz),
         "iter_max" : ops.mapmaker.iter_max,
@@ -396,7 +406,35 @@ def reduce_data(job, args, data):
     ops.mapmaker.det_data = ops.sim_noise.det_data
     ops.mapmaker.output_dir = args.out_dir
 
-    ops.mapmaker.apply(data)
+    if args.obsmaps:
+        # Map each observation separately
+        timer_obs = toast.timing.Timer()
+        timer_obs.start()
+        group = data.comm.group
+        orig_name = ops.mapmaker.name
+        orig_comm = data.comm
+        new_comm = Comm(world=data.comm.comm_group)
+        for iobs, obs in enumerate(data.obs):
+            log.info_rank(
+                f"{group} : mapping observation {iobs + 1} / {len(data.obs)}.  ntask = {new_comm.comm_world.size}",
+                comm=new_comm.comm_world,
+            )
+            # Data object that only covers one observation
+            obs_data = data.select(obs_uid=obs.uid)
+            # Replace comm_world with the group communicator
+            obs_data._comm = new_comm
+            ops.mapmaker.name = f"{orig_name}_{obs.name}"
+            ops.mapmaker.apply(obs_data, reset_pix_dist=True)
+            log.info_rank(
+                f"{group} : Mapped {obs.name} in", comm=new_comm.comm_world, timer=timer_obs
+            )
+        log.info_rank(
+            f"{group} : Done mapping {len(data.obs)} observations.",
+            comm=new_comm.comm_world,
+        )
+        data._comm = orig_comm
+    else:
+        ops.mapmaker.apply(data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # Optionally run Madam
