@@ -608,6 +608,20 @@ class HorizontalPatch(Patch):
         return in_view, msg
 
 
+def patch_is_rising(patch):
+    try:
+        # Horizontal patch definition
+        rising = patch.rising
+    except:
+        rising = True
+        for corner in patch.corners:
+            if corner.alt > 0 and corner.az > np.pi:
+                # The patch is setting
+                rising = False
+                break
+    return rising
+
+
 @function_timer
 def prioritize(args, visible):
     """Order visible targets by priority and number of scans."""
