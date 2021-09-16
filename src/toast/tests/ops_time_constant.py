@@ -55,6 +55,7 @@ class TimeConstantTest(MPITestCase):
             tau=1 * u.ms,
             det_data="signal",
         )
+        time_constant.deconvolve = False
         time_constant.apply(data)
 
         # Verify that the signal changed
@@ -67,18 +68,49 @@ class TimeConstantTest(MPITestCase):
 
         # Now deconvolve
 
-        time_constant = ops.TimeConstant(
-            tau=1 * u.ms,
-            det_data="signal",
-            deconvolve=True,
-        )
+        time_constant.deconvolve = True
         time_constant.apply(data)
 
         # Verify that the signal is restored
         for obs in data.obs:
+            if obs.comm_rank == 0:
+                import matplotlib.pyplot as plt
             for det in obs.local_detectors:
                 signal0 = obs.detdata["signal0"][det]
                 signal = obs.detdata["signal"][det]
+                if obs.comm_rank == 0:
+                    fig = plt.figure(figsize=(12, 8), dpi=72)
+                    ax = fig.add_subplot(2, 1, 1, aspect="auto")
+                    ax.plot(
+                        obs.shared["times"].data,
+                        signal0,
+                        c="black",
+                        label=f"Det {det} Original",
+                    )
+                    ax.plot(
+                        obs.shared["times"].data,
+                        signal,
+                        c="red",
+                        label=f"Det {det} After Convolve / Deconvolve",
+                    )
+                    ax.legend(loc=1)
+                    ax = fig.add_subplot(2, 1, 2, aspect="auto")
+                    ax.plot(
+                        obs.shared["times"].data,
+                        (signal - signal0),
+                        c="blue",
+                        label=f"Det {det} Processed - Original",
+                    )
+                    ax.set_ylim(-0.1, 0.1)
+                    ax.legend(loc=1)
+                    plt.title(f"Observation {obs.name} Detector {det}")
+                    savefile = os.path.join(
+                        self.outdir,
+                        f"out_{obs.name}_{det}.pdf",
+                    )
+                    plt.savefig(savefile)
+                    plt.close()
+
                 rms = np.std(signal0 - signal) / np.std(signal0)
                 assert rms < 1e-4
 

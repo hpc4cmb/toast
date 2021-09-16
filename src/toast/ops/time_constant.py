@@ -8,6 +8,7 @@ import traitlets
 
 from ..mpi import MPI, MPI_Comm, use_mpi, Comm
 
+from ..fft import FFTPlanReal1DStore
 from .operator import Operator
 from .. import qarray as qa
 from .. import rng
@@ -52,7 +53,7 @@ class TimeConstant(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        return
+        self._oversample = 1
 
     def _get_tau(self, obs, det):
         focalplane = obs.telescope.focalplane
@@ -84,28 +85,105 @@ class TimeConstant(Operator):
         if self.tau is None and self.tau_name is None:
             raise RuntimeError("Either tau or tau_name must be set.")
 
+        # The store of FFT plans which we will re-use for all observations
+        store = FFTPlanReal1DStore.get()
+
         for obs in data.obs:
             dets = obs.select_local_detectors(detectors)
             if len(dets) == 0:
                 continue
             fsample = obs.telescope.focalplane.sample_rate
 
-            # FIXME : if the FFTs here ever become a bottle neck, we will
-            # need to switch to using the TOAST batched FFT instead.
-
             nsample = obs.n_local_samples
-            freqs = np.fft.rfftfreq(nsample, 1 / fsample.to_value(u.Hz))
 
-            for det in dets:
-                signal = obs.detdata[self.det_data][det]
+            # Compute the radix-2 FFT length to use
+            fftlen = 2
+            while fftlen <= (self._oversample * nsample):
+                fftlen *= 2
+            npsd = fftlen // 2 + 1
 
+            # Compute the time domain offset that centers our data within the
+            # buffer
+            padded_start = (fftlen - nsample) // 2
+
+            freqs = np.fft.rfftfreq(fftlen, 1 / fsample.to_value(u.Hz))
+
+            # The forward and reverse plans
+            fplan = store.forward(fftlen, len(dets))
+            rplan = store.backward(fftlen, len(dets))
+
+            # Fill the forward buffers
+            for idet, det in enumerate(dets):
+                fplan.tdata(idet)[:] = 0
+                fplan.tdata(idet)[padded_start : padded_start + nsample] = obs.detdata[
+                    self.det_data
+                ][det]
+
+            # Do the forward transforms
+            fplan.exec()
+
+            # Temporary buffer for the imaginary terms of the filter
+            imgfilt = np.zeros(len(freqs) - 2)
+            imgsq = np.zeros(len(freqs) - 2)
+
+            # Apply Fourier domain filter and fill the frequency-domain
+            # buffers of the reverse transform.
+            for idet, det in enumerate(dets):
                 tau = self._get_tau(obs, det)
-                if self.deconvolve:
-                    taufilter = 1 + 2.0j * np.pi * freqs * tau.to_value(u.s)
-                else:
-                    taufilter = 1.0 / (1 + 2.0j * np.pi * freqs * tau.to_value(u.s))
+                tau_s = tau.to_value(u.s)
 
-                signal[:] = np.fft.irfft(taufilter * np.fft.rfft(signal), n=nsample)
+                # Our complex filter kernel is:
+                #
+                #   1 + 2 * pi * tau * freqs
+                #
+                # So the real part is "1" and we do not need to store that.  We
+                # just need to compute the imaginary terms:
+                imgfilt[:] = 2.0 * np.pi * tau_s * freqs[1:-1]
+
+                # Apply the kernel.  Here we are multiplying or dividing complex
+                # numbers.  The simplified steps here are the operations needed
+                # if one writes down the algebra and uses the fact that the real part
+                # of the filter is one.  We store the result in the fourier domain
+                # buffer of the reverse plan.
+                #
+                # If X = a + b*i, Y = c + d*i, and c == 1, then:
+                #   X * Y = (a - b*d) + (a*d + b)i
+                #   X / Y = (a + b*d) / (1 + d^2) + (b - a*d)i / (1 + d^2)
+                #
+                # Helper views that put the frequencies in the right order.  We
+                # handle the zero and Nyquist frequencies separately.
+                redata = fplan.fdata(idet)[1 : npsd - 1]
+                imgdata = fplan.fdata(idet)[-1 : npsd - 1 : -1]
+
+                if self.deconvolve:
+                    rplan.fdata(idet)[0] = fplan.fdata(idet)[0]
+                    rplan.fdata(idet)[1 : npsd - 1] = redata - imgdata * imgfilt
+                    rplan.fdata(idet)[npsd - 1] = fplan.fdata(idet)[npsd - 1]
+                    rplan.fdata(idet)[-1 : npsd - 1 : -1] = redata * imgfilt + imgdata
+                else:
+                    imgsq[:] = 1.0 / (1.0 + imgfilt * imgfilt)
+                    rplan.fdata(idet)[0] = fplan.fdata(idet)[0]
+                    rplan.fdata(idet)[1 : npsd - 1] = (
+                        redata + imgdata * imgfilt
+                    ) * imgsq
+                    rplan.fdata(idet)[npsd - 1] = fplan.fdata(idet)[npsd - 1]
+                    rplan.fdata(idet)[-1 : npsd - 1 : -1] = (
+                        imgdata - redata * imgfilt
+                    ) * imgsq
+
+            # Do the inverse transforms
+            rplan.exec()
+
+            # Copy timestreams back
+            for idet, det in enumerate(dets):
+                obs.detdata[self.det_data][det] = rplan.tdata(idet)[
+                    padded_start : padded_start + nsample
+                ]
+
+            # Clear the FFT plans after each observation to save memory.  This means
+            # we are just using the plan store for convenience and not re-using the
+            # allocated memory.
+            store.clear()
 
         return
 
