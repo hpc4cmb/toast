@@ -180,12 +180,10 @@ class TimeConstant(Operator):
                     padded_start : padded_start + nsample
                 ]
 
-        # Clear the FFT plans after all observations have been processed.  If we
-        # run out of memory due to having many observations of different sizes, then
-        # we could put this line inside the loop over observations.  However,
-        # in that case we are using the plan store as just a convenience and not
-        # benefitting from the re-use of the plan creation.
-        store.clear()
+            # Clear the FFT plans after each observation to save memory.  This means
+            # we are just using the plan store for convenience and not re-using the
+            # allocated memory.
+            store.clear()
 
         return
 
