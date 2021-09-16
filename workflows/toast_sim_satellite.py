@@ -254,6 +254,8 @@ def apply_madam(job, args, data):
         "write_matrix" : ops.mapmaker.write_invcov,
         "write_wcov" : ops.mapmaker.write_cov,
         "write_mask" : ops.mapmaker.write_rcond,
+        "write_binmap" : not tmpls.baselines.enabled,
+        "write_map" : tmpls.baselines.enabled,
         "info" : 3,
         "fsample" : data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz),
         "iter_max" : ops.mapmaker.iter_max,
