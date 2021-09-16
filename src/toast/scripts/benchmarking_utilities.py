@@ -682,15 +682,17 @@ def scan_map(args, rank, job_ops, data, log):
     """
     if job_ops.scan_map.enabled:
         # Use the final pointing model if it is enabled
-        pointing = job_ops.pointing
-        if job_ops.pointing_final.enabled:
-            pointing = job_ops.pointing_final
+        pixels = job_ops.pixels
+        weights = job_ops.weights
+        if job_ops.pixels_final.enabled:
+            pixels = job_ops.pixels_final
         # creates a map and puts it in args.input_map
         create_input_maps(
-            args.input_map, pointing.nside, rank, log, args.print_input_map
+            args.input_map, pixels.nside, rank, log, args.print_input_map
         )
         job_ops.scan_map.pixel_dist = job_ops.binner_final.pixel_dist
-        job_ops.scan_map.pointing = pointing
+        job_ops.scan_map.pixel_pointing = pixels
+        job_ops.scan_map.stokes_weights = weights
         job_ops.scan_map.save_pointing = job_ops.binner_final.full_pointing
         job_ops.scan_map.file = args.input_map
         job_ops.scan_map.apply(data)
@@ -706,7 +708,7 @@ def run_mapmaker(job_ops, args, tmpls, data):
 
     job_ops.mapmaker.binning = job_ops.binner
     job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(
-        templates=[tmpls.baselines]
+        templates=[tmpls.baselines], view=job_ops.pixels_final.view,
     )
     job_ops.mapmaker.map_binning = job_ops.binner_final
     job_ops.mapmaker.det_data = job_ops.sim_noise.det_data
@@ -714,6 +716,71 @@ def run_mapmaker(job_ops, args, tmpls, data):
 
     # Run the map making
     job_ops.mapmaker.apply(data)
+
+
+def run_madam(job_ops, args, tmpls, data):
+    """
+    Apply the Madam mapmaker using TOAST mapmaker configuration
+    """
+    log = Logger.get()
+    world_comm = data.comm.comm_world
+    timer = toast.timing.Timer()
+    timer.start()
+
+    pixels = job_ops.pixels_final
+    weights = job_ops.weights
+
+    # Cache pixel numbers and Stokes weights
+
+    if not pixels.nest:
+        toast.ops.Delete(detdata=[pixels.pixels]).apply(data)
+        log.info_rank("Purged pixel numbers in", comm=world_comm, timer=timer)
+        pixels.nest = True
+    pixels.apply(data)
+    log.info_rank("Cached pixel numbers in", comm=world_comm, timer=timer)
+    weights.apply(data)
+    log.info_rank("Cached Stokes weights in", comm=world_comm, timer=timer)
+    job_ops.mem_count.prefix = "After caching pointing"
+    job_ops.mem_count.apply(data)
+    # Configure Madam
+    job_ops.madam.pixels_nested = pixels.nest
+    job_ops.madam.view = job_ops.pixels_final.view
+    job_ops.madam.params = {
+        "nside_cross" : job_ops.pixels.nside,
+        "nside_map" : pixels.nside,
+        "nside_submap" : pixels.nside_submap,
+        "path_output" : args.out_dir,
+        "base_first" : tmpls.baselines.step_time.to_value(u.s),
+        "precond_width_min" : tmpls.baselines.precond_width,
+        "precond_width_max" : tmpls.baselines.precond_width,
+        "good_baseline_fraction" : tmpls.baselines.good_fraction,
+        "kfilter" : tmpls.baselines.use_noise_prior,
+        "kfirst" : tmpls.baselines.enabled,
+        "write_hits" : job_ops.mapmaker.write_hits,
+        "write_matrix" : job_ops.mapmaker.write_invcov,
+        "write_wcov" : job_ops.mapmaker.write_cov,
+        "write_mask" : job_ops.mapmaker.write_rcond,
+        "info" : 3,
+        "fsample" : data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz),
+        "iter_max" : job_ops.mapmaker.iter_max,
+        "pixlim_cross" : job_ops.mapmaker.solve_rcond_threshold,
+        "pixlim_map" : job_ops.mapmaker.map_rcond_threshold,
+        "cglimit" : job_ops.mapmaker.convergence,
+    }
+    sync_type = job_ops.binner_final.sync_type
+    if sync_type == "allreduce":
+        job_ops.madam.params["allreduce"] = True
+    elif sync_type == "alltoallv":
+        job_ops.madam.params["concatenate_messages"] = True
+        job_ops.madam.params["reassign_submaps"] = True
+    else:
+        msg = f"Unknown sync_type: {sync_type}"
+        raise RuntimeError(msg)
+    # Run Madam
+    job_ops.madam.apply(data)
+    log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+    job_ops.mem_count.prefix = "After Madam"
+    job_ops.mem_count.apply(data)
 
 
 def compute_science_metric(args, runtime, n_nodes, rank, log):
