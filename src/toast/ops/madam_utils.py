@@ -4,14 +4,11 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 
-import healpy as hp
-
-from ..utils import Logger, Timer, GlobalTimers, dtype_to_aligned, memreport
-
 from ..timing import function_timer
-
+from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, memreport
 from .memory_counter import MemoryCounter
 
 
@@ -79,12 +76,10 @@ def stage_local(
                 "Internal error on madam copy.  Only pixel indices should be flagged."
             )
     for ob in data.obs:
-        ldet = -1
         views = ob.view[view]
         for idet, det in enumerate(dets):
             if det not in ob.local_detectors:
                 continue
-            ldet += 1
             if operator is not None:
                 # Synthesize data for staging
                 obs_data = data.select(obs_uid=ob.uid)
@@ -111,18 +106,18 @@ def stage_local(
                     1,
                 )
                 if nnz > 1:
-                    madam_buffer[slc] = views.detdata[detdata_name][ivw][
-                        ldet
-                    ].flatten()[::nnz_stride]
+                    madam_buffer[slc] = views.detdata[detdata_name][ivw][det].flatten()[
+                        ::nnz_stride
+                    ]
                 else:
-                    madam_buffer[slc] = views.detdata[detdata_name][ivw][ldet].flatten()
+                    madam_buffer[slc] = views.detdata[detdata_name][ivw][det].flatten()
                 detflags = None
                 if do_flags:
                     if det_flags is None:
                         detflags = flags
                     else:
                         detflags = np.copy(flags)
-                        detflags |= views.detdata[det_flags][ivw][ldet] & det_mask
+                        detflags |= views.detdata[det_flags][ivw][det] & det_mask
                     madam_buffer[slc][detflags != 0] = -1
         if do_purge:
             del ob.detdata[detdata_name]
@@ -188,8 +183,6 @@ def restore_local(
     madam_buffer,
     interval_starts,
     nnz,
-    nside,
-    nest,
 ):
     """Helper function to create a detdata buffer from madam data."""
     n_det = len(dets)
@@ -224,19 +217,7 @@ def restore_local(
                         (-1, nnz)
                     )
                 else:
-                    # If this is the pointing pixel indices, AND if the original was
-                    # in RING ordering, then make a temporary array to do the conversion
-                    if nside > 0 and not nest:
-                        temp_pixels = -1 * np.ones(view_samples, dtype=detdata_dtype)
-                        npix = 12 * nside ** 2
-                        good = np.logical_and(
-                            madam_buffer[slc] >= 0, madam_buffer[slc] < npix
-                        )
-                        temp_pixels[good] = madam_buffer[slc][good]
-                        temp_pixels[good] = hp.nest2ring(nside, temp_pixels[good])
-                        views.detdata[detdata_name][ivw][ldet] = temp_pixels
-                    else:
-                        views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc]
+                    views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc]
                 ldet += 1
             interval += 1
     return
@@ -255,8 +236,6 @@ def restore_in_turns(
     madam_buffer_raw,
     interval_starts,
     nnz,
-    nside,
-    nest,
 ):
     """When restoring data, take turns copying it."""
     for copying in range(n_copy_groups):
@@ -272,8 +251,6 @@ def restore_in_turns(
                 madam_buffer,
                 interval_starts,
                 nnz,
-                nside,
-                nest,
             )
             madam_buffer_raw.clear()
         nodecomm.barrier()

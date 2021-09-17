@@ -2,42 +2,30 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi
-
 import os
 
-import traitlets
-
-import numpy as np
-
 import healpy as hp
-
+import numpy as np
+import traitlets
 from astropy import units as u
 
-from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
-
-from ..traits import trait_docs, Int, Unicode, Bool, Dict
-
-from ..timing import function_timer
-
+from ..mpi import MPI, use_mpi
 from ..observation import default_names as obs_names
-
 from ..templates import Offset
-
-from .operator import Operator
-
-from .mapmaker import MapMaker
-
-from .memory_counter import MemoryCounter
-
+from ..timing import function_timer
+from ..traits import Bool, Dict, Instance, Int, Unicode, trait_docs
+from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
+from .delete import Delete
 from .madam_utils import (
     log_time_memory,
-    stage_local,
-    stage_in_turns,
-    restore_local,
     restore_in_turns,
+    restore_local,
+    stage_in_turns,
+    stage_local,
 )
-
+from .mapmaker import MapMaker
+from .memory_counter import MemoryCounter
+from .operator import Operator
 
 madam = None
 if use_mpi:
@@ -63,19 +51,19 @@ def madam_params_from_mapmaker(mapmaker):
     map_pixels = mapmaker.map_binning.pixel_pointing
 
     params = {
-        "nside_cross" : destripe_pixels.nside,
-        "nside_map" : map_pixels.nside,
-        "nside_submap" : map_pixels.nside_submap,
-        "path_output" : mapmaker.output_dir,
-        "write_hits" : mapmaker.write_hits,
-        "write_matrix" : mapmaker.write_invcov,
-        "write_wcov" : mapmaker.write_cov,
-        "write_mask" : mapmaker.write_rcond,
-        "info" : 3,
-        "iter_max" : mapmaker.iter_max,
-        "pixlim_cross" : mapmaker.solve_rcond_threshold,
-        "pixlim_map" : mapmaker.map_rcond_threshold,
-        "cglimit" : mapmaker.convergence
+        "nside_cross": destripe_pixels.nside,
+        "nside_map": map_pixels.nside,
+        "nside_submap": map_pixels.nside_submap,
+        "path_output": mapmaker.output_dir,
+        "write_hits": mapmaker.write_hits,
+        "write_matrix": mapmaker.write_invcov,
+        "write_wcov": mapmaker.write_cov,
+        "write_mask": mapmaker.write_rcond,
+        "info": 3,
+        "iter_max": mapmaker.iter_max,
+        "pixlim_cross": mapmaker.solve_rcond_threshold,
+        "pixlim_map": mapmaker.map_rcond_threshold,
+        "cglimit": mapmaker.convergence,
     }
     sync_type = mapmaker.map_binning.sync_type
     if sync_type == "allreduce":
@@ -96,22 +84,26 @@ def madam_params_from_mapmaker(mapmaker):
     # Destriping parameters
 
     if baselines is None or not baselines.enabled:
-        params.update({
-            "write_binmap" : True,
-            "write_map" : False,
-            "kfirst" : False,
-        })
+        params.update(
+            {
+                "write_binmap": True,
+                "write_map": False,
+                "kfirst": False,
+            }
+        )
     else:
-        params.update({
-            "write_binmap" : False,
-            "write_map" : True,
-            "kfilter" : baselines.use_noise_prior,
-            "kfirst" : True,
-            "base_first" : baselines.step_time.to_value(u.s),
-            "precond_width_min" : baselines.precond_width,
-            "precond_width_max" : baselines.precond_width,
-            "good_baseline_fraction" : baselines.good_fraction,
-        })
+        params.update(
+            {
+                "write_binmap": False,
+                "write_map": True,
+                "kfilter": baselines.use_noise_prior,
+                "kfirst": True,
+                "base_first": baselines.step_time.to_value(u.s),
+                "precond_width_min": baselines.precond_width,
+                "precond_width_max": baselines.precond_width,
+                "good_baseline_fraction": baselines.good_fraction,
+            }
+        )
 
     return params
 
@@ -177,11 +169,6 @@ class Madam(Operator):
     purge_det_data = Bool(
         False,
         help="If True, clear all observation detector data after copying to madam buffers",
-    )
-
-    purge_pointing = Bool(
-        True,
-        help="If True, clear all observation detector pointing data after copying to madam buffers",
     )
 
     restore_det_data = Bool(
@@ -337,15 +324,12 @@ class Madam(Operator):
                 "contain at least one observation"
             )
 
-        # Check that the detector data is set
-        if self.det_data is None:
-            raise RuntimeError("You must set the det_data trait before calling exec()")
+        for trait in "det_data", "pixel_pointing", "stokes_weights":
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
-        # Check that the pointing is set
-        if self.pixels is None or self.weights is None:
-            raise RuntimeError(
-                "You must set the pixels and weights before calling exec()"
-            )
+        #
 
         # Combine parameters from an external file and other parameters passed in
 
@@ -385,8 +369,9 @@ class Madam(Operator):
             params.update(self.params)
 
         if "fsample" not in params:
-            params["fsample"] = \
-                data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)
+            params["fsample"] = data.obs[0].telescope.focalplane.sample_rate.to_value(
+                u.Hz
+            )
 
         # Set madam parameters that depend on our traits
         if self.mcmode:
@@ -411,13 +396,12 @@ class Madam(Operator):
             nnz_stride,
             interval_starts,
             psd_freqs,
-            nside,
         ) = self._prepare(params, data, detectors)
 
         if data.comm.world_rank == 0:
             msg = "{} Copying toast data to buffers".format(self._logprefix)
             log.info(msg)
-        psdinfo, signal_dtype, pixels_dtype, weight_dtype = self._stage_data(
+        psdinfo, signal_dtype = self._stage_data(
             params,
             data,
             all_dets,
@@ -427,7 +411,6 @@ class Madam(Operator):
             nnz_stride,
             interval_starts,
             psd_freqs,
-            nside,
         )
 
         if data.comm.world_rank == 0:
@@ -447,9 +430,6 @@ class Madam(Operator):
             nnz_full,
             interval_starts,
             signal_dtype,
-            pixels_dtype,
-            nside,
-            weight_dtype,
         )
 
         return
@@ -463,7 +443,7 @@ class Madam(Operator):
             "shared": [
                 self.times,
             ],
-            "detdata": [self.det_data, self.pixels, self.weights],
+            "detdata": [self.det_data],
             "intervals": list(),
         }
         if self.view is not None:
@@ -490,11 +470,7 @@ class Madam(Operator):
         timer = Timer()
         timer.start()
 
-        if "nside_map" not in params:
-            raise RuntimeError(
-                "Madam 'nside_map' must be set in the parameter dictionary"
-            )
-        nside = int(params["nside_map"])
+        params["nside_map"] = self.pixel_pointing.nside
 
         # Madam requires a fixed set of detectors and pointing matrix non-zeros.
         # Here we find the superset of local detectors used, and also the number
@@ -633,7 +609,6 @@ class Madam(Operator):
             nnz_stride,
             interval_starts,
             psd_freqs,
-            nside,
         )
 
     @function_timer
@@ -648,7 +623,6 @@ class Madam(Operator):
         nnz_stride,
         interval_starts,
         psd_freqs,
-        nside,
     ):
         """Create madam-compatible buffers.
 
@@ -665,7 +639,7 @@ class Madam(Operator):
 
         # Determine how many processes per node should copy at once.
         n_copy_groups = 1
-        if self.purge_det_data or self.purge_pointing:
+        if self.purge_det_data:
             # We will be purging some data- see if we should reduce the number of
             # processes copying in parallel (if we are not purging data, there
             # is no benefit to staggering the copy).
@@ -815,95 +789,57 @@ class Madam(Operator):
 
         # Copy the pointing
 
-        pixels_dtype = data.obs[0].detdata[self.pixels].dtype
-        weight_dtype = data.obs[0].detdata[self.weights].dtype
+        nested_pointing = self.pixel_pointing.nest
+        if not nested_pointing:
+            # Any existing pixel numbers are in the wrong ordering
+            Delete(detdata=[self.pixel_pointing.pixels]).apply(data)
+            self.pixel_pointing.nest = True
 
         if not self._cached:
             # We do not have the pointing yet.
-            if self.purge_pointing:
-                # Allocate in a staggered way.
-                self._madam_pixels_raw, self._madam_pixels = stage_in_turns(
-                    data,
-                    nodecomm,
-                    n_copy_groups,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.pixel_pointing.pixels,
-                    madam.PIXEL_TYPE,
-                    interval_starts,
-                    1,
-                    1,
-                    self.shared_flags,
-                    self.shared_flag_mask,
-                    self.det_flags,
-                    self.det_flag_mask,
-                    operator=self.pixel_pointing,
-                )
+            storage, _ = dtype_to_aligned(madam.PIXEL_TYPE)
+            self._madam_pixels_raw = storage.zeros(nsamp * len(all_dets))
+            self._madam_pixels = self._madam_pixels_raw.array()
 
-                self._madam_pixweights_raw, self._madam_pixweights = stage_in_turns(
-                    data,
-                    nodecomm,
-                    n_copy_groups,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.stokes_weights.weights,
-                    madam.WEIGHT_TYPE,
-                    interval_starts,
-                    nnz,
-                    nnz_stride,
-                    None,
-                    None,
-                    None,
-                    None,
-                    operator=self.stokes_weights,
-                )
-            else:
-                # Allocate and copy all at once.
-                storage, _ = dtype_to_aligned(madam.PIXEL_TYPE)
-                self._madam_pixels_raw = storage.zeros(nsamp * len(all_dets))
-                self._madam_pixels = self._madam_pixels_raw.array()
+            stage_local(
+                data,
+                nsamp,
+                self.view,
+                all_dets,
+                self.pixel_pointing.pixels,
+                self._madam_pixels,
+                interval_starts,
+                1,
+                1,
+                self.shared_flags,
+                self.shared_flag_mask,
+                self.det_flags,
+                self.det_flag_mask,
+                do_purge=True,
+                operator=self.pixel_pointing,
+            )
 
-                stage_local(
-                    data,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.pixel_pointing.pixels,
-                    self._madam_pixels,
-                    interval_starts,
-                    1,
-                    1,
-                    self.shared_flags,
-                    self.shared_flag_mask,
-                    self.det_flags,
-                    self.det_flag_mask,
-                    do_purge=False,
-                    operator=self.pixel_pointing,
-                )
+            storage, _ = dtype_to_aligned(madam.WEIGHT_TYPE)
+            self._madam_pixweights_raw = storage.zeros(nsamp * len(all_dets) * nnz)
+            self._madam_pixweights = self._madam_pixweights_raw.array()
 
-                storage, _ = dtype_to_aligned(madam.WEIGHT_TYPE)
-                self._madam_pixweights_raw = storage.zeros(nsamp * len(all_dets) * nnz)
-                self._madam_pixweights = self._madam_pixweights_raw.array()
-
-                stage_local(
-                    data,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.stokes_weights.weights,
-                    self._madam_pixweights,
-                    interval_starts,
-                    nnz,
-                    nnz_stride,
-                    None,
-                    None,
-                    None,
-                    None,
-                    do_purge=False,
-                    operator=self.stokes_weights,
-                )
+            stage_local(
+                data,
+                nsamp,
+                self.view,
+                all_dets,
+                self.stokes_weights.weights,
+                self._madam_pixweights,
+                interval_starts,
+                nnz,
+                nnz_stride,
+                None,
+                None,
+                None,
+                None,
+                do_purge=True,
+                operator=self.stokes_weights,
+            )
 
             log_time_memory(
                 data,
@@ -913,6 +849,11 @@ class Madam(Operator):
                 mem_msg="After pointing staging",
                 full_mem=self.mem_report,
             )
+
+        if not nested_pointing:
+            # Any existing pixel numbers are in the wrong ordering
+            Delete(detdata=[self.pixel_pointing.pixels]).apply(data)
+            self.pixel_pointing.nest = False
 
         psdinfo = None
 
@@ -964,7 +905,7 @@ class Madam(Operator):
         timer.stop()
         del nodecomm
 
-        return psdinfo, signal_dtype, pixels_dtype, weight_dtype
+        return psdinfo, signal_dtype
 
     @function_timer
     def _unstage_data(
@@ -977,9 +918,6 @@ class Madam(Operator):
         nnz_full,
         interval_starts,
         signal_dtype,
-        pixels_dtype,
-        nside,
-        weight_dtype,
     ):
         """
         Restore data to TOAST observations.
@@ -997,7 +935,7 @@ class Madam(Operator):
 
         # Determine how many processes per node should copy at once.
         n_copy_groups = 1
-        if self.purge_det_data or self.purge_pointing:
+        if self.purge_det_data:
             # We MAY be restoring some data- see if we should reduce the number of
             # processes copying in parallel (if we are not purging data, there
             # is no benefit to staggering the copy).
