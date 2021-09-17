@@ -60,7 +60,7 @@ from .mapmaker_templates import TemplateMatrix
 
 from .mapmaker import MapMaker
 
-from .madam import Madam
+from .madam import Madam, madam_params_from_mapmaker
 
 from .conviqt import SimConviqt, SimWeightedConviqt
 

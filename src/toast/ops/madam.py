@@ -22,7 +22,11 @@ from ..timing import function_timer
 
 from ..observation import default_names as obs_names
 
+from ..templates import Offset
+
 from .operator import Operator
+
+from .mapmaker import MapMaker
 
 from .memory_counter import MemoryCounter
 
@@ -47,6 +51,69 @@ def available():
     """(bool): True if libmadam is found in the library search path."""
     global madam
     return (madam is not None) and madam.available
+
+
+def madam_params_from_mapmaker(mapmaker):
+    """Utility function that configures Madam to match the TOAST mapmaker"""
+
+    if not isinstance(mapmaker, MapMaker):
+        raise RuntimeError("Need an instance of MapMaker to configure from")
+
+    destripe_pixels = mapmaker.binning.pixel_pointing
+    map_pixels = mapmaker.map_binning.pixel_pointing
+
+    params = {
+        "nside_cross" : destripe_pixels.nside,
+        "nside_map" : map_pixels.nside,
+        "nside_submap" : map_pixels.nside_submap,
+        "path_output" : mapmaker.output_dir,
+        "write_hits" : mapmaker.write_hits,
+        "write_matrix" : mapmaker.write_invcov,
+        "write_wcov" : mapmaker.write_cov,
+        "write_mask" : mapmaker.write_rcond,
+        "info" : 3,
+        "iter_max" : mapmaker.iter_max,
+        "pixlim_cross" : mapmaker.solve_rcond_threshold,
+        "pixlim_map" : mapmaker.map_rcond_threshold,
+        "cglimit" : mapmaker.convergence
+    }
+    sync_type = mapmaker.map_binning.sync_type
+    if sync_type == "allreduce":
+        params["allreduce"] = True
+    elif sync_type == "alltoallv":
+        params["concatenate_messages"] = True
+        params["reassign_submaps"] = True
+    else:
+        msg = f"Unknown sync_type: {sync_type}"
+        raise RuntimeError(msg)
+
+    for template in mapmaker.template_matrix.templates:
+        if isinstance(template, Offset):
+            baselines = template
+    else:
+        baselines = None
+
+    # Destriping parameters
+
+    if baselines is None or not baselines.enabled:
+        params.update({
+            "write_binmap" : True,
+            "write_map" : False,
+            "kfirst" : False,
+        })
+    else:
+        params.update({
+            "write_binmap" : False,
+            "write_map" : True,
+            "kfilter" : baselines.use_noise_prior,
+            "kfirst" : True,
+            "base_first" : baselines.step_time.to_value(u.s),
+            "precond_width_min" : baselines.precond_width,
+            "precond_width_max" : baselines.precond_width,
+            "good_baseline_fraction" : baselines.good_fraction,
+        })
+
+    return params
 
 
 @trait_docs
@@ -264,12 +331,11 @@ class Madam(Operator):
 
         # Combine parameters from an external file and other parameters passed in
 
-        params = None
+        params = dict()
         repeat_keys = ["detset", "detset_nopol", "survey"]
 
         if self.paramfile is not None:
             if data.comm.world_rank == 0:
-                params = dict()
                 line_pat = re.compile(r"(\S+)\s+=\s+(\S+)")
                 comment_pat = re.compile(r"^\s*\#.*")
                 with open(self.paramfile, "r") as f:
@@ -296,8 +362,13 @@ class Madam(Operator):
                         params[k].append(v)
                 else:
                     params[k] = v
-        else:
-            params = dict(self.params)
+
+        if self.params is not None:
+            params.update(self.params)
+
+        if "fsample" not in params:
+            params["fsample"] = \
+                data.obs[0].telescope.focalplane.sample_rate.to_value(u.Hz)
 
         # Set madam parameters that depend on our traits
         if self.mcmode:
