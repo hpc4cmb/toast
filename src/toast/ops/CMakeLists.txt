@@ -37,6 +37,7 @@ install(FILES
     madam_utils.py
     conviqt.py
     sim_gaindrifts.py
+    sim_crosstalk.py
     totalconvolve.py
     polyfilter.py
     groundfilter.py

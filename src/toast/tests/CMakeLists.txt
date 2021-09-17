@@ -45,6 +45,7 @@ install(FILES
     template_fourier2d.py
     template_subharmonic.py
     ops_sim_gaindrifts.py
+    ops_sim_crosstalk.py
     ops_polyfilter.py
     ops_groundfilter.py
     ops_sim_cosmic_rays.py

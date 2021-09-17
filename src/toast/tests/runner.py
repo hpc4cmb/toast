@@ -57,6 +57,7 @@ from . import ops_madam as test_ops_madam
 
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
+from . import ops_sim_crosstalk as test_ops_sim_crosstalk
 from . import ops_polyfilter as test_ops_polyfilter
 from . import ops_groundfilter as test_ops_groundfilter
 from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
@@ -64,6 +65,7 @@ from . import ops_time_constant as test_ops_time_constant
 from . import ops_cadence_map as test_ops_cadence_map
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_sss as test_ops_sss
+
 
 from . import covariance as test_covariance
 
@@ -186,11 +188,13 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))
         suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_crosstalk))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
         suite.addTest(loader.loadTestsFromModule(test_ops_time_constant))
         suite.addTest(loader.loadTestsFromModule(test_ops_cadence_map))
         suite.addTest(loader.loadTestsFromModule(test_ops_crosslinking))
         suite.addTest(loader.loadTestsFromModule(test_ops_sss))
+
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
