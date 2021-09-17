@@ -4,35 +4,33 @@
 
 import os
 import re
-from time import time
 import warnings
-
-from astropy import units as u
-from astropy.table import QTable
+from time import time
 
 import numpy as np
-from scipy.signal import firwin, fftconvolve
 import traitlets
+from astropy import units as u
+from astropy.table import QTable
+from scipy.signal import fftconvolve, firwin
 
-from ..mpi import MPI, MPI_Comm, use_mpi, Comm
-
-from .operator import Operator
-from .. import qarray as qa
-from ..timing import function_timer
-from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance, Float
-from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned, name_UID
+from ..data import Data
+from ..instrument import Focalplane, Telescope
+from ..intervals import IntervalList
+from ..mpi import MPI, Comm, MPI_Comm, use_mpi
+from ..noise import Noise
 from ..observation import Observation
 from ..observation import default_names as obs_names
-from ..noise import Noise
-from ..instrument import Telescope, Focalplane
-from ..data import Data
+from ..timing import function_timer
+from ..traits import Bool, Dict, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, name_UID
+from .operator import Operator
 
 
 class Lowpass:
-    """ A callable class that applies the low pass filter """
+    """A callable class that applies the low pass filter"""
 
     def __init__(self, wkernel, fmax, fsample, offset, nskip, window="hamming"):
-        """ Arguments:
+        """Arguments:
         wkernel(int) : width of the filter kernel
         fmax(float) : maximum frequency of the filter
         fsample(float) : signal sampling frequency
@@ -57,8 +55,7 @@ class Lowpass:
 
 @trait_docs
 class Demodulate(Operator):
-    """ Demodulate and downsample HWP-modulated data
-    """
+    """Demodulate and downsample HWP-modulated data"""
 
     API = Int(0, help="Internal interface version for this operator")
 
@@ -229,15 +226,19 @@ class Demodulate(Operator):
                 self.shared_flags, (n_local,), dtype=np.uint8, comm=demod_obs.comm_col
             )
 
-            demod_obs.detdata.ensure(self.det_data, detectors=demod_dets)
-            demod_obs.detdata.ensure(self.det_flags, detectors=demod_dets)
+            demod_obs.detdata.ensure(
+                self.det_data, detectors=demod_dets, dtype=np.float64
+            )
+            demod_obs.detdata.ensure(
+                self.det_flags, detectors=demod_dets, dtype=np.uint
+            )
 
             self._demodulate_flags(obs, demod_obs, dets, wkernel, offset)
             self._demodulate_signal(data, obs, demod_obs, dets, lowpass)
             self._demodulate_pointing(data, obs, demod_obs, dets, lowpass, offset)
             self._demodulate_noise(obs, demod_obs, dets, fsample, hwp_rate, lowpass)
 
-            #self._demodulate_offsets(obs, tod)
+            self._demodulate_intervals(obs, demod_obs)
 
             self.demod_data.obs.append(demod_obs)
 
@@ -297,7 +298,7 @@ class Demodulate(Operator):
 
     @function_timer
     def _demodulate_times(self, obs):
-        """ Downsample timestamps """
+        """Downsample timestamps"""
         times = obs.shared[self.times].data.copy()
         if self.nskip != 1:
             offset = obs.local_index_offset
@@ -306,7 +307,7 @@ class Demodulate(Operator):
 
     @function_timer
     def _demodulate_detsets(self, obs):
-        """ Lump all derived detectors into detector sets """
+        """Lump all derived detectors into detector sets"""
         detsets = obs.all_detector_sets
         demod_detsets = []
         if detsets is None:
@@ -345,33 +346,19 @@ class Demodulate(Operator):
         return demod_sample_sets
 
     @function_timer
-    def _demodulate_offsets(self, obs, tod):
+    def _demodulate_intervals(self, obs, demod_obs):
         if self.nskip == 1:
+            demod_obs.intervals = obs.intervals
             return
-        # Modulate sample distribution
-        old_offsets, old_nsamples = np.vstack(tod._dist_samples).T
-        new_offsets = old_offsets // self.nskip
-        new_nsamples = np.roll(np.cumsum(new_offsets), -1)
-        new_total = (tod.total_samples - 1) // self.nskip + 1
-        new_nsamples[-1] = new_total - new_offsets[-1]
-        tod._dist_samples = list(np.vstack([new_offsets, new_nsamples]).T)
-        tod._nsamp = new_total
-        offset, nsample = tod.local_samples
-        times = tod.local_times()
-        for ival in obs[self._intervals]:
-            ival.first //= self.nskip
-            ival.last //= self.nskip
-            local_first = ival.first - offset
-            if local_first >= 0 and local_first < nsample:
-                ival.start = times[local_first]
-            local_last = ival.last - offset
-            if local_last >= 0 and local_last < nsample:
-                ival.stop = times[local_last]
+        times = demod_obs.shared[self.times]
+        for name, ivals in obs.intervals.items():
+            timespans = [[ival.start, ival.stop] for ival in ivals]
+            demod_obs.intervals[name] = IntervalList(times, timespans=timespans)
         return
 
     @function_timer
     def _demodulate_flag(self, flags, wkernel, offset):
-        """ Collapse flags inside the filter window and downsample """
+        """Collapse flags inside the filter window and downsample"""
         """
         # FIXME: this is horribly inefficient but optimization may require
         # FIXME: a compiled kernel
@@ -393,12 +380,12 @@ class Demodulate(Operator):
         # flag invalid samples in both ends
         flags[: wkernel // 2] |= self.demod_flag_mask
         flags[-(wkernel // 2) :] |= self.demod_flag_mask
-        new_flags = flags[offset % self.nskip::self.nskip]
+        new_flags = flags[offset % self.nskip :: self.nskip]
         return new_flags
 
     @function_timer
     def _demodulate_common_flags(self, tod, wkernel, offset):
-        """ Combine and downsample flags in the filter window """
+        """Combine and downsample flags in the filter window"""
         common_flags = tod.local_common_flags()
         new_flags = self._demodulate_flag(common_flags, wkernel, offset)
         tod.cache.put(tod.COMMON_FLAG_NAME, new_flags, replace=True)
@@ -406,7 +393,7 @@ class Demodulate(Operator):
 
     @function_timer
     def _demodulate_signal(self, data, obs, demod_obs, dets, lowpass):
-        """ demodulate signal TOD """
+        """demodulate signal TOD"""
 
         for det in dets:
             signal = obs.detdata[self.det_data][det]
@@ -422,6 +409,11 @@ class Demodulate(Operator):
             signal_demod0 = lowpass(signal)
             signal_demod4r = lowpass(signal * 2 * qweights * etainv)
             signal_demod4i = lowpass(signal * 2 * uweights * etainv)
+
+            # import pdb
+            # import matplotlib.pyplot as plt
+            # plt.clf();plt.plot(lowpass(signal*2*qweights)[:100],'.');plt.plot(lowpass(signal*2*uweights)[:100],'.');plt.show()
+            # pdb.set_trace()
 
             det_data = demod_obs.detdata[self.det_data]
             det_data[f"demod0_{det}"] = signal_demod0
@@ -442,7 +434,7 @@ class Demodulate(Operator):
                     dsig[sig[1:] > 0.5] = 0
                     starts = np.where(dsig[:-1] * dsig[1:] < 0)[0]
                     for start, stop in zip(starts[::2], starts[1::2]):
-                        sig[start + 1:stop + 2] *= -1
+                        sig[start + 1 : stop + 2] *= -1
                     # handle some corner cases
                     dsig = np.diff(sig)
                     dstep = np.median(np.abs(dsig[sig[1:] < 0.5]))
@@ -462,7 +454,7 @@ class Demodulate(Operator):
 
     @function_timer
     def _demodulate_flags(self, obs, demod_obs, dets, wkernel, offset):
-        """ Demodulate and downsample flags """
+        """Demodulate and downsample flags"""
 
         shared_flags = obs.shared[self.shared_flags].data
         demod_shared_flags = self._demodulate_flag(shared_flags, wkernel, offset)
@@ -485,7 +477,7 @@ class Demodulate(Operator):
 
     @function_timer
     def _demodulate_pointing(self, data, obs, demod_obs, dets, lowpass, offset):
-        """ demodulate pointing matrix """
+        """demodulate pointing matrix"""
 
         # Pointing matrix is now computed on the fly.  We only need to
         # demodulate the boresight quaternions
@@ -531,15 +523,15 @@ class Demodulate(Operator):
 
     @function_timer
     def _demodulate_noise(
-            self,
-            obs,
-            demod_obs,
-            dets,
-            fsample,
-            hwp_rate,
-            lowpass,
+        self,
+        obs,
+        demod_obs,
+        dets,
+        fsample,
+        hwp_rate,
+        lowpass,
     ):
-        """ Add Noise objects for the new detectors """
+        """Add Noise objects for the new detectors"""
         noise = obs[self.noise_model]
 
         demod_detectors = []
@@ -623,8 +615,7 @@ class Demodulate(Operator):
 
 @trait_docs
 class StokesWeightsDemod(Operator):
-    """ Compute the Stokes pointing weights for demodulated data
-    """
+    """Compute the Stokes pointing weights for demodulated data"""
 
     API = Int(0, help="Internal interface version for this operator")
 
@@ -704,7 +695,7 @@ class StokesWeightsDemod(Operator):
         return req
 
     def _provides(self):
-        return {"detdata" : self.weights}
+        return {"detdata": self.weights}
 
     def _accelerators(self):
         return list()

@@ -668,7 +668,7 @@ def create_ground_data(
         telescope=tele,
         schedule=schedule,
         hwp_angle=obs_names.hwp_angle,
-        hwp_rpm=1.0,
+        hwp_rpm=120.0,
         weather="atacama",
         detset_key="pixel",
         elnod_start=el_nod,
