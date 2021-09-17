@@ -230,9 +230,8 @@ class MapmakerBinningTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=obs_names.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            pixels_nested=pixels.nest,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model="noise_model",
         )
 
