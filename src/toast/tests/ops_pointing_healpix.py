@@ -1,27 +1,20 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-
-from .mpi import MPITestCase
 
 import os
 
 import healpy as hp
 import numpy as np
 
-from .._libtoast import pointing_matrix_healpix
-
-from .. import qarray as qa
-
-from ..healpix import HealpixPixels
-
 from .. import ops as ops
-
-from ..observation import default_names as obs_names
-
+from .. import qarray as qa
+from .._libtoast import healpix_pixels, stokes_weights
+from ..healpix import HealpixPixels
 from ..intervals import Interval, IntervalList
-
+from ..observation import default_names as obs_names
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class PointingHealpixTest(MPITestCase):
@@ -54,16 +47,20 @@ class PointingHealpixTest(MPITestCase):
             phirot = qa.rotation(zaxis, phi)
             quats.append(qa.from_angles(theta, phi, psi))
         quats = np.vstack(quats)
-        pointing_matrix_healpix(
+        healpix_pixels(
             hpix,
             nest,
+            quats.reshape(-1),
+            flags,
+            pixels,
+        )
+        stokes_weights(
             eps,
             cal,
             mode,
             quats.reshape(-1),
             hwpang,
             flags,
-            pixels,
             weights.reshape(-1),
         )
         failed = False
@@ -92,7 +89,6 @@ class PointingHealpixTest(MPITestCase):
         nnz = 3
         hwpang = np.zeros(nsamp)
         flags = np.zeros(nsamp, dtype=np.uint8)
-        pixels = np.zeros(nsamp, dtype=np.int64)
         weights = np.zeros([nsamp, nnz], dtype=np.float64)
         pix = 49103
         theta, phi = hp.pix2ang(nside, pix, nest=nest)
@@ -105,16 +101,13 @@ class PointingHealpixTest(MPITestCase):
             psirot = qa.rotation(zaxis, psi)
             quats.append(qa.mult(pixrot, psirot))
         quats = np.vstack(quats)
-        pointing_matrix_healpix(
-            hpix,
-            nest,
+        stokes_weights(
             eps,
             cal,
             mode,
             quats.reshape(-1),
             hwpang,
             flags,
-            pixels,
             weights.reshape(-1),
         )
         weights_ref = []
@@ -161,34 +154,26 @@ class PointingHealpixTest(MPITestCase):
 
         # First with HWP angle == 0.0
         hwpang = np.zeros(nsamp)
-        pixels_zero = np.zeros(nsamp, dtype=np.int64)
         weights_zero = np.zeros([nsamp, nnz], dtype=np.float64)
-        pointing_matrix_healpix(
-            hpix,
-            nest,
+        stokes_weights(
             eps,
             cal,
             mode,
             quats.reshape(-1),
             hwpang,
             flags,
-            pixels_zero,
             weights_zero.reshape(-1),
         )
 
         # Now passing hwpang == None
-        pixels_none = np.zeros(nsamp, dtype=np.int64)
         weights_none = np.zeros([nsamp, nnz], dtype=np.float64)
-        pointing_matrix_healpix(
-            hpix,
-            nest,
+        stokes_weights(
             eps,
             cal,
             mode,
             quats.reshape(-1),
             None,
             flags,
-            pixels_none,
             weights_none.reshape(-1),
         )
         # print("")
@@ -212,9 +197,6 @@ class PointingHealpixTest(MPITestCase):
         #         )
         #     )
         failed = False
-        if not np.all(np.equal(pixels_zero, pixels_none)):
-            print("HWP pixels do not agree {} != {}".format(pixels_zero, pixels_none))
-            failed = True
 
         if not np.allclose(weights_zero, weights_none):
             print(
@@ -230,13 +212,11 @@ class PointingHealpixTest(MPITestCase):
         data = create_satellite_data(self.comm)
 
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
 
         rank = 0
         if self.comm is not None:
@@ -245,6 +225,31 @@ class PointingHealpixTest(MPITestCase):
         handle = None
         if rank == 0:
             handle = open(os.path.join(self.outdir, "out_test_hpix_simple_info"), "w")
+        data.info(handle=handle)
+        if rank == 0:
+            handle.close()
+
+    def test_weights_simple(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        detpointing = ops.PointingDetectorSimple()
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        handle = None
+        if rank == 0:
+            handle = open(
+                os.path.join(self.outdir, "out_test_weights_simple_info"), "w"
+            )
         data.info(handle=handle)
         if rank == 0:
             handle.close()
@@ -277,35 +282,29 @@ class PointingHealpixTest(MPITestCase):
             obs.intervals[half_intervals] = IntervalList(times, intervals=intervals2)
 
         detpointing = ops.PointingDetectorSimple(view=half_intervals)
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
             view=full_intervals,
         )
         with self.assertRaises(RuntimeError):
-            pointing.apply(data)
+            pixels.apply(data)
 
         detpointing = ops.PointingDetectorSimple(view=full_intervals)
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
             view=half_intervals,
         )
-        pointing.apply(data)
+        pixels.apply(data)
 
-    def test_hpix_hwpnull(self):
+    def test_weights_hwpnull(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
-            nside=64, mode="IQU", detector_pointing=detpointing
-        )
-        pointing.apply(data)
+        weights = ops.StokesWeights(mode="IQU", detector_pointing=detpointing)
+        weights.apply(data)
 
         rank = 0
         if self.comm is not None:
@@ -313,7 +312,7 @@ class PointingHealpixTest(MPITestCase):
 
         handle = None
         if rank == 0:
-            handle = open(os.path.join(self.outdir, "out_test_hpix_hwpnull"), "w")
+            handle = open(os.path.join(self.outdir, "out_test_weights_hwpnull"), "w")
         data.info(handle=handle)
         if rank == 0:
             handle.close()
