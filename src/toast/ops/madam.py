@@ -148,19 +148,21 @@ class Madam(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
 
-    pixels = Unicode(
-        obs_names.pixels, help="Observation detdata key for output pixel indices"
+    pixel_pointing = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a pixel pointing operator",
     )
 
-    weights = Unicode(
-        obs_names.weights, help="Observation detdata key for output weights"
+    stokes_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a Stokes weights operator",
     )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
-
-    pixels_nested = Bool(True, help="True if pixel indices are in NESTED ordering")
 
     det_out = Unicode(
         None,
@@ -178,18 +180,13 @@ class Madam(Operator):
     )
 
     purge_pointing = Bool(
-        False,
+        True,
         help="If True, clear all observation detector pointing data after copying to madam buffers",
     )
 
     restore_det_data = Bool(
         False,
         help="If True, restore detector data to observations on completion",
-    )
-
-    restore_pointing = Bool(
-        False,
-        help="If True, restore detector pointing to observations on completion",
     )
 
     mcmode = Bool(
@@ -242,15 +239,6 @@ class Madam(Operator):
             )
         return check
 
-    @traitlets.validate("restore_pointing")
-    def _check_restore_pointing(self, proposal):
-        check = proposal["value"]
-        if check and not self.purge_pointing:
-            raise traitlets.TraitError(
-                "Cannot set restore_pointing since purge_pointing is False"
-            )
-        return check
-
     @traitlets.validate("det_out")
     def _check_det_out(self, proposal):
         check = proposal["value"]
@@ -259,6 +247,36 @@ class Madam(Operator):
                 "If det_out is not None, restore_det_data should be False"
             )
         return check
+
+    @traitlets.validate("pixel_pointing")
+    def _check_pixel_pointing(self, proposal):
+        pixels = proposal["value"]
+        if pixels is not None:
+            if not isinstance(pixels, Operator):
+                raise traitlets.TraitError(
+                    "pixel_pointing should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["pixels", "create_dist", "view"]:
+                if not pixels.has_trait(trt):
+                    msg = f"pixel_pointing operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return pixels
+
+    @traitlets.validate("stokes_weights")
+    def _check_stokes_weights(self, proposal):
+        weights = proposal["value"]
+        if weights is not None:
+            if not isinstance(weights, Operator):
+                raise traitlets.TraitError(
+                    "stokes_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["weights", "view"]:
+                if not weights.has_trait(trt):
+                    msg = f"stokes_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return weights
 
     @traitlets.validate("params")
     def _check_params(self, proposal):
@@ -518,16 +536,6 @@ class Madam(Operator):
                     self.det_data, ob.name
                 )
                 raise RuntimeError(msg)
-            if self.pixels not in ob.detdata:
-                msg = "Detector pixels '{}' does not exist in observation '{}'".format(
-                    self.pixels, ob.name
-                )
-                raise RuntimeError(msg)
-            if self.weights not in ob.detdata:
-                msg = "Detector data '{}' does not exist in observation '{}'".format(
-                    self.weights, ob.name
-                )
-                raise RuntimeError(msg)
 
             # Check that the noise model exists, and that the PSD frequencies are the
             # same across all observations (required by Madam).
@@ -549,23 +557,6 @@ class Madam(Operator):
                     raise RuntimeError(
                         "All PSDs passed to Madam must have the same frequency binning."
                     )
-
-            # Get the number of pointing weights and verify that it is constant
-            # across observations.
-            ob_nnz = None
-            if len(ob.detdata[self.weights].detector_shape) == 1:
-                # The pointing weights just have one dimension (samples)
-                ob_nnz = 1
-            else:
-                ob_nnz = ob.detdata[self.weights].detector_shape[-1]
-
-            if nnz_full is None:
-                nnz_full = ob_nnz
-            elif ob_nnz != nnz_full:
-                msg = "observation '{}' has {} pointing weights per sample, not {}".format(
-                    ob.name, ob_nnz, nnz_full
-                )
-                raise RuntimeError(msg)
 
             # Are we using a view of the data?  If so, we will only be copying data in
             # those valid intervals.
@@ -598,7 +589,7 @@ class Madam(Operator):
         all_dets = list(all_dets)
         ndet = len(all_dets)
 
-        nnz = None
+        nnz_full = len(self.stokes_weights.mode)
         nnz_stride = None
         if "temperature_only" in params and params["temperature_only"] in [
             "T",
@@ -838,7 +829,7 @@ class Madam(Operator):
                     nsamp,
                     self.view,
                     all_dets,
-                    self.pixels,
+                    self.pixel_pointing.pixels,
                     madam.PIXEL_TYPE,
                     interval_starts,
                     1,
@@ -847,6 +838,7 @@ class Madam(Operator):
                     self.shared_flag_mask,
                     self.det_flags,
                     self.det_flag_mask,
+                    operator=self.pixel_pointing,
                 )
 
                 self._madam_pixweights_raw, self._madam_pixweights = stage_in_turns(
@@ -856,7 +848,7 @@ class Madam(Operator):
                     nsamp,
                     self.view,
                     all_dets,
-                    self.weights,
+                    self.stokes_weights.weights,
                     madam.WEIGHT_TYPE,
                     interval_starts,
                     nnz,
@@ -865,6 +857,7 @@ class Madam(Operator):
                     None,
                     None,
                     None,
+                    operator=self.stokes_weights,
                 )
             else:
                 # Allocate and copy all at once.
@@ -877,7 +870,7 @@ class Madam(Operator):
                     nsamp,
                     self.view,
                     all_dets,
-                    self.pixels,
+                    self.pixel_pointing.pixels,
                     self._madam_pixels,
                     interval_starts,
                     1,
@@ -887,6 +880,7 @@ class Madam(Operator):
                     self.det_flags,
                     self.det_flag_mask,
                     do_purge=False,
+                    operator=self.pixel_pointing,
                 )
 
                 storage, _ = dtype_to_aligned(madam.WEIGHT_TYPE)
@@ -898,7 +892,7 @@ class Madam(Operator):
                     nsamp,
                     self.view,
                     all_dets,
-                    self.weights,
+                    self.stokes_weights.weights,
                     self._madam_pixweights,
                     interval_starts,
                     nnz,
@@ -908,6 +902,7 @@ class Madam(Operator):
                     None,
                     None,
                     do_purge=False,
+                    operator=self.stokes_weights,
                 )
 
             log_time_memory(
@@ -1073,83 +1068,12 @@ class Madam(Operator):
 
         # Copy the pointing
 
-        if self.purge_pointing and self.restore_pointing:
-            # We previously purged it AND we want it back.
-            if not self.mcmode:
-                # We are not running multiple realizations, so delete as we copy.
-                restore_in_turns(
-                    data,
-                    nodecomm,
-                    n_copy_groups,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.pixels,
-                    pixels_dtype,
-                    self._madam_pixels,
-                    self._madam_pixels_raw,
-                    interval_starts,
-                    1,
-                    nside,
-                    self.pixels_nested,
-                )
-                del self._madam_pixels
-                del self._madam_pixels_raw
-                restore_in_turns(
-                    data,
-                    nodecomm,
-                    n_copy_groups,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.weights,
-                    weight_dtype,
-                    self._madam_pixweights,
-                    self._madam_pixweights_raw,
-                    interval_starts,
-                    nnz,
-                    0,
-                    True,
-                )
-                del self._madam_pixweights
-                del self._madam_pixweights_raw
-            else:
-                # We want to re-use the pointing, just copy.
-                restore_local(
-                    data,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.pixels,
-                    pixels_dtype,
-                    self._madam_pixels,
-                    interval_starts,
-                    1,
-                    nside,
-                    self.pixels_nested,
-                )
-                restore_local(
-                    data,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.weights,
-                    weight_dtype,
-                    self._madam_pixweights,
-                    interval_starts,
-                    nnz,
-                    0,
-                    True,
-                )
-
-            log_time_memory(
-                data,
-                timer=timer,
-                timer_msg="Copy pointing",
-                prefix=self._logprefix,
-                mem_msg="After restoring pointing",
-                full_mem=self.mem_report,
-            )
+        if not self.mcmode:
+            # We can clear the cached pointing
+            del self._madam_pixels
+            del self._madam_pixels_raw
+            del self._madam_pixweights
+            del self._madam_pixweights_raw
 
         del nodecomm
         return

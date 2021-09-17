@@ -63,10 +63,11 @@ def stage_local(
     det_flags,
     det_mask,
     do_purge=False,
+    operator=None,
 ):
     """Helper function to fill a madam buffer from a local detdata key."""
     n_det = len(dets)
-    interval = 0
+    interval_offset = 0
     do_flags = False
     if shared_flags is not None or det_flags is not None:
         do_flags = True
@@ -78,27 +79,32 @@ def stage_local(
                 "Internal error on madam copy.  Only pixel indices should be flagged."
             )
     for ob in data.obs:
-        # Loop over views
+        ldet = -1
         views = ob.view[view]
-        for ivw, vw in enumerate(views):
-            view_samples = None
-            if vw.start is None:
-                # This is a view of the whole obs
-                view_samples = ob.n_local_samples
-            else:
-                view_samples = vw.stop - vw.start
-            offset = interval_starts[interval]
-            flags = None
-            if do_flags:
-                # Using flags
-                flags = np.zeros(view_samples, dtype=np.uint8)
-            if shared_flags is not None:
-                flags |= views.shared[shared_flags][ivw] & shared_mask
+        for idet, det in enumerate(dets):
+            if det not in ob.local_detectors:
+                continue
+            ldet += 1
+            if operator is not None:
+                # Synthesize data for staging
+                obs_data = data.select(obs_uid=ob.uid)
+                operator.apply(obs_data, detectors=[det])
+            # Loop over views
+            for ivw, vw in enumerate(views):
+                view_samples = None
+                if vw.start is None:
+                    # This is a view of the whole obs
+                    view_samples = ob.n_local_samples
+                else:
+                    view_samples = vw.stop - vw.start
+                offset = interval_starts[interval_offset + ivw]
+                flags = None
+                if do_flags:
+                    # Using flags
+                    flags = np.zeros(view_samples, dtype=np.uint8)
+                if shared_flags is not None:
+                    flags |= views.shared[shared_flags][ivw] & shared_mask
 
-            ldet = 0
-            for idet, det in enumerate(dets):
-                if det not in ob.local_detectors:
-                    continue
                 slc = slice(
                     (idet * nsamp + offset) * nnz,
                     (idet * nsamp + offset + view_samples) * nnz,
@@ -118,10 +124,9 @@ def stage_local(
                         detflags = np.copy(flags)
                         detflags |= views.detdata[det_flags][ivw][ldet] & det_mask
                     madam_buffer[slc][detflags != 0] = -1
-                ldet += 1
-            interval += 1
         if do_purge:
             del ob.detdata[detdata_name]
+        interval_offset += len(views)
     return
 
 
@@ -141,6 +146,7 @@ def stage_in_turns(
     shared_mask,
     det_flags,
     det_mask,
+    operator=None,
 ):
     """When purging data, take turns staging it."""
     raw = None
@@ -166,6 +172,7 @@ def stage_in_turns(
                 det_flags,
                 det_mask,
                 do_purge=True,
+                operator=operator,
             )
         nodecomm.barrier()
     return raw, wrapped
