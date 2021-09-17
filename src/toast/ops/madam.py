@@ -1,10 +1,9 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
 
-import healpy as hp
 import numpy as np
 import traitlets
 from astropy import units as u
@@ -75,13 +74,14 @@ def madam_params_from_mapmaker(mapmaker):
         msg = f"Unknown sync_type: {sync_type}"
         raise RuntimeError(msg)
 
+    # Destriping parameters
+
     for template in mapmaker.template_matrix.templates:
         if isinstance(template, Offset):
             baselines = template
+            break
     else:
         baselines = None
-
-    # Destriping parameters
 
     if baselines is None or not baselines.enabled:
         params.update(
@@ -974,8 +974,6 @@ class Madam(Operator):
                     self._madam_signal_raw,
                     interval_starts,
                     1,
-                    0,
-                    True,
                 )
                 del self._madam_signal
                 del self._madam_signal_raw
@@ -991,8 +989,6 @@ class Madam(Operator):
                     self._madam_signal,
                     interval_starts,
                     1,
-                    0,
-                    True,
                 )
 
             log_time_memory(

@@ -373,24 +373,11 @@ def reduce_data(job, args, data):
 
     # Optionally run Madam
 
-    if ops.madam.enabled:
-        pixels = ops.pixels_radec_final
-        weights = ops.weights_radec
-        # Cache pixel numbers and Stokes weights
-        #if not pixels.nest:
-        #    toast.ops.Delete(detdata=[pixels.pixels]).apply(data)
-        #    log.info_rank("Purged pixel numbers in", comm=world_comm, timer=timer)
-        #    pixels.nest = True
-        #pixels.apply(data)
-        #log.info_rank("Cached pixel numbers in", comm=world_comm, timer=timer)
-        #weights.apply(data)
-        #log.info_rank("Cached Stokes weights in", comm=world_comm, timer=timer)
-        ops.madam.params = toast.ops.madam_params_from_mapmaker(ops.mapmaker)
-        #ops.madam.pixels_nested = pixels.nest
-        ops.madam.pixel_pointing = pixels
-        ops.madam.stokes_weights = weights
-        ops.madam.apply(data)
-        log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+    ops.madam.params = toast.ops.madam_params_from_mapmaker(ops.mapmaker)
+    ops.madam.pixel_pointing = ops.pixels_radec_final
+    ops.madam.stokes_weights = ops.weights_radec
+    ops.madam.apply(data)
+    log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
 
 
 def dump_spt3g(job, args, data):
