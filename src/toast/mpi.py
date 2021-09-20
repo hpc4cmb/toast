@@ -164,6 +164,7 @@ class Comm(object):
 
         self._group = self._wrank // self._gsize
         self._grank = self._wrank % self._gsize
+        self._cleanup_split_comm = False
 
         if self._ngroups == 1:
             # We just have one group with all processes.
@@ -177,6 +178,7 @@ class Comm(object):
             # unless MPI is enabled and we have multiple groups.
             self._gcomm = self._wcomm.Split(self._group, self._grank)
             self._rcomm = self._wcomm.Split(self._grank, self._group)
+            self._cleanup_split_comm = True
 
         # See if we are using CUDA and if so, determine which device each process will
         # be using.
@@ -195,6 +197,22 @@ class Comm(object):
                 # or for contiguous ranks to be assigned to same device?
                 rank_dev = noderank % cuda_devices
                 self._cuda = AcceleratorCuda(rank_dev)
+                nodecomm.Free()
+                del nodecomm
+
+    def close(self):
+        # Explicitly free communicators if needed
+        if hasattr(self, "_cleanup_split_comm") and self._cleanup_split_comm:
+            self._gcomm.Free()
+            self._rcomm.Free()
+            # Delete these members completely, so that an error will be
+            # triggered if we try to do something after calling close().
+            del self._gcomm
+            del self._rcomm
+        return
+
+    def __del__(self):
+        self.close()
 
     @property
     def world_size(self):
