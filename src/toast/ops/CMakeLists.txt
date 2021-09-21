@@ -53,5 +53,6 @@ install(FILES
     demodulation.py
     stokes_weights.py
     pixels_healpix.py
+    filterbin.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

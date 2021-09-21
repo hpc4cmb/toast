@@ -153,15 +153,14 @@ class GroundFilter(Operator):
                 theta, phi = qa.to_position(quats)
                 az = 2 * np.pi - phi
         except Exception as e:
-            raise RuntimeError(
-                "Failed to get boresight azimuth from TOD.  Perhaps it is "
-                'not ground TOD? "{}"'.format(e)
-            )
+            msg = f"Failed to get boresight azimuth from TOD.  " \
+                f"Perhaps it is not ground TOD? '{e}'"
+            raise RuntimeError(msg)
 
         # The azimuth vector is assumed to be arranged so that the
         # azimuth increases monotonously even across the zero meridian.
 
-        phase = (az - azmin) / (azmax - azmin) * 2 - 1
+        phase = (np.unwrap(az) - azmin) / (azmax - azmin) * 2 - 1
         nfilter = self.filter_order + 1
         legendre_templates = np.zeros([nfilter, phase.size])
         legendre(phase, legendre_templates, 0, nfilter)

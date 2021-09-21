@@ -676,6 +676,7 @@ def create_ground_data(
         det_flags="flags",
         det_data="signal",
         shared_flags="flags",
+        scan_accel_az=3 * u.degree / u.second ** 2,
     )
     sim_ground.apply(data)
 

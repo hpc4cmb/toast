@@ -55,5 +55,6 @@ install(FILES
     ops_crosslinking.py
     ops_sss.py
     ops_demodulate.py
+    ops_filterbin.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
