@@ -110,12 +110,10 @@ class SimGroundTest(MPITestCase):
         sim_ground.apply(data)
 
         # Pointing
-
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
-            nside=512,
-            mode="IQU",
-            hwp_angle=sim_ground.hwp_angle,
+        pixels = ops.PixelsHealpix(
+            nest=True,
+            create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
 
@@ -143,32 +141,24 @@ class SimGroundTest(MPITestCase):
 
         # Expand pointing and make a hit map.
 
-        detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
-            nest=True,
-            mode="IQU",
-            hwp_angle=sim_ground.hwp_angle,
-            create_dist="pixel_dist",
-            detector_pointing=detpointing,
-        )
-        pointing.nside_submap = 8
-        pointing.nside = 512
-        pointing.apply(data)
+        pixels.nside_submap = 8
+        pixels.nside = 512
+        pixels.apply(data)
 
-        build_hits = ops.BuildHitMap(pixel_dist="pixel_dist", pixels=pointing.pixels)
+        build_hits = ops.BuildHitMap(pixel_dist="pixel_dist", pixels=pixels.pixels)
         build_hits.apply(data)
 
         # Plot the hits
 
         hit_path = os.path.join(self.outdir, "hits.fits")
-        write_healpix_fits(data[build_hits.hits], hit_path, nest=pointing.nest)
+        write_healpix_fits(data[build_hits.hits], hit_path, nest=pixels.nest)
 
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
             import matplotlib.pyplot as plt
 
-            hits = hp.read_map(hit_path, field=None, nest=pointing.nest)
+            hits = hp.read_map(hit_path, field=None, nest=pixels.nest)
             outfile = os.path.join(self.outdir, "hits.png")
-            hp.mollview(hits, xsize=1600, max=50, nest=pointing.nest)
+            hp.mollview(hits, xsize=1600, max=50, nest=pixels.nest)
             plt.savefig(outfile)
             plt.close()
