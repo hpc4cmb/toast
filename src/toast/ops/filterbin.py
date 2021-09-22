@@ -351,11 +351,18 @@ class FilterBin(Operator):
                 )
                 signal = obs.detdata[self.det_data][det]
                 flags = obs.detdata[self.det_flags][det]
-                good = np.logical_and(
+                # `good` is essentially the diagonal noise matrix used in
+                # template regression.  All good detector samples have the
+                # same noise weight and rest have zero weight.
+                good_fit = np.logical_and(
                     (common_flags & self.shared_flag_mask) == 0,
                     (flags & self.det_flag_mask) == 0,
                 )
-                if np.sum(good) == 0:
+                good_bin = np.logical_and(
+                    (common_flags & self.binning.shared_flag_mask) == 0,
+                    (flags & self.binning.det_flag_mask) == 0,
+                )
+                if np.sum(good_fit) == 0:
                     continue
 
                 deproject = (
@@ -375,24 +382,41 @@ class FilterBin(Operator):
                     pixels = None
                     weights = None
 
-                templates = list(common_templates)
+                all_templates = list(common_templates)
 
-                self._add_deprojection_templates(data, obs, pixels, templates)
+                self._add_deprojection_templates(data, obs, pixels, all_templates)
                 log.verbose_rank(
                     f"{self.group:4} : OpFilterBin:   Built deprojection templates in",
                     comm=self.gcomm,
                     timer=timer,
                 )
 
+                # Throw out all templates that have no valid data
+                templates = []
+                nbad = 0
+                for template in all_templates:
+                    if np.any(template[good_fit] != 0):
+                        templates.append(template)
+                    else:
+                        nbad += 1
+                if nbad != 0:
+                    log.verbose(
+                        f"{self.rank:5} : Discarded {nbad} empty templates for {det}"
+                    )
                 templates = np.vstack(templates)
-                template_covariance = self._build_template_covariance(templates, good)
+
+                template_covariance = self._build_template_covariance(
+                    templates, good_fit
+                )
                 log.verbose_rank(
                     f"{self.group:4} : OpFilterBin:   Built template covariance",
                     comm=self.gcomm,
                     timer=timer,
                 )
 
-                self._regress_templates(templates, template_covariance, signal, good)
+                self._regress_templates(
+                    templates, template_covariance, signal, good_fit
+                )
                 log.verbose_rank(
                     f"{self.group:4} : OpFilterBin:   Regressed templates in",
                     comm=self.gcomm,
@@ -404,7 +428,8 @@ class FilterBin(Operator):
                     det,
                     pixels,
                     weights,
-                    good,
+                    good_fit,
+                    good_bin,
                     templates,
                     template_covariance,
                 )
@@ -554,6 +579,13 @@ class FilterBin(Operator):
 
     @function_timer
     def _build_template_covariance(self, templates, good):
+        """Calculate (F^T N^-1_F F)^-1
+
+        Observe that the sample noise weights in N^-1_F need not be the
+        same as in binning the filtered signal.  For instance, samples
+        falling on point sources may be masked here but included in the
+        final map.
+        """
         log = Logger.get()
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
@@ -563,18 +595,24 @@ class FilterBin(Operator):
             f"{self.group:4} : OpFilterBin: Template covariance matrix rcond = {rcond}",
             comm=self.gcomm,
         )
-        if rcond < 1e-6:
-            log.info_rank(
+        if rcond > 1e-6:
+            cov = np.linalg.inv(invcov)
+        else:
+            log.warning(
                 f"OpFilterBin: WARNING: template covariance matrix is poorly conditioned: "
-                f"rcond = {rcond}",
-                comm=self.gcomm,
+                f"rcond = {rcond}.  Using matrix pseudoinverse.",
             )
-        cov = np.linalg.inv(invcov)
+            cov = np.linalg.pinv(invcov, rcond=1e-6, hermitian=True)
 
         return cov
 
     @function_timer
     def _regress_templates(self, templates, template_covariance, signal, good):
+        """Calculate Zd = (I - F(F^T N^-1_F F)^-1 F^T N^-1_F)d
+
+        All samples that are not flagged (zero weight in N^-1_F) have
+        equal weight.
+        """
         proj = np.dot(templates, signal * good)
         amplitudes = np.dot(template_covariance, proj)
         for template, amplitude in zip(templates, amplitudes):
@@ -617,10 +655,18 @@ class FilterBin(Operator):
         det,
         pixels,
         weights,
-        good,
+        good_fit,
+        good_bin,
         templates,
         template_covariance,
     ):
+        """Calculate P^T N^-1 Z P
+        This part of the covariance calculation is cumulative: each observation
+        and detector is computed independently and can be cached.
+
+        Observe that `N` in this equation need not be the same used in
+        template covariance in `Z`.
+        """
         if not self.write_obs_matrix:
             return
         log = Logger.get()
@@ -629,9 +675,10 @@ class FilterBin(Operator):
         fname_cache = None
         local_obs_matrix = None
         if self.cache_dir is not None:
+            cache_dir = os.path.join(self.cache_dir, obs.name)
             if self.grank == 0:
-                os.makedirs(fname_cache, exist_ok=True)
-            fname_cache = os.path.join(self.cache_dir, obs.name, f"{deto}")
+                os.makedirs(cache_dir, exist_ok=True)
+            fname_cache = os.path.join(cache_dir, det)
             try:
                 mm_data = np.load(fname_cache + ".data.npy")
                 mm_indices = np.load(fname_cache + ".indices.npy")
@@ -651,13 +698,14 @@ class FilterBin(Operator):
 
         if local_obs_matrix is None:
             templates = templates.T.copy()
+            good_any = np.logical_or(good_fit, good_bin)
 
             # Temporarily compress pixels
             log.debug_rank(
                 f"{self.group:4} : OpFilterBin:     Compressing pixels", comm=self.gcomm
             )
             c_pixels, c_npix, local_to_global = self._compress_pixels(
-                pixels[good].copy()
+                pixels[good_any].copy()
             )
             log.debug_rank(
                 f"{self.group:4} : OpFilterBin: Compressed in",
@@ -672,9 +720,11 @@ class FilterBin(Operator):
             accumulate_observation_matrix(
                 c_obs_matrix,
                 c_pixels,
-                weights[good].copy(),
-                templates[good].copy(),
+                weights[good_any].copy(),
+                templates[good_any].copy(),
                 template_covariance,
+                good_fit[good_any].astype(np.uint8),
+                good_bin[good_any].astype(np.uint8),
             )
             log.debug_rank(
                 f"{self.group:4} : OpFilterBin:     Accumulated in",
@@ -713,7 +763,7 @@ class FilterBin(Operator):
         detweight = obs[self.binning.noise_model].detector_weight(det)
         self.obs_matrix += local_obs_matrix * detweight
         log.debug_rank(
-            "{self.group:4} : OpFilterBin:     Added in",
+            f"{self.group:4} : OpFilterBin:     Added in",
             comm=self.gcomm,
             timer=timer,
         )
@@ -773,6 +823,9 @@ class FilterBin(Operator):
 
     @function_timer
     def _noiseweight_obs_matrix(self, data):
+        """Apply (P^T N^-1 P)^-1 to the cumulative part of the
+        observation matrix, P^T N^-1 Z P.
+        """
         if not self.write_obs_matrix:
             return
         # Apply the white noise covariance to the observation matrix
@@ -825,7 +878,7 @@ class FilterBin(Operator):
             if self.comm is not None:
                 nnz = self.comm.allreduce(nnz)
             if nnz == 0:
-                log.info_rank(
+                log.debug_rank(
                     f"Slice {islice+1:5} / {nslice}: {row_start:12} - {row_stop:12} "
                     f"is empty.  Skipping.",
                     comm=self.comm,

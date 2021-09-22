@@ -198,14 +198,24 @@ void accumulate_observation_matrix(py::array_t <double,
                                    py::array_t <double, py::array::c_style | py::array::forcecast> weights,
                                    py::array_t <double, py::array::c_style | py::array::forcecast> templates,
                                    py::array_t <double,
-                                                py::array::c_style |
-                                                py::array::forcecast> template_covariance)
+                                                py::array::c_style | py::array::forcecast> template_covariance,
+                                   py::array_t <unsigned char, py::array::c_style | py::array::forcecast> good_fit,
+                                   py::array_t <unsigned char, py::array::c_style | py::array::forcecast> good_bin)
 {
+    /* This function evaluates the cumulative parts of the observation matrix:  P^T N^-1
+       Z P,  where Z = I - F(F^T N^-1_F F)^-1 F^T N^-1_F and F is the template matrix,
+       (F^T N^-1_F F)^-1 is the template covariance matrix, N^-1_F diagonal has the
+       fitting noise weights, N^-1 diagonal has the binning noise weights and P is the
+       pointing matrix
+     */
+
     auto fast_obs_matrix = c_obs_matrix.mutable_unchecked <2>();
     auto fast_pixels = c_pixels.unchecked <1>();
     auto fast_weights = weights.unchecked <2>();
     auto fast_templates = templates.unchecked <2>();
     auto fast_covariance = template_covariance.unchecked <2>();
+    auto fast_good_fit = good_fit.unchecked <1>();
+    auto fast_good_bin = good_bin.unchecked <1>();
 
     size_t nsample = fast_pixels.shape(0);
     size_t nnz = fast_weights.shape(1);
@@ -245,6 +255,8 @@ void accumulate_observation_matrix(py::array_t <double,
 #endif // ifdef _OPENMP
 
         for (size_t isample = 0; isample < nsample; ++isample) {
+            if (!fast_good_bin(isample)) continue;
+
             const int64_t ipixel = fast_pixels(isample);
             if (ipixel % nthreads != idthread) continue;
             const double * ipointer = &fast_templates(isample, 0);
@@ -255,44 +267,57 @@ void accumulate_observation_matrix(py::array_t <double,
                 const double * jpointer = &fast_templates(jsample, 0);
                 const double * pcov = &fast_covariance(0, 0);
 
-                // dense templates
-                for (size_t itemplate = 0; itemplate < ndense; ++itemplate) {
-                    const double * covpointer = pcov + itemplate * ntemplate;
-                    double dtemp = 0;
+                // Evaluate F(F^T N^-1_F F)^-1 F^T N^-1_F at
+                // (isample, jsample)
 
-                    // dense X dense
-                    for (size_t jtemplate = 0; jtemplate < ndense; ++jtemplate) {
-                        dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                if (fast_good_fit(jsample)) {
+                    // dense templates
+                    for (size_t itemplate = 0; itemplate < ndense; ++itemplate) {
+                        const double * covpointer = pcov + itemplate * ntemplate;
+                        double dtemp = 0;
+
+                        // dense X dense
+                        for (size_t jtemplate = 0; jtemplate < ndense; ++jtemplate) {
+                            dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                        }
+
+                        // dense X sparse
+                        for (const auto jtemplate : nonzeros[jsample]) {
+                            dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                        }
+                        filter_matrix += dtemp * ipointer[itemplate];
                     }
 
-                    // dense X sparse
-                    for (const auto jtemplate : nonzeros[jsample]) {
-                        dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                    // sparse templates
+                    for (const auto itemplate : nonzeros[isample]) {
+                        const double * covpointer = pcov + itemplate * ntemplate;
+                        double dtemp = 0;
+
+                        // sparse X dense
+                        for (size_t jtemplate = 0; jtemplate < ndense; ++jtemplate) {
+                            dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                        }
+
+                        // sparse X sparse
+                        for (const auto jtemplate : nonzeros[jsample]) {
+                            dtemp += jpointer[jtemplate] * covpointer[jtemplate];
+                        }
+                        filter_matrix += dtemp * ipointer[itemplate];
                     }
-                    filter_matrix += dtemp * ipointer[itemplate];
                 }
 
-                // sparse templates
-                for (const auto itemplate : nonzeros[isample]) {
-                    const double * covpointer = pcov + itemplate * ntemplate;
-                    double dtemp = 0;
+                // Now get Z = I - filter_matrix
 
-                    // sparse X dense
-                    for (size_t jtemplate = 0; jtemplate < ndense; ++jtemplate) {
-                        dtemp += jpointer[jtemplate] * covpointer[jtemplate];
-                    }
-
-                    // sparse X sparse
-                    for (const auto jtemplate : nonzeros[jsample]) {
-                        dtemp += jpointer[jtemplate] * covpointer[jtemplate];
-                    }
-                    filter_matrix += dtemp * ipointer[itemplate];
-                }
                 if (isample == jsample) {
                     filter_matrix = 1 - filter_matrix;
                 } else {
                     filter_matrix = -filter_matrix;
                 }
+
+                // `filter_matrix` holds the value of `Z` at
+                // (isample, jsample).  Now accumulate that value to
+                // approriate (ipixel, jpixel) in the observatio matrix.
+
                 for (size_t inz = 0; inz < nnz; ++inz) {
                     double iweight = fast_weights(isample, inz) * filter_matrix;
                     for (size_t jnz = 0; jnz < nnz; ++jnz) {
@@ -301,7 +326,6 @@ void accumulate_observation_matrix(py::array_t <double,
                     }
                 }
             }
-
         }
     }
 }

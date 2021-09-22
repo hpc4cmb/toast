@@ -153,8 +153,10 @@ class GroundFilter(Operator):
                 theta, phi = qa.to_position(quats)
                 az = 2 * np.pi - phi
         except Exception as e:
-            msg = f"Failed to get boresight azimuth from TOD.  " \
+            msg = (
+                f"Failed to get boresight azimuth from TOD.  "
                 f"Perhaps it is not ground TOD? '{e}'"
+            )
             raise RuntimeError(msg)
 
         # The azimuth vector is assumed to be arranged so that the

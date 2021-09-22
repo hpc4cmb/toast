@@ -166,7 +166,8 @@ void init_tod_pointing(py::module & m) {
                                     rawpixels);
               return;
           }, py::arg("hpix"), py::arg("nest"), py::arg("pdata"), py::arg("flags"),
-          py::arg("pixels"), R"(
+          py::arg(
+              "pixels"), R"(
         Compute the healpix pixel indices for one detector.
 
         Args:
@@ -235,7 +236,8 @@ void init_tod_pointing(py::module & m) {
               return;
           }, py::arg("eps"), py::arg("cal"), py::arg("mode"), py::arg("pdata"),
           py::arg("hwpang").none(true), py::arg("flags"),
-          py::arg("weights"), R"(
+          py::arg(
+              "weights"), R"(
         Compute the Stokes weights for one detector.
 
         Args:

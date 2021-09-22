@@ -633,7 +633,7 @@ class BuildNoiseWeighted(Operator):
 
             # Process every data view
             for pview, wview, dview, fview, shared_fview in zip(
-                    pix, wts, ddat, flgs, shared_flgs
+                pix, wts, ddat, flgs, shared_flgs
             ):
                 for det in dets:
                     # Data for this detector
@@ -649,8 +649,10 @@ class BuildNoiseWeighted(Operator):
                     else:
                         check_nnz = wview.detector_shape[1]
                     if check_nnz != weight_nnz:
-                        msg = f"observation {ob.name}, detector {det}, pointing " \
+                        msg = (
+                            f"observation {ob.name}, detector {det}, pointing "
                             f"weights {self.weights} has inconsistent number of values"
+                        )
                         raise RuntimeError(msg)
 
                     # Get local submap and pixels

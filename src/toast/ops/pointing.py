@@ -98,7 +98,6 @@ class BuildPixelDistribution(Operator):
             msg += "does not yet exist- and creating this requires all detectors."
             raise RuntimeError(msg)
 
-
         msg = "Creating pixel distribution '{}' in Data".format(self.pixel_dist)
         if data.comm.world_rank == 0:
             log.debug(msg)
