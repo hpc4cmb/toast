@@ -271,7 +271,7 @@ class Demodulate(Operator):
         focalplane = obs.telescope.focalplane
         det_data = focalplane.detector_data
         field_names = det_data.colnames
-        # Initialize files to empty lists
+        # Initialize fields to empty lists
         fields = dict([(name, []) for name in field_names])
         for idet, det in enumerate(det_data["name"]):
             for field_name in field_names:
@@ -385,14 +385,6 @@ class Demodulate(Operator):
         return new_flags
 
     @function_timer
-    def _demodulate_common_flags(self, tod, wkernel, offset):
-        """Combine and downsample flags in the filter window"""
-        common_flags = tod.local_common_flags()
-        new_flags = self._demodulate_flag(common_flags, wkernel, offset)
-        tod.cache.put(tod.COMMON_FLAG_NAME, new_flags, replace=True)
-        return
-
-    @function_timer
     def _demodulate_signal(self, data, obs, demod_obs, dets, lowpass):
         """demodulate signal TOD"""
 
@@ -407,19 +399,11 @@ class Demodulate(Operator):
             # uweights = eta * sin(2 * psi_det + 4 * psi_hwp)
             iweights, qweights, uweights = weights.T
             etainv = 1 / np.sqrt(qweights ** 2 + uweights ** 2)
-            signal_demod0 = lowpass(signal)
-            signal_demod4r = lowpass(signal * 2 * qweights * etainv)
-            signal_demod4i = lowpass(signal * 2 * uweights * etainv)
-
-            # import pdb
-            # import matplotlib.pyplot as plt
-            # plt.clf();plt.plot(lowpass(signal*2*qweights)[:100],'.');plt.plot(lowpass(signal*2*uweights)[:100],'.');plt.show()
-            # pdb.set_trace()
 
             det_data = demod_obs.detdata[self.det_data]
-            det_data[f"demod0_{det}"] = signal_demod0
-            det_data[f"demod4r_{det}"] = signal_demod4r
-            det_data[f"demod4i_{det}"] = signal_demod4i
+            det_data[f"demod0_{det}"] = lowpass(signal)
+            det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights * etainv)
+            det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights * etainv)
 
             if self.do_2f:
                 # Start by evaluating the 2f demodulation factors from the
@@ -443,10 +427,8 @@ class Demodulate(Operator):
                     bad = np.hstack([bad, False])
                     sig[bad] *= -1
                 # Demodulate and lowpass for 2f
-                signal_demod2r = lowpass(signal * signal_demod2r)
-                signal_demod2i = lowpass(signal * signal_demod2i)
-                det_data[f"demod2r_{det}"] = signal_demod2r
-                det_data[f"demod2i_{det}"] = signal_demod2i
+                det_data[f"demod2r_{det}"] = lowpass(signal * signal_demod2r)
+                det_data[f"demod2i_{det}"] = lowpass(signal * signal_demod2i)
 
         if self.purge:
             del obs.det_data[self.det_data]
