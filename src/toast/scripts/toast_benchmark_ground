@@ -95,13 +95,14 @@ def parse_arguments():
         action="store_true",
         help="Save simulated data to SPT3G format.",
     )
-    parser.add_argument(
-        "--madam",
-        required=False,
-        default=False,
-        action="store_true",
-        help="Apply the Madam mapmaker in place of the TOAST mapmaker.",
-    )
+    if toast.ops.madam.available():
+        parser.add_argument(
+            "--madam",
+            required=False,
+            default=False,
+            action="store_true",
+            help="Apply the Madam mapmaker in place of the TOAST mapmaker.",
+        )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
@@ -565,7 +566,7 @@ def main():
     job_ops.filtered_statistics.apply(data)
 
     # Destripe and/or bin TOD
-    if args.madam:
+    if toast.ops.madam.available() and args.madam:
         run_madam(job_ops, args, job.templates, data)
     else:
         run_mapmaker(job_ops, args, job.templates, data)

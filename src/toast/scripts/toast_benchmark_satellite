@@ -86,13 +86,14 @@ def parse_arguments():
         type=bool,
         help="Should the healpy input map be exported as a PNG for debugging purposes.",
     )
-    parser.add_argument(
-        "--madam",
-        required=False,
-        default=False,
-        action="store_true",
-        help="Apply the Madam mapmaker in place of the TOAST mapmaker.",
-    )
+    if toast.ops.madam.available():
+        parser.add_argument(
+            "--madam",
+            required=False,
+            default=False,
+            action="store_true",
+            help="Apply the Madam mapmaker in place of the TOAST mapmaker.",
+        )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
@@ -295,7 +296,7 @@ def main():
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
     # Destripe and/or bin TOD
-    if args.madam:
+    if toast.ops.madam.available() and args.madam:
         run_madam(job_ops, args, job.templates, data)
     else:
         run_mapmaker(job_ops, args, job.templates, data)
