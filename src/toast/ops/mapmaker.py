@@ -165,6 +165,12 @@ class MapMaker(Operator):
         False, help="If True and save_cleaned is True, overwrite the input data"
     )
 
+    reset_pix_dist = Bool(
+        False,
+        help="Clear any existing pixel distribution.  Useful when applying"
+        "repeatedly to different data objects.",
+    )
+
     output_dir = Unicode(
         ".",
         help="Write output data products to this directory",
@@ -228,7 +234,7 @@ class MapMaker(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, reset_pix_dist=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         timer = Timer()
         log_prefix = "MapMaker"
@@ -247,7 +253,7 @@ class MapMaker(Operator):
 
         # Optionally destroy existing pixel distributions (useful if calling
         # repeatedly with different data objects)
-        if reset_pix_dist:
+        if self.reset_pix_dist:
             if self.binning.pixel_dist in data:
                 del data[self.binning.pixel_dist]
             if self.map_binning.pixel_dist in data:

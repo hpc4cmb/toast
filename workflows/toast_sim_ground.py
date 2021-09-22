@@ -358,7 +358,8 @@ def reduce_data(job, args, data):
             # Replace comm_world with the group communicator
             obs_data._comm = new_comm
             ops.mapmaker.name = f"{orig_name}_{obs.name}"
-            ops.mapmaker.apply(obs_data, reset_pix_dist=True)
+            ops.mapmaker.reset_pix_dist = True
+            ops.mapmaker.apply(obs_data)
             log.info_rank(
                 f"{group} : Mapped {obs.name} in", comm=new_comm.comm_world, timer=timer_obs
             )
