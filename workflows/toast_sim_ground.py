@@ -374,11 +374,12 @@ def reduce_data(job, args, data):
 
     # Optionally run Madam
 
-    ops.madam.params = toast.ops.madam_params_from_mapmaker(ops.mapmaker)
-    ops.madam.pixel_pointing = ops.pixels_radec_final
-    ops.madam.stokes_weights = ops.weights_radec
-    ops.madam.apply(data)
-    log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+    if toast.ops.madam.available():
+        ops.madam.params = toast.ops.madam_params_from_mapmaker(ops.mapmaker)
+        ops.madam.pixel_pointing = ops.pixels_radec_final
+        ops.madam.stokes_weights = ops.weights_radec
+        ops.madam.apply(data)
+        log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
 
 
 def dump_spt3g(job, args, data):
