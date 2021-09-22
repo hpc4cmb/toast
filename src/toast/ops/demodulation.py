@@ -30,12 +30,13 @@ class Lowpass:
     """A callable class that applies the low pass filter"""
 
     def __init__(self, wkernel, fmax, fsample, offset, nskip, window="hamming"):
-        """Arguments:
-        wkernel(int) : width of the filter kernel
-        fmax(float) : maximum frequency of the filter
-        fsample(float) : signal sampling frequency
-        offset(int) : signal index offset for downsampling
-        nskip(int) : downsampling factor
+        """
+        Args:
+            wkernel (int) : width of the filter kernel
+            fmax (float) : maximum frequency of the filter
+            fsample (float) : signal sampling frequency
+            offset (int) : signal index offset for downsampling
+            nskip (int) : downsampling factor
         """
         self.lpf = firwin(
             wkernel,
