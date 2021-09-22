@@ -37,7 +37,6 @@ from .noise_weight import NoiseWeight
 from .gainscrambler import GainScrambler
 
 from .pointing_detector import PointingDetectorSimple
-from .pointing_healpix import PointingHealpix
 
 from .scan_map import ScanMap, ScanMask, ScanScale
 

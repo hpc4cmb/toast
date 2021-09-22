@@ -38,8 +38,6 @@ from .arithmetic import Subtract
 
 from .pointing import BuildPixelDistribution
 
-from .pointing_healpix import PointingHealpix
-
 from .mapmaker_utils import BuildNoiseWeighted
 
 
