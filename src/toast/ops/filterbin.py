@@ -4,6 +4,7 @@
 
 import os
 import re
+from glob import glob
 
 import astropy.units as u
 import numpy as np
@@ -34,21 +35,81 @@ from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 from .scan_map import ScanMap, ScanMask
 
-"""
-from ..mpi import MPI
 
-import os
-import re
-from time import time
+def combine_observation_matrix(rootname):
+    """Combine slices of the observation matrix into a single
+    scipy sparse matrix file
 
-import numpy as np
+    Args:
+        rootname (str) : rootname of the matrix slices.  Typically
+            `{filterbin.output_dir}/{filterbin_name}_obs_matrix`.
+    Returns:
+        filename_matrix (str) : Name of the composed matrix file,
+            `{rootname}.npz`.
+    """
 
-from .todmap_math import OpAccumDiag, OpScanScale, OpScanMask
-from ..map import covariance_apply, covariance_invert, DistPixels, covariance_rcond
-from ..op import Operator
-from ..utils import Logger
-from ..timing import function_timer
-"""
+    log = Logger.get()
+    timer0 = Timer()
+    timer0.start()
+    timer = Timer()
+    timer.start()
+
+    datafiles = sorted(glob(f"{rootname}.*.*.*.data.npy"))
+
+    all_data = []
+    all_indices = []
+    all_indptr = [0]
+
+    current_row = 0
+    current_offset = 0
+    shape = None
+
+    log.info(f"Combining observation matrix from {len(datafiles)} input files ...")
+
+    for datafile in datafiles:
+        parts = datafile.split(".")
+        row_start = int(parts[-5])
+        row_stop = int(parts[-4])
+        nrow_tot = int(parts[-3])
+        if shape is None:
+            shape = (nrow_tot, nrow_tot)
+        elif shape[0] != nrow_tot:
+            raise RuntimeError("Mismatch in shape")
+        if current_row != row_start:
+            all_indptr.append(np.zeros(row_start - current_row) + current_offset)
+            current_row = row_start
+        log.info(f"Loading {datafile}")
+        data = np.load(datafile)
+        indices = np.load(datafile.replace(".data.", ".indices."))
+        indptr = np.load(datafile.replace(".data.", ".indptr."))
+        all_data.append(data)
+        all_indices.append(indices)
+        indptr += current_offset
+        all_indptr.append(indptr[1:])
+        current_row = row_stop
+        current_offset = indptr[-1]
+
+    log.info_rank(f"Inputs loaded in", timer=timer, comm=None)
+
+    if current_row != nrow_tot:
+        all_indptr.append(np.zeros(nrow_tot - current_row) + current_offset)
+
+    log.info("Constructing CSR matrix ...")
+
+    all_data = np.hstack(all_data)
+    all_indices = np.hstack(all_indices)
+    all_indptr = np.hstack(all_indptr)
+    obs_matrix = scipy.sparse.csr_matrix((all_data, all_indices, all_indptr), shape)
+
+    log.info_rank(f"Constructed in", timer=timer, comm=None)
+
+    log.info(f"Writing {rootname}.npz ...")
+    scipy.sparse.save_npz(rootname, obs_matrix)
+    log.info_rank(f"Wrote in", timer=timer, comm=None)
+
+    log.info_rank(f"All done in", timer=timer, comm=None)
+
+    return f"{rootname}.npz"
 
 
 @trait_docs
@@ -114,7 +175,9 @@ class FilterBin(Operator):
     )
 
     ground_filter_order = Int(
-        5, help="Order of a Legendre polynomial to fit as a function of azimuth."
+        5,
+        allow_none=True,
+        help="Order of a Legendre polynomial to fit as a function of azimuth.",
     )
 
     split_ground_template = Bool(
@@ -125,7 +188,7 @@ class FilterBin(Operator):
 
     rightleft_mask = Int(4, help="Bit mask value left-to-right scans")
 
-    poly_filter_order = Int(1, allow_none=False, help="Polynomial order")
+    poly_filter_order = Int(1, allow_none=True, help="Polynomial order")
 
     poly_filter_view = Unicode(
         "scanning", allow_none=True, help="Intervals for polynomial filtering"
@@ -580,7 +643,8 @@ class FilterBin(Operator):
                 log.debug_rank(
                     f"{self.group:4} : OpFilterBin:     loaded cached matrix from "
                     f"{fname_cache}* in",
-                    timer=timer, comm=self.gcomm,
+                    timer=timer,
+                    comm=self.gcomm,
                 )
             except:
                 local_obs_matrix = None
@@ -642,7 +706,7 @@ class FilterBin(Operator):
                     comm=self.gcomm,
                     timer=timer,
                 )
- 
+
         log.debug_rank(
             f"{self.group:4} : OpFilterBin:     Adding to global", comm=self.gcomm
         )
@@ -717,7 +781,7 @@ class FilterBin(Operator):
         nsubmap = white_noise_cov.distribution.n_submap
         npix_submap = white_noise_cov.distribution.n_pix_submap
         for isubmap_local, isubmap_global in enumerate(
-                white_noise_cov.distribution.local_submaps
+            white_noise_cov.distribution.local_submaps
         ):
             submap = white_noise_cov.data[isubmap_local]
             offset = isubmap_global * npix_submap
@@ -728,11 +792,13 @@ class FilterBin(Operator):
                 icov = 0
                 for inz in range(self.nnz):
                     for jnz in range(inz, self.nnz):
-                        cc[pix + inz * self.npix, pix + jnz * self.npix] \
-                            = submap[pix_local, icov]
+                        cc[pix + inz * self.npix, pix + jnz * self.npix] = submap[
+                            pix_local, icov
+                        ]
                         if inz != jnz:
-                            cc[pix + jnz * self.npix, pix + inz * self.npix] \
-                                = submap[pix_local, icov]
+                            cc[pix + jnz * self.npix, pix + inz * self.npix] = submap[
+                                pix_local, icov
+                            ]
                         icov += 1
         cc = cc.tocsr()
         self.obs_matrix = cc.dot(self.obs_matrix)

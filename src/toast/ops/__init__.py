@@ -97,4 +97,5 @@ from .demodulation import Demodulate, StokesWeightsDemod
 from .stokes_weights import StokesWeights
 
 from .pixels_healpix import PixelsHealpix
-from .filterbin import FilterBin
+
+from .filterbin import FilterBin, combine_observation_matrix
