@@ -3,10 +3,24 @@
 Change Log
 -------------------------
 
-2.3.13 (Unreleased)
+2.3.13 (2021-09-23)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Nothing yet.
+* Add support for generating observation matrices (PR `#374`_).
+* Allow the user to set fixed weather simulation parameters (PR `#379`_).
+* Optimizations in the ground telescope simulation code (PR `#386`_).
+* Support gain template fitting in the map making (PR `#381`_).
+* Fixes to scheduling observations of solar system objects (PR `#408`_).
+* Add support for simulating detector cross talk (PR `#380`_).
+* Add support for common mode filtering (PR `#429`_).
+
+.. _`#374`: https://github.com/hpc4cmb/toast/pull/374
+.. _`#379`: https://github.com/hpc4cmb/toast/pull/379
+.. _`#386`: https://github.com/hpc4cmb/toast/pull/386
+.. _`#381`: https://github.com/hpc4cmb/toast/pull/381
+.. _`#408`: https://github.com/hpc4cmb/toast/pull/408
+.. _`#380`: https://github.com/hpc4cmb/toast/pull/380
+.. _`#429`: https://github.com/hpc4cmb/toast/pull/429
 
 2.3.12 (2020-11-12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
