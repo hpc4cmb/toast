@@ -117,10 +117,6 @@ class DemodulateTest(MPITestCase):
 
         default_model.apply(demod_data)
 
-        # Map again
-
-        default_model.apply(demod_data)
-
         demod_weights = ops.StokesWeightsDemod()
 
         mapper.name = "demodulated"
