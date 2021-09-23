@@ -128,9 +128,7 @@ def parse_arguments():
     ]
 
     if toast.ops.madam.available():
-        operators.append(
-            toast.ops.Madam(name="madam")
-        )
+        operators.append(toast.ops.Madam(name="madam"))
 
     # Templates we want to configure from the command line or a parameter file.
     templates = [toast.templates.Offset(name="baselines")]

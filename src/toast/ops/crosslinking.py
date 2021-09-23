@@ -90,9 +90,7 @@ class CrossLinking(Operator):
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
-    save_pointing = Bool(
-        False, help="If True, do not clear pixel numbers after use"
-    )
+    save_pointing = Bool(False, help="If True, do not clear pixel numbers after use")
 
     signal = "dummy_signal"
     weights = "crosslinking_weights"

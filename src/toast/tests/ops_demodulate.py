@@ -41,7 +41,7 @@ class DemodulateTest(MPITestCase):
             nside=nside,
             create_dist=dist_key,
             detector_pointing=detpointing,
-            #view="scanning",
+            # view="scanning",
         )
         pixels.apply(data)
         weights = ops.StokesWeights(

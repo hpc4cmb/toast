@@ -65,9 +65,7 @@ class CadenceMap(Operator):
         help="Write output data products to this directory",
     )
 
-    save_pointing = Bool(
-        False, help="If True, do not clear pixel numbers after use"
-    )
+    save_pointing = Bool(False, help="If True, do not clear pixel numbers after use")
 
     @traitlets.validate("pixel_pointing")
     def _check_pixel_pointing(self, proposal):

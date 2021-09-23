@@ -88,11 +88,11 @@ class SolverRHS(Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
             for trt in [
-                    "pixel_pointing",
-                    "stokes_weights",
-                    "det_data",
-                    "binned",
-                    "full_pointing",
+                "pixel_pointing",
+                "stokes_weights",
+                "det_data",
+                "binned",
+                "full_pointing",
             ]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)
@@ -346,11 +346,11 @@ class SolverLHS(Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
             for trt in [
-                    "pixel_pointing",
-                    "stokes_weights",
-                    "det_data",
-                    "binned",
-                    "full_pointing",
+                "pixel_pointing",
+                "stokes_weights",
+                "det_data",
+                "binned",
+                "full_pointing",
             ]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)

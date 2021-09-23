@@ -687,9 +687,7 @@ def scan_map(args, rank, job_ops, data, log):
         if job_ops.pixels_final.enabled:
             pixels = job_ops.pixels_final
         # creates a map and puts it in args.input_map
-        create_input_maps(
-            args.input_map, pixels.nside, rank, log, args.print_input_map
-        )
+        create_input_maps(args.input_map, pixels.nside, rank, log, args.print_input_map)
         job_ops.scan_map.pixel_dist = job_ops.binner_final.pixel_dist
         job_ops.scan_map.pixel_pointing = pixels
         job_ops.scan_map.stokes_weights = weights
@@ -708,7 +706,8 @@ def run_mapmaker(job_ops, args, tmpls, data):
 
     job_ops.mapmaker.binning = job_ops.binner
     job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(
-        templates=[tmpls.baselines], view=job_ops.pixels_final.view,
+        templates=[tmpls.baselines],
+        view=job_ops.pixels_final.view,
     )
     job_ops.mapmaker.map_binning = job_ops.binner_final
     job_ops.mapmaker.det_data = job_ops.sim_noise.det_data
@@ -725,7 +724,8 @@ def run_madam(job_ops, args, tmpls, data):
 
     job_ops.mapmaker.binning = job_ops.binner
     job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(
-        templates=[tmpls.baselines], view=job_ops.pixels_final.view,
+        templates=[tmpls.baselines],
+        view=job_ops.pixels_final.view,
     )
     job_ops.mapmaker.map_binning = job_ops.binner_final
     job_ops.mapmaker.output_dir = args.out_dir

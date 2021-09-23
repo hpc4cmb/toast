@@ -179,8 +179,10 @@ class BinMap(Operator):
 
         # Sanity check that the covariance pixel distribution agrees
         if cov.distribution != data[self.pixel_dist]:
-            msg = f"Pixel distribution '{self.pixel_dist}' does not match the one " \
+            msg = (
+                f"Pixel distribution '{self.pixel_dist}' does not match the one "
                 f"used by covariance '{self.covariance}'"
+            )
             log.error(msg)
             raise RuntimeError(msg)
 
@@ -193,8 +195,10 @@ class BinMap(Operator):
 
         if self.binned in data:
             if data[self.binned].distribution != data[self.pixel_dist]:
-                msg = f"Pixel distribution '{self.pixel_dist}' does not match " \
+                msg = (
+                    f"Pixel distribution '{self.pixel_dist}' does not match "
                     f"existing binned map '{self.binned}'"
+                )
                 log.error(msg)
                 raise RuntimeError(msg)
             data[self.binned].raw[:] = 0

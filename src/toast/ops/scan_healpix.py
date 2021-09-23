@@ -74,7 +74,7 @@ class ScanHealpix(Operator):
 
     save_pointing = Bool(
         False,
-        help="If True, do not clear detector pointing matrices if we " \
+        help="If True, do not clear detector pointing matrices if we "
         "generate the pixel distribution",
     )
 
@@ -180,9 +180,8 @@ class ScanHealpix(Operator):
 
         # Build and run a pipeline that scans from our map
         scan_pipe = Pipeline(
-            detector_sets=["SINGLE"], operators=[
-                self.pixel_pointing, self.stokes_weights, scanner
-            ]
+            detector_sets=["SINGLE"],
+            operators=[self.pixel_pointing, self.stokes_weights, scanner],
         )
         scan_pipe.apply(data, detectors=detectors)
 

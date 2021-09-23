@@ -84,7 +84,7 @@ class BuildPixelDistribution(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        for trait in "pixel_pointing", :
+        for trait in ("pixel_pointing",):
             if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
@@ -97,7 +97,6 @@ class BuildPixelDistribution(Operator):
             msg = "A subset of detectors is specified, but the pixel distribution\n"
             msg += "does not yet exist- and creating this requires all detectors."
             raise RuntimeError(msg)
-
 
         msg = "Creating pixel distribution '{}' in Data".format(self.pixel_dist)
         if data.comm.world_rank == 0:

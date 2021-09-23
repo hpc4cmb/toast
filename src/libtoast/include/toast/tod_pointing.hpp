@@ -10,7 +10,6 @@
 
 
 namespace toast {
-
 void healpix_pixels(toast::HealpixPixels const & hpix, bool nest, size_t n,
                     double const * pdata, uint8_t const * flags,
                     int64_t * pixels);

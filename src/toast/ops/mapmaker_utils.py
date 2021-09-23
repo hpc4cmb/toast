@@ -894,7 +894,10 @@ class CovarianceAndHits(Operator):
             # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
         accum.operators = [
-            self.pixel_pointing, self.stokes_weights, build_hits, build_invcov
+            self.pixel_pointing,
+            self.stokes_weights,
+            build_hits,
+            build_invcov,
         ]
 
         pipe_out = accum.apply(data, detectors=detectors)

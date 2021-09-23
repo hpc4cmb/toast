@@ -179,8 +179,10 @@ class StokesWeights(Operator):
                     detector_intervals = ob.intervals[self.detector_pointing.view]
                     intersection = detector_intervals & intervals
                     if intersection != intervals:
-                        msg = f"view {self.view} is not fully covered by valid " \
+                        msg = (
+                            f"view {self.view} is not fully covered by valid "
                             "detector pointing"
+                        )
                         raise RuntimeError(msg)
 
             # Do we already have pointing for all requested detectors?

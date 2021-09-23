@@ -175,9 +175,7 @@ def parse_arguments():
     ]
 
     if toast.ops.madam.available():
-        operators.append(
-            toast.ops.Madam(name="madam")
-        )
+        operators.append(toast.ops.Madam(name="madam"))
 
     # Templates we want to configure from the command line or a parameter file.
     templates = [toast.templates.Offset(name="baselines")]
@@ -574,7 +572,6 @@ def main():
 
     job_ops.mem_count.prefix = "After Map Making"
     job_ops.mem_count.apply(data)
-
 
     # end of the computations, sync and computes efficiency
     global_timer.stop_all()

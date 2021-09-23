@@ -361,7 +361,9 @@ def reduce_data(job, args, data):
             ops.mapmaker.reset_pix_dist = True
             ops.mapmaker.apply(obs_data)
             log.info_rank(
-                f"{group} : Mapped {obs.name} in", comm=new_comm.comm_world, timer=timer_obs
+                f"{group} : Mapped {obs.name} in",
+                comm=new_comm.comm_world,
+                timer=timer_obs,
             )
         log.info_rank(
             f"{group} : Done mapping {len(data.obs)} observations.",
