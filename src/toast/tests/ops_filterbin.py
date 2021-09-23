@@ -110,7 +110,7 @@ class FilterBinTest(MPITestCase):
     def test_filterbin_obsmatrix(self):
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -121,6 +121,7 @@ class FilterBinTest(MPITestCase):
             # view="scanning",
         )
         pixels.apply(data)
+
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=obs_names.hwp_angle,
@@ -132,6 +133,7 @@ class FilterBinTest(MPITestCase):
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
 
+        input_map_file = os.path.join(self.outdir, "input_map.fits")
         if data.comm.world_rank == 0:
             lmax = 3 * self.nside
             cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
@@ -139,8 +141,10 @@ class FilterBinTest(MPITestCase):
             input_map = hp.synfast(cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False)
             if pixels.nest:
                 input_map = hp.reorder(input_map, r2n=True)
-            input_map_file = os.path.join(self.outdir, "input_map.fits")
             hp.write_map(input_map_file, input_map, nest=pixels.nest)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.Barrier()
 
         # Scan map into timestreams
         scan_hpix = ops.ScanHealpix(
@@ -226,14 +230,14 @@ class FilterBinTest(MPITestCase):
             for i in range(3):
                 rms1 = np.std(filtered[i][good])
                 rms2 = np.std((filtered - test_map)[i][good])
-                assert rms2 < 1e-6 * rms1
+                assert rms2 < 1e-5 * rms1
 
         return
 
     def test_filterbin_obsmatrix_flags(self):
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -258,6 +262,7 @@ class FilterBinTest(MPITestCase):
         # Make fake flags
         fake_flags(data)
 
+        input_map_file = os.path.join(self.outdir, "input_map2.fits")
         if data.comm.world_rank == 0:
             lmax = 3 * self.nside
             cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
@@ -265,7 +270,6 @@ class FilterBinTest(MPITestCase):
             input_map = hp.synfast(cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False)
             if pixels.nest:
                 input_map = hp.reorder(input_map, r2n=True)
-            input_map_file = os.path.join(self.outdir, "input_map2.fits")
             hp.write_map(input_map_file, input_map, nest=pixels.nest)
 
         # Scan map into timestreams
@@ -360,7 +364,7 @@ class FilterBinTest(MPITestCase):
     def test_filterbin_obsmatrix_cached(self):
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -382,6 +386,7 @@ class FilterBinTest(MPITestCase):
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
 
+        input_map_file = os.path.join(self.outdir, "input_map3.fits")
         if data.comm.world_rank == 0:
             lmax = 3 * self.nside
             cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
@@ -389,7 +394,6 @@ class FilterBinTest(MPITestCase):
             input_map = hp.synfast(cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False)
             if pixels.nest:
                 input_map = hp.reorder(input_map, r2n=True)
-            input_map_file = os.path.join(self.outdir, "input_map3.fits")
             hp.write_map(input_map_file, input_map, nest=pixels.nest)
 
         # Scan map into timestreams
@@ -438,6 +442,7 @@ class FilterBinTest(MPITestCase):
 
         filterbin.name = "cached_run_1"
         filterbin.apply(data)
+
         filterbin.name = "cached_run_2"
         filterbin.apply(data)
 
