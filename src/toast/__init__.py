@@ -25,6 +25,10 @@ TOAST_TOD_BUFFER=<integer>
     * Number of elements to buffer in code where many intermediate timestream
       products are created.  Default is 1048576.
 
+TOAST_PIXEL_SHMEM=<value>
+    * Any non-empty value will turn on use of MPI shared memory for pixel domain
+      data storage.
+
 OMP_NUM_THREADS=<integer>
     * Toast uses OpenMP threading in several places and the concurrency is set by the
       usual environment variable.

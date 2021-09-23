@@ -12,7 +12,7 @@ from ..traits import trait_docs, Int, Unicode, Bool
 
 from ..timing import function_timer
 
-from ..pixels import PixelDistribution, PixelData
+from ..pixels import PixelData
 
 from ..observation import default_values as defaults
 

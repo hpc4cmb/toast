@@ -153,6 +153,13 @@ toast::Environment::Environment() {
         func_timers_ = true;
     }
 
+    // See if we should use MPI shared memory for PixelData objects.
+    pixel_shared_mem_ = false;
+    envval = ::getenv("TOAST_PIXEL_SHMEM");
+    if (envval != NULL) {
+        pixel_shared_mem_ = true;
+    }
+
     // Select MKL threading layer
     #ifdef HAVE_MKL
     # ifdef USE_MKL_GNU_THREADS
@@ -208,6 +215,15 @@ std::string toast::Environment::version() const {
 
 void toast::Environment::set_log_level(char const * level) {
     loglvl_ = std::string(level);
+}
+
+bool toast::Environment::pixel_shmem() const {
+    return pixel_shared_mem_;
+}
+
+void toast::Environment::set_pixel_shmem(bool value) {
+    pixel_shared_mem_ = value;
+    return;
 }
 
 bool toast::Environment::function_timers() const {

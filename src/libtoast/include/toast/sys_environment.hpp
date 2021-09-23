@@ -39,6 +39,8 @@ class Environment {
         void set_acc(int n_acc_device, int n_acc_proc_per_device, int my_acc_device);
         void get_acc(int * n_acc_device, int * n_acc_proc_per_device,
                      int * my_acc_device) const;
+        bool pixel_shmem() const;
+        void set_pixel_shmem(bool);
 
     private:
 
@@ -59,6 +61,7 @@ class Environment {
         int n_acc_device_;
         int n_acc_proc_per_device_;
         int my_acc_device_;
+        bool pixel_shared_mem_;
 };
 }
 

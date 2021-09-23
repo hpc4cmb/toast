@@ -20,8 +20,6 @@ from ..traits import trait_docs, Int, Unicode, Bool, Float, Instance
 
 from ..timing import function_timer, Timer
 
-from ..pixels import PixelDistribution, PixelData
-
 from ..pixels_io import write_healpix_fits
 
 from ..observation import default_values as defaults

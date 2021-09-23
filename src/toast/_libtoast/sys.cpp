@@ -50,6 +50,22 @@ void init_sys(py::module & m) {
                 None
 
         )")
+    .def("pixel_shmem", &toast::Environment::pixel_shmem,
+         R"(
+            Return the current state of using MPI shared memory for PixelData objects.
+        )")
+    .def("set_pixel_shmem", &toast::Environment::set_pixel_shmem,
+         py::arg(
+             "value"), R"(
+            Control whether to use MPI shared memory for PixelData storage.
+
+            Args:
+                value (bool):  If True, use MPI shared memory.
+
+            Returns:
+                None
+
+        )")
     .def("signals", &toast::Environment::signals,
          R"(
             Return a list of the currently available signals.

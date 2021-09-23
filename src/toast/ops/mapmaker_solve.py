@@ -12,8 +12,6 @@ from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
 from ..timing import function_timer, Timer
 
-from ..pixels import PixelDistribution, PixelData
-
 from ..templates import AmplitudesMap
 
 from .operator import Operator

@@ -12,8 +12,6 @@ from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
 from ..timing import function_timer
 
-from ..pixels import PixelDistribution, PixelData
-
 from ..covariance import covariance_apply
 
 from ..observation import default_values as defaults

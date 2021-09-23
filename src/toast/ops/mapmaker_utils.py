@@ -12,7 +12,7 @@ from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
 
 from ..timing import function_timer
 
-from ..pixels import PixelDistribution, PixelData
+from ..pixels import PixelData
 
 from ..covariance import covariance_invert
 
