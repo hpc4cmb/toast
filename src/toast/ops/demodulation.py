@@ -400,11 +400,6 @@ class Demodulate(Operator):
             iweights, qweights, uweights = weights.T
             etainv = 1 / np.sqrt(qweights ** 2 + uweights ** 2)
 
-            # import pdb
-            # import matplotlib.pyplot as plt
-            # plt.clf();plt.plot(lowpass(signal*2*qweights)[:100],'.');plt.plot(lowpass(signal*2*uweights)[:100],'.');plt.show()
-            # pdb.set_trace()
-
             det_data = demod_obs.detdata[self.det_data]
             det_data[f"demod0_{det}"] = lowpass(signal)
             det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights * etainv)
