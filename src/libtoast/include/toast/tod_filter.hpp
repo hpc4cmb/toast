@@ -18,6 +18,12 @@ void chebyshev(double * x, double * templates, size_t start_order, size_t stop_o
                size_t nsample);
 void add_templates(double * signal, double * templates, double * coeff, size_t nsample,
                    size_t ntemplate);
+void filter_poly2D_solve(
+    int64_t nsample, int32_t ndet, int32_t ngroup, int32_t nmode,
+    int32_t const * det_group, double const * templates, uint8_t const * masks,
+    double const * signals, double * coeff
+);
+
 }
 
 #endif // ifndef TOAST_TOD_FILTER_HPP

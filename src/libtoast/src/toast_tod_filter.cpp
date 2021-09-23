@@ -367,3 +367,114 @@ void toast::add_templates(double * signal, double * templates, double * coeff,
 
     return;
 }
+
+void toast::filter_poly2D_solve(
+    int64_t nsample, int32_t ndet, int32_t ngroup, int32_t nmode,
+    int32_t const * det_group, double const * templates, uint8_t const * masks,
+    double const * signals, double * coeff
+) {
+    // For each sample, solve for the regression coefficients.
+    // The templates are flat packed across (detectors, modes).
+    // The mask is flat packed across (samples, detectors).
+    // The signals are flat packed across (samples, detectors).
+    // The coefficients are flat packed across (samples, groups, modes).
+
+    toast::AlignedVector <double> rhs(nmode);
+    toast::AlignedVector <double> A(nmode * nmode);
+    toast::AlignedVector <double> singular_values(nmode);
+
+    int inmode = (int)nmode;
+    int rank;
+    int info;
+    int one = 1;
+    double rcond_limit = 1e-3;
+    int lwork = std::max(5 * inmode, 1000000);
+    toast::AlignedVector <double> work(lwork);
+
+    for (int64_t isamp = 0; isamp < nsample; ++isamp) {
+        // For this sample...
+        for (int32_t igroup = 0; igroup < ngroup; ++igroup) {
+            // For this group of detectors...
+            // Zero out solve buffers
+            std::fill(rhs.begin(), rhs.end(), 0.0);
+            std::fill(A.begin(), A.end(), 0.0);
+
+            // Accumulate the RHS and design matrix one detector at a time.  Imagine
+            // we have 2 detectors and 3 modes:
+            //
+            //       mask = [m_1 m_2] (These are either 0 or 1, so m_1 * m_1 == m_1)
+            //
+            //  templates = [[a_1 b_1 c_1],
+            //               [a_2 b_2 c_2]]
+            //
+            //     signal = [s_1 s_2]
+            //
+            //        RHS =  (mask * templates)^T  X  (mask * signals^T)
+            //            =  [[a_1 * s_1 * m_1 + a_2 * s_2 * m_2],
+            //                [b_1 * s_1 * m_1 + b_2 * s_2 * m_2],
+            //                [c_1 * s_1 * m_1 + c_2 * s_2 * m_2]]
+            //
+            //          A = (mask * templates)^T  X  (mask * templates)
+            //            = [ [a_1 * a_1 * m_1 + a_2 * a_2 * m_2,
+            //                 a_1 * b_1 * m_1 + a_2 * b_2 * m_2,
+            //                 a_1 * c_1 * m_1 + a_2 * c_2 * m_2],
+            //                [b_1 * a_1 * m_1 + b_2 * a_2 * m_2,
+            //                 b_1 * b_1 * m_1 + b_2 * b_2 * m_2,
+            //                 b_1 * c_1 * m_1 + b_2 * c_2 * m_2],
+            //                [c_1 * a_1 * m_1 + c_2 * a_2 * m_2,
+            //                 c_1 * b_1 * m_1 + c_2 * b_2 * m_2,
+            //                 c_1 * c_1 * m_1 + c_2 * c_2 * m_2] ]
+            //
+
+            for (int32_t idet = 0; idet < ndet; ++idet) {
+                // For each detector...
+                if (det_group[idet] != igroup) {
+                    // This detectors is not in this group
+                    continue;
+                }
+
+                // Mask value for this detector
+                double det_mask = (masks[isamp * ndet + idet] == 0) ? 0.0 : 1.0;
+
+                // Signal value for this detector
+                double det_sig = signals[isamp * ndet + idet];
+
+                for (int32_t imode = 0; imode < nmode; ++imode) {
+                    int32_t tmpl_off = idet * nmode;
+                    rhs[imode] += templates[tmpl_off + imode] * det_sig * det_mask;
+
+                    for (int32_t jmode = imode; jmode < nmode; ++jmode) {
+                        double val = templates[tmpl_off + imode] * templates[tmpl_off + jmode] * det_mask;
+                        A[imode * nmode + jmode] += val;
+                        if (jmode > imode) {
+                            A[jmode * nmode + imode] += val;
+                        }
+                    }
+                }
+            }
+
+            // DGELSS will overwrite RHS with the fitting
+            // coefficients.  A is overwritten with
+            // singular vectors.
+            toast::lapack_dgelss(
+                &inmode, &inmode, &one, A.data(), &inmode,
+                rhs.data(), &inmode, singular_values.data(), &rcond_limit,
+                &rank, work.data(), &lwork, &info
+            );
+            int64_t offset = isamp * (ngroup * nmode) + igroup * nmode;
+            if (info == 0) {
+                // Solve was successful
+                for (int64_t m = 0; m < nmode; ++m) {
+                    coeff[offset + m] = rhs[m];
+                }
+            } else {
+                // Failed
+                for (int64_t m = 0; m < nmode; ++m) {
+                    coeff[offset + m] = 0.0;
+                }
+            }
+        }
+    }
+
+    return;
+}

@@ -212,5 +212,106 @@ void init_tod_filter(py::module & m) {
 
     )");
 
+    m.def("filter_poly2D",
+          [](py::buffer det_groups, py::buffer templates, py::buffer signals, py::buffer masks, py::buffer coeff) {
+              pybuffer_check <uint8_t> (masks);
+              pybuffer_check <int32_t> (det_groups);
+              pybuffer_check <double> (templates);
+              pybuffer_check <double> (signals);
+              pybuffer_check <double> (coeff);
+              py::buffer_info info_masks = masks.request();
+              py::buffer_info info_detgroups = det_groups.request();
+              py::buffer_info info_templates = templates.request();
+              py::buffer_info info_signals = signals.request();
+              py::buffer_info info_coeff = coeff.request();
+              // Check dimensions
+              if (info_signals.ndim != 2) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Signals array should have 2 dimensions.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              int64_t nsample = info_signals.shape[0];
+              int32_t ndet = info_signals.shape[1];
+              if (info_masks.ndim != 2) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Masks array should have 2 dimensions.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              if ((info_masks.shape[0] != nsample) || (info_masks.shape[1] != ndet)) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Masks array dimensions are different than signals array";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              if (info_templates.ndim != 2) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Templates array should have 2 dimensions.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              if (info_templates.shape[0] != ndet) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "First dimension of templates array should be number of dets.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              int32_t nmodes = info_templates.shape[1];
+              if (info_coeff.ndim != 3) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Coefficient array should have 3 dimensions.";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              if ((info_coeff.shape[0] != nsample) || (info_coeff.shape[2] != nmodes)) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Coeff array dimensions are inconsistent";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+              int32_t ngroup = info_coeff.shape[1];
+              int32_t * raw_detgroups = reinterpret_cast <int32_t *> (info_detgroups.ptr);
+              for (int32_t i = 0; i < ndet; ++i) {
+                  if (raw_detgroups[i] >= ngroup) {
+                      auto log = toast::Logger::get();
+                      std::ostringstream o;
+                      o << "det " << i << ": group " << raw_detgroups[i] << " invalid for " << ngroup << " groups";
+                      log.error(o.str().c_str());
+                      throw std::runtime_error(o.str().c_str());
+                  }
+              }
+              uint8_t * raw_masks = reinterpret_cast <uint8_t *> (info_masks.ptr);
+
+              double * raw_templates = reinterpret_cast <double *> (info_templates.ptr);
+              double * raw_signals = reinterpret_cast <double *> (info_signals.ptr);
+              double * raw_coeff = reinterpret_cast <double *> (info_coeff.ptr);
+              toast::filter_poly2D_solve(nsample, ndet, ngroup, nmodes, raw_detgroups, raw_templates, raw_masks, raw_signals, raw_coeff);
+              return;
+          }, py::arg("det_groups"), py::arg("templates"), py::arg("signals"), py::arg("masks"),
+          py::arg(
+              "coeff"), R"(
+        Solves for 2D polynomial coefficients at each sample.
+
+        Args:
+            det_groups (array, int32):  The group index for each detector index.
+            templates (array, float64):  The N_detectors x N_modes templates.
+            signals (array, float64):  The N_sample x N_detector data.
+            masks (array, uint8):  The N_sample x N_detector mask.
+            coeff (array, float64):  The N_sample x N_group x N_mode output
+                coefficients.
+
+        Returns:
+            None.
+
+    )");
+
     return;
 }
