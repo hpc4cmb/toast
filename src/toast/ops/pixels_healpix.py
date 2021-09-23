@@ -49,7 +49,7 @@ class PixelsHealpix(Operator):
 
     nside_submap = Int(16, help="The NSIDE of the submap resolution")
 
-    nest = Bool(False, help="If True, use NESTED ordering instead of RING")
+    nest = Bool(True, help="If True, use NESTED ordering instead of RING")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
