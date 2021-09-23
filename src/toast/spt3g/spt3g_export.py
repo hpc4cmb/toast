@@ -34,6 +34,7 @@ if available:
     from spt3g import core as c3g
 
 
+@function_timer
 def export_shared(obs, name, view_name=None, view_index=0, g3t=None):
     """Convert a single shared object to a G3Object.
 
@@ -68,6 +69,7 @@ def export_shared(obs, name, view_name=None, view_index=0, g3t=None):
         return g3t(sview.flatten().tolist())
 
 
+@function_timer
 def export_detdata(
     obs, name, view_name=None, view_index=0, g3t=None, times=None, compress=None
 ):
@@ -153,32 +155,19 @@ def export_detdata(
     return out, gunit, compression
 
 
-def export_intervals(obs, name, times, view_name=None, view_index=0):
+@function_timer
+def export_intervals(obs, name, iframe):
     """Convert the named intervals into a G3 object.
 
     Args:
         obs (Observation):  The parent observation.
         name (str):  The name of the intervals.
-        times (str):  The shared name for the timestamps.
-        view_name (str):  If specified, use this view of the data.
-        view_index (int):  Export this element of the list of data views.
+        iframe (IntervalList):  An interval list defined for this frame.
 
     Returns:
         (G3Object):  The best container available.
 
     """
-    tview = obs.shared[times]
-    if view_name is not None:
-        tview = obs.view[view_name].shared[times][view_index]
-
-    # Create an IntervalList that spans the current frame, then use it
-    # to find the intersection of intervals with the frame.
-    iframe = IntervalList(
-        obs.shared[times],
-        timespans=[
-            (tview[0], tview[-1]),
-        ],
-    )
     overlap = iframe & obs.intervals[name]
 
     out = None
@@ -389,6 +378,9 @@ class export_obs_data(object):
 
         output = list()
         frame_view = obs.view[frame_intervals]
+        print(
+            f"group proc {obs.comm_rank}:  {obs.n_local_samples} samples, {len(obs.intervals[frame_intervals])} intervals tot = {np.sum([(x.last - x.first + 1) for x in obs.intervals[frame_intervals]])}"
+        )
         for ivw, tview in enumerate(frame_view.shared[self._timestamp_names[0]]):
             # Construct the Scan frame
             frame = c3g.G3Frame(c3g.G3FrameType.Scan)
@@ -431,14 +423,21 @@ class export_obs_data(object):
                         frame[f"{froot}_{d}_gain"] = compression[d]["gain"]
                         frame[f"{froot}_{d}_offset"] = compression[d]["offset"]
                         frame[f"{froot}_{d}_units"] = gunits
-            for ivl_key, ivl_val in self._interval_names:
-                frame[ivl_val] = export_intervals(
-                    obs,
-                    ivl_key,
-                    self._timestamp_names[0],
-                    view_name=frame_intervals,
-                    view_index=ivw,
+            # If we are exporting intervals, create an interval list with a single
+            # interval for this frame.  Then use this repeatedly in the intersection
+            # calculation.
+            if len(self._interval_names) > 0:
+                tview = obs.view[frame_intervals].shared[self._timestamp_names[0]][ivw]
+                iframe = IntervalList(
+                    obs.shared[self._timestamp_names[0]],
+                    timespans=[(tview[0], tview[-1])],
                 )
+                for ivl_key, ivl_val in self._interval_names:
+                    frame[ivl_val] = export_intervals(
+                        obs,
+                        ivl_key,
+                        iframe,
+                    )
             output.append(frame)
         # Delete our temporary frame interval if we created it
         if self._frame_intervals is None:

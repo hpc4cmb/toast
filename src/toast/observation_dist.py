@@ -204,14 +204,19 @@ class DistDetSamp(object):
 
         if self.comm_rank == 0:
             # check that all processes have some data, otherwise print warning
+            dbg = f"Dist {len(detectors)} detectors, {samples} samples, {process_rows}"
+            dbg += f" process rows"
             for i, ds in enumerate(self.dets):
                 if len(ds) == 0:
-                    msg = f"Process {i} has no detectors assigned."
+                    msg = f"Group process {i} has no detectors assigned."
                     log.warning(msg)
+                dbg += f"\n  Proc {i} dets {ds}"
             for i, ss in enumerate(self.samps):
                 if ss[1] == 0:
-                    msg = f"Process {i} has no samples assigned."
+                    msg = f"Group process {i} has no samples assigned."
                     log.warning(msg)
+                dbg += f"\n  Proc {i} samp sets {ss}"
+            log.verbose(dbg)
 
     def close(self):
         # Explicitly free communicators if needed

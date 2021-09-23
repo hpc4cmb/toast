@@ -373,6 +373,8 @@ def select_case(
     # See if the user is overriding the group size
     force_group_nodes = None
     if jobargs.group_size is not None:
+        if jobargs.group_size > n_procs or n_procs % jobargs.group_size != 0:
+            raise RuntimeError(f"Forced group size {jobargs.group_size} does not divide evenly into {n_procs} processes")
         n_group = n_procs // jobargs.group_size
         force_group_nodes = n_nodes // n_group
 

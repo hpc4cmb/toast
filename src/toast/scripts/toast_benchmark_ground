@@ -209,7 +209,7 @@ def parse_arguments():
     args.moon_avoidance_angle = 0.0
     args.gap_s = 60.0
     args.gap_small_s = 0.0
-    args.ces_max_time = 1200.0
+    args.ces_max_time = 3600.0
     args.boresight_angle_step = 180.0
     args.boresight_angle_time = 1440.0
     args.schedule_patches = [

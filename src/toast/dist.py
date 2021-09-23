@@ -106,10 +106,8 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
 
     dist.append(DistRange(off, weights.shape[0] - off))
 
-    if len(dist) != groups:
-        raise RuntimeError(
-            "Number of distributed groups different than " "number requested"
-        )
+    while len(dist) < groups:
+        dist.append(DistRange(off, 0))
     return dist
 
 
@@ -249,8 +247,9 @@ def distribute_samples(
         dist_dets_col = list()
         for set_range in dist_detsets_col:
             cur = list()
-            for ds in range(set_range.n_elem):
-                cur.extend(detsets[set_range.offset + ds])
+            if set_range.n_elem > 0:
+                for ds in range(set_range.n_elem):
+                    cur.extend(detsets[set_range.offset + ds])
             dist_dets_col.append(cur)
 
     # Distribute samples either uniformly or by set.
@@ -270,10 +269,11 @@ def distribute_samples(
         for set_off, n_set in dist_sampsets_row:
             setsamp = 0
             setchunk = 0
-            for ds in range(n_set):
-                sset = sampsets[set_off + ds]  # One sample set
-                setsamp += np.sum(sset)
-                setchunk += len(sset)
+            if n_set > 0:
+                for ds in range(n_set):
+                    sset = sampsets[set_off + ds]  # One sample set
+                    setsamp += np.sum(sset)
+                    setchunk += len(sset)
             dist_chunks_row.append(DistRange(chunk_off, setchunk))
             dist_samples_row.append(DistRange(samp_off, setsamp))
             samp_off += setsamp
