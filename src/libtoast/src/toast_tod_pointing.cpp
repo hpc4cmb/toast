@@ -12,18 +12,11 @@
 #include <iostream>
 
 
-void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
-                                    bool nest, double eps, double cal,
-                                    std::string const & mode, size_t n,
-                                    double const * pdata,
-                                    double const * hwpang,
-                                    uint8_t const * flags,
-                                    int64_t * pixels, double * weights) {
-    double xaxis[3] = {1.0, 0.0, 0.0};
+void toast::healpix_pixels(toast::HealpixPixels const & hpix, bool nest,
+                           size_t n, double const * pdata,
+                           uint8_t const * flags, int64_t * pixels) {
     double zaxis[3] = {0.0, 0.0, 1.0};
     double nullquat[4] = {0.0, 0.0, 0.0, 1.0};
-
-    double eta = (1.0 - eps) / (1.0 + eps);
 
     toast::AlignedVector <double> dir(3 * n);
     toast::AlignedVector <double> pin(4 * n);
@@ -61,6 +54,44 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
             pixels[i] = (flags[i] == 0) ? pixels[i] : -1;
         }
     }
+
+    return;
+}
+
+void toast::stokes_weights(double eps, double cal, std::string const & mode,
+                           size_t n, double const * pdata,
+                           double const * hwpang,  uint8_t const * flags,
+                           double * weights) {
+    double xaxis[3] = {1.0, 0.0, 0.0};
+    double zaxis[3] = {0.0, 0.0, 1.0};
+    double nullquat[4] = {0.0, 0.0, 0.0, 1.0};
+
+    double eta = (1.0 - eps) / (1.0 + eps);
+
+    toast::AlignedVector <double> dir(3 * n);
+    toast::AlignedVector <double> pin(4 * n);
+
+    if (flags == NULL) {
+        std::copy(pdata, pdata + (4 * n), pin.begin());
+    } else {
+        size_t off;
+        for (size_t i = 0; i < n; ++i) {
+            off = 4 * i;
+            if (flags[i] == 0) {
+                pin[off] = pdata[off];
+                pin[off + 1] = pdata[off + 1];
+                pin[off + 2] = pdata[off + 2];
+                pin[off + 3] = pdata[off + 3];
+            } else {
+                pin[off] = nullquat[0];
+                pin[off + 1] = nullquat[1];
+                pin[off + 2] = nullquat[2];
+                pin[off + 3] = nullquat[3];
+            }
+        }
+    }
+
+    toast::qa_rotate_many_one(n, pin.data(), zaxis, dir.data());
 
     if (mode == "I") {
         for (size_t i = 0; i < n; ++i) {
@@ -119,7 +150,7 @@ void toast::pointing_matrix_healpix(toast::HealpixPixels const & hpix,
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::ostringstream o;
-        o << "unknown healpix pointing matrix mode \"" << mode << "\"";
+        o << "unknown stokes weights mode \"" << mode << "\"";
         log.error(o.str().c_str(), here);
         throw std::runtime_error(o.str().c_str());
     }

@@ -41,14 +41,18 @@ class PolyFilterTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle="hwp_angle",
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -56,8 +60,8 @@ class PolyFilterTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data="signal",
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
@@ -128,14 +132,18 @@ class PolyFilterTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle="hwp_angle",
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -143,8 +151,8 @@ class PolyFilterTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data="signal",
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
@@ -245,14 +253,18 @@ class PolyFilterTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle="hwp_angle",
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle="hwp_angle",
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -260,8 +272,8 @@ class PolyFilterTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data="signal",
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)

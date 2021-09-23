@@ -47,19 +47,17 @@ class CadenceMapTest(MPITestCase):
 
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixelpointing = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
             create_dist="pixel_dist",
         )
-        pointing.apply(data)
+        pixelpointing.apply(data)
 
         # Cadence map
         cadence_map = ops.CadenceMap(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixelpointing,
             det_flags=None,
         )
 

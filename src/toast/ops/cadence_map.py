@@ -36,11 +36,10 @@ class CadenceMap(Operator):
         help="The Data key containing the submap distribution",
     )
 
-    pointing = Instance(
+    pixel_pointing = Instance(
         klass=Operator,
         allow_none=True,
-        help="This must be an instance of a pointing operator.  "
-        "Used exclusively for pixel numbers, not pointing weights.",
+        help="This must be an instance of a pixel pointing operator.",
     )
 
     times = Unicode(obs_names.times, help="Observation shared key for timestamps")
@@ -66,20 +65,20 @@ class CadenceMap(Operator):
         help="Write output data products to this directory",
     )
 
-    save_pointing = Bool(
-        False, help="If True, do not clear detector pointing matrices after use"
-    )
+    save_pointing = Bool(False, help="If True, do not clear pixel numbers after use")
 
-    @traitlets.validate("pointing")
-    def _check_pointing(self, proposal):
+    @traitlets.validate("pixel_pointing")
+    def _check_pixel_pointing(self, proposal):
         pntg = proposal["value"]
         if pntg is not None:
             if not isinstance(pntg, Operator):
-                raise traitlets.TraitError("pointing should be an Operator instance")
+                raise traitlets.TraitError(
+                    "pixel_pointing should be an Operator instance"
+                )
             # Check that this operator has the traits we expect
-            for trt in ["pixels", "weights", "create_dist", "view"]:
+            for trt in ["pixels", "create_dist", "view"]:
                 if not pntg.has_trait(trt):
-                    msg = "pointing operator should have a '{}' trait".format(trt)
+                    msg = f"pixel_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
         return pntg
 
@@ -90,8 +89,8 @@ class CadenceMap(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        for trait in "pointing", "pixel_dist":
-            if not hasattr(self, trait):
+        for trait in "pixel_pointing", "pixel_dist":
+            if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
@@ -103,7 +102,7 @@ class CadenceMap(Operator):
         if self.pixel_dist not in data:
             pix_dist = BuildPixelDistribution(
                 pixel_dist=self.pixel_dist,
-                pointing=self.pointing,
+                pixel_pointing=self.pixel_pointing,
                 shared_flags=self.shared_flags,
                 shared_flag_mask=self.shared_flag_mask,
                 save_pointing=self.save_pointing,
@@ -176,9 +175,9 @@ class CadenceMap(Operator):
                         else:
                             mask = good
                         # Compute pixel numbers.  Will do nothing if they already exist.
-                        self.pointing.apply(obs_data, detectors=[det])
+                        self.pixel_pointing.apply(obs_data, detectors=[det])
                         # Flag the hit pixels
-                        pixels = obs.detdata[self.pointing.pixels][det]
+                        pixels = obs.detdata[self.pixel_pointing.pixels][det]
                         mask[pixels < 0] = False
                         buf[day - day_start][pixels[mask]] = True
             if comm is not None:
@@ -194,14 +193,14 @@ class CadenceMap(Operator):
                 dset = f.create_dataset("cadence", data=all_hit)
                 dset.attrs["MJDSTART"] = MJD_start
                 dset.attrs["MJDSTOP"] = MJD_stop
-                dset.attrs["NESTED"] = self.pointing.nest
+                dset.attrs["NESTED"] = self.pixel_pointing.nest
             log.info(f"Wrote cadence map to {fname}.")
 
     def _finalize(self, data, **kwargs):
         return
 
     def _requires(self):
-        req = self.pointing.requires()
+        req = self.pixel_pointing.requires()
         req["shared"].append(self.times)
         req["shared"].append(self.shared_flags)
         if self.det_flags is not None:

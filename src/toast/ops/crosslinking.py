@@ -38,8 +38,6 @@ from .arithmetic import Subtract
 
 from .pointing import BuildPixelDistribution
 
-from .pointing_healpix import PointingHealpix
-
 from .mapmaker_utils import BuildNoiseWeighted
 
 
@@ -56,11 +54,10 @@ class CrossLinking(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    pointing = Instance(
+    pixel_pointing = Instance(
         klass=Operator,
         allow_none=True,
-        help="This must be an instance of a pointing operator.  "
-        "Used exclusively for pixel numbers, not pointing weights.",
+        help="This must be an instance of a pixel pointing operator.",
     )
 
     pixel_dist = Unicode(
@@ -93,31 +90,25 @@ class CrossLinking(Operator):
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
-    save_pointing = Bool(
-        False, help="If True, do not clear detector pointing matrices after use"
-    )
+    save_pointing = Bool(False, help="If True, do not clear pixel numbers after use")
 
     signal = "dummy_signal"
     weights = "crosslinking_weights"
     crosslinking_map = "crosslinking_map"
     noise_model = "uniform_noise_weights"
 
-    @traitlets.validate("pointing")
-    def _check_pointing(self, proposal):
+    @traitlets.validate("pixel_pointing")
+    def _check_pixel_pointing(self, proposal):
         pntg = proposal["value"]
         if pntg is not None:
             if not isinstance(pntg, Operator):
-                raise traitlets.TraitError("pointing should be an Operator instance")
+                raise traitlets.TraitError(
+                    "pixel_pointing should be an Operator instance"
+                )
             # Check that this operator has the traits we expect
-            for trt in [
-                "pixels",
-                "weights",
-                "create_dist",
-                "view",
-                "detector_pointing",
-            ]:
+            for trt in ["pixels", "create_dist", "view"]:
                 if not pntg.has_trait(trt):
-                    msg = "pointing operator should have a '{}' trait".format(trt)
+                    msg = f"pixel_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
         return pntg
 
@@ -136,8 +127,8 @@ class CrossLinking(Operator):
         signal[:] = 1
         weights = obs.detdata[self.weights][det]
         # Compute the detector quaternions
-        self.pointing.detector_pointing.apply(obs_data, detectors=[det])
-        quat = obs.detdata[self.pointing.detector_pointing.quats][det]
+        self.pixel_pointing.detector_pointing.apply(obs_data, detectors=[det])
+        quat = obs.detdata[self.pixel_pointing.detector_pointing.quats][det]
         # measure the scan direction wrt the local meridian for each sample
         theta, phi = qa.to_position(quat)
         theta = np.pi / 2 - theta
@@ -176,8 +167,8 @@ class CrossLinking(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        for trait in "pointing", "pixel_dist":
-            if not hasattr(self, trait):
+        for trait in "pixel_pointing", "pixel_dist":
+            if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
@@ -194,7 +185,7 @@ class CrossLinking(Operator):
         if self.pixel_dist not in data:
             pix_dist = BuildPixelDistribution(
                 pixel_dist=self.pixel_dist,
-                pointing=self.pointing,
+                pixel_pointing=self.pixel_pointing,
                 shared_flags=self.shared_flags,
                 shared_flag_mask=self.shared_flag_mask,
                 save_pointing=self.save_pointing,
@@ -207,8 +198,8 @@ class CrossLinking(Operator):
         build_zmap = BuildNoiseWeighted(
             pixel_dist=self.pixel_dist,
             zmap=self.crosslinking_map,
-            view=self.pointing.view,
-            pixels=self.pointing.pixels,
+            view=self.pixel_pointing.view,
+            pixels=self.pixel_pointing.pixels,
             weights=self.weights,
             noise_model=self.noise_model,
             det_data=self.signal,
@@ -226,7 +217,7 @@ class CrossLinking(Operator):
                 # Pointing weights
                 self._get_weights(obs_data, det)
                 # Pixel numbers
-                self.pointing.apply(obs_data, detectors=[det])
+                self.pixel_pointing.apply(obs_data, detectors=[det])
                 # Accumulate
                 build_zmap.exec(obs_data, detectors=[det])
 
@@ -235,7 +226,9 @@ class CrossLinking(Operator):
         # Write out the results
 
         fname = os.path.join(self.output_dir, f"{self.name}.fits")
-        write_healpix_fits(data[self.crosslinking_map], fname, nest=self.pointing.nest)
+        write_healpix_fits(
+            data[self.crosslinking_map], fname, nest=self.pixel_pointing.nest
+        )
         log.info_rank(f"Wrote crosslinking to {fname}", comm=data.comm.comm_world)
         data[self.crosslinking_map].clear()
         del data[self.crosslinking_map]
@@ -249,7 +242,7 @@ class CrossLinking(Operator):
         return
 
     def _requires(self):
-        req = self.pointing.detector_pointing.requires()
+        req = self.pixel_pointing.detector_pointing.requires()
         return req
 
     def _provides(self):

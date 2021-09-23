@@ -32,14 +32,18 @@ class ScanMapTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -47,8 +51,8 @@ class ScanMapTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
@@ -58,9 +62,9 @@ class ScanMapTest(MPITestCase):
         map_data = data["fake_map"]
         for ob in data.obs:
             for det in ob.local_detectors:
-                wt = ob.detdata[pointing.weights][det]
+                wt = ob.detdata[weights.weights][det]
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
-                    ob.detdata[pointing.pixels][det]
+                    ob.detdata[pixels.pixels][det]
                 )
                 for i in range(ob.n_local_samples):
                     if local_pix[i] < 0:
@@ -81,14 +85,18 @@ class ScanMapTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=obs_names.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -98,8 +106,8 @@ class ScanMapTest(MPITestCase):
 
         scanner = ops.ScanMap(
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
@@ -142,14 +150,12 @@ class ScanMapTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        pixels.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -164,7 +170,7 @@ class ScanMapTest(MPITestCase):
         scanner = ops.ScanMask(
             det_flags="mask_flags",
             det_flags_value=1,
-            pixels=pointing.pixels,
+            pixels=pixels.pixels,
             mask_key="fake_mask",
             mask_bits=1,
         )
@@ -176,7 +182,7 @@ class ScanMapTest(MPITestCase):
         for ob in data.obs:
             for det in ob.local_detectors:
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
-                    ob.detdata[pointing.pixels][det]
+                    ob.detdata[pixels.pixels][det]
                 )
                 for i in range(ob.n_local_samples):
                     if local_pix[i] < 0:

@@ -50,8 +50,11 @@ class MapmakerSolveTest(MPITestCase):
 
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
@@ -60,7 +63,8 @@ class MapmakerSolveTest(MPITestCase):
         # Build the covariance and hits
         cov_and_hits = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
         )
         cov_and_hits.apply(data)
@@ -70,7 +74,8 @@ class MapmakerSolveTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=sim_noise.det_data,
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             save_pointing=False,
         )
@@ -125,11 +130,12 @@ class MapmakerSolveTest(MPITestCase):
         np.testing.assert_equal(rhs_binned.raw.array(), check_binned.raw.array())
 
         # Scan the binned map and subtract from the original detector data.
-        pointing.apply(data)
+        pixels.apply(data)
+        weights.apply(data)
 
         scan_map = ops.ScanMap(
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key=binner.binned,
             det_data=sim_noise.det_data,
             subtract=True,
@@ -207,8 +213,11 @@ class MapmakerSolveTest(MPITestCase):
 
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
             mode="I",
             hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
@@ -217,7 +226,8 @@ class MapmakerSolveTest(MPITestCase):
         # Build the covariance and hits
         cov_and_hits = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
         )
         cov_and_hits.apply(data)
@@ -227,7 +237,8 @@ class MapmakerSolveTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=obs_names.det_data,
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             save_pointing=False,
         )

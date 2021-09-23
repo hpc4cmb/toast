@@ -1,39 +1,30 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi
-
 import os
 
-import traitlets
-
 import numpy as np
-
-import healpy as hp
-
+import traitlets
 from astropy import units as u
 
-from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
-
-from ..traits import trait_docs, Int, Unicode, Bool, Dict
-
-from ..timing import function_timer
-
+from ..mpi import MPI, use_mpi
 from ..observation import default_names as obs_names
-
-from .operator import Operator
-
-from .memory_counter import MemoryCounter
-
+from ..templates import Offset
+from ..timing import function_timer
+from ..traits import Bool, Dict, Instance, Int, Unicode, trait_docs
+from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
+from .delete import Delete
 from .madam_utils import (
     log_time_memory,
-    stage_local,
-    stage_in_turns,
-    restore_local,
     restore_in_turns,
+    restore_local,
+    stage_in_turns,
+    stage_local,
 )
-
+from .mapmaker import MapMaker
+from .memory_counter import MemoryCounter
+from .operator import Operator
 
 madam = None
 if use_mpi:
@@ -47,6 +38,74 @@ def available():
     """(bool): True if libmadam is found in the library search path."""
     global madam
     return (madam is not None) and madam.available
+
+
+def madam_params_from_mapmaker(mapmaker):
+    """Utility function that configures Madam to match the TOAST mapmaker"""
+
+    if not isinstance(mapmaker, MapMaker):
+        raise RuntimeError("Need an instance of MapMaker to configure from")
+
+    destripe_pixels = mapmaker.binning.pixel_pointing
+    map_pixels = mapmaker.map_binning.pixel_pointing
+
+    params = {
+        "nside_cross": destripe_pixels.nside,
+        "nside_map": map_pixels.nside,
+        "nside_submap": map_pixels.nside_submap,
+        "path_output": mapmaker.output_dir,
+        "write_hits": mapmaker.write_hits,
+        "write_matrix": mapmaker.write_invcov,
+        "write_wcov": mapmaker.write_cov,
+        "write_mask": mapmaker.write_rcond,
+        "info": 3,
+        "iter_max": mapmaker.iter_max,
+        "pixlim_cross": mapmaker.solve_rcond_threshold,
+        "pixlim_map": mapmaker.map_rcond_threshold,
+        "cglimit": mapmaker.convergence,
+    }
+    sync_type = mapmaker.map_binning.sync_type
+    if sync_type == "allreduce":
+        params["allreduce"] = True
+    elif sync_type == "alltoallv":
+        params["concatenate_messages"] = True
+        params["reassign_submaps"] = True
+    else:
+        msg = f"Unknown sync_type: {sync_type}"
+        raise RuntimeError(msg)
+
+    # Destriping parameters
+
+    for template in mapmaker.template_matrix.templates:
+        if isinstance(template, Offset):
+            baselines = template
+            break
+    else:
+        baselines = None
+
+    if baselines is None or not baselines.enabled:
+        params.update(
+            {
+                "write_binmap": True,
+                "write_map": False,
+                "kfirst": False,
+            }
+        )
+    else:
+        params.update(
+            {
+                "write_binmap": False,
+                "write_map": True,
+                "kfilter": baselines.use_noise_prior,
+                "kfirst": True,
+                "base_first": baselines.step_time.to_value(u.s),
+                "precond_width_min": baselines.precond_width,
+                "precond_width_max": baselines.precond_width,
+                "good_baseline_fraction": baselines.good_fraction,
+            }
+        )
+
+    return params
 
 
 @trait_docs
@@ -81,19 +140,21 @@ class Madam(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
 
-    pixels = Unicode(
-        obs_names.pixels, help="Observation detdata key for output pixel indices"
+    pixel_pointing = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a pixel pointing operator",
     )
 
-    weights = Unicode(
-        obs_names.weights, help="Observation detdata key for output weights"
+    stokes_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a Stokes weights operator",
     )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
-
-    pixels_nested = Bool(True, help="True if pixel indices are in NESTED ordering")
 
     det_out = Unicode(
         None,
@@ -110,19 +171,9 @@ class Madam(Operator):
         help="If True, clear all observation detector data after copying to madam buffers",
     )
 
-    purge_pointing = Bool(
-        False,
-        help="If True, clear all observation detector pointing data after copying to madam buffers",
-    )
-
     restore_det_data = Bool(
         False,
         help="If True, restore detector data to observations on completion",
-    )
-
-    restore_pointing = Bool(
-        False,
-        help="If True, restore detector pointing to observations on completion",
     )
 
     mcmode = Bool(
@@ -175,15 +226,6 @@ class Madam(Operator):
             )
         return check
 
-    @traitlets.validate("restore_pointing")
-    def _check_restore_pointing(self, proposal):
-        check = proposal["value"]
-        if check and not self.purge_pointing:
-            raise traitlets.TraitError(
-                "Cannot set restore_pointing since purge_pointing is False"
-            )
-        return check
-
     @traitlets.validate("det_out")
     def _check_det_out(self, proposal):
         check = proposal["value"]
@@ -192,6 +234,36 @@ class Madam(Operator):
                 "If det_out is not None, restore_det_data should be False"
             )
         return check
+
+    @traitlets.validate("pixel_pointing")
+    def _check_pixel_pointing(self, proposal):
+        pixels = proposal["value"]
+        if pixels is not None:
+            if not isinstance(pixels, Operator):
+                raise traitlets.TraitError(
+                    "pixel_pointing should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["pixels", "create_dist", "view"]:
+                if not pixels.has_trait(trt):
+                    msg = f"pixel_pointing operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return pixels
+
+    @traitlets.validate("stokes_weights")
+    def _check_stokes_weights(self, proposal):
+        weights = proposal["value"]
+        if weights is not None:
+            if not isinstance(weights, Operator):
+                raise traitlets.TraitError(
+                    "stokes_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["weights", "view"]:
+                if not weights.has_trait(trt):
+                    msg = f"stokes_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return weights
 
     @traitlets.validate("params")
     def _check_params(self, proposal):
@@ -252,24 +324,20 @@ class Madam(Operator):
                 "contain at least one observation"
             )
 
-        # Check that the detector data is set
-        if self.det_data is None:
-            raise RuntimeError("You must set the det_data trait before calling exec()")
+        for trait in "det_data", "pixel_pointing", "stokes_weights":
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
-        # Check that the pointing is set
-        if self.pixels is None or self.weights is None:
-            raise RuntimeError(
-                "You must set the pixels and weights before calling exec()"
-            )
+        #
 
         # Combine parameters from an external file and other parameters passed in
 
-        params = None
+        params = dict()
         repeat_keys = ["detset", "detset_nopol", "survey"]
 
         if self.paramfile is not None:
             if data.comm.world_rank == 0:
-                params = dict()
                 line_pat = re.compile(r"(\S+)\s+=\s+(\S+)")
                 comment_pat = re.compile(r"^\s*\#.*")
                 with open(self.paramfile, "r") as f:
@@ -296,8 +364,14 @@ class Madam(Operator):
                         params[k].append(v)
                 else:
                     params[k] = v
-        else:
-            params = dict(self.params)
+
+        if self.params is not None:
+            params.update(self.params)
+
+        if "fsample" not in params:
+            params["fsample"] = data.obs[0].telescope.focalplane.sample_rate.to_value(
+                u.Hz
+            )
 
         # Set madam parameters that depend on our traits
         if self.mcmode:
@@ -322,13 +396,12 @@ class Madam(Operator):
             nnz_stride,
             interval_starts,
             psd_freqs,
-            nside,
         ) = self._prepare(params, data, detectors)
 
         if data.comm.world_rank == 0:
             msg = "{} Copying toast data to buffers".format(self._logprefix)
             log.info(msg)
-        psdinfo, signal_dtype, pixels_dtype, weight_dtype = self._stage_data(
+        psdinfo, signal_dtype = self._stage_data(
             params,
             data,
             all_dets,
@@ -338,7 +411,6 @@ class Madam(Operator):
             nnz_stride,
             interval_starts,
             psd_freqs,
-            nside,
         )
 
         if data.comm.world_rank == 0:
@@ -358,9 +430,6 @@ class Madam(Operator):
             nnz_full,
             interval_starts,
             signal_dtype,
-            pixels_dtype,
-            nside,
-            weight_dtype,
         )
 
         return
@@ -374,7 +443,7 @@ class Madam(Operator):
             "shared": [
                 self.times,
             ],
-            "detdata": [self.det_data, self.pixels, self.weights],
+            "detdata": [self.det_data],
             "intervals": list(),
         }
         if self.view is not None:
@@ -401,11 +470,7 @@ class Madam(Operator):
         timer = Timer()
         timer.start()
 
-        if "nside_map" not in params:
-            raise RuntimeError(
-                "Madam 'nside_map' must be set in the parameter dictionary"
-            )
-        nside = int(params["nside_map"])
+        params["nside_map"] = self.pixel_pointing.nside
 
         # Madam requires a fixed set of detectors and pointing matrix non-zeros.
         # Here we find the superset of local detectors used, and also the number
@@ -447,16 +512,6 @@ class Madam(Operator):
                     self.det_data, ob.name
                 )
                 raise RuntimeError(msg)
-            if self.pixels not in ob.detdata:
-                msg = "Detector pixels '{}' does not exist in observation '{}'".format(
-                    self.pixels, ob.name
-                )
-                raise RuntimeError(msg)
-            if self.weights not in ob.detdata:
-                msg = "Detector data '{}' does not exist in observation '{}'".format(
-                    self.weights, ob.name
-                )
-                raise RuntimeError(msg)
 
             # Check that the noise model exists, and that the PSD frequencies are the
             # same across all observations (required by Madam).
@@ -478,23 +533,6 @@ class Madam(Operator):
                     raise RuntimeError(
                         "All PSDs passed to Madam must have the same frequency binning."
                     )
-
-            # Get the number of pointing weights and verify that it is constant
-            # across observations.
-            ob_nnz = None
-            if len(ob.detdata[self.weights].detector_shape) == 1:
-                # The pointing weights just have one dimension (samples)
-                ob_nnz = 1
-            else:
-                ob_nnz = ob.detdata[self.weights].detector_shape[-1]
-
-            if nnz_full is None:
-                nnz_full = ob_nnz
-            elif ob_nnz != nnz_full:
-                msg = "observation '{}' has {} pointing weights per sample, not {}".format(
-                    ob.name, ob_nnz, nnz_full
-                )
-                raise RuntimeError(msg)
 
             # Are we using a view of the data?  If so, we will only be copying data in
             # those valid intervals.
@@ -527,7 +565,7 @@ class Madam(Operator):
         all_dets = list(all_dets)
         ndet = len(all_dets)
 
-        nnz = None
+        nnz_full = len(self.stokes_weights.mode)
         nnz_stride = None
         if "temperature_only" in params and params["temperature_only"] in [
             "T",
@@ -571,7 +609,6 @@ class Madam(Operator):
             nnz_stride,
             interval_starts,
             psd_freqs,
-            nside,
         )
 
     @function_timer
@@ -586,7 +623,6 @@ class Madam(Operator):
         nnz_stride,
         interval_starts,
         psd_freqs,
-        nside,
     ):
         """Create madam-compatible buffers.
 
@@ -603,7 +639,7 @@ class Madam(Operator):
 
         # Determine how many processes per node should copy at once.
         n_copy_groups = 1
-        if self.purge_det_data or self.purge_pointing:
+        if self.purge_det_data:
             # We will be purging some data- see if we should reduce the number of
             # processes copying in parallel (if we are not purging data, there
             # is no benefit to staggering the copy).
@@ -753,91 +789,57 @@ class Madam(Operator):
 
         # Copy the pointing
 
-        pixels_dtype = data.obs[0].detdata[self.pixels].dtype
-        weight_dtype = data.obs[0].detdata[self.weights].dtype
+        nested_pointing = self.pixel_pointing.nest
+        if not nested_pointing:
+            # Any existing pixel numbers are in the wrong ordering
+            Delete(detdata=[self.pixel_pointing.pixels]).apply(data)
+            self.pixel_pointing.nest = True
 
         if not self._cached:
             # We do not have the pointing yet.
-            if self.purge_pointing:
-                # Allocate in a staggered way.
-                self._madam_pixels_raw, self._madam_pixels = stage_in_turns(
-                    data,
-                    nodecomm,
-                    n_copy_groups,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.pixels,
-                    madam.PIXEL_TYPE,
-                    interval_starts,
-                    1,
-                    1,
-                    self.shared_flags,
-                    self.shared_flag_mask,
-                    self.det_flags,
-                    self.det_flag_mask,
-                )
+            storage, _ = dtype_to_aligned(madam.PIXEL_TYPE)
+            self._madam_pixels_raw = storage.zeros(nsamp * len(all_dets))
+            self._madam_pixels = self._madam_pixels_raw.array()
 
-                self._madam_pixweights_raw, self._madam_pixweights = stage_in_turns(
-                    data,
-                    nodecomm,
-                    n_copy_groups,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.weights,
-                    madam.WEIGHT_TYPE,
-                    interval_starts,
-                    nnz,
-                    nnz_stride,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-            else:
-                # Allocate and copy all at once.
-                storage, _ = dtype_to_aligned(madam.PIXEL_TYPE)
-                self._madam_pixels_raw = storage.zeros(nsamp * len(all_dets))
-                self._madam_pixels = self._madam_pixels_raw.array()
+            stage_local(
+                data,
+                nsamp,
+                self.view,
+                all_dets,
+                self.pixel_pointing.pixels,
+                self._madam_pixels,
+                interval_starts,
+                1,
+                1,
+                self.shared_flags,
+                self.shared_flag_mask,
+                self.det_flags,
+                self.det_flag_mask,
+                do_purge=True,
+                operator=self.pixel_pointing,
+            )
 
-                stage_local(
-                    data,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.pixels,
-                    self._madam_pixels,
-                    interval_starts,
-                    1,
-                    1,
-                    self.shared_flags,
-                    self.shared_flag_mask,
-                    self.det_flags,
-                    self.det_flag_mask,
-                    do_purge=False,
-                )
+            storage, _ = dtype_to_aligned(madam.WEIGHT_TYPE)
+            self._madam_pixweights_raw = storage.zeros(nsamp * len(all_dets) * nnz)
+            self._madam_pixweights = self._madam_pixweights_raw.array()
 
-                storage, _ = dtype_to_aligned(madam.WEIGHT_TYPE)
-                self._madam_pixweights_raw = storage.zeros(nsamp * len(all_dets) * nnz)
-                self._madam_pixweights = self._madam_pixweights_raw.array()
-
-                stage_local(
-                    data,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.weights,
-                    self._madam_pixweights,
-                    interval_starts,
-                    nnz,
-                    nnz_stride,
-                    None,
-                    None,
-                    None,
-                    None,
-                    do_purge=False,
-                )
+            stage_local(
+                data,
+                nsamp,
+                self.view,
+                all_dets,
+                self.stokes_weights.weights,
+                self._madam_pixweights,
+                interval_starts,
+                nnz,
+                nnz_stride,
+                None,
+                None,
+                None,
+                None,
+                do_purge=True,
+                operator=self.stokes_weights,
+            )
 
             log_time_memory(
                 data,
@@ -847,6 +849,11 @@ class Madam(Operator):
                 mem_msg="After pointing staging",
                 full_mem=self.mem_report,
             )
+
+        if not nested_pointing:
+            # Any existing pixel numbers are in the wrong ordering
+            Delete(detdata=[self.pixel_pointing.pixels]).apply(data)
+            self.pixel_pointing.nest = False
 
         psdinfo = None
 
@@ -898,7 +905,7 @@ class Madam(Operator):
         timer.stop()
         del nodecomm
 
-        return psdinfo, signal_dtype, pixels_dtype, weight_dtype
+        return psdinfo, signal_dtype
 
     @function_timer
     def _unstage_data(
@@ -911,9 +918,6 @@ class Madam(Operator):
         nnz_full,
         interval_starts,
         signal_dtype,
-        pixels_dtype,
-        nside,
-        weight_dtype,
     ):
         """
         Restore data to TOAST observations.
@@ -931,7 +935,7 @@ class Madam(Operator):
 
         # Determine how many processes per node should copy at once.
         n_copy_groups = 1
-        if self.purge_det_data or self.purge_pointing:
+        if self.purge_det_data:
             # We MAY be restoring some data- see if we should reduce the number of
             # processes copying in parallel (if we are not purging data, there
             # is no benefit to staggering the copy).
@@ -970,8 +974,6 @@ class Madam(Operator):
                     self._madam_signal_raw,
                     interval_starts,
                     1,
-                    0,
-                    True,
                 )
                 del self._madam_signal
                 del self._madam_signal_raw
@@ -987,8 +989,6 @@ class Madam(Operator):
                     self._madam_signal,
                     interval_starts,
                     1,
-                    0,
-                    True,
                 )
 
             log_time_memory(
@@ -1002,83 +1002,12 @@ class Madam(Operator):
 
         # Copy the pointing
 
-        if self.purge_pointing and self.restore_pointing:
-            # We previously purged it AND we want it back.
-            if not self.mcmode:
-                # We are not running multiple realizations, so delete as we copy.
-                restore_in_turns(
-                    data,
-                    nodecomm,
-                    n_copy_groups,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.pixels,
-                    pixels_dtype,
-                    self._madam_pixels,
-                    self._madam_pixels_raw,
-                    interval_starts,
-                    1,
-                    nside,
-                    self.pixels_nested,
-                )
-                del self._madam_pixels
-                del self._madam_pixels_raw
-                restore_in_turns(
-                    data,
-                    nodecomm,
-                    n_copy_groups,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.weights,
-                    weight_dtype,
-                    self._madam_pixweights,
-                    self._madam_pixweights_raw,
-                    interval_starts,
-                    nnz,
-                    0,
-                    True,
-                )
-                del self._madam_pixweights
-                del self._madam_pixweights_raw
-            else:
-                # We want to re-use the pointing, just copy.
-                restore_local(
-                    data,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.pixels,
-                    pixels_dtype,
-                    self._madam_pixels,
-                    interval_starts,
-                    1,
-                    nside,
-                    self.pixels_nested,
-                )
-                restore_local(
-                    data,
-                    nsamp,
-                    self.view,
-                    all_dets,
-                    self.weights,
-                    weight_dtype,
-                    self._madam_pixweights,
-                    interval_starts,
-                    nnz,
-                    0,
-                    True,
-                )
-
-            log_time_memory(
-                data,
-                timer=timer,
-                timer_msg="Copy pointing",
-                prefix=self._logprefix,
-                mem_msg="After restoring pointing",
-                full_mem=self.mem_report,
-            )
+        if not self.mcmode:
+            # We can clear the cached pointing
+            del self._madam_pixels
+            del self._madam_pixels_raw
+            del self._madam_pixweights
+            del self._madam_pixweights_raw
 
         del nodecomm
         return

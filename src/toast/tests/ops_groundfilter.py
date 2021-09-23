@@ -37,17 +37,6 @@ class GroundFilterTest(MPITestCase):
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
-        # Create some detector pointing matrices
-        detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
-            nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
-            create_dist="pixel_dist",
-            detector_pointing=detpointing,
-        )
-        pointing.apply(data)
-
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
@@ -103,17 +92,6 @@ class GroundFilterTest(MPITestCase):
 
         # Create a fake satellite data set for testing
         data = create_ground_data(self.comm)
-
-        # Create some detector pointing matrices
-        detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
-            nside=64,
-            mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
-            create_dist="pixel_dist",
-            detector_pointing=detpointing,
-        )
-        pointing.apply(data)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")

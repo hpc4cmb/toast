@@ -77,10 +77,16 @@ class BinMap(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
-    pointing = Instance(
+    pixel_pointing = Instance(
         klass=Operator,
         allow_none=True,
-        help="This must be an instance of a pointing operator",
+        help="This must be an instance of a pixel pointing operator",
+    )
+
+    stokes_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a Stokes weights operator",
     )
 
     pre_process = Instance(
@@ -115,18 +121,35 @@ class BinMap(Operator):
             raise traitlets.TraitError("Invalid communication algorithm")
         return check
 
-    @traitlets.validate("pointing")
-    def _check_pointing(self, proposal):
-        pntg = proposal["value"]
-        if pntg is not None:
-            if not isinstance(pntg, Operator):
-                raise traitlets.TraitError("pointing should be an Operator instance")
+    @traitlets.validate("pixel_pointing")
+    def _check_pixel_pointing(self, proposal):
+        pixels = proposal["value"]
+        if pixels is not None:
+            if not isinstance(pixels, Operator):
+                raise traitlets.TraitError(
+                    "pixel_pointing should be an Operator instance"
+                )
             # Check that this operator has the traits we expect
-            for trt in ["pixels", "weights", "create_dist", "view"]:
-                if not pntg.has_trait(trt):
-                    msg = "pointing operator should have a '{}' trait".format(trt)
+            for trt in ["pixels", "create_dist", "view"]:
+                if not pixels.has_trait(trt):
+                    msg = f"pixel_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
-        return pntg
+        return pixels
+
+    @traitlets.validate("stokes_weights")
+    def _check_stokes_weights(self, proposal):
+        weights = proposal["value"]
+        if weights is not None:
+            if not isinstance(weights, Operator):
+                raise traitlets.TraitError(
+                    "stokes_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["weights", "view"]:
+                if not weights.has_trait(trt):
+                    msg = f"stokes_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return weights
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -135,11 +158,16 @@ class BinMap(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        for trait in "pixel_pointing", "stokes_weights":
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
+
         if data.comm.world_rank == 0:
             log.verbose("  BinMap building pipeline")
 
         if self.covariance not in data:
-            msg = "Data does not contain noise covariance '{}'".format(self.covariance)
+            msg = f"Data does not contain noise covariance '{self.covariance}'"
             log.error(msg)
             raise RuntimeError(msg)
 
@@ -151,23 +179,25 @@ class BinMap(Operator):
 
         # Sanity check that the covariance pixel distribution agrees
         if cov.distribution != data[self.pixel_dist]:
-            msg = "Pixel distribution '{}' does not match the one used by covariance '{}'".format(
-                self.pixel_dist, self.covariance
+            msg = (
+                f"Pixel distribution '{self.pixel_dist}' does not match the one "
+                f"used by covariance '{self.covariance}'"
             )
             log.error(msg)
             raise RuntimeError(msg)
 
         # Set outputs of the pointing operator
 
-        self.pointing.create_dist = None
+        self.pixel_pointing.create_dist = None
 
         # If the binned map already exists in the data, verify the distribution and
         # reset to zero.
 
         if self.binned in data:
             if data[self.binned].distribution != data[self.pixel_dist]:
-                msg = "Pixel distribution '{}' does not match existing binned map '{}'".format(
-                    self.pixel_dist, self.binned
+                msg = (
+                    f"Pixel distribution '{self.pixel_dist}' does not match "
+                    f"existing binned map '{self.binned}'"
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
@@ -179,9 +209,9 @@ class BinMap(Operator):
         build_zmap = BuildNoiseWeighted(
             pixel_dist=self.pixel_dist,
             zmap=self.binned,
-            view=self.pointing.view,
-            pixels=self.pointing.pixels,
-            weights=self.pointing.weights,
+            view=self.pixel_pointing.view,
+            pixels=self.pixel_pointing.pixels,
+            weights=self.stokes_weights.weights,
             noise_model=self.noise_model,
             det_data=self.det_data,
             det_flags=self.det_flags,
@@ -201,7 +231,7 @@ class BinMap(Operator):
         else:
             # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
-        accum_ops.extend([self.pointing, build_zmap])
+        accum_ops.extend([self.pixel_pointing, self.stokes_weights, build_zmap])
 
         accum.operators = accum_ops
 
@@ -227,7 +257,8 @@ class BinMap(Operator):
         return
 
     def _requires(self):
-        req = self.pointing.requires()
+        req = self.pixel_pointing.requires()
+        req.update(self.stokes_weights.requires())
         req["meta"].extend([self.noise_model, self.pixel_dist, self.covariance])
         req["detdata"].extend([self.det_data])
         if self.det_flags is not None:

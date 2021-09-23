@@ -682,15 +682,15 @@ def scan_map(args, rank, job_ops, data, log):
     """
     if job_ops.scan_map.enabled:
         # Use the final pointing model if it is enabled
-        pointing = job_ops.pointing
-        if job_ops.pointing_final.enabled:
-            pointing = job_ops.pointing_final
+        pixels = job_ops.pixels
+        weights = job_ops.weights
+        if job_ops.pixels_final.enabled:
+            pixels = job_ops.pixels_final
         # creates a map and puts it in args.input_map
-        create_input_maps(
-            args.input_map, pointing.nside, rank, log, args.print_input_map
-        )
+        create_input_maps(args.input_map, pixels.nside, rank, log, args.print_input_map)
         job_ops.scan_map.pixel_dist = job_ops.binner_final.pixel_dist
-        job_ops.scan_map.pointing = pointing
+        job_ops.scan_map.pixel_pointing = pixels
+        job_ops.scan_map.stokes_weights = weights
         job_ops.scan_map.save_pointing = job_ops.binner_final.full_pointing
         job_ops.scan_map.file = args.input_map
         job_ops.scan_map.apply(data)
@@ -706,7 +706,8 @@ def run_mapmaker(job_ops, args, tmpls, data):
 
     job_ops.mapmaker.binning = job_ops.binner
     job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(
-        templates=[tmpls.baselines]
+        templates=[tmpls.baselines],
+        view=job_ops.pixels_final.view,
     )
     job_ops.mapmaker.map_binning = job_ops.binner_final
     job_ops.mapmaker.det_data = job_ops.sim_noise.det_data
@@ -714,6 +715,25 @@ def run_mapmaker(job_ops, args, tmpls, data):
 
     # Run the map making
     job_ops.mapmaker.apply(data)
+
+
+def run_madam(job_ops, args, tmpls, data):
+    """
+    Apply the Madam mapmaker using TOAST mapmaker configuration
+    """
+
+    job_ops.mapmaker.binning = job_ops.binner
+    job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(
+        templates=[tmpls.baselines],
+        view=job_ops.pixels_final.view,
+    )
+    job_ops.mapmaker.map_binning = job_ops.binner_final
+    job_ops.mapmaker.output_dir = args.out_dir
+
+    job_ops.madam.params = toast.ops.madam_params_from_mapmaker(job_ops.mapmaker)
+    job_ops.madam.pixel_pointing = job_ops.pixels_final
+    job_ops.madam.stokes_weights = job_ops.weights
+    job_ops.madam.apply(data)
 
 
 def compute_science_metric(args, runtime, n_nodes, rank, log):

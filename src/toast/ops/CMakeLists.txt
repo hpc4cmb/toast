@@ -25,7 +25,6 @@ install(FILES
     gainscrambler.py
     pointing.py
     pointing_detector.py
-    pointing_healpix.py
     scan_map.py
     scan_healpix.py
     mapmaker_utils.py
@@ -51,5 +50,8 @@ install(FILES
     flag_sso.py
     crosslinking.py
     sss.py
+    demodulation.py
+    stokes_weights.py
+    pixels_healpix.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

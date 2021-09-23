@@ -58,31 +58,55 @@ class ScanHealpix(Operator):
         help="The Data key where the PixelDistribution object is located",
     )
 
-    pointing = Instance(
+    pixel_pointing = Instance(
         klass=Operator,
         allow_none=True,
-        help="This must be an instance of a pointing operator",
+        help="This must be an instance of a pixel pointing operator",
+    )
+
+    stokes_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a Stokes weights operator",
     )
 
     save_map = Bool(False, help="If True, do not delete map during finalize")
 
     save_pointing = Bool(
         False,
-        help="If True, do not clear detector pointing matrices if we generate the pixel distribution",
+        help="If True, do not clear detector pointing matrices if we "
+        "generate the pixel distribution",
     )
 
-    @traitlets.validate("pointing")
-    def _check_pointing(self, proposal):
-        pntg = proposal["value"]
-        if pntg is not None:
-            if not isinstance(pntg, Operator):
-                raise traitlets.TraitError("pointing should be an Operator instance")
+    @traitlets.validate("pixel_pointing")
+    def _check_pixel_pointing(self, proposal):
+        pixels = proposal["value"]
+        if pixels is not None:
+            if not isinstance(pixels, Operator):
+                raise traitlets.TraitError(
+                    "pixel_pointing should be an Operator instance"
+                )
             # Check that this operator has the traits we expect
-            for trt in ["pixels", "weights", "create_dist", "view"]:
-                if not pntg.has_trait(trt):
-                    msg = "pointing operator should have a '{}' trait".format(trt)
+            for trt in ["pixels", "create_dist", "view"]:
+                if not pixels.has_trait(trt):
+                    msg = f"pixel_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
-        return pntg
+        return pixels
+
+    @traitlets.validate("stokes_weights")
+    def _check_stokes_weights(self, proposal):
+        weights = proposal["value"]
+        if weights is not None:
+            if not isinstance(weights, Operator):
+                raise traitlets.TraitError(
+                    "stokes_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["weights", "view"]:
+                if not weights.has_trait(trt):
+                    msg = f"stokes_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return weights
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -101,7 +125,7 @@ class ScanHealpix(Operator):
         if self.pixel_dist not in data:
             pix_dist = BuildPixelDistribution(
                 pixel_dist=self.pixel_dist,
-                pointing=self.pointing,
+                pixel_pointing=self.pixel_pointing,
                 save_pointing=self.save_pointing,
             )
             pix_dist.apply(data)
@@ -110,15 +134,15 @@ class ScanHealpix(Operator):
         if not isinstance(dist, PixelDistribution):
             raise RuntimeError("The pixel_dist must be a PixelDistribution instance")
 
-        # Use the pixel distribution and pointing configuration to allocate our
+        # Use the pixel odistribution and pointing configuration to allocate our
         # map data and read it in.
         nnz = None
-        if self.pointing.mode == "I":
+        if self.stokes_weights.mode == "I":
             nnz = 1
-        elif self.pointing.mode == "IQU":
+        elif self.stokes_weights.mode == "IQU":
             nnz = 3
         else:
-            msg = "Unknown healpix pointing mode '{}'".format(self.pointing.mode)
+            msg = "Unknown Stokes weights mode '{}'".format(self.stokes_weights.mode)
             raise RuntimeError(msg)
 
         # Create our map to scan named after our own operator name.  Generally the
@@ -127,7 +151,9 @@ class ScanHealpix(Operator):
         # timestreams.
         if self.map_name not in data:
             data[self.map_name] = PixelData(dist, dtype=np.float32, n_value=nnz)
-            read_healpix_fits(data[self.map_name], self.file, nest=self.pointing.nest)
+            read_healpix_fits(
+                data[self.map_name], self.file, nest=self.pixel_pointing.nest
+            )
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.
@@ -145,8 +171,8 @@ class ScanHealpix(Operator):
 
         scanner = ScanMap(
             det_data=self.det_data,
-            pixels=self.pointing.pixels,
-            weights=self.pointing.weights,
+            pixels=self.pixel_pointing.pixels,
+            weights=self.stokes_weights.weights,
             map_key=self.map_name,
             subtract=self.subtract,
             zero=self.zero,
@@ -154,7 +180,8 @@ class ScanHealpix(Operator):
 
         # Build and run a pipeline that scans from our map
         scan_pipe = Pipeline(
-            detector_sets=["SINGLE"], operators=[self.pointing, scanner]
+            detector_sets=["SINGLE"],
+            operators=[self.pixel_pointing, self.stokes_weights, scanner],
         )
         scan_pipe.apply(data, detectors=detectors)
 
@@ -168,7 +195,8 @@ class ScanHealpix(Operator):
         return
 
     def _requires(self):
-        req = self.pointing.requires()
+        req = self.pixel_pointing.requires()
+        req.update(self.stokes_weights.requires())
         return req
 
     def _provides(self):

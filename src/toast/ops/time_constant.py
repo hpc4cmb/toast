@@ -74,7 +74,7 @@ class TimeConstant(Operator):
                 key=(key1, key2),
                 counter=(counter1, counter2),
             )[0]
-            tau *= 1 + x * self.tau_sigma
+            tau = tau * (1 + x * self.tau_sigma)
         return tau
 
     @function_timer

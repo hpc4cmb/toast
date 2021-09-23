@@ -37,7 +37,6 @@ from .noise_weight import NoiseWeight
 from .gainscrambler import GainScrambler
 
 from .pointing_detector import PointingDetectorSimple
-from .pointing_healpix import PointingHealpix
 
 from .scan_map import ScanMap, ScanMask, ScanScale
 
@@ -60,7 +59,7 @@ from .mapmaker_templates import TemplateMatrix
 
 from .mapmaker import MapMaker
 
-from .madam import Madam
+from .madam import Madam, madam_params_from_mapmaker
 
 from .conviqt import SimConviqt, SimWeightedConviqt
 
@@ -92,3 +91,9 @@ from .flag_sso import FlagSSO
 from .crosslinking import CrossLinking
 
 from .sss import SimScanSynchronousSignal
+
+from .demodulation import Demodulate, StokesWeightsDemod
+
+from .stokes_weights import StokesWeights
+
+from .pixels_healpix import PixelsHealpix

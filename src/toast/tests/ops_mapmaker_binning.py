@@ -53,8 +53,11 @@ class MapmakerBinningTest(MPITestCase):
 
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
@@ -65,7 +68,8 @@ class MapmakerBinningTest(MPITestCase):
             # Build the covariance and hits
             cov_and_hits = ops.CovarianceAndHits(
                 pixel_dist="pixel_dist",
-                pointing=pointing,
+                pixel_pointing=pixels,
+                stokes_weights=weights,
                 noise_model="noise_model",
                 covariance="cov_{}".format(stype),
                 hits="hits_{}".format(stype),
@@ -81,7 +85,8 @@ class MapmakerBinningTest(MPITestCase):
                 covariance=cov_and_hits.covariance,
                 binned="binned_{}".format(stype),
                 det_data=sim_noise.det_data,
-                pointing=pointing,
+                pixel_pointing=pixels,
+                stokes_weights=weights,
                 noise_model=default_model.noise_model,
                 sync_type=stype,
             )
@@ -104,13 +109,14 @@ class MapmakerBinningTest(MPITestCase):
 
         # Manual check
 
-        pointing.apply(data)
+        pixels.apply(data)
+        weights.apply(data)
 
         noise_weight = ops.BuildNoiseWeighted(
             pixel_dist="pixel_dist",
             noise_model=default_model.noise_model,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             det_data=sim_noise.det_data,
             zmap="zmap",
             sync_type="allreduce",
@@ -155,10 +161,13 @@ class MapmakerBinningTest(MPITestCase):
 
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
-            mode="IQU",
             nest=True,
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
+            mode="IQU",
             hwp_angle=obs_names.hwp_angle,
             detector_pointing=detpointing,
         )
@@ -166,7 +175,8 @@ class MapmakerBinningTest(MPITestCase):
         # Build the covariance and hits
         cov_and_hits = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
@@ -179,7 +189,8 @@ class MapmakerBinningTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=sim_noise.det_data,
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
@@ -203,9 +214,9 @@ class MapmakerBinningTest(MPITestCase):
         pars["iter_max"] = 10
         pars["base_first"] = 1.0
         pars["fsample"] = sample_rate
-        pars["nside_map"] = pointing.nside
-        pars["nside_cross"] = pointing.nside
-        pars["nside_submap"] = min(8, pointing.nside)
+        pars["nside_map"] = pixels.nside
+        pars["nside_cross"] = pixels.nside
+        pars["nside_submap"] = min(8, pixels.nside)
         pars["pixlim_cross"] = 1.0e-6
         pars["pixlim_map"] = 1.0e-6
         pars["write_map"] = "F"
@@ -219,14 +230,14 @@ class MapmakerBinningTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
-            pixels_nested=pointing.nest,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model="noise_model",
         )
 
         # Generate persistent pointing
-        pointing.apply(data)
+        pixels.apply(data)
+        weights.apply(data)
 
         # Run Madam
         madam.apply(data)

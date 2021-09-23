@@ -25,6 +25,7 @@ from toast.scripts.benchmarking_utilities import (
     make_focalplane,
     scan_map,
     run_mapmaker,
+    run_madam,
     compute_science_metric,
     estimate_memory_overhead,
     python_startup_time,
@@ -94,6 +95,14 @@ def parse_arguments():
         action="store_true",
         help="Save simulated data to SPT3G format.",
     )
+    if toast.ops.madam.available():
+        parser.add_argument(
+            "--madam",
+            required=False,
+            default=False,
+            action="store_true",
+            help="Apply the Madam mapmaker in place of the TOAST mapmaker.",
+        )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
@@ -132,7 +141,8 @@ def parse_arguments():
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, tau=5 * u.ms
         ),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU", nside=4096),
+        toast.ops.PixelsHealpix(name="pixels", view="scanning"),
+        toast.ops.StokesWeights(name="weights", mode="IQU"),
         toast.ops.FlagSSO(name="flag_sso"),
         toast.ops.Statistics(name="raw_statistics"),
         toast.ops.TimeConstant(
@@ -157,12 +167,15 @@ def parse_arguments():
             write_invcov=False,
             write_rcond=False,
         ),
-        toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
+        toast.ops.PixelsHealpix(name="pixels_final", view="scanning", enabled=False),
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
         toast.ops.MemoryCounter(name="mem_count"),
     ]
+
+    if toast.ops.madam.available():
+        operators.append(toast.ops.Madam(name="madam"))
 
     # Templates we want to configure from the command line or a parameter file.
     templates = [toast.templates.Offset(name="baselines")]
@@ -207,7 +220,8 @@ def parse_arguments():
     args.schedule_stop = "2027-12-31 00:00:00"
 
     # scan map
-    args.input_map = "fake_input_sky.fits"
+    args.nside = 4096
+    args.input_map = f"fake_input_sky_nside{args.nside}.fits"
 
     return config, args, jobargs
 
@@ -378,13 +392,13 @@ def main():
     # Estimate per-process memory use from map domain objects and
     # other sources.
     nside_final = None
-    if job_ops.pointing_final.enabled:
-        nside_final = job_ops.pointing_final.nside
+    if job_ops.pixels_final.enabled:
+        nside_final = job_ops.pixels_final.nside
     overhead_bytes = estimate_memory_overhead(
         n_procs,
         n_nodes,
         0.4,
-        job_ops.pointing.nside,
+        job_ops.pixels.nside,
         world_comm,
         nside_final=nside_final,
         sim_atmosphere=job_ops.sim_atmosphere,
@@ -458,18 +472,25 @@ def main():
     log.info_rank("Created elevation noise model in", comm=world_comm, timer=timer)
 
     # Set the pointing matrix operators to use the detector pointing
-    job_ops.pointing.detector_pointing = job_ops.det_pointing_radec
-    job_ops.pointing_final.detector_pointing = job_ops.det_pointing_radec
+    job_ops.pixels.nside = args.nside
+    job_ops.pixels.detector_pointing = job_ops.det_pointing_radec
+    job_ops.weights.detector_pointing = job_ops.det_pointing_radec
+    job_ops.pixels_final.nside = args.nside
+    job_ops.pixels_final.detector_pointing = job_ops.det_pointing_radec
+    job_ops.pixels.view = "scanning"
+    job_ops.pixels_final.view = "scanning"
 
     # If we are not using a different pointing matrix for our final binning, then
     # use the same one as the solve.
-    job_ops.binner.pointing = job_ops.pointing
-    if not job_ops.pointing_final.enabled:
-        job_ops.pointing_final = job_ops.pointing
+    job_ops.binner.pixel_pointing = job_ops.pixels
+    job_ops.binner.stokes_weights = job_ops.weights
+    if not job_ops.pixels_final.enabled:
+        job_ops.pixels_final = job_ops.pixels
 
     # If we are not using a different binner for our final binning, use the same one
     # as the solve.
-    job_ops.binner_final.pointing = job_ops.pointing_final
+    job_ops.binner_final.pixel_pointing = job_ops.pixels_final
+    job_ops.binner_final.stokes_weights = job_ops.weights
     if not job_ops.binner_final.enabled:
         job_ops.binner_final = job_ops.binner
 
@@ -542,8 +563,11 @@ def main():
     job_ops.filtered_statistics.output_dir = args.out_dir
     job_ops.filtered_statistics.apply(data)
 
-    # Build up our map-making operation.
-    run_mapmaker(job_ops, args, job.templates, data)
+    # Destripe and/or bin TOD
+    if toast.ops.madam.available() and args.madam:
+        run_madam(job_ops, args, job.templates, data)
+    else:
+        run_mapmaker(job_ops, args, job.templates, data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     job_ops.mem_count.prefix = "After Map Making"

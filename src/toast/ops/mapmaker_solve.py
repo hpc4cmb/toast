@@ -87,7 +87,13 @@ class SolverRHS(Operator):
             if not isinstance(bin, Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["pointing", "det_data", "binned", "full_pointing"]:
+            for trt in [
+                "pixel_pointing",
+                "stokes_weights",
+                "det_data",
+                "binned",
+                "full_pointing",
+            ]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
@@ -170,7 +176,8 @@ class SolverRHS(Operator):
         det_temp = "temp_RHS"
 
         # Use the same pointing operator as the binning
-        pointing = self.binning.pointing
+        pixels = self.binning.pixel_pointing
+        weights = self.binning.stokes_weights
 
         # Optionally Copy data to a temporary location to avoid overwriting the input.
         copy_det = None
@@ -188,9 +195,9 @@ class SolverRHS(Operator):
 
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
-            pixels=pointing.pixels,
-            weights=pointing.weights,
-            view=pointing.view,
+            pixels=pixels.pixels,
+            weights=weights.weights,
+            view=pixels.view,
             map_key=self.binning.binned,
             det_data=detdata_name,
             subtract=True,
@@ -200,13 +207,13 @@ class SolverRHS(Operator):
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
             det_data=detdata_name,
-            view=pointing.view,
+            view=pixels.view,
         )
 
         # Set up template matrix operator.
         self.template_matrix.transpose = True
         self.template_matrix.det_data = detdata_name
-        self.template_matrix.view = pointing.view
+        self.template_matrix.view = pixels.view
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
@@ -234,7 +241,8 @@ class SolverRHS(Operator):
                 oplist.append(copy_det)
             oplist.extend(
                 [
-                    pointing,
+                    pixels,
+                    weights,
                     scan_map,
                     noise_weight,
                     self.template_matrix,
@@ -337,7 +345,13 @@ class SolverLHS(Operator):
             if not isinstance(bin, Operator):
                 raise traitlets.TraitError("binning should be an Operator instance")
             # Check that this operator has the traits we expect
-            for trt in ["pointing", "det_data", "binned", "full_pointing"]:
+            for trt in [
+                "pixel_pointing",
+                "stokes_weights",
+                "det_data",
+                "binned",
+                "full_pointing",
+            ]:
                 if not bin.has_trait(trt):
                     msg = "binning operator should have a '{}' trait".format(trt)
                     raise traitlets.TraitError(msg)
@@ -402,7 +416,8 @@ class SolverLHS(Operator):
             raise RuntimeError("You must set the 'out' trait before calling exec()")
 
         # Pointing operator used in the binning
-        pointing = self.binning.pointing
+        pixels = self.binning.pixel_pointing
+        weights = self.binning.stokes_weights
 
         # Project amplitudes into timestreams and make a binned map.
 
@@ -411,7 +426,7 @@ class SolverLHS(Operator):
 
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
-        self.template_matrix.view = pointing.view
+        self.template_matrix.view = pixels.view
 
         self.binning.det_data = self.det_temp
 
@@ -442,9 +457,9 @@ class SolverLHS(Operator):
 
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
-            pixels=pointing.pixels,
-            weights=pointing.weights,
-            view=pointing.view,
+            pixels=pixels.pixels,
+            weights=weights.weights,
+            view=pixels.view,
             map_key=self.binning.binned,
             det_data=self.det_temp,
             subtract=True,
@@ -454,7 +469,7 @@ class SolverLHS(Operator):
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
             det_data=self.det_temp,
-            view=pointing.view,
+            view=pixels.view,
         )
 
         # Make a copy of the template_matrix operator so that we can apply both the
@@ -485,7 +500,8 @@ class SolverLHS(Operator):
                 detector_sets=["SINGLE"],
                 operators=[
                     self.template_matrix,
-                    pointing,
+                    pixels,
+                    weights,
                     scan_map,
                     noise_weight,
                     template_transpose,

@@ -30,7 +30,7 @@ class BuildPixelDistribution(Operator):
     the full detector pointing once in order to compute the distribution.  This is
     done one detector at a time unless the save_pointing trait is set to True.
 
-    NOTE:  The pointing operator must have the "pixels", "weights", and "create_dist"
+    NOTE:  The pointing operator must have the "pixels" and "create_dist"
     traits, which will be set by this operator during execution.
 
     Output PixelData objects are stored in the Data dictionary.
@@ -52,7 +52,7 @@ class BuildPixelDistribution(Operator):
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
 
-    pointing = Instance(
+    pixel_pointing = Instance(
         klass=Operator,
         allow_none=True,
         help="This must be an instance of a pointing operator",
@@ -62,16 +62,18 @@ class BuildPixelDistribution(Operator):
         False, help="If True, do not clear detector pointing matrices after use"
     )
 
-    @traitlets.validate("pointing")
-    def _check_pointing(self, proposal):
+    @traitlets.validate("pixel_pointing")
+    def _check_pixel_pointing(self, proposal):
         pntg = proposal["value"]
         if pntg is not None:
             if not isinstance(pntg, Operator):
-                raise traitlets.TraitError("pointing should be an Operator instance")
+                raise traitlets.TraitError(
+                    "pixel_pointing should be an Operator instance"
+                )
             # Check that this operator has the traits we expect
-            for trt in ["pixels", "weights", "create_dist", "view"]:
+            for trt in ["pixels", "create_dist", "view"]:
                 if not pntg.has_trait(trt):
-                    msg = "pointing operator should have a '{}' trait".format(trt)
+                    msg = f"pixel_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
         return pntg
 
@@ -81,6 +83,11 @@ class BuildPixelDistribution(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        for trait in ("pixel_pointing",):
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
         if self.pixel_dist in data:
             msg = f"pixel distribution `{self.pixel_dist}` already exists"
@@ -96,7 +103,7 @@ class BuildPixelDistribution(Operator):
             log.debug(msg)
 
         # Turn on creation of the pixel distribution
-        self.pointing.create_dist = self.pixel_dist
+        self.pixel_pointing.create_dist = self.pixel_dist
 
         # Compute the pointing matrix
 
@@ -109,12 +116,12 @@ class BuildPixelDistribution(Operator):
             # Run one detector a at time and discard.
             pixel_dist_pipe = Pipeline(detector_sets=["SINGLE"])
         pixel_dist_pipe.operators = [
-            self.pointing,
+            self.pixel_pointing,
         ]
         pipe_out = pixel_dist_pipe.apply(data, detectors=detectors)
 
         # Turn pixel distribution creation off again
-        self.pointing.create_dist = None
+        self.pixel_pointing.create_dist = None
 
         return
 
@@ -122,7 +129,7 @@ class BuildPixelDistribution(Operator):
         return
 
     def _requires(self):
-        req = self.pointing.requires()
+        req = self.pixel_pointing.requires()
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
         return req
@@ -134,7 +141,7 @@ class BuildPixelDistribution(Operator):
             "detdata": list(),
         }
         if self.save_pointing:
-            prov["detdata"].extend([self.pixels, self.weights])
+            prov["detdata"].extend([self.pixels])
         return prov
 
     def _accelerators(self):

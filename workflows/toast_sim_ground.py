@@ -37,7 +37,7 @@ from astropy import units as u
 import toast
 import toast.ops
 
-from toast.mpi import MPI
+from toast.mpi import MPI, Comm
 
 from toast import spt3g as t3g
 
@@ -78,6 +78,14 @@ def parse_config(operators, templates, comm):
         default=False,
         action="store_true",
         help="Save simulated data to SPT3G format.",
+    )
+
+    parser.add_argument(
+        "--obsmaps",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Map each observation separately.",
     )
 
     # Build a config dictionary starting from the operator defaults, overriding with any
@@ -189,8 +197,8 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
     ops.det_pointing_radec.boresight = ops.sim_ground.boresight_radec
 
-    ops.det_weights_azel.detector_pointing = ops.det_pointing_azel
-    ops.det_weights_azel.hwp_angle = ops.sim_ground.hwp_angle
+    ops.weights_azel.detector_pointing = ops.det_pointing_azel
+    ops.weights_azel.hwp_angle = ops.sim_ground.hwp_angle
 
     # Create the Elevation modulated noise model
 
@@ -202,19 +210,21 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
-    ops.pointing.detector_pointing = ops.det_pointing_radec
-    ops.pointing.hwp_angle = ops.sim_ground.hwp_angle
-    ops.pointing_final.detector_pointing = ops.det_pointing_radec
-    ops.pointing_final.hwp_angle = ops.sim_ground.hwp_angle
+    ops.pixels_radec.detector_pointing = ops.det_pointing_radec
+    ops.weights_radec.detector_pointing = ops.det_pointing_radec
+    ops.weights_radec.hwp_angle = ops.sim_ground.hwp_angle
+    ops.pixels_radec_final.detector_pointing = ops.det_pointing_radec
 
-    ops.binner.pointing = ops.pointing
+    ops.binner.pixel_pointing = ops.pixels_radec
+    ops.binner.stokes_weights = ops.weights_radec
 
     # If we are not using a different pointing matrix for our final binning, then
     # use the same one as the solve.
-    if not ops.pointing_final.enabled:
-        ops.pointing_final = ops.pointing
+    if not ops.pixels_radec_final.enabled:
+        ops.pixels_radec_final = ops.pixels_radec
 
-    ops.binner_final.pointing = ops.pointing_final
+    ops.binner_final.pixel_pointing = ops.pixels_radec_final
+    ops.binner_final.stokes_weights = ops.weights_radec
 
     # If we are not using a different binner for our final binning, use the same one
     # as the solve.
@@ -225,7 +235,8 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # in case that is different from the solver pointing model.
 
     ops.scan_map.pixel_dist = ops.binner_final.pixel_dist
-    ops.scan_map.pointing = ops.pointing_final
+    ops.scan_map.pixel_pointing = ops.pixels_radec_final
+    ops.scan_map.stokes_weights = ops.weights_radec
     ops.scan_map.save_pointing = use_full_pointing(job)
     ops.scan_map.apply(data)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
@@ -234,7 +245,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
     if ops.sim_atmosphere.polarization_fraction != 0:
-        ops.sim_atmosphere.detector_weights = ops.det_weights_azel
+        ops.sim_atmosphere.detector_weights = ops.weights_azel
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
@@ -277,13 +288,13 @@ def reduce_data(job, args, data):
 
     # Optional geometric factors
 
-    ops.cadence_map.pointing = ops.pointing_final
+    ops.cadence_map.pixel_pointing = ops.pixels_radec_final
     ops.cadence_map.pixel_dist = ops.binner_final.pixel_dist
     ops.cadence_map.output_dir = args.out_dir
     ops.cadence_map.apply(data)
     log.info_rank("Calculated cadence map in", comm=world_comm, timer=timer)
 
-    ops.crosslinking.pointing = ops.pointing_final
+    ops.crosslinking.pixel_pointing = ops.pixels_radec_final
     ops.crosslinking.pixel_dist = ops.binner_final.pixel_dist
     ops.crosslinking.output_dir = args.out_dir
     ops.crosslinking.apply(data)
@@ -329,11 +340,46 @@ def reduce_data(job, args, data):
     ops.mapmaker.det_data = ops.sim_noise.det_data
     ops.mapmaker.output_dir = args.out_dir
 
-    ops.mapmaker.apply(data)
+    if args.obsmaps:
+        # Map each observation separately
+        timer_obs = toast.timing.Timer()
+        timer_obs.start()
+        group = data.comm.group
+        orig_name = ops.mapmaker.name
+        orig_comm = data.comm
+        new_comm = Comm(world=data.comm.comm_group)
+        for iobs, obs in enumerate(data.obs):
+            log.info_rank(
+                f"{group} : mapping observation {iobs + 1} / {len(data.obs)}.",
+                comm=new_comm.comm_world,
+            )
+            # Data object that only covers one observation
+            obs_data = data.select(obs_uid=obs.uid)
+            # Replace comm_world with the group communicator
+            obs_data._comm = new_comm
+            ops.mapmaker.name = f"{orig_name}_{obs.name}"
+            ops.mapmaker.reset_pix_dist = True
+            ops.mapmaker.apply(obs_data)
+            log.info_rank(
+                f"{group} : Mapped {obs.name} in",
+                comm=new_comm.comm_world,
+                timer=timer_obs,
+            )
+        log.info_rank(
+            f"{group} : Done mapping {len(data.obs)} observations.",
+            comm=new_comm.comm_world,
+        )
+        data._comm = orig_comm
+    else:
+        ops.mapmaker.apply(data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # Optionally run Madam
+
     if toast.ops.madam.available():
+        ops.madam.params = toast.ops.madam_params_from_mapmaker(ops.mapmaker)
+        ops.madam.pixel_pointing = ops.pixels_radec_final
+        ops.madam.stokes_weights = ops.weights_radec
         ops.madam.apply(data)
         log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
 
@@ -430,10 +476,8 @@ def main():
             out_model="el_noise_model",
         ),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
-        # In the future, `det_weights_azel` may be a dedicated operator that does not
-        # expand pixel numbers but just Stokes weights
-        toast.ops.PointingHealpix(
-            name="det_weights_azel", weights="weights_azel", mode="IQU"
+        toast.ops.StokesWeights(
+            name="weights_azel", weights="weights_azel", mode="IQU"
         ),
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
@@ -445,7 +489,8 @@ def main():
             name="convolve_time_constant", deconvolve=False, enabled=False
         ),
         toast.ops.SimNoise(name="sim_noise"),
-        toast.ops.PointingHealpix(name="pointing", mode="IQU"),
+        toast.ops.PixelsHealpix(name="pixels_radec"),
+        toast.ops.StokesWeights(name="weights_radec", mode="IQU"),
         toast.ops.FlagSSO(name="flag_sso", enabled=False),
         toast.ops.CadenceMap(name="cadence_map", enabled=False),
         toast.ops.CrossLinking(name="crosslinking", enabled=False),
@@ -460,7 +505,7 @@ def main():
         toast.ops.Statistics(name="filtered_statistics", enabled=False),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
-        toast.ops.PointingHealpix(name="pointing_final", enabled=False, mode="IQU"),
+        toast.ops.PixelsHealpix(name="pixels_radec_final", enabled=False),
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),

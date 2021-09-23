@@ -6,22 +6,15 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
 from .. import ops as ops
-
-from ..vis import set_matplotlib_backend
-
-from ..pixels import PixelDistribution, PixelData
-
+from ..noise import Noise
 from ..observation import default_names as obs_names
-
-from ._helpers import create_outdir, create_satellite_data, create_fake_sky, fake_flags
+from ..pixels import PixelData, PixelDistribution
+from ..vis import set_matplotlib_backend
+from ._helpers import create_fake_sky, create_outdir, create_satellite_data, fake_flags
+from .mpi import MPITestCase
 
 
 class MadamTest(MPITestCase):
@@ -40,14 +33,18 @@ class MadamTest(MPITestCase):
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=64,
+            detector_pointing=detpointing,
+            create_dist="pixel_dist",
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=obs_names.hwp_angle,
-            create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pointing.apply(data)
+        weights.apply(data)
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
@@ -55,8 +52,8 @@ class MadamTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
+            pixels=pixels.pixels,
+            weights=weights.weights,
             map_key="fake_map",
         )
         scanner.apply(data)
@@ -180,9 +177,9 @@ class MadamTest(MPITestCase):
         pars["iter_max"] = 100
         pars["base_first"] = 300.0
         pars["fsample"] = sample_rate
-        pars["nside_map"] = pointing.nside
-        pars["nside_cross"] = pointing.nside
-        pars["nside_submap"] = min(8, pointing.nside)
+        pars["nside_map"] = pixels.nside
+        pars["nside_cross"] = pixels.nside
+        pars["nside_submap"] = min(8, pixels.nside)
         pars["write_map"] = "T"
         pars["write_binmap"] = "T"
         pars["write_matrix"] = "F"
@@ -196,16 +193,13 @@ class MadamTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=obs_names.det_data,
-            pixels=pointing.pixels,
-            weights=pointing.weights,
-            pixels_nested=pointing.nest,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             det_out="destriped",
             noise_model="noise_model",
             copy_groups=2,
             purge_det_data=False,
-            purge_pointing=True,
             restore_det_data=False,
-            restore_pointing=True,
             shared_flags=obs_names.shared_flags,
             shared_flag_mask=1,
             det_flags=obs_names.det_flags,
