@@ -594,17 +594,11 @@ class PolyFilter2D(Operator):
                         good = group_det == igroup
                         mask = masks[isample, good]
                         t = templates[good].T.copy() * mask
-                        print(
-                            f"samp {isample}, group {igroup}, good: {len(good)}, mask: {mask.shape}, t: {t.shape}"
-                        )
                         proj = np.dot(t, signals[good, isample] * mask)
                         ccinv = np.dot(t, t.T)
                         coeff[isample, igroup] = np.linalg.lstsq(
                             ccinv, proj, rcond=None
                         )[0]
-                        print(
-                            f"  proj: {proj.shape}, ccinv: {ccinv.shape}, coeff: {coeff[isample, igroup].shape}"
-                        )
 
                 gt.stop("Poly2D:  Solve templates")
 
