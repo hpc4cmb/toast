@@ -33,7 +33,7 @@ PREFIX=/usr/local
 
 # libgmp
 
-gmp_version=6.2.0
+gmp_version=6.2.1
 gmp_dir=gmp-${gmp_version}
 gmp_pkg=${gmp_dir}.tar.xz
 
@@ -89,7 +89,7 @@ tar xf ${mpfr_pkg} \
 
 # Install FFTW
 
-fftw_version=3.3.8
+fftw_version=3.3.10
 fftw_dir=fftw-${fftw_version}
 fftw_pkg=${fftw_dir}.tar.gz
 
@@ -147,7 +147,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.8.1
+ssparse_version=5.10.1
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
