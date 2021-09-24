@@ -152,12 +152,17 @@ class BuildHitMap(Operator):
 
             # The pixels and weights view for this observation
             pix = ob.view[self.view].detdata[self.pixels]
-            flgs = [None for x in pix]
             if self.det_flags is not None:
                 flgs = ob.view[self.view].detdata[self.det_flags]
+            else:
+                flgs = [None for x in pix]
+            if self.shared_flags is not None:
+                shared_flgs = ob.view[self.view].shared[self.shared_flags]
+            else:
+                shared_flgs = [None for x in pix]
 
             # Process every data view
-            for pview, fview in zip(pix, flgs):
+            for pview, fview, shared_fview in zip(pix, flgs, shared_flgs):
                 for det in dets:
                     # Get local submap and pixels
                     local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
@@ -170,6 +175,8 @@ class BuildHitMap(Operator):
                     # Apply the flags if needed
                     if self.det_flags is not None:
                         local_pix[fview[det] & self.det_flag_mask != 0] = -1
+                    if self.shared_flags is not None:
+                        local_pix[shared_fview & self.shared_flag_mask != 0] = -1
 
                     cov_accum_diag_hits(
                         dist.n_local_submap,
@@ -196,6 +203,8 @@ class BuildHitMap(Operator):
             "detdata": [self.pixels, self.weights],
             "intervals": list(),
         }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
         if self.view is not None:
@@ -365,12 +374,17 @@ class BuildInverseCovariance(Operator):
             # The pixels and weights view for this observation
             pix = ob.view[self.view].detdata[self.pixels]
             wts = ob.view[self.view].detdata[self.weights]
-            flgs = [None for x in wts]
             if self.det_flags is not None:
                 flgs = ob.view[self.view].detdata[self.det_flags]
+            else:
+                flgs = [None for x in wts]
+            if self.shared_flags is not None:
+                shared_flgs = ob.view[self.view].shared[self.shared_flags]
+            else:
+                shared_flgs = [None for x in wts]
 
             # Process every data view
-            for pview, wview, fview in zip(pix, wts, flgs):
+            for pview, wview, fview, shared_fview in zip(pix, wts, flgs, shared_flgs):
                 for det in dets:
                     # We require that the pointing matrix has the same number of
                     # non-zero elements for every detector and every observation.
@@ -401,6 +415,8 @@ class BuildInverseCovariance(Operator):
                     # Apply the flags if needed
                     if self.det_flags is not None:
                         local_pix[fview[det] & self.det_flag_mask != 0] = -1
+                    if self.shared_flags is not None:
+                        local_pix[shared_fview & self.shared_flag_mask != 0] = -1
 
                     # Accumulate
                     cov_accum_diag_invnpp(
@@ -430,6 +446,8 @@ class BuildInverseCovariance(Operator):
             "detdata": [self.pixels, self.weights],
             "intervals": list(),
         }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
         if self.view is not None:
@@ -604,12 +622,19 @@ class BuildNoiseWeighted(Operator):
             pix = ob.view[self.view].detdata[self.pixels]
             wts = ob.view[self.view].detdata[self.weights]
             ddat = ob.view[self.view].detdata[self.det_data]
-            flgs = [None for x in wts]
+            if self.shared_flags is not None:
+                shared_flgs = ob.view[self.view].shared[self.shared_flags]
+            else:
+                shared_flgs = [None for x in wts]
             if self.det_flags is not None:
                 flgs = ob.view[self.view].detdata[self.det_flags]
+            else:
+                flgs = [None for x in wts]
 
             # Process every data view
-            for pview, wview, dview, fview in zip(pix, wts, ddat, flgs):
+            for pview, wview, dview, fview, shared_fview in zip(
+                pix, wts, ddat, flgs, shared_flgs
+            ):
                 for det in dets:
                     # Data for this detector
                     ddata = dview[det]
@@ -624,8 +649,9 @@ class BuildNoiseWeighted(Operator):
                     else:
                         check_nnz = wview.detector_shape[1]
                     if check_nnz != weight_nnz:
-                        msg = "observation {}, detector {}, pointing weights {} has inconsistent number of values".format(
-                            ob.name, det, self.weights
+                        msg = (
+                            f"observation {ob.name}, detector {det}, pointing "
+                            f"weights {self.weights} has inconsistent number of values"
                         )
                         raise RuntimeError(msg)
 
@@ -643,6 +669,8 @@ class BuildNoiseWeighted(Operator):
                     # Apply the flags if needed
                     if self.det_flags is not None:
                         local_pix[fview[det] & self.det_flag_mask != 0] = -1
+                    if self.shared_flags is not None:
+                        local_pix[shared_fview & self.shared_flag_mask != 0] = -1
 
                     # Accumulate
                     cov_accum_zmap(
@@ -674,6 +702,8 @@ class BuildNoiseWeighted(Operator):
             "detdata": [self.pixels, self.weights],
             "intervals": list(),
         }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
         if self.view is not None:

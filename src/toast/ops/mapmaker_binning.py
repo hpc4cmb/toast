@@ -216,6 +216,8 @@ class BinMap(Operator):
             det_data=self.det_data,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
+            shared_flags=self.shared_flags,
+            shared_flag_mask=self.shared_flag_mask,
             sync_type=self.sync_type,
         )
 
@@ -261,6 +263,8 @@ class BinMap(Operator):
         req.update(self.stokes_weights.requires())
         req["meta"].extend([self.noise_model, self.pixel_dist, self.covariance])
         req["detdata"].extend([self.det_data])
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
         return req
