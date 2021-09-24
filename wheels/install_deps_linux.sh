@@ -7,6 +7,8 @@
 # bundled with our compiled extension.
 #
 
+set -e
+
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
 topdir=$(pwd)
