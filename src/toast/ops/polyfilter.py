@@ -17,10 +17,18 @@ from .operator import Operator
 from .. import qarray as qa
 from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
-from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
+from ..utils import (
+    Logger,
+    Environment,
+    Timer,
+    GlobalTimers,
+    dtype_to_aligned,
+    AlignedF64,
+    AlignedU8,
+)
 from ..observation import default_names as obs_names
 
-from .._libtoast import filter_polynomial
+from .._libtoast import filter_polynomial, filter_poly2D
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
@@ -31,6 +39,11 @@ class PolyFilter2D(Operator):
     """Operator to regress out 2D polynomials across the focal plane."""
 
     API = Int(0, help="Internal interface version for this operator")
+
+    times = Unicode(
+        obs_names.times,
+        help="Observation shared key for timestamps",
+    )
 
     det_data = Unicode(
         obs_names.det_data,
@@ -72,6 +85,10 @@ class PolyFilter2D(Operator):
         None, allow_none=True, help="Which focalplane key to match"
     )
 
+    use_python = Bool(
+        False, help="If True, use a pure python implementation for testing."
+    )
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -90,14 +107,9 @@ class PolyFilter2D(Operator):
         super().__init__(**kwargs)
         return
 
-    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        """Apply the 2D polynomial filter to the signal.
+        gt = GlobalTimers.get()
 
-        Args:
-            data (toast.Data): The distributed data.
-
-        """
         if detectors is not None:
             raise RuntimeError("PolyFilter2D cannot be run on subsets of detectors")
         norder = self.order + 1
@@ -105,20 +117,39 @@ class PolyFilter2D(Operator):
         pat = re.compile(self.pattern)
 
         for obs in data.obs:
-            t0 = time()
-            t_template = 0
-            t_get_norm = 0
-            t_apply_norm = 0
-            t_solve = 0
-            t_clean = 0
+            # Get the original number of process rows in the observation
+            proc_rows = obs.dist.process_rows
 
-            # communicator for processes with the same sample range
-            comm = obs.comm_col
+            # Duplicate just the fields of the observation we will use
+            gt.start("Poly2D:  Duplicate obs")
+            dup_shared = list()
+            if self.shared_flags is not None:
+                dup_shared.append(self.shared_flags)
+            dup_detdata = [self.det_data]
+            if self.det_flags is not None:
+                dup_detdata.append(self.det_flags)
+            dup_intervals = list()
+            if self.view is not None:
+                dup_intervals.append(self.view)
+            temp_ob = obs.duplicate(
+                times=self.times,
+                meta=list(),
+                shared=dup_shared,
+                detdata=dup_detdata,
+                intervals=dup_intervals,
+            )
+            gt.stop("Poly2D:  Duplicate obs")
+
+            # Redistribute this temporary observation to be distributed by sample sets
+            gt.start("Poly2D:  Forward redistribution")
+            temp_ob.redistribute(1, times=self.times)
+            gt.stop("Poly2D:  Forward redistribution")
+
+            gt.start("Poly2D:  Detector setup")
 
             # Detectors to process
-
             detectors = []
-            for det in obs.all_detectors:
+            for det in temp_ob.all_detectors:
                 if pat.match(det) is None:
                     continue
                 detectors.append(det)
@@ -130,17 +161,24 @@ class PolyFilter2D(Operator):
 
             detector_position = {}
             for det in detectors:
-                det_quat = obs.telescope.focalplane[det]["quat"]
+                det_quat = temp_ob.telescope.focalplane[det]["quat"]
                 x, y, z = qa.rotate(det_quat, ZAXIS)
                 theta, phi = np.arcsin([x, y])
                 detector_position[det] = [theta, phi]
 
             # Enumerate detector groups (e.g. wafers) to filter
 
+            # The integer group ID for a given detector
             group_index = {}
+
+            # The list of detectors for each group key
             groups = {}
+
+            # The integer group ID for each group key
             group_ids = {}
+
             if self.focalplane_key is None:
+                # We have just one group of all detectors
                 groups[None] = []
                 group_ids[None] = 0
                 ngroup = 1
@@ -149,7 +187,7 @@ class PolyFilter2D(Operator):
                     groups[None].append(det)
             else:
                 for det in detectors:
-                    value = obs.telescope.focalplane[det][self.focalplane_key]
+                    value = temp_ob.telescope.focalplane[det][self.focalplane_key]
                     if value not in groups:
                         groups[value] = []
                     groups[value].append(det)
@@ -161,11 +199,11 @@ class PolyFilter2D(Operator):
 
             # Enumerate detectors to process
 
-            detector_index = {}
-            group_det = np.zeros(ndet)
-            for idet, det in enumerate(detectors):
-                detector_index[det] = idet
-                group_det[idet] = group_index[det]
+            # Mapping from detector name to index
+            detector_index = {y: x for x, y in enumerate(detectors)}
+
+            # The integer group ID for a given detector index
+            group_det = np.array([group_index[x] for x in detectors])
 
             # Measure offset for each group, translate and scale
             # detector positions to [-1, 1]
@@ -204,32 +242,53 @@ class PolyFilter2D(Operator):
             yorders = yorders.ravel()
 
             detector_templates = np.zeros([ndet, nmode])
-            for det in obs.local_detectors:
+            for det in temp_ob.local_detectors:
                 if det not in detector_index:
                     continue
                 idet = detector_index[det]
                 theta, phi = detector_position[det]
                 detector_templates[idet] = theta ** xorders * phi ** yorders
 
+            gt.stop("Poly2D:  Detector setup")
+
             # Iterate over each interval
 
-            views = obs.view[self.view]
+            # Aligned memory objects using C-allocated memory so that we
+            # can explicitly free it after processing.
+            template_mem = AlignedF64()
+            mask_mem = AlignedU8()
+            signal_mem = AlignedF64()
+            coeff_mem = AlignedF64()
+
+            views = temp_ob.view[self.view]
             for iview, view in enumerate(views):
                 if view.start is None:
                     # This is a view of the whole obs
-                    nsample = obs.n_local_samples
+                    nsample = temp_ob.n_local_samples
                 else:
                     nsample = view.stop - view.start
 
                 # Accumulate the linear regression templates
 
-                # templates = np.zeros([ndet, nmode, nsample])
-                templates = np.zeros([ndet, nmode])
-                masks = np.zeros([ndet, nsample], dtype=np.uint8)
-                signals = np.zeros([ndet, nsample])
-                # proj = np.zeros([ngroup, nmode, nsample])
+                gt.start("Poly2D:  Accumulate templates")
 
-                t1 = time()
+                template_mem.resize(ndet * nmode)
+                template_mem[:] = 0
+                templates = template_mem.array().reshape((ndet, nmode))
+
+                mask_mem.resize(nsample * ndet)
+                mask_mem[:] = 0
+                masks = mask_mem.array().reshape((nsample, ndet))
+
+                signal_mem.resize(nsample * ndet)
+                signal_mem[:] = 0
+                signals = signal_mem.array().reshape((nsample, ndet))
+
+                coeff_mem.resize(nsample * ngroup * nmode)
+                coeff_mem[:] = 0
+                coeff = coeff_mem.array().reshape((nsample, ngroup, nmode))
+
+                det_groups = -1 * np.ones(ndet, dtype=np.int32)
 
                 if self.shared_flags is not None:
                     shared_flags = views.shared[self.shared_flags][iview]
@@ -237,11 +296,12 @@ class PolyFilter2D(Operator):
                 else:
                     shared_mask = np.ones(nsample, dtype=bool)
 
-                for idet, det in enumerate(obs.local_detectors):
+                for idet, det in enumerate(temp_ob.local_detectors):
                     if det not in detector_index:
                         continue
                     ind_det = detector_index[det]
                     ind_group = group_index[det]
+                    det_groups[ind_det] = ind_group
 
                     signal = views.detdata[self.det_data][iview][idet]
                     if self.det_flags is not None:
@@ -251,46 +311,34 @@ class PolyFilter2D(Operator):
                     else:
                         mask = shared_mask
 
-                    template = detector_templates[ind_det]
-                    templates[ind_det] = template
-                    masks[ind_det][:] = mask
-                    signals[ind_det] = signal * mask
+                    templates[ind_det, :] = detector_templates[ind_det]
+                    masks[:, ind_det] = mask
+                    signals[:, ind_det] = signal * mask
 
-                t_template += time() - t1
+                gt.stop("Poly2D:  Accumulate templates")
 
-                t1 = time()
-                if comm is not None:
-                    comm.Allreduce(MPI.IN_PLACE, templates, op=MPI.SUM)
-                    comm.Allreduce(MPI.IN_PLACE, masks, op=MPI.SUM)
-                    comm.Allreduce(MPI.IN_PLACE, signals, op=MPI.SUM)
-                t_get_norm += time() - t1
+                if self.use_python:
+                    gt.start("Poly2D:  Solve templates (with python)")
+                    for isample in range(nsample):
+                        for group, igroup in group_ids.items():
+                            good = group_det == igroup
+                            mask = masks[isample, good]
+                            t = templates[good].T.copy() * mask
+                            proj = np.dot(t, signals[isample, good] * mask)
+                            ccinv = np.dot(t, t.T)
+                            coeff[isample, igroup] = np.linalg.lstsq(
+                                ccinv, proj, rcond=None
+                            )[0]
+                    gt.stop("Poly2D:  Solve templates (with python)")
+                else:
+                    gt.start("Poly2D:  Solve templates")
+                    filter_poly2D(det_groups, templates, signals, masks, coeff)
+                    gt.stop("Poly2D:  Solve templates")
 
-                # Solve the linear regression amplitudes.  Each task
-                # inverts different template matrices
-
-                t1 = time()
-                coeff = np.zeros([nsample, ngroup, nmode])
-                masks = masks.T.copy()  # nsample x ndet
-                for isample in range(nsample):
-                    if comm is not None and isample % comm.size != comm.rank:
-                        continue
-                    for group, igroup in group_ids.items():
-                        good = group_det == igroup
-                        mask = masks[isample, good]
-                        t = templates[good].T.copy() * mask
-                        proj = np.dot(t, signals[good, isample] * mask)
-                        ccinv = np.dot(t, t.T)
-                        coeff[isample, igroup] = np.linalg.lstsq(
-                            ccinv, proj, rcond=None
-                        )[0]
-                if comm is not None:
-                    comm.Allreduce(MPI.IN_PLACE, coeff, op=MPI.SUM)
-                t_solve += time() - t1
-
-                t1 = time()
+                gt.start("Poly2D:  Update detector flags")
 
                 for igroup in range(ngroup):
-                    local_dets = obs.local_detectors
+                    local_dets = temp_ob.local_detectors
                     dets_in_group = np.zeros(len(local_dets), dtype=np.bool)
                     for idet, det in enumerate(local_dets):
                         if group_index[det] == igroup:
@@ -310,36 +358,34 @@ class PolyFilter2D(Operator):
                                     :, isample
                                 ] |= sample_flags
 
-                coeff = np.transpose(
-                    coeff, [1, 0, 2]
-                ).copy()  # ngroup x nsample x nmode
-                masks = masks.T.copy()  # ndet x nsample
-                for idet, det in enumerate(obs.local_detectors):
+                gt.stop("Poly2D:  Update detector flags")
+
+                gt.start("Poly2D:  Clean timestreams")
+
+                trcoeff = np.transpose(
+                    np.array(coeff), [1, 0, 2]
+                )  # ngroup x nsample x nmode
+                trmasks = np.array(masks).T  # ndet x nsample
+                for idet, det in enumerate(temp_ob.local_detectors):
                     if det not in detector_index:
                         continue
                     igroup = group_index[det]
                     ind = detector_index[det]
                     signal = views.detdata[self.det_data][iview][idet]
-                    mask = masks[idet]
-                    signal -= np.sum(coeff[igroup] * templates[ind], 1) * mask
+                    mask = trmasks[idet]
+                    signal -= np.sum(trcoeff[igroup] * templates[ind], 1) * mask
 
-                t_clean += time() - t1
+                gt.stop("Poly2D:  Clean timestreams")
 
-            """
-            print(
-                "Time per observation: {:.1f} s\n"
-                "   templates : {:6.1f} s\n"
-                "    get_norm : {:6.1f} s\n"
-                "  apply_norm : {:6.1f} s\n"
-                "       solve : {:6.1f} s\n"
-                "       clean : {:6.1f} s".format(
-                    time() - t0, t_template, t_get_norm, t_apply_norm, t_solve, t_clean
-                ),
-                flush=True,
-            )
-            """
+            # Redistribute back
+            gt.start("Poly2D:  Backward redistribution")
+            temp_ob.redistribute(proc_rows, times=self.times)
+            gt.stop("Poly2D:  Backward redistribution")
 
-        return
+            # Copy data to original observation
+            gt.start("Poly2D:  Copy output")
+            obs.detdata[self.det_data][:] = temp_ob.detdata[self.det_data][:]
+            gt.stop("Poly2D:  Copy output")
 
     def _finalize(self, data, **kwargs):
         return
@@ -451,7 +497,7 @@ class PolyFilter(Operator):
                 local_stops = []
                 for interval in obs.intervals[self.view]:
                     local_starts.append(interval.first)
-                    local_stops.append(intervallast)
+                    local_stops.append(interval.last)
             else:
                 local_starts = [0]
                 local_stops = [obs.n_local_samples - 1]

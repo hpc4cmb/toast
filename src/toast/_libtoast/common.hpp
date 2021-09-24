@@ -96,6 +96,31 @@ void pybuffer_check_1D(py::buffer data) {
     return;
 }
 
+template <typename T>
+void pybuffer_check(py::buffer data) {
+    auto log = toast::Logger::get();
+    py::buffer_info info = data.request();
+    std::vector <char> tp = align_format <T> ();
+    bool valid = false;
+    for (auto const & atp : tp) {
+        if (info.format[0] == atp) {
+            valid = true;
+        }
+    }
+    if (!valid) {
+        std::ostringstream o;
+        o << "Python buffer is type '" << info.format
+          << "', which is not in compatible list {";
+        for (auto const & atp : tp) {
+            o << "'" << atp << "',";
+        }
+        o << "}";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    return;
+}
+
 template <typename C>
 std::unique_ptr <C> aligned_uptr(size_t n) {
     return std::unique_ptr <C> (new C(n));

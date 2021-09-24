@@ -206,21 +206,44 @@ class PolyFilterTest(MPITestCase):
                 ax.plot(x, good, "-", label=f"{det} input good samples")
             ax.legend(loc="best")
 
-        # Filter
+        # Filter with python implementation.  Make a copy first
+
+        ops.Copy(detdata=[("signal", "pyfilter"), ("flags", "pyflags")]).apply(data)
 
         polyfilter = ops.PolyFilter2D(
             order=norder - 1,
-            det_data="signal",
-            det_flags="flags",
+            det_data="pyfilter",
+            det_flags="pyflags",
             det_flag_mask=255,
             shared_flags="flags",
             shared_flag_mask=255,
             view=None,
             focalplane_key="wafer",
         )
+        polyfilter.use_python = True
         polyfilter.apply(data)
 
         # Plot filtered TOD
+
+        if data.comm.world_rank == 0:
+            ax = fig.add_subplot(1, 2, 2)
+            for idet, det in enumerate(ob.local_detectors):
+                flags = np.array(ob.shared["flags"])
+                flags |= ob.detdata["flags"][det]
+                good = flags == 0
+                signal = ob.detdata["pyfilter"][det]
+                x = np.arange(signal.size)
+                ax.plot(x, signal, ".", label=f"{det} filtered")
+                ax.plot(x, good, "-", label=f"{det} new good samples")
+            ax.legend(loc="best")
+            outfile = os.path.join(testdir, "2Dfiltered_tod_python.png")
+            fig.savefig(outfile)
+
+        # Do the same with C++ implementation
+
+        polyfilter.det_data = "signal"
+        polyfilter.use_python = False
+        polyfilter.apply(data)
 
         if data.comm.world_rank == 0:
             ax = fig.add_subplot(1, 2, 2)
@@ -235,6 +258,15 @@ class PolyFilterTest(MPITestCase):
             ax.legend(loc="best")
             outfile = os.path.join(testdir, "2Dfiltered_tod.png")
             fig.savefig(outfile)
+
+        # Check for consistency
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                # print(f"pyfilter {det} = {ob.detdata['pyfilter'][det]}")
+                # print(f"signal {det} = {ob.detdata['signal'][det]}")
+                self.assertTrue(
+                    np.allclose(ob.detdata["signal"][det], ob.detdata["pyfilter"][det])
+                )
 
         # Check that the filtering reduces RMS
         for ob in data.obs:

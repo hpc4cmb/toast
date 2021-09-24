@@ -484,7 +484,9 @@ class Observation(MutableMapping):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def duplicate(self, times=None):
+    def duplicate(
+        self, times=None, meta=None, shared=None, detdata=None, intervals=None
+    ):
         """Return a copy of the observation and all its data.
 
         The times field should be the name of the shared field containing timestamps.
@@ -493,8 +495,16 @@ class Observation(MutableMapping):
         one).  If this is not specified and some intervals exist, then an exception is
         raised.
 
+        The meta, shared, detdata, and intervals list specifies which of those objects
+        to copy to the new observation.  If these are None, then all objects are
+        duplicated.
+
         Args:
             times (str):  The name of the timestamps shared field.
+            meta (list):  List of metadata objects to copy, or None.
+            shared (list):  List of shared objects to copy, or None.
+            detdata (list):  List of detdata objects to copy, or None.
+            intervals (list):  List of intervals objects to copy, or None.
 
         Returns:
             (Observation):  The new copy of the observation.
@@ -517,33 +527,37 @@ class Observation(MutableMapping):
             process_rows=self.dist.process_rows,
         )
         for k, v in self._internal.items():
-            new_obs[k] = copy.deepcopy(v)
+            if meta is None or k in meta:
+                new_obs[k] = copy.deepcopy(v)
         for name, data in self.detdata.items():
-            new_obs.detdata[name] = data
+            if detdata is None or name in detdata:
+                new_obs.detdata[name] = data
         for name, data in self.shared.items():
-            # Create the object on the corresponding communicator in the new obs
-            new_comm = None
-            if comm_equal(data.comm, self.dist.comm_row):
-                # Row comm
-                new_comm = new_obs.dist.comm_row
-            elif comm_equal(data.comm, self.dist.comm_col):
-                # Col comm
-                new_comm = new_obs.dist.comm_col
-            else:
-                # Full obs comm
-                new_comm = new_obs.dist.comm
-            new_obs.shared.create(name, data.shape, dtype=data.dtype, comm=new_comm)
-            offset = None
-            dval = None
-            if new_comm is None or new_comm.rank == 0:
-                offset = tuple([0 for x in data.shape])
-                dval = data.data
-            new_obs.shared[name].set(dval, offset=offset, fromrank=0)
+            if shared is None or name in shared:
+                # Create the object on the corresponding communicator in the new obs
+                new_comm = None
+                if comm_equal(data.comm, self.dist.comm_row):
+                    # Row comm
+                    new_comm = new_obs.dist.comm_row
+                elif comm_equal(data.comm, self.dist.comm_col):
+                    # Col comm
+                    new_comm = new_obs.dist.comm_col
+                else:
+                    # Full obs comm
+                    new_comm = new_obs.dist.comm
+                new_obs.shared.create(name, data.shape, dtype=data.dtype, comm=new_comm)
+                offset = None
+                dval = None
+                if new_comm is None or new_comm.rank == 0:
+                    offset = tuple([0 for x in data.shape])
+                    dval = data.data
+                new_obs.shared[name].set(dval, offset=offset, fromrank=0)
         for name, data in self.intervals.items():
-            timespans = [(x.start, x.stop) for x in data]
-            new_obs.intervals[name] = IntervalList(
-                new_obs.shared[times], timespans=timespans
-            )
+            if intervals is None or name in intervals:
+                timespans = [(x.start, x.stop) for x in data]
+                new_obs.intervals[name] = IntervalList(
+                    new_obs.shared[times], timespans=timespans
+                )
         return new_obs
 
     def memory_use(self):
