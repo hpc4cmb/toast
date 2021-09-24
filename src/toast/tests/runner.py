@@ -256,9 +256,9 @@ def test(name=None, verbosity=2):
     if ret > 0:
         sys.exit(ret)
 
-    alltimers = timing.gather_timers(comm=comm)
-    if rank == 0:
-        out = os.path.join(outdir, "timing")
-        timing.dump(alltimers, out)
+    # alltimers = timing.gather_timers(comm=comm)
+    # if rank == 0:
+    #     out = os.path.join(outdir, "timing")
+    #     timing.dump(alltimers, out)
 
     return ret
