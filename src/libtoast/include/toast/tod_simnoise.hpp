@@ -16,6 +16,11 @@ void tod_sim_noise_timestream(
     uint64_t obsindx, uint64_t detindx, double rate, int64_t firstsamp,
     int64_t samples, int64_t oversample, const double * freq,
     const double * psd, int64_t psdlen, double * noise);
+void tod_sim_noise_timestream_batch(
+    uint64_t realization, uint64_t telescope, uint64_t component,
+    uint64_t obsindx, double rate, int64_t firstsamp,
+    int64_t samples, int64_t oversample, int64_t ndet, uint64_t * detindices,
+    int64_t psdlen, const double * freq, const double * psds, double * noise);
 }
 
 #endif // ifndef TOAST_TOD_SIMNOISE_HPP
