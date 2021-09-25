@@ -81,7 +81,8 @@ void init_tod_simnoise(py::module & m) {
     m.def("tod_sim_noise_timestream_batch",
           [](uint64_t realization, uint64_t telescope, uint64_t component,
              uint64_t obsindx, double rate, int64_t firstsamp,
-             int64_t oversample, py::buffer detindices, py::buffer freq, py::buffer psds, py::buffer noise) {
+             int64_t oversample, py::buffer detindices, py::buffer freq,
+             py::buffer psds, py::buffer noise) {
               pybuffer_check_1D <uint64_t> (detindices);
               pybuffer_check_1D <double> (freq);
 
@@ -123,7 +124,11 @@ void init_tod_simnoise(py::module & m) {
               double * rawpsd = reinterpret_cast <double *> (info_psd.ptr);
               double * rawnoise = reinterpret_cast <double *> (info_noise.ptr);
 
-              toast::tod_sim_noise_timestream_batch(realization, telescope, component, obsindx, rate, firstsamp, samples, oversample, ndet, rawdetind, psdlen, rawfreq, rawpsd, rawnoise);
+              toast::tod_sim_noise_timestream_batch(realization, telescope, component,
+                                                    obsindx, rate, firstsamp, samples,
+                                                    oversample, ndet, rawdetind, psdlen,
+                                                    rawfreq,
+                                                    rawpsd, rawnoise);
               return;
           }, py::arg("realization"), py::arg("telescope"), py::arg("component"),
           py::arg("obsindx"), py::arg("rate"),

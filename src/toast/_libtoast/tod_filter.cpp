@@ -213,7 +213,8 @@ void init_tod_filter(py::module & m) {
     )");
 
     m.def("filter_poly2D",
-          [](py::buffer det_groups, py::buffer templates, py::buffer signals, py::buffer masks, py::buffer coeff) {
+          [](py::buffer det_groups, py::buffer templates, py::buffer signals,
+             py::buffer masks, py::buffer coeff) {
               pybuffer_check <uint8_t> (masks);
               pybuffer_check <int32_t> (det_groups);
               pybuffer_check <double> (templates);
@@ -224,7 +225,8 @@ void init_tod_filter(py::module & m) {
               py::buffer_info info_templates = templates.request();
               py::buffer_info info_signals = signals.request();
               py::buffer_info info_coeff = coeff.request();
-              // Check dimensions
+
+// Check dimensions
               if (info_signals.ndim != 2) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
@@ -275,7 +277,8 @@ void init_tod_filter(py::module & m) {
                   std::ostringstream o;
                   o << "Coeff array dimensions are inconsistent";
                   log.error(o.str().c_str());
-                  throw std::runtime_error(o.str().c_str());
+                  throw std::runtime_error(
+                            o.str().c_str());
               }
               int32_t ngroup = info_coeff.shape[1];
               int32_t * raw_detgroups = reinterpret_cast <int32_t *> (info_detgroups.ptr);
@@ -293,9 +296,12 @@ void init_tod_filter(py::module & m) {
               double * raw_templates = reinterpret_cast <double *> (info_templates.ptr);
               double * raw_signals = reinterpret_cast <double *> (info_signals.ptr);
               double * raw_coeff = reinterpret_cast <double *> (info_coeff.ptr);
-              toast::filter_poly2D_solve(nsample, ndet, ngroup, nmodes, raw_detgroups, raw_templates, raw_masks, raw_signals, raw_coeff);
+              toast::filter_poly2D_solve(nsample, ndet, ngroup, nmodes, raw_detgroups,
+                                         raw_templates, raw_masks, raw_signals,
+                                         raw_coeff);
               return;
-          }, py::arg("det_groups"), py::arg("templates"), py::arg("signals"), py::arg("masks"),
+          }, py::arg("det_groups"), py::arg("templates"), py::arg("signals"),
+          py::arg("masks"),
           py::arg(
               "coeff"), R"(
         Solves for 2D polynomial coefficients at each sample.

@@ -11,8 +11,11 @@
 #include <sstream>
 
 
-void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample, int64_t n_batch, int64_t n_binned, double const * binned_freq, double const * binned_psds, int64_t & fftlen, toast::AlignedVector <double> & interp_psds) {
-
+void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample,
+                              int64_t n_batch, int64_t n_binned,
+                              double const * binned_freq, double const * binned_psds,
+                              int64_t & fftlen,
+                              toast::AlignedVector <double> & interp_psds) {
     fftlen = 2;
     while (fftlen <= (oversample * samples)) {
         fftlen *= 2;
@@ -105,17 +108,23 @@ void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample, 
             if (toast::is_aligned(binned_psds)) {
                 #pragma omp simd
                 for (int64_t i = 0; i < n_binned; ++i) {
-                    logpsd[i] = ::log10(::sqrt(binned_psds[offset_binned + i] * norm) + psdshift);
+                    logpsd[i] = ::log10(::sqrt(
+                                            binned_psds[offset_binned + i] * norm) +
+                                        psdshift);
                 }
             } else {
                 for (int64_t i = 0; i < n_binned; ++i) {
-                    logpsd[i] = ::log10(::sqrt(binned_psds[offset_binned + i] * norm) + psdshift);
+                    logpsd[i] = ::log10(::sqrt(
+                                            binned_psds[offset_binned + i] * norm) +
+                                        psdshift);
                 }
             }
 
             #pragma omp simd
             for (int64_t i = 0; i < psdlen; ++i) {
-                interp_psds[offset_psd + i] = ::log10(increment * static_cast <double> (i) + freqshift);
+                interp_psds[offset_psd +
+                            i] = ::log10(
+                    increment * static_cast <double> (i) + freqshift);
             }
 
             int64_t ibin = 0;
@@ -123,11 +132,13 @@ void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample, 
             #pragma omp simd
             for (int64_t i = 0; i < psdlen; ++i) {
                 double loginterp_freq = interp_psds[offset_psd + i];
-                while ((ibin < (n_binned - 2)) && (logfreq[ibin + 1] < loginterp_freq)) {
+                while ((ibin < (n_binned - 2)) &&
+                       (logfreq[ibin + 1] < loginterp_freq)) {
                     ++ibin;
                 }
                 double r = (loginterp_freq - logfreq[ibin]) * stepinv[ibin];
-                interp_psds[offset_psd + i] = logpsd[ibin] + r * (logpsd[ibin + 1] - logpsd[ibin]);
+                interp_psds[offset_psd + i] = logpsd[ibin] + r *
+                                              (logpsd[ibin + 1] - logpsd[ibin]);
                 interp_psds[offset_psd + i] = pow(10, interp_psds[offset_psd + i]);
                 interp_psds[offset_psd + i] -= psdshift;
             }
@@ -140,13 +151,11 @@ void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample, 
     return;
 }
 
-
 void toast::tod_sim_noise_timestream(
     uint64_t realization, uint64_t telescope, uint64_t component,
     uint64_t obsindx, uint64_t detindx, double rate, int64_t firstsamp,
     int64_t samples, int64_t oversample, const double * freq,
     const double * psd, int64_t psdlen, double * noise) {
-
     // Generate a single noise timestream.
     //
     // Use the RNG parameters to generate unit-variance Gaussian samples and then modify
@@ -166,7 +175,8 @@ void toast::tod_sim_noise_timestream(
     int64_t fftlen;
     toast::AlignedVector <double> interp_psd;
 
-    tod_sim_noise_psd_interp(rate, samples, oversample, 1, psdlen, freq, psd, fftlen, interp_psd);
+    tod_sim_noise_psd_interp(rate, samples, oversample, 1, psdlen, freq, psd, fftlen,
+                             interp_psd);
 
     int64_t npsd = (fftlen / 2) + 1;
 
@@ -217,13 +227,11 @@ void toast::tod_sim_noise_timestream(
     return;
 }
 
-
 void toast::tod_sim_noise_timestream_batch(
     uint64_t realization, uint64_t telescope, uint64_t component,
     uint64_t obsindx, double rate, int64_t firstsamp,
     int64_t samples, int64_t oversample, int64_t ndet, uint64_t * detindices,
     int64_t psdlen, const double * freq, const double * psds, double * noise) {
-
     // Generate multiple noise timestreams at once.
     //
     // Use the RNG parameters to generate unit-variance Gaussian samples and then modify
@@ -248,7 +256,8 @@ void toast::tod_sim_noise_timestream_batch(
     int64_t fftlen;
     toast::AlignedVector <double> interp_psds;
 
-    tod_sim_noise_psd_interp(rate, samples, oversample, ndet, psdlen, freq, psds, fftlen, interp_psds);
+    tod_sim_noise_psd_interp(rate, samples, oversample, ndet, psdlen, freq, psds,
+                             fftlen, interp_psds);
 
     int64_t npsd = (fftlen / 2) + 1;
 

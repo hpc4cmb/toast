@@ -472,14 +472,10 @@ class FilterBinTest(MPITestCase):
 
             input_map = hp.read_map(input_map_file, None, nest=nest)
 
-            fname_filtered = os.path.join(
-                self.outdir, "cached_run_1_filtered_map.fits"
-            )
+            fname_filtered = os.path.join(self.outdir, "cached_run_1_filtered_map.fits")
             filtered1 = hp.read_map(fname_filtered, None, nest=nest)
 
-            fname_filtered = os.path.join(
-                self.outdir, "cached_run_2_filtered_map.fits"
-            )
+            fname_filtered = os.path.join(self.outdir, "cached_run_2_filtered_map.fits")
             filtered2 = hp.read_map(fname_filtered, None, nest=nest)
 
             test_map1 = obs_matrix1.dot(input_map.ravel()).reshape([3, -1])
@@ -526,9 +522,7 @@ class FilterBinTest(MPITestCase):
             fname = os.path.join(self.outdir, "obs_matrix_cached_test.png")
             fig.savefig(fname)
 
-            for filtered, test_map in [
-                    (filtered1, test_map1), (filtered2, test_map2)
-            ]:
+            for filtered, test_map in [(filtered1, test_map1), (filtered2, test_map2)]:
                 good = filtered[0] != 0
                 for i in range(3):
                     rms1 = np.std(filtered[i][good])
