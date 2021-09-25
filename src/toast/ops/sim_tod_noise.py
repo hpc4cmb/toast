@@ -14,7 +14,7 @@ from .. import rng
 
 from ..timing import function_timer
 
-from ..traits import trait_docs, Int, Unicode, Quantity
+from ..traits import trait_docs, Int, Unicode, Quantity, Bool
 
 from ..fft import FFTPlanReal1DStore
 
@@ -232,7 +232,7 @@ class SimNoise(Operator):
         None, allow_none=True, help="Desired output units of the timestream"
     )
 
-    serial = Bool(True, help="for debug")
+    serial = Bool(False, help="Use legacy serial implementation instead of batched")
 
     @traitlets.validate("realization")
     def _check_realization(self, proposal):
@@ -356,6 +356,45 @@ class SimNoise(Operator):
             else:
                 # Build up the list of noise stream indices and verify that the
                 # frequency data for all psds are consistent.
+                strm_names = list()
+                freq_zero = nse.freq(nse.keys[0])
+                for ikey, key in enumerate(nse.keys):
+                    weight = 0.0
+                    for det in dets:
+                        weight += np.abs(nse.weight(det, key))
+                    if weight == 0:
+                        continue
+                    test_freq = nse.freq(key)
+                    if (
+                        len(test_freq) != len(freq_zero)
+                        or test_freq[0] != freq_zero[0]
+                        or test_freq[-1] != freq_zero[-1]
+                    ):
+                        msg = "All psds must have the same frequency values"
+                        log.error(msg)
+                        raise RuntimeError(msg)
+                    strm_names.append(key)
+
+                freq = AlignedF64(len(freq_zero))
+                freq[:] = freq_zero.to_value(u.Hz)
+
+                strmindices = np.array(
+                    [nse.index(x) for x in strm_names], dtype=np.uint64
+                )
+
+                psdbuf = AlignedF64(len(freq_zero) * len(strmindices))
+                psds = psdbuf.array().reshape((len(strmindices), len(freq_zero)))
+                for ikey, key in enumerate(strm_names):
+                    sim_units = None
+                    psd_units = nse.psd(key).unit
+                    if self.det_data_units is not None:
+                        sim_units = self.det_data_units ** 2 * u.second
+                    else:
+                        sim_units = psd_units
+                    psds[ikey][:] = nse.psd(key).to_value(sim_units)
+
+                noisebuf = AlignedF64(ob.n_local_samples * len(strmindices))
+                noise = noisebuf.array().reshape((len(strmindices), ob.n_local_samples))
 
                 tod_sim_noise_timestream_batch(
                     self.realization,
@@ -368,15 +407,28 @@ class SimNoise(Operator):
                     strmindices,
                     freq,
                     psds,
-                    nsedata,
+                    noise,
                 )
+
+                del psds
+                psdbuf.clear()
+                del psdbuf
+
+                freq.clear()
+                del freq
+
                 # Add the noise to all detectors that have nonzero weights
                 for ikey, key in enumerate(nse.keys):
                     for det in dets:
                         weight = nse.weight(det, key)
                         if weight == 0:
                             continue
-                        ob.detdata[self.det_data][det] += weight * nsedata[ikey]
+                        ob.detdata[self.det_data][det] += weight * noise[ikey]
+
+                del noise
+                noisebuf.clear()
+                del noisebuf
+
                 # Save memory by clearing the fft plans
                 store = FFTPlanReal1DStore.get()
                 store.clear()

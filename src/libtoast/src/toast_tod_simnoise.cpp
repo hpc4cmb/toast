@@ -269,11 +269,11 @@ void toast::tod_sim_noise_timestream_batch(
     // for all detectors.
 
     int64_t fftlen;
-    int64_t npsd = (fftlen / 2) + 1;
-
     toast::AlignedVector <double> interp_psds;
 
     tod_sim_noise_psd_interp(rate, samples, oversample, ndet, psdlen, freq, psds, fftlen, interp_psds);
+
+    int64_t npsd = (fftlen / 2) + 1;
 
     // Get the plan for this batch size and length.
 
