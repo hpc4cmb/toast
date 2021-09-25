@@ -298,7 +298,7 @@ class SimNoise(Operator):
             )
 
             if self.serial:
-                # Original serial implementation
+                # Original serial implementation (for testing / comparison)
                 for key in nse.keys:
                     # Check if noise matching this PSD key is needed
                     weight = 0.0
@@ -340,22 +340,11 @@ class SimNoise(Operator):
                         ob.detdata[self.det_data][det] += weight * nsedata
 
                 # Release the work space allocated in the FFT plan store.
-                #
-                # FIXME: the fact that we are doing this begs the question of why bother
-                # using the plan store at all?  Only one plan per process, per FFT length
-                # should be created.  The memory use of these plans should be small relative
-                # to the other timestream memory use except in the case where:
-                #
-                #  1.  Each process only has a few detectors
-                #  2.  There is a broad distribution of observation lengths.
-                #
-                # If we are in this regime frequently, we should just allocate / free
-                # each plan.
                 store = FFTPlanReal1DStore.get()
                 store.clear()
             else:
                 # Build up the list of noise stream indices and verify that the
-                # frequency data for all psds are consistent.
+                # frequency data for all psds is consistent.
                 strm_names = list()
                 freq_zero = nse.freq(nse.keys[0])
                 for ikey, key in enumerate(nse.keys):
@@ -418,7 +407,7 @@ class SimNoise(Operator):
                 del freq
 
                 # Add the noise to all detectors that have nonzero weights
-                for ikey, key in enumerate(nse.keys):
+                for ikey, key in enumerate(strm_names):
                     for det in dets:
                         weight = nse.weight(det, key)
                         if weight == 0:

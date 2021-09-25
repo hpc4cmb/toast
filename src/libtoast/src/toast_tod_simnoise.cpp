@@ -146,60 +146,29 @@ void toast::tod_sim_noise_timestream(
     uint64_t obsindx, uint64_t detindx, double rate, int64_t firstsamp,
     int64_t samples, int64_t oversample, const double * freq,
     const double * psd, int64_t psdlen, double * noise) {
-    /*
-       Generate a noise timestream, given a starting RNG state.
 
-       Use the RNG parameters to generate unit-variance Gaussian samples and then modify
-          the Fourier domain amplitudes to match the desired PSD.
-
-       The RNG (Threefry2x64 from Random123) takes a "key" and a "counter"
-       which each consist of two unsigned 64bit integers.  These four numbers together
-          uniquely identify a single sample.  We construct those four numbers in the
-          following way:
-
-       key1 = realization * 2^32 + telescope * 2^16 + component key2 = obsindx * 2^32 +
-          detindx counter1 = currently unused (0) counter2 = sample in stream
-
-       counter2 is incremented internally by the RNG function as it calls the underlying
-          Random123 library for each sample.
-
-       Args:
-        realization (int): the Monte Carlo realization.
-        telescope (int): a unique index assigned to a telescope.
-        component (int): a number representing the type of timestream we are generating
-           (detector noise, common mode noise, atmosphere, etc).
-        obsindx (int): the global index of this observation.
-        detindx (int): the global index of this detector.
-        rate (float): the sample rate.
-        firstsamp (int): the start sample in the stream.
-        samples (int): the number of samples to generate.
-        oversample (int): the factor by which to expand the FFT length beyond the number
-           of samples.
-        freq (array): the frequency points of the PSD.
-        psd (array): the PSD values.
-
-       Returns (tuple):
-        the timestream array, the interpolated PSD frequencies, and the interpolated PSD
-           values.
-     */
+    // Generate a single noise timestream.
+    //
+    // Use the RNG parameters to generate unit-variance Gaussian samples and then modify
+    //     the Fourier domain amplitudes to match the desired PSD.
+    //
+    // The RNG (Threefry2x64 from Random123) takes a "key" and a "counter"
+    // which each consist of two unsigned 64bit integers.  These four numbers together
+    //     uniquely identify a single sample.  We construct those four numbers in the
+    //     following way:
+    //
+    // key1 = realization * 2^32 + telescope * 2^16 + component key2 = obsindx * 2^32 +
+    //     detindx counter1 = currently unused (0) counter2 = sample in stream
+    //
+    // counter2 is incremented internally by the RNG function as it calls the underlying
+    //     Random123 library for each sample.
 
     int64_t fftlen;
-    int64_t npsd = (fftlen / 2) + 1;
-
     toast::AlignedVector <double> interp_psd;
 
     tod_sim_noise_psd_interp(rate, samples, oversample, 1, psdlen, freq, psd, fftlen, interp_psd);
 
-    // gaussian Re/Im randoms, packed into a half-complex array
-
-    uint64_t key1 = realization * 4294967296 + telescope * 65536 + component;
-    uint64_t key2 = obsindx * 4294967296 + detindx;
-    uint64_t counter1 = 0;
-    uint64_t counter2 = static_cast <uint64_t> (firstsamp * oversample);
-    toast::AlignedVector <double> rngdata(fftlen);
-
-    toast::rng_dist_normal(fftlen, key1, key2, counter1, counter2,
-                           rngdata.data());
+    int64_t npsd = (fftlen / 2) + 1;
 
     // Get a plan of the correct size and direction from the global
     // per-process plan store.
@@ -208,7 +177,15 @@ void toast::tod_sim_noise_timestream(
     auto plan = store.backward(fftlen, 1);
 
     double * pdata = plan->fdata(0);
-    std::copy(rngdata.begin(), rngdata.end(), pdata);
+
+    // gaussian Re/Im randoms, packed into a half-complex array
+
+    uint64_t key1 = realization * 4294967296 + telescope * 65536 + component;
+    uint64_t key2 = obsindx * 4294967296 + detindx;
+    uint64_t counter1 = 0;
+    uint64_t counter2 = static_cast <uint64_t> (firstsamp * oversample);
+
+    toast::rng_dist_normal(fftlen, key1, key2, counter1, counter2, pdata);
 
     pdata[0] *= interp_psd[0];
     for (int64_t i = 1; i < (fftlen / 2); ++i) {
@@ -282,36 +259,29 @@ void toast::tod_sim_noise_timestream_batch(
 
     // Populate the Fourier domain buffers
 
-    #pragma omp parallel default(shared)
-    {
-        toast::AlignedVector <double> rngdata(fftlen);
+    #pragma omp parallel for default(shared) schedule(static)
+    for (int64_t idet = 0; idet < ndet; ++idet) {
+        int64_t offset_fft = idet * fftlen;
+        int64_t offset_psd = idet * npsd;
 
-        #pragma omp for schedule(static)
-        for (int64_t idet = 0; idet < ndet; ++idet) {
-            int64_t offset_fft = idet * fftlen;
-            int64_t offset_psd = idet * npsd;
+        double * pdata = plan->fdata(0) + offset_fft;
 
-            // Gaussian Re/Im randoms, packed into a half-complex array
-            uint64_t key1 = realization * 4294967296 + telescope * 65536 + component;
-            uint64_t key2 = obsindx * 4294967296 + detindices[idet];
-            uint64_t counter1 = 0;
-            uint64_t counter2 = static_cast <uint64_t> (firstsamp * oversample);
+        // Gaussian Re/Im randoms, packed into a half-complex array
+        uint64_t key1 = realization * 4294967296 + telescope * 65536 + component;
+        uint64_t key2 = obsindx * 4294967296 + detindices[idet];
+        uint64_t counter1 = 0;
+        uint64_t counter2 = static_cast <uint64_t> (firstsamp * oversample);
 
-            toast::rng_dist_normal(fftlen, key1, key2, counter1, counter2,
-                                rngdata.data());
+        toast::rng_dist_normal(fftlen, key1, key2, counter1, counter2, pdata);
 
-            double * pdata = plan->fdata(0) + offset_fft;
-            std::copy(rngdata.begin(), rngdata.end(), pdata);
-
-            pdata[0] *= interp_psds[offset_psd + 0];
-            for (int64_t i = 1; i < (fftlen / 2); ++i) {
-                double psdval = interp_psds[offset_psd + i];
-                pdata[i] *= psdval;
-                pdata[fftlen - i] *= psdval;
-            }
-
-            pdata[fftlen / 2] *= interp_psds[offset_psd + npsd - 1];
+        pdata[0] *= interp_psds[offset_psd + 0];
+        for (int64_t i = 1; i < (fftlen / 2); ++i) {
+            double psdval = interp_psds[offset_psd + i];
+            pdata[i] *= psdval;
+            pdata[fftlen - i] *= psdval;
         }
+
+        pdata[fftlen / 2] *= interp_psds[offset_psd + npsd - 1];
     }
 
     // Inverse FFT
