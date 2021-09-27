@@ -17,9 +17,9 @@ if [ "x${unexe}" = "x" ]; then
     exit 1
 fi
 
-umajor=$(uncrustify --version | sed -e "s#.*-\([0-9]\+\)\.[0-9]\+\.[0-9]\+_.*#\1#")
-uminor=$(uncrustify --version | sed -e "s#.*-[0-9]\+\.\([0-9]\+\)\.[0-9]\+_.*#\1#")
-upatch=$(uncrustify --version | sed -e "s#.*-[0-9]\+\.[0-9]\+\.\([0-9]\+\)_.*#\1#")
+umajor=$(uncrustify --version | sed -Ee 's#.*-([0-9]+)\.([0-9]+)\.([0-9]+).*#\1#')
+uminor=$(uncrustify --version | sed -Ee 's#.*-([0-9]+)\.([0-9]+)\.([0-9]+).*#\2#')
+upatch=$(uncrustify --version | sed -Ee 's#.*-([0-9]+)\.([0-9]+)\.([0-9]+).*#\3#')
 
 echo "Found uncrustify version ${umajor}.${uminor}.${upatch}"
 if [ ${umajor} -eq "0" ]; then
