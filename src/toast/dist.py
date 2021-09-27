@@ -65,6 +65,13 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
         (list):  A list of DistRange tuples, one per group.
 
     """
+    if len(sizes) < groups:
+        msg = (
+            f"Too many groups: cannot distribute {len(sizes)} blocks between "
+            f"{groups} groups."
+        )
+        raise RuntimeError(msg)
+
     chunks = np.array(sizes, dtype=np.int64)
     weights = np.power(chunks.astype(np.float64), pow)
     max_per_proc = float(distribute_partition(weights.astype(np.int64), groups))
@@ -107,9 +114,12 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
     dist.append(DistRange(off, weights.shape[0] - off))
 
     if len(dist) != groups:
-        raise RuntimeError(
-            "Number of distributed groups different than " "number requested"
+        msg = (
+            f"Number of distributed groups ({len(dist)}) different than number "
+            f"requested ({groups})."
         )
+        raise RuntimeError(msg)
+
     return dist
 
 

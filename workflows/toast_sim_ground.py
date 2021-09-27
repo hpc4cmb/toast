@@ -88,6 +88,13 @@ def parse_config(operators, templates, comm):
         help="Map each observation separately.",
     )
 
+    parser.add_argument(
+        "--sample_rate",
+        required=False,
+        type=float,
+        help="Override focalplane sampling rate [Hz]",
+    )
+
     # Build a config dictionary starting from the operator defaults, overriding with any
     # config files specified with the '--config' commandline option, followed by any
     # individually specified parameter overrides.
@@ -115,6 +122,9 @@ def load_instrument_and_schedule(args, comm):
     # built-in Focalplane class.  In a workflow for a specific experiment we would
     # have a custom class.
     focalplane = toast.instrument.Focalplane(file=args.focalplane, comm=comm)
+
+    if args.sample_rate is not None:
+        focalplane.sample_rate = args.sample_rate * u.Hz
 
     # Load the schedule file
     schedule = toast.schedule.GroundSchedule()
@@ -238,6 +248,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.scan_map.pixel_pointing = ops.pixels_radec_final
     ops.scan_map.stokes_weights = ops.weights_radec
     ops.scan_map.save_pointing = use_full_pointing(job)
+    log.info_rank("Simulating sky signal", comm=world_comm)
     ops.scan_map.apply(data)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
@@ -246,6 +257,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
     if ops.sim_atmosphere.polarization_fraction != 0:
         ops.sim_atmosphere.detector_weights = ops.weights_azel
+    log.info_rank("Simulating and observing atmosphere", comm=world_comm)
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
@@ -263,6 +275,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
     # Simulate detector noise
 
     ops.sim_noise.noise_model = ops.elevation_model.out_model
+    log.info_rank("Simulating detector noise", comm=world_comm)
     ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
@@ -283,6 +296,7 @@ def reduce_data(job, args, data):
     # Flag Sun, Moon and the planets
 
     ops.flag_sso.detector_pointing = ops.det_pointing_azel
+    log.info_rank("Flagging SSOs", comm=world_comm)
     ops.flag_sso.apply(data)
     log.info_rank("Flagged SSOs in", comm=world_comm, timer=timer)
 
@@ -313,6 +327,7 @@ def reduce_data(job, args, data):
 
     # Apply the filter stack
 
+    log.info_rank("Filtering signal", comm=world_comm)
     ops.groundfilter.apply(data)
     log.info_rank("Finished ground-filtering in", comm=world_comm, timer=timer)
     ops.polyfilter1D.apply(data)
@@ -340,6 +355,7 @@ def reduce_data(job, args, data):
     ops.mapmaker.det_data = ops.sim_noise.det_data
     ops.mapmaker.output_dir = args.out_dir
 
+    log.info_rank("Making maps", comm=world_comm)
     if args.obsmaps:
         # Map each observation separately
         timer_obs = toast.timing.Timer()
