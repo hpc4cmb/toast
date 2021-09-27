@@ -141,7 +141,7 @@ class SimAtmosphere(Operator):
         2000.0 * u.meter, help="Central value of the water vapor distribution"
     )
 
-    z0_sigma = Quantity(0.0 * u.meter, help="Sigmal of the water vapor distribution")
+    z0_sigma = Quantity(0.0 * u.meter, help="Sigma of the water vapor distribution")
 
     wind_dist = Quantity(
         10000.0 * u.meter,
@@ -172,6 +172,12 @@ class SimAtmosphere(Operator):
     )
 
     debug_plots = Bool(False, help="If True, make plots of the debug snapshots")
+
+    field_of_view = Quantity(
+        None,
+        allow_none=True,
+        help="Override the focalplane field of view",
+    )
 
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
@@ -628,7 +634,10 @@ class SimAtmosphere(Operator):
 
     @function_timer
     def _get_scan_range(self, obs, comm, prefix):
-        fov = obs.telescope.focalplane.field_of_view
+        if self.field_of_view is not None:
+            fov = self.field_of_view
+        else:
+            fov = obs.telescope.focalplane.field_of_view
         fp_radius = 0.5 * fov.to_value(u.radian)
 
         # Read the extent of the AZ/EL boresight pointing, and use that
