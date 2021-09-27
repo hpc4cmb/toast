@@ -372,7 +372,7 @@ void toast::filter_poly2D_solve(
     int64_t nsample, int32_t ndet, int32_t ngroup, int32_t nmode,
     int32_t const * det_group, double const * templates, uint8_t const * masks,
     double const * signals, double * coeff
-) {
+    ) {
     // For each sample, solve for the regression coefficients.
     // The templates are flat packed across (detectors, modes).
     // The mask is flat packed across (samples, detectors).
@@ -449,7 +449,8 @@ void toast::filter_poly2D_solve(
                         rhs[imode] += templates[tmpl_off + imode] * det_sig * det_mask;
 
                         for (int32_t jmode = imode; jmode < nmode; ++jmode) {
-                            double val = templates[tmpl_off + imode] * templates[tmpl_off + jmode] * det_mask;
+                            double val = templates[tmpl_off + imode] *
+                                         templates[tmpl_off + jmode] * det_mask;
                             A[imode * nmode + jmode] += val;
                             if (jmode > imode) {
                                 A[jmode * nmode + imode] += val;
@@ -465,7 +466,7 @@ void toast::filter_poly2D_solve(
                     &inmode, &inmode, &one, A.data(), &inmode,
                     rhs.data(), &inmode, singular_values.data(), &rcond_limit,
                     &rank, work.data(), &lwork, &info
-                );
+                    );
                 int64_t offset = isamp * (ngroup * nmode) + igroup * nmode;
                 if (info == 0) {
                     // Solve was successful

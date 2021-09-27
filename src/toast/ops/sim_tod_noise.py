@@ -14,7 +14,7 @@ from .. import rng
 
 from ..timing import function_timer
 
-from ..traits import trait_docs, Int, Unicode, Quantity
+from ..traits import trait_docs, Int, Unicode, Quantity, Bool
 
 from ..fft import FFTPlanReal1DStore
 
@@ -22,7 +22,7 @@ from ..utils import rate_from_times, Logger, AlignedF64
 
 from ..observation import default_names as obs_names
 
-from .._libtoast import tod_sim_noise_timestream
+from .._libtoast import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
 
 from .operator import Operator
 
@@ -232,6 +232,8 @@ class SimNoise(Operator):
         None, allow_none=True, help="Desired output units of the timestream"
     )
 
+    serial = Bool(False, help="Use legacy serial implementation instead of batched")
+
     @traitlets.validate("realization")
     def _check_realization(self, proposal):
         check = proposal["value"]
@@ -295,60 +297,131 @@ class SimNoise(Operator):
                 ob.shared[self.times].data
             )
 
-            for key in nse.keys:
-                # Check if noise matching this PSD key is needed
-                weight = 0.0
-                for det in dets:
-                    weight += np.abs(nse.weight(det, key))
-                if weight == 0:
-                    continue
-
-                # Output units
-
-                sim_units = None
-                psd_units = nse.psd(key).unit
-                if self.det_data_units is not None:
-                    sim_units = self.det_data_units ** 2 * u.second
-                else:
-                    sim_units = psd_units
-
-                # Simulate the noise matching this key
-                nsedata = sim_noise_timestream(
-                    realization=self.realization,
-                    telescope=telescope,
-                    component=self.component,
-                    obsindx=obsindx,
-                    detindx=nse.index(key),
-                    rate=rate,
-                    firstsamp=ob.local_index_offset,
-                    samples=ob.n_local_samples,
-                    oversample=self._oversample,
-                    freq=nse.freq(key).to_value(u.Hz),
-                    psd=nse.psd(key).to_value(sim_units),
-                    py=False,
-                )
-
-                # Add the noise to all detectors that have nonzero weights
-                for det in dets:
-                    weight = nse.weight(det, key)
+            if self.serial:
+                # Original serial implementation (for testing / comparison)
+                for key in nse.keys:
+                    # Check if noise matching this PSD key is needed
+                    weight = 0.0
+                    for det in dets:
+                        weight += np.abs(nse.weight(det, key))
                     if weight == 0:
                         continue
-                    ob.detdata[self.det_data][det] += weight * nsedata
 
-            # Release the work space allocated in the FFT plan store.
-            #
-            # FIXME: the fact that we are doing this begs the question of why bother
-            # using the plan store at all?  Only one plan per process, per FFT length
-            # should be created.  The memory use of these plans should be small relative
-            # to the other timestream memory use except in the case where:
-            #
-            #  1.  Each process only has a few detectors
-            #  2.  There is a broad distribution of observation lengths.
-            #
-            # If we are in this regime frequently, we should just allocate / free
-            # each plan.
-            store = FFTPlanReal1DStore.get()
-            store.clear()
+                    # Output units
+
+                    sim_units = None
+                    psd_units = nse.psd(key).unit
+                    if self.det_data_units is not None:
+                        sim_units = self.det_data_units ** 2 * u.second
+                    else:
+                        sim_units = psd_units
+
+                    # Simulate the noise matching this key
+                    nsedata = sim_noise_timestream(
+                        realization=self.realization,
+                        telescope=telescope,
+                        component=self.component,
+                        obsindx=obsindx,
+                        detindx=nse.index(key),
+                        rate=rate,
+                        firstsamp=ob.local_index_offset,
+                        samples=ob.n_local_samples,
+                        oversample=self._oversample,
+                        freq=nse.freq(key).to_value(u.Hz),
+                        psd=nse.psd(key).to_value(sim_units),
+                        py=False,
+                    )
+
+                    # Add the noise to all detectors that have nonzero weights
+                    for det in dets:
+                        weight = nse.weight(det, key)
+                        if weight == 0:
+                            continue
+                        ob.detdata[self.det_data][det] += weight * nsedata
+
+                # Release the work space allocated in the FFT plan store.
+                store = FFTPlanReal1DStore.get()
+                store.clear()
+            else:
+                # Build up the list of noise stream indices and verify that the
+                # frequency data for all psds is consistent.
+                strm_names = list()
+                freq_zero = nse.freq(nse.keys[0])
+                for ikey, key in enumerate(nse.keys):
+                    weight = 0.0
+                    for det in dets:
+                        weight += np.abs(nse.weight(det, key))
+                    if weight == 0:
+                        continue
+                    test_freq = nse.freq(key)
+                    if (
+                        len(test_freq) != len(freq_zero)
+                        or test_freq[0] != freq_zero[0]
+                        or test_freq[-1] != freq_zero[-1]
+                    ):
+                        msg = "All psds must have the same frequency values"
+                        log.error(msg)
+                        raise RuntimeError(msg)
+                    strm_names.append(key)
+
+                freq = AlignedF64(len(freq_zero))
+                freq[:] = freq_zero.to_value(u.Hz)
+
+                strmindices = np.array(
+                    [nse.index(x) for x in strm_names], dtype=np.uint64
+                )
+
+                psdbuf = AlignedF64(len(freq_zero) * len(strmindices))
+                psds = psdbuf.array().reshape((len(strmindices), len(freq_zero)))
+                for ikey, key in enumerate(strm_names):
+                    sim_units = None
+                    psd_units = nse.psd(key).unit
+                    if self.det_data_units is not None:
+                        sim_units = self.det_data_units ** 2 * u.second
+                    else:
+                        sim_units = psd_units
+                    psds[ikey][:] = nse.psd(key).to_value(sim_units)
+
+                noisebuf = AlignedF64(ob.n_local_samples * len(strmindices))
+                noise = noisebuf.array().reshape((len(strmindices), ob.n_local_samples))
+
+                tod_sim_noise_timestream_batch(
+                    self.realization,
+                    telescope,
+                    self.component,
+                    obsindx,
+                    rate,
+                    ob.local_index_offset,
+                    self._oversample,
+                    strmindices,
+                    freq,
+                    psds,
+                    noise,
+                )
+
+                del psds
+                psdbuf.clear()
+                del psdbuf
+
+                freq.clear()
+                del freq
+
+                # Add the noise to all detectors that have nonzero weights
+                for ikey, key in enumerate(strm_names):
+                    for det in dets:
+                        weight = nse.weight(det, key)
+                        if weight == 0:
+                            continue
+                        ob.detdata[self.det_data][det] += weight * noise[ikey]
+
+                del noise
+                noisebuf.clear()
+                del noisebuf
+
+                # Save memory by clearing the fft plans
+                store = FFTPlanReal1DStore.get()
+                store.clear()
+
         return
 
     def _finalize(self, data, **kwargs):

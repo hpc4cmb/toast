@@ -90,9 +90,22 @@ class SimNoiseTest(MPITestCase):
         noise_model = ops.DefaultNoiseModel()
         noise_model.apply(data)
 
-        # Simulate noise using this model
+        # Simulate data in parallel
         sim_noise = ops.SimNoise()
+        sim_noise.serial = False
+        sim_noise.det_data = "noise_batch"
         sim_noise.apply(data)
+
+        # Simulate noise serially and compare results
+        sim_noise.serial = True
+        sim_noise.det_data = "noise"
+        sim_noise.apply(data)
+
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                np.testing.assert_array_almost_equal(
+                    ob.detdata["noise_batch"][det], ob.detdata["noise"][det], decimal=6
+                )
 
         wrank = data.comm.world_rank
         grank = data.comm.group_rank
