@@ -18,8 +18,21 @@ popd >/dev/null 2>&1
 
 yum -y install xz
 
+# Install MPICH
+
+yum -y install mpich2-devel mpich-autoload
+
+# Start a new shell to pick up mpich changes
+
+exec bash
+
 # Get newer cmake with pip
+
 pip install cmake
+
+# Install mpi4py
+
+pip install mpi4py
 
 # Build options
 
@@ -34,34 +47,6 @@ CXXFLAGS="-O3 -fPIC -pthread -std=c++11"
 MAKEJ=2
 
 PREFIX=/usr
-
-# Install MPICH
-
-mpich_version=3.4.2
-mpich_dir=mpich-${mpich_version}
-mpich_pkg=${mpich_dir}.tar.gz
-
-echo "Fetching MPICH..."
-
-if [ ! -e ${mpich_pkg} ]; then
-    curl -SL http://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
-fi
-
-echo "Building MPICH..."
-
-rm -rf ${mpich_dir}
-tar xzf ${mpich_pkg} \
-    && pushd ${mpich_dir} >/dev/null 2>&1 \
-    && CC="${CC}" CXX="${CXX}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
-    ./configure --disable-fortran --with-device=ch3 --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install \
-    && popd >/dev/null 2>&1
-
-# Install mpi4py
-
-pip install mpi4py
 
 # libgmp
 
