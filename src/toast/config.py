@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import sys
 import types
 import re
 import ast
@@ -96,7 +97,7 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
             if info["type"] == "bool":
                 # Special case for boolean
                 if name == "enabled":
-                    # Special handling of the TraitConfig "disabled" trait.  We provide
+                    # Special handling of the TraitConfig "enabled" trait.  We provide
                     # both an enable and disable option for every instance which later
                     # toggles that trait.
                     df = True
@@ -167,14 +168,13 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
     return
 
 
-def args_update_config(args, conf, defaults, section, prefix="", separator="\."):
+def args_update_config(args, conf, useropts, section, prefix="", separator="\."):
     """Override options in a config dictionary from args namespace.
 
     Args:
         args (namespace):  The args namespace returned by ArgumentParser.parse_args()
         conf (dict):  The configuration to update.
-        defaults (dict):  The starting default config, used to detect which options from
-            argparse have been changed by the user.
+        useropts (list):  The list of options actually specified by the user.
         section (str):  Process objects in this section of the config.
         prefix (str):  Prepend this to the beginning of all options.
         separator (str):  Use this character between the class name and parameter.
@@ -183,9 +183,30 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="\.")
         (namespace):  The un-parsed remaining arg vars.
 
     """
+    # Build the regex match of option names
+    obj_pat = re.compile("{}(.*?){}(.*)".format(prefix, separator))
+    user_pat = re.compile("--{}(.*?){}(.*)".format(prefix, separator))
+    no_pat = re.compile("^no_(.*)")
+
+    # Parse the list of user options
+    user = dict()
+    for uo in useropts:
+        user_mat = user_pat.match(uo)
+        if user_mat is not None:
+            name = user_mat.group(1)
+            optname = user_mat.group(2)
+            if name not in user:
+                user[name] = set()
+            # Handle mapping of option names
+            if optname == "enable" or optname == "disable":
+                optname = "enabled"
+            no_mat = no_pat.match(optname)
+            if no_mat is not None:
+                optname = no_mat.group(1)
+            user[name].add(optname)
+
     remain = copy.deepcopy(args)
     parent = conf
-    dparent = defaults
     if section is not None:
         path = section.split("/")
         for p in path:
@@ -193,24 +214,15 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="\.")
                 msg = "section {} does not exist in config".format(section)
                 raise RuntimeError(msg)
             parent = parent[p]
-        for p in path:
-            if p not in dparent:
-                msg = "section {} does not exist in defaults".format(section)
-                raise RuntimeError(msg)
-            dparent = dparent[p]
-    # Build the regex match of option names
-    obj_pat = re.compile("{}(.*?){}(.*)".format(prefix, separator))
+
     for arg, val in vars(args).items():
         obj_mat = obj_pat.match(arg)
         if obj_mat is not None:
             name = obj_mat.group(1)
             optname = obj_mat.group(2)
-            if name not in parent or name not in dparent:
+            if name not in parent:
                 # This command line option is not part of this section
                 continue
-            # Only update config options which are different than the default.
-            # Otherwise we would be overwriting values from any config files with the
-            # defaults from argparse.
 
             if optname == "enable":
                 # The actual trait name is "enabled"
@@ -218,7 +230,7 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="\.")
 
             if val is None:
                 val = "None"
-            elif dparent[name][optname]["type"] == "bool":
+            elif parent[name][optname]["type"] == "bool":
                 if isinstance(val, bool):
                     # Convert to str
                     if val:
@@ -229,18 +241,23 @@ def args_update_config(args, conf, defaults, section, prefix="", separator="\.")
                     # This is already a string...
                     pass
             else:
-                if dparent[name][optname]["unit"] != "None":
+                # print(f"Checking option {name}.{optname} unit")
+                # print(f"  parent[{name}] = {parent[name]}")
+                if parent[name][optname]["unit"] != "None":
                     # This option is a quantity
                     val = "{:0.14e}".format(
-                        val.to_value(u.Unit(dparent[name][optname]["unit"]))
+                        val.to_value(u.Unit(parent[name][optname]["unit"]))
                     )
-                elif dparent[name][optname]["type"] == "float":
+                elif parent[name][optname]["type"] == "float":
                     val = "{:0.14e}".format(val)
                 else:
                     val = str(val)
-            if val != dparent[name][optname]["value"]:
-                parent[name][optname]["value"] = val
-            # This arg was recognized, remove from the namespace.
+            if val != parent[name][optname]["value"]:
+                # The argparse value is different than the input config value.
+                # Only update the value if it was actually specified by the user.
+                if name in user and optname in user[name]:
+                    # The user did set this
+                    parent[name][optname]["value"] = val
             delattr(remain, arg)
     return remain
 
@@ -250,6 +267,7 @@ def parse_config(
     operators=list(),
     templates=list(),
     prefix="",
+    opts=None,
 ):
     """Load command line arguments associated with object properties.
 
@@ -284,6 +302,7 @@ def parse_config(
             An enable / disable option is created for each, which toggles the
             TraitConfig base class "disabled" trait.
         prefix (str):  Optional string to prefix all options by.
+        opts (list):  If not None, parse arguments from this list instead of sys.argv.
 
     Returns:
         (tuple):  The (config dictionary, args).  The args namespace contains all the
@@ -364,8 +383,10 @@ def parse_config(
         help="(Advanced) Override the detected memory per node in bytes",
     )
 
-    # Parse commandline.
-    args = parser.parse_args()
+    # Parse commandline or list of options.
+    if opts is None:
+        opts = sys.argv[1:]
+    args = parser.parse_args(args=opts)
 
     # Dump default config values.
     if args.defaults_toml is not None:
@@ -389,11 +410,9 @@ def parse_config(
 
     # Parse operator commandline options.  These override any config file or default
     # values.
-    op_remaining = args_update_config(
-        args, config, defaults, "operators", prefix=prefix
-    )
+    op_remaining = args_update_config(args, config, opts, "operators", prefix=prefix)
     remaining = args_update_config(
-        op_remaining, config, defaults, "templates", prefix=prefix
+        op_remaining, config, opts, "templates", prefix=prefix
     )
 
     # Remove the options we created in this function
@@ -425,9 +444,11 @@ def _load_toml_traits(tbl):
     result = OrderedDict()
     for k in tbl.keys():
         if k == "class":
+            # print(f"  found trait class '{tbl[k]}'")
             result[k] = tbl[k]
         elif isinstance(tbl[k], tomlkit.items.Table):
             # This is a dictionary trait
+            # print(f"  found trait Dict '{tbl[k]}'")
             result[k] = OrderedDict()
             result[k]["value"] = OrderedDict()
             result[k]["type"] = "dict"
@@ -436,6 +457,7 @@ def _load_toml_traits(tbl):
                 result[k]["value"][str(tk)] = str(tv)
         elif isinstance(tbl[k], tomlkit.items.Array):
             # This is a list
+            # print(f"  found trait List '{tbl[k]}'")
             result[k] = OrderedDict()
             result[k]["value"] = list()
             result[k]["type"] = "list"
@@ -443,35 +465,49 @@ def _load_toml_traits(tbl):
             for it in tbl[k]:
                 result[k]["value"].append(str(it))
         elif isinstance(tbl[k], str):
-            if tbl[k] == "None":
+            # print(f"  Checking string '{tbl[k]}'")
+            if len(tbl[k]) == 0:
+                # Special handling for empty string
+                # print(f"  found trait str empty '{tbl[k]}'")
+                result[k] = OrderedDict()
+                result[k]["value"] = ""
+                result[k]["type"] = "str"
+                result[k]["unit"] = "None"
+            elif tbl[k] == "None":
                 # Copy None values.  There is no way to determine the type in this case.
                 # This is just a feature of how we are constructing the TOML files for
                 # ease of use, rather than dumping the full trait info as sub-tables.
                 # In practice these parameters will be ignored when constructing
                 # TraitConfig objects and the defaults will be used anyway.
+                # print(f"  found trait str None '{tbl[k]}'")
                 result[k] = OrderedDict()
                 result[k]["value"] = tbl[k]
                 result[k]["type"] = "unknown"
                 result[k]["unit"] = "None"
             else:
+                # print("    Not empty or None")
                 result[k] = OrderedDict()
                 # Is this string actually a Quantity?  We try to convert the first
                 # element of the string to a float and the remainder to a Unit.
-                parts = tbl[k].split()
-                vstr = parts.pop(0)
-                ustr = " ".join(parts)
                 try:
+                    parts = tbl[k].split()
+                    vstr = parts.pop(0)
+                    ustr = " ".join(parts)
                     v = float(vstr)
                     unit = u.Unit(ustr)
                     result[k]["value"] = "{:0.14e}".format(v)
                     result[k]["type"] = "Quantity"
                     result[k]["unit"] = str(unit)
-                except Exception:
+                    # print(f"  found trait Quantity '{tbl[k]}'")
+                except Exception as e:
+                    # print("      failed... just a string")
                     # Just a regular string
+                    # print(f"  found trait str '{tbl[k]}'")
                     result[k]["value"] = tbl[k]
                     result[k]["type"] = "str"
                     result[k]["unit"] = "None"
         elif isinstance(tbl[k], bool):
+            # print(f"  found trait bool '{tbl[k]}'")
             result[k] = OrderedDict()
             if tbl[k]:
                 result[k]["value"] = "True"
@@ -480,11 +516,13 @@ def _load_toml_traits(tbl):
             result[k]["type"] = "bool"
             result[k]["unit"] = "None"
         elif isinstance(tbl[k], int):
+            # print(f"  found trait int '{tbl[k]}'")
             result[k] = OrderedDict()
             result[k]["value"] = "{}".format(tbl[k])
             result[k]["type"] = "int"
             result[k]["unit"] = "None"
         elif isinstance(tbl[k], float):
+            # print(f"  found trait float '{tbl[k]}'")
             result[k] = OrderedDict()
             result[k]["value"] = "{:0.14e}".format(tbl[k])
             result[k]["type"] = "float"
@@ -533,7 +571,7 @@ def load_toml(file, input=None, comm=None):
                         # This is just a dictionary
                         conf_root[k] = OrderedDict()
                         convert_node(raw_root[k], conf_root[k])
-                except:
+                except Exception as e:
                     # This element is not a sub-table, just copy.
                     conf_root[k] = raw_root[k]
         else:
@@ -648,6 +686,15 @@ def dump_toml(file, conf, comm=None):
                             help = None
                             if "help" in conf_root[k]:
                                 help = conf_root[k]["help"]
+                            # print(
+                            #     "{}  trait {}, type {}, ({}): {}".format(
+                            #         " " * indent_size,
+                            #         conf_root[k]["value"],
+                            #         conf_root[k]["type"],
+                            #         unit,
+                            #         help,
+                            #     )
+                            # )
                             _dump_toml_trait(
                                 table_root,
                                 indent_size,
@@ -659,9 +706,18 @@ def dump_toml(file, conf, comm=None):
                             )
                         else:
                             # descend tree
+                            # print(
+                            #     "{}  {} not a trait, descending".format(
+                            #         " " * indent_size, k
+                            #     )
+                            # )
                             table_root[k] = table()
                             convert_node(conf_root[k], table_root[k], indent_size + 2)
                     else:
+                        # print(
+                        #     "{}  key {} not dict".format(" " * indent_size, k),
+                        #     flush=True,
+                        # )
                         table_root.add(k, conf_root[k])
                         table_root[k].indent(indent_size)
             else:
@@ -700,7 +756,7 @@ def load_json(file, input=None, comm=None):
         return raw
 
     # We need to merge results.
-    _merge_config(raw_config, input)
+    _merge_config(raw, input)
 
     return input
 
