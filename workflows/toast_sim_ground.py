@@ -188,6 +188,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     timer = toast.timing.Timer()
     timer.start()
 
+    ops.mem_count.prefix = "Before Simulation"
+    ops.mem_count.apply(data)
+
     # Simulate the telescope pointing
 
     ops.sim_ground.telescope = telescope
@@ -196,6 +199,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
         ops.sim_ground.weather = telescope.site.name
     ops.sim_ground.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After Scan Simulation"
+    ops.mem_count.apply(data)
 
     # Construct a "perfect" noise model just from the focalplane parameters
 
@@ -217,6 +223,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.elevation_model.view = ops.det_pointing_azel.view
     ops.elevation_model.apply(data)
     log.info_rank("Created elevation noise model in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After noise model"
+    ops.mem_count.apply(data)
 
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
@@ -252,6 +261,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.scan_map.apply(data)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After simulating sky signal"
+    ops.mem_count.apply(data)
+
     # Simulate atmosphere
 
     ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
@@ -261,16 +273,25 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After simulating atmosphere"
+    ops.mem_count.apply(data)
+
     # Simulate scan-synchronous signal
 
     ops.sim_sss.detector_pointing = ops.det_pointing_azel
     ops.sim_sss.apply(data)
     log.info_rank("Simulated Scan-synchronous signal", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After simulating scan-synchronous signal"
+    ops.mem_count.apply(data)
+
     # Apply a time constant
 
     ops.convolve_time_constant.apply(data)
     log.info_rank("Convolved time constant in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After applying time constant"
+    ops.mem_count.apply(data)
 
     # Simulate detector noise
 
@@ -278,6 +299,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     log.info_rank("Simulating detector noise", comm=world_comm)
     ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After simulating noise"
+    ops.mem_count.apply(data)
 
     return data
 
@@ -300,6 +324,9 @@ def reduce_data(job, args, data):
     ops.flag_sso.apply(data)
     log.info_rank("Flagged SSOs in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After flagging SSOs"
+    ops.mem_count.apply(data)
+
     # Optional geometric factors
 
     ops.cadence_map.pixel_pointing = ops.pixels_radec_final
@@ -308,11 +335,17 @@ def reduce_data(job, args, data):
     ops.cadence_map.apply(data)
     log.info_rank("Calculated cadence map in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After cadence map"
+    ops.mem_count.apply(data)
+
     ops.crosslinking.pixel_pointing = ops.pixels_radec_final
     ops.crosslinking.pixel_dist = ops.binner_final.pixel_dist
     ops.crosslinking.output_dir = args.out_dir
     ops.crosslinking.apply(data)
     log.info_rank("Calculated crosslinking in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After crosslinking map"
+    ops.mem_count.apply(data)
 
     # Collect signal statistics before filtering
 
@@ -320,10 +353,16 @@ def reduce_data(job, args, data):
     ops.raw_statistics.apply(data)
     log.info_rank("Calculated raw statistics in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After raw statistics"
+    ops.mem_count.apply(data)
+
     # Deconvolve a time constant
 
     ops.deconvolve_time_constant.apply(data)
     log.info_rank("Deconvolved time constant in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After deconvolving time constant"
+    ops.mem_count.apply(data)
 
     # Apply the filter stack
 
@@ -337,11 +376,17 @@ def reduce_data(job, args, data):
     ops.common_mode_filter.apply(data)
     log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After filtering"
+    ops.mem_count.apply(data)
+
     # Collect signal statistics after filtering
 
     ops.filtered_statistics.output_dir = args.out_dir
     ops.filtered_statistics.apply(data)
     log.info_rank("Calculated filtered statistics in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After filtered statistics"
+    ops.mem_count.apply(data)
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -390,6 +435,9 @@ def reduce_data(job, args, data):
         ops.mapmaker.apply(data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After mapmaker"
+    ops.mem_count.apply(data)
+
     # Optionally run Madam
 
     if toast.ops.madam.available():
@@ -398,6 +446,9 @@ def reduce_data(job, args, data):
         ops.madam.stokes_weights = ops.weights_radec
         ops.madam.apply(data)
         log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+
+        ops.mem_count.prefix = "After Madam"
+        ops.mem_count.apply(data)
 
 
 def dump_spt3g(job, args, data):
@@ -525,6 +576,7 @@ def main():
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
+        toast.ops.MemoryCounter(name="mem_count", enabled=False),
     ]
     if toast.ops.madam.available():
         operators.append(toast.ops.Madam(name="madam", enabled=False))
