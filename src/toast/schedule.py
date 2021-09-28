@@ -415,6 +415,7 @@ class GroundSchedule(object):
                         if iscan % nsplit != isplit:
                             continue
                     self.scans.append(gscan)
+            log.info(f"Loaded {len(self.scans)} scans from {file}")
             if sort:
                 sortedscans = sorted(self.scans, key=lambda scn: scn.name)
                 self.scans = sortedscans

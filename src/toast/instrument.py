@@ -427,16 +427,24 @@ class Focalplane(object):
         file=None,
         comm=None,
     ):
+        log = Logger.get()
         self.detector_data = None
         self.field_of_view = None
         self.sample_rate = None
 
         if file is not None:
+            log.info_rank(f"Loading focalplane from {file}", comm=comm)
             self.read(file, comm=comm)
         else:
             self.detector_data = detector_data
             self.field_of_view = field_of_view
             self.sample_rate = sample_rate
+        log.info_rank(
+            f"Focalplane has {len(self.detector_data)} detectors that span "
+            f"{self.field_of_view.to_value(u.deg):.3f} degrees and are sampled at "
+            f"{self.sample_rate.to_value(u.Hz)} Hz.",
+            comm=comm,
+        )
 
         # Add UID if not given
         if "uid" not in self.detector_data.colnames:
@@ -625,6 +633,10 @@ class Focalplane(object):
     @property
     def detectors(self):
         return list(self._det_to_row.keys())
+
+    @property
+    def n_detectors(self):
+        return len(self._det_to_row.keys())
 
     def keys(self):
         return self.detectors
