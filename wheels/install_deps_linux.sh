@@ -20,11 +20,11 @@ yum -y install xz
 
 # Install MPICH
 
-yum -y install mpich2-devel mpich-autoload
+yum -y install mpich-devel mpich-autoload
 
-# Start a new shell to pick up mpich changes
+# Pick up mpich changes
 
-exec bash
+. /etc/profile
 
 # Get newer cmake with pip
 
