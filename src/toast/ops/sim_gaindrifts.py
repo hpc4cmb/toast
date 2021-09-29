@@ -182,7 +182,9 @@ class GainDrifter(Operator):
                         psd=psd,
                         py=False,
                     )
-                    thermal_fluct.append(gain)
+                    thermal_fluct.append(np.array(gain))
+                    gain.clear()
+                    del gain
                 thermal_fluct = np.array(thermal_fluct)
 
                 for det in dets:
@@ -246,21 +248,22 @@ class GainDrifter(Operator):
                 else:
                     gain_common = []
                     for iw, w in enumerate(det_group):
-                        gain_common.append(
-                            sim_noise_timestream(
-                                realization=self.realization,
-                                telescope=ob.telescope.uid,
-                                component=self.component,
-                                obsindx=ob.uid,
-                                detindx=iw,  # drift common to all detectors
-                                rate=fsampl,
-                                firstsamp=ob.local_index_offset,
-                                samples=ob.n_local_samples,
-                                freq=freq,
-                                psd=psd,
-                                py=False,
-                            )
+                        gain = sim_noise_timestream(
+                            realization=self.realization,
+                            telescope=ob.telescope.uid,
+                            component=self.component,
+                            obsindx=ob.uid,
+                            detindx=iw,  # drift common to all detectors
+                            rate=fsampl,
+                            firstsamp=ob.local_index_offset,
+                            samples=ob.n_local_samples,
+                            freq=freq,
+                            psd=psd,
+                            py=False,
                         )
+                        gain_common.append(np.array(gain))
+                        gain.clear()
+                        del gain
                 gain_common = np.array(gain_common)
 
                 for det in dets:
@@ -287,9 +290,11 @@ class GainDrifter(Operator):
                     # assign the thermal fluct. simulated for that det. group
                     ob.detdata[self.det_data][det] *= (
                         1
-                        + (self.detector_mismatch * gain)
+                        + (self.detector_mismatch * gain.array())
                         + (1 - self.detector_mismatch) * gain_common[mask][0]
                     )
+                    gain.clear()
+                    del gain
 
         return
 
