@@ -201,8 +201,9 @@ class SimNoiseTest(MPITestCase):
                     py=True,
                 )
                 np.testing.assert_array_almost_equal(
-                    pytod, ob.detdata[sim_noise.det_data][det], decimal=2
+                    pytod.array(), ob.detdata[sim_noise.det_data][det], decimal=2
                 )
+                pytod.clear()
 
             if wrank == 0:
                 # One process dumps out interpolated PSD for debugging
@@ -328,6 +329,8 @@ class SimNoiseTest(MPITestCase):
                     psd=nse.psd(det).to_value(u.K ** 2 * u.second),
                     py=True,
                 )
+                pytod.clear()
+
                 # Factor of 2 comes from the negative frequency values.
                 psd_norm[det] = 2.0 * np.sum(psds[det] * dfreq)
 

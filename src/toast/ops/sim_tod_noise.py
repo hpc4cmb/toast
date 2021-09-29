@@ -80,11 +80,11 @@ def sim_noise_timestream(
             for testing.  If True, also return the interpolated PSD.
 
     Returns:
-        (array):  the noise timestream.  If py=True, returns a tuple of timestream,
+        (AlignedF64):  the noise timestream.  If py=True, returns a tuple of timestream,
             interpolated frequencies, and interpolated PSD.
 
     """
-    tdata = None
+    tdata = AlignedF64(samples)
     if py:
         fftlen = 2
         while fftlen <= (oversample * samples):
@@ -169,16 +169,15 @@ def sim_noise_timestream(
         fdata *= scale
 
         # inverse FFT
-        tdata = np.fft.irfft(fdata)
+        tempdata = np.fft.irfft(fdata)
 
         # subtract the DC level- for just the samples that we are returning
         offset = (fftlen - samples) // 2
 
-        DC = np.mean(tdata[offset : offset + samples])
-        tdata[offset : offset + samples] -= DC
-        return (tdata[offset : offset + samples], interp_freq, interp_psd)
+        DC = np.mean(tempdata[offset : offset + samples])
+        tdata[:] = tempdata[offset : offset + samples] - DC
+        return (tdata, interp_freq, interp_psd)
     else:
-        tdata = AlignedF64(samples)
         tod_sim_noise_timestream(
             realization,
             telescope,
@@ -192,7 +191,7 @@ def sim_noise_timestream(
             psd.astype(np.float64),
             tdata,
         )
-        return tdata.array()
+        return tdata
 
 
 @trait_docs
@@ -232,7 +231,7 @@ class SimNoise(Operator):
         None, allow_none=True, help="Desired output units of the timestream"
     )
 
-    serial = Bool(False, help="Use legacy serial implementation instead of batched")
+    serial = Bool(True, help="Use legacy serial implementation instead of batched")
 
     @traitlets.validate("realization")
     def _check_realization(self, proposal):
@@ -337,7 +336,10 @@ class SimNoise(Operator):
                         weight = nse.weight(det, key)
                         if weight == 0:
                             continue
-                        ob.detdata[self.det_data][det] += weight * nsedata
+                        ob.detdata[self.det_data][det] += weight * nsedata.array()
+
+                    nsedata.clear()
+                    del nsedata
 
                 # Release the work space allocated in the FFT plan store.
                 store = FFTPlanReal1DStore.get()
