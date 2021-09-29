@@ -3,7 +3,7 @@
 Change Log
 -------------------------
 
-2.3.13 (2021-09-23)
+2.3.13 (2021-09-29)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Add support for generating observation matrices (PR `#374`_).

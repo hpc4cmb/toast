@@ -234,7 +234,7 @@ def readme():
 
 
 conf = dict()
-conf["name"] = "toast-cmb"
+conf["name"] = "toast"
 conf["description"] = "Time Ordered Astrophysics Scalable Tools"
 conf["long_description"] = readme()
 conf["long_description_content_type"] = "text/markdown"
