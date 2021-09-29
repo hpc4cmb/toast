@@ -284,7 +284,7 @@ class SpaceSite(Site):
 class Bandpass(object):
     """Class that contains the bandpass information for an entire focalplane."""
 
-    def __init__(self, bandcenters, bandwidths, nstep=1001):
+    def __init__(self, bandcenters, bandwidths, nstep=101):
         """All units in GHz
 
         Args :

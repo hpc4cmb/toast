@@ -553,11 +553,8 @@ def main():
 
     operators = [
         toast.ops.SimGround(name="sim_ground", weather="atacama", detset_key="pixel"),
-        toast.ops.DefaultNoiseModel(name="noise_model"),
-        toast.ops.ElevationNoise(
-            name="elevation_model",
-            out_model="noise_model",
-        ),
+        toast.ops.DefaultNoiseModel(name="default_model", noise_model="noise_model"),
+        toast.ops.ElevationNoise(name="elevation_model", out_model="noise_model"),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
         toast.ops.StokesWeights(
             name="weights_azel", weights="weights_azel", mode="IQU"
