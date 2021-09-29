@@ -121,7 +121,14 @@ def load_instrument_and_schedule(args, comm):
     # Load a generic focalplane file.  NOTE:  again, this is just using the
     # built-in Focalplane class.  In a workflow for a specific experiment we would
     # have a custom class.
+    log = toast.utils.Logger.get()
+    timer = toast.timing.Timer()
+    timer.start()
+
     focalplane = toast.instrument.Focalplane(file=args.focalplane, comm=comm)
+    log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After loading focalplane:  {mem}", comm)
 
     if args.sample_rate is not None:
         focalplane.sample_rate = args.sample_rate * u.Hz
@@ -129,6 +136,9 @@ def load_instrument_and_schedule(args, comm):
     # Load the schedule file
     schedule = toast.schedule.GroundSchedule()
     schedule.read(args.schedule, comm=comm)
+    log.info_rank("Loaded schedule in", comm=comm, timer=timer)
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After loading schedule:  {mem}", comm)
 
     # Create a telescope for the simulation.  Again, for a specific experiment we
     # would use custom classes for the site.
@@ -208,6 +218,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.default_model.apply(data)
     log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After default noise model"
+    ops.mem_count.apply(data)
+
     # Set up detector pointing in both Az/El and RA/DEC
 
     ops.det_pointing_azel.boresight = ops.sim_ground.boresight_azel
@@ -224,7 +237,7 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.elevation_model.apply(data)
     log.info_rank("Created elevation noise model in", comm=world_comm, timer=timer)
 
-    ops.mem_count.prefix = "After noise model"
+    ops.mem_count.prefix = "After elevation noise model"
     ops.mem_count.apply(data)
 
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
@@ -527,6 +540,9 @@ def main():
     # Get optional MPI parameters
     comm, procs, rank = toast.get_world()
 
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"Start of the workflow:  {mem}", comm)
+
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
     # The "name" of each operator instance controls what the commandline and config
@@ -537,10 +553,10 @@ def main():
 
     operators = [
         toast.ops.SimGround(name="sim_ground", weather="atacama", detset_key="pixel"),
-        toast.ops.DefaultNoiseModel(name="default_model"),
+        toast.ops.DefaultNoiseModel(name="noise_model"),
         toast.ops.ElevationNoise(
             name="elevation_model",
-            out_model="el_noise_model",
+            out_model="noise_model",
         ),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
         toast.ops.StokesWeights(
