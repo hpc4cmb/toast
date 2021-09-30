@@ -12,6 +12,8 @@ from .mpi import MPI
 
 import healpy as hp
 
+from .utils import Logger, memreport
+
 
 @function_timer
 def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
@@ -133,7 +135,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
 
 
 @function_timer
-def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
+def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=False):
     """Write pixel data to a HEALPix format FITS table.
 
     The data across all processes is assumed to be synchronized (the data for a given
@@ -145,11 +147,15 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
         path (str): The path to the output FITS file.
         nest (bool): If True, data is in NESTED ordering, else data is in RING.
         comm_bytes (int): The approximate message size to use.
+        report_memory (bool): Report the amount of available memory on the root
+            node just before writing out the map.
 
     Returns:
         None
 
     """
+    log = Logger.get()
+
     # The distribution
     dist = pix.distribution
 
@@ -256,6 +262,9 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
         if os.path.isfile(path):
             os.remove(path)
         dtypes = [np.dtype(pix.dtype) for x in range(pix.n_value)]
+        if report_memory:
+            mem = memreport(msg="(root node)", silent=True)
+            log.info_rank(f"About to write {path}:  {mem}")
         hp.write_map(path, fview, dtype=dtypes, fits_IDL=False, nest=nest)
         del fview
         for col in range(pix.n_value):

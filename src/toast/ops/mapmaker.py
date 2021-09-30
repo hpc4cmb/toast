@@ -38,6 +38,8 @@ from .mapmaker_utils import CovarianceAndHits
 
 from .mapmaker_solve import solve, SolverRHS, SolverLHS
 
+from .memory_counter import MemoryCounter
+
 
 @trait_docs
 class MapMaker(Operator):
@@ -176,6 +178,8 @@ class MapMaker(Operator):
         help="Write output data products to this directory",
     )
 
+    report_memory = Bool(False, help="Report memory throughout the execution")
+
     @traitlets.validate("binning")
     def _check_binning(self, proposal):
         bin = proposal["value"]
@@ -239,6 +243,13 @@ class MapMaker(Operator):
         timer = Timer()
         log_prefix = "MapMaker"
 
+        memreport = MemoryCounter()
+        if not self.report_memory:
+            memreport.enabled = False
+
+        memreport.prefix = "Start of mapmaking"
+        memreport.apply(data)
+
         # The global communicator we are using (or None)
         comm = data.comm.comm_world
         rank = data.comm.world_rank
@@ -256,6 +267,9 @@ class MapMaker(Operator):
                 del data[self.binning.pixel_dist]
             if self.map_binning.pixel_dist in data:
                 del data[self.map_binning.pixel_dist]
+
+            memreport.prefix = "After resetting pixel distribution"
+            memreport.apply(data)
 
         # We use the input binning operator to define the flags that the user has
         # specified.  We will save the name / bit mask for these and restore them later.
@@ -419,6 +433,9 @@ class MapMaker(Operator):
                     timer=timer,
                 )
 
+                memreport.prefix = "After building flags"
+                memreport.apply(data)
+
             # Now construct the noise covariance, hits, and condition number mask for
             # the solver.
 
@@ -464,6 +481,9 @@ class MapMaker(Operator):
 
                 solver_cov.apply(data, detectors=detectors)
 
+                memreport.prefix = "After constructing covariance and hits"
+                memreport.apply(data)
+
                 data[self.solver_rcond_mask_name] = PixelData(
                     data[self.binning.pixel_dist], dtype=np.uint8, n_value=1
                 )
@@ -471,6 +491,9 @@ class MapMaker(Operator):
                     data[self.solver_rcond_name].raw.array()
                     < self.solve_rcond_threshold
                 ] = 1
+
+                memreport.prefix = "After constructing rcond mask"
+                memreport.apply(data)
 
                 # Re-use our mask scanning pipeline, setting third bit (== 4)
                 scanner.det_flags_value = 4
@@ -548,6 +571,9 @@ class MapMaker(Operator):
                 timer=timer,
             )
 
+            memreport.prefix = "After constructing RHS"
+            memreport.apply(data)
+
             # Set up the LHS operator.
 
             log.info_rank(
@@ -582,6 +608,9 @@ class MapMaker(Operator):
                 timer=timer,
             )
 
+            memreport.prefix = "After solving for amplitudes"
+            memreport.apply(data)
+
         # Delete our solver products to save memory
         if not self.mc_mode and not self.keep_solver_products:
             for prod in [
@@ -595,6 +624,9 @@ class MapMaker(Operator):
                 if prod in data:
                     data[prod].clear()
                     del data[prod]
+
+            memreport.prefix = "After deleting solver products"
+            memreport.apply(data)
 
         # Restore flag names and masks to binning operator, in case it is being used
         # for the final map making or for other external operations.
@@ -658,6 +690,9 @@ class MapMaker(Operator):
                 comm=comm,
                 timer=timer,
             )
+
+            memreport.prefix = "After constructing final covariance and hits"
+            memreport.apply(data)
 
         # Project the solved template amplitudes into timestreams and subtract
         # from the original.  Then make a binned map of the result.
@@ -743,6 +778,9 @@ class MapMaker(Operator):
             timer=timer,
         )
 
+        memreport.prefix = "After binning final map"
+        memreport.apply(data)
+
         # Write and delete the outputs
 
         # FIXME:  This all assumes the pointing operator is an instance of the
@@ -760,7 +798,10 @@ class MapMaker(Operator):
             if prod_write:
                 fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
                 write_healpix_fits(
-                    data[prod_key], fname, nest=map_binning.pixel_pointing.nest
+                    data[prod_key],
+                    fname,
+                    nest=map_binning.pixel_pointing.nest,
+                    report_memory=self.report_memory,
                 )
                 log.info_rank(f"Wrote {fname} in", comm=comm, timer=timer)
             if not self.keep_final_products:
@@ -768,11 +809,17 @@ class MapMaker(Operator):
                     data[prod_key].clear()
                     del data[prod_key]
 
+            memreport.prefix = f"After writing/deleting {prod_key}"
+            memreport.apply(data)
+
         log.info_rank(
             f"{log_prefix}  finished output write in",
             comm=comm,
             timer=timer,
         )
+
+        memreport.prefix = "End of mapmaking"
+        memreport.apply(data)
 
         return
 
