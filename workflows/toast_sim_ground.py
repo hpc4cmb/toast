@@ -125,13 +125,16 @@ def load_instrument_and_schedule(args, comm):
     timer = toast.timing.Timer()
     timer.start()
 
-    focalplane = toast.instrument.Focalplane(file=args.focalplane, comm=comm)
+    if args.sample_rate is not None:
+        sample_rate = args.sample_rate * u.Hz
+    else:
+        sample_rate = None
+    focalplane = toast.instrument.Focalplane(
+        file=args.focalplane, comm=comm, sample_rate=sample_rate
+    )
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
     log.info_rank(f"After loading focalplane:  {mem}", comm)
-
-    if args.sample_rate is not None:
-        focalplane.sample_rate = args.sample_rate * u.Hz
 
     # Load the schedule file
     schedule = toast.schedule.GroundSchedule()

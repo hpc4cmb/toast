@@ -699,7 +699,10 @@ class Focalplane(object):
     def read(self, file, comm=None):
         if comm is None or comm.rank == 0:
             self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
-            self.sample_rate = self.detector_data.meta["sample_rate"]
+            # Only use the sampling rate recorded in the file if it was not
+            # overridden in the constructor
+            if self.sample_rate is None:
+                self.sample_rate = self.detector_data.meta["sample_rate"]
             if "field_of_view" in self.detector_data.meta:
                 self.field_of_view = self.detector_data.meta["field_of_view"]
             else:
