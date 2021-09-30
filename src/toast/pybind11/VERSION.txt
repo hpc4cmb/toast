@@ -1,1 +1,1 @@
-This pybind11 comes from the 2.5.0 release tarball.
+This pybind11 comes from the 2.7.1 release tarball.
