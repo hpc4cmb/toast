@@ -53,10 +53,11 @@ class MemoryCounter(Operator):
     def _finalize(self, data, **kwargs):
         log = Logger.get()
         if not self.silent:
+            total_gb = self.total_bytes / 2 ** 30
+            if data.comm.comm_rank is not None:
+                total_gb = data.comm.comm_rank.allreduce(total_gb)
             if data.comm.world_rank == 0:
-                msg = "Total timestream memory use = {:0.2f} GB".format(
-                    self.total_bytes / 1024 ** 3
-                )
+                msg = f"Total timestream memory use = {total_gb:.3f} GB"
                 log.info(f"{self.prefix}:  {msg}")
                 log.info(f"{self.prefix}:  {self.sys_mem_str}")
         total = self.total_bytes
