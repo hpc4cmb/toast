@@ -142,7 +142,7 @@ class PolyFilter2D(Operator):
 
             # Redistribute this temporary observation to be distributed by sample sets
             gt.start("Poly2D:  Forward redistribution")
-            temp_ob.redistribute(1, times=self.times)
+            temp_ob.redistribute(1, times=self.times, override_sample_sets=None)
             gt.stop("Poly2D:  Forward redistribution")
 
             gt.start("Poly2D:  Detector setup")
@@ -186,8 +186,15 @@ class PolyFilter2D(Operator):
                     group_index[det] = 0
                     groups[None].append(det)
             else:
+                focalplane = temp_ob.telescope.focalplane
+                if self.focalplane_key not in focalplane.detector_data.colnames:
+                    msg = (
+                        f"Cannot divide detectors by {self.focalplane_key} because "
+                        "it is not defined in the focalplane detector data."
+                    )
+                    raise RuntimeError(msg)
                 for det in detectors:
-                    value = temp_ob.telescope.focalplane[det][self.focalplane_key]
+                    value = focalplane[det][self.focalplane_key]
                     if value not in groups:
                         groups[value] = []
                     groups[value].append(det)
@@ -379,7 +386,9 @@ class PolyFilter2D(Operator):
 
             # Redistribute back
             gt.start("Poly2D:  Backward redistribution")
-            temp_ob.redistribute(proc_rows, times=self.times)
+            temp_ob.redistribute(
+                proc_rows, times=self.times, override_sample_sets=obs.dist.sample_sets
+            )
             gt.stop("Poly2D:  Backward redistribution")
 
             # Copy data to original observation
