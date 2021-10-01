@@ -439,12 +439,6 @@ class Focalplane(object):
             self.detector_data = detector_data
             self.field_of_view = field_of_view
             self.sample_rate = sample_rate
-        log.info_rank(
-            f"Focalplane has {len(self.detector_data)} detectors that span "
-            f"{self.field_of_view.to_value(u.deg):.3f} degrees and are sampled at "
-            f"{self.sample_rate.to_value(u.Hz)} Hz.",
-            comm=comm,
-        )
 
         # Add UID if not given
         if "uid" not in self.detector_data.colnames:
@@ -463,6 +457,13 @@ class Focalplane(object):
         self._get_pol_efficiency()
         self._get_noise()
         self._get_bandpass()
+
+        log.info_rank(
+            f"Focalplane has {len(self.detector_data)} detectors that span "
+            f"{self.field_of_view.to_value(u.deg):.3f} degrees and are sampled at "
+            f"{self.sample_rate.to_value(u.Hz)} Hz.",
+            comm=comm,
+        )
 
     def _get_noise(self):
         """Use the noise parameters to instantiate an analytical noise model"""
