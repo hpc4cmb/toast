@@ -1,6 +1,8 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
+
+import h5py
 
 import os
 
@@ -302,8 +304,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
     """Write pixel data to a HEALPix format HDF5 dataset.
 
     The data across all processes is assumed to be synchronized (the data for a given
-    submap shared between processes is identical).  The submap data is sent to the root
-    process which writes it out.  For parallel writing, see write_hdf5().
+    submap shared between processes is identical).
 
     Args:
         pix (PixelData): The distributed pixel object.
@@ -325,25 +326,113 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
     dist = pix.distribution
 
     rank = 0
+    ntask = 1
     if dist.comm is not None:
         rank = dist.comm.rank
+        ntask = dist.comm.size
 
-    fdata, fview = collect_submaps(pix, comm_bytes=comm_bytes)
+    not_owned = None
+    allowners = None
+    if dist.comm is None:
+        not_owned = 1
+        allowners = np.zeros(dist.n_submap, dtype=np.int32)
+        allowners.fill(not_owned)
+        for m in dist.local_submaps:
+            allowners[m] = rank
+    else:
+        not_owned = dist.comm.size
+        owners = np.zeros(dist.n_submap, dtype=np.int32)
+        owners.fill(not_owned)
+        for m in dist.local_submaps:
+            owners[m] = dist.comm.rank
+        allowners = np.zeros_like(owners)
+        dist.comm.Allreduce(owners, allowners, op=MPI.MIN)
 
-    log.info_rank(f"Collected submaps in", comm=dist.comm, timer=timer)
+    try:
 
-    if rank == 0:
-        if os.path.isfile(path):
-            os.remove(path)
-        # Write hdf5 as a test
-        import h5py
-        with h5py.File(path, "w") as f:
-            dset = f.create_dataset("map", data=np.vstack(fview))
-            dset.attrs["NESTED"] = nest
-        del fview
-        for col in range(pix.n_value):
-            fdata[col].clear()
-        del fdata
+        # Try opening the file for parallel access.  This will only work
+        # if HDF5 and h5py were compiled with MPI
+
+        with h5py.File(path, "w", driver="mpio", comm=dist.comm) as f:
+
+            # Each process writes their own submaps to the file
+            dset = f.create_dataset(
+                "map",
+                (pix.n_value, dist.n_pix),
+                chunks=(pix.n_value, dist.n_pix_submap),
+                dtype=pix.dtype,
+            )
+            if rank == 0:
+                dset.attrs["NESTED"] = nest
+            """
+            for submap in dist.owned_submaps:
+                local_submap = dist.global_submap_to_local[submap]
+                offset = submap * dist.n_pix_submap
+                dset[:, offset : offset + dist.n_pix_submap] = pix[local_submap].T
+            """
+            for submap in range(dist.n_submap):
+                if allowners[submap] == rank:
+                    local_submap = dist.global_submap_to_local[submap]
+                    offset = submap * dist.n_pix_submap
+                    dset[:, offset : offset + dist.n_pix_submap] = pix[local_submap].T
+
+    except ValueError as e:
+
+        # No luck, write serially from root process
+
+        log.warning_rank(
+            f"Could not open {path} for parallel access: '{e}'. Writing in serial mode",
+            comm=dist.comm,
+        )
+
+        # n_send = len(dist.owned_submaps)
+        n_send = np.sum(allowners == rank)
+        if n_send == 0:
+            sendbuffer = None
+        else:
+            sendbuffer = np.empty(
+                [n_send, pix.n_value, dist.n_pix_submap],
+                dtype=pix.dtype,
+            )
+            offset = 0
+            # for submap in dist.owned_submaps:
+            for submap in range(dist.n_submap):
+                if allowners[submap] == rank:
+                    local_submap = dist.global_submap_to_local[submap]
+                    sendbuffer[offset] = pix.data[local_submap].T
+                    offset += 1
+
+        if rank == 0:
+            # Root process receives the submaps from other processes and writes
+            # them to file
+            with h5py.File(path, "w") as f:
+                dset = f.create_dataset(
+                    "map",
+                    (pix.n_value, dist.n_pix),
+                    chunks=(pix.n_value, dist.n_pix_submap),
+                    dtype=pix.dtype,
+                )
+                for rank_send in range(ntask):
+                    # submaps = np.argwhere(dist.submap_owners == rank_send).ravel()
+                    submaps = np.arange(dist.n_submap)[allowners == rank_send]
+                    n_receive = len(submaps)
+                    if n_receive > 0:
+                        if rank_send == rank:
+                            recvbuffer = sendbuffer
+                        else:
+                            recvbuffer = np.empty(
+                                [n_receive, pix.n_value, dist.n_pix_submap],
+                                dtype=pix.dtype,
+                            )
+                            dist.comm.Recv(recvbuffer, source=rank_send, tag=rank_send)
+                    for i, submap in enumerate(submaps):
+                        offset = submap * dist.n_pix_submap
+                        dset[:, offset : offset + dist.n_pix_submap] = recvbuffer[i]
+                dset.attrs["NESTED"] = nest
+        else:
+            # All others wait for their turn to send
+            if sendbuffer is not None:
+                dist.comm.Send(sendbuffer, dest=0, tag=rank)
 
     log.info_rank(f"Wrote map in", comm=dist.comm, timer=timer)
 

@@ -450,7 +450,7 @@ class PixelData(object):
         self.raw = self.storage_class.zeros(self._flatshape)
         self.data = self.raw.array().reshape(self._shape)
 
-        # Allreduce quantites
+        # Allreduce quantities
         self._all_comm_submap = None
         self._all_send = None
         self._all_send_raw = None
