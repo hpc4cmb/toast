@@ -33,6 +33,8 @@ from .utils import Logger, Environment, name_UID
 
 from . import qarray
 
+from ._libtoast import integrate_simpson
+
 # CMB temperature
 TCMB = 2.72548
 
@@ -346,7 +348,8 @@ class Bandpass(object):
             except AttributeError:
                 self.bandpass[det] = np.ones(self.nstep)
 
-            norm = simpson(self.bandpass[det], x=self.freqs[det])
+            #norm = simpson(self.bandpass[det], x=self.freqs[det])
+            norm = integrate_simpson(self.freqs[det], self.bandpass[det])
             if norm == 0:
                 raise RuntimeError("Bandpass cannot be normalized")
             self.bandpass[det] /= norm
@@ -364,7 +367,8 @@ class Bandpass(object):
             spectrum_det *= rj2cmb
 
         # Average across the bandpass
-        convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
+        #convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
+        convolved = integrate_simpson(freqs_det, spectrum_det * bandpass_det)
 
         return convolved
 

@@ -400,6 +400,7 @@ void register_aligned(py::module & m, char const * name) {
 
 // Initialize all the pieces of the bindings.
 void init_sys(py::module & m);
+void init_math_misc(py::module & m);
 void init_math_sf(py::module & m);
 void init_math_rng(py::module & m);
 void init_math_qarray(py::module & m);
