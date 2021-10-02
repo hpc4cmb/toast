@@ -428,17 +428,13 @@ class Focalplane(object):
         comm=None,
     ):
         log = Logger.get()
-        self.detector_data = None
-        self.field_of_view = None
-        self.sample_rate = None
+        self.detector_data = detector_data
+        self.field_of_view = field_of_view
+        self.sample_rate = sample_rate
 
         if file is not None:
             log.info_rank(f"Loading focalplane from {file}", comm=comm)
             self.read(file, comm=comm)
-        else:
-            self.detector_data = detector_data
-            self.field_of_view = field_of_view
-            self.sample_rate = sample_rate
 
         # Add UID if not given
         if "uid" not in self.detector_data.colnames:
@@ -699,12 +695,15 @@ class Focalplane(object):
 
     def read(self, file, comm=None):
         if comm is None or comm.rank == 0:
+            if self.detector_data is not None:
+                raise RuntimeError("Reading detector data over existing table")
             self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
             # Only use the sampling rate recorded in the file if it was not
             # overridden in the constructor
             if self.sample_rate is None:
                 self.sample_rate = self.detector_data.meta["sample_rate"]
-            if "field_of_view" in self.detector_data.meta:
+            if self.field_of_view is None and \
+               "field_of_view" in self.detector_data.meta:
                 self.field_of_view = self.detector_data.meta["field_of_view"]
             else:
                 self._compute_fov()

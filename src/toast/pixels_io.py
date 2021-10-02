@@ -135,27 +135,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
 
 
 @function_timer
-def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=False):
-    """Write pixel data to a HEALPix format FITS table.
-
-    The data across all processes is assumed to be synchronized (the data for a given
-    submap shared between processes is identical).  The submap data is sent to the root
-    process which writes it out.  For parallel writing, see write_hdf5().
-
-    Args:
-        pix (PixelData): The distributed pixel object.
-        path (str): The path to the output FITS file.
-        nest (bool): If True, data is in NESTED ordering, else data is in RING.
-        comm_bytes (int): The approximate message size to use.
-        report_memory (bool): Report the amount of available memory on the root
-            node just before writing out the map.
-
-    Returns:
-        None
-
-    """
-    log = Logger.get()
-
+def collect_submaps(pix, comm_bytes=10000000):
     # The distribution
     dist = pix.distribution
 
@@ -258,6 +238,44 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
                     recvbuf.fill(0)
             submap_off += ncomm
 
+    return fdata, fview
+
+
+@function_timer
+def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=False):
+    """Write pixel data to a HEALPix format FITS table.
+
+    The data across all processes is assumed to be synchronized (the data for a given
+    submap shared between processes is identical).  The submap data is sent to the root
+    process which writes it out.  For parallel writing, see write_hdf5().
+
+    Args:
+        pix (PixelData): The distributed pixel object.
+        path (str): The path to the output FITS file.
+        nest (bool): If True, data is in NESTED ordering, else data is in RING.
+        comm_bytes (int): The approximate message size to use.
+        report_memory (bool): Report the amount of available memory on the root
+            node just before writing out the map.
+
+    Returns:
+        None
+
+    """
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+
+    # The distribution
+    dist = pix.distribution
+
+    rank = 0
+    if dist.comm is not None:
+        rank = dist.comm.rank
+
+    fdata, fview = collect_submaps(pix, comm_bytes=comm_bytes)
+
+    log.info_rank(f"Collected submaps in", comm=dist.comm, timer=timer)
+
     if rank == 0:
         if os.path.isfile(path):
             os.remove(path)
@@ -271,6 +289,8 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
             fdata[col].clear()
         del fdata
 
+    log.info_rank(f"Wrote map in", comm=dist.comm, timer=timer)
+
     return
 
 
@@ -278,5 +298,53 @@ def read_hdf5(pix, path):
     pass
 
 
-def write_hdf5(pix, path):
-    pass
+def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=False):
+    """Write pixel data to a HEALPix format HDF5 dataset.
+
+    The data across all processes is assumed to be synchronized (the data for a given
+    submap shared between processes is identical).  The submap data is sent to the root
+    process which writes it out.  For parallel writing, see write_hdf5().
+
+    Args:
+        pix (PixelData): The distributed pixel object.
+        path (str): The path to the output FITS file.
+        nest (bool): If True, data is in NESTED ordering, else data is in RING.
+        comm_bytes (int): The approximate message size to use.
+        report_memory (bool): Report the amount of available memory on the root
+            node just before writing out the map.
+
+    Returns:
+        None
+
+    """
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+
+    # The distribution
+    dist = pix.distribution
+
+    rank = 0
+    if dist.comm is not None:
+        rank = dist.comm.rank
+
+    fdata, fview = collect_submaps(pix, comm_bytes=comm_bytes)
+
+    log.info_rank(f"Collected submaps in", comm=dist.comm, timer=timer)
+
+    if rank == 0:
+        if os.path.isfile(path):
+            os.remove(path)
+        # Write hdf5 as a test
+        import h5py
+        with h5py.File(path, "w") as f:
+            dset = f.create_dataset("map", data=np.vstack(fview))
+            dset.attrs["NESTED"] = nest
+        del fview
+        for col in range(pix.n_value):
+            fdata[col].clear()
+        del fdata
+
+    log.info_rank(f"Wrote map in", comm=dist.comm, timer=timer)
+
+    return

@@ -18,7 +18,7 @@ from ..timing import function_timer, Timer
 
 from ..pixels import PixelDistribution, PixelData
 
-from ..pixels_io import write_healpix_fits
+from ..pixels_io import write_healpix_fits, write_healpix_hdf5
 
 from ..observation import default_names as obs_names
 
@@ -130,6 +130,8 @@ class MapMaker(Operator):
     )
 
     write_map = Bool(True, help="If True, write the projected map")
+
+    write_hdf5 = Bool(False, help="If True, outputs are in HDF5 rather than FITS format.")
 
     write_noiseweighted_map = Bool(
         False,
@@ -796,13 +798,24 @@ class MapMaker(Operator):
         write_del.append((self.cov_name, self.write_cov))
         for prod_key, prod_write in write_del:
             if prod_write:
-                fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
-                write_healpix_fits(
-                    data[prod_key],
-                    fname,
-                    nest=map_binning.pixel_pointing.nest,
-                    report_memory=self.report_memory,
-                )
+                if self.write_hdf5:
+                    # Non-standard HDF5 output
+                    fname = os.path.join(self.output_dir, "{}.h5".format(prod_key))
+                    write_healpix_hdf5(
+                        data[prod_key],
+                        fname,
+                        nest=map_binning.pixel_pointing.nest,
+                        report_memory=self.report_memory,
+                    )
+                else:
+                    # Standard FITS output
+                    fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
+                    write_healpix_fits(
+                        data[prod_key],
+                        fname,
+                        nest=map_binning.pixel_pointing.nest,
+                        report_memory=self.report_memory,
+                    )
                 log.info_rank(f"Wrote {fname} in", comm=comm, timer=timer)
             if not self.keep_final_products:
                 if prod_key in data:
