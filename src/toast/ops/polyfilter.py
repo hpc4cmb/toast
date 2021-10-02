@@ -28,7 +28,7 @@ from ..utils import (
 )
 from ..observation import default_names as obs_names
 
-from .._libtoast import filter_polynomial, filter_poly2D
+from .._libtoast import filter_polynomial, filter_poly2D, sum_detectors, subtract_mean
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
@@ -597,7 +597,7 @@ class CommonModeFilter(Operator):
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
 
     poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
 
@@ -732,6 +732,7 @@ class CommonModeFilter(Operator):
                 values = sorted(values)
 
             nsample = temp_ob.n_local_samples
+            ndet = len(temp_ob.local_detectors)
 
             # Loop over all values of the focalplane key
             for value in values:
@@ -744,38 +745,44 @@ class CommonModeFilter(Operator):
                         and focalplane[det][self.focalplane_key] != value
                     ):
                         continue
-                    local_dets.append((idet, det))
+                    local_dets.append(idet)
+                local_dets = np.array(local_dets)
 
                 # Average all detectors that match the key
                 template = np.zeros(nsample)
-                hits = np.zeros(nsample)
+                hits = np.zeros(nsample, dtype=np.int64)
+
                 if self.shared_flags is not None:
                     shared_flags = temp_ob.shared[self.shared_flags].data
-                    shared_mask = (shared_flags & self.shared_flag_mask) == 0
                 else:
-                    shared_mask = np.ones(nsample, dtype=bool)
-                for idet, det in local_dets:
-                    signal = temp_ob.detdata[self.det_data][idet]
-                    if self.det_flags is not None:
-                        det_flags = temp_ob.detdata[self.det_flags][idet]
-                        det_mask = (det_flags & self.det_flag_mask) == 0
-                        mask = np.logical_and(shared_mask, det_mask)
-                    else:
-                        mask = shared_mask
-                    template[mask] += signal[mask]
-                    hits[mask] += 1
+                    shared_flags = np.zeros(nsample, dtype=np.uint8)
+                if self.det_flags is not None:
+                    det_flags = temp_ob.detdata[self.det_flags].data
+                else:
+                    det_flags = np.zeros([ndet, nsample], dtype=np.uint8)
+
+                sum_detectors(
+                    local_dets,
+                    shared_flags,
+                    self.shared_flag_mask,
+                    temp_ob.detdata[self.det_data].data,
+                    det_flags,
+                    self.det_flag_mask,
+                    template,
+                    hits,
+                )
 
                 if comm is not None:
                     comm.Barrier()
                     comm.Allreduce(MPI.IN_PLACE, template, op=MPI.SUM)
                     comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
 
-                good = hits != 0
-                template[good] /= hits[good]
-
-                # Subtract the average from matching detectors
-                for idet, det in local_dets:
-                    temp_ob.detdata[self.det_data][idet] -= template
+                subtract_mean(
+                    local_dets,
+                    temp_ob.detdata[self.det_data].data,
+                    template,
+                    hits,
+                )
 
             log.info_rank(
                 f"{data.comm.group:4} : Commonfiltered observation in",
