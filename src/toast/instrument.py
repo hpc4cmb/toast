@@ -319,6 +319,7 @@ class Bandpass(object):
                 fmax = max(fmax, self.fmax[name])
         return fmin, fmax
 
+    @function_timer
     def convolve(self, det, freqs, spectrum, rj=False):
         """Convolve the provided spectrum with the detector bandpass
 
@@ -461,6 +462,7 @@ class Focalplane(object):
             comm=comm,
         )
 
+    @function_timer
     def _get_noise(self):
         """Use the noise parameters to instantiate an analytical noise model"""
 
@@ -494,6 +496,7 @@ class Focalplane(object):
             self.noise = None
         return
 
+    @function_timer
     def _get_bandpass(self):
         """Use the bandpass parameters to instantiate a bandpass model"""
 
@@ -509,6 +512,7 @@ class Focalplane(object):
             self.bandpass = None
         return
 
+    @function_timer
     def _compute_fov(self):
         """Compute the field of view"""
         # Find the largest distance from the bore sight
@@ -526,6 +530,7 @@ class Focalplane(object):
         if self.field_of_view == 0:
             self.field_of_view = 1.0 * u.degree
 
+    @function_timer
     def _get_pol_angles(self):
         """Get the detector polarization angles from the quaternions"""
 
@@ -541,6 +546,7 @@ class Focalplane(object):
                 pol_angle = np.arctan2(2 * a * d, a ** 2 - d ** 2) % np.pi
                 row["pol_angle"] = pol_angle * u.radian
 
+    @function_timer
     def _get_pol_efficiency(self):
         """Get the polarization efficiency from polarization leakage or vice versa"""
 
