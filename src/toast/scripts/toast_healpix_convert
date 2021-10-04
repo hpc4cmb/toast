@@ -43,11 +43,18 @@ def main():
 
     parser.add_argument(
         "inmap",
-        help="Name of input file",
+        nargs="+",
+        help="One or more input maps",
     )
 
     parser.add_argument(
         "--outmap",
+        required=False,
+        help="Name of output file",
+    )
+
+    parser.add_argument(
+        "--outdir",
         required=False,
         help="Name of output file",
     )
@@ -61,50 +68,62 @@ def main():
 
     args = parser.parse_args()
 
-    if filename_is_fits(args.inmap):
-
-        # Convert a FITS map to HDF5
-
-        if args.outmap is None:
-            outfile = os.path.splitext(args.inmap)[0] + ".h5"
-        else:
-            outfile = args.outmap
-        log.info(f"Converting {args.inmap} to {outfile}")
-
-        mapdata, header = read_healpix(args.inmap, None, h=True, nest=True)
-        log.info_rank(f"Loaded {args.inmap} in", timer=timer, comm=comm)
-
-        write_healpix(outfile, mapdata, extra_header=header, nest=True, overwrite=True)
-
-        log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
-
-    elif filename_is_hdf5(args.inmap):
-
-        # Convert an HDF5 map to FITS
-
-        if args.outmap is None:
-            outfile = os.path.splitext(args.inmap)[0] + ".fits"
-        else:
-            outfile = args.outmap
-        log.info(f"Converting {args.inmap} to {outfile}")
-
-        mapdata, header = read_healpix(args.inmap, h=True, nest=True)
-
-        write_healpix(
-            outfile,
-            mapdata,
-            nside_submap=args.nside_submap,
-            extra_header=header,
-            nest=True,
-            overwrite=True,
+    if len(args.inmap) != 1 and args.outmap is not None:
+        raise RuntimeError(
+            "Cannot specify output file with multiple inputs. Use --outdir instead"
         )
 
-        log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
+    def get_outfile(infile, suffix):
+        if args.outmap is not None:
+            outfile = args.outmap
+        else:
+            indir = os.path.dirname(infile)
+            inroot = os.path.basename(os.path.splitext(infile)[0])
+            if args.outdir is None:
+                outfile = os.path.join(indir, inroot + suffix)
+            else:
+                outfile = os.path.join(args.outdir, inroot + suffix)
+        return outfile
 
-    else:
+    for infile in args.inmap:
 
-        msg = f"Cannot guess input map file type from {args.inmap}"
-        raise RuntimeError(msg)
+        if filename_is_fits(infile):
+
+            # Convert a FITS map to HDF5
+
+            outfile = get_outfile(infile, ".h5")
+            log.info(f"Converting {infile} to {outfile}")
+
+            mapdata, header = read_healpix(infile, None, h=True, nest=True)
+            log.info_rank(f"Loaded {infile} in", timer=timer, comm=comm)
+
+            write_healpix(outfile, mapdata, extra_header=header, nest=True, overwrite=True)
+            log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
+
+        elif filename_is_hdf5(infile):
+
+            # Convert an HDF5 map to FITS
+
+            outfile = get_outfile(infile, ".fits")
+            log.info(f"Converting {infile} to {outfile}")
+
+            mapdata, header = read_healpix(infile, h=True, nest=True)
+            log.info_rank(f"Loaded {infile} in", timer=timer, comm=comm)
+
+            write_healpix(
+                outfile,
+                mapdata,
+                nside_submap=args.nside_submap,
+                extra_header=header,
+                nest=True,
+                overwrite=True,
+            )
+            log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
+
+        else:
+
+            msg = f"Cannot guess input map file type from {args.inmap}"
+            raise RuntimeError(msg)
 
     log.info_rank(f"Conversion done in", timer=timer0, comm=comm)
 
