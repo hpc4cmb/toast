@@ -556,6 +556,12 @@ def read_healpix(filename, *args, **kwargs):
 
     elif filename_is_hdf5(filename):
 
+        if "verbose" in kwargs and kwargs.verbose == False:
+            verbose = False
+        else:
+            # healpy default
+            verbose = True
+
         # Load an HDF5 map
         with h5py.File(filename, "r") as f:
             dset = f["map"]
@@ -570,14 +576,23 @@ def read_healpix(filename, *args, **kwargs):
             header = dict(dset.attrs)
             if "ORDERING" not in header or header["ORDERING"] not in ["NESTED", "RING"]:
                 raise RuntimeError("Cannot determine pixel ordering")
+            if verbose:
+                print("")
             if "nest" in kwargs:
                 nest = kwargs["nest"]
             else:
                 nest = False
             if header["ORDERING"] == "NESTED" and nest == False:
+                if verbose:
+                    print(f"Reordering {filename} to RING")
                 mapdata = hp.reorder(mapdata, n2r=True)
             elif header["ORDERING"] == "RING" and nest == True:
+                if verbose:
+                    print(f"Reordering {filename} to NESTED")
                 mapdata = hp.reorder(mapdata, r2n=True)
+            else:
+                if verbose:
+                    print(f"{filename} is already {header['ORDERING']}")
 
         if "h" in kwargs and kwargs["h"] == True:
             result = mapdata, header
