@@ -323,8 +323,6 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
     if dist.comm is not None:
         rank = dist.comm.rank
 
-    print(f" ***** Task {rank} reading from {path}", flush=True)
-
     comm_submap = pix.comm_nsubmap(comm_bytes)
 
     fdata = None
@@ -395,8 +393,6 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
 
         submap_offset = submap_last
 
-    print(f" ***** Task {rank} done reading from {path}", flush=True)
-
     return
 
 
@@ -430,8 +426,6 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
     if dist.comm is not None:
         rank = dist.comm.rank
         ntask = dist.comm.size
-
-    print(f" ***** Task {rank} writing to {path}", flush=True)
 
     not_owned = None
     allowners = None
@@ -546,8 +540,6 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
                 dist.comm.Send(sendbuffer, dest=0, tag=rank)
 
     log.info_rank(f"Wrote map in", comm=dist.comm, timer=timer)
-
-    print(f" ***** Task {rank} done writing to {path}", flush=True)
 
     return
 
