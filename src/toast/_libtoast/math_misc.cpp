@@ -16,7 +16,7 @@ double integrate_simpson(py::array_t <double> x, py::array_t <double> f) {
     size_t n = x.size();
     double result = 0;
 
-#pragma omp parallel for reduction(+: result)    
+#pragma omp parallel for reduction(+: result)
     for (size_t i = 0; i < (n - 1) / 2; ++i) {
         size_t ii = 2 * i;
         double h1 = fast_x(ii + 1) - fast_x(ii);
@@ -26,11 +26,10 @@ double integrate_simpson(py::array_t <double> x, py::array_t <double> f) {
         double f3 = fast_f(ii + 2);
 
         result += (h1 + h2) / 6 * (
-                              (2 - h2 / h1) * f1 +
-                              pow(h1 + h2, 2) / (h1 * h2) * f2 +
-                              (2 - h1 / h2) * f3
-                              );
-
+            (2 - h2 / h1) * f1 +
+            pow(h1 + h2, 2) / (h1 * h2) * f2 +
+            (2 - h1 / h2) * f3
+            );
     }
 
     if (n % 2 == 0) {
@@ -40,16 +39,14 @@ double integrate_simpson(py::array_t <double> x, py::array_t <double> f) {
         double f2 = fast_f(n - 2);
         double f3 = fast_f(n - 3);
         result += (
-                  (2 * pow(h1, 2) + 3 * h1 * h2) / (6 * (h2 + h1)) * f1 +
-                  (pow(h1, 2) + 3 * h1 * h2) / (6 * h2) * f2 -
-                  pow(h1, 3) / (6 * h2 * (h2 + h1)) * f2
-                  );
-
+            (2 * pow(h1, 2) + 3 * h1 * h2) / (6 * (h2 + h1)) * f1 +
+            (pow(h1, 2) + 3 * h1 * h2) / (6 * h2) * f2 -
+            pow(h1, 3) / (6 * h2 * (h2 + h1)) * f2
+            );
     }
 
     return result;
 }
-
 
 void init_math_misc(py::module & m)
 {

@@ -634,6 +634,7 @@ def main():
 
     log.info_rank("Workflow completed in", comm=comm, timer=timer0)
 
+
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()
     with toast.mpi.exception_guard(comm=world):

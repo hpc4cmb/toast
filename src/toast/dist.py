@@ -10,6 +10,8 @@ import numpy as np
 
 from .mpi import Comm
 
+from .timing import function_timer
+
 
 class DistRange(NamedTuple):
     """The offset and number of elements in a distribution range."""
@@ -45,6 +47,7 @@ def distribute_partition(A, k):
     return low
 
 
+@function_timer
 def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
     """Distribute indivisible blocks of items between groups.
 
@@ -123,6 +126,7 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
     return dist
 
 
+@function_timer
 def distribute_uniform(totalsize, groups, breaks=None):
     """Uniformly distribute items between groups.
 
@@ -187,6 +191,7 @@ def distribute_uniform(totalsize, groups, breaks=None):
     return dist
 
 
+@function_timer
 def distribute_samples(
     mpicomm, detectors, samples, detranks=1, detsets=None, sampsets=None
 ):

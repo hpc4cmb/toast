@@ -286,6 +286,7 @@ class SpaceSite(Site):
 class Bandpass(object):
     """Class that contains the bandpass information for an entire focalplane."""
 
+    @function_timer
     def __init__(self, bandcenters, bandwidths, nstep=101):
         """All units in GHz
 
@@ -305,21 +306,20 @@ class Bandpass(object):
             self.fmin[name] = center - 0.5 * width
             self.fmax[name] = center + 0.5 * width
         # The interpolated bandpasses will be cached as needed
+        self.fmin_tot = None
+        self.fmax_tot = None
         self.freqs = {}
         self.bandpass = {}
 
-    def get_range(self):
+    @function_timer
+    def get_range(self, det=None):
         """Return the maximum range of frequencies needed for convolution."""
-        fmin = None
-        fmax = None
-        for name in self.dets:
-            if fmin is None:
-                fmin = self.fmin[name]
-                fmax = self.fmax[name]
-            else:
-                fmin = min(fmin, self.fmin[name])
-                fmax = max(fmax, self.fmax[name])
-        return fmin, fmax
+        if det is not None:
+            return self.fmin[det], self.fmin[det]
+        elif self.fmin_tot is None:
+            self.fmin_tot = min(self.fmin.values())
+            self.fmax_tot = max(self.fmax.values())
+        return self.fmin_tot, self.fmax_tot
 
     @function_timer
     def convolve(self, det, freqs, spectrum, rj=False):
@@ -348,7 +348,7 @@ class Bandpass(object):
             except AttributeError:
                 self.bandpass[det] = np.ones(self.nstep)
 
-            #norm = simpson(self.bandpass[det], x=self.freqs[det])
+            # norm = simpson(self.bandpass[det], x=self.freqs[det])
             norm = integrate_simpson(self.freqs[det], self.bandpass[det])
             if norm == 0:
                 raise RuntimeError("Bandpass cannot be normalized")
@@ -367,7 +367,7 @@ class Bandpass(object):
             spectrum_det *= rj2cmb
 
         # Average across the bandpass
-        #convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
+        # convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
         convolved = integrate_simpson(freqs_det, spectrum_det * bandpass_det)
 
         return convolved
@@ -424,6 +424,7 @@ class Focalplane(object):
 
     XAXIS, YAXIS, ZAXIS = np.eye(3)
 
+    @function_timer
     def __init__(
         self,
         detector_data=None,
@@ -648,6 +649,7 @@ class Focalplane(object):
     def keys(self):
         return self.detectors
 
+    @function_timer
     def detector_groups(self, column):
         """Group detectors by a common value in one property.
 
@@ -712,8 +714,10 @@ class Focalplane(object):
             # overridden in the constructor
             if self.sample_rate is None:
                 self.sample_rate = self.detector_data.meta["sample_rate"]
-            if self.field_of_view is None and \
-               "field_of_view" in self.detector_data.meta:
+            if (
+                self.field_of_view is None
+                and "field_of_view" in self.detector_data.meta
+            ):
                 self.field_of_view = self.detector_data.meta["field_of_view"]
             else:
                 self._compute_fov()

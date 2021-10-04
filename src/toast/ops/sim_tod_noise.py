@@ -298,16 +298,8 @@ class SimNoise(Operator):
 
             if self.serial:
                 # Original serial implementation (for testing / comparison)
-                for key in nse.keys:
-                    # Check if noise matching this PSD key is needed
-                    weight = 0.0
-                    for det in dets:
-                        weight += np.abs(nse.weight(det, key))
-                    if weight == 0:
-                        continue
-
+                for key in nse.all_keys_for_dets(dets):
                     # Output units
-
                     sim_units = None
                     psd_units = nse.psd(key).unit
                     if self.det_data_units is not None:

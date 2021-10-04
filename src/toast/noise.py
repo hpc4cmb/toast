@@ -9,6 +9,8 @@ from astropy import units as u
 
 import h5py
 
+from .timing import function_timer
+
 
 class Noise(object):
     """Noise objects act as containers for noise PSDs.
@@ -41,6 +43,7 @@ class Noise(object):
 
     """
 
+    @function_timer
     def __init__(
         self, detectors=list(), freqs=dict(), psds=dict(), mixmatrix=None, indices=None
     ):
@@ -116,10 +119,22 @@ class Noise(object):
             weight (float): Mixing matrix weight
 
         """
-        weight = 0.0
+        weight = 0
         if key in self._mixmatrix[det]:
             weight = self._mixmatrix[det][key]
         return weight
+
+    @function_timer
+    def all_keys_for_dets(self, dets):
+        """Return a complete list of noise keys that have nonzero
+        weights for given detectors:
+        """
+        keys = []
+        for det in dets:
+            for key, value in self._mixmatrix[det].items():
+                if value != 0:
+                    keys.append(key)
+        return keys
 
     def index(self, key):
         """Return the PSD index for `key`

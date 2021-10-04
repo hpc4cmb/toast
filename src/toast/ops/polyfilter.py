@@ -616,7 +616,7 @@ class CommonModeFilter(Operator):
     redistribute = Bool(
         False,
         help="If True, redistribute data before and after filtering for "
-        "optimal data locality."
+        "optimal data locality.",
     )
 
     @traitlets.validate("shared_flag_mask")
@@ -659,7 +659,7 @@ class CommonModeFilter(Operator):
             log.info_rank(
                 f"{data.comm.group:4} : Duplicated observation in",
                 comm=temp_ob.comm,
-                timer=timer
+                timer=timer,
             )
             # Redistribute this temporary observation to be distributed by sample sets
             temp_ob.redistribute(1, times=self.times, override_sample_sets=None)

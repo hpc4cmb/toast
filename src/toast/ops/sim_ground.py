@@ -23,7 +23,7 @@ from ..utils import Environment, name_UID, Logger, rate_from_times, astropy_cont
 
 from ..dist import distribute_uniform, distribute_discrete
 
-from ..timing import function_timer, Timer
+from ..timing import function_timer, Timer, GlobalTimers
 
 from ..intervals import Interval, regular_intervals, IntervalList
 
@@ -320,6 +320,10 @@ class SimGround(Operator):
                 "The schedule attribute must be set before calling exec()"
             )
 
+        gt = GlobalTimers.get()
+        gt.start("SimGround:  total")
+        gt.start("SimGround:  section A00")
+
         focalplane = self.telescope.focalplane
         rate = focalplane.sample_rate.to_value(u.Hz)
         comm = data.comm
@@ -331,6 +335,9 @@ class SimGround(Operator):
             det_ranks = 1
             samp_ranks = comm.group_size
 
+        gt.stop("SimGround:  section A00")
+        gt.start("SimGround:  section A01")
+
         # List of detectors in this pipeline
         pipedets = None
         if detectors is None:
@@ -341,17 +348,27 @@ class SimGround(Operator):
                 if det in detectors:
                     pipedets.append(det)
 
-        # Group by detector sets and prune to include only the detectors we
-        # are using.
-        detsets = None
-        if self.detset_key is not None:
-            detsets = dict()
+        gt.stop("SimGround:  section A01")
+        gt.start("SimGround:  section A02")
+
+        # Group by detector sets
+        if self.detset_key is None:
+            detsets = None
+        else:
             dsets = focalplane.detector_groups(self.detset_key)
-            for k, v in dsets.items():
-                detsets[k] = list()
-                for d in v:
-                    if d in pipedets:
-                        detsets[k].append(d)
+            if detectors is None:
+                detsets = dsets
+            else:
+                # Prune to include only the detectors we are using.
+                detsets = dict()
+                for k, v in dsets.items():
+                    detsets[k] = list()
+                    for d in v:
+                        if d in pipedets:
+                            detsets[k].append(d)
+
+        gt.stop("SimGround:  section A02")
+        gt.start("SimGround:  section A03")
 
         # Verify that we have enough detector data for all of our processes.  If we are
         # distributing by time, we check the sample sets on a per-observation basis
@@ -371,6 +388,9 @@ class SimGround(Operator):
                     msg = f"Group {comm.group} with {comm.group_size} processes cannot distribute {n_detset} detector sets."
                     log.error(msg)
                     raise RuntimeError(msg)
+
+        gt.stop("SimGround:  section A03")
+        gt.start("SimGround:  section A04")
 
         # Check valid combinations of options
 
@@ -392,6 +412,9 @@ class SimGround(Operator):
         scan_offsets = list()
         scan_samples = list()
 
+        gt.stop("SimGround:  section A04")
+        gt.start("SimGround:  section A05")
+
         incr = 1.0 / rate
         off = 0
         for scan in self.schedule.scans:
@@ -408,6 +431,9 @@ class SimGround(Operator):
             scan_offsets.append(off)
             off += ns
 
+        gt.stop("SimGround:  section A05")
+        gt.start("SimGround:  section A06")
+
         # FIXME:  Re-enable this when using astropy for coordinate transforms.
         # # Ensure that astropy IERS is downloaded
         # astropy_control(max_future=self.schedule.scans[-1].stop)
@@ -417,12 +443,19 @@ class SimGround(Operator):
 
         groupdist = distribute_discrete(scan_samples, comm.ngroups)
 
+        gt.stop("SimGround:  section A06")
+        gt.start("SimGround:  section A07")
+
         # Every process group creates its observations
 
         group_firstobs = groupdist[comm.group][0]
         group_numobs = groupdist[comm.group][1]
 
+        gt.stop("SimGround:  section A07")
+
         for obindx in range(group_firstobs, group_firstobs + group_numobs):
+            gt.start("SimGround:  section B")
+
             scan = self.schedule.scans[obindx]
 
             # Currently, El nods happen before or after the formal scan start / end.
@@ -469,6 +502,9 @@ class SimGround(Operator):
                 )
                 elnod_az = np.zeros_like(elnod_el) + scan.az_min.to_value(u.radian)
 
+            gt.stop("SimGround:  section B")
+            gt.start("SimGround:  section C")
+
             # Sample sets.  Although Observations support data distribution in any
             # shape process grid, this operator only supports 2 cases:  distributing
             # by detector and distributing by time.  We want to ensure that
@@ -512,6 +548,9 @@ class SimGround(Operator):
                     el.append(elnod_el_data)
                     ival_elnod.append((elnod_times[0], elnod_times[-1]))
 
+            gt.stop("SimGround:  section C")
+            gt.start("SimGround:  section D")
+
             # Now do the main scan
             (
                 scan_times,
@@ -538,6 +577,9 @@ class SimGround(Operator):
                 cosecant_modulation=self.scan_cosecant_modulation,
             )
 
+            gt.stop("SimGround:  section D")
+            gt.start("SimGround:  section E")
+
             # Do any adjustments to the El motion
             if self.el_mod_rate.to_value(u.Hz) > 0:
                 scan_min_el, scan_max_el = oscillate_el(
@@ -563,6 +605,9 @@ class SimGround(Operator):
                     self.el_mod_step.to_value(u.radian),
                 )
 
+            gt.stop("SimGround:  section E")
+            gt.start("SimGround:  section F")
+
             # When distributing data, ensure that each process has a whole number of
             # complete scans.
             scan_indices = np.searchsorted(
@@ -572,6 +617,9 @@ class SimGround(Operator):
             remainder = len(scan_times) - scan_indices[-1]
             if remainder > 0:
                 sample_sets.append([remainder])
+
+            gt.stop("SimGround:  section F")
+            gt.start("SimGround:  section G")
 
             times.append(scan_times)
             az.append(scan_az_data)
@@ -613,6 +661,9 @@ class SimGround(Operator):
                     el.append(elnod_el_data)
                     ival_elnod.append((elnod_times[0], elnod_times[-1]))
 
+            gt.stop("SimGround:  section G")
+            gt.start("SimGround:  section H")
+
             times = np.hstack(times)
             az = np.hstack(az)
             el = np.hstack(el)
@@ -629,6 +680,9 @@ class SimGround(Operator):
             # Create the observation, now that we know the total number of samples.
             # We copy the original site information and add weather information for
             # this observation if needed.
+
+            gt.stop("SimGround:  section H")
+            gt.start("SimGround:  section I")
 
             weather = None
             site = self.telescope.site
@@ -655,6 +709,9 @@ class SimGround(Operator):
                 site = copy.deepcopy(self.telescope.site)
                 site.weather = weather
 
+            gt.stop("SimGround:  section I")
+            gt.start("SimGround:  section J")
+
             # Since we have a constant focalplane for all observations, we just use
             # a reference to the input rather than copying.
             telescope = Telescope(
@@ -663,6 +720,9 @@ class SimGround(Operator):
                 focalplane=focalplane,
                 site=site,
             )
+
+            gt.stop("SimGround:  section J")
+            gt.start("SimGround:  section K")
 
             name = f"{scan.name}_{int(scan.start.timestamp())}"
             ob = Observation(
@@ -674,7 +734,11 @@ class SimGround(Operator):
                 detector_sets=detsets,
                 process_rows=det_ranks,
                 sample_sets=sample_sets,
+                verify_detector_sets=False,
             )
+
+            gt.stop("SimGround:  section K")
+            gt.start("SimGround:  section L")
 
             # Scan limits
             ob["scan_el"] = scan.el  # Nominal elevation
@@ -729,6 +793,9 @@ class SimGround(Operator):
                 comm=ob.comm_col,
             )
 
+            gt.stop("SimGround:  section L")
+            gt.start("SimGround:  section M")
+
             # Optionally initialize detector data
 
             dets = ob.select_local_detectors(detectors)
@@ -738,6 +805,9 @@ class SimGround(Operator):
 
             if self.det_flags is not None:
                 ob.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
+
+            gt.stop("SimGround:  section M")
+            gt.start("SimGround:  section N")
 
             # Only the first rank of the process grid columns sets / computes these.
 
@@ -777,6 +847,9 @@ class SimGround(Operator):
                 # Convert to RA / DEC.  Use pyephem for now.
                 bore_radec = azel_to_radec(site, stamps, bore_azel, use_ephem=True)
 
+            gt.stop("SimGround:  section N")
+            gt.start("SimGround:  section O")
+
             ob.shared[self.times].set(stamps, offset=(0,), fromrank=0)
             ob.shared[self.azimuth].set(az_data, offset=(0,), fromrank=0)
             ob.shared[self.elevation].set(el_data, offset=(0,), fromrank=0)
@@ -784,6 +857,9 @@ class SimGround(Operator):
             ob.shared[self.velocity].set(velocity, offset=(0, 0), fromrank=0)
             ob.shared[self.boresight_azel].set(bore_azel, offset=(0, 0), fromrank=0)
             ob.shared[self.boresight_radec].set(bore_radec, offset=(0, 0), fromrank=0)
+
+            gt.stop("SimGround:  section O")
+            gt.start("SimGround:  section P")
 
             # Simulate HWP angle
 
@@ -797,6 +873,9 @@ class SimGround(Operator):
                 hwp_step=self.hwp_step,
                 hwp_step_time=self.hwp_step_time,
             )
+
+            gt.stop("SimGround:  section P")
+            gt.start("SimGround:  section Q")
 
             # Create interval lists for our motion.  Since we simulated the scan on
             # every process, we don't need to communicate the global timespans of the
@@ -826,6 +905,9 @@ class SimGround(Operator):
                 | ob.intervals[self.turn_rightleft_interval]
             )
 
+            gt.stop("SimGround:  section Q")
+            gt.start("SimGround:  section R")
+
             # Get the Sun's position in horizontal coordinates and define
             # "Sun up" and "Sun close" intervals according to it
 
@@ -841,6 +923,10 @@ class SimGround(Operator):
             )
 
             data.obs.append(ob)
+
+            gt.stop("SimGround:  section R")
+
+        gt.start("SimGround:  section S")
 
         # For convenience, we additionally create a shared flag field with bits set
         # according to the different intervals.  This basically just saves workflows
@@ -863,6 +949,9 @@ class SimGround(Operator):
             ],
         )
         flag_intervals.apply(data, detectors=None)
+
+        gt.stop("SimGround:  section S")
+        gt.stop("SimGround:  total")
 
         return
 

@@ -29,7 +29,7 @@ class MathMiscTest(MPITestCase):
         val1 = integrate_simpson(x, f)
         val2 = simpson(f, x=x)
 
-        assert np.abs((val1-val2) / val2) < 1e-4
+        assert np.abs((val1 - val2) / val2) < 1e-4
 
     def test_integrate_simpson_even(self):
         x = np.arange(100)
@@ -38,4 +38,4 @@ class MathMiscTest(MPITestCase):
         val1 = integrate_simpson(x, f)
         val2 = simpson(f, x=x)
 
-        assert np.abs((val1-val2) / val2) < 1e-4
+        assert np.abs((val1 - val2) / val2) < 1e-4

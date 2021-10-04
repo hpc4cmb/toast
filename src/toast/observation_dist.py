@@ -16,6 +16,8 @@ from .mpi import MPI, comm_equal, comm_equivalent
 
 from .dist import distribute_samples, DistRange
 
+from .timing import function_timer
+
 from .utils import (
     Logger,
     name_UID,
@@ -57,11 +59,21 @@ class DistDetSamp(object):
         process_rows (int):  (Optional) The size of the rectangular process grid
             in the detector direction.  This number must evenly divide into the size of
             comm.  If not specified, defaults to the size of the communicator.
+        verify_detector_sets (bool):  If False, detectors and detector_sets are guaranteed
+            to be consistent so DistDetSamp can skip the potentially expensive check.
 
     """
 
+    @function_timer
     def __init__(
-        self, samples, detectors, sample_sets, detector_sets, comm, process_rows
+        self,
+        samples,
+        detectors,
+        sample_sets,
+        detector_sets,
+        comm,
+        process_rows,
+        verify_detector_sets=False,
     ):
         log = Logger.get()
 
@@ -119,7 +131,7 @@ class DistDetSamp(object):
                 # We have a list of lists
                 for ds in self.detector_sets:
                     for d in ds:
-                        if d not in self.detectors:
+                        if verify_detector_sets and d not in self.detectors:
                             raise RuntimeError(
                                 f"detector {d} in a detset but not in detector list"
                             )
@@ -129,7 +141,7 @@ class DistDetSamp(object):
                 # We have a detector group dictionary
                 for ds in self.detector_sets.values():
                     for d in ds:
-                        if d not in self.detectors:
+                        if verify_detector_sets and d not in self.detectors:
                             raise RuntimeError(
                                 f"detector {d} in a detset but not in detector list"
                             )

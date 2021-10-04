@@ -131,7 +131,9 @@ class MapMaker(Operator):
 
     write_map = Bool(True, help="If True, write the projected map")
 
-    write_hdf5 = Bool(False, help="If True, outputs are in HDF5 rather than FITS format.")
+    write_hdf5 = Bool(
+        False, help="If True, outputs are in HDF5 rather than FITS format."
+    )
 
     write_noiseweighted_map = Bool(
         False,

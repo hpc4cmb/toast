@@ -31,6 +31,8 @@ from .utils import (
 
 from .intervals import IntervalList
 
+from .timing import function_timer
+
 
 class DetectorData(object):
     """Class representing a logical collection of co-sampled detector data.
