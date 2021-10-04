@@ -276,8 +276,6 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
 
     fdata, fview = collect_submaps(pix, comm_bytes=comm_bytes)
 
-    log.info_rank(f"Collected submaps in", comm=dist.comm, timer=timer)
-
     if rank == 0:
         if os.path.isfile(path):
             os.remove(path)
@@ -290,8 +288,6 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
         for col in range(pix.n_value):
             fdata[col].clear()
         del fdata
-
-    log.info_rank(f"Wrote map in", comm=dist.comm, timer=timer)
 
     return
 
@@ -538,8 +534,6 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
             # All others wait for their turn to send
             if sendbuffer is not None:
                 dist.comm.Send(sendbuffer, dest=0, tag=rank)
-
-    log.info_rank(f"Wrote map in", comm=dist.comm, timer=timer)
 
     return
 
