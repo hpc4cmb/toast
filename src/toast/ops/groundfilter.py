@@ -281,7 +281,7 @@ class GroundFilter(Operator):
             # Prefix for logging
             log_prefix = f"{data.comm.group} : {obs.name} :"
 
-            if gcomm is None or gcomm.rank == 0:
+            if data.comm.group_rank == 0:
                 msg = (
                     f"{log_prefix} OpGroundFilter: "
                     f"Processing observation {iobs + 1} / {nobs}"
@@ -298,7 +298,7 @@ class GroundFilter(Operator):
 
             t1 = time()
             templates, legendre_trend, legendre_filter = self.build_templates(obs)
-            if gcomm is None or gcomm.rank == 0:
+            if data.comm.group_rank == 0:
                 msg = (
                     f"{log_prefix} OpGroundFilter: "
                     f"Built templates in {time() - t1:.1f}s"
@@ -307,7 +307,7 @@ class GroundFilter(Operator):
 
             ndet = len(obs.local_detectors)
             for idet, det in enumerate(obs.local_detectors):
-                if gcomm is None or gcomm.rank == 0:
+                if data.comm.group_rank == 0:
                     msg = (
                         f"{log_prefix} OpGroundFilter: "
                         f"Processing detector # {idet + 1} / {ndet}"
@@ -322,7 +322,7 @@ class GroundFilter(Operator):
 
                 t1 = time()
                 coeff = self.fit_templates(obs, det, templates, ref, good)
-                if gcomm is None or gcomm.rank == 0:
+                if data.comm.group_rank == 0:
                     msg = (
                         f"{log_prefix} OpGroundFilter: "
                         f"Fit templates in {time() - t1:.1f}s"
@@ -336,7 +336,7 @@ class GroundFilter(Operator):
                 self.subtract_templates(
                     ref, good, coeff, legendre_trend, legendre_filter
                 )
-                if gcomm is None or gcomm.rank == 0:
+                if data.comm.group_rank == 0:
                     msg = (
                         f"{log_prefix} OpGroundFilter: "
                         f"Subtract templates in {time() - t1:.1f}s"

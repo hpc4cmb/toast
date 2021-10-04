@@ -666,11 +666,11 @@ class SimGround(Operator):
 
             name = f"{scan.name}_{int(scan.start.timestamp())}"
             ob = Observation(
+                comm,
                 telescope,
                 len(times),
                 name=name,
                 uid=name_UID(name),
-                comm=comm.comm_group,
                 detector_sets=detsets,
                 process_rows=det_ranks,
                 sample_sets=sample_sets,

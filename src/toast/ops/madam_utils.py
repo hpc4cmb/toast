@@ -40,7 +40,9 @@ def log_time_memory(
             )
             log.debug(msg)
         if full_mem:
-            _ = memreport(msg="{} {}".format(prefix, mem_msg), comm=comm)
+            _ = memreport(
+                msg="{} {}".format(prefix, mem_msg), comm=data.comm.comm_world
+            )
     if restart:
         timer.start()
 

@@ -41,7 +41,6 @@ def job_size(world_comm):
 
     procs_per_node = 1
     node_rank = 0
-    node_comm = None
     rank = 0
     procs = 1
 
@@ -55,6 +54,8 @@ def job_size(world_comm):
         max_per_node = world_comm.allreduce(procs_per_node, op=MPI.MAX)
         if min_per_node != max_per_node:
             raise RuntimeError("Nodes have inconsistent numbers of MPI ranks")
+        node_comm.Free()
+        del node_comm
 
     n_node = procs // procs_per_node
 

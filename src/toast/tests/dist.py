@@ -190,19 +190,13 @@ class DataTest(MPITestCase):
         get_uid = None
         for season in range(3):
             data.obs.append(
-                Observation(
-                    tele, 10, name=f"atacama-{season:02d}", comm=toastcomm.comm_group
-                )
+                Observation(toastcomm, tele, 10, name=f"atacama-{season:02d}")
             )
             data.obs[-1]["site"] = "Atacama"
             data.obs[-1]["season"] = season
             get_uid = data.obs[-1].uid
         for season in range(3):
-            data.obs.append(
-                Observation(
-                    tele, 10, name=f"pole-{season:02d}", comm=toastcomm.comm_group
-                )
-            )
+            data.obs.append(Observation(toastcomm, tele, 10, name=f"pole-{season:02d}"))
             data.obs[-1]["site"] = "Pole"
             data.obs[-1]["season"] = season
 
@@ -231,18 +225,12 @@ class DataTest(MPITestCase):
         data = Data(toastcomm)
         for season in range(3):
             data.obs.append(
-                Observation(
-                    tele, 10, name=f"atacama-{season:02d}", comm=toastcomm.comm_group
-                )
+                Observation(toastcomm, tele, 10, name=f"atacama-{season:02d}")
             )
             data.obs[-1]["site"] = "Atacama"
             data.obs[-1]["season"] = season
         for season in range(3):
-            data.obs.append(
-                Observation(
-                    tele, 10, name=f"pole-{season:02d}", comm=toastcomm.comm_group
-                )
-            )
+            data.obs.append(Observation(toastcomm, tele, 10, name=f"pole-{season:02d}"))
             data.obs[-1]["site"] = "Pole"
             data.obs[-1]["season"] = season
 

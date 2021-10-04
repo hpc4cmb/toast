@@ -125,8 +125,8 @@ class GainDrifter(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
-            comm = ob.comm
-            rank = ob.comm_rank
+            comm = ob.comm.comm_group
+            rank = ob.comm.group_rank
             # Make sure detector data output exists
             ob.detdata.ensure(self.det_data, detectors=dets)
             obsindx = ob.uid

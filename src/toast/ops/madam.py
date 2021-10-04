@@ -633,9 +633,7 @@ class Madam(Operator):
         log = Logger.get()
         timer = Timer()
 
-        nodecomm = data.comm.comm_world.Split_type(
-            MPI.COMM_TYPE_SHARED, data.comm.world_rank
-        )
+        nodecomm = data.comm.comm_node
 
         # Determine how many processes per node should copy at once.
         n_copy_groups = 1
@@ -903,7 +901,6 @@ class Madam(Operator):
                 prefix=self._logprefix,
             )
         timer.stop()
-        del nodecomm
 
         return psdinfo, signal_dtype
 
@@ -929,9 +926,7 @@ class Madam(Operator):
         log = Logger.get()
         timer = Timer()
 
-        nodecomm = data.comm.comm_world.Split_type(
-            MPI.COMM_TYPE_SHARED, data.comm.world_rank
-        )
+        nodecomm = data.comm.comm_node
 
         # Determine how many processes per node should copy at once.
         n_copy_groups = 1
@@ -1008,8 +1003,6 @@ class Madam(Operator):
             del self._madam_pixels_raw
             del self._madam_pixweights
             del self._madam_pixweights_raw
-
-        del nodecomm
         return
 
     @function_timer

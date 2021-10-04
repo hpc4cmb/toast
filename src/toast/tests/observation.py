@@ -125,9 +125,9 @@ class ObservationTest(MPITestCase):
                 "all_A",
                 shape=all_common.shape,
                 dtype=all_common.dtype,
-                comm=obs.comm,
+                comm=obs.comm.comm_group,
             )
-            if obs.comm_rank == 0:
+            if obs.comm.group_rank == 0:
                 obs.shared["all_A"][:, :, :] = all_common
             else:
                 obs.shared["all_A"][None] = None
@@ -166,15 +166,15 @@ class ObservationTest(MPITestCase):
                 sh[None] = None
             obs.shared["det_B"] = sh
 
-            sh = MPIShared(all_common.shape, all_common.dtype, obs.comm)
-            if obs.comm_rank == 0:
+            sh = MPIShared(all_common.shape, all_common.dtype, obs.comm.comm_group)
+            if obs.comm.group_rank == 0:
                 sh[:, :, :] = all_common
             else:
                 sh[None] = None
             obs.shared["all_B"] = sh
 
-            # this style of assignment only works for the default obs.comm
-            if obs.comm_rank == 0:
+            # this style of assignment only works for the default obs.comm.comm_group
+            if obs.comm.group_rank == 0:
                 obs.shared["all_C"] = all_common
             else:
                 obs.shared["all_C"] = None
@@ -268,7 +268,7 @@ class ObservationTest(MPITestCase):
 
             # Create some shared objects over the whole comm
             local_array = None
-            if obs.comm_rank == 0:
+            if obs.comm.group_rank == 0:
                 local_array = np.arange(100, dtype=np.int16)
             obs.shared["everywhere"] = local_array
 
@@ -383,7 +383,7 @@ class ObservationTest(MPITestCase):
             # Make some intervals
 
             bad = None
-            if ob.comm_rank == 0:
+            if ob.comm.group_rank == 0:
                 all_time = np.arange(ob.n_all_samples, dtype=np.float64)
                 incr = ob.n_all_samples // 2
                 bad = [(float(x * incr), float(x * incr + 2)) for x in range(2)]
@@ -459,7 +459,7 @@ class ObservationTest(MPITestCase):
 
             # Create some shared objects over the whole comm
             local_array = None
-            if obs.comm_rank == 0:
+            if obs.comm.group_rank == 0:
                 local_array = np.arange(100, dtype=np.int16)
             obs.shared["everywhere"] = local_array
 
@@ -536,7 +536,7 @@ class ObservationTest(MPITestCase):
 
         # Redistribute back and verify
         for ob, orig in zip(data.obs, original):
-            ob.redistribute(orig.comm_size, times="times")
+            ob.redistribute(orig.comm.group_size, times="times")
             self.assertTrue(ob == orig)
 
     # The code below is here for reference, but we cannot actually test this

@@ -130,9 +130,9 @@ class Statistics(Operator):
                     # Mean
                     means[idet] += np.sum(good_signal)
 
-            if obs.comm is not None:
-                hits = obs.comm.allreduce(hits, op=MPI.SUM)
-                means = obs.comm.allreduce(means, op=MPI.SUM)
+            if obs.comm.comm_group is not None:
+                hits = obs.comm.comm_group.allreduce(hits, op=MPI.SUM)
+                means = obs.comm.comm_group.allreduce(means, op=MPI.SUM)
 
             good = hits != 0
             means[good] /= hits[good]
@@ -171,10 +171,10 @@ class Statistics(Operator):
                     # Kurtosis
                     stats[2, idet] += np.sum(good_signal ** 4)
 
-            if obs.comm is not None:
-                stats = obs.comm.reduce(stats, op=MPI.SUM)
+            if obs.comm.comm_group is not None:
+                stats = obs.comm.comm_group.reduce(stats, op=MPI.SUM)
 
-            if obs.comm is None or obs.comm.rank == 0:
+            if obs.comm.group_rank == 0:
                 # Central moments
                 m2 = stats[0]
                 m3 = stats[1]

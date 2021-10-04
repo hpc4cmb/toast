@@ -182,16 +182,15 @@ class CrossTalk(Operator):
             Ndets = len(dets)
             if Ndets == 0:
                 continue
-            comm = ob.comm
-            rank = ob.comm_rank
+            comm = ob.comm.comm_group
+            rank = ob.comm.group_rank
             ob.detdata.ensure(self.det_data, detectors=dets)
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
             # we loop over all the procs except rank
 
-            procs = np.arange(ob.comm_size)
-            # procs= np.arange(ob.comm.size )
+            procs = np.arange(ob.comm.group_size)
             procs = procs[procs != rank]
             tmp = np.zeros_like(ob.detdata[self.det_data].data)
             for idet, det in enumerate(dets):
@@ -258,7 +257,6 @@ class CrossTalk(Operator):
             # that all the send/receive have been performed
             comm.Barrier()
             for idet, det in enumerate(dets):
-
                 ob.detdata[self.det_data][det] += tmp[idet]
 
         return
@@ -276,13 +274,13 @@ class CrossTalk(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            comm = ob.comm
-            rank = ob.comm_rank
+            comm = ob.comm.comm_group
+            rank = ob.comm.group_rank
             # Detdata are usually distributed by detectors,
             # to crosstalk is more convenient to  redistribute them by time,
             # so that   each process has the samples from all detectors at a given
             # time stamp
-            if ob.comm_size > 1:
+            if ob.comm.group_size > 1:
                 old_data_shape = ob.detdata[self.det_data].data.shape
                 ob.redistribute(1, times=ob.shared["times"])
                 # Now ob.local_detectors == ob.all_detectors and
@@ -312,8 +310,8 @@ class CrossTalk(Operator):
                 ob.detdata[self.det_data][det] += tmp[idet]
 
             # We distribute the data back to the previous distribution
-            if ob.comm_size > 1:
-                ob.redistribute(ob.comm_size, times=ob.shared["times"])
+            if ob.comm.group_size > 1:
+                ob.redistribute(ob.comm.group_size, times=ob.shared["times"])
 
         return
 
@@ -411,10 +409,10 @@ class MitigateCrossTalk(Operator):
         for ob in data.obs:
 
             # Get the detectors we are using for this observation
-            comm = ob.comm
-            rank = ob.comm_rank
+            comm = ob.comm.comm_group
+            rank = ob.comm.group_rank
             # Redistribute data as in CrossTalk operator
-            if ob.comm_size > 1:
+            if ob.comm.group_size > 1:
                 old_data_shape = ob.detdata[self.det_data].data.shape
                 ob.redistribute(1, times=ob.shared["times"])
                 new_data_shape = ob.detdata[self.det_data].data.shape
@@ -445,8 +443,8 @@ class MitigateCrossTalk(Operator):
             for idet, det in enumerate(ob.all_detectors):
                 ob.detdata[self.det_data][det] = tmp[idet]
             # We distribute the data back to the previous distribution
-            if ob.comm_size > 1:
-                ob.redistribute(ob.comm_size, times=ob.shared["times"])
+            if ob.comm.group_size > 1:
+                ob.redistribute(ob.comm.group_size, times=ob.shared["times"])
 
         return
 

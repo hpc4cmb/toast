@@ -101,7 +101,7 @@ class SaveSpt3g(Operator):
             frames = self.obs_export(ob)
 
             # One process writes frame files
-            if ob.comm_rank == ex_rank:
+            if ob.comm.group_rank == ex_rank:
                 # Make observation directory.  This should NOT already exist.
                 ob_dir = os.path.join(self.directory, ob.name)
                 os.makedirs(ob_dir)
@@ -117,8 +117,8 @@ class SaveSpt3g(Operator):
                 )
                 save_pipe.Run()
 
-            if ob.comm is not None:
-                ob.comm.barrier()
+            if ob.comm.comm_group is not None:
+                ob.comm.comm_group.barrier()
 
         return
 

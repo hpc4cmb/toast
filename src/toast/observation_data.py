@@ -431,8 +431,8 @@ class DetDataManager(MutableMapping):
     """
 
     def __init__(self, dist):
-        self.samples = dist.samps[dist.comm_rank].n_elem
-        self.detectors = dist.dets[dist.comm_rank]
+        self.samples = dist.samps[dist.comm.group_rank].n_elem
+        self.detectors = dist.dets[dist.comm.group_rank]
         self._internal = dict()
 
     def _data_shape(self, sample_shape):
@@ -803,8 +803,8 @@ class SharedDataManager(MutableMapping):
     """
 
     def __init__(self, dist):
-        self.n_detectors = len(dist.dets[dist.comm_rank])
-        self.n_samples = dist.samps[dist.comm_rank].n_elem
+        self.n_detectors = len(dist.dets[dist.comm.group_rank])
+        self.n_samples = dist.samps[dist.comm.group_rank].n_elem
         self.comm = dist.comm
         self.comm_row = dist.comm_row
         self.comm_col = dist.comm_col
@@ -838,10 +838,10 @@ class SharedDataManager(MutableMapping):
 
         shared_comm = comm
         if shared_comm is None:
-            # Use the observation communicator.
-            shared_comm = self.comm
+            # Use the observation group communicator.
+            shared_comm = self.comm.comm_group
 
-        if comm_equal(self.comm, shared_comm):
+        if comm_equal(self.comm.comm_group, shared_comm):
             # This is shared over the whole observation communicator, so it
             # may have any shape.
             pass
@@ -895,7 +895,9 @@ class SharedDataManager(MutableMapping):
         if isinstance(value, MPIShared):
             # This is an existing shared object.
             if key not in self._internal:
-                self.create(key, shape=value.shape, dtype=value.dtype, comm=self.comm)
+                self.create(
+                    key, shape=value.shape, dtype=value.dtype, comm=self.comm.comm_group
+                )
             else:
                 # Verify that communicators and dimensions match
                 if value.shape != self._internal[key].shape:
@@ -923,7 +925,7 @@ class SharedDataManager(MutableMapping):
                 # We need to create it.  In that case we use the default communicator
                 # (the full observation comm).  We also need to get the array
                 # properties to all processes in order to create the object.
-                if self.comm is None:
+                if self.comm.comm_group is None:
                     # No MPI
                     self.create(key, shape=value.shape, dtype=value.dtype)
                     offset = tuple([0 for x in self._internal[key].shape])
@@ -931,13 +933,13 @@ class SharedDataManager(MutableMapping):
                 else:
                     shp = None
                     dt = None
-                    check_rank = np.zeros((self.comm.size,), dtype=np.int32)
-                    check_result = np.zeros((self.comm.size,), dtype=np.int32)
+                    check_rank = np.zeros((self.comm.group_size,), dtype=np.int32)
+                    check_result = np.zeros((self.comm.group_size,), dtype=np.int32)
                     if value is not None:
                         shp = value.shape
                         dt = value.dtype
-                        check_rank[self.comm.rank] = 1
-                    self.comm.Allreduce(check_rank, check_result, op=MPI.SUM)
+                        check_rank[self.comm.group_rank] = 1
+                    self.comm.comm_group.Allreduce(check_rank, check_result, op=MPI.SUM)
                     tot = np.sum(check_result)
                     if tot > 1:
                         msg = "When creating shared data with [] notation, only "
@@ -946,11 +948,11 @@ class SharedDataManager(MutableMapping):
                         raise RuntimeError(msg)
 
                     from_rank = np.where(check_result == 1)[0][0]
-                    shp = self.comm.bcast(shp, root=from_rank)
-                    dt = self.comm.bcast(dt, root=from_rank)
+                    shp = self.comm.comm_group.bcast(shp, root=from_rank)
+                    dt = self.comm.comm_group.bcast(dt, root=from_rank)
                     self.create(key, shape=shp, dtype=dt)
                     offset = None
-                    if self.comm.rank == from_rank:
+                    if self.comm.group_rank == from_rank:
                         offset = tuple([0 for x in self._internal[key].shape])
                     self._internal[key].set(value, offset=offset, fromrank=from_rank)
             else:
@@ -986,8 +988,8 @@ class SharedDataManager(MutableMapping):
         if self.n_samples != other.n_samples:
             log.verbose(f"  n_detectors {self.n_samples} != {other.n_samples}")
             return False
-        if not comm_equivalent(self.comm, other.comm):
-            log.verbose(f"  comm not equivalent")
+        if not comm_equivalent(self.comm.comm_group, other.comm.comm_group):
+            log.verbose(f"  comm_group not equivalent")
             return False
         if not comm_equivalent(self.comm_row, other.comm_row):
             log.verbose(f"  comm_row not equivalent")
@@ -1113,18 +1115,18 @@ class IntervalsManager(MutableMapping):
         """
         send_col_rank = 0
         send_row_rank = 0
-        if self.comm is not None:
+        if self.comm.comm_group is not None:
             col_rank = 0
             if self.comm_col is not None:
                 col_rank = self.comm_col.rank
             # Find the process grid ranks of the incoming data
-            if self.comm.rank == fromrank:
+            if self.comm.group_rank == fromrank:
                 if self.comm_col is not None:
                     send_col_rank = self.comm_col.rank
                 if self.comm_row is not None:
                     send_row_rank = self.comm_row.rank
-            send_col_rank = self.comm.bcast(send_col_rank, root=0)
-            send_row_rank = self.comm.bcast(send_row_rank, root=0)
+            send_col_rank = self.comm.comm_group.bcast(send_col_rank, root=0)
+            send_row_rank = self.comm.comm_group.bcast(send_row_rank, root=0)
             # Broadcast data along the row
             if col_rank == send_col_rank:
                 if self.comm_row is not None:
@@ -1179,7 +1181,7 @@ class IntervalsManager(MutableMapping):
 
     def __eq__(self, other):
         log = Logger.get()
-        if not comm_equivalent(self.comm, other.comm):
+        if not comm_equivalent(self.comm.comm_group, other.comm.comm_group):
             log.verbose(f"  comm not equivalent")
             return False
         if not comm_equivalent(self.comm_row, other.comm_row):

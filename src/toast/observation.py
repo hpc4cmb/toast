@@ -137,12 +137,13 @@ class Observation(MutableMapping):
         det4  sample(0), sample(1), ...,  |  ...., sample(N-1)
 
     Args:
+        comm (toast.Comm):  The toast communicator containing information about the
+            process group.
         telescope (Telescope):  An instance of a Telescope object.
         n_samples (int):  The total number of samples for this observation.
         name (str):  (Optional) The observation name.
         uid (int):  (Optional) The Unique ID for this observation.  If not specified,
             the UID will be computed from a hash of the name.
-        comm (mpi4py.MPI.Comm):  (Optional) The MPI communicator to use.
         detector_sets (list):  (Optional) List of lists containing detector names.
             These discrete detector sets are used to distribute detectors- a detector
             set will always be within a single row of the process grid.  If None,
@@ -163,11 +164,11 @@ class Observation(MutableMapping):
 
     def __init__(
         self,
+        comm,
         telescope,
         n_samples,
         name=None,
         uid=None,
-        comm=None,
         detector_sets=None,
         sample_sets=None,
         process_rows=None,
@@ -229,28 +230,12 @@ class Observation(MutableMapping):
         """
         return self._uid
 
-    # The overall MPI communicator for this observation.
-
     @property
     def comm(self):
         """
-        (mpi4py.MPI.Comm):  The group communicator for this observation (or None).
+        (toast.Comm):  The overall communicator.
         """
         return self.dist.comm
-
-    @property
-    def comm_size(self):
-        """
-        (int): The number of processes in the observation communicator.
-        """
-        return self.dist.comm_size
-
-    @property
-    def comm_rank(self):
-        """
-        (int): The rank of this process in the observation communicator.
-        """
-        return self.dist.comm_rank
 
     # The MPI communicator along the current row of the process grid
 
@@ -312,7 +297,7 @@ class Observation(MutableMapping):
         """
         (list): The detectors assigned to this process.
         """
-        return self.dist.dets[self.dist.comm_rank]
+        return self.dist.dets[self.dist.comm.group_rank]
 
     def select_local_detectors(self, selection=None):
         """
@@ -345,8 +330,8 @@ class Observation(MutableMapping):
             return None
         else:
             ds = list()
-            for d in range(self.dist.det_sets[self.dist.comm_rank].n_elem):
-                off = self.dist.det_sets[self.dist.comm_rank].offset
+            for d in range(self.dist.det_sets[self.dist.comm.group_rank].n_elem):
+                off = self.dist.det_sets[self.dist.comm.group_rank].offset
                 ds.append(self.dist.detector_sets[off + d])
             return ds
 
@@ -362,14 +347,14 @@ class Observation(MutableMapping):
         """
         The first sample on this process, relative to the observation start.
         """
-        return self.dist.samps[self.dist.comm_rank].offset
+        return self.dist.samps[self.dist.comm.group_rank].offset
 
     @property
     def n_local_samples(self):
         """
         The number of local samples on this process.
         """
-        return self.dist.samps[self.dist.comm_rank].n_elem
+        return self.dist.samps[self.dist.comm.group_rank].n_elem
 
     # Sample set distribution
 
@@ -389,8 +374,8 @@ class Observation(MutableMapping):
             return None
         else:
             ss = list()
-            for s in range(self.dist.samp_sets[self.dist.comm_rank].n_elem):
-                off = self.dist.samp_sets[self.dist.comm_rank].offset
+            for s in range(self.dist.samp_sets[self.dist.comm.group_rank].n_elem):
+                off = self.dist.samp_sets[self.dist.comm.group_rank].offset
                 ss.append(self.dist.sample_sets[off + s])
             return ss
 
@@ -421,10 +406,10 @@ class Observation(MutableMapping):
         val = "<Observation"
         val += f"\n  name = '{self.name}'"
         val += f"\n  uid = '{self.uid}'"
-        if self.comm is None:
+        if self.comm.comm_group is None:
             val += "  group has a single process (no MPI)"
         else:
-            val += f"  group has {self.comm.size} processes"
+            val += f"  group has {self.comm.group_size} processes"
         val += f"\n  telescope = {self._telescope.__repr__()}"
         for k, v in self._internal.items():
             val += f"\n  {k} = {v}"
@@ -477,8 +462,8 @@ class Observation(MutableMapping):
         if self.intervals != other.intervals:
             fail = 1
             log.verbose("Obs intervals not equal")
-        if self.comm is not None:
-            fail = self.comm.allreduce(fail, op=MPI.SUM)
+        if self.comm.comm_group is not None:
+            fail = self.comm.comm_group.allreduce(fail, op=MPI.SUM)
         return fail == 0
 
     def __ne__(self, other):
@@ -517,11 +502,11 @@ class Observation(MutableMapping):
             log.error(msg)
             raise RuntimeError(msg)
         new_obs = Observation(
+            self.dist.comm,
             self.telescope,
             self.n_all_samples,
             name=self.name,
             uid=self.uid,
-            comm=self.dist.comm,
             detector_sets=self.all_detector_sets,
             sample_sets=self.all_sample_sets,
             process_rows=self.dist.process_rows,
@@ -544,7 +529,7 @@ class Observation(MutableMapping):
                     new_comm = new_obs.dist.comm_col
                 else:
                     # Full obs comm
-                    new_comm = new_obs.dist.comm
+                    new_comm = new_obs.dist.comm.comm_group
                 new_obs.shared.create(name, data.shape, dtype=data.dtype, comm=new_comm)
                 offset = None
                 dval = None
@@ -587,10 +572,10 @@ class Observation(MutableMapping):
 
         # Sum the aggregate local memory
         total = None
-        if self.comm is None:
+        if self.comm.comm_group is None:
             total = local_mem
         else:
-            total = self.comm.allreduce(local_mem, op=MPI.SUM)
+            total = self.comm.comm_group.allreduce(local_mem, op=MPI.SUM)
 
         # The total shared memory use is already returned on every process by this
         # next function.
@@ -640,7 +625,6 @@ class Observation(MutableMapping):
         )
 
         # Replace our distribution and data managers with the new ones.
-        self.dist.close()
         del self.dist
         self.dist = new_dist
 

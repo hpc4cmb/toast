@@ -68,8 +68,8 @@ class GainScrambler(Operator):
                 # Nothing to do for this observation
                 continue
 
-            comm = obs.comm
-            rank = obs.comm_rank
+            comm = obs.comm.comm_group
+            rank = obs.comm.group_rank
 
             obsindx = obs.uid
             telescope = obs.telescope.uid

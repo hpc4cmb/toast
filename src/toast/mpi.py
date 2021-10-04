@@ -87,12 +87,23 @@ class Comm(object):
     "group".  If group_size does not divide evenly into the size of the given
     communicator, then those processes remain idle.
 
-    A Comm object stores three MPI communicators:  The "world" communicator
+    A Comm object stores several MPI communicators:  The "world" communicator
     given here, which contains all processes to consider, a "group"
     communicator (one per group), and a "rank" communicator which contains the
     processes with the same group-rank across all groups.
 
-    If MPI is not enabled, then all communicators are set to None.
+    This object also stores a "node" communicator containing all processes with
+    access to the same shared memory, and a "node rank" communicator for
+    processes with the same rank on a node.  There is a node rank communicator
+    for all nodes and also one for within the group.
+
+    Additionally, there is a mechanism for creating and caching row / column
+    communicators for process grids within a group.
+
+    If MPI is not enabled, then all communicators are set to None.  Additionally,
+    there may be cases where MPI is enabled in the environment, but the user wishes
+    to disable it when creating a Comm object.  This can be done by passing
+    MPI.COMM_SELF as the world communicator.
 
     Args:
         world (mpi4py.MPI.Comm): the MPI communicator containing all processes.
@@ -134,9 +145,16 @@ class Comm(object):
         self._wcomm = world
         self._wrank = 0
         self._wsize = 1
+        self._nodecomm = None
+        self._noderankcomm = None
+        self._nodeprocs = 1
         if self._wcomm is not None:
             self._wrank = self._wcomm.rank
             self._wsize = self._wcomm.size
+            self._nodecomm = self._wcomm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+            self._nodeprocs = self._nodecomm.size
+            myworldnode = self._wrank // self._nodeprocs
+            self._noderankcomm = self._wcomm.Split(self._nodecomm.rank, myworldnode)
 
         self._gsize = groupsize
 
@@ -162,13 +180,21 @@ class Comm(object):
             log.error(msg)
             raise RuntimeError(msg)
 
+        if self._gsize > self._nodeprocs and self._gsize % self._nodeprocs != 0:
+            msg = f"Group size of {self._gsize} is not a whole number of "
+            msg += f"nodes (there are {self._nodeprocs} processes per node)"
+            log.error(msg)
+            raise RuntimeError(msg)
+
         self._group = self._wrank // self._gsize
         self._grank = self._wrank % self._gsize
-        self._cleanup_split_comm = False
+        self._cleanup_group_comm = False
 
+        self._gnoderankcomm = None
         if self._ngroups == 1:
             # We just have one group with all processes.
             self._gcomm = self._wcomm
+            self._gnoderankcomm = self._noderankcomm
             if use_mpi:
                 self._rcomm = MPI.COMM_SELF
             else:
@@ -178,7 +204,9 @@ class Comm(object):
             # unless MPI is enabled and we have multiple groups.
             self._gcomm = self._wcomm.Split(self._group, self._grank)
             self._rcomm = self._wcomm.Split(self._grank, self._group)
-            self._cleanup_split_comm = True
+            mygroupnode = self._grank // self._nodeprocs
+            self._gnoderankcomm = self._wcomm.Split(self._nodecomm.rank, mygroupnode)
+            self._cleanup_group_comm = True
 
         # See if we are using CUDA and if so, determine which device each process will
         # be using.
@@ -188,27 +216,41 @@ class Comm(object):
                 # We are not using MPI, so we will just use the first device
                 self._cuda = AcceleratorCuda(0)
             else:
-                # How many processes are on this node?
-                nodecomm = self._wcomm.Split_type(MPI.COMM_TYPE_SHARED, 0)
-                nodeprocs = nodecomm.size
-                noderank = nodecomm.rank
                 # Assign this process to one of the GPUs.
                 # FIXME:  Is it better for ranks to be spread across the devices
                 # or for contiguous ranks to be assigned to same device?
-                rank_dev = noderank % cuda_devices
+                rank_dev = self._nodecomm.rank % cuda_devices
                 self._cuda = AcceleratorCuda(rank_dev)
-                nodecomm.Free()
-                del nodecomm
+
+        # Create a cache of row / column communicators for each group.  These can
+        # then be re-used for observations with the same grid shapes.
+        self._rowcolcomm = dict()
 
     def close(self):
-        # Explicitly free communicators if needed
-        if hasattr(self, "_cleanup_split_comm") and self._cleanup_split_comm:
+        # Explicitly free communicators if needed.
+        # We always need to clean up the node and world node-rank communicators
+        # if they exist
+        if hasattr(self, "_nodecomm") and self._nodecomm is not None:
+            self._nodecomm.Free()
+            del self._nodecomm
+        if hasattr(self, "_noderankcomm") and self._noderankcomm is not None:
+            self._noderankcomm.Free()
+            del self._noderankcomm
+        # Optionally delete the group communicators if they were created.
+        if hasattr(self, "_cleanup_split_comm") and self._cleanup_group_comm:
             self._gcomm.Free()
             self._rcomm.Free()
-            # Delete these members completely, so that an error will be
-            # triggered if we try to do something after calling close().
+            self._gnoderankcomm.Free()
             del self._gcomm
             del self._rcomm
+            del self._gnoderankcomm
+        # Go through the cache of row / column grid communicators and free
+        if hasattr(self, "_rowcolcomm"):
+            for process_rows, comms in self._rowcolcomm.items():
+                comms["row"].Free()
+                del comms["row"]
+                comms["col"].Free()
+                del comms["col"]
         return
 
     def __del__(self):
@@ -250,14 +292,80 @@ class Comm(object):
         return self._wcomm
 
     @property
+    def comm_node(self):
+        """The communicator shared by processes on the same node."""
+        return self._nodecomm
+
+    @property
+    def comm_node_rank(self):
+        """The communicator shared by processes with the same node rank across all nodes."""
+        return self._nodecomm
+
+    @property
     def comm_group(self):
         """The communicator shared by processes within this group."""
         return self._gcomm
 
     @property
-    def comm_rank(self):
+    def comm_group_rank(self):
         """The communicator shared by processes with the same group_rank."""
         return self._rcomm
+
+    @property
+    def comm_group_node_rank(self):
+        """The communicator shared by processes with the same node rank on nodes within the group."""
+        return self._rcomm
+
+    def comm_row_col(self, process_rows):
+        """Return the row and column communicators for this group and grid shape.
+
+        Args:
+            process_rows (int):  The number of rows in the process grid.
+
+        Returns:
+            (tuple):  The (row MPI.Comm, column MPI.Comm) for the group using the
+                specified number of process rows.
+
+        """
+        if process_rows not in self._rowcolcomm:
+            # Does not exist yet, create it.
+            if self._gcomm is None:
+                if process_rows != 1:
+                    msg = "MPI not in use, so only process_rows == 1 is allowed"
+                    log.error(msg)
+                    raise ValueError(msg)
+                self._rowcolcomm[process_rows] = {
+                    "row": None,
+                    "col": None,
+                }
+            else:
+                if self._gcomm.size % process_rows != 0:
+                    msg = f"The number of process_rows ({process_rows}) "
+                    msg += f"does not divide evenly into the communicator "
+                    msg += f"size ({self._gcomm.size})"
+                    log.error(msg)
+                    raise RuntimeError(msg)
+                process_cols = self._gcomm.size // process_rows
+                col_rank = self._gcomm.rank // process_cols
+                row_rank = self._gcomm.rank % process_cols
+
+                self._rowcolcomm[process_rows] = dict()
+                if process_cols == 1:
+                    self._rowcolcomm[process_rows]["row"] = MPI.Comm.Dup(MPI.COMM_SELF)
+                else:
+                    self._rowcolcomm[process_rows]["row"] = self._gcomm.Split(
+                        col_rank, row_rank
+                    )
+                if process_rows == 1:
+                    self._rowcolcomm[process_rows]["col"] = MPI.Comm.Dup(MPI.COMM_SELF)
+                else:
+                    self._rowcolcomm[process_rows]["col"] = self._gcomm.Split(
+                        row_rank, col_rank
+                    )
+        return (
+            self._rowcolcomm[process_rows]["row"],
+            self._rowcolcomm[process_rows]["col"],
+        )
 
     @property
     def cuda(self):

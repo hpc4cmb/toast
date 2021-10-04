@@ -73,12 +73,12 @@ class TimeConstantTest(MPITestCase):
 
         # Verify that the signal is restored
         for obs in data.obs:
-            if obs.comm_rank == 0:
+            if obs.comm.group_rank == 0:
                 import matplotlib.pyplot as plt
             for det in obs.local_detectors:
                 signal0 = obs.detdata["signal0"][det]
                 signal = obs.detdata["signal"][det]
-                if obs.comm_rank == 0:
+                if obs.comm.group_rank == 0:
                     fig = plt.figure(figsize=(12, 8), dpi=72)
                     ax = fig.add_subplot(2, 1, 1, aspect="auto")
                     ax.plot(
