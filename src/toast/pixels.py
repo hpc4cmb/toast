@@ -77,6 +77,7 @@ class PixelDistribution(object):
         self._submap_owners = None
         self._owned_submaps = None
         self._alltoallv_info = None
+        self._all_hit_submaps = None
 
     def __eq__(self, other):
         local_eq = True
@@ -146,6 +147,17 @@ class PixelDistribution(object):
     def local_submaps(self):
         """(array): The list of local submaps or None if process has no data."""
         return self._local_submaps
+
+    @property
+    def all_hit_submaps(self):
+        """(array): The list of submaps local to atleast one process."""
+        if self._all_hit_submaps is None:
+            hits = np.zeros(self._n_submap)
+            hits[self._local_submaps] += 1
+            if self._comm is not None:
+                self._comm.Allreduce(MPI.IN_PLACE, hits)
+            self._all_hit_submaps = np.argwhere(hits != 0).ravel()
+        return self._all_hit_submaps
 
     @property
     def global_submap_to_local(self):

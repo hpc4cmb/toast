@@ -145,7 +145,7 @@ class PixelTest(MPITestCase):
 
                     nt.assert_equal(pdata.data, other.data)
 
-    def test_io(self):
+    def test_io_fits(self):
         np.random.seed(0)
         if self.comm is not None:
             np.random.seed(self.comm.rank)
@@ -203,6 +203,75 @@ class PixelTest(MPITestCase):
                                 )
                         # Compare to file written with our own function
                         loaded = hp.read_map(fitsfile, nest=True, field=None)
+                        for lc, sm in enumerate(pdata.distribution.local_submaps):
+                            global_offset = sm * pdata.distribution.n_pix_submap
+                            n_check = pdata.distribution.n_pix_submap
+                            if global_offset + n_check > pdata.distribution.n_pix:
+                                n_check = pdata.distribution.n_pix - global_offset
+                            for col in range(pdata.n_value):
+                                nt.assert_equal(
+                                    loaded[col][
+                                        global_offset : global_offset + n_check
+                                    ],
+                                    pdata.data[lc, 0:n_check, col],
+                                )
+
+    def test_io_hdf5(self):
+        np.random.seed(0)
+        if self.comm is not None:
+            np.random.seed(self.comm.rank)
+        for nside in self.nsides:
+            for nsb in self.nsub:
+                dist = self._make_pixdist(nside, nsb, self.comm)
+                for tp in self.fitstypes:
+                    pdata = self._make_pixdata(dist, tp, 2)
+                    pdata = PixelData(dist, tp, n_value=6)
+                    hdf5file = os.path.join(
+                        self.outdir,
+                        "data_N{}_sub{}_type-{}.h5".format(
+                            nside, nsb, np.dtype(tp).char
+                        ),
+                    )
+                    io.write_healpix_hdf5(pdata, hdf5file, nest=True)
+                    check = PixelData(dist, tp, n_value=6)
+                    io.read_healpix_hdf5(check, hdf5file, nest=True)
+                    nt.assert_equal(pdata.data, check.data)
+                    if self.comm is None or self.comm.size == 1:
+                        # Write out the data serially and compare
+                        fdata = list()
+                        for col in range(pdata.n_value):
+                            fdata.append(np.zeros(pdata.distribution.n_pix))
+                        for lc, sm in enumerate(pdata.distribution.local_submaps):
+                            global_offset = sm * pdata.distribution.n_pix_submap
+                            n_copy = pdata.distribution.n_pix_submap
+                            if global_offset + n_copy > pdata.distribution.n_pix:
+                                n_copy = pdata.distribution.n_pix - global_offset
+                            for col in range(pdata.n_value):
+                                fdata[col][
+                                    global_offset : global_offset + n_copy
+                                ] = pdata.data[lc, 0:n_copy, col]
+                        serialfile = os.path.join(
+                            self.outdir,
+                            "serial_N{}_sub{}_type-{}.h5".format(
+                                nside, nsb, np.dtype(tp).char
+                            ),
+                        )
+                        io.write_healpix(serialfile, fdata, nest=True, overwrite=True)
+                        loaded = io.read_healpix(serialfile, nest=True, field=None)
+                        for lc, sm in enumerate(pdata.distribution.local_submaps):
+                            global_offset = sm * pdata.distribution.n_pix_submap
+                            n_check = pdata.distribution.n_pix_submap
+                            if global_offset + n_check > pdata.distribution.n_pix:
+                                n_check = pdata.distribution.n_pix - global_offset
+                            for col in range(pdata.n_value):
+                                nt.assert_equal(
+                                    loaded[col][
+                                        global_offset : global_offset + n_check
+                                    ],
+                                    pdata.data[lc, 0:n_check, col],
+                                )
+                        # Compare to file written with our parallel function
+                        loaded = io.read_healpix(hdf5file, nest=True, field=None)
                         for lc, sm in enumerate(pdata.distribution.local_submaps):
                             global_offset = sm * pdata.distribution.n_pix_submap
                             n_check = pdata.distribution.n_pix_submap

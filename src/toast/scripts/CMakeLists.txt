@@ -10,6 +10,7 @@ install(PROGRAMS
     toast_benchmark_satellite
     toast_benchmark_ground
     benchmarking_utilities.py
+    toast_healpix_convert
     DESTINATION bin
 )
 

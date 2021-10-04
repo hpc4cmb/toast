@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
+# a BSD-style license that can be found in the LICENSE file.
+
+"""This script converts HEALPiX maps between FITS and HDF5
+"""
+
+import os
+import sys
+import argparse
+import traceback
+
+import h5py
+import healpy as hp
+import numpy as np
+
+import toast
+from toast.mpi import get_world, Comm
+
+from toast.utils import Logger, Environment, Timer
+from toast.pixels_io import (
+    filename_is_fits,
+    filename_is_hdf5,
+    read_healpix,
+    write_healpix,
+)
+
+
+def main():
+    env = Environment.get()
+    log = Logger.get()
+    comm, procs, rank = get_world()
+    timer0 = Timer()
+    timer = Timer()
+    timer0.start()
+    timer.start()
+
+    parser = argparse.ArgumentParser(
+        description="Convert HEALPiX maps between FITS and HDF5"
+    )
+
+    parser.add_argument(
+        "inmap",
+        help="Name of input file",
+    )
+
+    parser.add_argument(
+        "--outmap",
+        required=False,
+        help="Name of output file",
+    )
+
+    parser.add_argument(
+        "--nside_submap",
+        default=16,
+        help="Submap size is 12 * nside_submap ** 2.  "
+        "Number of submaps is (nside / nside_submap) ** 2",
+    )
+
+    args = parser.parse_args()
+
+    if filename_is_fits(args.inmap):
+
+        # Convert a FITS map to HDF5
+
+        if args.outmap is None:
+            outfile = os.path.splitext(args.inmap)[0] + ".h5"
+        else:
+            outfile = args.outmap
+        log.info(f"Converting {args.inmap} to {outfile}")
+
+        mapdata, header = read_healpix(args.inmap, None, h=True, nest=True)
+        log.info_rank(f"Loaded {args.inmap} in", timer=timer, comm=comm)
+
+        write_healpix(outfile, mapdata, extra_header=header, nest=True, overwrite=True)
+
+        log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
+
+    elif filename_is_hdf5(args.inmap):
+
+        # Convert an HDF5 map to FITS
+
+        if args.outmap is None:
+            outfile = os.path.splitext(args.inmap)[0] + ".fits"
+        else:
+            outfile = args.outmap
+        log.info(f"Converting {args.inmap} to {outfile}")
+
+        mapdata, header = read_healpix(args.inmap, h=True, nest=True)
+
+        write_healpix(
+            outfile,
+            mapdata,
+            nside_submap=args.nside_submap,
+            extra_header=header,
+            nest=True,
+            overwrite=True,
+        )
+
+        log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
+
+    else:
+
+        msg = f"Cannot guess input map file type from {args.inmap}"
+        raise RuntimeError(msg)
+
+    log.info_rank(f"Conversion done in", timer=timer0, comm=comm)
+
+    return
+
+
+if __name__ == "__main__":
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
+        main()
