@@ -472,8 +472,10 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
             for submap in range(dist.n_submap):
                 if allowners[submap] == rank:
                     local_submap = dist.global_submap_to_local[submap]
-                    offset = submap * dist.n_pix_submap
-                    dset[:, offset : offset + dist.n_pix_submap] = pix[local_submap].T
+                    # Accommodate submap sizes that do not fit the map cleanly
+                    first = submap * dist.n_pix_submap
+                    last = min(first + dist.n_pix_submap, dist.n_pix)
+                    dset[:, first : last] = pix[local_submap, 0 : last - first].T
 
     except ValueError as e:
 
@@ -525,8 +527,10 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
                             )
                             dist.comm.Recv(recvbuffer, source=rank_send, tag=rank_send)
                     for i, submap in enumerate(submaps):
-                        offset = submap * dist.n_pix_submap
-                        dset[:, offset : offset + dist.n_pix_submap] = recvbuffer[i]
+                        # Accommodate submap sizes that do not fit the map cleanly
+                        first = submap * dist.n_pix_submap
+                        last = min(first + dist.n_pix_submap, dist.n_pix)
+                        dset[:, first : last] = recvbuffer[i, :, 0 : last - first]
 
                 for key, value in header.items():
                     dset.attrs[key] = value
@@ -556,7 +560,7 @@ def read_healpix(filename, *args, **kwargs):
 
     elif filename_is_hdf5(filename):
 
-        if "verbose" in kwargs and kwargs.verbose == False:
+        if "verbose" in kwargs and kwargs["verbose"] == False:
             verbose = False
         else:
             # healpy default

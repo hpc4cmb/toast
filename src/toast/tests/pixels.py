@@ -236,7 +236,7 @@ class PixelTest(MPITestCase):
                     check = PixelData(dist, tp, n_value=6)
                     io.read_healpix_hdf5(check, hdf5file, nest=True)
                     nt.assert_equal(pdata.data, check.data)
-                    if self.comm is None or self.comm.size == 1:
+                    if self.comm is None or self.comm.rank == 0:
                         # Write out the data serially and compare
                         fdata = list()
                         for col in range(pdata.n_value):
@@ -257,7 +257,9 @@ class PixelTest(MPITestCase):
                             ),
                         )
                         io.write_healpix(serialfile, fdata, nest=True, overwrite=True)
-                        loaded = io.read_healpix(serialfile, nest=True, field=None)
+                        loaded = io.read_healpix(
+                            serialfile, nest=True, field=None, verbose=False
+                        )
                         for lc, sm in enumerate(pdata.distribution.local_submaps):
                             global_offset = sm * pdata.distribution.n_pix_submap
                             n_check = pdata.distribution.n_pix_submap
@@ -271,7 +273,9 @@ class PixelTest(MPITestCase):
                                     pdata.data[lc, 0:n_check, col],
                                 )
                         # Compare to file written with our parallel function
-                        loaded = io.read_healpix(hdf5file, nest=True, field=None)
+                        loaded = io.read_healpix(
+                            hdf5file, nest=True, field=None, verbose=False
+                        )
                         for lc, sm in enumerate(pdata.distribution.local_submaps):
                             global_offset = sm * pdata.distribution.n_pix_submap
                             n_check = pdata.distribution.n_pix_submap
