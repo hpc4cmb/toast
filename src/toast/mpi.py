@@ -254,18 +254,20 @@ class Comm(object):
         # Go through the cache of row / column grid communicators and free
         if hasattr(self, "_rowcolcomm"):
             for process_rows, comms in self._rowcolcomm.items():
-                comms["row"].Free()
-                del comms["row"]
-                comms["row_node"].Free()
-                del comms["row_node"]
-                comms["row_rank_node"].Free()
-                del comms["row_rank_node"]
-                comms["col"].Free()
-                del comms["col"]
-                comms["col_node"].Free()
-                del comms["col_node"]
-                comms["col_rank_node"].Free()
-                del comms["col_rank_node"]
+                if comms["row"] is not None:
+                    comms["row_node"].Free()
+                    del comms["row_node"]
+                    comms["row_rank_node"].Free()
+                    del comms["row_rank_node"]
+                    comms["row"].Free()
+                    del comms["row"]
+                if comms["col"] is not None:
+                    comms["col_node"].Free()
+                    del comms["col_node"]
+                    comms["col_rank_node"].Free()
+                    del comms["col_rank_node"]
+                    comms["col"].Free()
+                    del comms["col"]
         return
 
     def __del__(self):
