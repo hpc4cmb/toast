@@ -190,10 +190,13 @@ class Comm(object):
         self._grank = self._wrank % self._gsize
         self._cleanup_group_comm = False
 
+        self._gnodecomm = None
         self._gnoderankcomm = None
+        self._gnodeprocs = 1
         if self._ngroups == 1:
             # We just have one group with all processes.
             self._gcomm = self._wcomm
+            self._gnodecomm = self._nodecomm
             self._gnoderankcomm = self._noderankcomm
             if use_mpi:
                 self._rcomm = MPI.COMM_SELF
@@ -204,8 +207,10 @@ class Comm(object):
             # unless MPI is enabled and we have multiple groups.
             self._gcomm = self._wcomm.Split(self._group, self._grank)
             self._rcomm = self._wcomm.Split(self._grank, self._group)
-            mygroupnode = self._grank // self._nodeprocs
-            self._gnoderankcomm = self._wcomm.Split(self._nodecomm.rank, mygroupnode)
+            self._gnodecomm = self._gcomm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+            self._gnodeprocs = self._gnodecomm.size
+            mygroupnode = self._grank // self._gnodeprocs
+            self._gnoderankcomm = self._gcomm.Split(self._gnodecomm.rank, mygroupnode)
             self._cleanup_group_comm = True
 
         # See if we are using CUDA and if so, determine which device each process will
@@ -240,17 +245,27 @@ class Comm(object):
         if hasattr(self, "_cleanup_split_comm") and self._cleanup_group_comm:
             self._gcomm.Free()
             self._rcomm.Free()
+            self._gnodecomm.Free()
             self._gnoderankcomm.Free()
             del self._gcomm
             del self._rcomm
+            del self._gnodecomm
             del self._gnoderankcomm
         # Go through the cache of row / column grid communicators and free
         if hasattr(self, "_rowcolcomm"):
             for process_rows, comms in self._rowcolcomm.items():
                 comms["row"].Free()
                 del comms["row"]
+                comms["row_node"].Free()
+                del comms["row_node"]
+                comms["row_rank_node"].Free()
+                del comms["row_rank_node"]
                 comms["col"].Free()
                 del comms["col"]
+                comms["col_node"].Free()
+                del comms["col_node"]
+                comms["col_rank_node"].Free()
+                del comms["col_rank_node"]
         return
 
     def __del__(self):
@@ -286,20 +301,22 @@ class Comm(object):
         """The rank of this process in the group communicator."""
         return self._grank
 
+    # All the different types of relevant MPI communicators.
+
     @property
     def comm_world(self):
         """The world communicator."""
         return self._wcomm
 
     @property
-    def comm_node(self):
-        """The communicator shared by processes on the same node."""
+    def comm_world_node(self):
+        """The communicator shared by world processes on the same node."""
         return self._nodecomm
 
     @property
-    def comm_node_rank(self):
-        """The communicator shared by processes with the same node rank across all nodes."""
-        return self._nodecomm
+    def comm_world_node_rank(self):
+        """The communicator shared by world processes with the same node rank across all nodes."""
+        return self._noderankcomm
 
     @property
     def comm_group(self):
@@ -312,19 +329,36 @@ class Comm(object):
         return self._rcomm
 
     @property
+    def comm_group_node(self):
+        """The communicator shared by group processes on the same node."""
+        return self._gnodecomm
+
+    @property
     def comm_group_node_rank(self):
-        """The communicator shared by processes with the same node rank on nodes within the group."""
-        return self._rcomm
+        """The communicator shared by group processes with the same node rank on nodes within the group."""
+        return self._gnoderankcomm
 
     def comm_row_col(self, process_rows):
         """Return the row and column communicators for this group and grid shape.
+
+        This function will create and / or return the communicators needed for
+        a given process grid.  The return value is a dictionary with the following
+        keys:
+
+            - "row":  The row communicator.
+            - "col":  The column communicator.
+            - "row_node":  The node-local communicator within the row communicator
+            - "col_node":  The node-local communicator within the col communicator
+            - "row_rank_node":  The communicator across nodes among processes with
+                the same node-rank within the row communicator.
+            - "col_rank_node":  The communicator across nodes among processes with
+                the same node-rank within the column communicator.
 
         Args:
             process_rows (int):  The number of rows in the process grid.
 
         Returns:
-            (tuple):  The (row MPI.Comm, column MPI.Comm) for the group using the
-                specified number of process rows.
+            (dict):  The communicators for this grid shape.
 
         """
         if process_rows not in self._rowcolcomm:
@@ -337,6 +371,10 @@ class Comm(object):
                 self._rowcolcomm[process_rows] = {
                     "row": None,
                     "col": None,
+                    "row_node": None,
+                    "row_rank_node": None,
+                    "col_node": None,
+                    "col_rank_node": None,
                 }
             else:
                 if self._gcomm.size % process_rows != 0:
@@ -349,23 +387,37 @@ class Comm(object):
                 col_rank = self._gcomm.rank // process_cols
                 row_rank = self._gcomm.rank % process_cols
 
-                self._rowcolcomm[process_rows] = dict()
+                comm_row = None
+                comm_col = None
                 if process_cols == 1:
-                    self._rowcolcomm[process_rows]["row"] = MPI.Comm.Dup(MPI.COMM_SELF)
+                    comm_row = MPI.Comm.Dup(MPI.COMM_SELF)
                 else:
-                    self._rowcolcomm[process_rows]["row"] = self._gcomm.Split(
-                        col_rank, row_rank
-                    )
+                    comm_row = self._gcomm.Split(col_rank, row_rank)
                 if process_rows == 1:
-                    self._rowcolcomm[process_rows]["col"] = MPI.Comm.Dup(MPI.COMM_SELF)
+                    comm_col = MPI.Comm.Dup(MPI.COMM_SELF)
                 else:
-                    self._rowcolcomm[process_rows]["col"] = self._gcomm.Split(
-                        row_rank, col_rank
-                    )
-        return (
-            self._rowcolcomm[process_rows]["row"],
-            self._rowcolcomm[process_rows]["col"],
-        )
+                    comm_col = self._gcomm.Split(row_rank, col_rank)
+
+                # Node and node-rank comms for each row and col.
+                comm_row_node = comm_row.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                row_nodeprocs = comm_row_node.size
+                row_node = comm_row.rank // row_nodeprocs
+                comm_row_rank_node = comm_row.Split(comm_row_node.rank, row_node)
+
+                comm_col_node = comm_col.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                col_nodeprocs = comm_col_node.size
+                col_node = comm_col.rank // col_nodeprocs
+                comm_col_rank_node = comm_col.Split(comm_col_node.rank, col_node)
+
+                self._rowcolcomm[process_rows] = {
+                    "row": comm_row,
+                    "row_node": comm_row_node,
+                    "row_rank_node": comm_row_rank_node,
+                    "col": comm_col,
+                    "col_node": comm_col_node,
+                    "col_rank_node": comm_col_rank_node,
+                }
+        return self._rowcolcomm[process_rows]
 
     @property
     def cuda(self):

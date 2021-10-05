@@ -329,8 +329,6 @@ class Madam(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
-        #
-
         # Combine parameters from an external file and other parameters passed in
 
         params = dict()
@@ -633,7 +631,7 @@ class Madam(Operator):
         log = Logger.get()
         timer = Timer()
 
-        nodecomm = data.comm.comm_node
+        nodecomm = data.comm.comm_group_node
 
         # Determine how many processes per node should copy at once.
         n_copy_groups = 1
@@ -926,7 +924,7 @@ class Madam(Operator):
         log = Logger.get()
         timer = Timer()
 
-        nodecomm = data.comm.comm_node
+        nodecomm = data.comm.comm_group_node
 
         # Determine how many processes per node should copy at once.
         n_copy_groups = 1

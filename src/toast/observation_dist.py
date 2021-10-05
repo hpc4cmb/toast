@@ -88,7 +88,14 @@ class DistDetSamp(object):
 
         # Get the row / column communicators for this grid shape
 
-        self.comm_row, self.comm_col = self.comm.comm_row_col(self.process_rows)
+        rowcolcomm = self.comm.comm_row_col(self.process_rows)
+        self.comm_row = rowcolcomm["row"]
+        self.comm_col = rowcolcomm["col"]
+        self.comm_row_node = rowcolcomm["row_node"]
+        self.comm_col_node = rowcolcomm["col_node"]
+        self.comm_row_rank_node = rowcolcomm["row_rank_node"]
+        self.comm_col_rank_node = rowcolcomm["col_rank_node"]
+
         self.comm_row_size = 1
         self.comm_row_rank = 0
         if self.comm_row is not None:
