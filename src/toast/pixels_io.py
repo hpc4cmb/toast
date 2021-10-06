@@ -477,7 +477,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
                     last = min(first + dist.n_pix_submap, dist.n_pix)
                     dset[:, first : last] = pix[local_submap, 0 : last - first].T
 
-    except ValueError as e:
+    except (ValueError, AssertionError) as e:
 
         # No luck, write serially from root process
 
