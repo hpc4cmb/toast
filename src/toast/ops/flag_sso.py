@@ -70,13 +70,11 @@ class FlagSSO(Operator):
         help="Names of the SSOs, must be recognized by pyEphem",
     )
 
-    # FIXME: Once TOAST supports Lists of Quantities,
-    # FIXME: we can use astropy units here
-    sso_radii_deg = List(
-        default_value=["45.0", "5.0"],
-        trait=Unicode,  # Only type supported by TOAST for now
+    sso_radii = List(
+        default_value=[45.0 * u.deg, 5.0 * u.deg],
+        trait=Quantity,
         allow_none=True,
-        help="Radii (in degrees) around the sources to flag",
+        help="Radii around the sources to flag",
     )
 
     @traitlets.validate("detector_pointing")
@@ -117,7 +115,7 @@ class FlagSSO(Operator):
         env = Environment.get()
         log = Logger.get()
 
-        if len(self.sso_names) != len(self.sso_radii_deg):
+        if len(self.sso_names) != len(self.sso_radii):
             raise RuntimeError("Each SSO must have a radius")
 
         self.ssos = []
@@ -213,8 +211,8 @@ class FlagSSO(Operator):
             flags = obs.detdata[self.det_flags][det]
 
             cosel = np.cos(el)
-            for sso_az, sso_el, sso_radius in zip(sso_azs, sso_els, self.sso_radii_deg):
-                radius = np.radians(float(sso_radius))
+            for sso_az, sso_el, sso_radius in zip(sso_azs, sso_els, self.sso_radii):
+                radius = sso_radius.to_value(u.radian)
                 # Flag samples within search radius.
                 if radius > np.radians(15):
                     # Exact formula for cosine of the angular distance
