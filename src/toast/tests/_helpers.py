@@ -159,9 +159,7 @@ def create_satellite_empty(mpicomm, obs_per_group=1, samples=10):
         tele = create_space_telescope(toastcomm.group_size)
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
-        ob = Observation(
-            tele, n_samples=samples, name=oname, uid=oid, comm=toastcomm.comm_group
-        )
+        ob = Observation(toastcomm, tele, n_samples=samples, name=oname, uid=oid)
         data.obs.append(ob)
     return data
 
@@ -340,9 +338,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
 
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
-        ob = Observation(
-            tele, n_samples=nsamp, name=oname, uid=oid, comm=toastcomm.comm_group
-        )
+        ob = Observation(toastcomm, tele, n_samples=nsamp, name=oname, uid=oid)
         # Create shared objects for timestamps, common flags, boresight, position,
         # and velocity.
         ob.shared.create(

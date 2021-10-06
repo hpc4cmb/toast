@@ -189,22 +189,22 @@ class PolyFilterTest(MPITestCase):
 
         # Plot unfiltered TOD
 
-        if data.comm.world_rank == 0:
-            set_matplotlib_backend()
-            import matplotlib.pyplot as plt
+        # if data.comm.world_rank == 0:
+        #     set_matplotlib_backend()
+        #     import matplotlib.pyplot as plt
 
-            fig = plt.figure(figsize=[18, 12])
-            ax = fig.add_subplot(1, 2, 1)
-            ob = data.obs[0]
-            for idet, det in enumerate(ob.local_detectors):
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
-                good = flags == 0
-                signal = ob.detdata["signal"][det]
-                x = np.arange(signal.size)
-                ax.plot(x, signal, "-", label=f"{det} unfiltered")
-                ax.plot(x, good, "-", label=f"{det} input good samples")
-            ax.legend(loc="best")
+        #     fig = plt.figure(figsize=[18, 12])
+        #     ax = fig.add_subplot(1, 3, 1)
+        #     ob = data.obs[0]
+        #     for idet, det in enumerate(ob.local_detectors):
+        #         flags = np.array(ob.shared["flags"])
+        #         flags |= ob.detdata["flags"][det]
+        #         good = flags == 0
+        #         signal = ob.detdata["signal"][det]
+        #         x = np.arange(signal.size)
+        #         ax.plot(x, signal, "-", label=f"{det} unfiltered")
+        #         ax.plot(x, good, "-", label=f"{det} input good samples")
+        #     ax.legend(loc="best")
 
         # Filter with python implementation.  Make a copy first
 
@@ -225,19 +225,17 @@ class PolyFilterTest(MPITestCase):
 
         # Plot filtered TOD
 
-        if data.comm.world_rank == 0:
-            ax = fig.add_subplot(1, 2, 2)
-            for idet, det in enumerate(ob.local_detectors):
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
-                good = flags == 0
-                signal = ob.detdata["pyfilter"][det]
-                x = np.arange(signal.size)
-                ax.plot(x, signal, ".", label=f"{det} filtered")
-                ax.plot(x, good, "-", label=f"{det} new good samples")
-            ax.legend(loc="best")
-            outfile = os.path.join(testdir, "2Dfiltered_tod_python.png")
-            fig.savefig(outfile)
+        # if data.comm.world_rank == 0:
+        #     ax = fig.add_subplot(1, 3, 2)
+        #     for idet, det in enumerate(ob.local_detectors):
+        #         flags = np.array(ob.shared["flags"])
+        #         flags |= ob.detdata["flags"][det]
+        #         good = flags == 0
+        #         signal = ob.detdata["pyfilter"][det]
+        #         x = np.arange(signal.size)
+        #         ax.plot(x, signal, ".", label=f"{det} filtered")
+        #         ax.plot(x, good, "-", label=f"{det} new good samples")
+        #     ax.legend(loc="best")
 
         # Do the same with C++ implementation
 
@@ -245,19 +243,19 @@ class PolyFilterTest(MPITestCase):
         polyfilter.use_python = False
         polyfilter.apply(data)
 
-        if data.comm.world_rank == 0:
-            ax = fig.add_subplot(1, 2, 2)
-            for idet, det in enumerate(ob.local_detectors):
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
-                good = flags == 0
-                signal = ob.detdata["signal"][det]
-                x = np.arange(signal.size)
-                ax.plot(x, signal, ".", label=f"{det} filtered")
-                ax.plot(x, good, "-", label=f"{det} new good samples")
-            ax.legend(loc="best")
-            outfile = os.path.join(testdir, "2Dfiltered_tod.png")
-            fig.savefig(outfile)
+        # if data.comm.world_rank == 0:
+        #     ax = fig.add_subplot(1, 3, 3)
+        #     for idet, det in enumerate(ob.local_detectors):
+        #         flags = np.array(ob.shared["flags"])
+        #         flags |= ob.detdata["flags"][det]
+        #         good = flags == 0
+        #         signal = ob.detdata["signal"][det]
+        #         x = np.arange(signal.size)
+        #         ax.plot(x, signal, ".", label=f"{det} filtered")
+        #         ax.plot(x, good, "-", label=f"{det} new good samples")
+        #     ax.legend(loc="best")
+        #     outfile = os.path.join(testdir, "2Dfiltered_tod.png")
+        #     fig.savefig(outfile)
 
         # Check for consistency
         for ob in data.obs:

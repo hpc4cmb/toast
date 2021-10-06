@@ -241,9 +241,7 @@ class MapMaker(Operator):
 
         # The global communicator we are using (or None)
         comm = data.comm.comm_world
-        rank = 0
-        if comm is not None:
-            rank = comm.rank
+        rank = data.comm.world_rank
 
         # Check map binning
         map_binning = self.map_binning

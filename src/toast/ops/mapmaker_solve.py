@@ -143,9 +143,7 @@ class SolverRHS(Operator):
 
         # The global communicator we are using (or None)
         comm = data.comm.comm_world
-        rank = 0
-        if comm is not None:
-            rank = comm.rank
+        rank = data.comm.world_rank
 
         # Check that the inputs are set
         if self.det_data is None:
@@ -401,9 +399,7 @@ class SolverLHS(Operator):
 
         # The global communicator we are using (or None)
         comm = data.comm.comm_world
-        rank = 0
-        if comm is not None:
-            rank = comm.rank
+        rank = data.comm.world_rank
 
         # Check that input traits are set
         if self.binning is None:
@@ -576,9 +572,7 @@ def solve(
 
     # The global communicator we are using (or None)
     comm = data.comm.comm_world
-    rank = 0
-    if comm is not None:
-        rank = comm.rank
+    rank = data.comm.world_rank
 
     if rhs_key not in data:
         msg = "rhs_key '{}' does not exist in data".format(rhs_key)

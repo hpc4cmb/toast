@@ -818,19 +818,13 @@ class FilterBin(Operator):
 
     @function_timer
     def _initialize_comm(self, data):
+        """Create convenience aliases to the communicators and properties."""
         self.comm = data.comm.comm_world
-        if self.comm is None:
-            self.rank = 0
-            self.ntask = 1
-        else:
-            self.rank = self.comm.rank
-            self.ntask = self.comm.size
+        self.rank = data.comm.world_rank
+        self.ntask = data.comm.world_size
         self.gcomm = data.comm.comm_group
         self.group = data.comm.group
-        if self.gcomm is None:
-            self.grank = 0
-        else:
-            self.grank = self.gcomm.rank
+        self.grank = data.comm.group_rank
         return
 
     @function_timer

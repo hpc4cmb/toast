@@ -444,11 +444,11 @@ class SimSatellite(Operator):
             scan = self.schedule.scans[obindx]
 
             ob = Observation(
+                comm,
                 self.telescope,
                 scan_samples[obindx],
                 name=f"{scan.name}_{int(scan.start.timestamp())}",
                 uid=name_UID(scan.name),
-                comm=comm.comm_group,
                 detector_sets=detsets,
                 process_rows=det_ranks,
             )

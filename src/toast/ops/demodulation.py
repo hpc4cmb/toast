@@ -200,11 +200,11 @@ class Demodulate(Operator):
 
             demod_name = f"demod_{obs.name}"
             demod_obs = Observation(
+                obs.comm,
                 demod_telescope,
                 demod_times.size,
                 name=demod_name,
                 uid=name_UID(demod_name),
-                comm=obs.comm,
                 detector_sets=demod_detsets,
                 process_rows=demod_process_rows,
                 sample_sets=demod_sample_sets,

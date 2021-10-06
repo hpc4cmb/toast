@@ -53,7 +53,7 @@ class DistDetSamp(object):
             None, any distribution break in the sample direction will happen at an
             arbitrary place.  The sum of all chunks must equal the total number of
             samples.
-        comm (mpi4py.MPI.Comm):  (Optional) The MPI communicator to use.
+        comm (toast.Comm):  The communicator to use.
         process_rows (int):  (Optional) The size of the rectangular process grid
             in the detector direction.  This number must evenly divide into the size of
             comm.  If not specified, defaults to the size of the communicator.
@@ -76,60 +76,36 @@ class DistDetSamp(object):
             log.error(msg)
             raise RuntimeError(msg)
 
-        self.comm = None
-        self.comm_size = 1
-        self.comm_rank = 0
-        if comm is not None:
-            self.comm = comm
-            self.comm_size = self.comm.size
-            self.comm_rank = self.comm.rank
+        self.comm = comm
 
         if self.process_rows is None:
-            if self.comm is None:
+            if self.comm.comm_group is None:
                 # No MPI, default to 1
                 self.process_rows = 1
             else:
-                # We have MPI, default to the size of the communicator
-                self.process_rows = self.comm.size
+                # We have MPI, default to the size of the group
+                self.process_rows = self.comm.group_size
 
-        self.process_cols = 1
+        # Get the row / column communicators for this grid shape
+
+        rowcolcomm = self.comm.comm_row_col(self.process_rows)
+        self.comm_row = rowcolcomm["row"]
+        self.comm_col = rowcolcomm["col"]
+        self.comm_row_node = rowcolcomm["row_node"]
+        self.comm_col_node = rowcolcomm["col_node"]
+        self.comm_row_rank_node = rowcolcomm["row_rank_node"]
+        self.comm_col_rank_node = rowcolcomm["col_rank_node"]
+
         self.comm_row_size = 1
         self.comm_row_rank = 0
+        if self.comm_row is not None:
+            self.comm_row_size = self.comm_row.size
+            self.comm_row_rank = self.comm_row.rank
         self.comm_col_size = 1
         self.comm_col_rank = 0
-        self.comm_row = None
-        self.comm_col = None
-
-        if self.comm is None:
-            if self.process_rows != 1:
-                msg = "MPI is disabled, so process_rows must equal 1"
-                log.error(msg)
-                raise RuntimeError(msg)
-        else:
-            if comm.size % self.process_rows != 0:
-                msg = "The number of process_rows ({}) does not divide evenly into the communicator size ({})".format(
-                    self.process_rows, comm.size
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
-            self.process_cols = comm.size // self.process_rows
-            self.comm_col_rank = comm.rank // self.process_cols
-            self.comm_row_rank = comm.rank % self.process_cols
-
-            # Split the main communicator into process row and column
-            # communicators.
-
-            if self.process_cols == 1:
-                self.comm_row = MPI.Comm.Dup(MPI.COMM_SELF)
-            else:
-                self.comm_row = self.comm.Split(self.comm_col_rank, self.comm_row_rank)
-                self.comm_row_size = self.comm_row.size
-
-            if self.process_rows == 1:
-                self.comm_col = MPI.Comm.Dup(MPI.COMM_SELF)
-            else:
-                self.comm_col = self.comm.Split(self.comm_row_rank, self.comm_col_rank)
-                self.comm_col_size = self.comm_col.size
+        if self.comm_col is not None:
+            self.comm_col_size = self.comm_col.size
+            self.comm_col_rank = self.comm_col.rank
 
         # If detector_sets is specified, check consistency.
 
@@ -188,7 +164,7 @@ class DistDetSamp(object):
                 raise RuntimeError(msg)
 
         (self.dets, self.det_sets, self.samps, self.samp_sets) = distribute_samples(
-            self.comm,
+            self.comm.comm_group,
             self.detectors,
             self.samples,
             detranks=self.process_rows,
@@ -202,7 +178,7 @@ class DistDetSamp(object):
             dlast = self.det_index[ds[-1]]
             self.det_indices.append(DistRange(dfirst, dlast - dfirst + 1))
 
-        if self.comm_rank == 0:
+        if self.comm.group_rank == 0:
             # check that all processes have some data, otherwise print warning
             for i, ds in enumerate(self.dets):
                 if len(ds) == 0:
@@ -213,34 +189,19 @@ class DistDetSamp(object):
                     msg = f"Process {i} has no samples assigned."
                     log.warning(msg)
 
-    def close(self):
-        # Explicitly free communicators if needed
-        if hasattr(self, "comm_row") and (self.comm_row is not None):
-            self.comm_row.Free()
-            self.comm_row = None
-        if hasattr(self, "comm_col") and (self.comm_col is not None):
-            self.comm_col.Free()
-            self.comm_col = None
-        return
-
-    def __del__(self):
-        self.close()
-
     def __eq__(self, other):
         log = Logger.get()
         fail = 0
         if self.process_rows != other.process_rows:
             fail = 1
             log.verbose(f"  process_rows {self.process_rows} != {other.process_rows}")
-        if not comm_equivalent(self.comm, other.comm):
+        if not comm_equivalent(self.comm.comm_group, other.comm.comm_group):
             fail = 1
-            log.verbose(f"  obs comm not equivalent")
-        if not comm_equivalent(self.comm_row, other.comm_row):
-            fail = 1
-            log.verbose(f"  obs comm_row not equivalent")
-        if not comm_equivalent(self.comm_col, other.comm_col):
-            fail = 1
-            log.verbose(f"  obs comm_col not equivalent")
+            log.verbose(f"  obs group comm not equivalent")
+        # If the group comms are equivalent, then we know that the row / col
+        # comms are equivalent, since they come from the same cache for a given
+        # value of process_rows.
+        #
         # Test the resulting distribution quantities, rather than the
         # inputs passed to the constructor, in case those are slightly
         # different types.
@@ -256,8 +217,8 @@ class DistDetSamp(object):
         if self.samp_sets != other.samp_sets:
             fail = 1
             log.verbose(f"  dist samp_sets {self.samp_sets} != {other.samp_sets}")
-        if self.comm is not None:
-            fail = self.comm.allreduce(fail, op=MPI.SUM)
+        if self.comm.comm_group is not None:
+            fail = self.comm.comm_group.allreduce(fail, op=MPI.SUM)
         return fail == 0
 
     def __ne__(self, other):
@@ -445,7 +406,7 @@ def extract_global_intervals(old_dist, intervals_manager):
     log = Logger.get()
 
     global_intervals = None
-    if old_dist.comm_rank == 0:
+    if old_dist.comm.group_rank == 0:
         global_intervals = dict()
 
     for iname in list(intervals_manager.keys()):
@@ -460,7 +421,7 @@ def extract_global_intervals(old_dist, intervals_manager):
                     (ilist, old_dist.samps[old_dist.comm_row_rank].n_elem), root=0
                 )
         del ilist
-        if old_dist.comm_rank == 0:
+        if old_dist.comm.group_rank == 0:
             # Only one process builds the list of start / stop times.  By definition,
             # the rank zero process of the observation is also the process with rank
             # zero along both the rows and columns.
@@ -545,7 +506,7 @@ def redistribute_detector_data(
             msg = "Redistribution only supports detdata with all local detectors."
             msg += f" Field {field} has {len(field_dets)} dets instead of "
             msg += f"{len(old_local_dets)}.  Deleting."
-            log.warning_rank(msg, comm=old_dist.comm)
+            log.warning_rank(msg, comm=old_dist.comm.comm_group)
             del detdata_manager[field]
             continue
 
@@ -556,7 +517,7 @@ def redistribute_detector_data(
         # have returned at the very start.  So we know that we have a real
         # communicator at this point.
         mpibytesize, mpitype = mpi_data_type(
-            old_dist.comm, detdata_manager[field].dtype
+            old_dist.comm.comm_group, detdata_manager[field].dtype
         )
 
         # Allocate new data
@@ -599,7 +560,7 @@ def redistribute_detector_data(
 
         # Redistribute
         redistribute_buffer(
-            old_dist.comm,
+            old_dist.comm.comm_group,
             buffer_class,
             mpitype,
             detdata_manager[field].data,
@@ -659,7 +620,7 @@ def redistribute_shared_data(
 
     for field in shared_manager.keys():
         shobj = shared_manager[field]
-        if comm_equal(shobj.comm, old_dist.comm):
+        if comm_equal(shobj.comm, old_dist.comm.comm_group):
             # Using full group communicator, just copy to the new data manager.
             new_shared_manager[field] = shobj
         else:
@@ -730,7 +691,7 @@ def redistribute_shared_data(
 
                 # Redistribute
                 redistribute_buffer(
-                    old_dist.comm,
+                    old_dist.comm.comm_group,
                     buffer_class,
                     mpitype,
                     shobj.data,
@@ -784,7 +745,7 @@ def redistribute_shared_data(
 
                 # Redistribute
                 redistribute_buffer(
-                    old_dist.comm,
+                    old_dist.comm.comm_group,
                     buffer_class,
                     mpitype,
                     shobj.data,
@@ -829,7 +790,7 @@ def redistribute_data(
 
     global_intervals = dict()
     if times is None and len(intervals_manager.keys()) > 0:
-        if old_dist.comm_rank == 0:
+        if old_dist.comm.group_rank == 0:
             msg = "Time stamps not specified when redistributing observation."
             msg += "  Intervals will be deleted and not redistributed."
             log.warning(msg)
@@ -841,21 +802,21 @@ def redistribute_data(
     # Compute the detector and sample ranges we are sending and receiving.  These are
     # common for all detdata objects.
 
-    old_det_off = old_dist.det_indices[old_dist.comm_rank].offset
-    old_det_n = old_dist.det_indices[old_dist.comm_rank].n_elem
+    old_det_off = old_dist.det_indices[old_dist.comm.group_rank].offset
+    old_det_n = old_dist.det_indices[old_dist.comm.group_rank].n_elem
     old_local_dets = old_dist.detectors[old_det_off : old_det_off + old_det_n]
     det_send_info = compute_1d_offsets(old_det_off, old_det_n, new_dist.det_indices)
 
-    old_samp_off = old_dist.samps[old_dist.comm_rank].offset
-    old_samp_n = old_dist.samps[old_dist.comm_rank].n_elem
+    old_samp_off = old_dist.samps[old_dist.comm.group_rank].offset
+    old_samp_n = old_dist.samps[old_dist.comm.group_rank].n_elem
     samp_send_info = compute_1d_offsets(old_samp_off, old_samp_n, new_dist.samps)
 
-    new_det_off = new_dist.det_indices[new_dist.comm_rank].offset
-    new_det_n = new_dist.det_indices[new_dist.comm_rank].n_elem
+    new_det_off = new_dist.det_indices[new_dist.comm.group_rank].offset
+    new_det_n = new_dist.det_indices[new_dist.comm.group_rank].n_elem
     det_recv_info = compute_1d_offsets(new_det_off, new_det_n, old_dist.det_indices)
 
-    new_samp_off = new_dist.samps[new_dist.comm_rank].offset
-    new_samp_n = new_dist.samps[new_dist.comm_rank].n_elem
+    new_samp_off = new_dist.samps[new_dist.comm.group_rank].offset
+    new_samp_n = new_dist.samps[new_dist.comm.group_rank].n_elem
     samp_recv_info = compute_1d_offsets(new_samp_off, new_samp_n, old_dist.samps)
 
     # Redistribute detector data.
@@ -892,13 +853,13 @@ def redistribute_data(
 
     # Communicate the field list
     gkeys = None
-    if old_dist.comm_rank == 0:
+    if old_dist.comm.group_rank == 0:
         gkeys = list(global_intervals.keys())
-    ivl_fields = old_dist.comm.bcast(gkeys, root=0)
+    ivl_fields = old_dist.comm.comm_group.bcast(gkeys, root=0)
 
     for field in ivl_fields:
         glb = None
-        if old_dist.comm_rank == 0:
+        if old_dist.comm.group_rank == 0:
             glb = global_intervals[field]
         new_intervals_manager.create(field, glb, new_shared_manager[times], fromrank=0)
 

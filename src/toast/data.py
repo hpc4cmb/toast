@@ -115,7 +115,7 @@ class Data(MutableMapping):
 
         gcomm = self._comm.comm_group
         wcomm = self._comm.comm_world
-        rcomm = self._comm.comm_rank
+        rcomm = self._comm.comm_group_rank
 
         if wcomm is None:
             msg = "Data distributed over a single process (no MPI)"

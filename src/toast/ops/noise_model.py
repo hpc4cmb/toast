@@ -43,8 +43,6 @@ class DefaultNoiseModel(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        comm = data.comm
-
         for ob in data.obs:
             if ob.telescope.focalplane.noise is None:
                 raise RuntimeError("Focalplane does not have a noise model")

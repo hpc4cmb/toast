@@ -252,6 +252,8 @@ class SimAtmosphere(Operator):
         comm = data.comm.comm_group
         group = data.comm.group
         rank = data.comm.group_rank
+        comm_node = data.comm.comm_group_node
+        comm_node_rank = data.comm.comm_group_node_rank
 
         view = self.view
         if view is None:
@@ -424,6 +426,8 @@ class SimAtmosphere(Operator):
                         tmin,
                         tmax,
                         comm,
+                        comm_node,
+                        comm_node_rank,
                         key1,
                         key2,
                         counter1,
@@ -736,6 +740,8 @@ class SimAtmosphere(Operator):
         tmin,
         tmax,
         comm,
+        comm_node,
+        comm_node_rank,
         key1,
         key2,
         counter1,
@@ -800,6 +806,8 @@ class SimAtmosphere(Operator):
             rmin * u.meter,
             rmax * u.meter,
             write_debug=self.debug_spectrum,
+            node_comm=comm_node,
+            node_rank_comm=comm_node_rank,
         )
 
         if comm is not None:

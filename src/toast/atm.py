@@ -85,6 +85,11 @@ class AtmSim(object):
         rmin (Quantity):  Minimum line of sight observing distance.
         rmax (Quantity):  Maximum line of sight observing distance.
         write_debug (bool): If true, write out intermediate text files for debugging.
+        node_comm (mpi4py.MPI.Comm):  The MPI communicator for processes on a node.  If
+            None, then it will be created by the MPIShared class as needed.
+        node_rank_comm (mpi4py.MPI.Comm):  The MPI communicator for processes with
+            the same rank across nodes.  If None, then it will be created by the
+            MPIShared class as needed.
 
     """
 
@@ -123,6 +128,8 @@ class AtmSim(object):
         rmin,
         rmax,
         write_debug=False,
+        node_comm=None,
+        node_rank_comm=None,
     ):
         self._azmin = azmin.to_value(u.radian)
         self._azmax = azmax.to_value(u.radian)
@@ -157,6 +164,8 @@ class AtmSim(object):
         self._rmin = rmin.to_value(u.meter)
         self._rmax = rmax.to_value(u.meter)
         self._write_debug = write_debug
+        self._node_comm = node_comm
+        self._node_rank_comm = node_rank_comm
 
         self._counter1 = self._counter1start
         self._counter2 = self._counter2start
@@ -294,7 +303,13 @@ class AtmSim(object):
         timer.start()
 
         # This memory is already zeroed on construction.
-        self._realization = MPIShared((self._nelem,), np.float64, self._comm)
+        self._realization = MPIShared(
+            (self._nelem,),
+            np.float64,
+            self._comm,
+            comm_node=self._node_comm,
+            comm_node_rank=self._node_rank_comm,
+        )
 
         timer.stop()
         if self._rank == 0:
@@ -787,8 +802,20 @@ class AtmSim(object):
         timer = Timer()
         timer.start()
 
-        self._compressed_index = MPIShared((self._nn,), np.int64, self._comm)
-        self._full_index = MPIShared((self._nn,), np.int64, self._comm)
+        self._compressed_index = MPIShared(
+            (self._nn,),
+            np.int64,
+            self._comm,
+            comm_node=self._node_comm,
+            comm_node_rank=self._node_rank_comm,
+        )
+        self._full_index = MPIShared(
+            (self._nn,),
+            np.int64,
+            self._comm,
+            comm_node=self._node_comm,
+            comm_node_rank=self._node_rank_comm,
+        )
 
         timer.stop()
         if self._rank == 0:
@@ -910,7 +937,13 @@ class AtmSim(object):
         # Shrink the full index to what is needed.  Only one process per node copies
         # existing data.
 
-        new_full = MPIShared((self._nelem,), np.int64, self._comm)
+        new_full = MPIShared(
+            (self._nelem,),
+            np.int64,
+            self._comm,
+            comm_node=self._node_comm,
+            comm_node_rank=self._node_rank_comm,
+        )
         if (self._full_index._nodecomm is None) or (
             self._full_index._nodecomm.rank == 0
         ):
@@ -1074,9 +1107,27 @@ class AtmSim(object):
             setattr(self, "_{}".format(k), mdata[k])
 
         # Allocate the shared memory buffers
-        self._realization = MPIShared((self._nelem,), np.float64, self._comm)
-        self._compressed_index = MPIShared((self._nn,), np.int64, self._comm)
-        self._full_index = MPIShared((self._nelem,), np.int64, self._comm)
+        self._realization = MPIShared(
+            (self._nelem,),
+            np.float64,
+            self._comm,
+            comm_node=self._node_comm,
+            comm_node_rank=self._node_rank_comm,
+        )
+        self._compressed_index = MPIShared(
+            (self._nn,),
+            np.int64,
+            self._comm,
+            comm_node=self._node_comm,
+            comm_node_rank=self._node_rank_comm,
+        )
+        self._full_index = MPIShared(
+            (self._nelem,),
+            np.int64,
+            self._comm,
+            comm_node=self._node_comm,
+            comm_node_rank=self._node_rank_comm,
+        )
 
         # Read and set shared memory
         buffer = None
