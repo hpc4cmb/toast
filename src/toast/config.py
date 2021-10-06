@@ -113,7 +113,7 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                     parser.add_argument(
                         "--{}{}{}disable".format(prefix, obj, separator),
                         required=False,
-                        default=df,
+                        default=(not df),
                         action="store_false",
                         help="Disable use of {}".format(obj),
                         dest="{}{}{}enable".format(prefix, obj, separator),
