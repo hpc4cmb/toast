@@ -162,6 +162,7 @@ class Observation(MutableMapping):
 
     view = ViewInterface()
 
+    @function_timer
     def __init__(
         self,
         comm,
@@ -585,7 +586,13 @@ class Observation(MutableMapping):
     # Redistribution
 
     @function_timer
-    def redistribute(self, process_rows, times=None):
+    def redistribute(
+        self,
+        process_rows,
+        times=None,
+        override_sample_sets=False,
+        override_detector_sets=False,
+    ):
         """Take the currently allocated observation and redistribute in place.
 
         This changes the data distribution within the observation.  After
@@ -599,6 +606,10 @@ class Observation(MutableMapping):
                 observation communicator.
             times (str):  The shared data field representing the timestamps.  This
                 is used to recompute the intervals after redistribution.
+            override_sample_sets (False, None or list):  If not False, override
+                existing sample set boundaries in the redistributed data.
+            override_detector_sets (False, None or list):  If not False, override
+                existing detector set boundaries in the redistributed data.
 
         Returns:
             None
@@ -609,12 +620,22 @@ class Observation(MutableMapping):
             # Nothing to do!
             return
 
+        if override_sample_sets == False:
+            sample_sets = self.dist.sample_sets
+        else:
+            sample_sets = override_sample_sets
+
+        if override_detector_sets == False:
+            detector_sets = self.dist.detector_sets
+        else:
+            detector_sets = override_detector_sets
+
         # Create the new distribution
         new_dist = DistDetSamp(
             self.dist.samples,
             self._telescope.focalplane.detectors,
-            self.dist.sample_sets,
-            self.dist.detector_sets,
+            sample_sets,
+            detector_sets,
             self.dist.comm,
             process_rows,
         )

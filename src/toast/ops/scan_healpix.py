@@ -14,7 +14,9 @@ from ..timing import function_timer
 
 from ..pixels import PixelDistribution, PixelData
 
-from ..pixels_io import read_healpix_fits
+from ..pixels_io import (
+    read_healpix_fits, read_healpix_hdf5, filename_is_fits, filename_is_hdf5
+)
 
 from ..observation import default_names as obs_names
 
@@ -151,9 +153,17 @@ class ScanHealpix(Operator):
         # timestreams.
         if self.map_name not in data:
             data[self.map_name] = PixelData(dist, dtype=np.float32, n_value=nnz)
-            read_healpix_fits(
-                data[self.map_name], self.file, nest=self.pixel_pointing.nest
-            )
+            if filename_is_fits(self.file):
+                read_healpix_fits(
+                    data[self.map_name], self.file, nest=self.pixel_pointing.nest
+                )
+            elif filename_is_hdf5(self.file):
+                read_healpix_hdf5(
+                    data[self.map_name], self.file, nest=self.pixel_pointing.nest
+                )
+            else:
+                f"Could not determine map format (HDF5 or FITS): {self.file}"
+                raise RuntimeError(msg)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.

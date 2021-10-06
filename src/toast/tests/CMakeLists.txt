@@ -11,6 +11,7 @@ install(FILES
     instrument.py
     intervals.py
     rng.py
+    math_misc.py
     qarray.py
     fft.py
     healpix.py

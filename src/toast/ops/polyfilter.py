@@ -28,7 +28,7 @@ from ..utils import (
 )
 from ..observation import default_names as obs_names
 
-from .._libtoast import filter_polynomial, filter_poly2D
+from .._libtoast import filter_polynomial, filter_poly2D, sum_detectors, subtract_mean
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
@@ -142,7 +142,7 @@ class PolyFilter2D(Operator):
 
             # Redistribute this temporary observation to be distributed by sample sets
             gt.start("Poly2D:  Forward redistribution")
-            temp_ob.redistribute(1, times=self.times)
+            temp_ob.redistribute(1, times=self.times, override_sample_sets=None)
             gt.stop("Poly2D:  Forward redistribution")
 
             gt.start("Poly2D:  Detector setup")
@@ -186,8 +186,15 @@ class PolyFilter2D(Operator):
                     group_index[det] = 0
                     groups[None].append(det)
             else:
+                focalplane = temp_ob.telescope.focalplane
+                if self.focalplane_key not in focalplane.detector_data.colnames:
+                    msg = (
+                        f"Cannot divide detectors by {self.focalplane_key} because "
+                        "it is not defined in the focalplane detector data."
+                    )
+                    raise RuntimeError(msg)
                 for det in detectors:
-                    value = temp_ob.telescope.focalplane[det][self.focalplane_key]
+                    value = focalplane[det][self.focalplane_key]
                     if value not in groups:
                         groups[value] = []
                     groups[value].append(det)
@@ -379,7 +386,9 @@ class PolyFilter2D(Operator):
 
             # Redistribute back
             gt.start("Poly2D:  Backward redistribution")
-            temp_ob.redistribute(proc_rows, times=self.times)
+            temp_ob.redistribute(
+                proc_rows, times=self.times, override_sample_sets=obs.dist.sample_sets
+            )
             gt.stop("Poly2D:  Backward redistribution")
 
             # Copy data to original observation
@@ -566,6 +575,11 @@ class CommonModeFilter(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    times = Unicode(
+        obs_names.times,
+        help="Observation shared key for timestamps",
+    )
+
     det_data = Unicode(
         obs_names.det_data, help="Observation detdata key apply filtering to"
     )
@@ -577,15 +591,13 @@ class CommonModeFilter(Operator):
         "match the pattern are filtered.",
     )
 
-    order = Int(1, allow_none=False, help="Polynomial order")
-
     det_flags = Unicode(
         obs_names.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
 
     poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
 
@@ -599,6 +611,12 @@ class CommonModeFilter(Operator):
 
     focalplane_key = Unicode(
         None, allow_none=True, help="Which focalplane key to match"
+    )
+
+    redistribute = Bool(
+        False,
+        help="If True, redistribute data before and after filtering for "
+        "optimal data locality.",
     )
 
     @traitlets.validate("shared_flag_mask")
@@ -620,6 +638,68 @@ class CommonModeFilter(Operator):
         return
 
     @function_timer
+    def _redistribute(self, data, obs, timer, log):
+        if self.redistribute:
+            # Redistribute the data so each process has all detectors for some sample range
+            # Duplicate just the fields of the observation we will use
+            dup_shared = list()
+            if self.shared_flags is not None:
+                dup_shared.append(self.shared_flags)
+            dup_detdata = [self.det_data]
+            if self.det_flags is not None:
+                dup_detdata.append(self.det_flags)
+            dup_intervals = list()
+            temp_ob = obs.duplicate(
+                times=self.times,
+                meta=list(),
+                shared=dup_shared,
+                detdata=dup_detdata,
+                intervals=dup_intervals,
+            )
+            log.info_rank(
+                f"{data.comm.group:4} : Duplicated observation in",
+                comm=temp_ob.comm,
+                timer=timer,
+            )
+            # Redistribute this temporary observation to be distributed by sample sets
+            temp_ob.redistribute(1, times=self.times, override_sample_sets=None)
+            log.info_rank(
+                f"{data.comm.group:4} : Redistributed observation in",
+                comm=temp_ob.comm,
+                timer=timer,
+            )
+            comm = None
+        else:
+            comm = obs.comm_col
+            temp_ob = obs
+            proc_rows = None
+
+        return comm, temp_ob
+
+    @function_timer
+    def _re_redistribute(self, data, obs, timer, log, temp_ob):
+        if self.redistribute:
+            # Redistribute data back
+            temp_ob.redistribute(
+                obs.dist.process_rows,
+                times=self.times,
+                override_sample_sets=obs.dist.sample_sets,
+            )
+            log.info_rank(
+                f"{data.comm.group:4} : Re-redistributed observation in",
+                comm=temp_ob.comm,
+                timer=timer,
+            )
+            # Copy data to original observation
+            obs.detdata[self.det_data][:] = temp_ob.detdata[self.det_data][:]
+            log.info_rank(
+                f"{data.comm.group:4} : Copied observation data in",
+                comm=temp_ob.comm,
+                timer=timer,
+            )
+        return
+
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         """Apply the common mode filter to the signal.
 
@@ -630,14 +710,17 @@ class CommonModeFilter(Operator):
         if detectors is not None:
             raise RuntimeError("CommonModeFilter cannot be run in batch mode")
 
+        log = Logger.get()
+        timer = Timer()
+        timer.start()
         pat = re.compile(self.pattern)
 
         for obs in data.obs:
-            focalplane = obs.telescope.focalplane
-            # communicator for processes with the same sample range
-            comm = obs.comm_col
+            comm, temp_ob = self._redistribute(data, obs, timer, log)
 
-            detectors = obs.all_detectors
+            focalplane = temp_ob.telescope.focalplane
+
+            detectors = temp_ob.all_detectors
             if self.focalplane_key is None:
                 values = [None]
             else:
@@ -648,11 +731,13 @@ class CommonModeFilter(Operator):
                     values.add(focalplane[det][self.focalplane_key])
                 values = sorted(values)
 
-            nsample = obs.n_local_samples
+            nsample = temp_ob.n_local_samples
+            ndet = len(temp_ob.local_detectors)
 
+            # Loop over all values of the focalplane key
             for value in values:
                 local_dets = []
-                for idet, det in enumerate(obs.local_detectors):
+                for idet, det in enumerate(temp_ob.local_detectors):
                     if pat.match(det) is None:
                         continue
                     if (
@@ -660,36 +745,53 @@ class CommonModeFilter(Operator):
                         and focalplane[det][self.focalplane_key] != value
                     ):
                         continue
-                    local_dets.append((idet, det))
+                    local_dets.append(idet)
+                local_dets = np.array(local_dets)
 
+                # Average all detectors that match the key
                 template = np.zeros(nsample)
-                hits = np.zeros(nsample)
+                hits = np.zeros(nsample, dtype=np.int64)
+
                 if self.shared_flags is not None:
-                    shared_flags = obs.shared[self.shared_flags].data
-                    shared_mask = (shared_flags & self.shared_flag_mask) == 0
+                    shared_flags = temp_ob.shared[self.shared_flags].data
                 else:
-                    shared_mask = np.ones(nsample, dtype=bool)
-                for idet, det in local_dets:
-                    signal = obs.detdata[self.det_data][idet]
-                    if self.det_flags is not None:
-                        det_flags = obs.detdata[self.det_flags][idet]
-                        det_mask = (det_flags & self.det_flag_mask) == 0
-                        mask = np.logical_and(shared_mask, det_mask)
-                    else:
-                        mask = shared_mask
-                    template[mask] += signal[mask]
-                    hits[mask] += 1
+                    shared_flags = np.zeros(nsample, dtype=np.uint8)
+                if self.det_flags is not None:
+                    det_flags = temp_ob.detdata[self.det_flags].data
+                else:
+                    det_flags = np.zeros([ndet, nsample], dtype=np.uint8)
+
+                sum_detectors(
+                    local_dets,
+                    shared_flags,
+                    self.shared_flag_mask,
+                    temp_ob.detdata[self.det_data].data,
+                    det_flags,
+                    self.det_flag_mask,
+                    template,
+                    hits,
+                )
 
                 if comm is not None:
                     comm.Barrier()
                     comm.Allreduce(MPI.IN_PLACE, template, op=MPI.SUM)
                     comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
 
-                good = hits != 0
-                template[good] /= hits[good]
+                subtract_mean(
+                    local_dets,
+                    temp_ob.detdata[self.det_data].data,
+                    template,
+                    hits,
+                )
 
-                for idet, det in local_dets:
-                    obs.detdata[self.det_data][idet] -= template
+            log.info_rank(
+                f"{data.comm.group:4} : Commonfiltered observation in",
+                comm=temp_ob.comm.comm_group,
+                timer=timer,
+            )
+
+            self._re_redistribute(data, obs, timer, log, temp_ob)
+
         return
 
     def _finalize(self, data, **kwargs):
@@ -700,7 +802,6 @@ class CommonModeFilter(Operator):
             "meta": list(),
             "shared": list(),
             "detdata": [self.det_data],
-            "intervals": [self.view],
         }
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)

@@ -16,6 +16,8 @@ from .mpi import MPI, comm_equal, comm_equivalent
 
 from .dist import distribute_samples, DistRange
 
+from .timing import function_timer
+
 from .utils import (
     Logger,
     name_UID,
@@ -60,8 +62,15 @@ class DistDetSamp(object):
 
     """
 
+    @function_timer
     def __init__(
-        self, samples, detectors, sample_sets, detector_sets, comm, process_rows
+        self,
+        samples,
+        detectors,
+        sample_sets,
+        detector_sets,
+        comm,
+        process_rows,
     ):
         log = Logger.get()
 
@@ -115,11 +124,12 @@ class DistDetSamp(object):
             # the det sets.
             new_dets = list()
             detsets = list()
+            detectors_set = set(self.detectors)
             if isinstance(self.detector_sets, list):
                 # We have a list of lists
                 for ds in self.detector_sets:
                     for d in ds:
-                        if d not in self.detectors:
+                        if d not in detectors_set:
                             raise RuntimeError(
                                 f"detector {d} in a detset but not in detector list"
                             )
@@ -129,7 +139,7 @@ class DistDetSamp(object):
                 # We have a detector group dictionary
                 for ds in self.detector_sets.values():
                     for d in ds:
-                        if d not in self.detectors:
+                        if d not in detectors_set:
                             raise RuntimeError(
                                 f"detector {d} in a detset but not in detector list"
                             )

@@ -121,14 +121,27 @@ def load_instrument_and_schedule(args, comm):
     # Load a generic focalplane file.  NOTE:  again, this is just using the
     # built-in Focalplane class.  In a workflow for a specific experiment we would
     # have a custom class.
-    focalplane = toast.instrument.Focalplane(file=args.focalplane, comm=comm)
+    log = toast.utils.Logger.get()
+    timer = toast.timing.Timer()
+    timer.start()
 
     if args.sample_rate is not None:
-        focalplane.sample_rate = args.sample_rate * u.Hz
+        sample_rate = args.sample_rate * u.Hz
+    else:
+        sample_rate = None
+    focalplane = toast.instrument.Focalplane(
+        file=args.focalplane, comm=comm, sample_rate=sample_rate
+    )
+    log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After loading focalplane:  {mem}", comm)
 
     # Load the schedule file
     schedule = toast.schedule.GroundSchedule()
     schedule.read(args.schedule, comm=comm)
+    log.info_rank("Loaded schedule in", comm=comm, timer=timer)
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After loading schedule:  {mem}", comm)
 
     # Create a telescope for the simulation.  Again, for a specific experiment we
     # would use custom classes for the site.
@@ -188,6 +201,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     timer = toast.timing.Timer()
     timer.start()
 
+    ops.mem_count.prefix = "Before Simulation"
+    ops.mem_count.apply(data)
+
     # Simulate the telescope pointing
 
     ops.sim_ground.telescope = telescope
@@ -197,10 +213,16 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_ground.apply(data)
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After Scan Simulation"
+    ops.mem_count.apply(data)
+
     # Construct a "perfect" noise model just from the focalplane parameters
 
     ops.default_model.apply(data)
     log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After default noise model"
+    ops.mem_count.apply(data)
 
     # Set up detector pointing in both Az/El and RA/DEC
 
@@ -217,6 +239,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.elevation_model.view = ops.det_pointing_azel.view
     ops.elevation_model.apply(data)
     log.info_rank("Created elevation noise model in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After elevation noise model"
+    ops.mem_count.apply(data)
 
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
@@ -252,6 +277,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.scan_map.apply(data)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After simulating sky signal"
+    ops.mem_count.apply(data)
+
     # Simulate atmosphere
 
     ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
@@ -261,16 +289,25 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After simulating atmosphere"
+    ops.mem_count.apply(data)
+
     # Simulate scan-synchronous signal
 
     ops.sim_sss.detector_pointing = ops.det_pointing_azel
     ops.sim_sss.apply(data)
     log.info_rank("Simulated Scan-synchronous signal", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After simulating scan-synchronous signal"
+    ops.mem_count.apply(data)
+
     # Apply a time constant
 
     ops.convolve_time_constant.apply(data)
     log.info_rank("Convolved time constant in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After applying time constant"
+    ops.mem_count.apply(data)
 
     # Simulate detector noise
 
@@ -278,6 +315,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
     log.info_rank("Simulating detector noise", comm=world_comm)
     ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After simulating noise"
+    ops.mem_count.apply(data)
 
     return data
 
@@ -300,6 +340,9 @@ def reduce_data(job, args, data):
     ops.flag_sso.apply(data)
     log.info_rank("Flagged SSOs in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After flagging SSOs"
+    ops.mem_count.apply(data)
+
     # Optional geometric factors
 
     ops.cadence_map.pixel_pointing = ops.pixels_radec_final
@@ -308,11 +351,17 @@ def reduce_data(job, args, data):
     ops.cadence_map.apply(data)
     log.info_rank("Calculated cadence map in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After cadence map"
+    ops.mem_count.apply(data)
+
     ops.crosslinking.pixel_pointing = ops.pixels_radec_final
     ops.crosslinking.pixel_dist = ops.binner_final.pixel_dist
     ops.crosslinking.output_dir = args.out_dir
     ops.crosslinking.apply(data)
     log.info_rank("Calculated crosslinking in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After crosslinking map"
+    ops.mem_count.apply(data)
 
     # Collect signal statistics before filtering
 
@@ -320,10 +369,16 @@ def reduce_data(job, args, data):
     ops.raw_statistics.apply(data)
     log.info_rank("Calculated raw statistics in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After raw statistics"
+    ops.mem_count.apply(data)
+
     # Deconvolve a time constant
 
     ops.deconvolve_time_constant.apply(data)
     log.info_rank("Deconvolved time constant in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After deconvolving time constant"
+    ops.mem_count.apply(data)
 
     # Apply the filter stack
 
@@ -337,11 +392,17 @@ def reduce_data(job, args, data):
     ops.common_mode_filter.apply(data)
     log.info_rank("Finished common-mode-filtering in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After filtering"
+    ops.mem_count.apply(data)
+
     # Collect signal statistics after filtering
 
     ops.filtered_statistics.output_dir = args.out_dir
     ops.filtered_statistics.apply(data)
     log.info_rank("Calculated filtered statistics in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After filtered statistics"
+    ops.mem_count.apply(data)
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -390,6 +451,9 @@ def reduce_data(job, args, data):
         ops.mapmaker.apply(data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
+    ops.mem_count.prefix = "After mapmaker"
+    ops.mem_count.apply(data)
+
     # Optionally run Madam
 
     if toast.ops.madam.available():
@@ -398,6 +462,9 @@ def reduce_data(job, args, data):
         ops.madam.stokes_weights = ops.weights_radec
         ops.madam.apply(data)
         log.info_rank("Finished Madam in", comm=world_comm, timer=timer)
+
+        ops.mem_count.prefix = "After Madam"
+        ops.mem_count.apply(data)
 
 
 def dump_spt3g(job, args, data):
@@ -472,9 +539,14 @@ def main():
     log = toast.utils.Logger.get()
     gt = toast.timing.GlobalTimers.get()
     gt.start("toast_ground_sim (total)")
+    timer0 = toast.timing.Timer()
+    timer0.start()
 
     # Get optional MPI parameters
     comm, procs, rank = toast.get_world()
+
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"Start of the workflow:  {mem}", comm)
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
@@ -486,11 +558,8 @@ def main():
 
     operators = [
         toast.ops.SimGround(name="sim_ground", weather="atacama", detset_key="pixel"),
-        toast.ops.DefaultNoiseModel(name="default_model"),
-        toast.ops.ElevationNoise(
-            name="elevation_model",
-            out_model="el_noise_model",
-        ),
+        toast.ops.DefaultNoiseModel(name="default_model", noise_model="noise_model"),
+        toast.ops.ElevationNoise(name="elevation_model", out_model="noise_model"),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
         toast.ops.StokesWeights(
             name="weights_azel", weights="weights_azel", mode="IQU"
@@ -525,6 +594,7 @@ def main():
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
+        toast.ops.MemoryCounter(name="mem_count", enabled=False),
     ]
     if toast.ops.madam.available():
         operators.append(toast.ops.Madam(name="madam", enabled=False))
@@ -561,6 +631,8 @@ def main():
     if toast_comm.world_rank == 0:
         out = os.path.join(args.out_dir, "timing")
         toast.timing.dump(alltimers, out)
+
+    log.info_rank("Workflow completed in", comm=comm, timer=timer0)
 
 
 if __name__ == "__main__":

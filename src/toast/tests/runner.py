@@ -21,6 +21,7 @@ from .. import timing
 from . import env as test_env
 from . import timing as test_timing
 from . import rng as test_rng
+from . import math_misc as test_math_misc
 from . import fft as test_fft
 from . import healpix as test_healpix
 from . import qarray as test_qarray
@@ -154,6 +155,7 @@ def test(name=None, verbosity=2):
             # fail.
             suite.addTest(loader.loadTestsFromModule(test_timing))
         suite.addTest(loader.loadTestsFromModule(test_rng))
+        suite.addTest(loader.loadTestsFromModule(test_math_misc))
         suite.addTest(loader.loadTestsFromModule(test_fft))
         suite.addTest(loader.loadTestsFromModule(test_healpix))
         suite.addTest(loader.loadTestsFromModule(test_qarray))

@@ -23,7 +23,7 @@ from ..utils import Environment, name_UID, Logger, rate_from_times, astropy_cont
 
 from ..dist import distribute_uniform, distribute_discrete
 
-from ..timing import function_timer, Timer
+from ..timing import function_timer, Timer, GlobalTimers
 
 from ..intervals import Interval, regular_intervals, IntervalList
 
@@ -341,17 +341,21 @@ class SimGround(Operator):
                 if det in detectors:
                     pipedets.append(det)
 
-        # Group by detector sets and prune to include only the detectors we
-        # are using.
-        detsets = None
-        if self.detset_key is not None:
-            detsets = dict()
+        # Group by detector sets
+        if self.detset_key is None:
+            detsets = None
+        else:
             dsets = focalplane.detector_groups(self.detset_key)
-            for k, v in dsets.items():
-                detsets[k] = list()
-                for d in v:
-                    if d in pipedets:
-                        detsets[k].append(d)
+            if detectors is None:
+                detsets = dsets
+            else:
+                # Prune to include only the detectors we are using.
+                detsets = dict()
+                for k, v in dsets.items():
+                    detsets[k] = list()
+                    for d in v:
+                        if d in pipedets:
+                            detsets[k].append(d)
 
         # Verify that we have enough detector data for all of our processes.  If we are
         # distributing by time, we check the sample sets on a per-observation basis
@@ -423,6 +427,7 @@ class SimGround(Operator):
         group_numobs = groupdist[comm.group][1]
 
         for obindx in range(group_firstobs, group_firstobs + group_numobs):
+
             scan = self.schedule.scans[obindx]
 
             # Currently, El nods happen before or after the formal scan start / end.

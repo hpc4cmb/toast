@@ -6,6 +6,94 @@
 #include <module.hpp>
 
 
+void sum_detectors(py::array_t <int64_t,
+                                py::array::c_style | py::array::forcecast> detectors,
+                   py::array_t <unsigned char,
+                                py::array::c_style | py::array::forcecast> shared_flags,
+                   unsigned char shared_flag_mask,
+                   py::array_t <double,
+                                py::array::c_style | py::array::forcecast> det_data,
+                   py::array_t <unsigned char,
+                                py::array::c_style | py::array::forcecast> det_flags,
+                   unsigned char det_flag_mask,
+                   py::array_t <double,
+                                py::array::c_style | py::array::forcecast> sum_data,
+                   py::array_t <int64_t,
+                                py::array::c_style | py::array::forcecast> hits)
+{
+    auto fast_detectors = detectors.unchecked <1>();
+    auto fast_shared_flags = shared_flags.unchecked <1>();
+    auto fast_det_data = det_data.unchecked <2>();
+    auto fast_det_flags = det_flags.unchecked <2>();
+    auto fast_sum_data = sum_data.mutable_unchecked <1>();
+    auto fast_hits = hits.mutable_unchecked <1>();
+
+    size_t ndet = fast_detectors.shape(0);
+    size_t nsample = fast_det_data.shape(1);
+
+    size_t buflen = 10000;
+    size_t nbuf = int(ceilf(double(nsample) / buflen));
+
+#pragma omp parallel for schedule(static, 1)
+    for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
+        size_t sample_start = ibuf * buflen;
+        size_t sample_stop = std::min(sample_start + buflen, nsample);
+        for (size_t idet = 0; idet < ndet; ++idet) {
+            int64_t row = fast_detectors(idet);
+            for (size_t sample = sample_start; sample < sample_stop; ++sample) {
+                if (fast_shared_flags(sample) & shared_flag_mask != 0) continue;
+                if (fast_det_flags(row, sample) & det_flag_mask != 0) continue;
+                fast_sum_data(sample) += fast_det_data(row, sample);
+                fast_hits(sample)++;
+            }
+        }
+    }
+
+    return;
+}
+
+void subtract_mean(py::array_t <int64_t,
+                                py::array::c_style | py::array::forcecast> detectors,
+                   py::array_t <double,
+                                py::array::c_style | py::array::forcecast> det_data,
+                   py::array_t <double,
+                                py::array::c_style | py::array::forcecast> sum_data,
+                   py::array_t <int64_t,
+                                py::array::c_style | py::array::forcecast> hits)
+{
+    auto fast_detectors = detectors.unchecked <1>();
+    auto fast_det_data = det_data.mutable_unchecked <2>();
+    auto fast_sum_data = sum_data.mutable_unchecked <1>();
+    auto fast_hits = hits.unchecked <1>();
+
+    size_t ndet = fast_detectors.shape(0);
+    size_t nsample = fast_det_data.shape(1);
+
+    size_t buflen = 10000;
+    size_t nbuf = int(ceilf(double(nsample) / buflen));
+
+#pragma omp parallel for schedule(static, 10000)
+    for (size_t sample = 0; sample < nsample; ++sample) {
+        if (fast_hits(sample) != 0) {
+            fast_sum_data(sample) /= fast_hits(sample);
+        }
+    }
+
+#pragma omp parallel for schedule(static, 1)
+    for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
+        size_t sample_start = ibuf * buflen;
+        size_t sample_stop = std::min(sample_start + buflen, nsample);
+        for (size_t idet = 0; idet < ndet; ++idet) {
+            int64_t row = fast_detectors(idet);
+            for (size_t sample = sample_start; sample < sample_stop; ++sample) {
+                fast_det_data(row, sample) -= fast_sum_data(sample);
+            }
+        }
+    }
+
+    return;
+}
+
 void init_tod_filter(py::module & m) {
     m.def("legendre",
           [](py::buffer x, py::buffer templates, size_t start_order,
@@ -318,6 +406,9 @@ void init_tod_filter(py::module & m) {
             None.
 
     )");
+
+    m.def("sum_detectors", &sum_detectors);
+    m.def("subtract_mean", &subtract_mean);
 
     return;
 }

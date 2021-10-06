@@ -33,6 +33,8 @@ from .utils import Logger, Environment, name_UID
 
 from . import qarray
 
+from ._libtoast import integrate_simpson
+
 # CMB temperature
 TCMB = 2.72548
 
@@ -284,7 +286,8 @@ class SpaceSite(Site):
 class Bandpass(object):
     """Class that contains the bandpass information for an entire focalplane."""
 
-    def __init__(self, bandcenters, bandwidths, nstep=1001):
+    @function_timer
+    def __init__(self, bandcenters, bandwidths, nstep=101):
         """All units in GHz
 
         Args :
@@ -303,22 +306,22 @@ class Bandpass(object):
             self.fmin[name] = center - 0.5 * width
             self.fmax[name] = center + 0.5 * width
         # The interpolated bandpasses will be cached as needed
+        self.fmin_tot = None
+        self.fmax_tot = None
         self.freqs = {}
         self.bandpass = {}
 
-    def get_range(self):
+    @function_timer
+    def get_range(self, det=None):
         """Return the maximum range of frequencies needed for convolution."""
-        fmin = None
-        fmax = None
-        for name in self.dets:
-            if fmin is None:
-                fmin = self.fmin[name]
-                fmax = self.fmax[name]
-            else:
-                fmin = min(fmin, self.fmin[name])
-                fmax = max(fmax, self.fmax[name])
-        return fmin, fmax
+        if det is not None:
+            return self.fmin[det], self.fmin[det]
+        elif self.fmin_tot is None:
+            self.fmin_tot = min(self.fmin.values())
+            self.fmax_tot = max(self.fmax.values())
+        return self.fmin_tot, self.fmax_tot
 
+    @function_timer
     def convolve(self, det, freqs, spectrum, rj=False):
         """Convolve the provided spectrum with the detector bandpass
 
@@ -345,7 +348,8 @@ class Bandpass(object):
             except AttributeError:
                 self.bandpass[det] = np.ones(self.nstep)
 
-            norm = simpson(self.bandpass[det], x=self.freqs[det])
+            # norm = simpson(self.bandpass[det], x=self.freqs[det])
+            norm = integrate_simpson(self.freqs[det], self.bandpass[det])
             if norm == 0:
                 raise RuntimeError("Bandpass cannot be normalized")
             self.bandpass[det] /= norm
@@ -363,7 +367,8 @@ class Bandpass(object):
             spectrum_det *= rj2cmb
 
         # Average across the bandpass
-        convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
+        # convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
+        convolved = integrate_simpson(freqs_det, spectrum_det * bandpass_det)
 
         return convolved
 
@@ -419,6 +424,7 @@ class Focalplane(object):
 
     XAXIS, YAXIS, ZAXIS = np.eye(3)
 
+    @function_timer
     def __init__(
         self,
         detector_data=None,
@@ -427,16 +433,14 @@ class Focalplane(object):
         file=None,
         comm=None,
     ):
-        self.detector_data = None
-        self.field_of_view = None
-        self.sample_rate = None
+        log = Logger.get()
+        self.detector_data = detector_data
+        self.field_of_view = field_of_view
+        self.sample_rate = sample_rate
 
         if file is not None:
+            log.info_rank(f"Loading focalplane from {file}", comm=comm)
             self.read(file, comm=comm)
-        else:
-            self.detector_data = detector_data
-            self.field_of_view = field_of_view
-            self.sample_rate = sample_rate
 
         # Add UID if not given
         if "uid" not in self.detector_data.colnames:
@@ -456,6 +460,14 @@ class Focalplane(object):
         self._get_noise()
         self._get_bandpass()
 
+        log.info_rank(
+            f"Focalplane has {len(self.detector_data)} detectors that span "
+            f"{self.field_of_view.to_value(u.deg):.3f} degrees and are sampled at "
+            f"{self.sample_rate.to_value(u.Hz)} Hz.",
+            comm=comm,
+        )
+
+    @function_timer
     def _get_noise(self):
         """Use the noise parameters to instantiate an analytical noise model"""
 
@@ -489,6 +501,7 @@ class Focalplane(object):
             self.noise = None
         return
 
+    @function_timer
     def _get_bandpass(self):
         """Use the bandpass parameters to instantiate a bandpass model"""
 
@@ -504,6 +517,7 @@ class Focalplane(object):
             self.bandpass = None
         return
 
+    @function_timer
     def _compute_fov(self):
         """Compute the field of view"""
         # Find the largest distance from the bore sight
@@ -521,6 +535,7 @@ class Focalplane(object):
         if self.field_of_view == 0:
             self.field_of_view = 1.0 * u.degree
 
+    @function_timer
     def _get_pol_angles(self):
         """Get the detector polarization angles from the quaternions"""
 
@@ -536,6 +551,7 @@ class Focalplane(object):
                 pol_angle = np.arctan2(2 * a * d, a ** 2 - d ** 2) % np.pi
                 row["pol_angle"] = pol_angle * u.radian
 
+    @function_timer
     def _get_pol_efficiency(self):
         """Get the polarization efficiency from polarization leakage or vice versa"""
 
@@ -626,9 +642,14 @@ class Focalplane(object):
     def detectors(self):
         return list(self._det_to_row.keys())
 
+    @property
+    def n_detectors(self):
+        return len(self._det_to_row.keys())
+
     def keys(self):
         return self.detectors
 
+    @function_timer
     def detector_groups(self, column):
         """Group detectors by a common value in one property.
 
@@ -686,9 +707,17 @@ class Focalplane(object):
 
     def read(self, file, comm=None):
         if comm is None or comm.rank == 0:
+            if self.detector_data is not None:
+                raise RuntimeError("Reading detector data over existing table")
             self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
-            self.sample_rate = self.detector_data.meta["sample_rate"]
-            if "field_of_view" in self.detector_data.meta:
+            # Only use the sampling rate recorded in the file if it was not
+            # overridden in the constructor
+            if self.sample_rate is None:
+                self.sample_rate = self.detector_data.meta["sample_rate"]
+            if (
+                self.field_of_view is None
+                and "field_of_view" in self.detector_data.meta
+            ):
                 self.field_of_view = self.detector_data.meta["field_of_view"]
             else:
                 self._compute_fov()

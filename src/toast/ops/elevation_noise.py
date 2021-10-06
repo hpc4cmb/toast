@@ -151,7 +151,7 @@ class ElevationNoise(Operator):
             noise = ob[self.noise_model]
 
             out_noise = None
-            if self.out_model is None:
+            if self.out_model is None or self.noise_model == self.out_model:
                 out_noise = noise
             else:
                 ob[self.out_model] = copy.deepcopy(noise)

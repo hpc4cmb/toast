@@ -31,6 +31,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/common.cpp
     _libtoast/module.cpp
     _libtoast/sys.cpp
+    _libtoast/math_misc.cpp
     _libtoast/math_sf.cpp
     _libtoast/math_rng.cpp
     _libtoast/math_qarray.cpp

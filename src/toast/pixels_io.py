@@ -1,6 +1,8 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
+
+import h5py
 
 import os
 
@@ -11,6 +13,8 @@ from .timing import function_timer, Timer
 from .mpi import MPI
 
 import healpy as hp
+
+from .utils import Logger, memreport
 
 
 @function_timer
@@ -133,23 +137,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
 
 
 @function_timer
-def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
-    """Write pixel data to a HEALPix format FITS table.
-
-    The data across all processes is assumed to be synchronized (the data for a given
-    submap shared between processes is identical).  The submap data is sent to the root
-    process which writes it out.  For parallel writing, see write_hdf5().
-
-    Args:
-        pix (PixelData): The distributed pixel object.
-        path (str): The path to the output FITS file.
-        nest (bool): If True, data is in NESTED ordering, else data is in RING.
-        comm_bytes (int): The approximate message size to use.
-
-    Returns:
-        None
-
-    """
+def collect_submaps(pix, comm_bytes=10000000):
     # The distribution
     dist = pix.distribution
 
@@ -252,10 +240,49 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
                     recvbuf.fill(0)
             submap_off += ncomm
 
+    return fdata, fview
+
+
+@function_timer
+def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=False):
+    """Write pixel data to a HEALPix format FITS table.
+
+    The data across all processes is assumed to be synchronized (the data for a given
+    submap shared between processes is identical).  The submap data is sent to the root
+    process which writes it out.  For parallel writing, see write_hdf5().
+
+    Args:
+        pix (PixelData): The distributed pixel object.
+        path (str): The path to the output FITS file.
+        nest (bool): If True, data is in NESTED ordering, else data is in RING.
+        comm_bytes (int): The approximate message size to use.
+        report_memory (bool): Report the amount of available memory on the root
+            node just before writing out the map.
+
+    Returns:
+        None
+
+    """
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+
+    # The distribution
+    dist = pix.distribution
+
+    rank = 0
+    if dist.comm is not None:
+        rank = dist.comm.rank
+
+    fdata, fview = collect_submaps(pix, comm_bytes=comm_bytes)
+
     if rank == 0:
         if os.path.isfile(path):
             os.remove(path)
         dtypes = [np.dtype(pix.dtype) for x in range(pix.n_value)]
+        if report_memory:
+            mem = memreport(msg="(root node)", silent=True)
+            log.info_rank(f"About to write {path}:  {mem}")
         hp.write_map(path, fview, dtype=dtypes, fits_IDL=False, nest=nest)
         del fview
         for col in range(pix.n_value):
@@ -265,9 +292,359 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
     return
 
 
-def read_hdf5(pix, path):
-    pass
+@function_timer
+def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
+    """Read and broadcast a HEALPix map from an HDF5 file.
+
+    The root process opens the file and iterates over chunks of the map.
+    Chunks of submaps are broadcast to all processes, and each process
+    copies data to its local submaps.
+
+    Args:
+        pix (PixelData): The distributed PixelData object.
+        path (str): The path to the FITS file.
+        nest (bool): If True, convert input to NESTED ordering, else use RING.
+        comm_bytes (int): The approximate message size to use in bytes.
+
+    Returns:
+        None
+
+    """
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+
+    dist = pix.distribution
+    rank = 0
+    if dist.comm is not None:
+        rank = dist.comm.rank
+
+    comm_submap = pix.comm_nsubmap(comm_bytes)
+
+    fdata = None
+    if rank == 0:
+        f = h5py.File(path, "r")
+
+        dset = f["map"]
+        header = dict(dset.attrs)
+        nside_file = header["NSIDE"]
+        nside = hp.npix2nside(dist.n_pix)
+        if nside_file != nside:
+            msg = f"Wrong resolution in {path}: expected {nside} but found {nside_file}"
+            raise RuntimeError(msg)
+        if header["ORDERING"] == "NESTED":
+            file_nested = True
+        elif header["ORDERING"] == "RING":
+            file_nested = False
+        else:
+            msg = f"Could not determine {path} pixel ordering."
+            raise RuntimeError(msg)
+
+        nnz, npix = dset.shape
+        if nnz < pix.n_value:
+            msg = f"Map in {path} has {nnz} columns but we require {pix.n_value}."
+            raise RuntimeError(msg)
+        if file_nested != nest:
+            log.warning(
+                f"{path} has ORDERING={header['ORDERING']}, "
+                f"reordering serially upon load."
+            )
+            if file_nested and not nest:
+                mapdata = hp.reorder(dset[:], n2r=True)
+            elif not file_nested and nest:
+                mapdata = hp.reorder(dset[:], r2n=True)
+        else:
+            # No reorder, we'll only load what we need
+            mapdata = dset
+
+    buf = np.zeros(comm_submap * pix.n_value * dist.n_pix_submap, dtype=pix.dtype)
+    view = buf.reshape(comm_submap, pix.n_value, dist.n_pix_submap)
+
+    # Load and broadcast submaps that are used
+    hit_submaps = dist.all_hit_submaps
+    n_hit_submaps = len(hit_submaps)
+
+    submap_offset = 0
+    while submap_offset < n_hit_submaps:
+        submap_last = min(submap_offset + comm_submap, n_hit_submaps)
+        if rank == 0:
+            for i, submap in enumerate(hit_submaps[submap_offset:submap_last]):
+                pix_offset = submap * dist.n_pix_submap
+                # Healpix submaps are always complete but capping the upper
+                # limit helps when users are embedding other pixelizations
+                # into Healpix
+                pix_last = min(pix_offset + dist.n_pix_submap, dist.n_pix)
+                view[i, :, 0 : pix_last - pix_offset] = mapdata[
+                    0 : pix.n_value, pix_offset:pix_last
+                ]
+
+        if dist.comm is not None:
+            dist.comm.Bcast(buf, root=0)
+
+        # loop over these submaps, and copy any that we are assigned
+        for i, submap in enumerate(hit_submaps[submap_offset:submap_last]):
+            if submap in dist.local_submaps:
+                loc = dist.global_submap_to_local[submap]
+                pix.data[loc] = view[i].T
+
+        submap_offset = submap_last
+
+    return
 
 
-def write_hdf5(pix, path):
-    pass
+def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=False):
+    """Write pixel data to a HEALPix format HDF5 dataset.
+
+    The data across all processes is assumed to be synchronized (the data for a given
+    submap shared between processes is identical).
+
+    Args:
+        pix (PixelData): The distributed pixel object.
+        path (str): The path to the output FITS file.
+        nest (bool): If True, data is in NESTED ordering, else data is in RING.
+        comm_bytes (int): The approximate message size to use.
+        report_memory (bool): Report the amount of available memory on the root
+            node just before writing out the map.
+
+    Returns:
+        None
+
+    """
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+
+    # The distribution
+    dist = pix.distribution
+
+    rank = 0
+    ntask = 1
+    if dist.comm is not None:
+        rank = dist.comm.rank
+        ntask = dist.comm.size
+
+    not_owned = None
+    allowners = None
+    if dist.comm is None:
+        not_owned = 1
+        allowners = np.zeros(dist.n_submap, dtype=np.int32)
+        allowners.fill(not_owned)
+        for m in dist.local_submaps:
+            allowners[m] = rank
+    else:
+        not_owned = dist.comm.size
+        owners = np.zeros(dist.n_submap, dtype=np.int32)
+        owners.fill(not_owned)
+        for m in dist.local_submaps:
+            owners[m] = dist.comm.rank
+        allowners = np.zeros_like(owners)
+        dist.comm.Allreduce(owners, allowners, op=MPI.MIN)
+
+    header = {}
+    if nest:
+        header["ORDERING"] = "NESTED"
+    else:
+        header["ORDERING"] = "RING"
+    header["NSIDE"] = hp.npix2nside(dist.n_pix)
+
+    try:
+
+        # Try opening the file for parallel access.  This will only work
+        # if HDF5 and h5py were compiled with MPI
+
+        with h5py.File(path, "w", driver="mpio", comm=dist.comm) as f:
+
+            # Each process writes their own submaps to the file
+            dset = f.create_dataset(
+                "map",
+                (pix.n_value, dist.n_pix),
+                chunks=(pix.n_value, dist.n_pix_submap),
+                dtype=pix.dtype,
+            )
+            for key, value in header.items():
+                dset.attrs[key] = value
+            """
+            for submap in dist.owned_submaps:
+                local_submap = dist.global_submap_to_local[submap]
+                offset = submap * dist.n_pix_submap
+                dset[:, offset : offset + dist.n_pix_submap] = pix[local_submap].T
+            """
+            for submap in range(dist.n_submap):
+                if allowners[submap] == rank:
+                    local_submap = dist.global_submap_to_local[submap]
+                    # Accommodate submap sizes that do not fit the map cleanly
+                    first = submap * dist.n_pix_submap
+                    last = min(first + dist.n_pix_submap, dist.n_pix)
+                    dset[:, first : last] = pix[local_submap, 0 : last - first].T
+
+    except (ValueError, AssertionError) as e:
+
+        # No luck, write serially from root process
+
+        log.warning_rank(
+            f"Could not open {path} for parallel access: '{e}'. Writing in serial mode",
+            comm=dist.comm,
+        )
+
+        # n_send = len(dist.owned_submaps)
+        n_send = np.sum(allowners == rank)
+        if n_send == 0:
+            sendbuffer = None
+        else:
+            sendbuffer = np.empty(
+                [n_send, pix.n_value, dist.n_pix_submap],
+                dtype=pix.dtype,
+            )
+            offset = 0
+            # for submap in dist.owned_submaps:
+            for submap in range(dist.n_submap):
+                if allowners[submap] == rank:
+                    local_submap = dist.global_submap_to_local[submap]
+                    sendbuffer[offset] = pix.data[local_submap].T
+                    offset += 1
+
+        if rank == 0:
+            # Root process receives the submaps from other processes and writes
+            # them to file
+            with h5py.File(path, "w") as f:
+                dset = f.create_dataset(
+                    "map",
+                    (pix.n_value, dist.n_pix),
+                    chunks=(pix.n_value, dist.n_pix_submap),
+                    dtype=pix.dtype,
+                )
+                for rank_send in range(ntask):
+                    # submaps = np.argwhere(dist.submap_owners == rank_send).ravel()
+                    submaps = np.arange(dist.n_submap)[allowners == rank_send]
+                    n_receive = len(submaps)
+                    if n_receive > 0:
+                        if rank_send == rank:
+                            recvbuffer = sendbuffer
+                        else:
+                            recvbuffer = np.empty(
+                                [n_receive, pix.n_value, dist.n_pix_submap],
+                                dtype=pix.dtype,
+                            )
+                            dist.comm.Recv(recvbuffer, source=rank_send, tag=rank_send)
+                    for i, submap in enumerate(submaps):
+                        # Accommodate submap sizes that do not fit the map cleanly
+                        first = submap * dist.n_pix_submap
+                        last = min(first + dist.n_pix_submap, dist.n_pix)
+                        dset[:, first : last] = recvbuffer[i, :, 0 : last - first]
+
+                for key, value in header.items():
+                    dset.attrs[key] = value
+        else:
+            # All others wait for their turn to send
+            if sendbuffer is not None:
+                dist.comm.Send(sendbuffer, dest=0, tag=rank)
+
+    return
+
+
+def filename_is_fits(filename):
+    return filename.endswith((".fits", ".fit", ".FITS"))
+
+
+def filename_is_hdf5(filename):
+    return filename.endswith((".hdf5", ".h5", ".H5"))
+
+
+def read_healpix(filename, *args, **kwargs):
+    """Read a FITS or HDF5 map serially"""
+
+    if filename_is_fits(filename):
+
+        # Load a FITS map with healpy
+        result = hp.read_map(filename, *args, **kwargs)
+
+    elif filename_is_hdf5(filename):
+
+        if "verbose" in kwargs and kwargs["verbose"] == False:
+            verbose = False
+        else:
+            # healpy default
+            verbose = True
+
+        # Load an HDF5 map
+        with h5py.File(filename, "r") as f:
+            dset = f["map"]
+            if "field" in kwargs and kwargs["field"] is not None:
+                mapdata = []
+                for field in kwargs["field"]:
+                    mapdata.append(dset[field])
+                mapdata = np.vstack(mapdata)
+            else:
+                mapdata = dset[:]
+
+            header = dict(dset.attrs)
+            if "ORDERING" not in header or header["ORDERING"] not in ["NESTED", "RING"]:
+                raise RuntimeError("Cannot determine pixel ordering")
+            if verbose:
+                print("")
+            if "nest" in kwargs:
+                nest = kwargs["nest"]
+            else:
+                nest = False
+            if header["ORDERING"] == "NESTED" and nest == False:
+                if verbose:
+                    print(f"Reordering {filename} to RING")
+                mapdata = hp.reorder(mapdata, n2r=True)
+            elif header["ORDERING"] == "RING" and nest == True:
+                if verbose:
+                    print(f"Reordering {filename} to NESTED")
+                mapdata = hp.reorder(mapdata, r2n=True)
+            else:
+                if verbose:
+                    print(f"{filename} is already {header['ORDERING']}")
+
+        if "h" in kwargs and kwargs["h"] == True:
+            result = mapdata, header
+        else:
+            result = mapdata
+
+    return result
+
+
+def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
+    """Write a FITS or HDF5 map serially"""
+
+    if filename_is_fits(filename):
+
+        # Write a FITS map with healpy
+        return hp.write_map(filename, mapdata, *args, **kwargs)
+
+    elif filename_is_hdf5(filename):
+
+        # Write an HDF5 map
+        mapdata = np.atleast_2d(mapdata)
+        n_value, n_pix = mapdata.shape
+        nside = hp.npix2nside(n_pix)
+
+        nside_submap = min(nside_submap, nside)
+        n_pix_submap = 12 * nside_submap ** 2
+
+        mode = "w-"
+        if "overwrite" in kwargs and kwargs["overwrite"] == True:
+            mode = "w"
+
+        with h5py.File(filename, mode) as f:
+            dset = f.create_dataset(
+                "map",
+                (n_value, n_pix),
+                chunks=(n_value, n_pix_submap),
+                dtype=mapdata.dtype,
+            )
+            dset[:] = mapdata
+
+            if "extra_header" in kwargs:
+                header = kwargs["extra_header"]
+                for key, value in header:
+                    dset.attrs[key] = value
+            if "nest" in kwargs and kwargs["nest"] == True:
+                dset.attrs["ORDERING"] = "NESTED"
+            else:
+                dset.attrs["ORDERING"] = "RING"
+            dset.attrs["NSIDE"] = nside
+
+    return

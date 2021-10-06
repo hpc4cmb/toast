@@ -10,6 +10,8 @@ import h5py
 
 from .noise import Noise
 
+from .timing import function_timer
+
 
 class AnalyticNoise(Noise):
     """Class representing an analytic noise model.
@@ -28,6 +30,7 @@ class AnalyticNoise(Noise):
 
     """
 
+    @function_timer
     def __init__(
         self,
         detectors=list(),
@@ -54,8 +57,22 @@ class AnalyticNoise(Noise):
         psds = {}
 
         last_nyquist = None
+        last_det = None
 
         for d in detectors:
+            if last_det is not None:
+                # shortcut when the noise models are identical
+                if (
+                    self._rate[d] == self._rate[last_det] and
+                    self._fmin[d] == self._fmin[last_det] and
+                    self._fknee[d] == self._fknee[last_det] and
+                    self._alpha[d] == self._alpha[last_det] and
+                    self._NET[d] == self._NET[last_det]
+                ):
+                    freqs[d] = freqs[last_det].copy()
+                    psds[d] = psds[last_det].copy()
+                    continue
+
             fmin_hz = self._fmin[d].to_value(u.Hz)
             fknee_hz = self._fknee[d].to_value(u.Hz)
             rate_hz = self._rate[d].to_value(u.Hz)
@@ -95,6 +112,8 @@ class AnalyticNoise(Noise):
                 psds[d] = np.ones_like(freqs[d].to_value(u.Hz))
                 psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second))) ** 2
             psds[d] *= (self._NET[d].unit) ** 2
+
+            last_det = d
 
         # call the parent class constructor to store the psds
         super().__init__(detectors=detectors, freqs=freqs, psds=psds, indices=indices)
