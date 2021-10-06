@@ -106,14 +106,14 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                     parser.add_argument(
                         "--{}{}{}enable".format(prefix, obj, separator),
                         required=False,
-                        default=None,
+                        default=df,
                         action="store_true",
                         help="Enable use of {}".format(obj),
                     )
                     parser.add_argument(
                         "--{}{}{}disable".format(prefix, obj, separator),
                         required=False,
-                        default=None,
+                        default=df,
                         action="store_false",
                         help="Disable use of {}".format(obj),
                         dest="{}{}{}enable".format(prefix, obj, separator),
@@ -225,12 +225,8 @@ def args_update_config(args, conf, useropts, section, prefix="", separator="\.")
                 continue
 
             if optname == "enable":
-                if val is None:
-                    # No command line override
-                    continue
-                else:
-                    # The actual trait name is "enabled"
-                    optname = "enabled"
+                # The actual trait name is "enabled"
+                optname = "enabled"
 
             if val is None:
                 val = "None"
