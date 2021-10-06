@@ -786,7 +786,7 @@ class CommonModeFilter(Operator):
 
             log.info_rank(
                 f"{data.comm.group:4} : Commonfiltered observation in",
-                comm=temp_ob.comm,
+                comm=temp_ob.comm.comm_group,
                 timer=timer,
             )
 
