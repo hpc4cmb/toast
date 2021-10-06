@@ -56,7 +56,7 @@ def main():
     parser.add_argument(
         "--outdir",
         required=False,
-        help="Name of output file",
+        help="Name of output directory",
     )
 
     parser.add_argument(
