@@ -89,6 +89,59 @@ def trait_type_to_string(trait):
     return "str"
 
 
+def trait_string_to_value(val):
+    """Attempt to convert a string to other basic types.
+
+    Trait container support arbitrary objects, but when parsing a config everything
+    is a string.  This attempts to convert a value to its real type.
+
+    Args:
+        val (str):  The input.
+
+    Returns:
+        (scalar):  The converted value.
+
+    """
+    if isinstance(val, TraitConfig):
+        # Reference to another object
+        return val
+    elif val == "None":
+        return None
+    elif val == "True":
+        return True
+    elif val == "False":
+        return False
+    elif val == "":
+        return val
+    else:
+        # See if we have a Quantity
+        try:
+            parts = val.split()
+            vstr = parts.pop(0)
+            ustr = " ".join(parts)
+            if ustr == "":
+                raise ValueError("No unit")
+            v = float(vstr)
+            unit = u.Unit(ustr)
+            # Yes
+            return u.Quantity(v, unit=unit)
+        except (IndexError, ValueError):
+            # No.  Try int next
+            try:
+                ival = int(val)
+                # Yes
+                return ival
+            except ValueError:
+                # No.  Try float
+                try:
+                    fval = float(val)
+                    # Yes
+                    return fval
+                except ValueError:
+                    # Just a string
+                    return val
+
+
 def string_to_pytype(st):
     """Return a python type corresponding to a type string.
 
@@ -206,6 +259,20 @@ class TraitConfig(HasTraits):
         val += "\n>"
         return val
 
+    def __eq__(self, other):
+        if len(self.traits()) != len(other.traits()):
+            return False
+        # Now we know that both objects have the same number of traits- compare the
+        # types and values.
+        for trait_name, trait in self.traits().items():
+            trother = other.traits()[trait_name]
+            if trait.get(self) != trother.get(other):
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     @classmethod
     def get_class_config_path(cls):
         return "/{}".format(cls.__qualname__)
@@ -237,7 +304,7 @@ class TraitConfig(HasTraits):
     def _format_conf_trait(conf, trt, tval):
         retval = "None"
         unitstr = "None"
-        typestr = None
+        typestr = trait_type_to_string(trt)
 
         def _format_item(c, tv):
             val = "None"
@@ -259,15 +326,17 @@ class TraitConfig(HasTraits):
             return (val, unit)
 
         if isinstance(trt, Dict):
-            retval = dict()
-            for k, v in tval.items():
-                retval[k], _ = _format_item(conf, v)
-        if isinstance(trt, List) or isinstance(trt, Set) or isinstance(trt, Tuple):
-            retval = list()
-            for v in tval:
-                vstr, _ = _format_item(conf, v)
-                retval.append(vstr)
-        if isinstance(trt, Instance) and not isinstance(tval, TraitConfig):
+            if tval is not None:
+                retval = dict()
+                for k, v in tval.items():
+                    retval[k], _ = _format_item(conf, v)
+        elif isinstance(trt, List) or isinstance(trt, Set) or isinstance(trt, Tuple):
+            if tval is not None:
+                retval = list()
+                for v in tval:
+                    vstr, _ = _format_item(conf, v)
+                    retval.append(vstr)
+        elif isinstance(trt, Instance) and not isinstance(tval, TraitConfig):
             # Our trait is some other class not derived from TraitConfig.  This
             # means that we cannot recursively dump it to the config and we also have
             # no way (currently) of serializing this instance to the config.  We set it
@@ -276,7 +345,7 @@ class TraitConfig(HasTraits):
         else:
             # Single object
             retval, unitstr = _format_item(conf, tval)
-        typestr = trait_type_to_string(trt)
+
         return retval, unitstr, typestr
 
     @classmethod
@@ -418,18 +487,21 @@ class TraitConfig(HasTraits):
                         # This is some kind of more complicated class.  We will let the
                         # constructor choose the default value.
                         continue
-                    cv = v["value"]
-                    if cv == "True":
-                        cv = True
-                    elif cv == "False":
-                        cv = False
-                    elif cv == "{}":
-                        cv = dict()
-                    elif cv == "()":
-                        cv = tuple()
-                    elif cv == "[]":
-                        cv = list()
-                    kw[k] = pyt(cv)
+                    elif v["value"] == "{}" or v["value"] == "()" or v["value"] == "[]":
+                        # Empty container
+                        kw[k] = pyt(v["value"])
+                    elif pyt == dict:
+                        # Convert items
+                        kw[k] = dict()
+                        raw = pyt(v["value"])
+                        for rk, rv in raw.items():
+                            kw[k][rk] = trait_string_to_value(rv)
+                    elif pyt == list or pyt == set or pyt == tuple:
+                        raw = pyt(v["value"])
+                        kw[k] = pyt([trait_string_to_value(x) for x in raw])
+                    else:
+                        # Other scalar
+                        kw[k] = trait_string_to_value(v["value"])
             else:
                 # We have a Quantity.
                 kw[k] = u.Quantity(float(v["value"]) * u.Unit(v["unit"]))

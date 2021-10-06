@@ -8,6 +8,10 @@ import os
 
 import copy
 
+import types
+
+import argparse
+
 from datetime import datetime
 
 import numpy as np
@@ -17,7 +21,7 @@ from astropy import units as u
 
 from tomlkit import comment, document, nl, table, dumps, loads
 
-from ..utils import Environment
+from ..utils import Environment, Logger
 
 from ..traits import (
     trait_docs,
@@ -33,13 +37,19 @@ from ..traits import (
     Tuple,
 )
 
-from ..config import load_config, dump_toml, build_config, create_from_config
+from ..config import (
+    load_config,
+    dump_toml,
+    build_config,
+    create_from_config,
+    parse_config,
+)
 
 from ..instrument import Telescope, Focalplane
 
 from ..schedule_sim_satellite import create_satellite_schedule
 
-from ..ops import SimSatellite, Pipeline, SimNoise, DefaultNoiseModel, Operator
+from .. import ops
 
 from ..templates import Offset, SubHarmonic
 
@@ -49,26 +59,66 @@ from ._helpers import create_outdir, create_comm, create_space_telescope
 
 
 class FakeClass:
-    def __init__(self):
+    def __init__(self, other="blah"):
         self.foo = "bar"
+        self.other = other
 
 
 @trait_docs
-class ConfigOperator(Operator):
+class ConfigOperator(ops.Operator):
     """Dummy class to test all the different trait types."""
 
     # Class traits
     API = Int(0, help="Internal interface version for this operator")
-    unicode_test = Unicode("str", help="String trait")
-    int_test = Int(123456, help="Int trait")
-    float_test = Float(1.2345, help="Float trait")
-    bool_test = Bool(False, help="Bool trait")
-    quantity_test = Quantity(1.2345 * u.second, help="Quantity trait")
-    instance_test = Instance(allow_none=True, klass=FakeClass, help="Instance trait")
-    list_test = List(["foo", "bar", "blat"], help="List trait")
-    dict_test = Dict({"a": "1", "b": "2", "c": "3"}, help="Dict trait")
-    set_test = Set({"a", "b", "c"}, help="Set trait")
-    tuple_test = Tuple(["foo", "bar", "blat"], help="Tuple trait")
+
+    unicode_default = Unicode("str", help="String default")
+    unicode_empty = Unicode("", help="String empty")
+    unicode_none = Unicode(None, allow_none=True, help="String none")
+
+    int_default = Int(123456, help="Int default")
+    int_none = Int(None, allow_none=True, help="Int None")
+
+    float_default = Float(1.2345, help="Float default")
+    float_none = Float(None, allow_none=True, help="Float none")
+
+    bool_default = Bool(False, help="Bool default")
+    bool_none = Bool(None, allow_none=True, help="Bool none")
+
+    quantity_default = Quantity(1.2345 * u.second, help="Quantity default")
+    quantity_none = Quantity(None, allow_none=True, help="Quantity none")
+
+    # NOTE:  Our config system does not currently support Instance traits
+    # with allow_none=False.
+    instance_none = Instance(allow_none=True, klass=FakeClass, help="Instance none")
+
+    list_none = List(None, allow_none=True, help="List none")
+    list_string = List(["foo", "bar", "blat"], help="List string default")
+    list_string_empty = List(["", "", ""], help="List string empty")
+    list_float = List([1.23, 4.56, 7.89], help="List float default")
+    list_mixed = List([None, True, "", "foo", 1.23, 4.56], help="list mixed")
+
+    dict_none = Dict(None, allow_none=True, help="Dict none")
+    dict_string = Dict(
+        {"a": "foo", "b": "bar", "c": "blat"}, help="Dict string default"
+    )
+    dict_string_empty = Dict({"a": "", "b": "", "c": ""}, help="Dict string empty")
+    dict_float = Dict({"a": 1.23, "b": 4.56, "c": 7.89}, help="Dict float default")
+    dict_mixed = Dict(
+        {"a": None, "b": True, "c": "", "d": 4.56, "e": 7.89},
+        help="Dict mixed",
+    )
+
+    set_none = Set(None, allow_none=True, help="Set none")
+    set_string = Set({"a", "b", "c"}, help="Set string default")
+    set_string_empty = Set({"", "", ""}, help="Set string empty")
+    set_float = Set({1.23, 4.56, 7.89}, help="Set float default")
+    set_mixed = Set({None, "", "foo", True, 4.56, 7.89}, help="Set mixed")
+
+    tuple_none = Tuple(None, allow_none=True, help="Tuple string default")
+    tuple_string = Tuple(["foo", "bar", "blat"], help="Tuple string default")
+    tuple_string_empty = Tuple(["", "", ""], help="Tuple string empty")
+    tuple_float = Tuple([1.23, 4.56, 7.89], help="Tuple float")
+    tuple_mixed = Tuple([None, True, "", "foo", 4.56, 7.89], help="Tuple mixed")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -96,43 +146,29 @@ class ConfigTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
         self.toastcomm = create_comm(self.comm)
 
-        env = Environment.get()
-
-        # Create some example configs to load
-
-        ops = [
-            SimSatellite(name="sim_satellite"),
-            DefaultNoiseModel(name="noise_model"),
-            SimNoise(name="sim_noise"),
+    def create_operators(self):
+        oplist = [
+            ops.SimSatellite(
+                name="sim_satellite",
+                hwp_angle="hwp",
+                hwp_rpm=1.0,
+            ),
+            ops.DefaultNoiseModel(name="noise_model"),
+            ops.SimNoise(name="sim_noise"),
+            ops.MemoryCounter(name="mem_count"),
         ]
+        return {x.name: x for x in oplist}
 
-        templates = [Offset(name="baselines"), SubHarmonic(name="subharmonic")]
-
-        objs = list(ops)
-        objs.extend(templates)
-
-        self.doc1_file = os.path.join(self.outdir, "doc1.toml")
-        self.doc2_file = os.path.join(self.outdir, "doc2.toml")
-
-        conf = build_config(objs)
-
-        if self.toastcomm.world_rank == 0:
-            dump_toml(self.doc1_file, conf)
-
-        pipe = Pipeline(name="sim_pipe")
-        pipe.operators = ops
-        conf_pipe = pipe.get_config()
-
-        if self.toastcomm.world_rank == 0:
-            dump_toml(self.doc2_file, conf_pipe)
+    def create_templates(self):
+        tmpls = [Offset(name="baselines"), SubHarmonic(name="subharmonic")]
+        return {x.name: x for x in tmpls}
 
     def test_trait_types(self):
         fake = ConfigOperator(name="fake")
-        fake.instance_test = FakeClass()
 
         fakeconf = fake.get_config()
 
-        fakefile = os.path.join(self.outdir, "fake.toml")
+        fakefile = os.path.join(self.outdir, "types_fake.toml")
         if self.toastcomm.world_rank == 0:
             dump_toml(fakefile, fakeconf)
 
@@ -144,42 +180,112 @@ class ConfigTest(MPITestCase):
 
         run = create_from_config(loadconf)
 
-        self.assertTrue(run.operators.fake.instance_test is None)
-        self.assertTrue(fake.unicode_test == run.operators.fake.unicode_test)
-        self.assertTrue(fake.int_test == run.operators.fake.int_test)
-        self.assertTrue(fake.float_test == run.operators.fake.float_test)
-        self.assertTrue(fake.bool_test == run.operators.fake.bool_test)
-        self.assertTrue(fake.list_test == run.operators.fake.list_test)
-        self.assertTrue(fake.dict_test == run.operators.fake.dict_test)
-        self.assertTrue(fake.quantity_test == run.operators.fake.quantity_test)
-        self.assertTrue(fake.set_test == run.operators.fake.set_test)
-        self.assertTrue(fake.tuple_test == run.operators.fake.tuple_test)
+        self.assertTrue(run.operators.fake == fake)
+
+    def test_config_multi(self):
+        testops = self.create_operators()
+        objs = [y for x, y in testops.items()]
+        defaults = build_config(objs)
+
+        conf_file = os.path.join(self.outdir, "multi_defaults.toml")
+        if self.toastcomm.world_rank == 0:
+            dump_toml(conf_file, defaults)
+
+        # Now change some values
+        testops["mem_count"].prefix = "newpref"
+        testops["mem_count"].enabled = False
+        testops["sim_noise"].serial = False
+        testops["sim_satellite"].hwp_rpm = 8.0
+        testops["sim_satellite"].distribute_time = True
+
+        # Dump this config
+        objs = [y for x, y in testops.items()]
+        conf = build_config(objs)
+        conf2_file = os.path.join(self.outdir, "multi_conf.toml")
+        if self.toastcomm.world_rank == 0:
+            dump_toml(conf2_file, conf)
+
+        # Options for testing
+        arg_opts = [
+            "--mem_count.prefix",
+            "altpref",
+            "--mem_count.enable",
+            "--sim_noise.serial",
+            "--sim_satellite.hwp_rpm",
+            "3.0",
+            "--sim_satellite.no_distribute_time",
+            "--config",
+            conf_file,
+            conf2_file,
+        ]
+
+        parser = argparse.ArgumentParser(description="Test")
+        config, remaining, jobargs = parse_config(
+            parser,
+            operators=[y for x, y in testops.items()],
+            templates=list(),
+            prefix="",
+            opts=arg_opts,
+        )
+
+        # Instantiate
+        run = create_from_config(config)
+        runops = run.operators
+
+        # Check
+        self.assertTrue(runops.mem_count.prefix == "altpref")
+        self.assertTrue(runops.mem_count.enabled == True)
+        self.assertTrue(runops.sim_noise.serial == True)
+        self.assertTrue(runops.sim_satellite.distribute_time == False)
+        self.assertTrue(runops.sim_satellite.hwp_rpm == 3.0)
 
     def test_roundtrip(self):
-        conf = None
-        if self.toastcomm.world_rank == 0:
-            conf = load_config(self.doc2_file)
-        if self.toastcomm.comm_world is not None:
-            conf = self.toastcomm.comm_world.bcast(conf, root=0)
+        testops = self.create_operators()
+        tmpls = self.create_templates()
 
-        check_file = os.path.join(self.outdir, "check.toml")
+        objs = [y for x, y in testops.items()]
+        objs.extend([y for x, y in tmpls.items()])
+        conf = build_config(objs)
+
+        conf_file = os.path.join(self.outdir, "roundtrip_conf.toml")
+        if self.toastcomm.world_rank == 0:
+            dump_toml(conf_file, conf)
+
+        new_conf = None
+        if self.toastcomm.world_rank == 0:
+            new_conf = load_config(conf_file)
+        if self.toastcomm.comm_world is not None:
+            new_conf = self.toastcomm.comm_world.bcast(new_conf, root=0)
+
+        check_file = os.path.join(self.outdir, "roundtrip_check.toml")
         check = None
         if self.toastcomm.world_rank == 0:
-            dump_toml(check_file, conf)
+            dump_toml(check_file, new_conf)
             check = load_config(check_file)
         if self.toastcomm.comm_world is not None:
             check = self.toastcomm.comm_world.bcast(check, root=0)
-        self.assertTrue(conf == check)
+        run = create_from_config(check)
+
+        for opname, op in testops.items():
+            other = getattr(run.operators, opname)
+            self.assertTrue(other == op)
+
+        for tname, tmpl in tmpls.items():
+            other = getattr(run.templates, tname)
+            self.assertTrue(other == tmpl)
 
     def test_run(self):
-        conf = None
+        testops = self.create_operators()
+
+        pipe = ops.Pipeline(name="sim_pipe")
+        pipe.operators = [y for x, y in testops.items()]
+        conf_pipe = pipe.get_config()
+
+        conf_file = os.path.join(self.outdir, "run_conf.toml")
         if self.toastcomm.world_rank == 0:
-            conf = load_config(self.doc2_file)
+            dump_toml(conf_file, conf_pipe)
 
-        if self.toastcomm.comm_world is not None:
-            conf = self.toastcomm.comm_world.bcast(conf, root=0)
-
-        run = create_from_config(conf)
+        run = create_from_config(conf_pipe)
 
         data = Data(self.toastcomm)
 
@@ -193,12 +299,3 @@ class ConfigTest(MPITestCase):
         run.operators.sim_satellite.schedule = sch
 
         run.operators.sim_pipe.apply(data)
-
-        # for obs in data.obs:
-        #     for d in obs.local_detectors:
-        #         print(
-        #             "proc {}, det {}: {}".format(
-        #                 self.toastcomm.world_rank, d, obs.detdata["noise"][d][:5]
-        #             ),
-        #             flush=True,
-        #         )
