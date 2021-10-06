@@ -562,9 +562,10 @@ class SimAtmosphere(Operator):
         freq_min, freq_max = bandpass.get_range()
         n_freq = self.n_bandpass_freqs
         freqs = np.linspace(freq_min, freq_max, n_freq)
-        ntask = 1
-        my_rank = 0
-        if comm is not None:
+        if comm is None:
+            ntask = 1
+            my_rank = 0
+        else:
             ntask = comm.size
             my_rank = comm.rank
         n_freq_task = int(np.ceil(n_freq / ntask))
