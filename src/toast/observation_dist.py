@@ -59,8 +59,6 @@ class DistDetSamp(object):
         process_rows (int):  (Optional) The size of the rectangular process grid
             in the detector direction.  This number must evenly divide into the size of
             comm.  If not specified, defaults to the size of the communicator.
-        verify_detector_sets (bool):  If False, detectors and detector_sets are guaranteed
-            to be consistent so DistDetSamp can skip the potentially expensive check.
 
     """
 
@@ -73,7 +71,6 @@ class DistDetSamp(object):
         detector_sets,
         comm,
         process_rows,
-        verify_detector_sets=False,
     ):
         log = Logger.get()
 
@@ -127,11 +124,12 @@ class DistDetSamp(object):
             # the det sets.
             new_dets = list()
             detsets = list()
+            detectors_set = set(self.detectors)
             if isinstance(self.detector_sets, list):
                 # We have a list of lists
                 for ds in self.detector_sets:
                     for d in ds:
-                        if verify_detector_sets and d not in self.detectors:
+                        if d not in detectors_set:
                             raise RuntimeError(
                                 f"detector {d} in a detset but not in detector list"
                             )
@@ -141,7 +139,7 @@ class DistDetSamp(object):
                 # We have a detector group dictionary
                 for ds in self.detector_sets.values():
                     for d in ds:
-                        if verify_detector_sets and d not in self.detectors:
+                        if d not in detectors_set:
                             raise RuntimeError(
                                 f"detector {d} in a detset but not in detector list"
                             )

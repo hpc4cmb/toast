@@ -157,8 +157,6 @@ class Observation(MutableMapping):
         process_rows (int):  (Optional) The size of the rectangular process grid
             in the detector direction.  This number must evenly divide into the size of
             comm.  If not specified, defaults to the size of the communicator.
-        verify_detector_sets (bool):  If False, detectors and detector_sets are guaranteed
-            to be consistent so DistDetSamp can skip the potentially expensive check.
 
     """
 
@@ -175,7 +173,6 @@ class Observation(MutableMapping):
         detector_sets=None,
         sample_sets=None,
         process_rows=None,
-        verify_detector_sets=False,
     ):
         log = Logger.get()
         self._telescope = telescope
@@ -192,7 +189,6 @@ class Observation(MutableMapping):
             detector_sets,
             comm,
             process_rows,
-            verify_detector_sets=verify_detector_sets,
         )
 
         # The internal metadata dictionary

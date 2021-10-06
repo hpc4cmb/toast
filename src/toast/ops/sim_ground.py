@@ -679,7 +679,6 @@ class SimGround(Operator):
                 detector_sets=detsets,
                 process_rows=det_ranks,
                 sample_sets=sample_sets,
-                verify_detector_sets=False,
             )
 
             # Scan limits
