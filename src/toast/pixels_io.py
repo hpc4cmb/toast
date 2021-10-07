@@ -392,7 +392,7 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
     return
 
 
-def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=False):
+def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, single_precision=False):
     """Write pixel data to a HEALPix format HDF5 dataset.
 
     The data across all processes is assumed to be synchronized (the data for a given
@@ -403,8 +403,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
         path (str): The path to the output FITS file.
         nest (bool): If True, data is in NESTED ordering, else data is in RING.
         comm_bytes (int): The approximate message size to use.
-        report_memory (bool): Report the amount of available memory on the root
-            node just before writing out the map.
+        single_precision (bool): If True, write floats and integers in single precision
 
     Returns:
         None
@@ -447,6 +446,13 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
         header["ORDERING"] = "RING"
     header["NSIDE"] = hp.npix2nside(dist.n_pix)
 
+    dtype = pix.dtype
+    if single_precision:
+        if dtype == np.float64:
+            dtype = np.float32
+        elif dtype == np.int64:
+            dtype = np.int32
+
     try:
 
         # Try opening the file for parallel access.  This will only work
@@ -459,7 +465,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
                 "map",
                 (pix.n_value, dist.n_pix),
                 chunks=(pix.n_value, dist.n_pix_submap),
-                dtype=pix.dtype,
+                dtype=dtype,
             )
             for key, value in header.items():
                 dset.attrs[key] = value
@@ -493,7 +499,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
         else:
             sendbuffer = np.empty(
                 [n_send, pix.n_value, dist.n_pix_submap],
-                dtype=pix.dtype,
+                dtype=dtype,
             )
             offset = 0
             # for submap in dist.owned_submaps:
@@ -511,7 +517,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
                     "map",
                     (pix.n_value, dist.n_pix),
                     chunks=(pix.n_value, dist.n_pix_submap),
-                    dtype=pix.dtype,
+                    dtype=dtype,
                 )
                 for rank_send in range(ntask):
                     # submaps = np.argwhere(dist.submap_owners == rank_send).ravel()
@@ -523,7 +529,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
                         else:
                             recvbuffer = np.empty(
                                 [n_receive, pix.n_value, dist.n_pix_submap],
-                                dtype=pix.dtype,
+                                dtype=dtype,
                             )
                             dist.comm.Recv(recvbuffer, source=rank_send, tag=rank_send)
                     for i, submap in enumerate(submaps):
@@ -598,6 +604,9 @@ def read_healpix(filename, *args, **kwargs):
                 if verbose:
                     print(f"{filename} is already {header['ORDERING']}")
 
+        if "dtype" in kwargs and kwargs["dtype"] is not None:
+            mapdata = mapdata.astype(kwargs["dtype"])
+
         if "h" in kwargs and kwargs["h"] == True:
             result = mapdata, header
         else:
@@ -628,12 +637,16 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
         if "overwrite" in kwargs and kwargs["overwrite"] == True:
             mode = "w"
 
+        dtype = mapdata.dtype
+        if "dtype" in kwargs and kwargs["dtype"] is not None:
+            dtype = kwargs["dtype"]
+
         with h5py.File(filename, mode) as f:
             dset = f.create_dataset(
                 "map",
                 (n_value, n_pix),
                 chunks=(n_value, n_pix_submap),
-                dtype=mapdata.dtype,
+                dtype=dtype,
             )
             dset[:] = mapdata
 

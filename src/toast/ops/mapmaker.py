@@ -807,7 +807,7 @@ class MapMaker(Operator):
                         data[prod_key],
                         fname,
                         nest=map_binning.pixel_pointing.nest,
-                        report_memory=self.report_memory,
+                        single_precision=True,
                     )
                 else:
                     # Standard FITS output
