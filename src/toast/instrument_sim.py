@@ -621,7 +621,11 @@ def fake_hexagon_focalplane(
         det_table[idet]["psd_alpha"] = psd_alpha
         det_table[idet]["psd_net"] = psd_net
 
-    return Focalplane(detector_data=det_table, sample_rate=sample_rate)
+    return Focalplane(
+        detector_data=det_table,
+        sample_rate=sample_rate,
+        field_of_view=(width + 2.1 * fwhm),
+    )
 
 
 def plot_focalplane(

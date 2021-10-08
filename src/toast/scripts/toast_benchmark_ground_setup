@@ -93,7 +93,7 @@ def parse_arguments():
 
     # Focal plane- we will use a dummy focalplane with just 2 detectors.
     args.sample_rate = 1.0  # sample_rate is nb sample per second.
-    args.width = 10.1
+    args.width = 10.0
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
 
