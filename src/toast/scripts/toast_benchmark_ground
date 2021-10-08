@@ -29,6 +29,7 @@ from toast.scripts.benchmarking_utilities import (
     compute_science_metric,
     estimate_memory_overhead,
     python_startup_time,
+    default_sim_atmosphere,
 )
 
 if t3g.available:
@@ -42,6 +43,13 @@ def parse_arguments():
     # defines the parameters of the script
     parser = argparse.ArgumentParser(
         description="Run a TOAST ground workflow scaled appropriately to the MPI communicator size and available memory."
+    )
+    parser.add_argument(
+        "--input_dir",
+        required=False,
+        default="toast_benchmark_ground_inputs",
+        type=str,
+        help="The output directory",
     )
     parser.add_argument(
         "--out_dir",
@@ -82,13 +90,6 @@ def parse_arguments():
         help="Size of the worflow to be run: 'tiny' (1GB), 'xsmall' (10GB), 'small' (100GB), 'medium' (1TB), 'large' (10TB), 'xlarge' (100TB), 'heroic' (1000TB) or 'auto' (deduced from MPI parameters).",
     )
     parser.add_argument(
-        "--print_input_map",
-        required=False,
-        default=False,
-        type=bool,
-        help="Should the healpy input map be exported as a PNG for debugging purposes.",
-    )
-    parser.add_argument(
         "--save_spt3g",
         required=False,
         default=False,
@@ -121,23 +122,7 @@ def parse_arguments():
         ),
         toast.ops.ScanHealpix(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
-        toast.ops.SimAtmosphere(
-            name="sim_atmosphere",
-            lmin_center=0.001 * u.meter,
-            lmin_sigma=0.0 * u.meter,
-            lmax_center=1.0 * u.meter,
-            lmax_sigma=0.0 * u.meter,
-            gain=1.0e-4,
-            zatm=40000 * u.meter,
-            zmax=200 * u.meter,
-            xstep=5 * u.meter,
-            ystep=5 * u.meter,
-            zstep=5 * u.meter,
-            nelem_sim_max=10000,
-            wind_dist=3000 * u.meter,
-            z0_center=2000 * u.meter,
-            z0_sigma=0 * u.meter,
-        ),
+        default_sim_atmosphere(),
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, tau=5 * u.ms
         ),
@@ -195,30 +180,6 @@ def parse_arguments():
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
 
-    # schedule, site and telescope parameters
-    args.telescope_name = "LAT"
-    args.site_name = "atacama"
-    args.site_lon = " -67:47:10"
-    args.site_lat = " -22:57:30"
-    args.site_alt = 5200.0 * u.meter
-    args.patch_coord = "C"
-    args.el_min = 30.0
-    args.el_max = 70.0
-    args.sun_el_max = 90.0
-    args.sun_avoidance_angle = 0.0
-    args.moon_avoidance_angle = 0.0
-    args.gap_s = 60.0
-    args.gap_small_s = 0.0
-    args.ces_max_time = 1200.0
-    args.boresight_angle_step = 180.0
-    args.boresight_angle_time = 1440.0
-    args.schedule_patches = [
-        "RISING_SCAN_35,HORIZONTAL,1.00,30.00,150.00,35.00,1500",
-        "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
-    ]
-    args.schedule_start = "2027-01-01 00:00:00"
-    args.schedule_stop = "2027-12-31 00:00:00"
-
     # scan map
     args.nside = 4096
     args.input_map = f"fake_input_sky_nside{args.nside}.fits"
@@ -226,64 +187,18 @@ def parse_arguments():
     return config, args, jobargs
 
 
-def make_schedule(args, world_comm, site):
+def load_schedule(args, world_comm):
     """
     Creates a ground schedule
     """
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
-        schedule_file = "ground_bench_schedule.txt"
-        output_schedule = os.path.join(args.out_dir, "ground_bench_schedule.txt")
+        schedule_file = os.path.join(args.input_dir, "ground_bench_schedule.txt")
         if not os.path.exists(schedule_file):
-            # Building the schedule is serial and takes a while, only generate it
-            # if needed.
-            sch_opts = [
-                "--site-name",
-                args.site_name,
-                "--telescope",
-                args.telescope_name,
-                "--site-lon",
-                f"{site.earthloc.lon.to_value(u.degree)}",
-                "--site-lat",
-                f"{site.earthloc.lat.to_value(u.degree)}",
-                "--site-alt",
-                f"{site.earthloc.height.to_value(u.meter)}",
-                "--patch-coord",
-                args.patch_coord,
-                "--el-min",
-                f"{args.el_min}",
-                "--el-max",
-                f"{args.el_max}",
-                "--sun-el-max",
-                f"{args.sun_el_max}",
-                "--sun-avoidance-angle",
-                f"{args.sun_avoidance_angle}",
-                "--moon-avoidance-angle",
-                f"{args.moon_avoidance_angle}",
-                "--gap-s",
-                f"{args.gap_s}",
-                "--gap-small-s",
-                f"{args.gap_small_s}",
-                "--ces-max-time",
-                f"{args.ces_max_time}",
-                "--boresight-angle-step",
-                f"{args.boresight_angle_step}",
-                "--boresight-angle-time",
-                f"{args.boresight_angle_time}",
-                "--start",
-                args.schedule_start,
-                "--stop",
-                args.schedule_stop,
-                "--out",
-                schedule_file,
-            ]
-            for patch in args.schedule_patches:
-                sch_opts.extend(["--patch", patch])
-            run_scheduler(opts=sch_opts)
-        # Copy the schedule into the output directory for reference
-        shutil.copy(schedule_file, output_schedule)
+            msg = f"Schedule file {schedule_file} does not exist- did you run toast_benchmark_ground_setup?"
+            raise RuntimeError(msg)
         schedule = toast.schedule.GroundSchedule()
-        schedule.read(output_schedule)
+        schedule.read(schedule_file)
     if world_comm is not None:
         schedule = world_comm.bcast(schedule, root=0)
     args.schedule = schedule
@@ -387,7 +302,18 @@ def main():
     )
 
     # Create the schedule, so that we know the total observing time.
-    make_schedule(args, world_comm, site)
+    load_schedule(args, world_comm)
+
+    # Check that we have the atmosphere cache directory set up.
+    atm_cache = os.path.join(args.input_dir, "atmosphere")
+    if job_ops.sim_atmosphere.enabled:
+        if job_ops.sim_atmosphere.cache_dir is None:
+            job_ops.sim_atmosphere.cache_dir = atm_cache
+        if rank == 0:
+            if not os.path.isdir(job_ops.sim_atmosphere.cache_dir):
+                msg = f"Atmosphere cache {job_ops.sim_atmosphere.cache_dir} does "
+                msg += "not exist- did you run toast_benchmark_ground_setup?"
+                raise RuntimeError(msg)
 
     # Estimate per-process memory use from map domain objects and
     # other sources.

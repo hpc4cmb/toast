@@ -154,7 +154,7 @@ def select_distribution(
     per_process_overhead_bytes,
     max_samples=None,
     max_memory_bytes=None,
-    target_proc_dets=20,
+    target_proc_dets=100,
     force_group_nodes=None,
 ):
     """Choose a group size that load balances across both detectors and observations.
@@ -694,6 +694,27 @@ def scan_map(args, rank, job_ops, data, log):
         job_ops.scan_map.save_pointing = job_ops.binner_final.full_pointing
         job_ops.scan_map.file = args.input_map
         job_ops.scan_map.apply(data)
+
+
+def default_sim_atmosphere():
+    """Return a SimAtmosphere operator with fixed defaults."""
+    return toast.ops.SimAtmosphere(
+        name="sim_atmosphere",
+        lmin_center=0.001 * u.meter,
+        lmin_sigma=0.0 * u.meter,
+        lmax_center=1.0 * u.meter,
+        lmax_sigma=0.0 * u.meter,
+        gain=1.0e-4,
+        zatm=40000 * u.meter,
+        zmax=200 * u.meter,
+        xstep=5 * u.meter,
+        ystep=5 * u.meter,
+        zstep=5 * u.meter,
+        nelem_sim_max=10000,
+        wind_dist=3000 * u.meter,
+        z0_center=2000 * u.meter,
+        z0_sigma=0 * u.meter,
+    )
 
 
 def run_mapmaker(job_ops, args, tmpls, data):
