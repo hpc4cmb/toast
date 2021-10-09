@@ -323,6 +323,11 @@ def main():
     nside_final = None
     if job_ops.pixels_final.enabled:
         nside_final = job_ops.pixels_final.nside
+
+    # The maximum number of seconds in any scan
+    ces_max_time = np.max(
+        [(x.stop - x.start).total_seconds() for x in args.schedule.scans]
+    )
     overhead_bytes = estimate_memory_overhead(
         n_procs,
         n_nodes,
@@ -331,7 +336,7 @@ def main():
         world_comm,
         nside_final=nside_final,
         sim_atmosphere=job_ops.sim_atmosphere,
-        ces_max_time=args.ces_max_time,
+        ces_max_time=ces_max_time,
         fov=args.width,
     )
 
