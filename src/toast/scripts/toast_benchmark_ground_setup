@@ -246,8 +246,8 @@ def main():
 
     # Create the input sky map
     map_file = os.path.join(args.work_dir, args.input_map)
-    if os.path.isfile(map_file) and args.overwrite:
-        if rank == 0:
+    if rank == 0:
+        if os.path.isfile(map_file) and args.overwrite:
             os.remove(map_file)
     create_input_maps(
         map_file,
@@ -300,8 +300,14 @@ def main():
     job_ops.weights.detector_pointing = job_ops.det_pointing_radec
 
     # Simulate atmosphere signal
+    cache_dir = os.path.join(args.work_dir, "atmosphere")
+    if rank == 0:
+        if os.path.isdir(cache_dir) and args.overwrite:
+            os.shutil.rmtree(cache_dir)
+    if world_comm is not None:
+        world_comm.barrier()
     job_ops.sim_atmosphere.detector_pointing = job_ops.det_pointing_azel
-    job_ops.sim_atmosphere.cache_dir = os.path.join(args.work_dir, "atmosphere")
+    job_ops.sim_atmosphere.cache_dir = cache_dir
     job_ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated atmosphere in", comm=world_comm, timer=timer)
 
