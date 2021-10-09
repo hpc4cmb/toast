@@ -296,13 +296,16 @@ def main():
         outlog = os.path.join(args.out_dir, "config_log.toml")
         toast.config.dump_toml(outlog, config)
 
+    # Load the schedule, so that we know the total observing time.
+    load_schedule(args, world_comm)
+
     # Observing site
     site = toast.instrument.GroundSite(
-        args.site_name, args.site_lat, args.site_lon, args.site_alt
+        args.schedule.site_name,
+        args.schedule.site_lat,
+        args.schedule.site_lon,
+        args.schedule.site_alt,
     )
-
-    # Create the schedule, so that we know the total observing time.
-    load_schedule(args, world_comm)
 
     # Check that we have the atmosphere cache directory set up.
     atm_cache = os.path.join(args.input_dir, "atmosphere")
@@ -356,7 +359,7 @@ def main():
 
     # Create a telescope for the simulation.
     telescope = toast.instrument.Telescope(
-        args.telescope_name, focalplane=focalplane, site=site
+        args.schedule.telescope_name, focalplane=focalplane, site=site
     )
 
     # Create the toast communicator
