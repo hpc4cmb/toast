@@ -270,10 +270,9 @@ void toast::tod_sim_noise_timestream_batch(
 
     #pragma omp parallel for default(shared) schedule(static)
     for (int64_t idet = 0; idet < ndet; ++idet) {
-        int64_t offset_fft = idet * fftlen;
         int64_t offset_psd = idet * npsd;
 
-        double * pdata = plan->fdata(0) + offset_fft;
+        double * pdata = plan->fdata(idet);
 
         // Gaussian Re/Im randoms, packed into a half-complex array
         uint64_t key1 = realization * 4294967296 + telescope * 65536 + component;
@@ -298,9 +297,9 @@ void toast::tod_sim_noise_timestream_batch(
 
     // Copy data to output
     for (int64_t idet = 0; idet < ndet; ++idet) {
-        int64_t offset = idet * fftlen + (fftlen - samples) / 2;
+        int64_t offset = (fftlen - samples) / 2;
         int64_t offset_nse = idet * samples;
-        double * pdata = plan->tdata(0) + offset;
+        double * pdata = plan->tdata(idet) + offset;
         std::copy(pdata, (pdata + samples), &(noise[offset_nse]));
 
         // subtract the DC level
