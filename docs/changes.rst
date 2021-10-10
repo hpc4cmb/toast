@@ -3,6 +3,13 @@
 Change Log
 -------------------------
 
+2.3.14 (2021-10-10)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Update pybind11 to 2.7.1 to fix conda-forge builds (PR `#490`_).
+
+.. _`#490`: https://github.com/hpc4cmb/toast/pull/490
+
 2.3.13 (2021-09-29)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
