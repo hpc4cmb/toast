@@ -13,12 +13,20 @@ import os
 import sys
 import shutil
 import argparse
+
+import numpy as np
+
 from astropy import units as u
+
 import toast
 import toast.ops
+
 from toast import spt3g as t3g
+
 from toast.schedule_sim_ground import run_scheduler
+
 from toast.timing import gather_timers, dump
+
 from toast.scripts.benchmarking_utilities import (
     get_mpi_settings,
     select_case,
@@ -182,7 +190,6 @@ def parse_arguments():
 
     # scan map
     args.nside = 4096
-    args.input_map = f"fake_input_sky_nside{args.nside}.fits"
 
     return config, args, jobargs
 
@@ -432,6 +439,11 @@ def main():
     job_ops.mem_count.apply(data)
 
     # Simulate sky signal from a map.
+    args.input_map = os.path.join(
+        args.input_dir,
+        f"fake_input_sky_nside{args.nside}.fits"
+    )
+    args.print_input_map = False
     scan_map(args, rank, job_ops, data, log)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
