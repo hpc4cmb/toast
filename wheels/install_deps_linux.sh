@@ -7,6 +7,8 @@
 # bundled with our compiled extension.
 #
 
+set -e
+
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
 topdir=$(pwd)
@@ -16,8 +18,21 @@ popd >/dev/null 2>&1
 
 yum -y install xz
 
+# Install MPICH
+
+yum -y install mpich-devel mpich-autoload
+
+# Pick up mpich changes
+
+. /etc/profile
+
 # Get newer cmake with pip
+
 pip install cmake
+
+# Install mpi4py
+
+pip install mpi4py
 
 # Build options
 
@@ -33,37 +48,9 @@ MAKEJ=2
 
 PREFIX=/usr
 
-# Install MPICH
-
-mpich_version=3.2
-mpich_dir=mpich-${mpich_version}
-mpich_pkg=${mpich_dir}.tar.gz
-
-echo "Fetching MPICH..."
-
-if [ ! -e ${mpich_pkg} ]; then
-    curl -SL http://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
-fi
-
-echo "Building MPICH..."
-
-rm -rf ${mpich_dir}
-tar xzf ${mpich_pkg} \
-    && pushd ${mpich_dir} >/dev/null 2>&1 \
-    && CC="${CC}" CXX="${CXX}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
-    ./configure --disable-fortran --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install \
-    && popd >/dev/null 2>&1
-
-# Install mpi4py
-
-pip install mpi4py
-
 # libgmp
 
-gmp_version=6.2.0
+gmp_version=6.2.1
 gmp_dir=gmp-${gmp_version}
 gmp_pkg=${gmp_dir}.tar.xz
 
@@ -118,7 +105,7 @@ tar xf ${mpfr_pkg} \
 
 # Install Openblas
 
-openblas_version=0.3.10
+openblas_version=0.3.13
 openblas_dir=OpenBLAS-${openblas_version}
 openblas_pkg=${openblas_dir}.tar.gz
 
@@ -135,15 +122,16 @@ tar xzf ${openblas_pkg} \
     && pushd ${openblas_dir} >/dev/null 2>&1 \
     && make USE_OPENMP=1 NO_SHARED=1 \
     MAKE_NB_JOBS=${MAKEJ} \
-    CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 \
+    CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
     COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
     LDFLAGS="-fopenmp -lm" \
-    && make NO_SHARED=1 PREFIX="${PREFIX}" install \
+    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC \
+    PREFIX="${PREFIX}" install \
     && popd >/dev/null 2>&1
 
 # Install FFTW
 
-fftw_version=3.3.8
+fftw_version=3.3.10
 fftw_dir=fftw-${fftw_version}
 fftw_pkg=${fftw_dir}.tar.gz
 
@@ -201,7 +189,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.8.1
+ssparse_version=5.10.1
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
