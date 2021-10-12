@@ -154,7 +154,7 @@ def select_distribution(
     per_process_overhead_bytes,
     max_samples=None,
     max_memory_bytes=None,
-    target_proc_dets=100,
+    target_proc_dets=20,
     force_group_nodes=None,
 ):
     """Choose a group size that load balances across both detectors and observations.
@@ -357,7 +357,7 @@ def select_case(
     full_pointing,
     world_comm,
     per_process_overhead_bytes=1024 ** 3,
-    target_proc_dets=20,
+    target_proc_dets=50,
 ):
     """
     Selects the most appropriate case size given the memory available and number of
