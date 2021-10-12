@@ -28,7 +28,7 @@ from ..utils import Environment, Logger, Timer
 
 from .._libtoast import bin_templates, add_templates, legendre
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 
 @trait_docs
@@ -40,7 +40,7 @@ class GroundFilter(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key for accumulating atmosphere timestreams",
     )
 
@@ -49,27 +49,36 @@ class GroundFilter(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+    )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     ground_flag_mask = Int(
-        1, help="Bit mask to use when adding flags based on ground filter failures."
+        defaults.det_mask_invalid,
+        help="Bit mask to use when adding flags based on ground filter failures.",
     )
 
     azimuth = Unicode(
-        obs_names.azimuth, allow_none=True, help="Observation shared key for Azimuth"
+        defaults.azimuth, allow_none=True, help="Observation shared key for Azimuth"
     )
 
     boresight_azel = Unicode(
-        obs_names.boresight_azel,
+        defaults.boresight_azel,
         allow_none=True,
         help="Observation shared key for boresight Az/El",
     )

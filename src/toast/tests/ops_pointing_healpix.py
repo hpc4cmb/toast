@@ -12,7 +12,7 @@ from .. import qarray as qa
 from .._libtoast import healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
 from ..intervals import Interval, IntervalList
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
@@ -236,7 +236,7 @@ class PointingHealpixTest(MPITestCase):
         detpointing = ops.PointingDetectorSimple()
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -260,7 +260,7 @@ class PointingHealpixTest(MPITestCase):
         full_intervals = "full_intervals"
         half_intervals = "half_intervals"
         for obs in data.obs:
-            times = obs.shared[obs_names.times]
+            times = obs.shared[defaults.times]
             nsample = len(times)
             intervals1 = [
                 Interval(

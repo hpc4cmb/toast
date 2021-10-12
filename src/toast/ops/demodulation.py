@@ -19,7 +19,7 @@ from ..intervals import IntervalList
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..noise import Noise
 from ..observation import Observation
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Dict, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, name_UID
@@ -67,40 +67,44 @@ class Demodulate(Operator):
     )
 
     times = Unicode(
-        obs_names.times,
+        defaults.times,
         help="Observation shared key for timestamps",
     )
 
-    hwp_angle = Unicode(
-        obs_names.hwp_angle, help="Observation shared key for HWP angle"
-    )
+    hwp_angle = Unicode(defaults.hwp_angle, help="Observation shared key for HWP angle")
 
     boresight = Unicode(
-        obs_names.boresight_radec, help="Observation shared key for boresight"
+        defaults.boresight_radec, help="Observation shared key for boresight"
     )
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key apply filtering to",
     )
 
     det_flags = Unicode(
-        obs_names.det_flags,
+        defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
-    demod_flag_mask = Int(1, help="Bit mask value for demod & downsample flagging")
+    demod_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for demod & downsample flagging"
+    )
 
     shared_flags = Unicode(
-        obs_names.shared_flags,
+        defaults.shared_flags,
         allow_none=True,
         help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(1, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+    )
 
     noise_model = Unicode(
         "noise_model",
@@ -609,7 +613,7 @@ class StokesWeightsDemod(Operator):
     )
 
     weights = Unicode(
-        obs_names.weights, help="Observation detdata key for output weights"
+        defaults.weights, help="Observation detdata key for output weights"
     )
 
     single_precision = Bool(False, help="If True, use 32bit float in output")

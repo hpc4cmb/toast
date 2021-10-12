@@ -48,7 +48,7 @@ from ..coordinates import azel_to_radec
 
 from ..healpix import ang2vec
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .operator import Operator
 
@@ -154,20 +154,20 @@ class SimGround(Operator):
         help="If specified, use this column of the focalplane detector_data to group detectors",
     )
 
-    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     shared_flags = Unicode(
-        obs_names.shared_flags, help="Observation shared key for common flags"
+        defaults.shared_flags, help="Observation shared key for common flags"
     )
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         allow_none=True,
         help="Observation detdata key to initialize",
     )
 
     det_flags = Unicode(
-        obs_names.det_flags,
+        defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to initialize",
     )
@@ -176,23 +176,21 @@ class SimGround(Operator):
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
 
-    azimuth = Unicode(obs_names.azimuth, help="Observation shared key for Azimuth")
+    azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
 
-    elevation = Unicode(
-        obs_names.elevation, help="Observation shared key for Elevation"
-    )
+    elevation = Unicode(defaults.elevation, help="Observation shared key for Elevation")
 
     boresight_azel = Unicode(
-        obs_names.boresight_azel, help="Observation shared key for boresight AZ/EL"
+        defaults.boresight_azel, help="Observation shared key for boresight AZ/EL"
     )
 
     boresight_radec = Unicode(
-        obs_names.boresight_radec, help="Observation shared key for boresight RA/DEC"
+        defaults.boresight_radec, help="Observation shared key for boresight RA/DEC"
     )
 
-    position = Unicode(obs_names.position, help="Observation shared key for position")
+    position = Unicode(defaults.position, help="Observation shared key for position")
 
-    velocity = Unicode(obs_names.velocity, help="Observation shared key for velocity")
+    velocity = Unicode(defaults.velocity, help="Observation shared key for velocity")
 
     hwp_rpm = Float(None, allow_none=True, help="The rate (in RPM) of the HWP rotation")
 
@@ -874,14 +872,14 @@ class SimGround(Operator):
             shared_flags=self.shared_flags,
             shared_flag_bytes=1,
             view_mask=[
-                (self.turnaround_interval, 1),
-                (self.scan_leftright_interval, 2),
-                (self.scan_rightleft_interval, 4),
-                (self.turn_leftright_interval, 3),
-                (self.turn_rightleft_interval, 5),
-                (self.sun_up_interval, 8),
-                (self.sun_close_interval, 16),
-                (self.elnod_interval, 32),
+                (self.turnaround_interval, defaults.turnaround),
+                (self.scan_leftright_interval, defaults.scan_leftright),
+                (self.scan_rightleft_interval, defaults.scan_rightleft),
+                (self.turn_leftright_interval, defaults.scan_leftright),
+                (self.turn_rightleft_interval, defaults.scan_leftright),
+                (self.sun_up_interval, defaults.sun_up),
+                (self.sun_close_interval, defaults.sun_close),
+                (self.elnod_interval, defaults.elnod),
             ],
         )
         flag_intervals.apply(data, detectors=None)

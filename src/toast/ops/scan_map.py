@@ -14,7 +14,7 @@ from ..timing import function_timer
 
 from ..pixels import PixelDistribution, PixelData
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .._libtoast import scan_map_float64, scan_map_float32
 
@@ -36,17 +36,17 @@ class ScanMap(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key for the timestream data"
+        defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    pixels = Unicode(obs_names.pixels, help="Observation detdata key for pixel indices")
+    pixels = Unicode(defaults.pixels, help="Observation detdata key for pixel indices")
 
     weights = Unicode(
-        obs_names.weights, help="Observation detdata key for Stokes weights"
+        defaults.weights, help="Observation detdata key for Stokes weights"
     )
 
     map_key = Unicode(
@@ -332,10 +332,10 @@ class ScanScale(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    pixels = Unicode(obs_names.pixels, help="Observation detdata key for pixel indices")
+    pixels = Unicode(defaults.pixels, help="Observation detdata key for pixel indices")
 
     weights = Unicode(
-        obs_names.weights, help="Observation detdata key for Stokes weights"
+        defaults.weights, help="Observation detdata key for Stokes weights"
     )
 
     map_key = Unicode(

@@ -18,7 +18,7 @@ from .. import qarray as qa
 
 from ..pixels import PixelDistribution
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .._libtoast import stokes_weights
 
@@ -78,7 +78,7 @@ class StokesWeights(Operator):
     )
 
     weights = Unicode(
-        obs_names.weights, help="Observation detdata key for output weights"
+        defaults.weights, help="Observation detdata key for output weights"
     )
 
     quats = Unicode(

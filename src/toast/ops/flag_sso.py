@@ -30,7 +30,7 @@ from .pipeline import Pipeline
 
 from ..utils import Environment, Logger, Timer
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..coordinates import to_DJD
 
@@ -43,7 +43,7 @@ class FlagSSO(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
@@ -56,12 +56,11 @@ class FlagSSO(Operator):
     )
 
     det_flags = Unicode(
-        obs_names.det_flags,
-        allow_none=True,
+        defaults.det_flags,
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(1, help="Bit mask to raise flags with")
+    det_flag_mask = Int(defaults.det_mask_sso, help="Bit mask to raise flags with")
 
     sso_names = List(
         # default_value=["Sun", "Moon"],

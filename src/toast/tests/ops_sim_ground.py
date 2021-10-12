@@ -19,7 +19,7 @@ from ..mpi import Comm, MPI
 
 from ..data import Data
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..instrument import Focalplane, Telescope, GroundSite
 
@@ -103,7 +103,7 @@ class SimGroundTest(MPITestCase):
             name="sim_ground",
             telescope=tele,
             schedule=schedule,
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             hwp_rpm=1.0,
             max_pwv=5 * u.mm,
         )
@@ -135,7 +135,7 @@ class SimGroundTest(MPITestCase):
 
         # Simulate noise and accumulate to signal
         sim_noise = ops.SimNoise(
-            noise_model=el_model.out_model, det_data=obs_names.det_data
+            noise_model=el_model.out_model, det_data=defaults.det_data
         )
         sim_noise.apply(data)
 

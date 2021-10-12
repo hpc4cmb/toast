@@ -13,7 +13,7 @@ from astropy.table import Column
 
 from .. import ops as ops
 from ..noise import Noise
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io import write_healpix_fits
 from ..vis import set_matplotlib_backend
@@ -42,7 +42,7 @@ class FilterBinTest(MPITestCase):
         )
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
 
@@ -51,7 +51,7 @@ class FilterBinTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise from this model
-        sim_noise = ops.SimNoise(noise_model="noise_model", out=obs_names.det_data)
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
 
         # Make fake flags
@@ -65,18 +65,18 @@ class FilterBinTest(MPITestCase):
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="allreduce",
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
-            det_flags=obs_names.det_flags,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
-            det_data=obs_names.det_data,
-            det_flags=obs_names.det_flags,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
             binning=binning,
             ground_filter_order=5,
@@ -124,7 +124,7 @@ class FilterBinTest(MPITestCase):
 
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -149,7 +149,7 @@ class FilterBinTest(MPITestCase):
         # Scan map into timestreams
         scan_hpix = ops.ScanHealpix(
             file=input_map_file,
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
         )
@@ -159,23 +159,23 @@ class FilterBinTest(MPITestCase):
         binning = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance="covariance",
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="allreduce",
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
-            det_flags=obs_names.det_flags,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
-            det_data=obs_names.det_data,
-            det_flags=obs_names.det_flags,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
             binning=binning,
             ground_filter_order=5,
@@ -250,7 +250,7 @@ class FilterBinTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -275,7 +275,7 @@ class FilterBinTest(MPITestCase):
         # Scan map into timestreams
         scan_hpix = ops.ScanHealpix(
             file=input_map_file,
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
         )
@@ -286,23 +286,23 @@ class FilterBinTest(MPITestCase):
         binning = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance="covariance",
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="allreduce",
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
-            det_flags=obs_names.det_flags,
+            det_flags=defaults.det_flags,
             det_flag_mask=0,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin_flagged",
-            det_data=obs_names.det_data,
-            det_flags=obs_names.det_flags,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
             binning=binning,
             ground_filter_order=5,
@@ -377,7 +377,7 @@ class FilterBinTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -399,36 +399,36 @@ class FilterBinTest(MPITestCase):
         # Scan map into timestreams
         scan_hpix = ops.ScanHealpix(
             file=input_map_file,
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
         )
         scan_hpix.apply(data)
 
         # Copy the signal
-        ops.Copy(detdata=[(obs_names.det_data, "signal_copy")]).apply(data)
+        ops.Copy(detdata=[(defaults.det_data, "signal_copy")]).apply(data)
 
         # Configure and apply the filterbin operator
         binning = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance="covariance",
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="allreduce",
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
-            det_flags=obs_names.det_flags,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
-            det_data=obs_names.det_data,
-            det_flags=obs_names.det_flags,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
             binning=binning,
             ground_filter_order=5,

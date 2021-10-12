@@ -33,7 +33,7 @@ from ..schedule_sim_satellite import create_satellite_schedule
 from ..schedule_sim_ground import run_scheduler
 
 from ..observation import DetectorData, Observation
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..pixels import PixelData
 
@@ -215,7 +215,7 @@ def create_satellite_data(
         name="sim_sat",
         telescope=tele,
         schedule=sch,
-        hwp_angle=obs_names.hwp_angle,
+        hwp_angle=defaults.hwp_angle,
         hwp_rpm=10.0,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
@@ -292,7 +292,7 @@ def create_satellite_data_big(
         name="sim_sat",
         telescope=tele,
         schedule=sch,
-        hwp_angle=obs_names.hwp_angle,
+        hwp_angle=defaults.hwp_angle,
         hwp_rpm=10.0,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
@@ -342,31 +342,31 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         # Create shared objects for timestamps, common flags, boresight, position,
         # and velocity.
         ob.shared.create(
-            obs_names.times,
+            defaults.times,
             shape=(ob.n_local_samples,),
             dtype=np.float64,
             comm=ob.comm_col,
         )
         ob.shared.create(
-            obs_names.shared_flags,
+            defaults.shared_flags,
             shape=(ob.n_local_samples,),
             dtype=np.uint8,
             comm=ob.comm_col,
         )
         ob.shared.create(
-            obs_names.position,
+            defaults.position,
             shape=(ob.n_local_samples, 3),
             dtype=np.float64,
             comm=ob.comm_col,
         )
         ob.shared.create(
-            obs_names.velocity,
+            defaults.velocity,
             shape=(ob.n_local_samples, 3),
             dtype=np.float64,
             comm=ob.comm_col,
         )
         ob.shared.create(
-            obs_names.boresight_radec,
+            defaults.boresight_radec,
             shape=(ob.n_local_samples, 4),
             dtype=np.float64,
             comm=ob.comm_col,
@@ -418,10 +418,10 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
             # build the normalized quaternion
             boresight = qa.norm(np.concatenate((v, s), axis=1))
 
-        ob.shared[obs_names.times].set(stamps, offset=(0,), fromrank=0)
-        ob.shared[obs_names.position].set(position, offset=(0, 0), fromrank=0)
-        ob.shared[obs_names.velocity].set(velocity, offset=(0, 0), fromrank=0)
-        ob.shared[obs_names.boresight_radec].set(boresight, offset=(0, 0), fromrank=0)
+        ob.shared[defaults.times].set(stamps, offset=(0,), fromrank=0)
+        ob.shared[defaults.position].set(position, offset=(0, 0), fromrank=0)
+        ob.shared[defaults.velocity].set(velocity, offset=(0, 0), fromrank=0)
+        ob.shared[defaults.boresight_radec].set(boresight, offset=(0, 0), fromrank=0)
 
         data.obs.append(ob)
     return data
@@ -560,9 +560,9 @@ def create_fake_beam_alm(
 
 def fake_flags(
     data,
-    shared_name=obs_names.shared_flags,
+    shared_name=defaults.shared_flags,
     shared_val=1,
-    det_name=obs_names.det_flags,
+    det_name=defaults.det_flags,
     det_val=1,
 ):
     """Create fake flags.
@@ -663,7 +663,7 @@ def create_ground_data(
         name="sim_ground",
         telescope=tele,
         schedule=schedule,
-        hwp_angle=obs_names.hwp_angle,
+        hwp_angle=defaults.hwp_angle,
         hwp_rpm=120.0,
         weather="atacama",
         detset_key="pixel",

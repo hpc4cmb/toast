@@ -20,7 +20,7 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..pixels_io import write_healpix_fits, write_healpix_hdf5
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .operator import Operator
 
@@ -88,7 +88,7 @@ class MapMaker(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key for the timestream data"
+        defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
     convergence = Float(1.0e-12, help="Relative convergence limit")

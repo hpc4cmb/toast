@@ -20,7 +20,7 @@ from .._libtoast import (
     legendre,
 )
 from ..mpi import MPI
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io import (
     read_healpix_fits,
@@ -138,24 +138,29 @@ class FilterBin(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key for the timestream data"
+        defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
     det_flags = Unicode(
-        obs_names.det_flags,
+        defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(255, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     shared_flags = Unicode(
-        obs_names.shared_flags,
+        defaults.shared_flags,
         allow_none=True,
         help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(1, help="Bit mask value for optional telescope flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Bit mask value for optional telescope flagging",
+    )
 
     deproject_map = Unicode(
         None,
@@ -183,7 +188,7 @@ class FilterBin(Operator):
     )
 
     azimuth = Unicode(
-        obs_names.azimuth, allow_none=True, help="Observation shared key for Azimuth"
+        defaults.azimuth, allow_none=True, help="Observation shared key for Azimuth"
     )
 
     ground_filter_order = Int(
@@ -196,9 +201,13 @@ class FilterBin(Operator):
         False, help="Apply a different template for left and right scans"
     )
 
-    leftright_mask = Int(2, help="Bit mask value left-to-right scans")
+    leftright_mask = Int(
+        defaults.scan_leftright, help="Bit mask value left-to-right scans"
+    )
 
-    rightleft_mask = Int(4, help="Bit mask value left-to-right scans")
+    rightleft_mask = Int(
+        defaults.scan_rightleft, help="Bit mask value left-to-right scans"
+    )
 
     poly_filter_order = Int(1, allow_none=True, help="Polynomial order")
 

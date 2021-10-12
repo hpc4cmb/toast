@@ -608,7 +608,8 @@ def main():
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
         toast.ops.FilterBin(
-            name="filterbin", enabled=False,
+            name="filterbin",
+            enabled=False,
         ),
         toast.ops.MemoryCounter(name="mem_count", enabled=False),
     ]

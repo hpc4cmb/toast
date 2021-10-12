@@ -32,7 +32,7 @@ from .pipeline import Pipeline
 
 from ..utils import Environment, Logger, Timer
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..coordinates import to_DJD
 
@@ -50,7 +50,7 @@ class SimScanSynchronousSignal(Operator):
     component = Int(663056, help="The simulation component index")
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key for accumulating simulated timestreams",
     )
 

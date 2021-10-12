@@ -18,7 +18,7 @@ from .. import qarray as qa
 
 from .. import ops as ops
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..pixels_io import write_healpix_fits
 
@@ -40,7 +40,7 @@ class SSSTest(MPITestCase):
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight=obs_names.boresight_azel, quats="quats_azel"
+            boresight=defaults.boresight_azel, quats="quats_azel"
         )
 
         # Simulate

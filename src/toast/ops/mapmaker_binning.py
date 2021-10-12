@@ -16,7 +16,7 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..covariance import covariance_apply
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .operator import Operator
 
@@ -62,20 +62,29 @@ class BinMap(Operator):
     )
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key for the timestream data"
+        defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Bit mask value for optional telescope flagging",
+    )
 
     pixel_pointing = Instance(
         klass=Operator,

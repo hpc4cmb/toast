@@ -43,8 +43,8 @@ class Fourier2D(Template):
     #    data             : The Data instance we are working with
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
-    #    flags            : Optional detector solver flags
-    #    flag_mask        : Bit mask for detector solver flags
+    #    det_flags        : Optional detector solver flags
+    #    det_flag_mask    : Bit mask for detector solver flags
     #
 
     times = Unicode("times", help="Observation shared key for timestamps")
@@ -276,9 +276,9 @@ class Fourier2D(Template):
                     view_templates[det] = evaluate_template(theta, phi, radius)
 
                     good[:] = 1.0
-                    if self.flags is not None:
-                        flags = views.detdata[self.flags][ivw][det]
-                        good[(flags & self.flag_mask) != 0] = 0
+                    if self.det_flags is not None:
+                        flags = views.detdata[self.det_flags][ivw][det]
+                        good[(flags & self.det_flag_mask) != 0] = 0
                     norms_view += np.outer(good, view_templates[det] ** 2 * detweight)
 
                 obs_local_namp += self._obs_view_namp[iob][ivw]

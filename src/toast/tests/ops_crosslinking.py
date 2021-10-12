@@ -23,7 +23,7 @@ from .. import ops as ops
 
 from ..pixels import PixelDistribution, PixelData
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ._helpers import create_outdir, create_satellite_data
 
@@ -45,7 +45,7 @@ class CrossLinkingTest(MPITestCase):
         pixelpointing = ops.PixelsHealpix(
             nside=64,
             detector_pointing=detpointing,
-            pixels=obs_names.pixels,
+            pixels=defaults.pixels,
         )
 
         # Crosslinking

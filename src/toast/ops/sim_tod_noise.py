@@ -20,7 +20,7 @@ from ..fft import FFTPlanReal1DStore
 
 from ..utils import rate_from_times, Logger, AlignedF64
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .._libtoast import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
 
@@ -220,10 +220,10 @@ class SimNoise(Operator):
 
     component = Int(0, help="The noise component index")
 
-    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key for accumulating noise timestreams",
     )
 

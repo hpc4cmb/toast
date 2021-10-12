@@ -27,7 +27,7 @@ from ..pixels_io import write_healpix_fits
 
 from ..covariance import covariance_apply
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ._helpers import create_outdir, create_satellite_data
 
@@ -59,7 +59,7 @@ class MapmakerBinningTest(MPITestCase):
         )
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
 
@@ -156,7 +156,7 @@ class MapmakerBinningTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise
-        sim_noise = ops.SimNoise(noise_model="noise_model", det_data=obs_names.det_data)
+        sim_noise = ops.SimNoise(noise_model="noise_model", det_data=defaults.det_data)
         sim_noise.apply(data)
 
         # Pointing operator
@@ -168,7 +168,7 @@ class MapmakerBinningTest(MPITestCase):
         )
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
 
@@ -229,7 +229,7 @@ class MapmakerBinningTest(MPITestCase):
 
         madam = ops.Madam(
             params=pars,
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",

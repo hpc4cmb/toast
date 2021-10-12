@@ -39,8 +39,8 @@ class SubHarmonic(Template):
     #    data             : The Data instance we are working with
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
-    #    flags            : Optional detector solver flags
-    #    flag_mask        : Bit mask for detector solver flags
+    #    det_flags        : Optional detector solver flags
+    #    det_flag_mask    : Bit mask for detector solver flags
     #
 
     times = Unicode("times", help="Observation shared key for timestamps")
@@ -145,9 +145,9 @@ class SubHarmonic(Template):
                         detweight = noise.detector_weight(det)
 
                     good = slice(0, view_len, 1)
-                    if self.flags is not None:
-                        flags = views.detdata[self.flags][ivw][det]
-                        good = flags & self.flag_mask != 0
+                    if self.det_flags is not None:
+                        flags = views.detdata[self.det_flags][ivw][det]
+                        good = flags & self.det_flag_mask != 0
 
                     prec = np.zeros((norder, norder), dtype=np.float64)
                     for row in range(norder):

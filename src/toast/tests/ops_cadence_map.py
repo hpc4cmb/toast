@@ -27,7 +27,7 @@ from ..pixels_io import write_healpix_fits
 
 from ..covariance import covariance_apply
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ._helpers import create_outdir, create_satellite_data
 

@@ -14,6 +14,8 @@ from ..traits import TraitConfig, Instance, Unicode, Int
 
 from ..data import Data
 
+from ..observation import default_values as defaults
+
 
 class Template(TraitConfig):
     """Base class for timestream templates.
@@ -45,14 +47,20 @@ class Template(TraitConfig):
     )
 
     det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
+        defaults.det_data,
+        allow_none=True,
+        help="Observation detdata key for the timestream data",
     )
 
-    flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for solver flags to use"
+    det_flags = Unicode(
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for solver flags to use",
     )
 
-    flag_mask = Int(0, help="Bit mask value for solver flags")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for solver flags"
+    )
 
     @traitlets.validate("data")
     def _check_data(self, proposal):

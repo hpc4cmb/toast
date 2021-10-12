@@ -15,11 +15,9 @@ from astropy import units as u
 
 from pshmem import MPIShared
 
-from ..observation import DetectorData, Observation, set_default_names
+from ..observation import DetectorData, Observation, set_default_values
 
-from ..observation import default_names as obs_names
-
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..mpi import Comm, MPI
 
@@ -545,7 +543,7 @@ class ObservationTest(MPITestCase):
     # are set at first import).  In order to swap default names, it must be done
     # before importing toast.ops
 
-    # def test_default_names(self):
+    # def test_default_values(self):
     #     # Change defaults
     #     custom = {
     #         "times": "custom_times",
@@ -563,7 +561,7 @@ class ObservationTest(MPITestCase):
     #         "weights": "custom_weights",
     #         "quats": "custom_quats",
     #     }
-    #     set_default_names(custom)
+    #     set_default_values(custom)
 
     #     from .. import ops as ops
 
@@ -584,7 +582,7 @@ class ObservationTest(MPITestCase):
     #     pointing = ops.PointingHealpix(
     #         nside=64,
     #         mode="IQU",
-    #         hwp_angle=obs_names.hwp_angle,
+    #         hwp_angle=defaults.hwp_angle,
     #         detector_pointing=detpointing,
     #     )
     #     pointing.apply(data)
