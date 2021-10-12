@@ -845,6 +845,11 @@ class SimGround(Operator):
                 self.sun_close_distance,
             )
 
+            obmem = ob.memory_use()
+            obmem_gb = obmem / 1024**3
+            msg = f"Observation {ob.name} using {obmem_gb:0.2f} GB of total memory"
+            log.debug_rank(msg, comm=ob.comm.comm_group)    
+
             data.obs.append(ob)
 
         # For convenience, we additionally create a shared flag field with bits set

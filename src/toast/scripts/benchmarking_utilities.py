@@ -527,8 +527,8 @@ def estimate_memory_overhead(
     """
     log = toast.utils.Logger.get()
     # Start with 1GB for everything else
-    # base = 1024 ** 3
-    base = 0
+    base = 1024 ** 3
+    #base = 0
 
     # Compute the bytes per pixel.  We have:
     #   hits (int64):  8 bytes
