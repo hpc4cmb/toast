@@ -669,11 +669,11 @@ class SimAtmosphere(Operator):
             detquat = qa.mult(phirot, thetarot)
             detquats.append(detquat)
 
-        # Get fake detector pointing
+        # Get fake detector pointing in every 10th sample
 
         az = []
         el = []
-        quats = obs.shared[self.detector_pointing.boresight]
+        quats = obs.shared[self.detector_pointing.boresight][::10].copy()
         for detquat in detquats:
             vecs = qa.rotate(qa.mult(quats, detquat), zaxis)
             theta, phi = hp.vec2ang(vecs)
