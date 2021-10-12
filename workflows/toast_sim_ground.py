@@ -416,6 +416,10 @@ def reduce_data(job, args, data):
     ops.mapmaker.det_data = ops.sim_noise.det_data
     ops.mapmaker.output_dir = args.out_dir
 
+    ops.filterbin.binning = ops.binner_final
+    ops.filterbin.det_data = ops.sim_noise.det_data
+    ops.filterbin.output_dir = args.out_dir
+
     log.info_rank("Making maps", comm=world_comm)
     if args.obsmaps:
         # Map each observation separately
@@ -423,6 +427,7 @@ def reduce_data(job, args, data):
         timer_obs.start()
         group = data.comm.group
         orig_name = ops.mapmaker.name
+        orig_name_filterbin = ops.filterbin.name
         orig_comm = data.comm
         new_comm = Comm(world=data.comm.comm_group)
         for iobs, obs in enumerate(data.obs):
@@ -439,6 +444,14 @@ def reduce_data(job, args, data):
             ops.mapmaker.apply(obs_data)
             log.info_rank(
                 f"{group} : Mapped {obs.name} in",
+                comm=new_comm.comm_world,
+                timer=timer_obs,
+            )
+            ops.filterbin.name = f"{orig_name_filterbin}_{obs.name}"
+            ops.filterbin.reset_pix_dist = True
+            ops.filterbin.apply(obs_data)
+            log.info_rank(
+                f"{group} : Filter+binned {obs.name} in",
                 comm=new_comm.comm_world,
                 timer=timer_obs,
             )
@@ -593,6 +606,9 @@ def main():
         toast.ops.PixelsHealpix(name="pixels_radec_final", enabled=False),
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
+        ),
+        toast.ops.FilterBin(
+            name="filterbin", enabled=False,
         ),
         toast.ops.MemoryCounter(name="mem_count", enabled=False),
     ]
