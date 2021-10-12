@@ -680,6 +680,7 @@ class SimGround(Operator):
                 site=site,
             )
 
+            name = f"{scan.name}-{scan.scan_indx}-{scan.subscan_indx}"
             ob = Observation(
                 comm,
                 telescope,
