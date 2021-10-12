@@ -1074,9 +1074,9 @@ class FilterBin(Operator):
                     # Non-standard HDF5 output
                     fname = os.path.join(self.output_dir, f"{key}.h5")
                     write_healpix_hdf5(
-                        data[prod_key],
+                        data[key],
                         fname,
-                        nest=map_binning.pixel_pointing.nest,
+                        nest=self.binning.pixel_pointing.nest,
                     )
                 else:
                     # Standard FITS output
