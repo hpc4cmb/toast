@@ -308,7 +308,7 @@ class ObserveAtmosphere(Operator):
                                 else:
                                     views.detdata[self.det_flags][vw][det][good][
                                         bad
-                                    ] = 255
+                                    ] |= self.det_flag_mask
                                     nbad_tot += nbad
                     gt.stop("ObserveAtmosphere:  detector AtmSim.observe")
                     gt.start("ObserveAtmosphere:  detector accumulate")
