@@ -92,10 +92,12 @@ class SimAtmosphere(Operator):
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
 
     turnaround_interval = Unicode("turnaround", help="Interval name for turnarounds")
 
@@ -161,6 +163,10 @@ class SimAtmosphere(Operator):
         None,
         allow_none=True,
         help="Directory to use for loading / saving atmosphere realizations",
+    )
+
+    overwrite_cache = Bool(
+        False, help="If True, redo and overwrite any cached atmospheric realizations."
     )
 
     debug_spectrum = Bool(False, help="If True, dump out Kolmogorov debug files")
@@ -842,11 +848,15 @@ class SimAtmosphere(Operator):
                 fname = os.path.join(
                     cachedir, "{}_{}_{}_{}.h5".format(key1, key2, counter1, counter2)
                 )
-            if (fname is not None) and os.path.isfile(fname):
+                if os.path.isfile(fname):
+                    if self.overwrite_cache:
+                        os.remove(fname)
+                    else:
+                        have_cache=True
+            if have_cache:
                 log.debug(
                     f"{prefix}Loading the atmosphere for t = {tmin - tmin_tot} from {fname}"
                 )
-                have_cache = True
             else:
                 log.debug(
                     f"{prefix}Simulating the atmosphere for t = {tmin - tmin_tot}"
