@@ -57,11 +57,12 @@ class DemodulateTest(MPITestCase):
         dist = data[dist_key]
         pix_data = PixelData(dist, np.float64, n_value=3)
         off = 0
+        map_values = [10, -1, 2]
         for submap in range(dist.n_submap):
             if submap in dist.local_submaps:
-                pix_data.data[off, :, 0] = 10
-                pix_data.data[off, :, 1] = 1
-                pix_data.data[off, :, 2] = 0
+                pix_data.data[off, :, 0] = map_values[0]
+                pix_data.data[off, :, 1] = map_values[1] # 1
+                pix_data.data[off, :, 2] = map_values[2] # 0
                 off += 1
         data[map_key] = pix_data
 
@@ -139,7 +140,7 @@ class DemodulateTest(MPITestCase):
             reso = 5
 
             for i, m in enumerate(map_mod):
-                value = [10, 1, 0][i]
+                value = map_values[i]
                 good = m != 0
                 rms = np.sqrt(np.mean((m[good] - value) ** 2))
                 m[m == 0] = hp.UNSEEN
@@ -154,12 +155,11 @@ class DemodulateTest(MPITestCase):
                 )
 
             for i, m in enumerate(map_demod):
-                value = [10, 1, 0][i]
+                value = map_values[i]
                 good = m != 0
                 rms = np.sqrt(np.mean((m[good] - value) ** 2))
                 m[m == 0] = hp.UNSEEN
                 stokes = "IQU"[i]
-                value = [10, 1, 0][i]
                 amp = 0.0001
                 hp.gnomview(
                     m,
@@ -171,7 +171,7 @@ class DemodulateTest(MPITestCase):
                     max=value + amp,
                     cmap="coolwarm",
                 )
-                assert rms < 1e-4
+                assert rms < 1e-3
 
             outfile = os.path.join(self.outdir, "map_comparison.png")
             fig.savefig(outfile)
