@@ -22,7 +22,14 @@ from .._libtoast import (
 from ..mpi import MPI
 from ..observation import default_names as obs_names
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io import read_healpix_fits, write_healpix_fits
+from ..pixels_io import (
+    read_healpix_fits,
+    write_healpix_fits,
+    read_healpix_hdf5,
+    write_healpix_hdf5,
+    filename_is_fits,
+    filename_is_hdf5,
+)
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -135,13 +142,17 @@ class FilterBin(Operator):
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        obs_names.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(255, help="Bit mask value for optional detector flagging")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        obs_names.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(1, help="Bit mask value for optional telescope flagging")
@@ -238,6 +249,10 @@ class FilterBin(Operator):
     )
 
     deproject_map_name = "deprojection_map"
+
+    write_hdf5 = Bool(
+        False, help="If True, output maps are in HDF5 rather than FITS format."
+    )
 
     @traitlets.validate("binning")
     def _check_binning(self, proposal):
@@ -1046,10 +1061,20 @@ class FilterBin(Operator):
             (self.binning.covariance, self.write_cov and binned, True),
         ]:
             if write:
-                fname = os.path.join(self.output_dir, f"{key}.fits")
-                write_healpix_fits(
-                    data[key], fname, nest=self.binning.pixel_pointing.nest
-                )
+                if self.write_hdf5:
+                    # Non-standard HDF5 output
+                    fname = os.path.join(self.output_dir, f"{key}.h5")
+                    write_healpix_hdf5(
+                        data[prod_key],
+                        fname,
+                        nest=map_binning.pixel_pointing.nest,
+                    )
+                else:
+                    # Standard FITS output
+                    fname = os.path.join(self.output_dir, f"{key}.fits")
+                    write_healpix_fits(
+                        data[key], fname, nest=self.binning.pixel_pointing.nest
+                    )
                 log.info_rank(f"Wrote {fname} in", comm=self.comm, timer=timer)
             if not keep and key in data:
                 data[key].clear()
@@ -1066,11 +1091,21 @@ class FilterBin(Operator):
             dtype=np.float32,
             n_value=self.deproject_nnz,
         )
-        read_healpix_fits(
-            data[self.deproject_map_name],
-            self.deproject_map,
-            nest=self.binning.pixel_pointing.nest,
-        )
+        if filename_is_hdf5(self.deproject_map):
+            read_healpix_hdf5(
+                data[self.deproject_map_name],
+                self.deproject_map,
+                nest=self.binning.pixel_pointing.nest,
+            )
+        elif filename_is_fits(self.deproject_map):
+            read_healpix_fits(
+                data[self.deproject_map_name],
+                self.deproject_map,
+                nest=self.binning.pixel_pointing.nest,
+            )
+        else:
+            msg = f"Cannot determine deprojection map type: {self.deproject_map}"
+            raise RuntimeError(msg)
         self._deproject_pattern = re.compile(self.deproject_pattern)
         return
 
