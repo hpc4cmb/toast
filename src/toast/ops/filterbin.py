@@ -378,8 +378,11 @@ class FilterBin(Operator):
                     f"{iobs} / {len(data.obs)}",
                 )
 
-            common_flags = obs.shared[self.shared_flags].data
             phase = self._get_phase(obs)
+            if self.shared_flags is not None:
+                common_flags = obs.shared[self.shared_flags].data
+            else:
+                common_flags = np.zeros(phase.size, dtype=np.uint8)
             common_templates = self._build_common_templates(obs, phase, common_flags)
 
             if self.grank == 0:
