@@ -246,6 +246,30 @@ class SimGround(Operator):
         None, allow_none=True, help="Maximum PWV for the simulated weather."
     )
 
+    turnaround_mask = Int(
+        defaults.turnaround, help="Bit mask to raise turnaround flags with"
+    )
+
+    leftright_mask = Int(
+        defaults.scan_leftright, help="Bit mask to raise left-to-right flags with"
+    )
+
+    rightleft_mask = Int(
+        defaults.scan_rightleft, help="Bit mask to raise right-to-left flags with"
+    )
+
+    sun_up_mask = Int(
+        defaults.sun_up, help="Bit mask to raise Sun up flags with"
+    )
+
+    sun_close_mask = Int(
+        defaults.sun_close, help="Bit mask to raise Sun close flags with"
+    )
+
+    elnod_mask = Int(
+        defaults.elnod, help="Bit mask to raise elevation nod flags with"
+    )
+
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
         tele = proposal["value"]
@@ -873,14 +897,14 @@ class SimGround(Operator):
             shared_flags=self.shared_flags,
             shared_flag_bytes=1,
             view_mask=[
-                (self.turnaround_interval, defaults.turnaround),
-                (self.scan_leftright_interval, defaults.scan_leftright),
-                (self.scan_rightleft_interval, defaults.scan_rightleft),
-                (self.turn_leftright_interval, defaults.scan_leftright),
-                (self.turn_rightleft_interval, defaults.scan_leftright),
-                (self.sun_up_interval, defaults.sun_up),
-                (self.sun_close_interval, defaults.sun_close),
-                (self.elnod_interval, defaults.elnod),
+                (self.turnaround_interval, self.turnaround_mask),
+                (self.scan_leftright_interval, self.leftright_mask),
+                (self.scan_rightleft_interval, self.rightleft_mask),
+                (self.turn_leftright_interval, self.rightleft_mask),
+                (self.turn_rightleft_interval, self.leftright_mask),
+                (self.sun_up_interval, self.sun_up_mask),
+                (self.sun_close_interval, self.sun_close_mask),
+                (self.elnod_interval, self.elnod_mask),
             ],
         )
         flag_intervals.apply(data, detectors=None)
