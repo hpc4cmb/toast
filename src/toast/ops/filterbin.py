@@ -328,7 +328,7 @@ class FilterBin(Operator):
                 shared_flag_mask=binning.shared_flag_mask,
             )
             pix_dist.apply(data)
-            log.info_rank(
+            log.debug_rank(
                 "Cached pixel distribution in", comm=data.comm.comm_world, timer=timer
             )
 
@@ -346,23 +346,23 @@ class FilterBin(Operator):
         # Filter data
 
         self._initialize_obs_matrix()
-        log.info_rank(
+        log.debug_rank(
             "OpFilterBin: Initialized observation_matrix in",
             comm=self.comm,
             timer=timer,
         )
 
         self._load_deprojection_map(data)
-        log.info_rank(
+        log.debug_rank(
             "OpFilterBin: Loaded deprojection map in", comm=self.comm, timer=timer
         )
 
         self._bin_map(data, detectors, filtered=False)
-        log.info_rank(
+        log.debug_rank(
             "OpFilterBin: Binned unfiltered map in", comm=self.comm, timer=timer
         )
 
-        log.info_rank("OpFilterBin: Filtering signal", comm=self.comm)
+        log.debug_rank("OpFilterBin: Filtering signal", comm=self.comm)
 
         timer1 = Timer()
         timer1.start()
@@ -506,19 +506,25 @@ class FilterBin(Operator):
         # Bin filtered signal
 
         self._bin_map(data, detectors, filtered=True)
-        log.info_rank(
+        log.debug_rank(
             "OpFilterBin: Binned filtered map in", comm=self.comm, timer=timer
         )
 
+        log.info_rank(
+            f"OpFilterBin:   Binned data in",
+            comm=self.comm,
+            timer=timer2,
+        )
+
         if self.write_obs_matrix:
-            log.info_rank(
+            log.debug_rank(
                 "OpFilterBin: Noise-weighting observation matrix", comm=self.comm
             )
             self._noiseweight_obs_matrix(data)
-            log.info_rank(
+            log.debug_rank(
                 "OpFilterBin: Noise-weighted observation_matrix in",
                 comm=self.comm,
-                timer=timer,
+                timer=timer2,
             )
 
             log.info_rank("OpFilterBin: Collecting observation matrix", comm=self.comm)
@@ -526,7 +532,7 @@ class FilterBin(Operator):
             log.info_rank(
                 "OpFilterBin: Collected observation_matrix in",
                 comm=self.comm,
-                timer=timer,
+                timer=timer2,
             )
 
         return
@@ -942,7 +948,7 @@ class FilterBin(Operator):
                     comm=self.comm,
                 )
                 continue
-            log.info_rank(
+            log.debug_rank(
                 f"Collecting slice {islice+1:5} / {nslice} : {row_start:12} - "
                 f"{row_stop:12}",
                 comm=self.comm,
@@ -1002,7 +1008,7 @@ class FilterBin(Operator):
 
                 if self.comm is not None:
                     self.comm.Barrier()
-                log.info_rank("OpFilterBin: Collected in", comm=self.comm, timer=timer)
+                log.debug_rank("OpFilterBin: Collected in", comm=self.comm, timer=timer)
                 factor *= 2
 
             # Write out the observation matrix
@@ -1042,6 +1048,7 @@ class FilterBin(Operator):
 
         hits_name = f"{self.name}_hits"
         invcov_name = f"{self.name}_invcov"
+        cov_name = f"{self.name}_cov"
         rcond_name = f"{self.name}_rcond"
         if filtered:
             map_name = f"{self.name}_filtered_map"
@@ -1053,6 +1060,7 @@ class FilterBin(Operator):
         self.binning.noiseweighted = noiseweighted_map_name
         self.binning.binned = map_name
         self.binning.det_data = self.det_data
+        self.binning.covariance = cov_name
 
         cov = CovarianceAndHits(
             pixel_dist=self.binning.pixel_dist,
@@ -1083,23 +1091,27 @@ class FilterBin(Operator):
             (noiseweighted_map_name, self.write_noiseweighted_map, False),
             (map_name, self.write_map, False),
             (invcov_name, self.write_invcov and binned, False),
-            (self.binning.covariance, self.write_cov and binned, True),
+            (cov_name, self.write_cov and binned, True),
         ]:
             if write:
-                if self.write_hdf5:
-                    # Non-standard HDF5 output
-                    fname = os.path.join(self.output_dir, f"{key}.h5")
-                    write_healpix_hdf5(
-                        data[key],
-                        fname,
-                        nest=self.binning.pixel_pointing.nest,
-                    )
-                else:
-                    # Standard FITS output
-                    fname = os.path.join(self.output_dir, f"{key}.fits")
-                    write_healpix_fits(
-                        data[key], fname, nest=self.binning.pixel_pointing.nest
-                    )
+                try:
+                    if self.write_hdf5:
+                        # Non-standard HDF5 output
+                        fname = os.path.join(self.output_dir, f"{key}.h5")
+                        write_healpix_hdf5(
+                            data[key],
+                            fname,
+                            nest=self.binning.pixel_pointing.nest,
+                        )
+                    else:
+                        # Standard FITS output
+                        fname = os.path.join(self.output_dir, f"{key}.fits")
+                        write_healpix_fits(
+                            data[key], fname, nest=self.binning.pixel_pointing.nest
+                        )
+                except Exception as e:
+                    msg = f"ERROR: failed to write {fname} : {e}"
+                    raise RuntimeError(msg)
                 log.info_rank(f"Wrote {fname} in", comm=self.comm, timer=timer)
             if not keep and key in data:
                 data[key].clear()
