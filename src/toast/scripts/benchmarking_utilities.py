@@ -357,7 +357,7 @@ def select_case(
     full_pointing,
     world_comm,
     per_process_overhead_bytes=1024 ** 3,
-    target_proc_dets=50,
+    target_proc_dets=200,
 ):
     """
     Selects the most appropriate case size given the memory available and number of
