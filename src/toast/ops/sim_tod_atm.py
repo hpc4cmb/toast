@@ -660,8 +660,8 @@ class SimAtmosphere(Operator):
         # Create a fake focalplane of detectors in a circle around the boresight
 
         xaxis, yaxis, zaxis = np.eye(3)
-        ndet = 128
-        phidet = np.linspace(0, 2 * np.pi, ndet, endpoint=False)[rank::ntask]
+        ndet = 64
+        phidet = np.linspace(0, 2 * np.pi, ndet, endpoint=False)
         detquats = []
         thetarot = qa.rotation(yaxis, fp_radius)
         for phi in phidet:
@@ -669,11 +669,11 @@ class SimAtmosphere(Operator):
             detquat = qa.mult(phirot, thetarot)
             detquats.append(detquat)
 
-        # Get fake detector pointing in every 10th sample
+        # Get fake detector pointing
 
         az = []
         el = []
-        quats = obs.shared[self.detector_pointing.boresight][::10].copy()
+        quats = obs.shared[self.detector_pointing.boresight][rank::ntask].copy()
         for detquat in detquats:
             vecs = qa.rotate(qa.mult(quats, detquat), zaxis)
             theta, phi = hp.vec2ang(vecs)
