@@ -263,6 +263,12 @@ class FilterBin(Operator):
         False, help="If True, output maps are in HDF5 rather than FITS format."
     )
 
+    reset_pix_dist = Bool(
+        False,
+        help="Clear any existing pixel distribution.  Useful when applying"
+        "repeatedly to different data objects.",
+    )
+
     @traitlets.validate("binning")
     def _check_binning(self, proposal):
         bin = proposal["value"]
@@ -305,11 +311,18 @@ class FilterBin(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
-        pixel_dist = self.binning.pixel_dist
+        # Optionally destroy existing pixel distributions (useful if calling
+        # repeatedly with different data objects)
+
+        binning = self.binning
+        pixel_dist = binning.pixel_dist
+        if self.reset_pix_dist:
+            if pixel_dist in data:
+                del data[pixel_dist]
+
         if pixel_dist not in data:
-            binning = self.binning
             pix_dist = BuildPixelDistribution(
-                pixel_dist=binning.pixel_dist,
+                pixel_dist=pixel_dist,
                 pixel_pointing=binning.pixel_pointing,
                 shared_flags=binning.shared_flags,
                 shared_flag_mask=binning.shared_flag_mask,

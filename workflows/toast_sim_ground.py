@@ -395,15 +395,6 @@ def reduce_data(job, args, data):
     ops.mem_count.prefix = "After filtering"
     ops.mem_count.apply(data)
 
-    # Collect signal statistics after filtering
-
-    ops.filtered_statistics.output_dir = args.out_dir
-    ops.filtered_statistics.apply(data)
-    log.info_rank("Calculated filtered statistics in", comm=world_comm, timer=timer)
-
-    ops.mem_count.prefix = "After filtered statistics"
-    ops.mem_count.apply(data)
-
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
 
@@ -478,6 +469,15 @@ def reduce_data(job, args, data):
 
         ops.mem_count.prefix = "After Madam"
         ops.mem_count.apply(data)
+
+    # Collect signal statistics after filtering/destriping
+
+    ops.filtered_statistics.output_dir = args.out_dir
+    ops.filtered_statistics.apply(data)
+    log.info_rank("Calculated filtered statistics in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After filtered statistics"
+    ops.mem_count.apply(data)
 
 
 def dump_spt3g(job, args, data):
