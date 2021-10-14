@@ -112,7 +112,7 @@ def covariance_invert(npp, threshold, rcond=None, use_alltoallv=False):
 
     if use_alltoallv:
         if rcond is not None:
-            # Ensure that the recond receive buffer exists
+            # Ensure that the rcond receive buffer exists
             rcond.setup_alltoallv()
         linvert = create_local_invert(
             npp.distribution.n_pix_submap, mapnnz, threshold, rcond, invert=True

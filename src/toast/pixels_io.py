@@ -412,9 +412,8 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, single_precisi
         None
 
     """
+    global hdf5_is_parallel
     log = Logger.get()
-    timer = Timer()
-    timer.start()
 
     # The distribution
     dist = pix.distribution

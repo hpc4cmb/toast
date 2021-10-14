@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
+# a BSD-style license that can be found in the LICENSE file.
+
+"""This script loads HEALPix maps and noise matrices and calculates
+minimum variance averages
+"""
+
+import os
+import sys
+import argparse
+import traceback
+
+import h5py
+import healpy as hp
+import numpy as np
+
+import toast
+from toast.mpi import get_world, Comm
+
+from toast.utils import Logger, Environment, Timer
+from toast.pixels_io import (
+    filename_is_fits,
+    filename_is_hdf5,
+    read_healpix,
+    write_healpix,
+)
+from toast._libtoast import cov_eigendecompose_diag, cov_apply_diag
+
+
+def main():
+    env = Environment.get()
+    log = Logger.get()
+    comm, procs, rank = get_world()
+    timer0 = Timer()
+    timer = Timer()
+    timer0.start()
+    timer.start()
+
+    parser = argparse.ArgumentParser(
+        description="Co-add HEALPix maps"
+    )
+
+    parser.add_argument(
+        "inmap",
+        nargs="+",
+        help="One or more input maps",
+    )
+
+    parser.add_argument(
+        "--outmap",
+        required=False,
+        help="Name of output file",
+    )
+
+    parser.add_argument(
+        "--nside_submap",
+        default=16,
+        type=int,
+        help="Submap size is 12 * nside_submap ** 2.  "
+        "Number of submaps is (nside / nside_submap) ** 2",
+    )
+
+    parser.add_argument(
+        "--rcond_limit",
+        default=1e-3,
+        type=float,
+        help="Reciprocal condition number limit"
+    )
+
+    args = parser.parse_args()
+
+    map_sum = None
+    matrix_sum = None
+    for infile_map in args.inmap:
+        print(f"Loading {infile_map}")
+        inmap = read_healpix(infile_map, None, nest=True)
+
+        infile_matrix = infile_map.replace("noiseweighted_filtered_map", "invcov")
+        if infile_matrix == infile_map:
+            raise RuntimeError("Could not convert map file name to matrix")
+        print(f"Loading {infile_matrix}")
+        inmatrix = read_healpix(infile_matrix, None, nest=True)
+
+        if map_sum is None:
+            map_sum = inmap
+            matrix_sum = inmatrix
+            nnz, npix = inmap.shape
+        else:
+            map_sum += inmap
+            matrix_sum += inmatrix
+
+    nsubmap = npix
+    npix_submap = 1
+
+
+    rcond = np.zeros(npix, dtype=float)
+
+    print("Inverting matrix")
+    matrix_sum = matrix_sum.T.ravel().astype(float).copy()
+    cov_eigendecompose_diag(
+        nsubmap, npix_submap, nnz, matrix_sum, rcond, args.rcond_limit, True
+    )
+    
+    print("Applying matrix")
+    map_sum = map_sum.T.ravel().astype(float).copy()
+    cov_apply_diag(
+        nsubmap, npix_submap, nnz, matrix_sum.data, map_sum.data
+    )
+
+    map_sum = map_sum.reshape(npix, -1).T.copy()
+    matrix_sum = matrix_sum.reshape(npix, -1).T.copy()
+
+    print(f"Writing {args.outmap}")
+    write_healpix(
+        args.outmap, map_sum, nest=True, overwrite=True
+    )
+
+    log.info_rank(f"Co-add done in", timer=timer0, comm=comm)
+
+    return
+
+
+if __name__ == "__main__":
+    world, procs, rank = toast.mpi.get_world()
+    with toast.mpi.exception_guard(comm=world):
+        main()
