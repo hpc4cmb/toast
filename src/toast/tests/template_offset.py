@@ -50,6 +50,7 @@ class TemplateOffsetTest(MPITestCase):
 
         tmpl = Offset(
             det_data=defaults.det_data,
+            det_flags=None,
             times=defaults.times,
             noise_model=noise_model.noise_model,
             step_time=step_seconds * u.second,
