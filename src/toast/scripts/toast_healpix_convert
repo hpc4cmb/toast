@@ -97,7 +97,9 @@ def main():
             mapdata, header = read_healpix(infile, None, h=True, nest=True)
             log.info_rank(f"Loaded {infile} in", timer=timer, comm=comm)
 
-            write_healpix(outfile, mapdata, extra_header=header, nest=True, overwrite=True)
+            write_healpix(
+                outfile, mapdata, extra_header=header, nest=True, overwrite=True
+            )
             log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
 
         elif filename_is_hdf5(infile):

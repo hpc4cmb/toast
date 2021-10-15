@@ -512,7 +512,9 @@ class AtmSim(object):
                     )
                 )
             else:
-                log.verbose("Observed {} samples in {} s".format(nsamp, timer.seconds()))
+                log.verbose(
+                    "Observed {} samples in {} s".format(nsamp, timer.seconds())
+                )
 
         if status != 0:
             log.error("Observing {} samples failed with error {}".format(nsamp, status))

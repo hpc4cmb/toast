@@ -63,11 +63,11 @@ class AnalyticNoise(Noise):
             if last_det is not None:
                 # shortcut when the noise models are identical
                 if (
-                    self._rate[d] == self._rate[last_det] and
-                    self._fmin[d] == self._fmin[last_det] and
-                    self._fknee[d] == self._fknee[last_det] and
-                    self._alpha[d] == self._alpha[last_det] and
-                    self._NET[d] == self._NET[last_det]
+                    self._rate[d] == self._rate[last_det]
+                    and self._fmin[d] == self._fmin[last_det]
+                    and self._fknee[d] == self._fknee[last_det]
+                    and self._alpha[d] == self._alpha[last_det]
+                    and self._NET[d] == self._NET[last_det]
                 ):
                     freqs[d] = freqs[last_det].copy()
                     psds[d] = psds[last_det].copy()

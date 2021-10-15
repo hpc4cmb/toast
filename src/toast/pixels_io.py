@@ -475,7 +475,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
                     # Accommodate submap sizes that do not fit the map cleanly
                     first = submap * dist.n_pix_submap
                     last = min(first + dist.n_pix_submap, dist.n_pix)
-                    dset[:, first : last] = pix[local_submap, 0 : last - first].T
+                    dset[:, first:last] = pix[local_submap, 0 : last - first].T
 
     except (ValueError, AssertionError) as e:
 
@@ -530,7 +530,7 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, report_memory=
                         # Accommodate submap sizes that do not fit the map cleanly
                         first = submap * dist.n_pix_submap
                         last = min(first + dist.n_pix_submap, dist.n_pix)
-                        dset[:, first : last] = recvbuffer[i, :, 0 : last - first]
+                        dset[:, first:last] = recvbuffer[i, :, 0 : last - first]
 
                 for key, value in header.items():
                     dset.attrs[key] = value

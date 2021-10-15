@@ -19,7 +19,14 @@ from toast.weather import SimWeather
 
 from .. import qarray as qa
 
-from ..utils import Environment, name_UID, Logger, rate_from_times, astropy_control, memreport
+from ..utils import (
+    Environment,
+    name_UID,
+    Logger,
+    rate_from_times,
+    astropy_control,
+    memreport,
+)
 
 from ..dist import distribute_uniform, distribute_discrete
 
@@ -851,9 +858,9 @@ class SimGround(Operator):
             )
 
             obmem = ob.memory_use()
-            obmem_gb = obmem / 1024**3
+            obmem_gb = obmem / 1024 ** 3
             msg = f"Observation {ob.name} using {obmem_gb:0.2f} GB of total memory"
-            log.debug_rank(msg, comm=ob.comm.comm_group)    
+            log.debug_rank(msg, comm=ob.comm.comm_group)
 
             data.obs.append(ob)
 

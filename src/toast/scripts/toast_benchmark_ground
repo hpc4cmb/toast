@@ -54,7 +54,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--input_dir",
-        required=False,
+        required=True,
         default="toast_benchmark_ground_inputs",
         type=str,
         help="The output directory",
@@ -440,8 +440,7 @@ def main():
 
     # Simulate sky signal from a map.
     args.input_map = os.path.join(
-        args.input_dir,
-        f"fake_input_sky_nside{args.nside}.fits"
+        args.input_dir, f"fake_input_sky_nside{args.nside}.fits"
     )
     args.print_input_map = False
     scan_map(args, rank, job_ops, data, log)
