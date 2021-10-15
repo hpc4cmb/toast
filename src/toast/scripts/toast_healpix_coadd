@@ -18,7 +18,7 @@ import healpy as hp
 import numpy as np
 
 import toast
-from toast.mpi import get_world, Comm
+from toast.mpi import get_world, Comm, MPI
 
 from toast.utils import Logger, Environment, Timer
 from toast.pixels_io import (
@@ -33,7 +33,7 @@ from toast._libtoast import cov_eigendecompose_diag, cov_apply_diag
 def main():
     env = Environment.get()
     log = Logger.get()
-    comm, procs, rank = get_world()
+    comm, ntask, rank = get_world()
     timer0 = Timer()
     timer = Timer()
     timer0.start()
@@ -54,6 +54,24 @@ def main():
     )
 
     parser.add_argument(
+        "--rcond",
+        required=False,
+        help="Name of output rcond file",
+    )
+
+    parser.add_argument(
+        "--invcov",
+        required=False,
+        help="Name of output inverse covariance file",
+    )
+
+    parser.add_argument(
+        "--cov",
+        required=False,
+        help="Name of output covariance file",
+    )
+
+    parser.add_argument(
         "--nside_submap",
         default=16,
         type=int,
@@ -70,46 +88,157 @@ def main():
 
     args = parser.parse_args()
 
-    map_sum = None
-    matrix_sum = None
-    for infile_map in args.inmap:
-        print(f"Loading {infile_map}")
-        inmap = read_healpix(infile_map, None, nest=True)
-
-        infile_matrix = infile_map.replace("noiseweighted_filtered_map", "invcov")
-        if infile_matrix == infile_map:
-            raise RuntimeError("Could not convert map file name to matrix")
-        print(f"Loading {infile_matrix}")
-        inmatrix = read_healpix(infile_matrix, None, nest=True)
-
-        if map_sum is None:
-            map_sum = inmap
-            matrix_sum = inmatrix
+    noiseweighted_sum = None
+    invcov_sum = None
+    nnz, nnz2, npix = None, None, None
+    nfile = len(args.inmap)
+    for ifile, infile_map in enumerate(args.inmap):
+        if ntask == 1:
+            prefix = ""
+        else:
+            prefix = f"{rank:4} : "
+        if ifile % ntask != rank:
+            continue
+        log.info(f"{prefix}Loading file {ifile + 1} / {nfile} : {infile_map}")
+        inmap = read_healpix(infile_map, None, nest=True, dtype=float)
+        if nnz is None:
             nnz, npix = inmap.shape
         else:
-            map_sum += inmap
-            matrix_sum += inmatrix
+            nnz_test, npix_test = inmap.shape
+            if nnz != nnz_test:
+                raise RuntimeError(f"Mismatch in nnz: {nnz} != {nnz_test}")
+            if npix != npix_test:
+                raise RuntimeError(f"Mismatch in npix: {npix} != {npix_test}")
+
+        # Did we load a binned or noise-weighted map?
+        noiseweighted = "noiseweighted" in infile_map
+
+        # Determine the name of the covariance matrix file
+        if "unfiltered_map" in infile_map:
+            mapstring = "unfiltered_map"
+        elif "filtered_map" in infile_map:
+            mapstring = "filtered_map"
+        else:
+            mapstring = "map"
+        if noiseweighted:
+            mapstring = f"noiseweighted_{mapstring}"
+
+        infile_invcov = infile_map.replace(mapstring, "invcov")
+        if os.path.isfile(infile_invcov):
+            log.info(f"{prefix}Loading {infile_invcov}")
+            invcov = read_healpix(infile_invcov, None, nest=True, dtype=float)
+        else:
+            # Inverse covariance does not exist. Load and invert the
+            # covariance matrix
+            infile_cov = infile_map.replace(mapstring, "cov")
+            if not os.path.isfile(infile_cov):
+                msg = (
+                    f"Could not find covariance or inverse covariance for {infile_map}"
+                )
+                raise RuntimeError(msg)
+            log.info(f"{prefix}Loading {infile_cov}")
+            cov = read_healpix(infile_cov, None, nest=True, dtype=float)
+            nsubmap = npix
+            npix_submap = 1
+            rcond = np.zeros(npix, dtype=float)
+            log.info(f"{prefix}Inverting matrix")
+            cov = cov.T.ravel().astype(float).copy()
+            cov_eigendecompose_diag(
+                nsubmap, npix_submap, nnz, cov, rcond, args.rcond_limit, True
+            )
+            invcov = cov.reshape(npix, -1).T.copy()
+            del cov
+
+        if not noiseweighted:
+            # Must reverse the multiplication with the
+            # white noise covariance matrix
+            log.info(f"{prefix}Applying inverse matrix")
+            invcov = invcov.T.ravel().astype(float).copy()
+            inmap = inmap.T.ravel().astype(float).copy()
+            cov_apply_diag(nsubmap, npix_submap, nnz, invcov.data, inmap.data)
+            inmap = inmap.reshape(npix, -1).T.copy()
+            invcov = invcov.reshape(npix, -1).T.copy()
+
+        if nnz2 is None:
+            nnz2, npix_test = invcov.shape
+
+        if noiseweighted_sum is None:
+            noiseweighted_sum = inmap
+            invcov_sum = invcov
+        else:
+            noiseweighted_sum += inmap
+            invcov_sum += invcov
+        del invcov
+        del inmap
+
+    log.info_rank(f"Processed inputs in", timer=timer, comm=comm)
+
+    if ntask != 1:
+        nnz = comm.bcast(nnz)
+        nnz2 = comm.bcast(nnz2)
+        npix = comm.bcast(npix)
+        if noiseweighted_sum is None:
+            noiseweighted_sum = np.zeros([nnz, npix], dtype=float)
+            invcov_sum = np.zeros([nnz2, npix], dtype=float)
+        if rank == 0:
+            comm.Reduce(MPI.IN_PLACE, noiseweighted_sum, op=MPI.SUM, root=0)
+            comm.Reduce(MPI.IN_PLACE, invcov_sum, op=MPI.SUM, root=0)
+        else:
+            comm.Reduce(noiseweighted_sum, None, op=MPI.SUM, root=0)
+            comm.Reduce(invcov_sum, None, op=MPI.SUM, root=0)
+        log.info_rank(f"Reduced inputs in", timer=timer, comm=comm)
+        if rank != 0:
+            del noiseweighted_sum
+            del invcov_sum
 
     nsubmap = npix
     npix_submap = 1
 
-    rcond = np.zeros(npix, dtype=float)
+    if args.invcov is not None:
+        log.info(f"Writing {args.invcov}")
+        if rank == 0:
+            write_healpix(args.invcov, invcov_sum, nest=True, overwrite=True)
+        log.info_rank(f"Wrote {args.invcov} in", timer=timer, comm=comm)
 
-    print("Inverting matrix")
-    matrix_sum = matrix_sum.T.ravel().astype(float).copy()
-    cov_eigendecompose_diag(
-        nsubmap, npix_submap, nnz, matrix_sum, rcond, args.rcond_limit, True
-    )
+    log.info_rank("Inverting matrix", comm=comm)
+    if rank == 0:
+        rcond = np.zeros(npix, dtype=float)
+        cov = invcov_sum.T.ravel().astype(float).copy()
+        del invcov_sum
+        cov_eigendecompose_diag(
+            nsubmap, npix_submap, nnz, cov, rcond, args.rcond_limit, True
+        )
+    log.info_rank(f"Inverted matrix", timer=timer, comm=comm)
 
-    print("Applying matrix")
-    map_sum = map_sum.T.ravel().astype(float).copy()
-    cov_apply_diag(nsubmap, npix_submap, nnz, matrix_sum.data, map_sum.data)
+    if args.rcond is not None:
+        log.info_rank(f"Writing {args.rcond}", comm=comm)
+        if rank == 0:
+            write_healpix(args.rcond, rcond, nest=True, overwrite=True)
+        log.info_rank(f"Wrote {args.rcond}", timer=timer, comm=comm)
+    if rank == 0:
+        del rcond
 
-    map_sum = map_sum.reshape(npix, -1).T.copy()
-    matrix_sum = matrix_sum.reshape(npix, -1).T.copy()
+    log.info("Applying matrix")
+    if rank == 0:
+        coadd_map = noiseweighted_sum.T.ravel().astype(float).copy()
+        del noiseweighted_sum
+        cov_apply_diag(nsubmap, npix_submap, nnz, cov.data, coadd_map.data)
+    log.info_rank(f"Applied matrix in", timer=timer, comm=comm)
 
-    print(f"Writing {args.outmap}")
-    write_healpix(args.outmap, map_sum, nest=True, overwrite=True)
+    if args.cov is not None:
+        log.info_rank(f"Writing {args.cov}", comm=comm)
+        if rank == 0:
+            cov = cov.reshape(npix, -1).T.copy()
+            write_healpix(args.cov, cov, nest=True, overwrite=True)
+        log.info_rank(f"Wrote {args.cov}", timer=timer, comm=comm)
+    if rank == 0:
+        del cov
+
+    log.info_rank(f"Writing {args.outmap}", comm=comm)
+    if rank == 0:
+        coadd_map = coadd_map.reshape(npix, -1).T.copy()
+        write_healpix(args.outmap, coadd_map, nest=True, overwrite=True)
+    log.info_rank(f"Wrote {args.outmap}", timer=timer, comm=comm)
 
     log.info_rank(f"Co-add done in", timer=timer0, comm=comm)
 
