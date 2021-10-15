@@ -286,6 +286,7 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -509,6 +510,7 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -736,6 +738,7 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
