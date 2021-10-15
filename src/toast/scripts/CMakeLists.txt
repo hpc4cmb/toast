@@ -9,6 +9,7 @@ install(PROGRAMS
     toast_timing_plot
     toast_benchmark_satellite
     toast_benchmark_ground
+    toast_benchmark_ground_setup
     benchmarking_utilities.py
     toast_healpix_convert
     DESTINATION bin

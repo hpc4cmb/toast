@@ -506,13 +506,15 @@ class AtmSim(object):
 
         if self._rank == 0:
             if fixed_r > 0:
-                log.debug(
+                log.verbose(
                     "Observed {} samples at r = {} in {} s".format(
                         nsamp, fixed_r, timer.seconds()
                     )
                 )
             else:
-                log.debug("Observed {} samples in {} s".format(nsamp, timer.seconds()))
+                log.verbose(
+                    "Observed {} samples in {} s".format(nsamp, timer.seconds())
+                )
 
         if status != 0:
             log.error("Observing {} samples failed with error {}".format(nsamp, status))

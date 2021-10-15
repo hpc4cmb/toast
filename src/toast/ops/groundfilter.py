@@ -312,6 +312,7 @@ class GroundFilter(Operator):
                         f"{log_prefix} OpGroundFilter: "
                         f"Processing detector # {idet + 1} / {ndet}"
                     )
+                    log.verbose(msg)
 
                 ref = obs.detdata[self.det_data][idet]
                 if self.det_flags is not None:
@@ -327,7 +328,7 @@ class GroundFilter(Operator):
                         f"{log_prefix} OpGroundFilter: "
                         f"Fit templates in {time() - t1:.1f}s"
                     )
-                    log.debug(msg)
+                    log.verbose(msg)
 
                 if coeff is None:
                     continue
@@ -341,7 +342,7 @@ class GroundFilter(Operator):
                         f"{log_prefix} OpGroundFilter: "
                         f"Subtract templates in {time() - t1:.1f}s"
                     )
-                    log.debug(msg)
+                    log.verbose(msg)
 
         if wcomm is not None:
             self.nsingular = wcomm.allreduce(self.nsingular)

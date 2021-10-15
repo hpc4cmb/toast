@@ -64,14 +64,14 @@ class FlagSSO(Operator):
     det_flag_mask = Int(1, help="Bit mask to raise flags with")
 
     sso_names = List(
-        #default_value=["Sun", "Moon"],
+        # default_value=["Sun", "Moon"],
         trait=Unicode,
         allow_none=True,
         help="Names of the SSOs, must be recognized by pyEphem",
     )
 
     sso_radii = List(
-        #default_value=[45.0 * u.deg, 5.0 * u.deg],
+        # default_value=[45.0 * u.deg, 5.0 * u.deg],
         trait=Quantity,
         allow_none=True,
         help="Radii around the sources to flag",

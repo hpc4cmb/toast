@@ -19,7 +19,14 @@ from toast.weather import SimWeather
 
 from .. import qarray as qa
 
-from ..utils import Environment, name_UID, Logger, rate_from_times, astropy_control
+from ..utils import (
+    Environment,
+    name_UID,
+    Logger,
+    rate_from_times,
+    astropy_control,
+    memreport,
+)
 
 from ..dist import distribute_uniform, distribute_discrete
 
@@ -427,8 +434,14 @@ class SimGround(Operator):
         group_numobs = groupdist[comm.group][1]
 
         for obindx in range(group_firstobs, group_firstobs + group_numobs):
-
             scan = self.schedule.scans[obindx]
+            name = f"{scan.name}_{int(scan.start.timestamp())}"
+            sys_mem_str = memreport(
+                msg="(whole node)", comm=data.comm.comm_group, silent=True
+            )
+            msg = f"Group {data.comm.group} begin observation {name} "
+            msg += f"with {sys_mem_str}"
+            log.debug_rank(msg, comm=data.comm.comm_group)
 
             # Currently, El nods happen before or after the formal scan start / end.
             # This means that we don't know ahead of time the total number of samples
@@ -669,7 +682,6 @@ class SimGround(Operator):
                 site=site,
             )
 
-            name = f"{scan.name}_{int(scan.start.timestamp())}"
             ob = Observation(
                 comm,
                 telescope,
@@ -844,6 +856,11 @@ class SimGround(Operator):
                 self.sun_close_interval,
                 self.sun_close_distance,
             )
+
+            obmem = ob.memory_use()
+            obmem_gb = obmem / 1024 ** 3
+            msg = f"Observation {ob.name} using {obmem_gb:0.2f} GB of total memory"
+            log.debug_rank(msg, comm=ob.comm.comm_group)
 
             data.obs.append(ob)
 

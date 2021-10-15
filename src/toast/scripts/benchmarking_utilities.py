@@ -357,7 +357,7 @@ def select_case(
     full_pointing,
     world_comm,
     per_process_overhead_bytes=1024 ** 3,
-    target_proc_dets=20,
+    target_proc_dets=200,
 ):
     """
     Selects the most appropriate case size given the memory available and number of
@@ -527,8 +527,8 @@ def estimate_memory_overhead(
     """
     log = toast.utils.Logger.get()
     # Start with 1GB for everything else
-    # base = 1024 ** 3
-    base = 0
+    base = 1024 ** 3
+    # base = 0
 
     # Compute the bytes per pixel.  We have:
     #   hits (int64):  8 bytes
@@ -694,6 +694,27 @@ def scan_map(args, rank, job_ops, data, log):
         job_ops.scan_map.save_pointing = job_ops.binner_final.full_pointing
         job_ops.scan_map.file = args.input_map
         job_ops.scan_map.apply(data)
+
+
+def default_sim_atmosphere():
+    """Return a SimAtmosphere operator with fixed defaults."""
+    return toast.ops.SimAtmosphere(
+        name="sim_atmosphere",
+        lmin_center=0.001 * u.meter,
+        lmin_sigma=0.0 * u.meter,
+        lmax_center=1.0 * u.meter,
+        lmax_sigma=0.0 * u.meter,
+        gain=1.0e-4,
+        zatm=40000 * u.meter,
+        zmax=200 * u.meter,
+        xstep=5 * u.meter,
+        ystep=5 * u.meter,
+        zstep=5 * u.meter,
+        nelem_sim_max=10000,
+        wind_dist=3000 * u.meter,
+        z0_center=2000 * u.meter,
+        z0_sigma=0 * u.meter,
+    )
 
 
 def run_mapmaker(job_ops, args, tmpls, data):
