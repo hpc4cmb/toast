@@ -42,7 +42,8 @@ class TemplateSubHarmonicTest(MPITestCase):
 
         tmpl = SubHarmonic(
             det_data=defaults.det_data,
-            times=obs_names.times,
+            det_flags=None,
+            times=defaults.times,
             noise_model=noise_model.noise_model,
         )
 
