@@ -107,8 +107,8 @@ class GroundFilterTest(MPITestCase):
         rms = dict()
         for ob in data.obs:
             shared_flags = ob.shared[defaults.shared_flags].data
-            rightgoing = (shared_flags & 2) != 0
-            leftgoing = (shared_flags & 4) != 0
+            rightgoing = (shared_flags & defaults.scan_leftright) != 0
+            leftgoing = (shared_flags & defaults.scan_rightleft) != 0
             az = ob.shared[defaults.azimuth].data * 100
             rms[ob.name] = dict()
             for det in ob.local_detectors:

@@ -210,11 +210,11 @@ class FilterBin(Operator):
     )
 
     leftright_mask = Int(
-        defaults.scan_leftright, help="Bit mask value left-to-right scans"
+        defaults.scan_leftright, help="Bit mask value for left-to-right scans"
     )
 
     rightleft_mask = Int(
-        defaults.scan_rightleft, help="Bit mask value left-to-right scans"
+        defaults.scan_rightleft, help="Bit mask value for right-to-left scans"
     )
 
     poly_filter_order = Int(1, allow_none=True, help="Polynomial order")

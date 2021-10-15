@@ -103,6 +103,14 @@ class GroundFilter(Operator):
         False, help="Apply a different template for left and right scans"
     )
 
+    leftright_mask = Int(
+        defaults.scan_leftright, help="Bit mask value for left-to-right scans"
+    )
+
+    rightleft_mask = Int(
+        defaults.scan_rightleft, help="Bit mask value for right-to-left scans"
+    )
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
@@ -182,8 +190,8 @@ class GroundFilter(Operator):
             common_flags = obs.shared[self.shared_flags].data
             legendre_filter = []
             # The flag masks are hard-coded in sim_ground.py
-            mask1 = common_flags & 2 == 0
-            mask2 = common_flags & 4 == 0
+            mask1 = (common_flags & self.rightleft_mask) == 0
+            mask2 = (common_flags & self.leftright_mask) == 0
             for template in legendre_templates:
                 for mask in mask1, mask2:
                     temp = template.copy()
