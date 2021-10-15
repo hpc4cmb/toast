@@ -63,6 +63,9 @@ def combine_observation_matrix(rootname):
     timer.start()
 
     datafiles = sorted(glob(f"{rootname}.*.*.*.data.npy"))
+    if len(datafiles) == 0:
+        msg = f"No files match {rootname}.*.*.*.data.npy"
+        raise RuntimeError(msg)
 
     all_data = []
     all_indices = []
@@ -147,6 +150,11 @@ class FilterBin(Operator):
         help="Observation detdata key for flags to use",
     )
 
+    filter_flag_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Bit mask value for flagging samples that fail filtering",
+    )
+
     det_flag_mask = Int(
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
@@ -212,7 +220,7 @@ class FilterBin(Operator):
     poly_filter_order = Int(1, allow_none=True, help="Polynomial order")
 
     poly_filter_view = Unicode(
-        "scanning", allow_none=True, help="Intervals for polynomial filtering"
+        "throw", allow_none=True, help="Intervals for polynomial filtering"
     )
 
     write_obs_matrix = Bool(False, help="Write the observation matrix")
@@ -412,6 +420,7 @@ class FilterBin(Operator):
                     (common_flags & self.binning.shared_flag_mask) == 0,
                     (flags & self.binning.det_flag_mask) == 0,
                 )
+
                 if np.sum(good_fit) == 0:
                     continue
 
@@ -442,12 +451,13 @@ class FilterBin(Operator):
                     )
                     t1 = time()
 
-                # Throw out all templates that have no valid data
+                # Throw out all templates that have no valid data, normalize the rest
                 templates = []
                 nbad = 0
                 for template in all_templates:
                     if np.any(template[good_fit] != 0):
-                        templates.append(template)
+                        norm = np.sum(template[good_fit] ** 2)
+                        templates.append(template / norm)
                     else:
                         nbad += 1
                 if nbad != 0:
@@ -586,17 +596,33 @@ class FilterBin(Operator):
         ninterval = len(intervals)
         nsample = obs.n_local_samples
         poly_templates = np.zeros([nfilter * ninterval, nsample])
+        shared_flags = np.array(obs.shared[self.shared_flags])
+        bad = (shared_flags & self.shared_flag_mask) != 0
 
         offset = 0
         for ival in intervals:
             istart = ival.first
             istop = ival.last + 1
+            # Trim flagged samples from both ends
+            while istart < istop and bad[istart]:
+                istart += 1
+            while istop - 1 > istart and bad[istop - 1]:
+                istop -= 1
+            if istop - istart < nfilter:
+                # Not enough samples to filter, flag this interval
+                shared_flags[istart:istop] |= self.filter_flag_mask
+                continue
             wbin = 2 / (istop - istart)
             phase = (np.arange(istop - istart) + 0.5) * wbin - 1
             legendre_templates = np.zeros([nfilter, phase.size])
             legendre(phase, legendre_templates, 0, nfilter)
             poly_templates[offset : offset + nfilter, istart:istop] = legendre_templates
             offset += nfilter
+
+        if offset < nfilter * ninterval:
+            # some interval(s) were too short
+            obs.shared[self.shared_flags].set(shared_flags, offset=(0,), fromrank=0)
+            poly_templates = poly_templates[:offset]
 
         if templates is None:
             templates = poly_templates
@@ -679,7 +705,7 @@ class FilterBin(Operator):
                 f"is poorly conditioned: "
                 f"rcond = {rcond}.  Using matrix pseudoinverse.",
             )
-            cov = np.linalg.pinv(invcov, rcond=1e-6, hermitian=True)
+            cov = np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
 
         return cov
 

@@ -32,16 +32,18 @@ class FilterBinTest(MPITestCase):
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
+        nside = 256
+
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
         pixels = ops.PixelsHealpix(
-            nside=self.nside,
+            nside=nside,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
             # view="scanning",
         )
         weights = ops.StokesWeights(
-            mode="IQU",
+            mode="I",  # "IQU",
             hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
@@ -53,6 +55,13 @@ class FilterBinTest(MPITestCase):
         # Simulate noise from this model
         sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
+
+        # Add a strong gradient that should be filtered out completely
+        for obs in data.obs:
+            times = obs.shared[defaults.times]
+            for det in obs.local_detectors:
+                obs.detdata[defaults.det_data] += times.data
+                obs.detdata[defaults.det_data][:] = times.data
 
         # Make fake flags
         fake_flags(data)
@@ -89,6 +98,13 @@ class FilterBinTest(MPITestCase):
         # Confirm that the filtered map has less noise than the unfiltered map
 
         if data.comm.world_rank == 0:
+            import matplotlib.pyplot as plt
+
+            rot = [43, -42]
+            reso = 4
+            fig = plt.figure(figsize=[18, 12])
+            cmap = "coolwarm"
+
             fname_binned = os.path.join(
                 self.outdir, f"{filterbin.name}_unfiltered_map.fits"
             )
@@ -96,14 +112,34 @@ class FilterBinTest(MPITestCase):
                 self.outdir, f"{filterbin.name}_filtered_map.fits"
             )
 
-            binned = hp.read_map(fname_binned, None)
-            filtered = hp.read_map(fname_filtered, None)
+            binned = np.atleast_2d(hp.read_map(fname_binned, None))
+            filtered = np.atleast_2d(hp.read_map(fname_filtered, None))
 
             good = binned != 0
             rms1 = np.std(binned[good])
             rms2 = np.std(filtered[good])
 
-            assert rms2 < 0.9 * rms1
+            nrow, ncol = 2, 2
+            for m in binned, filtered:
+                m[m == 0] = hp.UNSEEN
+            args = {"rot": rot, "reso": reso, "cmap": cmap}
+            hp.gnomview(
+                binned[0],
+                sub=[nrow, ncol, 1],
+                title=f"Binned map : {rms1}",
+                **args,
+            )
+            hp.gnomview(
+                filtered[0],
+                sub=[nrow, ncol, 2],
+                title=f"Filtered map : {rms2}",
+                **args,
+            )
+
+            fname = os.path.join(self.outdir, "filter_test.png")
+            fig.savefig(fname)
+
+            assert rms2 < 1e-6 * rms1
 
         return
 
@@ -345,19 +381,41 @@ class FilterBinTest(MPITestCase):
             diffmap[filtered == 0] = hp.UNSEEN
             filtered[filtered == 0] = hp.UNSEEN
             test_map[test_map == 0] = hp.UNSEEN
-            hp.gnomview(filtered[0], sub=[nrow, ncol, 1], title="Filtered map", **args)
+            rms1 = np.std(filtered[0, good])
             hp.gnomview(
-                test_map[0], sub=[nrow, ncol, 2], title="Input x obs.matrix", **args
+                filtered[0],
+                sub=[nrow, ncol, 1],
+                title=f"Filtered map, RMS = {rms1}",
+                **args,
             )
-            hp.gnomview(input_map[0], sub=[nrow, ncol, 3], title="Input map", **args)
-            hp.gnomview(diffmap[0], sub=[nrow, ncol, 4], title="Difference", **args)
+            rms2 = np.std(test_map[0, good])
+            hp.gnomview(
+                test_map[0],
+                sub=[nrow, ncol, 2],
+                title=f"Input x obs.matrix, RMS = {rms2}",
+                **args,
+            )
+            rms3 = np.std(input_map[0, good])
+            hp.gnomview(
+                input_map[0],
+                sub=[nrow, ncol, 3],
+                title=f"Input map, RMS = {rms3}",
+                **args,
+            )
+            rms4 = np.std(diffmap[0, good])
+            hp.gnomview(
+                diffmap[0],
+                sub=[nrow, ncol, 4],
+                title=f"Difference, RMS = {rms4}",
+                **args,
+            )
             fname = os.path.join(self.outdir, "obs_matrix_flagged_test.png")
             fig.savefig(fname)
 
             for i in range(3):
                 rms1 = np.std(filtered[i][good])
                 rms2 = np.std((filtered - test_map)[i][good])
-                assert rms2 < 1e-6 * rms1
+                assert rms2 < 1e-5 * rms1
 
         return
 

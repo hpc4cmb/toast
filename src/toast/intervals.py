@@ -232,6 +232,9 @@ class IntervalList(Sequence):
     def __getitem__(self, key):
         return self._internal[key]
 
+    def __delitem__(self, key):
+        del self._internal[key]
+
     def __contains__(self, item):
         for ival in self._internal:
             if ival == item:

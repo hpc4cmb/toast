@@ -39,9 +39,7 @@ def main():
     timer0.start()
     timer.start()
 
-    parser = argparse.ArgumentParser(
-        description="Co-add HEALPix maps"
-    )
+    parser = argparse.ArgumentParser(description="Co-add HEALPix maps")
 
     parser.add_argument(
         "inmap",
@@ -67,7 +65,7 @@ def main():
         "--rcond_limit",
         default=1e-3,
         type=float,
-        help="Reciprocal condition number limit"
+        help="Reciprocal condition number limit",
     )
 
     args = parser.parse_args()
@@ -95,7 +93,6 @@ def main():
     nsubmap = npix
     npix_submap = 1
 
-
     rcond = np.zeros(npix, dtype=float)
 
     print("Inverting matrix")
@@ -103,20 +100,16 @@ def main():
     cov_eigendecompose_diag(
         nsubmap, npix_submap, nnz, matrix_sum, rcond, args.rcond_limit, True
     )
-    
+
     print("Applying matrix")
     map_sum = map_sum.T.ravel().astype(float).copy()
-    cov_apply_diag(
-        nsubmap, npix_submap, nnz, matrix_sum.data, map_sum.data
-    )
+    cov_apply_diag(nsubmap, npix_submap, nnz, matrix_sum.data, map_sum.data)
 
     map_sum = map_sum.reshape(npix, -1).T.copy()
     matrix_sum = matrix_sum.reshape(npix, -1).T.copy()
 
     print(f"Writing {args.outmap}")
-    write_healpix(
-        args.outmap, map_sum, nest=True, overwrite=True
-    )
+    write_healpix(args.outmap, map_sum, nest=True, overwrite=True)
 
     log.info_rank(f"Co-add done in", timer=timer0, comm=comm)
 

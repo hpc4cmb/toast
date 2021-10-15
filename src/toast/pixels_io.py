@@ -395,7 +395,9 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
     return
 
 
-def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, single_precision=False):
+def write_healpix_hdf5(
+    pix, path, nest=True, comm_bytes=10000000, single_precision=False
+):
     """Write pixel data to a HEALPix format HDF5 dataset.
 
     The data across all processes is assumed to be synchronized (the data for a given

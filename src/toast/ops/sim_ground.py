@@ -214,6 +214,18 @@ class SimGround(Operator):
 
     turnaround_interval = Unicode("turnaround", help="Interval name for turnarounds")
 
+    throw_leftright_interval = Unicode(
+        "throw_leftright", help="Interval name for left to right scans + turnarounds"
+    )
+
+    throw_rightleft_interval = Unicode(
+        "throw_rightleft", help="Interval name for right to left scans + turnarounds"
+    )
+
+    throw_interval = Unicode(
+        "throw", help="Interval name for scan + turnaround intervals"
+    )
+
     scan_leftright_interval = Unicode(
         "scan_leftright", help="Interval name for left to right scans"
     )
@@ -246,6 +258,10 @@ class SimGround(Operator):
         None, allow_none=True, help="Maximum PWV for the simulated weather."
     )
 
+    invalid_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask to raise invalid flags with"
+    )
+
     turnaround_mask = Int(
         defaults.turnaround, help="Bit mask to raise turnaround flags with"
     )
@@ -258,17 +274,13 @@ class SimGround(Operator):
         defaults.scan_rightleft, help="Bit mask to raise right-to-left flags with"
     )
 
-    sun_up_mask = Int(
-        defaults.sun_up, help="Bit mask to raise Sun up flags with"
-    )
+    sun_up_mask = Int(defaults.sun_up, help="Bit mask to raise Sun up flags with")
 
     sun_close_mask = Int(
         defaults.sun_close, help="Bit mask to raise Sun close flags with"
     )
 
-    elnod_mask = Int(
-        defaults.elnod, help="Bit mask to raise elevation nod flags with"
-    )
+    elnod_mask = Int(defaults.elnod, help="Bit mask to raise elevation nod flags with")
 
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
@@ -563,6 +575,8 @@ class SimGround(Operator):
                 ival_turn_leftright,
                 ival_scan_rightleft,
                 ival_turn_rightleft,
+                ival_throw_leftright,
+                ival_throw_rightleft,
             ) = simulate_ces_scan(
                 start_time.timestamp(),
                 stop_time.timestamp(),
@@ -842,6 +856,16 @@ class SimGround(Operator):
             # every process, we don't need to communicate the global timespans of the
             # intervals (using create or create_col).  We can just create them directly.
 
+            ob.intervals[self.throw_leftright_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_throw_leftright
+            )
+            ob.intervals[self.throw_rightleft_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_throw_rightleft
+            )
+            ob.intervals[self.throw_interval] = (
+                ob.intervals[self.throw_leftright_interval]
+                | ob.intervals[self.throw_rightleft_interval]
+            )
             ob.intervals[self.scan_leftright_interval] = IntervalList(
                 ob.shared[self.times], timespans=ival_scan_leftright
             )
@@ -898,10 +922,8 @@ class SimGround(Operator):
             shared_flag_bytes=1,
             view_mask=[
                 (self.turnaround_interval, self.turnaround_mask),
-                (self.scan_leftright_interval, self.leftright_mask),
-                (self.scan_rightleft_interval, self.rightleft_mask),
-                (self.turn_leftright_interval, self.rightleft_mask),
-                (self.turn_rightleft_interval, self.leftright_mask),
+                (self.throw_leftright_interval, self.leftright_mask),
+                (self.throw_rightleft_interval, self.rightleft_mask),
                 (self.sun_up_interval, self.sun_up_mask),
                 (self.sun_close_interval, self.sun_close_mask),
                 (self.elnod_interval, self.elnod_mask),
