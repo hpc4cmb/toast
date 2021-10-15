@@ -15,7 +15,7 @@ from .. import ops as ops
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io import write_healpix_fits
+from ..pixels_io import read_healpix
 from ..vis import set_matplotlib_backend
 from ._helpers import create_fake_sky, create_ground_data, create_outdir, fake_flags
 from .mpi import MPITestCase
@@ -92,6 +92,7 @@ class FilterBinTest(MPITestCase):
             split_ground_template=True,
             poly_filter_order=2,
             output_dir=self.outdir,
+            write_hdf5=True,
         )
         filterbin.apply(data)
 
@@ -106,14 +107,14 @@ class FilterBinTest(MPITestCase):
             cmap = "coolwarm"
 
             fname_binned = os.path.join(
-                self.outdir, f"{filterbin.name}_unfiltered_map.fits"
+                self.outdir, f"{filterbin.name}_unfiltered_map.h5"
             )
             fname_filtered = os.path.join(
-                self.outdir, f"{filterbin.name}_filtered_map.fits"
+                self.outdir, f"{filterbin.name}_filtered_map.h5"
             )
 
-            binned = np.atleast_2d(hp.read_map(fname_binned, None))
-            filtered = np.atleast_2d(hp.read_map(fname_filtered, None))
+            binned = np.atleast_2d(read_healpix(fname_binned, None))
+            filtered = np.atleast_2d(read_healpix(fname_filtered, None))
 
             good = binned != 0
             rms1 = np.std(binned[good])
