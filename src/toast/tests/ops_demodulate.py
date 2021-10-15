@@ -61,8 +61,8 @@ class DemodulateTest(MPITestCase):
         for submap in range(dist.n_submap):
             if submap in dist.local_submaps:
                 pix_data.data[off, :, 0] = map_values[0]
-                pix_data.data[off, :, 1] = map_values[1] # 1
-                pix_data.data[off, :, 2] = map_values[2] # 0
+                pix_data.data[off, :, 1] = map_values[1]
+                pix_data.data[off, :, 2] = map_values[2]
                 off += 1
         data[map_key] = pix_data
 

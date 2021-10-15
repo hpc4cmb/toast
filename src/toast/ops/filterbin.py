@@ -125,11 +125,11 @@ def combine_observation_matrix(rootname):
 
 @trait_docs
 class FilterBin(Operator):
-    """OpFilterBin buids a template matrix and projects out
+    """FilterBin buids a template matrix and projects out
     compromised modes.  It then bins the signal and optionally
     writes out the sparse observation matrix that matches the
     filtering operations.
-    OpFilterBin supports deprojection templates.
+    FilterBin supports deprojection templates.
 
     THIS OPERATOR ASSUMES OBSERVATIONS ARE DISTRIBUTED BY DETECTOR
     WITHIN A GROUP
@@ -355,22 +355,22 @@ class FilterBin(Operator):
 
         self._initialize_obs_matrix()
         log.debug_rank(
-            "OpFilterBin: Initialized observation_matrix in",
+            "FilterBin: Initialized observation_matrix in",
             comm=self.comm,
             timer=timer,
         )
 
         self._load_deprojection_map(data)
         log.debug_rank(
-            "OpFilterBin: Loaded deprojection map in", comm=self.comm, timer=timer
+            "FilterBin: Loaded deprojection map in", comm=self.comm, timer=timer
         )
 
         self._bin_map(data, detectors, filtered=False)
         log.debug_rank(
-            "OpFilterBin: Binned unfiltered map in", comm=self.comm, timer=timer
+            "FilterBin: Binned unfiltered map in", comm=self.comm, timer=timer
         )
 
-        log.debug_rank("OpFilterBin: Filtering signal", comm=self.comm)
+        log.debug_rank("FilterBin: Filtering signal", comm=self.comm)
 
         timer1 = Timer()
         timer1.start()
@@ -382,7 +382,7 @@ class FilterBin(Operator):
             dets = obs.select_local_detectors(detectors)
             if self.grank == 0:
                 log.verbose(
-                    f"{self.group:4} : OpFilterBin: Processing observation "
+                    f"{self.group:4} : FilterBin: Processing observation "
                     f"{iobs} / {len(data.obs)}",
                 )
 
@@ -395,7 +395,7 @@ class FilterBin(Operator):
 
             if self.grank == 0:
                 log.verbose(
-                    f"{self.group:4} : OpFilterBin:   Built common templates in "
+                    f"{self.group:4} : FilterBin:   Built common templates in "
                     f"{time() - t1:.2f} s",
                 )
                 t1 = time()
@@ -403,7 +403,7 @@ class FilterBin(Operator):
             for idet, det in enumerate(dets):
                 if self.grank == 0:
                     log.verbose(
-                        f"{self.group:4} : OpFilterBin:   Processing detector "
+                        f"{self.group:4} : FilterBin:   Processing detector "
                         f"# {idet + 1} / {len(dets)}",
                     )
 
@@ -446,7 +446,7 @@ class FilterBin(Operator):
                 self._add_deprojection_templates(data, obs, pixels, all_templates)
                 if self.grank == 0:
                     log.verbose(
-                        f"{self.group:4} : OpFilterBin:   Built deprojection "
+                        f"{self.group:4} : FilterBin:   Built deprojection "
                         f"templates in {time() - t1:.2f} s",
                     )
                     t1 = time()
@@ -472,7 +472,7 @@ class FilterBin(Operator):
                 )
                 if self.grank == 0:
                     log.verbose(
-                        f"{self.group:4} : OpFilterBin:   Built template covariance "
+                        f"{self.group:4} : FilterBin:   Built template covariance "
                         f"{time() - t1:.2f} s",
                     )
                     t1 = time()
@@ -482,7 +482,7 @@ class FilterBin(Operator):
                 )
                 if self.grank == 0:
                     log.verbose(
-                        f"{self.group:4} : OpFilterBin:   Regressed templates in "
+                        f"{self.group:4} : FilterBin:   Regressed templates in "
                         f"{time() - t1:.2f} s",
                     )
                     t1 = time()
@@ -499,7 +499,7 @@ class FilterBin(Operator):
                 )
 
         log.debug_rank(
-            f"{self.group:4} : OpFilterBin:   Filtered group data in",
+            f"{self.group:4} : FilterBin:   Filtered group data in",
             comm=self.gcomm,
             timer=timer1,
         )
@@ -508,7 +508,7 @@ class FilterBin(Operator):
             self.comm.Barrier()
 
         log.info_rank(
-            f"OpFilterBin:   Filtered data in",
+            f"FilterBin:   Filtered data in",
             comm=self.comm,
             timer=timer2,
         )
@@ -516,31 +516,29 @@ class FilterBin(Operator):
         # Bin filtered signal
 
         self._bin_map(data, detectors, filtered=True)
-        log.debug_rank(
-            "OpFilterBin: Binned filtered map in", comm=self.comm, timer=timer
-        )
+        log.debug_rank("FilterBin: Binned filtered map in", comm=self.comm, timer=timer)
 
         log.info_rank(
-            f"OpFilterBin:   Binned data in",
+            f"FilterBin:   Binned data in",
             comm=self.comm,
             timer=timer2,
         )
 
         if self.write_obs_matrix:
             log.debug_rank(
-                "OpFilterBin: Noise-weighting observation matrix", comm=self.comm
+                "FilterBin: Noise-weighting observation matrix", comm=self.comm
             )
             self._noiseweight_obs_matrix(data)
             log.debug_rank(
-                "OpFilterBin: Noise-weighted observation_matrix in",
+                "FilterBin: Noise-weighted observation_matrix in",
                 comm=self.comm,
                 timer=timer2,
             )
 
-            log.info_rank("OpFilterBin: Collecting observation matrix", comm=self.comm)
+            log.info_rank("FilterBin: Collecting observation matrix", comm=self.comm)
             self._collect_obs_matrix()
             log.info_rank(
-                "OpFilterBin: Collected observation_matrix in",
+                "FilterBin: Collected observation_matrix in",
                 comm=self.comm,
                 timer=timer2,
             )
@@ -694,14 +692,14 @@ class FilterBin(Operator):
         rcond = 1 / np.linalg.cond(invcov)
         if self.grank == 0:
             log.debug(
-                f"{self.group:4} : OpFilterBin: Template covariance matrix "
+                f"{self.group:4} : FilterBin: Template covariance matrix "
                 f"rcond = {rcond}",
             )
         if rcond > 1e-6:
             cov = np.linalg.inv(invcov)
         else:
             log.warning(
-                f"{self.group:4} : OpFilterBin: WARNING: template covariance matrix "
+                f"{self.group:4} : FilterBin: WARNING: template covariance matrix "
                 f"is poorly conditioned: "
                 f"rcond = {rcond}.  Using matrix pseudoinverse.",
             )
@@ -790,7 +788,7 @@ class FilterBin(Operator):
                 )
                 if self.grank == 0:
                     log.debug(
-                        f"{self.group:4} : OpFilterBin:     loaded cached matrix from "
+                        f"{self.group:4} : FilterBin:     loaded cached matrix from "
                         f"{fname_cache}* in {time() - t1:.2f} s",
                     )
                     t1 = time()
@@ -803,19 +801,19 @@ class FilterBin(Operator):
 
             # Temporarily compress pixels
             if self.grank == 0:
-                log.debug(f"{self.group:4} : OpFilterBin:     Compressing pixels")
+                log.debug(f"{self.group:4} : FilterBin:     Compressing pixels")
             c_pixels, c_npix, local_to_global = self._compress_pixels(
                 pixels[good_any].copy()
             )
             if self.grank == 0:
                 log.debug(
-                    f"{self.group:4} : OpFilterBin: Compressed in {time() - t1:.2f} s",
+                    f"{self.group:4} : FilterBin: Compressed in {time() - t1:.2f} s",
                 )
                 t1 = time()
             c_npixtot = c_npix * self.nnz
             c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
             if self.grank == 0:
-                log.debug(f"{self.group:4} : OpFilterBin:     Accumulating")
+                log.debug(f"{self.group:4} : FilterBin:     Accumulating")
             accumulate_observation_matrix(
                 c_obs_matrix,
                 c_pixels,
@@ -827,41 +825,41 @@ class FilterBin(Operator):
             )
             if self.grank == 0:
                 log.debug(
-                    f"{self.group:4} : OpFilterBin:     Accumulated in {time() - t1:.2f} s"
+                    f"{self.group:4} : FilterBin:     Accumulated in {time() - t1:.2f} s"
                 )
                 log.debug(
-                    f"{self.group:4} : OpFilterBin:     Expanding local to global",
+                    f"{self.group:4} : FilterBin:     Expanding local to global",
                 )
                 t1 = time()
             # expand to global pixel numbers
             local_obs_matrix = self._expand_matrix(c_obs_matrix, local_to_global)
             if self.grank == 0:
                 log.debug(
-                    f"{self.group:4} : OpFilterBin:     Expanded in {time() - t1:.2f} s"
+                    f"{self.group:4} : FilterBin:     Expanded in {time() - t1:.2f} s"
                 )
                 t1 = time()
 
             if fname_cache is not None:
                 if self.grank == 0:
                     log.debug(
-                        f"{self.group:4} : OpFilterBin:     Caching to {fname_cache}*",
+                        f"{self.group:4} : FilterBin:     Caching to {fname_cache}*",
                     )
                 np.save(fname_cache + ".data", local_obs_matrix)
                 np.save(fname_cache + ".indices", local_obs_matrix)
                 np.save(fname_cache + ".indptr", local_obs_matrix)
                 if self.grank == 0:
                     log.debug(
-                        f"{self.group:4} : OpFilterBin:     cached in {time() - t1:.2f} s",
+                        f"{self.group:4} : FilterBin:     cached in {time() - t1:.2f} s",
                     )
                     t1 = time()
 
         if self.grank == 0:
-            log.debug(f"{self.group:4} : OpFilterBin:     Adding to global")
+            log.debug(f"{self.group:4} : FilterBin:     Adding to global")
         detweight = obs[self.binning.noise_model].detector_weight(det)
         self.obs_matrix += local_obs_matrix * detweight
         if self.grank == 0:
             log.debug(
-                f"{self.group:4} : OpFilterBin:     Added in {time() - t1:.2f} s",
+                f"{self.group:4} : FilterBin:     Added in {time() - t1:.2f} s",
             )
         return
 
@@ -983,7 +981,7 @@ class FilterBin(Operator):
             factor = 1
             while factor < self.ntask:
                 log.debug_rank(
-                    f"OpFilterBin: Collecting {2 * factor} / {self.ntask}",
+                    f"FilterBin: Collecting {2 * factor} / {self.ntask}",
                     comm=self.comm,
                 )
                 if self.rank % (factor * 2) == 0:
@@ -1034,14 +1032,14 @@ class FilterBin(Operator):
 
                 if self.comm is not None:
                     self.comm.Barrier()
-                log.debug_rank("OpFilterBin: Collected in", comm=self.comm, timer=timer)
+                log.debug_rank("FilterBin: Collected in", comm=self.comm, timer=timer)
                 factor *= 2
 
             # Write out the observation matrix
             fname = os.path.join(self.output_dir, f"{self.name}_obs_matrix")
             fname += f".{row_start:012}.{row_stop:012}.{nrow_tot:012}"
             log.debug_rank(
-                f"OpFilterBin: Writing observation matrix to {fname}.npz",
+                f"FilterBin: Writing observation matrix to {fname}.npz",
                 comm=self.comm,
             )
             if self.rank == 0:
@@ -1054,7 +1052,7 @@ class FilterBin(Operator):
                 else:
                     scipy.sparse.save_npz(fname, obs_matrix_slice)
             log.info_rank(
-                f"OpFilterBin: Wrote observation matrix to {fname} in",
+                f"FilterBin: Wrote observation matrix to {fname} in",
                 comm=self.comm,
                 timer=timer,
             )
