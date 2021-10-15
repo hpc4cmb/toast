@@ -43,7 +43,7 @@ class StatisticsTest(MPITestCase):
         sim_noise.apply(data)
 
         # Measure TOD statistics
-        statistics = ops.Statistics()
+        statistics = ops.Statistics(det_flags=None)
         statistics.output_dir = self.outdir
         statistics.apply(data)
 

@@ -72,6 +72,7 @@ class MapmakerSolveTest(MPITestCase):
         # Set up binner
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             covariance=cov_and_hits.covariance,
             det_data=sim_noise.det_data,
             pixel_pointing=pixels,
@@ -91,6 +92,7 @@ class MapmakerSolveTest(MPITestCase):
         step_seconds = float(int(ob_time / 10.0))
         tmpl = Offset(
             times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -182,6 +184,7 @@ class MapmakerSolveTest(MPITestCase):
         step_seconds = float(int(ob_time / 10.0))
         tmpl = Offset(
             times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -235,6 +238,7 @@ class MapmakerSolveTest(MPITestCase):
         # Set up binner
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             covariance=cov_and_hits.covariance,
             det_data=defaults.det_data,
             pixel_pointing=pixels,
