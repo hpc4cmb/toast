@@ -132,6 +132,7 @@ class SimDipoleTest(MPITestCase):
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
+            det_flags=None,
         )
         binner.apply(data)
 
