@@ -12,7 +12,7 @@ from ..traits import trait_docs, Int, Unicode, Bool
 
 from ..timing import function_timer
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .. import qarray as qa
 
@@ -35,10 +35,12 @@ class PointingDetectorSimple(Operator):
         None, allow_none=True, help="Observation shared key for telescope flags to use"
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+    )
 
     boresight = Unicode(
-        obs_names.boresight_radec, help="Observation shared key for boresight"
+        defaults.boresight_radec, help="Observation shared key for boresight"
     )
 
     quats = Unicode(

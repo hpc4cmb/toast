@@ -15,7 +15,7 @@ from .. import rng
 from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Float
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 
 @trait_docs
@@ -25,7 +25,7 @@ class TimeConstant(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key apply filtering to",
     )
 

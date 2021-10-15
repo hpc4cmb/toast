@@ -17,6 +17,8 @@ from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
 from .operator import Operator
 
+from ..observation import default_values as defaults
+
 
 @function_timer
 def read_xtalk_matrix(filename, data):
@@ -152,7 +154,9 @@ class CrossTalk(Operator):
     )
 
     det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
+        defaults.det_data,
+        allow_none=True,
+        help="Observation detdata key for the timestream data",
     )
 
     xtalk_mat_file = Unicode(

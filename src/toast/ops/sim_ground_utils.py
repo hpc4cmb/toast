@@ -475,7 +475,7 @@ def simulate_ces_scan(
         azvec = np.array([az_min, az_max])
     all_t.append(np.array(tvec))
     all_az.append(np.array(azvec))
-    range_scan_leftright = (tvec[0], tvec[-1])
+    range_scan_leftright = (t0, t1)
 
     # turnaround
 
@@ -490,7 +490,7 @@ def simulate_ces_scan(
     azvec = az_max + (tvec - t0) * dazdt - 0.5 * scan_accel * (tvec - t0) ** 2
     all_t.append(np.array(tvec[:-1]))
     all_az.append(np.array(azvec[:-1]))
-    range_turn_leftright = (tvec[0], tvec[-1])
+    range_turn_leftright = (t0, t1)
 
     # right-to-left
 
@@ -509,7 +509,7 @@ def simulate_ces_scan(
         azvec = np.array([az_max, az_min])
     all_t.append(np.array(tvec))
     all_az.append(np.array(azvec))
-    range_scan_rightleft = (tvec[0], tvec[-1])
+    range_scan_rightleft = (t0, t1)
 
     # turnaround
 
@@ -524,7 +524,7 @@ def simulate_ces_scan(
     azvec = az_min - (tvec - t0) * dazdt + 0.5 * scan_accel * (tvec - t0) ** 2
     all_t.append(np.array(tvec))
     all_az.append(np.array(azvec))
-    range_turn_rightleft = (tvec[0], tvec[-1])
+    range_turn_rightleft = (t0, t1)
 
     # Concatenate
 
@@ -581,6 +581,9 @@ def simulate_ces_scan(
     ival_scan_rightleft = list()
     ival_turn_leftright = list()
     ival_turn_rightleft = list()
+    ival_throw_leftright = list()
+    ival_throw_rightleft = list()
+    ival_scan = list()
 
     # Repeat time intervals to cover the timestamps
     n_repeat = 1 + int((times[-1] - tmin) / tdelta)
@@ -598,14 +601,35 @@ def simulate_ces_scan(
         ival_turn_rightleft.append(
             (range_turn_rightleft[0] + t_off, range_turn_rightleft[1] + t_off)
         )
+        half_turn_leftright = 0.5 * (range_turn_leftright[1] - range_turn_leftright[0])
+        half_turn_rightleft = 0.5 * (range_turn_rightleft[1] - range_turn_rightleft[0])
+        ival_throw_leftright.append(
+            (
+                range_scan_leftright[0] + t_off - half_turn_rightleft,
+                range_scan_leftright[1] + t_off + half_turn_leftright,
+            )
+        )
+        ival_throw_rightleft.append(
+            (
+                range_scan_rightleft[0] + t_off - half_turn_leftright,
+                range_scan_rightleft[1] + t_off + half_turn_rightleft,
+            )
+        )
         t_off += tdelta
-    # Trim off the final intervals if they extend past the timestamps
+
+    # Trim off the intervals if they extend past the timestamps
     for ival in [
         ival_scan_leftright,
         ival_scan_rightleft,
         ival_turn_leftright,
         ival_turn_rightleft,
+        ival_throw_leftright,
+        ival_throw_rightleft,
     ]:
+        first = tuple(ival[-1])
+        if first[0] < times[0]:
+            # interval is truncated
+            ival[0] = (times[0], first[1])
         last = tuple(ival[-1])
         if last[0] > times[-1]:
             # Whole interval beyond the end
@@ -624,6 +648,8 @@ def simulate_ces_scan(
         ival_turn_leftright,
         ival_scan_rightleft,
         ival_turn_rightleft,
+        ival_throw_leftright,
+        ival_throw_rightleft,
     )
 
 

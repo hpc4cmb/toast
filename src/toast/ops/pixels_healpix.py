@@ -18,7 +18,7 @@ from .. import qarray as qa
 
 from ..pixels import PixelDistribution
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .._libtoast import healpix_pixels
 
@@ -56,7 +56,7 @@ class PixelsHealpix(Operator):
     )
 
     pixels = Unicode(
-        obs_names.pixels, help="Observation detdata key for output pixel indices"
+        defaults.pixels, help="Observation detdata key for output pixel indices"
     )
 
     quats = Unicode(

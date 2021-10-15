@@ -28,7 +28,7 @@ from ..utils import Environment, Logger, Timer
 
 from .._libtoast import bin_templates, add_templates, legendre
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 
 @trait_docs
@@ -40,7 +40,7 @@ class GroundFilter(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key for accumulating atmosphere timestreams",
     )
 
@@ -49,27 +49,36 @@ class GroundFilter(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+    )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     ground_flag_mask = Int(
-        1, help="Bit mask to use when adding flags based on ground filter failures."
+        defaults.det_mask_invalid,
+        help="Bit mask to use when adding flags based on ground filter failures.",
     )
 
     azimuth = Unicode(
-        obs_names.azimuth, allow_none=True, help="Observation shared key for Azimuth"
+        defaults.azimuth, allow_none=True, help="Observation shared key for Azimuth"
     )
 
     boresight_azel = Unicode(
-        obs_names.boresight_azel,
+        defaults.boresight_azel,
         allow_none=True,
         help="Observation shared key for boresight Az/El",
     )
@@ -92,6 +101,14 @@ class GroundFilter(Operator):
 
     split_template = Bool(
         False, help="Apply a different template for left and right scans"
+    )
+
+    leftright_mask = Int(
+        defaults.scan_leftright, help="Bit mask value for left-to-right scans"
+    )
+
+    rightleft_mask = Int(
+        defaults.scan_rightleft, help="Bit mask value for right-to-left scans"
     )
 
     @traitlets.validate("det_flag_mask")
@@ -173,8 +190,8 @@ class GroundFilter(Operator):
             common_flags = obs.shared[self.shared_flags].data
             legendre_filter = []
             # The flag masks are hard-coded in sim_ground.py
-            mask1 = common_flags & 2 == 0
-            mask2 = common_flags & 4 == 0
+            mask1 = (common_flags & self.rightleft_mask) == 0
+            mask2 = (common_flags & self.leftright_mask) == 0
             for template in legendre_templates:
                 for mask in mask1, mask2:
                     temp = template.copy()

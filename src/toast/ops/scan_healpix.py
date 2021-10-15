@@ -21,7 +21,7 @@ from ..pixels_io import (
     filename_is_hdf5,
 )
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .operator import Operator
 
@@ -49,7 +49,7 @@ class ScanHealpix(Operator):
     file = Unicode(None, allow_none=True, help="Path to healpix FITS file")
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key for accumulating output"
+        defaults.det_data, help="Observation detdata key for accumulating output"
     )
 
     subtract = Bool(

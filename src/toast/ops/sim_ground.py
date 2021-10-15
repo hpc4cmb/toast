@@ -48,7 +48,7 @@ from ..coordinates import azel_to_radec
 
 from ..healpix import ang2vec
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .operator import Operator
 
@@ -154,20 +154,20 @@ class SimGround(Operator):
         help="If specified, use this column of the focalplane detector_data to group detectors",
     )
 
-    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     shared_flags = Unicode(
-        obs_names.shared_flags, help="Observation shared key for common flags"
+        defaults.shared_flags, help="Observation shared key for common flags"
     )
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         allow_none=True,
         help="Observation detdata key to initialize",
     )
 
     det_flags = Unicode(
-        obs_names.det_flags,
+        defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to initialize",
     )
@@ -176,23 +176,21 @@ class SimGround(Operator):
         None, allow_none=True, help="Observation shared key for HWP angle"
     )
 
-    azimuth = Unicode(obs_names.azimuth, help="Observation shared key for Azimuth")
+    azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
 
-    elevation = Unicode(
-        obs_names.elevation, help="Observation shared key for Elevation"
-    )
+    elevation = Unicode(defaults.elevation, help="Observation shared key for Elevation")
 
     boresight_azel = Unicode(
-        obs_names.boresight_azel, help="Observation shared key for boresight AZ/EL"
+        defaults.boresight_azel, help="Observation shared key for boresight AZ/EL"
     )
 
     boresight_radec = Unicode(
-        obs_names.boresight_radec, help="Observation shared key for boresight RA/DEC"
+        defaults.boresight_radec, help="Observation shared key for boresight RA/DEC"
     )
 
-    position = Unicode(obs_names.position, help="Observation shared key for position")
+    position = Unicode(defaults.position, help="Observation shared key for position")
 
-    velocity = Unicode(obs_names.velocity, help="Observation shared key for velocity")
+    velocity = Unicode(defaults.velocity, help="Observation shared key for velocity")
 
     hwp_rpm = Float(None, allow_none=True, help="The rate (in RPM) of the HWP rotation")
 
@@ -215,6 +213,18 @@ class SimGround(Operator):
     scanning_interval = Unicode("scanning", help="Interval name for scanning")
 
     turnaround_interval = Unicode("turnaround", help="Interval name for turnarounds")
+
+    throw_leftright_interval = Unicode(
+        "throw_leftright", help="Interval name for left to right scans + turnarounds"
+    )
+
+    throw_rightleft_interval = Unicode(
+        "throw_rightleft", help="Interval name for right to left scans + turnarounds"
+    )
+
+    throw_interval = Unicode(
+        "throw", help="Interval name for scan + turnaround intervals"
+    )
 
     scan_leftright_interval = Unicode(
         "scan_leftright", help="Interval name for left to right scans"
@@ -247,6 +257,30 @@ class SimGround(Operator):
     max_pwv = Quantity(
         None, allow_none=True, help="Maximum PWV for the simulated weather."
     )
+
+    invalid_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask to raise invalid flags with"
+    )
+
+    turnaround_mask = Int(
+        defaults.turnaround, help="Bit mask to raise turnaround flags with"
+    )
+
+    leftright_mask = Int(
+        defaults.scan_leftright, help="Bit mask to raise left-to-right flags with"
+    )
+
+    rightleft_mask = Int(
+        defaults.scan_rightleft, help="Bit mask to raise right-to-left flags with"
+    )
+
+    sun_up_mask = Int(defaults.sun_up, help="Bit mask to raise Sun up flags with")
+
+    sun_close_mask = Int(
+        defaults.sun_close, help="Bit mask to raise Sun close flags with"
+    )
+
+    elnod_mask = Int(defaults.elnod, help="Bit mask to raise elevation nod flags with")
 
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
@@ -541,6 +575,8 @@ class SimGround(Operator):
                 ival_turn_leftright,
                 ival_scan_rightleft,
                 ival_turn_rightleft,
+                ival_throw_leftright,
+                ival_throw_rightleft,
             ) = simulate_ces_scan(
                 start_time.timestamp(),
                 stop_time.timestamp(),
@@ -682,6 +718,7 @@ class SimGround(Operator):
                 site=site,
             )
 
+            name = f"{scan.name}-{scan.scan_indx}-{scan.subscan_indx}"
             ob = Observation(
                 comm,
                 telescope,
@@ -819,6 +856,16 @@ class SimGround(Operator):
             # every process, we don't need to communicate the global timespans of the
             # intervals (using create or create_col).  We can just create them directly.
 
+            ob.intervals[self.throw_leftright_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_throw_leftright
+            )
+            ob.intervals[self.throw_rightleft_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_throw_rightleft
+            )
+            ob.intervals[self.throw_interval] = (
+                ob.intervals[self.throw_leftright_interval]
+                | ob.intervals[self.throw_rightleft_interval]
+            )
             ob.intervals[self.scan_leftright_interval] = IntervalList(
                 ob.shared[self.times], timespans=ival_scan_leftright
             )
@@ -874,14 +921,12 @@ class SimGround(Operator):
             shared_flags=self.shared_flags,
             shared_flag_bytes=1,
             view_mask=[
-                (self.turnaround_interval, 1),
-                (self.scan_leftright_interval, 2),
-                (self.scan_rightleft_interval, 4),
-                (self.turn_leftright_interval, 3),
-                (self.turn_rightleft_interval, 5),
-                (self.sun_up_interval, 8),
-                (self.sun_close_interval, 16),
-                (self.elnod_interval, 32),
+                (self.turnaround_interval, self.turnaround_mask),
+                (self.throw_leftright_interval, self.leftright_mask),
+                (self.throw_rightleft_interval, self.rightleft_mask),
+                (self.sun_up_interval, self.sun_up_mask),
+                (self.sun_close_interval, self.sun_close_mask),
+                (self.elnod_interval, self.elnod_mask),
             ],
         )
         flag_intervals.apply(data, detectors=None)

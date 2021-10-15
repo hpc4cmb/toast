@@ -9,7 +9,7 @@ import traitlets
 from astropy import units as u
 
 from ..mpi import MPI, use_mpi
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 from ..templates import Offset
 from ..timing import function_timer
 from ..traits import Bool, Dict, Instance, Int, Unicode, trait_docs
@@ -122,23 +122,32 @@ class Madam(Operator):
         None, allow_none=True, help="Read madam parameters from this file"
     )
 
-    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key for the timestream data"
+        defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Bit mask value for optional shared flagging",
+    )
 
     pixel_pointing = Instance(
         klass=Operator,

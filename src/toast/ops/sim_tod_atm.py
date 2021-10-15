@@ -30,7 +30,7 @@ from ..utils import Environment, Logger, Timer
 
 from ..atm import AtmSim, available_utils
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .sim_tod_atm_utils import ObserveAtmosphere
 
@@ -57,10 +57,10 @@ class SimAtmosphere(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    times = Unicode(obs_names.times, help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key for accumulating atmosphere timestreams",
     )
 
@@ -92,10 +92,14 @@ class SimAtmosphere(Operator):
     shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     turnaround_interval = Unicode("turnaround", help="Interval name for turnarounds")
 
@@ -161,6 +165,10 @@ class SimAtmosphere(Operator):
         None,
         allow_none=True,
         help="Directory to use for loading / saving atmosphere realizations",
+    )
+
+    overwrite_cache = Bool(
+        False, help="If True, redo and overwrite any cached atmospheric realizations."
     )
 
     debug_spectrum = Bool(False, help="If True, dump out Kolmogorov debug files")
@@ -640,36 +648,55 @@ class SimAtmosphere(Operator):
             fov = obs.telescope.focalplane.field_of_view
         fp_radius = 0.5 * fov.to_value(u.radian)
 
-        # Read the extent of the AZ/EL boresight pointing, and use that
-        # to compute the range of angles needed for simulating the slab.
+        # work in parallel
 
-        quats = obs.shared[self.detector_pointing.boresight]
-        theta, phi = qa.to_position(quats)
-        az = 2 * np.pi - phi
-        el = np.pi / 2 - theta
-        if self.shared_flags is not None:
-            good = (self.shared[self.shared_flags] & self.shared_flag_mask) == 0
-            az = az[good]
-            el = el[good]
-        min_az_bore = np.amin(az)
-        max_az_bore = np.amax(az)
-        min_el_bore = np.amin(el)
-        max_el_bore = np.amax(el)
+        if comm is None:
+            rank = 0
+            ntask = 1
+        else:
+            rank = comm.rank
+            ntask = comm.size
 
-        # Use a fixed focal plane radius so that changing the actual
-        # set of detectors will not affect the simulated atmosphere.
+        # Create a fake focalplane of detectors in a circle around the boresight
 
-        elfac = 1 / np.cos(max_el_bore + fp_radius)
-        azmin = min_az_bore - fp_radius * elfac
-        azmax = max_az_bore + fp_radius * elfac
+        xaxis, yaxis, zaxis = np.eye(3)
+        ndet = 64
+        phidet = np.linspace(0, 2 * np.pi, ndet, endpoint=False)
+        detquats = []
+        thetarot = qa.rotation(yaxis, fp_radius)
+        for phi in phidet:
+            phirot = qa.rotation(zaxis, phi)
+            detquat = qa.mult(phirot, thetarot)
+            detquats.append(detquat)
+
+        # Get fake detector pointing
+
+        az = []
+        el = []
+        quats = obs.shared[self.detector_pointing.boresight][rank::ntask].copy()
+        for detquat in detquats:
+            vecs = qa.rotate(qa.mult(quats, detquat), zaxis)
+            theta, phi = hp.vec2ang(vecs)
+            az.append(2 * np.pi - phi)
+            el.append(np.pi / 2 - theta)
+        az = np.unwrap(np.hstack(az))
+        el = np.hstack(el)
+
+        # find the extremes
+
+        azmin = np.amin(az)
+        azmax = np.amax(az)
+        elmin = np.amin(el)
+        elmax = np.amax(el)
+
         if azmin < -2 * np.pi:
             azmin += 2 * np.pi
             azmax += 2 * np.pi
         elif azmax > 2 * np.pi:
             azmin -= 2 * np.pi
             azmax -= 2 * np.pi
-        elmin = min_el_bore - fp_radius
-        elmax = max_el_bore + fp_radius
+
+        # Combine results
 
         if comm is not None:
             azmin = comm.allreduce(azmin, op=MPI.MIN)
@@ -677,19 +704,6 @@ class SimAtmosphere(Operator):
             elmin = comm.allreduce(elmin, op=MPI.MIN)
             elmax = comm.allreduce(elmax, op=MPI.MAX)
 
-        if elmin < 0 or elmax > np.pi / 2:
-            raise RuntimeError(
-                "{}Error in CES elevation: elmin = {:.3f} deg, elmax = {:.3f} deg, "
-                "elmin_bore = {:.3f} deg, elmax_bore = {:.3f} deg, "
-                "fp_radius = {:.3f} deg".format(
-                    prefix,
-                    np.degrees(elmin),
-                    np.degrees(elmax),
-                    np.degrees(min_el_bore),
-                    np.degrees(max_el_bore),
-                    np.degrees(fp_radius),
-                )
-            )
         return azmin * u.radian, azmax * u.radian, elmin * u.radian, elmax * u.radian
 
     @function_timer
@@ -842,11 +856,15 @@ class SimAtmosphere(Operator):
                 fname = os.path.join(
                     cachedir, "{}_{}_{}_{}.h5".format(key1, key2, counter1, counter2)
                 )
-            if (fname is not None) and os.path.isfile(fname):
+                if os.path.isfile(fname):
+                    if self.overwrite_cache:
+                        os.remove(fname)
+                    else:
+                        have_cache = True
+            if have_cache:
                 log.debug(
                     f"{prefix}Loading the atmosphere for t = {tmin - tmin_tot} from {fname}"
                 )
-                have_cache = True
             else:
                 log.debug(
                     f"{prefix}Simulating the atmosphere for t = {tmin - tmin_tot}"

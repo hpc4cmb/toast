@@ -46,8 +46,8 @@ class Offset(Template):
     #    data             : The Data instance we are working with
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
-    #    flags            : Optional detector solver flags
-    #    flag_mask        : Bit mask for detector solver flags
+    #    det_flags        : Optional detector solver flags
+    #    det_flag_mask    : Bit mask for detector solver flags
     #
 
     step_time = Quantity(10000.0 * u.second, help="Time per baseline step")
@@ -245,7 +245,7 @@ class Offset(Template):
                     # Move this loop to compiled code if it is slow...
                     # Note:  we are building the offset amplitude *variance*, which is
                     # why the "noise weight" (inverse variance) is in the denominator.
-                    if self.flags is None:
+                    if self.det_flags is None:
                         voff = 0
                         for amp in range(n_amp_view):
                             amplen = step_length
@@ -254,14 +254,14 @@ class Offset(Template):
                             self._offsetvar[offset + amp] = 1.0 / (detnoise * amplen)
                             voff += step_length
                     else:
-                        flags = views.detdata[self.flags][ivw]
+                        flags = views.detdata[self.det_flags][ivw]
                         voff = 0
                         for amp in range(n_amp_view):
                             amplen = step_length
                             if amp == n_amp_view - 1:
                                 amplen = view_samples - voff
                             n_good = amplen - np.count_nonzero(
-                                flags[det][voff : voff + amplen] & self.flag_mask
+                                flags[det][voff : voff + amplen] & self.det_flag_mask
                             )
                             if (n_good / amplen) > self.good_fraction:
                                 # Keep this

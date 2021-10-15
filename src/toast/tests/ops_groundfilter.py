@@ -20,7 +20,7 @@ from ..vis import set_matplotlib_backend
 
 from ..pixels import PixelDistribution, PixelData
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ._helpers import create_outdir, create_ground_data, fake_flags
 
@@ -42,7 +42,7 @@ class GroundFilterTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise from this model
-        sim_noise = ops.SimNoise(noise_model="noise_model", out=obs_names.det_data)
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
 
         # Make fake flags
@@ -50,15 +50,15 @@ class GroundFilterTest(MPITestCase):
 
         rms = dict()
         for ob in data.obs:
-            az = ob.shared[obs_names.azimuth].data * 100
+            az = ob.shared[defaults.azimuth].data * 100
             rms[ob.name] = dict()
             for det in ob.local_detectors:
-                flags = ob.shared[obs_names.shared_flags].data & self.shared_flag_mask
-                flags |= ob.detdata[obs_names.det_flags][det]
+                flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
+                flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
                 # Add scan-synchronous signal to the data
-                ob.detdata[obs_names.det_data][det] += az
-                rms[ob.name][det] = np.std(ob.detdata[obs_names.det_data][det][good])
+                ob.detdata[defaults.det_data][det] += az
+                rms[ob.name][det] = np.std(ob.detdata[defaults.det_data][det][good])
 
         # Filter
 
@@ -67,10 +67,10 @@ class GroundFilterTest(MPITestCase):
             filter_order=1,
             detrend=True,
             split_template=False,
-            det_data=obs_names.det_data,
-            det_flags=obs_names.det_flags,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=self.shared_flag_mask,
             view=None,
         )
@@ -78,10 +78,10 @@ class GroundFilterTest(MPITestCase):
 
         for ob in data.obs:
             for det in ob.local_detectors:
-                flags = ob.shared[obs_names.shared_flags].data & self.shared_flag_mask
-                flags |= ob.detdata[obs_names.det_flags][det]
+                flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
+                flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
-                check_rms = np.std(ob.detdata[obs_names.det_data][det][good])
+                check_rms = np.std(ob.detdata[defaults.det_data][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
 
@@ -98,7 +98,7 @@ class GroundFilterTest(MPITestCase):
         default_model.apply(data)
 
         # Simulate noise from this model
-        sim_noise = ops.SimNoise(noise_model="noise_model", out=obs_names.det_data)
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
 
         # Make fake flags
@@ -106,19 +106,19 @@ class GroundFilterTest(MPITestCase):
 
         rms = dict()
         for ob in data.obs:
-            shared_flags = ob.shared[obs_names.shared_flags].data
-            rightgoing = (shared_flags & 2) != 0
-            leftgoing = (shared_flags & 4) != 0
-            az = ob.shared[obs_names.azimuth].data * 100
+            shared_flags = ob.shared[defaults.shared_flags].data
+            rightgoing = (shared_flags & defaults.scan_leftright) != 0
+            leftgoing = (shared_flags & defaults.scan_rightleft) != 0
+            az = ob.shared[defaults.azimuth].data * 100
             rms[ob.name] = dict()
             for det in ob.local_detectors:
-                flags = ob.shared[obs_names.shared_flags].data & self.shared_flag_mask
-                flags |= ob.detdata[obs_names.det_flags][det]
+                flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
+                flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
                 # Add scan-synchronous signal to the data
-                ob.detdata[obs_names.det_data][det][leftgoing] += az[leftgoing]
-                ob.detdata[obs_names.det_data][det][rightgoing] -= az[rightgoing]
-                rms[ob.name][det] = np.std(ob.detdata[obs_names.det_data][det][good])
+                ob.detdata[defaults.det_data][det][leftgoing] += az[leftgoing]
+                ob.detdata[defaults.det_data][det][rightgoing] -= az[rightgoing]
+                rms[ob.name][det] = np.std(ob.detdata[defaults.det_data][det][good])
 
         # Filter
 
@@ -127,10 +127,10 @@ class GroundFilterTest(MPITestCase):
             filter_order=1,
             detrend=True,
             split_template=True,
-            det_data=obs_names.det_data,
-            det_flags=obs_names.det_flags,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
-            shared_flags=obs_names.shared_flags,
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=self.shared_flag_mask,
             view=None,
         )
@@ -138,10 +138,10 @@ class GroundFilterTest(MPITestCase):
 
         for ob in data.obs:
             for det in ob.local_detectors:
-                flags = ob.shared[obs_names.shared_flags].data & self.shared_flag_mask
-                flags |= ob.detdata[obs_names.det_flags][det]
+                flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
+                flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
-                check_rms = np.std(ob.detdata[obs_names.det_data][det][good])
+                check_rms = np.std(ob.detdata[defaults.det_data][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
 

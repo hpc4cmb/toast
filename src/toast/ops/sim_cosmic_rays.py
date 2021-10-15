@@ -17,6 +17,8 @@ from .operator import Operator
 from ..utils import Environment, Logger
 from .. import rng
 
+from ..observation import default_values as defaults
+
 
 class InjectCosmicRays(Operator):
     """
@@ -65,7 +67,7 @@ class InjectCosmicRays(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        "signal", help="Observation detdata key to inject the gain drift"
+        defaults.det_data, help="Observation detdata key to inject the gain drift"
     )
     crfile = Unicode(None, help="Path to the *.npz file encoding cosmic ray infos")
     crdata_units = Quantity(1 * u.W, help="set the unities of the input amplitudes ")

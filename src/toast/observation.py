@@ -48,11 +48,11 @@ from .observation_dist import (
 )
 
 
-default_names = None
+default_values = None
 
 
-def set_default_names(names=None):
-    """Update default names for common Observation objects.
+def set_default_values(values=None):
+    """Update default values for common Observation objects.
 
     Args:
         names (dict):  The dictionary specifying any name overrides.
@@ -61,9 +61,10 @@ def set_default_names(names=None):
         None
 
     """
-    global default_names
+    global default_values
 
-    default_values = {
+    defaults = {
+        # names
         "times": "times",
         "shared_flags": "flags",
         "det_data": "signal",
@@ -79,17 +80,33 @@ def set_default_names(names=None):
         "weights": "weights",
         "quats": "quats",
         "quats_azel": "quats_azel",
+        #
+        # flag masks
+        #
+        "shared_mask_invalid": 1,
+        "shared_mask_unstable_scanrate": 2,
+        "shared_mask_irregular": 4,
+        "det_mask_invalid": 1,
+        "det_mask_sso": 1 + 2,
+        #
+        # ground-specific flag masks
+        #
+        "turnaround": 1 + 2,  # remove invalid bit to map turnarounds
+        "scan_leftright": 8,
+        "scan_rightleft": 16,
+        "sun_up": 32,
+        "sun_close": 64,
+        "elnod": 1 + 2 + 4,
     }
 
-    defaults = dict()
-    defaults.update(default_values)
-    if names is not None:
-        defaults.update(names)
-    default_names = types.SimpleNamespace(**defaults)
+    if values is not None:
+        defaults.update(values)
+
+    default_values = types.SimpleNamespace(**defaults)
 
 
-if default_names is None:
-    set_default_names()
+if default_values is None:
+    set_default_values()
 
 
 class Observation(MutableMapping):

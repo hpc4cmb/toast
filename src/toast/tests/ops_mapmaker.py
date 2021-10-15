@@ -19,7 +19,7 @@ from ..vis import set_matplotlib_backend
 
 from .. import ops as ops
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .. import templates
 
@@ -59,7 +59,7 @@ class MapmakerTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -69,7 +69,7 @@ class MapmakerTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -87,13 +87,14 @@ class MapmakerTest(MPITestCase):
 
         # Simulate noise and accumulate to signal
         sim_noise = ops.SimNoise(
-            noise_model=default_model.noise_model, det_data=obs_names.det_data
+            noise_model=default_model.noise_model, det_data=defaults.det_data
         )
         sim_noise.apply(data)
 
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -104,12 +105,13 @@ class MapmakerTest(MPITestCase):
         # Use 1/10 of an observation as the baseline length.  Make it not evenly
         # divisible in order to test handling of the final amplitude.
         ob_time = (
-            data.obs[0].shared[obs_names.times][-1]
-            - data.obs[0].shared[obs_names.times][0]
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
         )
         step_seconds = float(int(ob_time / 10.0))
         tmpl = templates.Offset(
-            times=obs_names.times,
+            times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -119,7 +121,7 @@ class MapmakerTest(MPITestCase):
         # Map maker
         mapper = ops.MapMaker(
             name="test1",
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
             write_hits=False,
@@ -167,7 +169,7 @@ class MapmakerTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -177,7 +179,7 @@ class MapmakerTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -195,13 +197,14 @@ class MapmakerTest(MPITestCase):
 
         # Simulate noise and accumulate to signal
         sim_noise = ops.SimNoise(
-            noise_model=default_model.noise_model, det_data=obs_names.det_data
+            noise_model=default_model.noise_model, det_data=defaults.det_data
         )
         sim_noise.apply(data)
 
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -212,13 +215,14 @@ class MapmakerTest(MPITestCase):
         # Use 1/10 of an observation as the baseline length.  Make it not evenly
         # divisible in order to test handling of the final amplitude.
         ob_time = (
-            data.obs[0].shared[obs_names.times][-1]
-            - data.obs[0].shared[obs_names.times][0]
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
         )
         # step_seconds = float(int(ob_time / 10.0))
         step_seconds = 5.0
         tmpl = templates.Offset(
-            times=obs_names.times,
+            times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -228,7 +232,7 @@ class MapmakerTest(MPITestCase):
         # Map maker
         mapper = ops.MapMaker(
             name="toastmap",
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
             solve_rcond_threshold=1.0e-6,
@@ -281,7 +285,8 @@ class MapmakerTest(MPITestCase):
 
         madam = ops.Madam(
             params=pars,
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -381,7 +386,7 @@ class MapmakerTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -391,7 +396,7 @@ class MapmakerTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -409,13 +414,14 @@ class MapmakerTest(MPITestCase):
 
         # Simulate noise and accumulate to signal
         sim_noise = ops.SimNoise(
-            noise_model=default_model.noise_model, det_data=obs_names.det_data
+            noise_model=default_model.noise_model, det_data=defaults.det_data
         )
         sim_noise.apply(data)
 
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -426,13 +432,14 @@ class MapmakerTest(MPITestCase):
         # Use 1/10 of an observation as the baseline length.  Make it not evenly
         # divisible in order to test handling of the final amplitude.
         ob_time = (
-            data.obs[0].shared[obs_names.times][-1]
-            - data.obs[0].shared[obs_names.times][0]
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
         )
         # step_seconds = float(int(ob_time / 10.0))
         step_seconds = 5.0
         tmpl = templates.Offset(
-            times=obs_names.times,
+            times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -444,7 +451,7 @@ class MapmakerTest(MPITestCase):
         # Map maker
         mapper = ops.MapMaker(
             name="toastmap",
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
             solve_rcond_threshold=1.0e-4,
@@ -502,7 +509,8 @@ class MapmakerTest(MPITestCase):
 
         madam = ops.Madam(
             params=pars,
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -606,7 +614,7 @@ class MapmakerTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -616,7 +624,7 @@ class MapmakerTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -634,13 +642,14 @@ class MapmakerTest(MPITestCase):
 
         # Simulate noise and accumulate to signal
         sim_noise = ops.SimNoise(
-            noise_model=default_model.noise_model, det_data=obs_names.det_data
+            noise_model=default_model.noise_model, det_data=defaults.det_data
         )
         sim_noise.apply(data)
 
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -651,13 +660,14 @@ class MapmakerTest(MPITestCase):
         # Use 1/10 of an observation as the baseline length.  Make it not evenly
         # divisible in order to test handling of the final amplitude.
         ob_time = (
-            data.obs[0].shared[obs_names.times][-1]
-            - data.obs[0].shared[obs_names.times][0]
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
         )
         # step_seconds = float(int(ob_time / 10.0))
         step_seconds = 5.0
         tmpl = templates.Offset(
-            times=obs_names.times,
+            times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -669,7 +679,7 @@ class MapmakerTest(MPITestCase):
         # Map maker
         mapper = ops.MapMaker(
             name="toastmap",
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
             solve_rcond_threshold=1.0e-4,
@@ -727,7 +737,8 @@ class MapmakerTest(MPITestCase):
 
         madam = ops.Madam(
             params=pars,
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",

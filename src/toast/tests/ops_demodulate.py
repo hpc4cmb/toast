@@ -10,7 +10,7 @@ from astropy import units as u
 
 from .. import ops as ops
 from .. import qarray as qa
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io import write_healpix_fits
 from ..vis import set_matplotlib_backend
@@ -46,7 +46,7 @@ class DemodulateTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -61,14 +61,14 @@ class DemodulateTest(MPITestCase):
         for submap in range(dist.n_submap):
             if submap in dist.local_submaps:
                 pix_data.data[off, :, 0] = map_values[0]
-                pix_data.data[off, :, 1] = map_values[1] # 1
-                pix_data.data[off, :, 2] = map_values[2] # 0
+                pix_data.data[off, :, 1] = map_values[1]
+                pix_data.data[off, :, 2] = map_values[2]
                 off += 1
         data[map_key] = pix_data
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key=map_key,
@@ -86,13 +86,13 @@ class DemodulateTest(MPITestCase):
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
-            det_flags=obs_names.det_flags,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
         )
 
         mapper = ops.MapMaker(
             name="modulated",
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             binning=binner,
             template_matrix=None,
             write_hits=True,
@@ -112,7 +112,7 @@ class DemodulateTest(MPITestCase):
         demod = ops.Demodulate(stokes_weights=weights)
         demod_data = demod.apply(data)
 
-        # ops.Delete(detdata=[obs_names.weights]).apply(demod_data)
+        # ops.Delete(detdata=[defaults.weights]).apply(demod_data)
 
         # Map again
 

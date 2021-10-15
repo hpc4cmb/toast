@@ -20,7 +20,7 @@ from .operator import Operator
 
 from ..utils import Environment, Logger
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..dipole import dipole
 
@@ -49,7 +49,7 @@ class SimDipole(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key for accumulating dipole timestreams",
     )
 
@@ -58,22 +58,10 @@ class SimDipole(Operator):
     )
 
     boresight = Unicode(
-        obs_names.boresight_radec, help="Observation shared key for boresight"
+        defaults.boresight_radec, help="Observation shared key for boresight"
     )
 
-    velocity = Unicode(obs_names.velocity, help="Observation shared key for velocity")
-
-    shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
-    )
-
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
-
-    det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
-    )
-
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    velocity = Unicode(defaults.velocity, help="Observation shared key for velocity")
 
     subtract = Bool(
         False, help="If True, subtract the dipole timestream instead of accumulating"
@@ -178,14 +166,6 @@ class SimDipole(Operator):
             views = ob.view[self.view]
 
             for vw in range(len(views)):
-                # Get the flags if needed
-                sh_flags = None
-                if self.shared_flags is not None:
-                    sh_flags = (
-                        np.array(views.shared[self.shared_flags][vw])
-                        & self.shared_flag_mask
-                    )
-
                 # Boresight pointing quaternions
                 boresight = views.shared[self.boresight][vw]
 
@@ -204,26 +184,12 @@ class SimDipole(Operator):
 
                 for det in dets:
                     props = focalplane[det]
-                    flags = None
-                    if self.det_flags is not None:
-                        flags = (
-                            np.array(views.detdata[self.det_flags][vw][det])
-                            & self.det_flag_mask
-                        )
-                        if sh_flags is not None:
-                            flags |= sh_flags
-                    elif sh_flags is not None:
-                        flags = sh_flags
 
                     # Detector quaternion offset from the boresight
                     detquat = props["quat"]
 
                     # Timestream of detector quaternions
                     quats = qa.mult(boresight, detquat)
-
-                    # Make sure that flagged pointing is well defined
-                    if sh_flags is not None:
-                        quats[(sh_flags != 0), :] = nullquat
 
                     # Compute the dipole timestream for this view and detector
                     dipole_tod = dipole(
@@ -235,21 +201,10 @@ class SimDipole(Operator):
                     )
 
                     # Add contribution to output
-                    if flags is None:
-                        if self.subtract:
-                            views.detdata[self.det_data][vw][det] -= dipole_tod
-                        else:
-                            views.detdata[self.det_data][vw][det] += dipole_tod
+                    if self.subtract:
+                        views.detdata[self.det_data][vw][det] -= dipole_tod
                     else:
-                        good = flags == 0
-                        if self.subtract:
-                            views.detdata[self.det_data][vw][det][good] -= dipole_tod[
-                                good
-                            ]
-                        else:
-                            views.detdata[self.det_data][vw][det][good] += dipole_tod[
-                                good
-                            ]
+                        views.detdata[self.det_data][vw][det] += dipole_tod
         return
 
     def _finalize(self, data, **kwargs):

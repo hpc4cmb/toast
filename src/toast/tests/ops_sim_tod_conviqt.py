@@ -18,7 +18,7 @@ from .. import qarray as qa
 
 from .. import ops as ops
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..pixels_io import write_healpix_fits
 
@@ -114,7 +114,7 @@ class SimConviqtTest(MPITestCase):
 
         detpointing = ops.PointingDetectorSimple()
 
-        key = obs_names.det_data
+        key = defaults.det_data
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
@@ -158,6 +158,7 @@ class SimConviqtTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=key,
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,

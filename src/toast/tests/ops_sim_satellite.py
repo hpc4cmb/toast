@@ -19,7 +19,7 @@ from ..mpi import Comm, MPI
 
 from ..data import Data
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..instrument import Focalplane, Telescope, SpaceSite
 
@@ -81,7 +81,7 @@ class SimSatelliteTest(MPITestCase):
             name="sim_sat",
             telescope=tele,
             schedule=sch,
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             hwp_rpm=1.0,
             spin_angle=30.0 * u.degree,
             prec_angle=65.0 * u.degree,

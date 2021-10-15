@@ -20,7 +20,7 @@ from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 
 @trait_docs
@@ -29,19 +29,27 @@ class Statistics(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    det_data = Unicode(obs_names.det_data, help="Observation detdata key to analyze")
+    det_data = Unicode(defaults.det_data, help="Observation detdata key to analyze")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(1, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+    )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"

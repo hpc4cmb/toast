@@ -13,7 +13,7 @@ from .mpi import MPITestCase
 
 from .. import ops as ops
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..pixels import PixelData
 
@@ -40,7 +40,7 @@ class ScanMapTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -50,7 +50,7 @@ class ScanMapTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -73,7 +73,7 @@ class ScanMapTest(MPITestCase):
                     for j in range(3):
                         val += wt[i, j] * map_data.data[local_sm[i], local_pix[i], j]
                     np.testing.assert_almost_equal(
-                        val, ob.detdata[obs_names.det_data][det, i]
+                        val, ob.detdata[defaults.det_data][det, i]
                     )
 
         del data
@@ -93,7 +93,7 @@ class ScanMapTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -105,7 +105,7 @@ class ScanMapTest(MPITestCase):
         # zero option.
 
         scanner = ops.ScanMap(
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -115,7 +115,7 @@ class ScanMapTest(MPITestCase):
         rms = list()
         for ob in data.obs:
             for det in ob.local_detectors:
-                rms.append(np.std(ob.detdata[obs_names.det_data][det]))
+                rms.append(np.std(ob.detdata[defaults.det_data][det]))
         rms = np.array(rms)
 
         scanner.zero = True
@@ -124,7 +124,7 @@ class ScanMapTest(MPITestCase):
         trms = list()
         for ob in data.obs:
             for det in ob.local_detectors:
-                trms.append(np.std(ob.detdata[obs_names.det_data][det]))
+                trms.append(np.std(ob.detdata[defaults.det_data][det]))
         trms = np.array(trms)
 
         np.testing.assert_equal(trms, rms)
@@ -136,7 +136,7 @@ class ScanMapTest(MPITestCase):
         trms = list()
         for ob in data.obs:
             for det in ob.local_detectors:
-                trms.append(np.std(ob.detdata[obs_names.det_data][det]))
+                trms.append(np.std(ob.detdata[defaults.det_data][det]))
         trms = np.array(trms)
 
         np.testing.assert_equal(trms, np.zeros_like(trms))

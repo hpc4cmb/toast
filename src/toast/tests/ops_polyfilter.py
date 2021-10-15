@@ -24,6 +24,8 @@ from .. import qarray as qa
 
 from ._helpers import create_outdir, create_satellite_data, create_fake_sky, fake_flags
 
+from ..observation import default_values as defaults
+
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
@@ -59,7 +61,7 @@ class PolyFilterTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data="signal",
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -92,10 +94,10 @@ class PolyFilterTest(MPITestCase):
 
         polyfilter = ops.PolyFilter(
             order=0,
-            det_data="signal",
-            det_flags="flags",
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
-            shared_flags="flags",
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=255,
             view=None,
         )
@@ -140,7 +142,7 @@ class PolyFilterTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle="hwp_angle",
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -150,7 +152,7 @@ class PolyFilterTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data="signal",
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -239,7 +241,7 @@ class PolyFilterTest(MPITestCase):
 
         # Do the same with C++ implementation
 
-        polyfilter.det_data = "signal"
+        polyfilter.det_data = defaults.det_data
         polyfilter.use_python = False
         polyfilter.apply(data)
 
@@ -301,7 +303,7 @@ class PolyFilterTest(MPITestCase):
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
-            det_data="signal",
+            det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
             map_key="fake_map",
@@ -326,10 +328,10 @@ class PolyFilterTest(MPITestCase):
         # Filter
 
         common_filter = ops.CommonModeFilter(
-            det_data="signal",
-            det_flags="flags",
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
             det_flag_mask=255,
-            shared_flags="flags",
+            shared_flags=defaults.shared_flags,
             shared_flag_mask=255,
             view=None,
         )

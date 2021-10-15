@@ -16,6 +16,9 @@ import healpy as hp
 
 from .utils import Logger, memreport
 
+# This boolean is set to False after first failed MPI-open
+hdf5_is_parallel = True
+
 
 @function_timer
 def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
@@ -392,7 +395,9 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
     return
 
 
-def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, single_precision=False):
+def write_healpix_hdf5(
+    pix, path, nest=True, comm_bytes=10000000, single_precision=False
+):
     """Write pixel data to a HEALPix format HDF5 dataset.
 
     The data across all processes is assumed to be synchronized (the data for a given
@@ -409,9 +414,8 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, single_precisi
         None
 
     """
+    global hdf5_is_parallel
     log = Logger.get()
-    timer = Timer()
-    timer.start()
 
     # The distribution
     dist = pix.distribution
@@ -454,6 +458,8 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, single_precisi
             dtype = np.int32
 
     try:
+        if not hdf5_is_parallel:
+            raise ValueError()
 
         # Try opening the file for parallel access.  This will only work
         # if HDF5 and h5py were compiled with MPI
@@ -469,12 +475,6 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, single_precisi
             )
             for key, value in header.items():
                 dset.attrs[key] = value
-            """
-            for submap in dist.owned_submaps:
-                local_submap = dist.global_submap_to_local[submap]
-                offset = submap * dist.n_pix_submap
-                dset[:, offset : offset + dist.n_pix_submap] = pix[local_submap].T
-            """
             for submap in range(dist.n_submap):
                 if allowners[submap] == rank:
                     local_submap = dist.global_submap_to_local[submap]
@@ -486,11 +486,12 @@ def write_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000, single_precisi
     except (ValueError, AssertionError) as e:
 
         # No luck, write serially from root process
-
-        log.warning_rank(
-            f"Could not open {path} for parallel access: '{e}'. Writing in serial mode",
-            comm=dist.comm,
-        )
+        if hdf5_is_parallel:
+            log.warning_rank(
+                f"Could not open {path} for parallel access: '{e}'. Writing in serial mode",
+                comm=dist.comm,
+            )
+            hdf5_is_parallel = False
 
         # n_send = len(dist.owned_submaps)
         n_send = np.sum(allowners == rank)

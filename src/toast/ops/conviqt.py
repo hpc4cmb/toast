@@ -17,7 +17,7 @@ from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 
 conviqt = None
@@ -73,7 +73,7 @@ class SimConviqt(Operator):
     )
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         allow_none=False,
         help="Observation detdata key for accumulating convolved timestreams",
     )

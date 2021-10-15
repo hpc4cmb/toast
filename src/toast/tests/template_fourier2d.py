@@ -15,7 +15,7 @@ from ..utils import rate_from_times
 
 from .. import ops
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..templates import Fourier2D
 
@@ -38,11 +38,12 @@ class TemplateFourier2DTest(MPITestCase):
 
         # Create some empty detector data
         for ob in data.obs:
-            ob.detdata.create(obs_names.det_data, dtype=np.float64)
+            ob.detdata.create(defaults.det_data, dtype=np.float64)
 
         tmpl = Fourier2D(
-            det_data=obs_names.det_data,
-            times=obs_names.times,
+            det_data=defaults.det_data,
+            det_flags=None,
+            times=defaults.times,
             noise_model=noise_model.noise_model,
         )
 

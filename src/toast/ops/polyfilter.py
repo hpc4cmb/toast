@@ -26,7 +26,7 @@ from ..utils import (
     AlignedF64,
     AlignedU8,
 )
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from .._libtoast import filter_polynomial, filter_poly2D, sum_detectors, subtract_mean
 
@@ -41,12 +41,12 @@ class PolyFilter2D(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     times = Unicode(
-        obs_names.times,
+        defaults.times,
         help="Observation shared key for timestamps",
     )
 
     det_data = Unicode(
-        obs_names.det_data,
+        defaults.det_data,
         help="Observation detdata key apply filtering to",
     )
 
@@ -60,22 +60,26 @@ class PolyFilter2D(Operator):
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
-        obs_names.det_flags,
+        defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
-        obs_names.shared_flags,
+        defaults.shared_flags,
         allow_none=True,
         help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(1, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+    )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
@@ -433,7 +437,7 @@ class PolyFilter(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key apply filtering to"
+        defaults.det_data, help="Observation detdata key apply filtering to"
     )
 
     pattern = Unicode(
@@ -446,22 +450,26 @@ class PolyFilter(Operator):
     order = Int(1, allow_none=False, help="Polynomial order")
 
     det_flags = Unicode(
-        obs_names.det_flags,
+        defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
-    poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
+    poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
-        obs_names.shared_flags,
+        defaults.shared_flags,
         allow_none=True,
         help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+    )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
@@ -576,12 +584,12 @@ class CommonModeFilter(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     times = Unicode(
-        obs_names.times,
+        defaults.times,
         help="Observation shared key for timestamps",
     )
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key apply filtering to"
+        defaults.det_data, help="Observation detdata key apply filtering to"
     )
 
     pattern = Unicode(
@@ -592,22 +600,24 @@ class CommonModeFilter(Operator):
     )
 
     det_flags = Unicode(
-        obs_names.det_flags,
+        defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(1, help="Bit mask value for optional detector flagging")
-
-    poly_flag_mask = Int(0, help="Bit mask value for intervals that fail to filter")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     shared_flags = Unicode(
-        obs_names.shared_flags,
+        defaults.shared_flags,
         allow_none=True,
         help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+    )
 
     focalplane_key = Unicode(
         None, allow_none=True, help="Which focalplane key to match"

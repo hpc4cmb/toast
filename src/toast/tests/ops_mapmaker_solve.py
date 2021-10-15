@@ -19,7 +19,7 @@ from ..vis import set_matplotlib_backend
 
 from .. import ops as ops
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 from ..templates import Offset, AmplitudesMap
 
@@ -44,7 +44,7 @@ class MapmakerSolveTest(MPITestCase):
 
         # Simulate noise
         sim_noise = ops.SimNoise(
-            noise_model=default_model.noise_model, det_data=obs_names.det_data
+            noise_model=default_model.noise_model, det_data=defaults.det_data
         )
         sim_noise.apply(data)
 
@@ -56,7 +56,7 @@ class MapmakerSolveTest(MPITestCase):
         )
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
 
@@ -72,6 +72,7 @@ class MapmakerSolveTest(MPITestCase):
         # Set up binner
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             covariance=cov_and_hits.covariance,
             det_data=sim_noise.det_data,
             pixel_pointing=pixels,
@@ -85,12 +86,13 @@ class MapmakerSolveTest(MPITestCase):
         # Use 1/10 of an observation as the baseline length.  Make it not evenly
         # divisible in order to test handling of the final amplitude.
         ob_time = (
-            data.obs[0].shared[obs_names.times][-1]
-            - data.obs[0].shared[obs_names.times][0]
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
         )
         step_seconds = float(int(ob_time / 10.0))
         tmpl = Offset(
-            times=obs_names.times,
+            times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -176,12 +178,13 @@ class MapmakerSolveTest(MPITestCase):
         # Use 1/10 of an observation as the baseline length.  Make it not evenly
         # divisible in order to test handling of the final amplitude.
         ob_time = (
-            data.obs[0].shared[obs_names.times][-1]
-            - data.obs[0].shared[obs_names.times][0]
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
         )
         step_seconds = float(int(ob_time / 10.0))
         tmpl = Offset(
-            times=obs_names.times,
+            times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -203,10 +206,10 @@ class MapmakerSolveTest(MPITestCase):
         )
 
         for ob in data.obs:
-            ob.detdata.create(obs_names.det_data)
+            ob.detdata.create(defaults.det_data)
 
         tmatrix.amplitudes = "amplitudes"
-        tmatrix.det_data = obs_names.det_data
+        tmatrix.det_data = defaults.det_data
         tmatrix.data = data
         tmatrix.transpose = False
         tmatrix.apply(data)
@@ -219,7 +222,7 @@ class MapmakerSolveTest(MPITestCase):
         )
         weights = ops.StokesWeights(
             mode="I",
-            hwp_angle=obs_names.hwp_angle,
+            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
 
@@ -235,8 +238,9 @@ class MapmakerSolveTest(MPITestCase):
         # Set up binner
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             covariance=cov_and_hits.covariance,
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -248,7 +252,7 @@ class MapmakerSolveTest(MPITestCase):
         tmatrix.amplitudes = "amplitudes_check"
         binner.binned = "rhs_binned"
         rhs_calc = SolverRHS(
-            det_data=obs_names.det_data,
+            det_data=defaults.det_data,
             overwrite=True,
             binning=binner,
             template_matrix=tmatrix,
@@ -266,7 +270,7 @@ class MapmakerSolveTest(MPITestCase):
         data[out_amps] = data["amplitudes"].duplicate()
 
         lhs_calc = SolverLHS(
-            det_temp=obs_names.det_data,
+            det_temp=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
             out=out_amps,

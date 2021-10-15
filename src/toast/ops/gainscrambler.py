@@ -16,7 +16,7 @@ from ..utils import Logger
 
 from ..timing import function_timer
 
-from ..observation import default_names as obs_names
+from ..observation import default_values as defaults
 
 
 @trait_docs
@@ -32,7 +32,7 @@ class GainScrambler(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_data = Unicode(
-        obs_names.det_data, help="Observation detdata key to apply the gain error to"
+        defaults.det_data, help="Observation detdata key to apply the gain error to"
     )
 
     pattern = Unicode(
