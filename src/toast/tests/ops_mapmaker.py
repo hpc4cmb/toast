@@ -94,6 +94,7 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -110,6 +111,7 @@ class MapmakerTest(MPITestCase):
         step_seconds = float(int(ob_time / 10.0))
         tmpl = templates.Offset(
             times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -202,6 +204,7 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -219,6 +222,7 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -416,6 +420,7 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -433,6 +438,7 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -641,6 +647,7 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
+            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -658,6 +665,7 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
+            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
