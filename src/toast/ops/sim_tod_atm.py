@@ -171,6 +171,10 @@ class SimAtmosphere(Operator):
         False, help="If True, redo and overwrite any cached atmospheric realizations."
     )
 
+    cache_only = Bool(
+        False, help="If True, only cache the atmosphere, do not observe it."
+    )
+
     debug_spectrum = Bool(False, help="If True, dump out Kolmogorov debug files")
 
     debug_tod = Bool(False, help="If True, dump TOD to pickle files")
@@ -493,19 +497,19 @@ class SimAtmosphere(Operator):
                     ob.intervals[view] & ob.intervals[wind_intervals]
                 )
 
-            # Observation pipeline.  We do not want to store persistent detector
-            # pointing, so we build a small pipeline that runs one detector at a time
-            # on only the current observation.
+            if not self.cache_only:
+                # Observation pipeline.  We do not want to store persistent detector
+                # pointing, so we build a small pipeline that runs one detector at a
+                # time on only the current observation.
+                pipe_data = data.select(obs_index=iobs)
 
-            pipe_data = data.select(obs_index=iobs)
+                operators = [self.detector_pointing]
+                if self.detector_weights is not None:
+                    operators.append(self.detector_weights)
+                operators.append(observe_atm)
 
-            operators = [self.detector_pointing]
-            if self.detector_weights is not None:
-                operators.append(self.detector_weights)
-            operators.append(observe_atm)
-
-            observe_pipe = Pipeline(operators=operators, detector_sets=["SINGLE"])
-            observe_pipe.apply(pipe_data)
+                observe_pipe = Pipeline(operators=operators, detector_sets=["SINGLE"])
+                observe_pipe.apply(pipe_data)
 
             # Delete the atmosphere slabs for this observation
             for wind_slabs in ob[atm_sim_key]:

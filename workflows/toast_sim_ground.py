@@ -266,6 +266,23 @@ def simulate_data(job, toast_comm, telescope, schedule):
     if not ops.binner_final.enabled:
         ops.binner_final = ops.binner
 
+    # Simulate atmosphere
+
+    ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
+    if ops.sim_atmosphere.polarization_fraction != 0:
+        ops.sim_atmosphere.detector_weights = ops.weights_azel
+    log.info_rank("Simulating and observing atmosphere", comm=world_comm)
+    ops.sim_atmosphere.apply(data)
+    log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
+
+    ops.mem_count.prefix = "After simulating atmosphere"
+    ops.mem_count.apply(data)
+
+    # Shortcut if we are only caching the atmosphere.  If this job is only caching
+    # (not observing) the atmosphere, then return at this point.
+    if ops.sim_atmosphere.cache_only:
+        return data
+
     # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
     # in case that is different from the solver pointing model.
 
@@ -278,18 +295,6 @@ def simulate_data(job, toast_comm, telescope, schedule):
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
 
     ops.mem_count.prefix = "After simulating sky signal"
-    ops.mem_count.apply(data)
-
-    # Simulate atmosphere
-
-    ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
-    if ops.sim_atmosphere.polarization_fraction != 0:
-        ops.sim_atmosphere.detector_weights = ops.weights_azel
-    log.info_rank("Simulating and observing atmosphere", comm=world_comm)
-    ops.sim_atmosphere.apply(data)
-    log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
-
-    ops.mem_count.prefix = "After simulating atmosphere"
     ops.mem_count.apply(data)
 
     # Simulate scan-synchronous signal
@@ -636,12 +641,16 @@ def main():
     # Create simulated data
     data = simulate_data(job, toast_comm, telescope, schedule)
 
-    # Optionally save to spt3g format
-    if args.save_spt3g:
-        dump_spt3g(job, args, data)
+    # Handle special case of caching the atmosphere simulations.  In this
+    # case, we are not simulating timestreams or doing data reductions.
 
-    # Reduce the data
-    reduce_data(job, args, data)
+    if not job.operators.sim_atmosphere.cache_only:
+        # Optionally save to spt3g format
+        if args.save_spt3g:
+            dump_spt3g(job, args, data)
+
+        # Reduce the data
+        reduce_data(job, args, data)
 
     # Collect optional timing information
     alltimers = toast.timing.gather_timers(comm=toast_comm.comm_world)
