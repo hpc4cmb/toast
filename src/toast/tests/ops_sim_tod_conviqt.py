@@ -314,7 +314,8 @@ class SimConviqtTest(MPITestCase):
         detpointing = ops.PointingDetectorSimple()
 
         key = defaults.det_data
-        sim_conviqt = ops.SimConviqtTEB(
+
+        sim_conviqt = ops.SimTEBConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
