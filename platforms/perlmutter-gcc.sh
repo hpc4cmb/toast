@@ -17,6 +17,7 @@ cmake \
     -DFFTW_ROOT=${CMBENV_AUX_ROOT} \
     -DAATM_ROOT=${CMBENV_AUX_ROOT} \
     -DBLAS_LIBRARIES=${CMBENV_AUX_ROOT}/lib/libopenblas.a \
+    -DLAPACK_LIBRARIES=${CMBENV_AUX_ROOT}/lib/libopenblas.a \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${CMBENV_AUX_ROOT}/include" \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${CMBENV_AUX_ROOT}/lib" \
     ${opts} \
