@@ -278,7 +278,7 @@ class export_obs_meta(object):
         # Serialize focalplane to HDF5 bytes and write to frame.
         byte_writer = io.BytesIO()
         with h5py.File(byte_writer, "w") as f:
-            obs.telescope.focalplane.write(f)
+            obs.telescope.focalplane.save_hdf5(f)
         cal["focalplane"] = c3g.G3VectorUnsignedChar(byte_writer.getvalue())
         del byte_writer
 

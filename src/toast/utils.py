@@ -11,7 +11,11 @@ import importlib
 
 import datetime
 
+from tempfile import gettempdir
+
 import numpy as np
+
+import h5py
 
 from ._libtoast import Environment, Timer, GlobalTimers
 
@@ -629,3 +633,35 @@ def import_from_name(name):
         msg = f"Cannot import class '{cls_name}' from module '{cls_mod_name}'"
         raise RuntimeError(msg)
     return cls
+
+
+# Test whether h5py supports parallel I/O
+
+hdf5_is_parallel = None
+
+
+def have_hdf5_parallel():
+    global hdf5_is_parallel
+    if hdf5_is_parallel is not None:
+        # Already checked
+        return hdf5_is_parallel
+
+    # Do we even have MPI?
+    if not use_mpi:
+        hdf5_is_parallel = False
+        return hdf5_is_parallel
+
+    # Try to open a temp file on each process with the mpio driver but using
+    # COMM_SELF.  This lets us test the presence of the driver without actually
+    # doing any communication
+    try:
+        tempdir = gettempdir()
+        tempfile = os.path.join(tempdir, f"test_hdf5_mpio_{MPI.COMM_WORLD.rank}.h5")
+        f = h5py.File(tempfile, "w", driver="mpio", comm=MPI.COMM_SELF)
+        # Yay!
+        hdf5_is_parallel = True
+        f.close()
+    except (ValueError, AssertionError) as e:
+        # Nope...
+        hdf5_is_parallel = False
+    return hdf5_is_parallel

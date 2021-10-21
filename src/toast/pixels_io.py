@@ -10,14 +10,11 @@ import numpy as np
 
 from .timing import function_timer, Timer
 
-from .mpi import MPI
+from .mpi import MPI, use_mpi
 
 import healpy as hp
 
-from .utils import Logger, memreport
-
-# This boolean is set to False after first failed MPI-open
-hdf5_is_parallel = False
+from .utils import Logger, memreport, have_hdf5_parallel
 
 
 @function_timer
@@ -392,6 +389,9 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
 
         submap_offset = submap_last
 
+    if rank == 0:
+        f.close()
+
     return
 
 
@@ -458,15 +458,10 @@ def write_healpix_hdf5(
         elif dtype == np.int64:
             dtype = np.int32
 
-    try:
-        if not hdf5_is_parallel:
-            raise ValueError()
-
-        # Try opening the file for parallel access.  This will only work
+    if have_hdf5_parallel():
+        # Open the file for parallel access.  This will only work
         # if HDF5 and h5py were compiled with MPI
-
         with h5py.File(path, "w", driver="mpio", comm=dist.comm) as f:
-
             # Each process writes their own submaps to the file
             dset = f.create_dataset(
                 "map",
@@ -483,16 +478,14 @@ def write_healpix_hdf5(
                     first = submap * dist.n_pix_submap
                     last = min(first + dist.n_pix_submap, dist.n_pix)
                     dset[:, first:last] = pix[local_submap, 0 : last - first].T
-
-    except (ValueError, AssertionError) as e:
-
+    else:
         # No luck, write serially from root process
-        if hdf5_is_parallel:
+        if use_mpi:
+            # MPI is enabled, but we are not using it.  Warn the user.
             log.warning_rank(
-                f"Could not open {path} for parallel access: '{e}'. Writing in serial mode",
+                f"h5py not built with MPI support.  Writing {path} in serial mode.",
                 comm=dist.comm,
             )
-            hdf5_is_parallel = False
 
         # n_send = len(dist.owned_submaps)
         n_send = np.sum(allowners == rank)

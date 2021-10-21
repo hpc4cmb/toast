@@ -211,23 +211,22 @@ class Noise(object):
         """
         return self._detector_weight(det)
 
-    def _save_base_hdf5(self, hf):
+    def _save_base_hdf5(self, hf, comm=None):
         """Write internal data to an open HDF5 file."""
         for k in self._freqs.keys():
             # Create a dataset for this key
-            ds = hf.create_dataset(
-                k,
-                data=np.stack(
+            ds = hf.create_dataset(k, (len(self._freqs[k]), 2), dtype=np.float64)
+            # Store the rate and index as attributes
+            ds.attrs["rate"] = self._rates[k].to_value(u.Hz)
+            ds.attrs["index"] = self._indices[k]
+            if comm is None or comm.rank == 0:
+                ds[:] = np.stack(
                     [
                         self._freqs[k].to_value(u.Hz),
                         self._psds[k].to_value(u.K ** 2 * u.second),
                     ],
                     axis=-1,
-                ),
-            )
-            # Store the rate and index as attributes
-            ds.attrs["rate"] = self._rates[k].to_value(u.Hz)
-            ds.attrs["index"] = self._indices[k]
+                )
         # Now store the mixing matrix as a separate dataset
         mixdata = list()
         maxstr = 0
@@ -239,28 +238,33 @@ class Noise(object):
                     maxstr = len(other)
                 mixdata.append((k, other, val))
         maxstr += 1
-        mixdata = np.array(mixdata, dtype=np.dtype(f"a{maxstr}, a{maxstr}, f8"))
-        hf.create_dataset("mixing_matrix", data=mixdata)
+        mixdtype = np.dtype(f"a{maxstr}, a{maxstr}, f8")
+        ds = hf.create_dataset("mixing_matrix", (len(mixdata),), dtype=mixdtype)
+        if comm is None or comm.rank == 0:
+            ds[:] = np.array(mixdata, dtype=mixdtype)
 
-    def _save_hdf5(self, handle, **kwargs):
+    def _save_hdf5(self, handle, comm=None, **kwargs):
         """Internal method which can be overridden by derived classes."""
-        with h5py.File(handle, "w") as hf:
-            self._save_base_hdf5(hf)
+        if isinstance(handle, h5py.Group):
+            self._save_base_hdf5(handle, comm=comm)
+        else:
+            with h5py.File(handle, "w") as hf:
+                self._save_base_hdf5(hf, comm=comm)
 
-    def save_hdf5(self, handle, **kwargs):
+    def save_hdf5(self, handle, comm=None, **kwargs):
         """Save the noise object to an HDF5 file.
 
         Args:
-            handle (str, file object):  This can be any object accepted by the h5py
+            handle (str, file object, group):  Any object accepted by the h5py
                 package.
 
         Returns:
             None
 
         """
-        self._save_hdf5(handle, **kwargs)
+        self._save_hdf5(handle, comm=comm, **kwargs)
 
-    def _load_base_hdf5(self, hf):
+    def _load_base_hdf5(self, hf, comm=None):
         """Read internal data from an open HDF5 file"""
         self._freqs = dict()
         self._psds = dict()
@@ -287,23 +291,26 @@ class Noise(object):
                 self._freqs[dsname] = u.Quantity(ds[:, 0], u.Hz)
                 self._psds[dsname] = u.Quantity(ds[:, 1], u.K ** 2 * u.second)
 
-    def _load_hdf5(self, handle, **kwargs):
+    def _load_hdf5(self, handle, comm=None, **kwargs):
         """Internal method which can be overridden by derived classes."""
-        with h5py.File(handle, "r") as hf:
-            self._load_base_hdf5(hf)
+        if isinstance(handle, h5py.Group):
+            self._load_base_hdf5(handle, comm=comm)
+        else:
+            with h5py.File(handle, "r") as hf:
+                self._load_base_hdf5(hf, comm=comm)
 
-    def load_hdf5(self, handle, **kwargs):
+    def load_hdf5(self, handle, comm=None, **kwargs):
         """Load the noise object from an HDF5 file.
 
         Args:
-            handle (str, file object):  This can be any object accepted by the h5py
+            handle (str, file object, group):  Any object accepted by the h5py
                 package.
 
         Returns:
             None
 
         """
-        self._load_hdf5(handle, **kwargs)
+        self._load_hdf5(handle, comm=comm, **kwargs)
 
     def __repr__(self):
         mix_min = np.min([len(y) for x, y in self._mixmatrix.items()])

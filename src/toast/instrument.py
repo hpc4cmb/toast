@@ -7,6 +7,8 @@ import sys
 
 import numpy as np
 
+import h5py
+
 from astropy import units as u
 
 import astropy.time as astime
@@ -14,6 +16,8 @@ import astropy.time as astime
 import astropy.coordinates as coord
 
 from astropy.table import QTable, Column
+
+from astropy.io.misc.hdf5 import write_table_hdf5, read_table_hdf5
 
 from scipy.constants import h, k
 
@@ -440,7 +444,7 @@ class Focalplane(object):
 
         if file is not None:
             log.debug_rank(f"Loading focalplane from {file}", comm=comm)
-            self.read(file, comm=comm)
+            self.load_hdf5(file, comm=comm)
 
         # Add UID if not given
         if "uid" not in self.detector_data.colnames:
@@ -705,11 +709,24 @@ class Focalplane(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def read(self, file, comm=None):
+    def load_hdf5(self, handle, comm=None, **kwargs):
+        """Load the focalplane from an HDF5 file.
+
+        Args:
+            handle (str, file object, group):  Any object accepted by the h5py
+                package.
+
+        Returns:
+            None
+
+        """
         if comm is None or comm.rank == 0:
             if self.detector_data is not None:
                 raise RuntimeError("Reading detector data over existing table")
-            self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
+            if isinstance(handle, h5py.Group):
+                self.detector_data = read_table_hdf5(handle, path="focalplane")
+            else:
+                self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
             # Only use the sampling rate recorded in the file if it was not
             # overridden in the constructor
             if self.sample_rate is None:
@@ -726,17 +743,32 @@ class Focalplane(object):
             self.sample_rate = comm.bcast(self.sample_rate, root=0)
             self.field_of_view = comm.bcast(self.field_of_view, root=0)
 
-    def write(self, file, comm=None):
+    def save_hdf5(self, handle, comm=None, **kwargs):
+        """Save the focalplane to an HDF5 file.
+
+        Args:
+            handle (str, file object, group):  Any object accepted by the h5py
+                package.
+
+        Returns:
+            None
+
+        """
         if comm is None or comm.rank == 0:
             self.detector_data.meta["sample_rate"] = self.sample_rate
             self.detector_data.meta["field_of_view"] = self.field_of_view
-            self.detector_data.write(
-                file,
-                format="hdf5",
-                path="focalplane",
-                serialize_meta=True,
-                overwrite=True,
-            )
+            if isinstance(handle, h5py.Group):
+                write_table_hdf5(
+                    self.detector_data, handle, path="focalplane", overwrite=True
+                )
+            else:
+                self.detector_data.write(
+                    handle,
+                    format="hdf5",
+                    path="focalplane",
+                    serialize_meta=True,
+                    overwrite=True,
+                )
 
 
 class Telescope(object):
