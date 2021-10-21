@@ -94,6 +94,7 @@ def parse_arguments():
     # Focal plane- we will use a dummy focalplane with just 2 detectors.
     args.sample_rate = 1.0  # sample_rate is nb sample per second.
     args.width = 10.0
+    args.fov = 1.1 * args.width * u.degree
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
 
@@ -119,7 +120,8 @@ def parse_arguments():
         "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
     ]
     args.schedule_start = "2027-01-01 00:00:00"
-    args.schedule_stop = "2027-12-31 00:00:00"
+    # args.schedule_stop = "2027-12-31 00:00:00"
+    args.schedule_stop = "2027-01-01 01:00:00"
 
     # scan map
     args.nside = 4096
@@ -307,6 +309,7 @@ def main():
     if world_comm is not None:
         world_comm.barrier()
     job_ops.sim_atmosphere.detector_pointing = job_ops.det_pointing_azel
+    job_ops.sim_atmosphere.field_of_view = args.fov
     job_ops.sim_atmosphere.cache_dir = cache_dir
     job_ops.sim_atmosphere.cache_only = True
     job_ops.sim_atmosphere.apply(data)
