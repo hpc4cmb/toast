@@ -331,7 +331,7 @@ class ObserveAtmosphere(Operator):
             if nbad_tot > 0:
                 frac = nbad_tot / (ngood_tot + nbad_tot) * 100
                 log.error(
-                    "{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
+                    f"{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
                 )
         gt.stop("ObserveAtmosphere:  total")
 
