@@ -716,7 +716,7 @@ class SimTEBConviqt(SimConviqt):
                 sky_file = self.sky_file.format(detector=det, mc=self.mc)
             sky = self.get_sky(sky_file, det, verbose)
             import pdb; pdb.set_trace()
-            
+
             beam_file = self.beam_file.format(detector=det, mc=self.mc)
             beam_file_T = beam_file.replace(".fits","_T.fits")
             beam_file_P = beam_file.replace(".fits","_P.fits")
@@ -730,21 +730,21 @@ class SimTEBConviqt(SimConviqt):
 
             # I-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data = self.convolve(skyT, beamT, detector, pnt, det, verbose)
+            convolved_data = self.convolve(sky[0,:], beamT, detector, pnt, det, verbose)
 
             del pnt
 
             # Q-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.cos(2 * psi_pol) * self.convolve(
-                        skyE, beamP, detector, pnt, det, verbose
+                        sky[1,:], beamP, detector, pnt, det, verbose
                             )
             del pnt
 
             # U-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.sin(2 * psi_pol) * self.convolve(
-                skyB, beamP, detector, pnt, det, verbose
+                sky[2,:], beamP, detector, pnt, det, verbose
             )
             del theta, phi, psi
 
