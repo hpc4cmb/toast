@@ -38,6 +38,7 @@ from .copy import Copy
 from .delete import Delete
 from .mapmaker_solve import SolverLHS, SolverRHS, solve
 from .mapmaker_utils import CovarianceAndHits
+from .memory_counter import MemoryCounter
 from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
@@ -105,7 +106,7 @@ class SparseTemplates:
             if np.any(good[start:stop]):
                 masked.starts.append(start)
                 masked.stops.append(stop)
-                masked.templates.append(template.copy())
+                masked.templates.append(template)
         masked.normalize(good)
         return masked
 
@@ -353,6 +354,8 @@ class FilterBin(Operator):
         "repeatedly to different data objects.",
     )
 
+    report_memory = Bool(False, help="Report memory throughout the execution")
+
     @traitlets.validate("binning")
     def _check_binning(self, proposal):
         bin = proposal["value"]
@@ -389,6 +392,13 @@ class FilterBin(Operator):
 
         timer = Timer()
         timer.start()
+
+        memreport = MemoryCounter()
+        if not self.report_memory:
+            memreport.enabled = False
+
+        memreport.prefix = "Start of mapmaking"
+        memreport.apply(data)
 
         for trait in ("binning",):
             if getattr(self, trait) is None:
@@ -453,11 +463,14 @@ class FilterBin(Operator):
         timer2 = Timer()
         timer2.start()
 
+        memreport.prefix = "Before filtering"
+        memreport.apply(data)
+
         t1 = time()
         for iobs, obs in enumerate(data.obs):
             dets = obs.select_local_detectors(detectors)
             if self.grank == 0:
-                log.verbose(
+                log.debug(
                     f"{self.group:4} : FilterBin: Processing observation "
                     f"{iobs} / {len(data.obs)}",
                 )
@@ -469,15 +482,18 @@ class FilterBin(Operator):
                 common_flags = np.zeros(phase.size, dtype=np.uint8)
 
             if self.grank == 0:
-                log.verbose(
+                log.debug(
                     f"{self.group:4} : FilterBin:   Built common templates in "
                     f"{time() - t1:.2f} s",
                 )
                 t1 = time()
 
+            memreport.prefix = "After common templates"
+            memreport.apply(data)
+
             for idet, det in enumerate(dets):
                 if self.grank == 0:
-                    log.verbose(
+                    log.debug(
                         f"{self.group:4} : FilterBin:   Processing detector "
                         f"# {idet + 1} / {len(dets)}",
                     )
@@ -520,17 +536,21 @@ class FilterBin(Operator):
 
                 self._add_deprojection_templates(data, obs, pixels, det_templates)
                 if self.grank == 0:
-                    log.verbose(
+                    log.debug(
                         f"{self.group:4} : FilterBin:   Built deprojection "
-                        f"templates in {time() - t1:.2f} s",
+                        f"templates in {time() - t1:.2f} s. "
+                        f"ntemplate = {det_templates.ntemplate}",
                     )
                     t1 = time()
+
+                memreport.prefix = "After detector templates"
+                memreport.apply(data)
 
                 template_covariance = self._build_template_covariance(
                     det_templates, good_fit
                 )
                 if self.grank == 0:
-                    log.verbose(
+                    log.debug(
                         f"{self.group:4} : FilterBin:   Built template covariance "
                         f"{time() - t1:.2f} s",
                     )
@@ -540,7 +560,7 @@ class FilterBin(Operator):
                     det_templates, template_covariance, signal, good_fit
                 )
                 if self.grank == 0:
-                    log.verbose(
+                    log.debug(
                         f"{self.group:4} : FilterBin:   Regressed templates in "
                         f"{time() - t1:.2f} s",
                     )
@@ -572,6 +592,9 @@ class FilterBin(Operator):
             timer=timer2,
         )
 
+        memreport.prefix = "After filtering"
+        memreport.apply(data)
+
         # Bin filtered signal
 
         self._bin_map(data, detectors, filtered=True)
@@ -582,6 +605,9 @@ class FilterBin(Operator):
             comm=self.comm,
             timer=timer2,
         )
+
+        memreport.prefix = "After binning"
+        memreport.apply(data)
 
         if self.write_obs_matrix:
             log.debug_rank(
@@ -601,6 +627,9 @@ class FilterBin(Operator):
                 comm=self.comm,
                 timer=timer2,
             )
+
+            memreport.prefix = "After observation matrix"
+            memreport.apply(data)
 
         return
 
