@@ -258,6 +258,11 @@ class SimGround(Operator):
         None, allow_none=True, help="Maximum PWV for the simulated weather."
     )
 
+    median_weather = Bool(
+        False,
+        help="Use median weather parameters instead of sampling from the distributions",
+    )
+
     invalid_mask = Int(
         defaults.shared_mask_invalid, help="Bit mask to raise invalid flags with"
     )
@@ -697,6 +702,7 @@ class SimGround(Operator):
                         name=self.weather,
                         site_uid=site.uid,
                         max_pwv=self.max_pwv,
+                        median_weather=self.median_weather,
                     )
                 except RuntimeError:
                     # must be a file
@@ -705,6 +711,7 @@ class SimGround(Operator):
                         file=self.weather,
                         site_uid=site.uid,
                         max_pwv=self.max_pwv,
+                        median_weather=self.median_weather,
                     )
                 site = copy.deepcopy(self.telescope.site)
                 site.weather = weather

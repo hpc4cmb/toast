@@ -204,11 +204,19 @@ class SimWeather(Weather):
         site_uid (int):  The Unique ID for the site, used for random draw of parameters.
         realization (int):  The realization index used for random draw of parameters.
         max_pwv (quantity):  Maximum PWV to draw.
+        median_weather (bool):  Instead of random values, return the median ones.
 
     """
 
     def __init__(
-        self, time=None, name=None, file=None, site_uid=0, realization=0, max_pwv=None
+        self,
+        time=None,
+        name=None,
+        file=None,
+        site_uid=0,
+        realization=0,
+        max_pwv=None,
+        median_weather=False,
     ):
         if time is None:
             raise RuntimeError("you must specify the time")
@@ -225,6 +233,7 @@ class SimWeather(Weather):
         self._max_pwv = max_pwv
         if max_pwv is not None:
             self._truncate_distributions("TQV", max_pwv)
+        self.median_weather = median_weather
 
         # Use a separate RNG index for each data type
         self._varindex = {y: x for x, y in enumerate(self._data[0]["data"].keys())}
@@ -323,13 +332,16 @@ class SimWeather(Weather):
         counter1 = self._varindex[name]
         counter2 = (self._year * 366 + self._doy) * 24 + self._hour
 
-        # Get a uniform random number for inverse sampling
-        x = rng.random(
-            1,
-            sampler="uniform_01",
-            key=(self._site_uid, self._realization),
-            counter=(counter1, counter2),
-        )[0]
+        if self.median_weather:
+            x = 0.5
+        else:
+            # Get a uniform random number for inverse sampling
+            x = rng.random(
+                1,
+                sampler="uniform_01",
+                key=(self._site_uid, self._realization),
+                counter=(counter1, counter2),
+            )[0]
 
         # Sample the variable from the inverse cumulative distribution function
         prob = self._data[self._month]["prob"]
