@@ -656,3 +656,108 @@ class SimWeightedConviqt(SimConviqt):
                 timer.report_clear(f"conviqt process detector {det}")
 
         return
+
+
+
+
+class SimTEBConviqt(SimConviqt):
+    """
+    Operator that uses libconviqt to generate beam-convolved timestreams.
+    This operator should be used in presence of a spinning HWP which makes the beam time-dependent,
+    constantly mapping the co- and cross-polar responses on to each other.
+    In the parent class OpSimConviqt we assume the beam to be static.
+
+    This passes through each observations and loops over each detector.
+    For each detector, it produces the beam convolver timestreams.
+
+    This implementation follows the approach from M.Reinecke in which we have 3 convolutions,
+    obtained when spliting both the sky into their {T,E,B} components and the beam alm
+    into the {T, P}   ones, with P being defined as :math:`P=b_{lm}^E + b_{lm}^B`
+    The convolution  is performed by  coupling each IQU component of the signal propertly as:
+    :math:`skyT_lm * beamT_lm, skyE_lm * Re{P}, skyB_lm * Im{P}`.
+
+
+
+    After that each time-steam is summed up properly weighted (according to HWP angle).
+"""
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        if not self.available:
+            raise RuntimeError("libconviqt is not available")
+
+        if self.comm is None:
+            raise RuntimeError("libconviqt requires MPI")
+
+        if self.detector_pointing is None:
+            raise RuntimeError("detector_pointing cannot be None.")
+
+        log = Logger.get()
+
+        timer = Timer()
+        timer.start()
+
+        # Expand detector pointing
+        self.detector_pointing.apply(data, detectors=detectors)
+
+        all_detectors = self._get_all_detectors(data, detectors)
+
+        for det in all_detectors:
+            verbose = self.comm.rank == 0 and self.verbosity > 0
+
+            # Expand detector pointing
+            self.detector_pointing.apply(data, detectors=[det])
+
+            if det in self.sky_file_dict:
+                sky_file = self.sky_file_dict[det]
+            else:
+                sky_file = self.sky_file.format(detector=det, mc=self.mc)
+            sky = self.get_sky(sky_file, det, verbose)
+            import pdb; pdb.set_trace()
+            
+            beam_file = self.beam_file.format(detector=det, mc=self.mc)
+            beam_file_T = beam_file.replace(".fits","_T.fits")
+            beam_file_P = beam_file.replace(".fits","_P.fits")
+
+            beamT = self.get_beam(beam_file_T, det, verbose)
+            beamP = self.get_beam(beam_file_P, det, verbose)
+
+            detector = self.get_detector(det)
+
+            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
+
+            # I-beam convolution
+            pnt = self.get_buffer(theta, phi, psi, det, verbose)
+            convolved_data = self.convolve(skyT, beamT, detector, pnt, det, verbose)
+
+            del pnt
+
+            # Q-beam convolution
+            pnt = self.get_buffer(theta, phi, psi, det, verbose)
+            convolved_data += np.cos(2 * psi_pol) * self.convolve(
+                        skyE, beamP, detector, pnt, det, verbose
+                            )
+            del pnt
+
+            # U-beam convolution
+            pnt = self.get_buffer(theta, phi, psi, det, verbose)
+            convolved_data += np.sin(2 * psi_pol) * self.convolve(
+                skyB, beamP, detector, pnt, det, verbose
+            )
+            del theta, phi, psi
+
+            self.calibrate_signal(
+                data,
+                det,
+                beamT,
+                convolved_data,
+                verbose,
+            )
+            self.save(data, det, convolved_data, verbose)
+
+            del pnt, detector, beamT, beamP, skyT, skyE, skyB
+
+            if verbose:
+                timer.report_clear(f"conviqt process detector {det}")
+
+        return
