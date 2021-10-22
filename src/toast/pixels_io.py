@@ -17,7 +17,7 @@ import healpy as hp
 from .utils import Logger, memreport
 
 # This boolean is set to False after first failed MPI-open
-hdf5_is_parallel = True
+hdf5_is_parallel = False
 
 
 @function_timer
@@ -395,6 +395,7 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
     return
 
 
+@function_timer
 def write_healpix_hdf5(
     pix, path, nest=True, comm_bytes=10000000, single_precision=False
 ):
@@ -557,6 +558,7 @@ def filename_is_hdf5(filename):
     return filename.endswith((".hdf5", ".h5", ".H5"))
 
 
+@function_timer
 def read_healpix(filename, *args, **kwargs):
     """Read a FITS or HDF5 map serially"""
 
@@ -616,6 +618,7 @@ def read_healpix(filename, *args, **kwargs):
     return result
 
 
+@function_timer
 def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
     """Write a FITS or HDF5 map serially"""
 
