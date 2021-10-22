@@ -12,7 +12,8 @@ void filter_polynomial(int64_t order, size_t nsignal, uint8_t * flags,
                        int64_t const * starts, int64_t const * stops);
 void bin_proj(double * signal, double * templates, uint8_t * good,
               double * proj, size_t nsample, size_t ntemplate);
-void bin_invcov(double * templates, uint8_t * good, double * invcov, size_t nsample, size_t ntemplate);
+void bin_invcov(double * templates, uint8_t * good, double * invcov, size_t nsample,
+                size_t ntemplate);
 void legendre(double * x, double * templates, size_t start_order, size_t stop_order,
               size_t nsample);
 void chebyshev(double * x, double * templates, size_t start_order, size_t stop_order,

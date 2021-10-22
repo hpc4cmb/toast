@@ -197,8 +197,8 @@ void toast::bin_proj(double * signal, double * templates,
     return;
 }
 
-void toast::bin_invcov(double * templates, uint8_t * good, double * invcov, size_t nsample, size_t ntemplate) {
-
+void toast::bin_invcov(double * templates, uint8_t * good, double * invcov,
+                       size_t nsample, size_t ntemplate) {
     for (size_t row = 0; row < ntemplate; row++) {
         for (size_t col = 0; col < ntemplate; col++) {
             invcov[ntemplate * row + col] = 0;

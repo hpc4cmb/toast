@@ -33,6 +33,7 @@ from ..observation import default_values as defaults
 
 # Wrappers for more precise timing
 
+
 @function_timer
 def bin_proj_fast(ref, templates, good, proj):
     return bin_proj(ref, templates, good, proj)
@@ -51,6 +52,7 @@ def get_rcond(invcov):
 @function_timer
 def get_inverse(invcov):
     return np.linalg.inv(invcov)
+
 
 @function_timer
 def get_pseudoinverse(invcov):
@@ -236,7 +238,18 @@ class GroundFilter(Operator):
         return templates, legendre_trend, legendre_filter
 
     @function_timer
-    def fit_templates(self, obs, det, templates, ref, good, last_good, last_invcov, last_cov, last_rcond):
+    def fit_templates(
+        self,
+        obs,
+        det,
+        templates,
+        ref,
+        good,
+        last_good,
+        last_invcov,
+        last_cov,
+        last_rcond,
+    ):
         log = Logger.get()
         # communicator for processes with the same detectors
         comm = obs.comm_row
@@ -364,7 +377,15 @@ class GroundFilter(Operator):
 
                 t1 = time()
                 coeff, last_invcov, last_cov, last_rcond = self.fit_templates(
-                    obs, det, templates, ref, good, last_good, last_invcov, last_cov, last_rcond
+                    obs,
+                    det,
+                    templates,
+                    ref,
+                    good,
+                    last_good,
+                    last_invcov,
+                    last_cov,
+                    last_rcond,
                 )
                 last_good = good
                 if data.comm.group_rank == 0:
