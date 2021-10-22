@@ -669,18 +669,12 @@ class SimTEBConviqt(SimConviqt):
     constantly mapping the co- and cross-polar responses on to each other.
     In the parent class OpSimConviqt we assume the beam to be static.
 
-    This passes through each observations and loops over each detector.
-    For each detector, it produces the beam convolver timestreams.
 
-    This implementation follows the approach from M.Reinecke in which we have 3 convolutions,
-    obtained when spliting both the sky into their {T,E,B} components and the beam alm
-    into the {T, P}   ones, with P being defined as :math:`P=b_{lm}^E + b_{lm}^B`
     The convolution  is performed by  coupling each IQU component of the signal propertly as:
     :math:`skyT_lm * beamT_lm, skyE_lm * Re{P}, skyB_lm * Im{P}`.
 
+    For extra details please refer to [this note ](https://giuspugl.github.io/reports/Notes_TEB_convolution.html)
 
-
-    After that each time-steam is summed up properly weighted (according to HWP angle).
 """
 
     @function_timer
@@ -715,7 +709,6 @@ class SimTEBConviqt(SimConviqt):
             else:
                 sky_file = self.sky_file.format(detector=det, mc=self.mc)
             sky = self.get_sky(sky_file, det, verbose)
-            import pdb; pdb.set_trace()
 
             beam_file = self.beam_file.format(detector=det, mc=self.mc)
             beam_file_T = beam_file.replace(".fits","_T.fits")
