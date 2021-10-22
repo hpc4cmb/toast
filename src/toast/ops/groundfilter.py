@@ -241,17 +241,19 @@ class GroundFilter(Operator):
         # communicator for processes with the same detectors
         comm = obs.comm_row
         ngood = np.sum(good)
+        ntask = 1
         if comm is not None:
             ngood = comm.allreduce(ngood)
+            ntask = comm.size
         if ngood == 0:
-            return None
+            return None, None, None, None
 
         ntemplate = len(templates)
         invcov = np.zeros([ntemplate, ntemplate])
         proj = np.zeros(ntemplate)
 
         bin_proj_fast(ref, templates, good.astype(np.uint8), proj)
-        if last_good is not None and np.all(good == last_good) and comm is None:
+        if last_good is not None and np.all(good == last_good) and ntask == 1:
             # Flags have not changed, we can re-use the last inverse covariance
             invcov = last_invcov
             cov = last_cov
