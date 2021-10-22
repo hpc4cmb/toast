@@ -26,9 +26,41 @@ from .operator import Operator
 
 from ..utils import Environment, Logger, Timer
 
-from .._libtoast import bin_templates, add_templates, legendre
+from .._libtoast import bin_proj, bin_invcov, add_templates, legendre
 
 from ..observation import default_values as defaults
+
+
+# Wrappers for more precise timing
+
+@function_timer
+def bin_proj_fast(ref, templates, good, proj):
+    return bin_proj(ref, templates, good, proj)
+
+
+@function_timer
+def bin_invcov_fast(templates, good, invcov):
+    return bin_invcov(templates, good, invcov)
+
+
+@function_timer
+def get_rcond(invcov):
+    return 1 / np.linalg.cond(invcov)
+
+
+@function_timer
+def get_inverse(invcov):
+    return np.linalg.inv(invcov)
+
+@function_timer
+def get_pseudoinverse(invcov):
+    return np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
+
+
+@function_timer
+def lstsq_coeff(invcov, proj):
+    cov = np.linalg.inv(invcov)
+    return np.linalg.lstsq(invcov, proj, rcond=1e-30)[0]
 
 
 @trait_docs
@@ -204,24 +236,7 @@ class GroundFilter(Operator):
         return templates, legendre_trend, legendre_filter
 
     @function_timer
-    def bin_templates(self, ref, templates, good, invcov, proj):
-
-        # Bin the local data
-
-        for i in range(ntemplate):
-            temp = templates[i] * good
-            proj[i] = np.dot(temp, ref)
-            for j in range(i, ntemplate):
-                invcov[i, j] = np.dot(temp, templates[j])
-                # Symmetrize invcov
-                if i != j:
-                    invcov[j, i] = invcov[i, j]
-            del temp
-
-        return
-
-    @function_timer
-    def fit_templates(self, obs, det, templates, ref, good):
+    def fit_templates(self, obs, det, templates, ref, good, last_good, last_invcov, last_cov, last_rcond):
         log = Logger.get()
         # communicator for processes with the same detectors
         comm = obs.comm_row
@@ -235,35 +250,38 @@ class GroundFilter(Operator):
         invcov = np.zeros([ntemplate, ntemplate])
         proj = np.zeros(ntemplate)
 
-        bin_templates(ref, templates, good.astype(np.uint8), invcov, proj)
-
-        if comm is not None:
-            # Reduce the binned data.  The detector signal is
-            # distributed across the group communicator.
-            comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
-            comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
-
-        # Assemble the joint template
-        rcond = 1 / np.linalg.cond(invcov)
+        bin_proj_fast(ref, templates, good.astype(np.uint8), proj)
+        if last_good is not None and np.all(good == last_good) and comm is None:
+            # Flags have not changed, we can re-use the last inverse covariance
+            invcov = last_invcov
+            cov = last_cov
+            rcond = last_rcond
+        else:
+            bin_invcov_fast(templates, good.astype(np.uint8), invcov)
+            if comm is not None:
+                # Reduce the binned data.  The detector signal is
+                # distributed across the group communicator.
+                comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
+                comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
+            rcond = get_rcond(invcov)
+            cov = None
 
         self.rcondsum += rcond
         if rcond > 1e-6:
             self.ngood += 1
-            cov = np.linalg.inv(invcov)
-            coeff = np.dot(cov, proj)
+            if cov is None:
+                cov = get_inverse(invcov)
         else:
             self.nsingular += 1
             log.debug(
                 f"Ground template matrix is poorly conditioned, "
-                f"rcond = {rcond}, doing least squares fitting."
+                f"rcond = {rcond}, using pseudoinverse."
             )
-            # np.linalg.lstsq will find a least squares minimum
-            # even if the covariance matrix is not invertible
-            coeff = np.linalg.lstsq(invcov, proj, rcond=1e-30)[0]
-            if np.any(np.isnan(coeff)) or np.std(coeff) < 1e-30:
-                raise RuntimeError("lstsq FAILED")
+            if cov is None:
+                cov = get_pseudoinverse(invcov)
+        coeff = np.dot(cov, proj)
 
-        return coeff
+        return coeff, invcov, cov, rcond
 
     @function_timer
     def subtract_templates(self, ref, good, coeff, legendre_trend, legendre_filter):
@@ -322,6 +340,10 @@ class GroundFilter(Operator):
                 )
                 log.debug(msg)
 
+            last_good = None
+            last_invcov = None
+            last_cov = None
+            last_rcond = None
             ndet = len(obs.local_detectors)
             for idet, det in enumerate(obs.local_detectors):
                 if data.comm.group_rank == 0:
@@ -339,7 +361,10 @@ class GroundFilter(Operator):
                     good = common_flags == 0
 
                 t1 = time()
-                coeff = self.fit_templates(obs, det, templates, ref, good)
+                coeff, last_invcov, last_cov, last_rcond = self.fit_templates(
+                    obs, det, templates, ref, good, last_good, last_invcov, last_cov, last_rcond
+                )
+                last_good = good
                 if data.comm.group_rank == 0:
                     msg = (
                         f"{log_prefix} OpGroundFilter: "
@@ -360,6 +385,10 @@ class GroundFilter(Operator):
                         f"Subtract templates in {time() - t1:.1f}s"
                     )
                     log.verbose(msg)
+            del last_good
+            del last_invcov
+            del last_cov
+            del last_rcond
 
         if wcomm is not None:
             self.nsingular = wcomm.allreduce(self.nsingular)

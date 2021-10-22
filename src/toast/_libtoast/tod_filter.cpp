@@ -162,9 +162,8 @@ void init_tod_filter(py::module & m) {
 
     )");
 
-    m.def("bin_templates",
+    m.def("bin_proj",
           [](py::buffer signal, py::buffer templates, py::buffer good,
-             py::buffer invcov,
              py::buffer proj) {
               pybuffer_check_1D <double> (signal);
               pybuffer_check_1D <double> (proj);
@@ -172,34 +171,65 @@ void init_tod_filter(py::module & m) {
               py::buffer_info info_signal = signal.request();
               py::buffer_info info_templates = templates.request();
               py::buffer_info info_good = good.request();
-              py::buffer_info info_invcov = invcov.request();
               py::buffer_info info_proj = proj.request();
 
               size_t nsample = info_signal.size;
               size_t ntemplate = info_templates.size / nsample;
-              if ((ntemplate * ntemplate != info_invcov.size) ||
-                  (ntemplate != info_proj.size)) {
+              if (ntemplate != info_proj.size) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
-                  o << "templates, invcov and proj must have consistent sizes, not " << ntemplate << ", " << info_invcov.size << ", " << info_proj.size;
+                  o << "templates and proj must have consistent sizes, not " << ntemplate << ", " << info_proj.size;
                   log.error(o.str().c_str());
                   throw std::runtime_error(o.str().c_str());
               }
 
               double * psignal = reinterpret_cast <double *> (info_signal.ptr);
               double * ptemplates = reinterpret_cast <double *> (info_templates.ptr);
-              double * pinvcov = reinterpret_cast <double *> (info_invcov.ptr);
               double * pproj = reinterpret_cast <double *> (info_proj.ptr);
               uint8_t * pgood = reinterpret_cast <uint8_t *> (info_good.ptr);
-              toast::bin_templates(psignal, ptemplates, pgood, pinvcov, pproj, nsample,
-                                   ntemplate);
+              toast::bin_proj(psignal, ptemplates, pgood, pproj, nsample, ntemplate);
 
               return;
           }, py::arg("signal"), py::arg("templates"), py::arg("good"), py::arg(
-              "invcov"), py::arg(
               "proj"),
           R"(
         Perform dot products between signal and templates
+
+        Args:
+
+        Returns:
+            None.
+
+    )");
+
+    m.def("bin_invcov",
+          [](py::buffer templates, py::buffer good,
+             py::buffer invcov) {
+              pybuffer_check_1D <uint8_t> (good);
+              py::buffer_info info_templates = templates.request();
+              py::buffer_info info_good = good.request();
+              py::buffer_info info_invcov = invcov.request();
+
+              size_t nsample = info_good.size;
+              size_t ntemplate = info_templates.size / nsample;
+              if (ntemplate * ntemplate != info_invcov.size) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "templates and invcov must have consistent sizes, not " << ntemplate << ", " << info_invcov.size;
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+
+              double * ptemplates = reinterpret_cast <double *> (info_templates.ptr);
+              double * pinvcov = reinterpret_cast <double *> (info_invcov.ptr);
+              uint8_t * pgood = reinterpret_cast <uint8_t *> (info_good.ptr);
+              toast::bin_invcov(ptemplates, pgood, pinvcov, nsample, ntemplate);
+
+              return;
+          }, py::arg("templates"), py::arg("good"), py::arg(
+              "invcov"),
+          R"(
+        Perform dot products between templates
 
         Args:
 
