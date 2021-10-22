@@ -491,6 +491,9 @@ class FilterBin(Operator):
             memreport.prefix = "After common templates"
             memreport.apply(data)
 
+            last_good_fit = None
+            template_covariance = None
+
             for idet, det in enumerate(dets):
                 if self.grank == 0:
                     log.debug(
@@ -534,7 +537,14 @@ class FilterBin(Operator):
 
                 det_templates = common_templates.mask(good_fit)
 
-                self._add_deprojection_templates(data, obs, pixels, det_templates)
+                if (
+                    self.deproject_map is None
+                    or self._deproject_pattern.match(det) is None
+                ):
+                    self._add_deprojection_templates(data, obs, pixels, det_templates)
+                    # Must re-evaluate the template covariance
+                    template_covariance = None
+
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:   Built deprojection "
@@ -546,9 +556,12 @@ class FilterBin(Operator):
                 memreport.prefix = "After detector templates"
                 memreport.apply(data)
 
-                template_covariance = self._build_template_covariance(
-                    det_templates, good_fit
-                )
+                if template_covariance is None or np.any(last_good_fit != good_fit):
+                    template_covariance = self._build_template_covariance(
+                        det_templates, good_fit
+                    )
+                    last_good_fit = good_fit.copy()
+
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:   Built template covariance "
@@ -719,9 +732,6 @@ class FilterBin(Operator):
 
     @function_timer
     def _add_deprojection_templates(self, data, obs, pixels, templates):
-        if self.deproject_map is None or self._deproject_pattern.match(det) is None:
-            return
-
         deproject_map = data[self.deproject_map_name]
         map_dist = deproject_map.distribution
         local_sm, local_pix = map_dist.global_pixel_to_submap(pixels)
