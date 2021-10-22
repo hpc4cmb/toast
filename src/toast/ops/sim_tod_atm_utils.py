@@ -296,7 +296,7 @@ class ObserveAtmosphere(Operator):
                             t_temp = times[good][::self.n_interp].copy()
                             atm_temp = np.zeros(t_temp.size, dtype=np.float64)
                             az_temp = az[::self.n_interp].copy()
-                            el_temp = az[::self.n_interp].copy()
+                            el_temp = el[::self.n_interp].copy()
                             err = cur_sim.observe(t_temp, az_temp, el_temp, atm_temp, -1.0)
                             atmdata = np.interp(times[good], t_temp, atm_temp)
                             del t_temp, atm_temp, az_temp, el_temp
