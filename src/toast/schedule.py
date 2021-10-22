@@ -417,9 +417,9 @@ class GroundSchedule(object):
                             continue
                     total_time += (gscan.stop - gscan.start).total_seconds()
                     self.scans.append(gscan)
-            if total_time > 86400:
+            if total_time > 2 * 86400:
                 total_time = f"{total_time / 86400:.3f} days"
-            elif total_time > 3600:
+            elif total_time > 2 * 3600:
                 total_time = f"{total_time / 3600:.3} hours"
             else:
                 total_time = f"{total_time / 60:.3} minutes"
