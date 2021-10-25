@@ -185,7 +185,9 @@ def parse_arguments():
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10.0
-    args.fov = 1.1 * args.width * u.degree
+    # The "width" is the angle between the flats of the hexagon.  We want
+    # the vertex-vertex angle.  Also add 10% margin
+    args.fov = 1.1 * (args.width / np.cos(np.pi / 6)) * u.degree
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
 
