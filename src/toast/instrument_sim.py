@@ -627,7 +627,7 @@ def fake_hexagon_focalplane(
     return Focalplane(
         detector_data=det_table,
         sample_rate=sample_rate,
-        field_of_view=(width + 2.1 * fwhm),
+        field_of_view=1.1 * (width + 2 * fwhm),
     )
 
 
