@@ -568,10 +568,13 @@ def fake_hexagon_focalplane(
 
     """
     width_deg = width.to_value(u.degree)
+    # When laying out the hexagonal pixels, the angular "width" is the distance
+    # between the flat sides.
+    width_flats = np.cos(np.pi / 6) * width_deg
     pol_A = hex_pol_angles_qu(n_pix, offset=0.0)
     pol_B = hex_pol_angles_qu(n_pix, offset=90.0)
-    quat_A = hex_layout(n_pix, width_deg, "D", "A", pol_A)
-    quat_B = hex_layout(n_pix, width_deg, "D", "B", pol_B)
+    quat_A = hex_layout(n_pix, width_flats, "D", "A", pol_A)
+    quat_B = hex_layout(n_pix, width_flats, "D", "B", pol_B)
 
     temp_data = dict(quat_A)
     temp_data.update(quat_B)
