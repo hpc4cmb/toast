@@ -91,11 +91,10 @@ class FlagIntervals(Operator):
             # byte width is in place.  Otherwise create it.
 
             if self.shared_flags not in ob.shared:
-                ob.shared.create(
+                ob.shared.create_column(
                     self.shared_flags,
                     shape=(ob.n_local_samples,),
                     dtype=fdtype,
-                    comm=ob.comm_col,
                 )
 
             # The intervals / view is common between all processes in a column of the
