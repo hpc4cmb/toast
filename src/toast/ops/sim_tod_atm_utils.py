@@ -94,7 +94,7 @@ class ObserveAtmosphere(Operator):
     )
 
     n_interp = Int(
-        4,
+        1,
         help="Number of time samples to interpolate per simulated sample",
     )
 

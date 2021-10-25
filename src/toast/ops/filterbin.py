@@ -538,8 +538,8 @@ class FilterBin(Operator):
                 det_templates = common_templates.mask(good_fit)
 
                 if (
-                    self.deproject_map is None
-                    or self._deproject_pattern.match(det) is None
+                    self.deproject_map is not None
+                    and self._deproject_pattern.match(det) is not None
                 ):
                     self._add_deprojection_templates(data, obs, pixels, det_templates)
                     # Must re-evaluate the template covariance
