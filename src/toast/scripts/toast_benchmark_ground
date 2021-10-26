@@ -185,7 +185,6 @@ def parse_arguments():
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10.0
-    args.fov = 1.1 * args.width * u.degree
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
 
@@ -460,7 +459,6 @@ def main():
 
     # Simulate atmosphere signal
     job_ops.sim_atmosphere.detector_pointing = job_ops.det_pointing_azel
-    job_ops.sim_atmosphere.field_of_view = args.fov
     job_ops.sim_atmosphere.apply(data)
     log.info_rank("Simulated and observed atmosphere in", comm=world_comm, timer=timer)
 
