@@ -456,6 +456,12 @@ def extract_global_intervals(old_dist, intervals_manager):
                         last_stop = stop
 
                     glist.append((last_start, last_stop))
+                    #
+                    # Note:  If we enable this code, then intervals split by earlier
+                    # redistribution will be correctly recombined.  However, intervals
+                    # with genuine boundaries at the data distribution will be
+                    # combined too.  It seems safer to leave these split.
+                    #
                     # if last == pn - 1:
                     #     last_continue = True
                     # else:
