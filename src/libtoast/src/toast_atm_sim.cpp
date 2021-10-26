@@ -314,6 +314,8 @@ double toast::atm_sim_cov_eval(
                 double dz = zz1 - zz2;
                 double r2 = dx * dx + dy * dy + dz * dz;
                 if (r2 < rcorrsq) {
+                    // The volume elements are within maximum
+                    // correlation distance
                     double r = sqrt(r2);
 
                     // Water vapor altitude factor
@@ -433,7 +435,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
     double rmax_kolmo,
     double const * kolmo_x,
     double const * kolmo_y,
-    double rcorr,
+    double rcorr, // Maximum correlation distance
     double xstart,
     double ystart,
     double zstart,
@@ -568,6 +570,9 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                     irow + ind_start,
                     rowcoord
                     );
+
+                // Skip pairs of volume elements that are further
+                // apart than maximum correlation distance
                 if (fabs(colcoord[0] - rowcoord[0]) > rcorr) continue;
                 if (fabs(colcoord[1] - rowcoord[1]) > rcorr) continue;
                 if (fabs(colcoord[2] - rowcoord[2]) > rcorr) continue;
@@ -591,14 +596,9 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                     val *= 1.01;
                 }
 
-                // If the covariance exceeds the threshold, add it to the
-                // sparse matrix
-                // if (val * val > 1e-6 * diagonal[icol] * diagonal[irow]) {
                 myrows.push_back(irow);
                 mycols.push_back(icol);
                 myvals.push_back(val);
-
-                // }
             }
         }
         # pragma omp critical
