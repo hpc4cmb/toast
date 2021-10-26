@@ -790,13 +790,21 @@ class SharedDataManager(MutableMapping):
         )
         obs.shared["times"].set(timestamps, offset=(0,), fromrank=0)
 
-        # Create from existing MPIShared object:
+        # Create from existing MPIShared object on the column communicator:
         sharedtime = MPIShared((obs.n_local_samples,), np.float32, obs.comm_col)
         sharedtime[:] = timestamps
-        obs.shared["times"] = sharedtime
+        obs.shared["times"] = (sharedtime, "column")
 
         # Create from array on one process, pre-communication needed:
-        obs.shared["times"] = timestamps
+        obs.shared["times"] = (timestamps, "column")
+
+    If you are creating data products shared over the whole group communicator, you
+    may leave off the "group" communicator type:
+
+        if obs.comm_col_rank == 0:
+            obs.shared["stuff"] = np.ones(100)
+        else:
+            obs.shared["stuff"] = None
 
     After creation, you can access a given object by name with standard dictionary
     syntax:
