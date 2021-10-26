@@ -127,7 +127,7 @@ class SimAtmosphere(Operator):
         10.0 * u.meter, help="Kolmogorov turbulence injection scale sigma"
     )
 
-    gain = Float(1.0, help="Scaling applied to the simulated TOD")
+    gain = Float(1e-5, help="Scaling applied to the simulated TOD")
 
     zatm = Quantity(40000.0 * u.meter, help="Atmosphere extent for temperature profile")
 
@@ -148,7 +148,7 @@ class SimAtmosphere(Operator):
     z0_sigma = Quantity(0.0 * u.meter, help="Sigma of the water vapor distribution")
 
     wind_dist = Quantity(
-        10000.0 * u.meter,
+        3000.0 * u.meter,
         help="Maximum wind drift before discarding the volume and creating a new one",
     )
 
