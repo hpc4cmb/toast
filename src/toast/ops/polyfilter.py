@@ -472,7 +472,7 @@ class PolyFilter(Operator):
     )
 
     view = Unicode(
-        None, allow_none=True, help="Use this view of the data in all observations"
+        "throw", allow_none=True, help="Use this view of the data in all observations"
     )
 
     @traitlets.validate("shared_flag_mask")
@@ -510,6 +510,12 @@ class PolyFilter(Operator):
                 continue
 
             if self.view is not None:
+                if self.view not in obs.intervals:
+                    msg = (
+                        f"PolyFilter is configured to apply in the '{self.view}' view "
+                        f"but it is not defined for observation '{obs.name}'"
+                    )
+                    raise RuntimeError(msg)
                 local_starts = []
                 local_stops = []
                 for interval in obs.intervals[self.view]:
@@ -529,6 +535,8 @@ class PolyFilter(Operator):
             else:
                 shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
+            signals = []
+            last_flags = None
             for idet, det in enumerate(dets):
                 # Test the detector pattern
                 if pat.match(det) is None:
@@ -541,12 +549,28 @@ class PolyFilter(Operator):
                 else:
                     flags = shared_flags
 
+                if last_flags is None or np.all(last_flags == flags):
+                    signals.append(signal)
+                else:
+                    filter_polynomial(
+                        self.order, last_flags, signals, local_starts, local_stops
+                    )
+                    signals = [signal]
+                last_flags = flags.copy()
+
+            if len(signals) > 0:
                 filter_polynomial(
-                    self.order, flags, [signal], local_starts, local_stops
+                    self.order, last_flags, signals, local_starts, local_stops
                 )
 
-                if self.det_flags is not None:
-                    obs.detdata[self.det_flags][idet][flags != 0] |= self.poly_flag_mask
+            # Optionally flag unfiltered data
+            if self.shared_flags is not None and self.poly_flag_mask is not None:
+                shared_flags = np.array(obs.shared[self.shared_flags])
+                last_stop = None
+                for stop, start in zip(local_starts, local_stops):
+                    if last_stop is not None and last_stop < start:
+                        shared_flags[last_stop:start] |= self.poly_flag_mask
+                obs.shared[self.shared_flags].set(shared_flags, fromrank=0)
 
         return
 
