@@ -11,7 +11,13 @@ import h5py
 
 import json
 
-from ..utils import Environment, Logger, have_hdf5_parallel, object_fullname
+from ..utils import (
+    Environment,
+    Logger,
+    have_hdf5_parallel,
+    object_fullname,
+    dtype_to_aligned,
+)
 
 from ..mpi import MPI
 
@@ -21,21 +27,156 @@ from ..instrument import GroundSite
 
 
 @function_timer
+def save_hdf5_shared(obs, hgrp, fields):
+    log = Logger.get()
+    parallel = have_hdf5_parallel()
+
+    # Get references to the distribution of detectors and samples
+    proc_rows = obs.dist.process_rows
+    proc_cols = obs.dist.comm.group_size // proc_rows
+    dist_samps = obs.dist.samps
+    dist_dets = obs.dist.det_indices
+
+    for field in fields:
+        if field not in obs.shared:
+            msg = f"Shared data '{field}' does not exist in observation "
+            msg += f"{obs.name}.  Skipping."
+            log.warning_rank(msg, comm=obs.comm.comm_group)
+            continue
+
+        # Compute properties of the full set of data across the observation
+
+        scomm = obs.shared.comm_type(field)
+        sdata = obs.shared[field]
+        sdtype = sdata.dtype
+        if scomm == "group":
+            sshape = sdata.shape
+        elif scomm == "column":
+            sshape = (obs.n_all_samples,) + sdata.shape[1:]
+        else:
+            sshape = (len(obs.all_detectors),) + sdata.shape[1:]
+
+        # The buffer class to use for allocating receive buffers
+        sbclass, _ = dtype_to_aligned(sdtype)
+
+        # Participating processes create the dataset
+
+        hdata = None
+        if parallel or obs.comm.group_rank == 0:
+            hdata = hgrp.create_dataset(field, sshape, dtype=sdtype)
+            hdata.attrs["comm_type"] = scomm
+
+        # If we have parallel support, the rank zero of each comm can write
+        # independently.  Otherwise, send data to rank zero of the group
+        # for writing.
+
+        if scomm == "group":
+            # Easy...
+            if obs.comm.group_rank == 0:
+                hdata[:] = sdata.data
+        elif scomm == "column":
+            if parallel:
+                # Rank zero of each column writes
+                if sdata.comm is None or sdata.comm.rank == 0:
+                    hdata[
+                        obs.local_index_offset : obs.local_index_offset
+                        + obs.n_local_samples
+                    ] = sdata.data
+            else:
+                # Send data to root process
+                for proc in range(proc_cols):
+                    # Process grid is indexed row-major, so the rank-zero process
+                    # of each column is just the first row of the grid.
+                    group_rank = proc
+                    # Leading data range for this process
+                    off = dist_samps[group_rank].offset
+                    nelem = dist_samps[group_rank].n_elem
+                    nflat = nelem * np.prod(sshape[1:])
+                    shp = (nelem,) + sshape[1:]
+                    if group_rank == 0:
+                        # Root process writes local data
+                        if obs.comm.group_rank == 0:
+                            hdata[off : off + nelem] = sdata.data
+                    elif group_rank == obs.comm.group_rank:
+                        # We are sending
+                        obs.comm.comm_group.Send(
+                            sdata.data.flatten(), dest=0, tag=group_rank
+                        )
+                    elif obs.comm.group_rank == 0:
+                        # We are receiving and writing
+                        recv = sbclass(nflat)
+                        obs.comm.comm_group.Recv(
+                            recv, source=group_rank, tag=group_rank
+                        )
+                        hdata[off : off + nelem] = recv.array().reshape(shp)
+                        recv.clear()
+                        del recv
+                    if obs.comm.comm_group is not None:
+                        obs.comm.comm_group.barrier()
+        else:
+            if parallel:
+                # Rank zero of each row writes
+                if sdata.comm is None or sdata.comm.rank == 0:
+                    off = dist_dets[obs.comm.group_rank].offset
+                    nelem = dist_dets[obs.comm.group_rank].n_elem
+                    hdata[off : off + nelem] = sdata.data
+            else:
+                # Send data to root process
+                for proc in range(proc_rows):
+                    # Process grid is indexed row-major, so the rank-zero process
+                    # of each row is strided by the number of columns.
+                    group_rank = proc * proc_cols
+                    # Leading data range for this process
+                    off = dist_dets[group_rank].offset
+                    nelem = dist_dets[group_rank].n_elem
+                    nflat = nelem * np.prod(sshape[1:])
+                    shp = (nelem,) + sshape[1:]
+                    if group_rank == 0:
+                        # Root process writes local data
+                        if obs.comm.group_rank == 0:
+                            hdata[off : off + nelem] = sdata.data
+                    elif group_rank == obs.comm.group_rank:
+                        # We are sending
+                        obs.comm.comm_group.Send(
+                            sdata.data.flatten(), dest=0, tag=group_rank
+                        )
+                    elif obs.comm.group_rank == 0:
+                        # We are receiving and writing
+                        recv = sbclass(nflat)
+                        obs.comm.comm_group.Recv(
+                            recv, source=group_rank, tag=group_rank
+                        )
+                        hdata[off : off + nelem] = recv.array().reshape(shp)
+                        recv.clear()
+                        del recv
+                    if obs.comm.comm_group is not None:
+                        obs.comm.comm_group.barrier()
+
+
+@function_timer
+def save_hdf5_detdata(obs, hgrp, fields):
+    pass
+
+
+@function_timer
+def save_hdf5_intervals(obs, hgrp, fields):
+    pass
+
+
+@function_timer
 def save_hdf5(
     obs,
+    dir,
     meta=None,
     detdata=None,
     shared=None,
     intervals=None,
-    dir=None,
-    root=None,
     config=None,
 ):
     """Save an observation to HDF5.
 
-    This function writes an observation either to a new file in the specified directory,
-    or as a new HDF5 child group under the specified root.  In either case, the name is
-    built from the observation name and the observation UID.
+    This function writes an observation to a new file in the specified directory.  The
+    name is built from the observation name and the observation UID.
 
     The telescope information is written to a sub-dataset.
 
@@ -60,37 +201,26 @@ def save_hdf5(
     env = Environment.get()
     parallel = have_hdf5_parallel()
 
-    if dir is None and root is None:
-        raise ValueError(
-            "You must specify either the parent directory or parent HDF5 group"
-        )
-
-    if dir is not None and root is not None:
-        raise ValueError(
-            "Cannot specify both the parent directory and the parent HDF5 group"
-        )
-
     if obs.name is None:
         raise RuntimeError("Cannot save observations that have no name")
 
     namestr = f"{obs.name}_{obs.uid}"
+    hfpath = os.path.join(dir, f"{namestr}.h5")
+    hfpath_temp = f"{hfpath}.tmp"
 
-    if dir is not None:
-        # Create the file and get the root group
-        hfpath = os.path.join(dir, f"{namestr}.h5")
-        hfpath_temp = f"{hfpath}.tmp"
-        if parallel:
-            hf = h5py.File(hfpath_temp, "w", driver="mpio", comm=obs.comm.comm_group)
-            hgroup = hf
-        elif obs.comm.group_rank == 0:
-            hf = h5py.File(hfpath_temp, "w")
-            hgroup = hf
-    else:
-        # We already have an open handle.  Create a subgroup with our name.
-        if parallel or obs.comm.group_rank == 0:
-            hgroup = root.create_group(namestr)
+    # Create the file and get the root group
+    hf = None
+    hfgroup = None
+    if parallel:
+        hf = h5py.File(hfpath_temp, "w", driver="mpio", comm=obs.comm.comm_group)
+        hgroup = hf
+    elif obs.comm.group_rank == 0:
+        hf = h5py.File(hfpath_temp, "w")
+        hgroup = hf
 
-    # Participating processes now go and create all sub-groups and datasets
+    shared_group = None
+    detdata_group = None
+    intervals_group = None
     if parallel or obs.comm.group_rank == 0:
         # Record the software versions and config
         hgroup.attrs["toast_version"] = env.version()
@@ -147,77 +277,26 @@ def save_hdf5(
         detdata_group = hgroup.create_group("detdata")
         intervals_group = hgroup.create_group("intervals")
 
-    # Dump shared data
+    # Dump data
 
-    # FIXME:  When dumping data from a serial job, we have no mechanism for detecting
-    # if a shared object is shared across the row, column, or group communicators.
+    fields = shared
+    if fields is None:
+        fields = obs.shared.keys()
+    save_hdf5_shared(obs, shared_group, fields)
 
-    for skey, sdata in obs.shared.items():
-        sdims = None
-        sdtype = None
-        commstr = None
-        if obs.comm.group_rank == 0:
-            sdtype = sdata.dtype
-            if (
-                sdata.comm is None
-                or MPI.Comm.Compare(sdata.comm, obs.comm.comm_group) == MPI.IDENT
-            ):
-                # Using the group comm
-                sdims = sdata.shape
-                commstr = "group"
-            elif MPI.Comm.Compare(sdata.comm, obs.comm_row) == MPI.IDENT:
-                # Using the row comm.  Compute total shape.
-                sdims = (len(obs.all_detectors),) + sdata.shape[1:]
-                commstr = "row"
-            elif MPI.Comm.Compare(sdata.comm, obs.comm_col) == MPI.IDENT:
-                # Using the col comm.  Compute total shape.
-                sdims = (obs.n_all_samples,) + sdata.shape[1:]
-                commstr = "col"
-            else:
-                msg = f"Shared object '{skey}' cannot be written- only the "
-                msg += "group, row, and column communicators are supported"
-                log.error(msg)
-                raise ValueError(msg)
-        if obs.comm.comm_group is not None:
-            sdims = obs.comm.comm_group.bcast(sdims, root=0)
-            sdtype = obs.comm.comm_group.bcast(sdtype, root=0)
-            commstr = obs.comm.comm_group.bcast(commstr, root=0)
-        if parallel or obs.comm.group_rank == 0:
-            sds = shared_group.create_dataset(skey, sdims, dtype=sdtype)
-            sds.attrs["comm"] = commstr
-        # Rank zero of each comm writes the data
-        if sdata.comm is None or (commstr == "group" and obs.comm.group_rank == 0):
-            sds[:] = sdata.data
-        elif commstr == "row":
-            if parallel:
-                # The first process in each row of the grid has direct access to the
-                # dataset.
-                if obs.comm_row_rank == 0:
-                sds[
-                    obs.local_index_offset : obs.local_index_offset + obs.n_local_samples
-                ] = sdata.data
-            else:
-                # Only the root process of the group has access to the file.
-                # Communicate the data for writing, by looping over all process
-                # rows and sending data from the first process in each row.
-                for prow in range(obs.comm_col_size):
-                    if obs.comm_col_rank == prow and obs.comm_row_rank == 0:
-                        if prow == 0:
-                            # This is the root process of the whole group- just write
-                            # our piece.
-                            sds[obs.dist.]
-                        else:
-                            # My turn to send
-                    elif obs.comm.group_rank == 0:
-                        # Root process of group receives and writes
+    fields = detdata
+    if fields is None:
+        fields = obs.detdata.keys()
+    save_hdf5_detdata(obs, detdata_group, fields)
 
+    fields = intervals
+    if fields is None:
+        fields = obs.intervals.keys()
+    save_hdf5_intervals(obs, intervals_group, fields)
 
-        elif commstr == "col" and obs.comm_col_rank == 0:
-            sds[
-                obs.local_index_offset : obs.local_index_offset + obs.n_local_samples
-            ] = sdata.data
+    # Close file if we opened it
 
-    if parallel or obs.comm.group_rank == 0:
+    if hf is not None:
         hf.flush()
         hf.close()
 
@@ -226,6 +305,7 @@ def save_hdf5(
 
     # Move file into place
     if obs.comm.group_rank == 0:
-        os.rename(hfpath_temp, hfpath)
+        if hfpath is not None:
+            os.rename(hfpath_temp, hfpath)
 
     return

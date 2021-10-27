@@ -88,7 +88,7 @@ class IoHdf5Test(MPITestCase):
         original = list()
         for ob in data.obs:
             original.append(ob.duplicate(times="times"))
-            save_hdf5(ob, dir=datadir, config=config)
+            save_hdf5(ob, datadir, config=config)
 
         # # Import the data
         # check_data = Data(comm=data.comm)
