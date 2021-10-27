@@ -171,6 +171,8 @@ class ConfigTest(MPITestCase):
         fakefile = os.path.join(self.outdir, "types_fake.toml")
         if self.toastcomm.world_rank == 0:
             dump_toml(fakefile, fakeconf)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
 
         loadconf = None
         if self.toastcomm.world_rank == 0:
@@ -190,6 +192,8 @@ class ConfigTest(MPITestCase):
         conf_file = os.path.join(self.outdir, "multi_defaults.toml")
         if self.toastcomm.world_rank == 0:
             dump_toml(conf_file, defaults)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
 
         # Now change some values
         testops["mem_count"].prefix = "newpref"
@@ -204,6 +208,8 @@ class ConfigTest(MPITestCase):
         conf2_file = os.path.join(self.outdir, "multi_conf.toml")
         if self.toastcomm.world_rank == 0:
             dump_toml(conf2_file, conf)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
 
         # Options for testing
         arg_opts = [
@@ -250,6 +256,8 @@ class ConfigTest(MPITestCase):
         conf_file = os.path.join(self.outdir, "roundtrip_conf.toml")
         if self.toastcomm.world_rank == 0:
             dump_toml(conf_file, conf)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
 
         new_conf = None
         if self.toastcomm.world_rank == 0:
@@ -284,6 +292,8 @@ class ConfigTest(MPITestCase):
         conf_file = os.path.join(self.outdir, "run_conf.toml")
         if self.toastcomm.world_rank == 0:
             dump_toml(conf_file, conf_pipe)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
 
         run = create_from_config(conf_pipe)
 
