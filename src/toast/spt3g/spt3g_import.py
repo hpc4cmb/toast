@@ -417,7 +417,7 @@ class import_obs_data(object):
         # samples.
         frame_total = np.sum([len(x[self._timestamp_names[0]]) for x in frames])
         if frame_total != obs.n_local_samples:
-            msg = f"Process {obs.comm_rank} has {obs.n_local_samples} local samples, "
+            msg = f"Process {obs.comm.group_rank} has {obs.n_local_samples} local samples, "
             msg += f"but is importing Scan frames with a total length of {frame_total}."
             log.error(msg)
             raise RuntimeError(msg)
@@ -429,11 +429,10 @@ class import_obs_data(object):
 
         # Timestamps are required
         frame_times, obs_times = self._timestamp_names
-        obs.shared.create(
+        obs.shared.create_column(
             obs_times,
             (obs.n_local_samples,),
             dtype=np.float64,
-            comm=obs.comm_col,
         )
         frame_zero_samples = len(frames[0][self._timestamp_names[0]])
         for frame_field, obs_field in self._shared_names:
@@ -448,11 +447,10 @@ class import_obs_data(object):
             sshape = (obs.n_local_samples,)
             if nnz > 1:
                 sshape = (obs.n_local_samples, nnz)
-            obs.shared.create(
+            obs.shared.create_column(
                 obs_field,
                 sshape,
                 dtype=dt,
-                comm=obs.comm_col,
             )
 
         for frame_field, obs_field in self._det_names:
@@ -533,18 +531,17 @@ class import_obs_data(object):
 class import_obs(object):
     """Import class to build a toast Observation from spt3g frames.
 
-    The optional communicator is the MPI comm to use for the observation.  The frames
-    may be already distributed, in which case each process should pass in their local
-    list of frames.  The frames on each process may be in random order, and will be
-    sorted and redistributed based on times.  If the frames are being imported from one
-    process, then `import_rank` should specify the process passing in the data.  In
-    this case, the input frames are ignored on all other processes.
+    The frames may be already distributed, in which case each process should pass in
+    their local list of frames.  The frames on each process may be in random order, and
+    will be sorted and redistributed based on times.  If the frames are being imported
+    from one process, then `import_rank` should specify the process passing in the
+    data.  In this case, the input frames are ignored on all other processes.
 
     IMPORTANT:  It is assumed that all processes with Scan frames have an identical set
     of Observation and Calibration frames.
 
     Args:
-        comm (MPI.Comm):  The optional MPI communicator.
+        comm (toast.Comm):  The toast communicator.
         timestamps (str):  The name of the frame object containing the sample times.
         meta_import (Object):  Callable class that consumes Observation and Calibration
             frames.
@@ -555,7 +552,7 @@ class import_obs(object):
 
     def __init__(
         self,
-        comm=None,
+        comm,
         timestamps="times",
         meta_import=import_obs_meta(),
         data_import=import_obs_data(),
@@ -567,11 +564,8 @@ class import_obs(object):
         self._meta_import = meta_import
         self._data_import = data_import
 
-        self._nproc = 1
-        self._rank = 0
-        if self._comm is not None:
-            self._rank = self._comm.rank
-            self._nproc = self._comm.size
+        self._nproc = self._comm.group_size
+        self._rank = self._comm.group_rank
 
     @property
     def import_rank(self):
@@ -616,13 +610,13 @@ class import_obs(object):
                 obs_telescope,
                 obs_noise,
             ) = self._meta_import(frames)
-        if self._comm is not None:
-            obs_telescope = self._comm.bcast(obs_telescope, root=lead_rank)
-            obs_name = self._comm.bcast(obs_name, root=lead_rank)
-            obs_meta = self._comm.bcast(obs_meta, root=lead_rank)
-            obs_uid = self._comm.bcast(obs_uid, root=lead_rank)
-            obs_detsets = self._comm.bcast(obs_detsets, root=lead_rank)
-            obs_noise = self._comm.bcast(obs_noise, root=lead_rank)
+        if self._comm.comm_group is not None:
+            obs_telescope = self._comm.comm_group.bcast(obs_telescope, root=lead_rank)
+            obs_name = self._comm.comm_group.bcast(obs_name, root=lead_rank)
+            obs_meta = self._comm.comm_group.bcast(obs_meta, root=lead_rank)
+            obs_uid = self._comm.comm_group.bcast(obs_uid, root=lead_rank)
+            obs_detsets = self._comm.comm_group.bcast(obs_detsets, root=lead_rank)
+            obs_noise = self._comm.comm_group.bcast(obs_noise, root=lead_rank)
 
         # Every process with data builds some information about their
         # scan frames, which can then be used to sort and redistribute them
@@ -641,10 +635,10 @@ class import_obs(object):
                     )
                 )
         all_frames = None
-        if self._comm is None:
+        if self._comm.comm_group is None:
             all_frames = [local_frames]
         else:
-            all_frames = self._comm.allgather(local_frames)
+            all_frames = self._comm.comm_group.allgather(local_frames)
         sorted_frames = list()
         for proc_frames in all_frames:
             sorted_frames.extend(proc_frames)
@@ -657,11 +651,11 @@ class import_obs(object):
 
         # Create the observation
         ob = Observation(
+            self._comm,
             obs_telescope,
             total_samples,
             name=obs_name,
             uid=obs_uid,
-            comm=self._comm,
             detector_sets=obs_detsets,
             sample_sets=sample_sets,
             process_rows=1,
@@ -687,18 +681,18 @@ class import_obs(object):
         # We cannot (easily) use alltoallv for lists of arbitrary objects (frames)
         # so instead we loop over destination processes and gather frames to each.
         obs_frames = None
-        if ob.comm is None:
+        if ob.comm.comm_group is None:
             # Just sort our local scan frames
             obs_frames = [frames[x[1]] for x in sorted_frames]
         else:
-            for receiver in range(ob.comm_size):
+            for receiver in range(ob.comm.group_size):
                 send_frames = list()
                 for finfo in frame_dist:
-                    if finfo[0] == ob.comm_rank and finfo[2] == receiver:
+                    if finfo[0] == ob.comm.group_rank and finfo[2] == receiver:
                         # We are sending this frame
                         send_frames.append(frames[finfo[1]])
-                recv_frames = ob.comm.gather(send_frames, root=receiver)
-                if ob.comm_rank == receiver:
+                recv_frames = ob.comm.comm_group.gather(send_frames, root=receiver)
+                if ob.comm.group_rank == receiver:
                     obs_frames = [x for proc_frames in recv_frames for x in proc_frames]
 
         # Now every process copies their frames into the observation
