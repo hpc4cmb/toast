@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import sys
 
 import numpy as np
 
@@ -86,9 +87,20 @@ class IoHdf5Test(MPITestCase):
 
         # Export the data, and make a copy for later comparison.
         original = list()
+        obfiles = list()
         for ob in data.obs:
             original.append(ob.duplicate(times="times"))
-            save_hdf5(ob, datadir, config=config)
+            try:
+                obf = save_hdf5(ob, datadir, config=config)
+                obfiles.append(obf)
+            except:
+                import traceback
+
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                lines = [f"Proc {self.comm.rank}: {x}" for x in lines]
+                msg = "".join(lines)
+                print(msg)
 
         # # Import the data
         # check_data = Data(comm=data.comm)

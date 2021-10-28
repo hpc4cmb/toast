@@ -3,6 +3,7 @@
 
 install(FILES
     __init__.py
-    observation_hdf.py
+    observation_hdf_save.py
+    observation_hdf_load.py
     DESTINATION ${PYTHON_SITE}/toast/io
 )

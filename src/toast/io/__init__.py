@@ -4,4 +4,6 @@
 
 # Namespace imports
 
-from .observation_hdf import save_hdf5
+from .observation_hdf_save import save_hdf5
+
+from .observation_hdf_load import load_hdf5

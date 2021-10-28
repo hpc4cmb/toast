@@ -25,6 +25,10 @@ from ..timing import Timer, function_timer, GlobalTimers
 
 from ..instrument import GroundSite
 
+from ..observation import default_values as defaults
+
+from ..observation_dist import global_interval_times
+
 
 @function_timer
 def save_hdf5_shared(obs, hgrp, fields):
@@ -57,7 +61,7 @@ def save_hdf5_shared(obs, hgrp, fields):
             sshape = (len(obs.all_detectors),) + sdata.shape[1:]
 
         # The buffer class to use for allocating receive buffers
-        sbclass, _ = dtype_to_aligned(sdtype)
+        bufclass, _ = dtype_to_aligned(sdtype)
 
         # Participating processes create the dataset
 
@@ -104,7 +108,7 @@ def save_hdf5_shared(obs, hgrp, fields):
                         )
                     elif obs.comm.group_rank == 0:
                         # We are receiving and writing
-                        recv = sbclass(nflat)
+                        recv = bufclass(nflat)
                         obs.comm.comm_group.Recv(
                             recv, source=group_rank, tag=group_rank
                         )
@@ -142,7 +146,7 @@ def save_hdf5_shared(obs, hgrp, fields):
                         )
                     elif obs.comm.group_rank == 0:
                         # We are receiving and writing
-                        recv = sbclass(nflat)
+                        recv = bufclass(nflat)
                         obs.comm.comm_group.Recv(
                             recv, source=group_rank, tag=group_rank
                         )
@@ -153,14 +157,141 @@ def save_hdf5_shared(obs, hgrp, fields):
                         obs.comm.comm_group.barrier()
 
 
+def write_detdata_slice(dset, det_off, n_det, samp_off, n_samp, data):
+    """Helper function to write detector data into a larger dataset."""
+    # Data is arranged per detector
+    for d in range(n_det):
+        dset[det_off + d, samp_off : samp_off + n_samp] = data[d]
+
+
 @function_timer
 def save_hdf5_detdata(obs, hgrp, fields):
-    pass
+    log = Logger.get()
+    parallel = have_hdf5_parallel()
+
+    # Get references to the distribution of detectors and samples
+    proc_rows = obs.dist.process_rows
+    proc_cols = obs.dist.comm.group_size // proc_rows
+    dist_samps = obs.dist.samps
+    dist_dets = obs.dist.det_indices
+
+    for field in fields:
+        if field not in obs.detdata:
+            msg = f"Detdata data '{field}' does not exist in observation "
+            msg += f"{obs.name}.  Skipping."
+            log.warning_rank(msg, comm=obs.comm.comm_group)
+            continue
+
+        local_data = obs.detdata[field]
+        if local_data.detectors != obs.local_detectors:
+            msg = f"Data data '{field}' does not contain all local detectors."
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        # Compute properties of the full set of data across the observation
+
+        ddtype = local_data.dtype
+        dshape = (len(obs.all_detectors), obs.n_all_samples)
+        dvalshape = None
+        if len(local_data.detector_shape) > 1:
+            dvalshape = local_data.detector_shape[1:]
+            dshape += dvalshape
+
+        # The buffer class to use for allocating receive buffers
+        bufclass, _ = dtype_to_aligned(ddtype)
+
+        # Participating processes create the dataset
+
+        hdata = None
+        if parallel or obs.comm.group_rank == 0:
+            hdata = hgrp.create_dataset(field, dshape, dtype=ddtype)
+            print(f"detdata {field} has units {local_data.units.to_string()}")
+            hdata.attrs["units"] = local_data.units.to_string()
+            print(f"unit attr now {hdata.attrs['units']}")
+
+        # If we have parallel support, every process can write independently.
+        # Otherwise, send data to rank zero of the group for writing.
+
+        if parallel:
+            samp_off = dist_samps[obs.comm.group_rank].offset
+            samp_nelem = dist_samps[obs.comm.group_rank].n_elem
+            det_off = dist_dets[obs.comm.group_rank].offset
+            det_nelem = dist_dets[obs.comm.group_rank].n_elem
+            write_detdata_slice(
+                hdata, det_off, det_nelem, samp_off, samp_nelem, local_data
+            )
+        else:
+            # Send data to root process
+            for proc in range(obs.comm.group_size):
+                # Data ranges for this process
+                samp_off = dist_samps[proc].offset
+                samp_nelem = dist_samps[proc].n_elem
+                det_off = dist_dets[proc].offset
+                det_nelem = dist_dets[proc].n_elem
+                nflat = det_nelem * samp_nelem
+                shp = (det_nelem, samp_nelem)
+                if dvalshape is not None:
+                    nflat *= dvalshape
+                    shp += dvalshape
+                if proc == 0:
+                    # Root process writes local data
+                    if obs.comm.group_rank == 0:
+                        write_detdata_slice(
+                            hdata, det_off, det_nelem, samp_off, samp_nelem, local_data
+                        )
+                elif proc == obs.comm.group_rank:
+                    # We are sending
+                    obs.comm.comm_group.Send(local_data.flatdata, dest=0, tag=proc)
+                elif obs.comm.group_rank == 0:
+                    # We are receiving and writing
+                    recv = bufclass(nflat)
+                    obs.comm.comm_group.Recv(recv, source=proc, tag=proc)
+                    write_detdata_slice(
+                        hdata,
+                        det_off,
+                        det_nelem,
+                        samp_off,
+                        samp_nelem,
+                        recv.array().reshape(shp),
+                    )
+                    recv.clear()
+                    del recv
+                if obs.comm.comm_group is not None:
+                    obs.comm.comm_group.barrier()
 
 
 @function_timer
 def save_hdf5_intervals(obs, hgrp, fields):
-    pass
+    log = Logger.get()
+    parallel = have_hdf5_parallel()
+
+    for field in fields:
+        if field not in obs.intervals:
+            msg = f"Intervals '{field}' does not exist in observation "
+            msg += f"{obs.name}.  Skipping."
+            log.warning_rank(msg, comm=obs.comm.comm_group)
+            continue
+
+        # Get the list of start / stop tuples on the rank zero process
+        ilist = global_interval_times(obs.dist, obs.intervals, field, join=False)
+
+        n_list = None
+        if obs.comm.group_rank == 0:
+            n_list = len(ilist)
+        if obs.comm.comm_group is not None:
+            n_list = obs.comm.comm_group.bcast(n_list, root=0)
+
+        # Participating processes create the dataset
+        hdata = None
+        if parallel or obs.comm.group_rank == 0:
+            hdata = hgrp.create_dataset(field, (2, n_list), dtype=np.float64)
+
+        # Only the root process writes
+        if obs.comm.group_rank == 0:
+            hdata[:, :] = np.transpose(np.array(ilist))
+
+        if obs.comm.comm_group is not None:
+            obs.comm.comm_group.barrier()
 
 
 @function_timer
@@ -172,6 +303,7 @@ def save_hdf5(
     shared=None,
     intervals=None,
     config=None,
+    times=defaults.times,
 ):
     """Save an observation to HDF5.
 
@@ -192,9 +324,16 @@ def save_hdf5(
 
     Args:
         obs (Observation):  The observation to write.
+        dir (str):  The parent directory containing the file.
+        meta (list):  Only save this list of metadata objects.
+        detdata (list):  Only save this list of detdata objects.
+        shared (list):  Only save this list of shared objects.
+        intervals (list):  Only save this list of intervals objects.
+        config (dict):  The job config dictionary to save.
+        times (str):  The name of the shared timestamp field.s
 
     Returns:
-        None
+        (str):  The full path of the file that was written.
 
     """
     log = Logger.get()
@@ -276,6 +415,7 @@ def save_hdf5(
         shared_group = hgroup.create_group("shared")
         detdata_group = hgroup.create_group("detdata")
         intervals_group = hgroup.create_group("intervals")
+        intervals_group.attrs["times"] = times
 
     # Dump data
 
@@ -292,7 +432,11 @@ def save_hdf5(
     fields = intervals
     if fields is None:
         fields = obs.intervals.keys()
-    save_hdf5_intervals(obs, intervals_group, fields)
+    if times not in obs.shared:
+        msg = f"Timestamp field '{times}' does not exist.  Not saving intervals."
+        log.warning_rank(msg, comm=obs.comm.comm_group)
+    else:
+        save_hdf5_intervals(obs, intervals_group, fields)
 
     # Close file if we opened it
 
@@ -308,4 +452,4 @@ def save_hdf5(
         if hfpath is not None:
             os.rename(hfpath_temp, hfpath)
 
-    return
+    return hfpath
