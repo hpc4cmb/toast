@@ -459,7 +459,10 @@ class PolyFilter(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
-    poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
+    poly_flag_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Shared flag bit mask for samples that are not filtered",
+    )
 
     shared_flags = Unicode(
         defaults.shared_flags,
