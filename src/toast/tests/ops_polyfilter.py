@@ -22,7 +22,13 @@ from ..pixels import PixelDistribution, PixelData
 
 from .. import qarray as qa
 
-from ._helpers import create_outdir, create_satellite_data, create_fake_sky, fake_flags
+from ._helpers import (
+    create_outdir,
+    create_satellite_data,
+    create_ground_data,
+    create_fake_sky,
+    fake_flags,
+)
 
 from ..observation import default_values as defaults
 
@@ -38,8 +44,8 @@ class PolyFilterTest(MPITestCase):
 
     def test_polyfilter(self):
 
-        # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm)
+        # Create a fake ground data set for testing
+        data = create_ground_data(self.comm)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -79,38 +85,53 @@ class PolyFilterTest(MPITestCase):
         # Make fake flags
         fake_flags(data)
 
-        rms = dict()
         for ob in data.obs:
-            rms[ob.name] = dict()
+            times = np.array(ob.shared[defaults.times])
             for det in ob.local_detectors:
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
-                good = flags == 0
-                # Add an offset to the data
-                ob.detdata["signal"][det] += 500.0
-                rms[ob.name][det] = np.std(ob.detdata["signal"][det][good])
+                flags = (
+                    np.array(ob.shared[defaults.shared_flags])
+                    & defaults.shared_mask_invalid
+                ) != 0
+                flags |= (
+                    ob.detdata[defaults.det_flags][det] & defaults.det_mask_invalid
+                ) != 0
+                good = np.logical_not(flags)
+                signal = ob.detdata[defaults.det_data][det]
+                # Replace TOD with a gradient
+                signal[:] = times
+
+        ops.Copy(detdata=[(defaults.det_data, "signal_copy")]).apply(data)
 
         # Filter
 
         polyfilter = ops.PolyFilter(
-            order=0,
+            order=1,
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.shared_mask_invalid,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=255,
-            view=None,
+            shared_flag_mask=defaults.det_mask_invalid,
+            poly_flag_mask=1,
+            view="scanning",
         )
         polyfilter.apply(data)
 
         for ob in data.obs:
             for det in ob.local_detectors:
-                flags = np.array(ob.shared["flags"])
-                flags |= ob.detdata["flags"][det]
-                good = flags == 0
-                check_rms = np.std(ob.detdata["signal"][det][good])
+                flags = (
+                    np.array(ob.shared[defaults.shared_flags])
+                    & defaults.shared_mask_invalid
+                ) != 0
+                flags |= (
+                    ob.detdata[defaults.det_flags][det] & defaults.det_mask_invalid
+                ) != 0
+                good = np.logical_not(flags)
+                old_signal = ob.detdata["signal_copy"][det]
+                new_signal = ob.detdata[defaults.det_data][det]
+                old_rms = np.std(old_signal[good])
+                new_rms = np.std(new_signal[good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(0.9 * check_rms < rms[ob.name][det])
+                self.assertTrue(new_rms / old_rms < 1e-6)
 
         del data
         return

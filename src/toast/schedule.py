@@ -373,6 +373,7 @@ class GroundSchedule(object):
 
             read_header = True
             last_name = None
+            total_time = 0
 
             with open(file, "r") as f:
                 for line in f:
@@ -414,8 +415,17 @@ class GroundSchedule(object):
                         last_name = name
                         if iscan % nsplit != isplit:
                             continue
+                    total_time += (gscan.stop - gscan.start).total_seconds()
                     self.scans.append(gscan)
-            log.info(f"Loaded {len(self.scans)} scans from {file}")
+            if total_time > 2 * 86400:
+                total_time = f"{total_time / 86400:.3f} days"
+            elif total_time > 2 * 3600:
+                total_time = f"{total_time / 3600:.3} hours"
+            else:
+                total_time = f"{total_time / 60:.3} minutes"
+            log.info(
+                f"Loaded {len(self.scans)} scans from {file} totaling {total_time}."
+            )
             if sort:
                 sortedscans = sorted(self.scans, key=lambda scn: scn.name)
                 self.scans = sortedscans

@@ -139,54 +139,39 @@ void expand_matrix(py::array_t <double> compressed_matrix,
     }
 }
 
-void build_template_covariance(py::array_t <double,
-                                            py::array::c_style | py::array::forcecast> templates,
+void build_template_covariance(std::vector <int64_t> & starts,
+                               std::vector <int64_t> & stops,
+                               std::vector <py::array_t <double,
+                                                         py::array::c_style | py::array::forcecast> > & templates,
                                py::array_t <double,
                                             py::array::c_style | py::array::forcecast> good,
                                py::array_t <double,
                                             py::array::c_style |
                                             py::array::forcecast> template_covariance) {
-    auto fast_templates = templates.unchecked <2>();
     auto fast_good = good.unchecked <1>();
     auto fast_covariance = template_covariance.mutable_unchecked <2>();
 
-    size_t ntemplate = fast_templates.shape(0);
-    size_t nsample = fast_templates.shape(1);
-
-    std::vector <size_t> starts(ntemplate);
-    std::vector <size_t> stops(ntemplate);
-#pragma omp parallel for schedule(static, 1)
-    for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
-        size_t istart = 0;
-        for (; istart < nsample; ++istart) {
-            if ((fast_templates(itemplate,
-                                istart) != 0) && (fast_good[istart] != 0)) break;
-        }
-        starts[itemplate] = istart;
-
-        size_t istop = nsample - 1;
-        for (; istop >= istart; --istop) {
-            if ((fast_templates(itemplate,
-                                istop) != 0) && (fast_good[istop] != 0)) break;
-        }
-        stops[itemplate] = istop + 1;
-    }
+    size_t ntemplate = templates.size();
 
 #pragma omp parallel for schedule(static, 1)
-    for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
-        for (size_t jtemplate = itemplate; jtemplate < ntemplate; ++jtemplate) {
+    for (size_t row = 0; row < ntemplate; ++row) {
+        auto rowtemplate = templates[row].unchecked <1>();
+        size_t rowoffset = starts[row];
+        for (size_t col = row; col < ntemplate; ++col) {
+            auto coltemplate = templates[col].unchecked <1>();
+            size_t coloffset = starts[col];
             double val = 0;
-            size_t istart = std::max(starts[itemplate], starts[jtemplate]);
-            size_t istop = std::min(stops[itemplate], stops[jtemplate]);
-            if ((itemplate == jtemplate) && (istop - istart <= 1)) val = 1;
+            size_t istart = std::max(starts[row], starts[col]);
+            size_t istop = std::min(stops[row], stops[col]);
+            if ((row == col) && (istop - istart <= 1)) val = 1;
             for (size_t isample = istart; isample < istop; ++isample) {
-                val += fast_templates(itemplate, isample)
-                       * fast_templates(jtemplate, isample)
+                val += rowtemplate(isample - rowoffset)
+                       * coltemplate(isample - coloffset)
                        * fast_good(isample);
             }
-            fast_covariance(itemplate, jtemplate) = val;
-            if (itemplate != jtemplate) {
-                fast_covariance(jtemplate, itemplate) = val;
+            fast_covariance(row, col) = val;
+            if (row != col) {
+                fast_covariance(col, row) = val;
             }
         }
     }

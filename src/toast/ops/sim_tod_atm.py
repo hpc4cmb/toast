@@ -127,7 +127,7 @@ class SimAtmosphere(Operator):
         10.0 * u.meter, help="Kolmogorov turbulence injection scale sigma"
     )
 
-    gain = Float(1.0, help="Scaling applied to the simulated TOD")
+    gain = Float(1e-5, help="Scaling applied to the simulated TOD")
 
     zatm = Quantity(40000.0 * u.meter, help="Atmosphere extent for temperature profile")
 
@@ -148,7 +148,7 @@ class SimAtmosphere(Operator):
     z0_sigma = Quantity(0.0 * u.meter, help="Sigma of the water vapor distribution")
 
     wind_dist = Quantity(
-        10000.0 * u.meter,
+        3000.0 * u.meter,
         help="Maximum wind drift before discarding the volume and creating a new one",
     )
 
@@ -411,17 +411,17 @@ class SimAtmosphere(Operator):
             while tmin < tmax_tot:
                 if comm is not None:
                     comm.Barrier()
-                if rank == 0:
-                    log.debug(
-                        "{}Instantiating atmosphere for t = {}".format(
-                            log_prefix, tmin - tmin_tot
-                        )
-                    )
-
                 istart, istop, tmax = self._get_time_range(
                     tmin, istart, times, tmax_tot, ob, weather
                 )
                 wind_times.append((tmin, tmax))
+
+                if rank == 0:
+                    log.debug(
+                        f"{log_prefix}Instantiating atmosphere for t = "
+                        f"{tmin - tmin_tot:10.1f} s - {tmax - tmin_tot:10.1f} s "
+                        f"out of {tmax_tot - tmin_tot:10.1f} s"
+                    )
 
                 ind = slice(istart, istop)
                 nind = istop - istart

@@ -178,14 +178,11 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     return;
 }
 
-void toast::bin_templates(double * signal, double * templates,
-                          uint8_t * good, double * invcov, double * proj,
-                          size_t nsample, size_t ntemplate) {
+void toast::bin_proj(double * signal, double * templates,
+                     uint8_t * good, double * proj,
+                     size_t nsample, size_t ntemplate) {
     for (size_t row = 0; row < ntemplate; row++) {
         proj[row] = 0;
-        for (size_t col = 0; col < ntemplate; col++) {
-            invcov[ntemplate * row + col] = 0;
-        }
     }
 
 #pragma omp parallel for \
@@ -197,8 +194,19 @@ void toast::bin_templates(double * signal, double * templates,
         }
     }
 
+    return;
+}
+
+void toast::bin_invcov(double * templates, uint8_t * good, double * invcov,
+                       size_t nsample, size_t ntemplate) {
+    for (size_t row = 0; row < ntemplate; row++) {
+        for (size_t col = 0; col < ntemplate; col++) {
+            invcov[ntemplate * row + col] = 0;
+        }
+    }
+
 #pragma omp parallel \
-    default(none) shared(invcov, templates, signal, good, ntemplate, nsample)
+    default(none) shared(invcov, templates, good, ntemplate, nsample)
     {
         int nthread = 1;
         int id_thread = 0;

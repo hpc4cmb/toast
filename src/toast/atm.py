@@ -296,8 +296,7 @@ class AtmSim(object):
 
         self.compress_volume()
 
-        if self._rank == 0:
-            log.debug("Resizing realization to {}".format(self._nelem))
+        log.debug_rank(f"Resizing realization to {self._nelem}", comm=self._comm)
 
         timer = Timer()
         timer.start()
@@ -311,13 +310,9 @@ class AtmSim(object):
             comm_node_rank=self._node_rank_comm,
         )
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug(
-                "Allocated shared realization buffer in {} s".format(timer.seconds())
-            )
-        timer.clear()
-        timer.start()
+        log.debug_rank(
+            "Allocated shared realization buffer in", comm=self._comm, timer=timer
+        )
 
         ind_start = 0
         ind_stop = 0
@@ -386,11 +381,7 @@ class AtmSim(object):
         if self._comm is not None:
             self._comm.barrier()
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug("Simulated all slices in {} s".format(timer.seconds()))
-        timer.clear()
-        timer.start()
+        log.debug_rank("Simulated all slices in", comm=self._comm, timer=timer)
 
         # Gather the slices.  Every process has written their assigned slices to their
         # node-local shared memory buffer.  However, these slices do not exist on the
@@ -412,21 +403,16 @@ class AtmSim(object):
             # Set the slice across all nodes
             self._realization.set(tempvec, (ind_start,), fromrank=root)
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug("Distributed slices to all nodes in {} s".format(timer.seconds()))
-        timer.clear()
-        timer.start()
+        log.debug_rank(
+            "Distributed slices to all nodes in", comm=self._comm, timer=timer
+        )
 
         # self.smooth()
 
         self._cached = True
         if use_cache:
             self.save_realization()
-
-        timer.stop()
-        if use_cache and self._rank == 0:
-            log.debug("Saved realization in {} s".format(timer.seconds()))
+            log.debug_rank("Saved realization in", comm=self._comm, timer=timer)
 
         return 0
 
@@ -507,17 +493,13 @@ class AtmSim(object):
         if self._rank == 0:
             if fixed_r > 0:
                 log.verbose(
-                    "Observed {} samples at r = {} in {} s".format(
-                        nsamp, fixed_r, timer.seconds()
-                    )
+                    f"Observed {nsamp} samples at r = {fixed_r} in {timer.seconds()} s"
                 )
             else:
-                log.verbose(
-                    "Observed {} samples in {} s".format(nsamp, timer.seconds())
-                )
+                log.verbose(f"Observed {nsamp} samples in {timer.seconds()} s")
 
         if status != 0:
-            log.error("Observing {} samples failed with error {}".format(nsamp, status))
+            log.error(f"Observing {nsamp} samples failed with error {status}")
         return status
 
     def _get_slice(self, ind_start, ind_stop):
@@ -798,8 +780,7 @@ class AtmSim(object):
         """Establish a mapping between full and observed volume indices."""
         log = Logger.get()
 
-        if self._rank == 0:
-            log.debug("Compressing volume, N = {}".format(self._nn))
+        log.debug_rank(f"Compressing volume, N = {self._nn}", comm=self._comm)
 
         timer = Timer()
         timer.start()
@@ -819,15 +800,11 @@ class AtmSim(object):
             comm_node_rank=self._node_rank_comm,
         )
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug(
-                "Allocated shared full and compressed indices in {} s".format(
-                    timer.seconds()
-                )
-            )
-        timer.clear()
-        timer.start()
+        log.debug_rank(
+            "Allocated shared full and compressed indices in",
+            comm=self._comm,
+            timer=timer,
+        )
 
         hit = np.zeros(self._nn, dtype=np.uint8)
 
@@ -861,20 +838,12 @@ class AtmSim(object):
             self._sinel0,
         )
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug("Flagged hits in {} s".format(timer.seconds()))
-        timer.clear()
-        timer.start()
+        log.debug_rank("Flagged hits in", comm=self._comm, timer=timer)
 
         if self._comm is not None:
             self._comm.Allreduce(MPI.IN_PLACE, [hit, MPI.UNSIGNED_CHAR], MPI.LOR)
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug("Reduced hits in {} s".format(timer.seconds()))
-        timer.clear()
-        timer.start()
+        log.debug_rank("Reduced hits in", comm=self._comm, timer=timer)
 
         # For extra margin, flag all the neighbors of the hit elements
 
@@ -893,22 +862,14 @@ class AtmSim(object):
             self._zstride,
         )
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug("Extended flags in {} s".format(timer.seconds()))
-        timer.clear()
-        timer.start()
+        log.debug_rank("Extended flags in", comm=self._comm, timer=timer)
 
         del hit2
 
         if self._comm is not None:
             self._comm.Allreduce(MPI.IN_PLACE, [hit, MPI.UNSIGNED_CHAR], MPI.LOR)
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug("Reduced extended hits in {} s".format(timer.seconds()))
-        timer.clear()
-        timer.start()
+        log.debug_rank("Reduced extended hits in", comm=self._comm, timer=timer)
 
         # Create the mappings between the compressed and full indices.  The hit
         # vector is duplicated across all processes and we are modifying node shared
@@ -928,11 +889,7 @@ class AtmSim(object):
         if self._full_index._nodecomm is not None:
             self._nelem = self._full_index._nodecomm.bcast(self._nelem, root=0)
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug("Created compression table in {} s".format(timer.seconds()))
-        timer.clear()
-        timer.start()
+        log.debug_rank("Created compression table in", comm=self._comm, timer=timer)
 
         del hit
 
@@ -959,14 +916,14 @@ class AtmSim(object):
 
         self._full_index = new_full
 
-        if self._rank == 0:
-            msg = "\nVolume compressed:\n"
-            msg += "  {} / {} ({} %) elements needed for the simulation\n".format(
-                self._nelem, self._nn, (self._nelem * 100 / self._nn)
-            )
-            msg += "  nx = {} ny = {} nz = {}\n".format(self._nx, self._ny, self._nz)
-            msg += "  wx = {} wy = {} wz = {}\n".format(self._wx, self._wy, self._wz)
-            log.debug(msg)
+        msg = "\nVolume compressed:\n"
+        msg += "  {} / {} ({} %) elements needed for the simulation\n".format(
+            self._nelem, self._nn, (self._nelem * 100 / self._nn)
+        )
+        msg += "  nx = {} ny = {} nz = {}\n".format(self._nx, self._ny, self._nz)
+        msg += "  wx = {} wy = {} wz = {}\n".format(self._wx, self._wy, self._wz)
+        log.debug_rank(msg, comm=self._comm)
+
         if self._nelem == 0:
             raise RuntimeError("No elements in the observation cone.")
         return
@@ -1204,9 +1161,7 @@ class AtmSim(object):
             icorr -= 1
         self._rcorr = self._kolmo_x[icorr]
 
-        timer.stop()
-        if self._rank == 0:
-            log.debug("Initialized Kolmogorov in {} s".format(timer.seconds()))
+        log.debug_rank("Initialized Kolmogorov in", comm=self._comm, timer=timer)
         return
 
     def get_repr(self):

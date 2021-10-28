@@ -798,6 +798,8 @@ class MapMaker(Operator):
         write_del.append((self.map_name, self.write_map))
         write_del.append((self.invcov_name, self.write_invcov))
         write_del.append((self.cov_name, self.write_cov))
+        wtimer = Timer()
+        wtimer.start()
         for prod_key, prod_write in write_del:
             if prod_write:
                 if self.write_hdf5:
@@ -818,7 +820,7 @@ class MapMaker(Operator):
                         nest=map_binning.pixel_pointing.nest,
                         report_memory=self.report_memory,
                     )
-                log.info_rank(f"Wrote {fname} in", comm=comm, timer=timer)
+                log.info_rank(f"Wrote {fname} in", comm=comm, timer=wtimer)
             if not self.keep_final_products:
                 if prod_key in data:
                     data[prod_key].clear()

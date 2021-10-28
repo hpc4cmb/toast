@@ -93,6 +93,11 @@ class ObserveAtmosphere(Operator):
         help="The number of sampling frequencies used when convolving the bandpass with atmosphere absorption and loading",
     )
 
+    n_interp = Int(
+        1,
+        help="Number of time samples to interpolate per simulated sample",
+    )
+
     gain = Float(1.0, help="Scaling applied to the simulated TOD")
 
     @traitlets.validate("det_flag_mask")
@@ -284,7 +289,20 @@ class ObserveAtmosphere(Operator):
                             )
                             raise RuntimeError(msg)
 
-                        err = cur_sim.observe(times[good], az, el, atmdata, -1.0)
+                        if self.n_interp == 1:
+                            err = cur_sim.observe(times[good], az, el, atmdata, -1.0)
+                        else:
+                            # Sample the TOD and interpolate to full resolution
+                            t_temp = times[good][:: self.n_interp].copy()
+                            atm_temp = np.zeros(t_temp.size, dtype=np.float64)
+                            az_temp = az[:: self.n_interp].copy()
+                            el_temp = el[:: self.n_interp].copy()
+                            err = cur_sim.observe(
+                                t_temp, az_temp, el_temp, atm_temp, -1.0
+                            )
+                            atmdata = np.interp(times[good], t_temp, atm_temp)
+                            del t_temp, atm_temp, az_temp, el_temp
+
                         if err != 0:
                             # Observing failed
                             bad = np.abs(atmdata) < 1e-30
