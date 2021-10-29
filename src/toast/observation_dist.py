@@ -640,7 +640,7 @@ def redistribute_shared_data(
         commtype = shared_manager.comm_type(field)
         if commtype == "group":
             # Using full group communicator, just copy to new data manager.
-            new_shared_manager._assign_mpishared(field, shobj, commtype)
+            new_shared_manager.assign_mpishared(field, shobj, commtype)
             continue
 
         # Full shape of the object

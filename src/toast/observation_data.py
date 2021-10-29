@@ -271,9 +271,8 @@ class DetectorData(object):
                 view = tuple(view)
             except TypeError:
                 log = Logger.get()
-                msg = "Detector indexing supports slice, int, string or iterable, not '{}'".format(
-                    key
-                )
+                msg = "Detector indexing supports slice, int, string or "
+                msg += f"iterable, not '{key}'"
                 log.error(msg)
                 raise TypeError(msg)
         return view
@@ -599,9 +598,8 @@ class DetDataManager(MutableMapping):
                     msg = "detector '{}' not in this observation".format(d)
                     raise ValueError(msg)
             if value.shape[1] != self.samples:
-                msg = "Assignment DetectorData object has {} samples instead of {} in the observation".format(
-                    value.shape[1], self.samples
-                )
+                msg = f"Assignment DetectorData object has {value.shape[1]} samples "
+                msg += "instead of {self.samples} in the observation"
                 raise ValueError(msg)
             if key not in self._internal:
                 # Create it first
@@ -626,9 +624,8 @@ class DetDataManager(MutableMapping):
                     msg = "detector '{}' not in this observation".format(d)
                     raise ValueError(msg)
                 if ddata.shape[0] != self.samples:
-                    msg = "Assigment dictionary detector {} has {} samples instead of {} in the observation".format(
-                        d, ddata.shape[0], self.samples
-                    )
+                    msg = "Assigment dictionary detector {d} has {ddata.shape[0]} "
+                    msg += f"samples instead of {self.samples} in the observation"
                     raise ValueError(msg)
                 if sample_shape is None:
                     sample_shape = ddata.shape[1:]
@@ -702,7 +699,8 @@ class DetDataManager(MutableMapping):
                 self._internal[key][:] = value
             else:
                 # Incompatible
-                msg = "Assignment of detector data from an array only supports full size or single detector"
+                msg = "Assignment of detector data from an array only supports full "
+                msg += "size or single detector"
                 raise ValueError(msg)
 
     def memory_use(self):
@@ -746,9 +744,9 @@ class DetDataManager(MutableMapping):
         for k in self._internal.keys():
             # if self._internal[k] != other._internal[k]:
             if not np.allclose(self._internal[k], other._internal[k]):
-                log.verbose(
-                    f"  detector data {k} not equal:  {self._internal[k]} != {other._internal[k]}"
-                )
+                msg = f"  detector data {k} not equal:  "
+                msg += f"{self._internal[k]} != {other._internal[k]}"
+                log.verbose(msg)
                 return False
         return True
 
@@ -759,7 +757,7 @@ class DetDataManager(MutableMapping):
 class SharedDataType(NamedTuple):
     """The shared data object and a string specifying the comm type."""
 
-    shm: MPIShared
+    shdata: MPIShared
     type: str
 
 
@@ -875,7 +873,8 @@ class SharedDataManager(MutableMapping):
     def create_row(self, name, shape, dtype=None):
         """Create a shared memory buffer on the process row communicator.
 
-        This buffer will be replicated across all nodes used by the processes in the process grid row.  This uses the MPIShared class, which falls back to a simple
+        This buffer will be replicated across all nodes used by the processes in the
+        process grid row.  This uses the MPIShared class, which falls back to a simple
         numpy array if MPI is not being used.
 
         Args:
@@ -1030,11 +1029,11 @@ class SharedDataManager(MutableMapping):
     # Mapping methods
 
     def __getitem__(self, key):
-        return self._internal[key].shm
+        return self._internal[key].shdata
 
     def __delitem__(self, key):
         if key in self._internal:
-            self._internal[key].shm.close()
+            self._internal[key].shdata.close()
             del self._internal[key]
 
     def _comm_from_type(self, commstr):
@@ -1098,14 +1097,15 @@ class SharedDataManager(MutableMapping):
         # Assign
         off = None
         if myrank == fromrank:
-            if value.shape != self._internal[key].shm.shape:
+            if value.shape != self._internal[key].shdata.shape:
                 raise ValueError(
                     "When assigning directly to a shared object, the value must have the same dimensions"
                 )
-            off = tuple([0 for x in self._internal[key].shm.shape])
-        self._internal[key].shm.set(value, offset=off, fromrank=fromrank)
+            off = tuple([0 for x in self._internal[key].shdata.shape])
+        self._internal[key].shdata.set(value, offset=off, fromrank=fromrank)
 
-    def _assign_mpishared(self, key, value, commtype):
+    def assign_mpishared(self, key, value, commtype):
+        """Helper function to assign an existing MPIShared data object."""
         log = Logger.get()
         if key not in self._internal:
             # Create the object, and check that value comm is correct.
@@ -1121,11 +1121,11 @@ class SharedDataManager(MutableMapping):
                 msg = "Direct assignment object must have equivalent communicator."
                 log.error(msg)
                 raise RuntimeError(msg)
-            if value.shape != self._internal[key].shm.shape:
+            if value.shape != self._internal[key].shdata.shape:
                 msg = "Direct assignment of shared object must have the same shape."
                 log.error(msg)
                 raise RuntimeError(msg)
-            if value.dtype != self._internal[key].shm.dtype:
+            if value.dtype != self._internal[key].shdata.dtype:
                 msg = "Direct assignment of shared object must have the same dtype."
                 log.error(msg)
                 raise RuntimeError(msg)
@@ -1134,16 +1134,16 @@ class SharedDataManager(MutableMapping):
         offset = None
         dval = None
         if value.comm is None or value.comm.rank == 0:
-            offset = tuple([0 for x in self._internal[key].shm.shape])
+            offset = tuple([0 for x in self._internal[key].shdata.shape])
             dval = value.data
-        self._internal[key].shm.set(dval, offset=offset, fromrank=0)
+        self._internal[key].shdata.set(dval, offset=offset, fromrank=0)
 
     def __setitem__(self, key, value):
         log = Logger.get()
         if key in self._internal:
             # This is an existing shared object.
             if isinstance(value, MPIShared):
-                self._assign_mpishared(key, value, self._internal[key].type)
+                self.assign_mpishared(key, value, self._internal[key].type)
             else:
                 # This must be an array on exactly one process.
                 self._assign_array(key, value, self._internal[key].type)
@@ -1155,7 +1155,7 @@ class SharedDataManager(MutableMapping):
                 tvalue = value[1]
                 if isinstance(dvalue, MPIShared):
                     # The passed value is already an MPIShared object
-                    self._assign_mpishared(key, dvalue, tvalue)
+                    self.assign_mpishared(key, dvalue, tvalue)
                 else:
                     # This is a simple array on one process
                     self._assign_array(key, dvalue, tvalue)
@@ -1163,7 +1163,7 @@ class SharedDataManager(MutableMapping):
                 # We are specifying just the data, so the comm type
                 # is assumed to be the group comm
                 if isinstance(value, MPIShared):
-                    self._assign_mpishared(key, value, "group")
+                    self.assign_mpishared(key, value, "group")
                 else:
                     # This is a simple array on one process
                     self._assign_array(key, value, "group")
@@ -1176,7 +1176,7 @@ class SharedDataManager(MutableMapping):
 
     def clear(self):
         for k in self._internal.keys():
-            self._internal[k].shm.close()
+            self._internal[k].shdata.close()
 
     def __del__(self):
         if hasattr(self, "_internal"):
@@ -1203,18 +1203,18 @@ class SharedDataManager(MutableMapping):
             log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
             return False
         for k in self._internal.keys():
-            if self._internal[k].shm.shape != other._internal[k].shm.shape:
+            if self._internal[k].shdata.shape != other._internal[k].shdata.shape:
                 log.verbose(
-                    f"  key {k} shape {self._internal[k].shm.shape} != {other._internal[k].shm.shape}"
+                    f"  key {k} shape {self._internal[k].shdata.shape} != {other._internal[k].shdata.shape}"
                 )
                 return False
-            if self._internal[k].shm.dtype != other._internal[k].shm.dtype:
+            if self._internal[k].shdata.dtype != other._internal[k].shdata.dtype:
                 log.verbose(
-                    f"  key {k} dtype {self._internal[k].shm.dtype} != {other._internal[k].shm.dtype}"
+                    f"  key {k} dtype {self._internal[k].shdata.dtype} != {other._internal[k].shdata.dtype}"
                 )
                 return False
             if not comm_equivalent(
-                self._internal[k].shm.comm, other._internal[k].shm.comm
+                self._internal[k].shdata.comm, other._internal[k].shdata.comm
             ):
                 log.verbose(f"  key {k} comms not equivalent")
                 return False
@@ -1232,17 +1232,17 @@ class SharedDataManager(MutableMapping):
             shared_bytes = 0
             node_bytes = 0
             node_rank = 0
-            if self._internal[k].shm.nodecomm is not None:
-                node_rank = self._internal[k].shm.nodecomm.rank
+            if self._internal[k].shdata.nodecomm is not None:
+                node_rank = self._internal[k].shdata.nodecomm.rank
             if node_rank == 0:
                 node_elems = 1
-                for d in self._internal[k].shm.shape:
+                for d in self._internal[k].shdata.shape:
                     node_elems *= d
-                node_bytes += node_elems * self._internal[k].shm.data.itemsize
-            if self._internal[k].shm.comm is None:
+                node_bytes += node_elems * self._internal[k].shdata.data.itemsize
+            if self._internal[k].shdata.comm is None:
                 shared_bytes = node_bytes
             else:
-                shared_bytes = self._internal[k].shm.comm.allreduce(
+                shared_bytes = self._internal[k].shdata.comm.allreduce(
                     node_bytes, op=MPI.SUM
                 )
             bytes += shared_bytes
@@ -1252,8 +1252,8 @@ class SharedDataManager(MutableMapping):
         val = "<SharedDataManager"
         for k in self._internal.keys():
             val += f"\n    {k} ({self._internal[k].type}): "
-            val += f"shape = {self._internal[k].shm.shape}, "
-            val += f"dtype = {self._internal[k].shm.dtype}"
+            val += f"shape = {self._internal[k].shdata.shape}, "
+            val += f"dtype = {self._internal[k].shdata.dtype}"
         val += ">"
         return val
 

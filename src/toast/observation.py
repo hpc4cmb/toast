@@ -538,9 +538,7 @@ class Observation(MutableMapping):
         for name, data in self.shared.items():
             if shared is None or name in shared:
                 # Create the object on the corresponding communicator in the new obs
-                new_obs.shared._assign_mpishared(
-                    name, data, self.shared.comm_type(name)
-                )
+                new_obs.shared.assign_mpishared(name, data, self.shared.comm_type(name))
         for name, data in self.intervals.items():
             if intervals is None or name in intervals:
                 timespans = [(x.start, x.stop) for x in data]

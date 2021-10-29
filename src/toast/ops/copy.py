@@ -108,7 +108,7 @@ class Copy(Operator):
                 for in_key, out_key in self.shared:
                     # Although this is an internal function, the input arguments come
                     # from existing shared objects and so should already be valid.
-                    ob.shared._assign_mpishared(
+                    ob.shared.assign_mpishared(
                         out_key, ob.shared[in_key], ob.shared.comm_type(in_key)
                     )
 
