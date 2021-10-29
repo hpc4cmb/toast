@@ -106,42 +106,11 @@ class Copy(Operator):
 
             if self.shared is not None:
                 for in_key, out_key in self.shared:
-                    if out_key in ob.shared:
-                        if ob.shared[in_key].comm is not None:
-                            comp = MPI.Comm.Compare(
-                                ob.shared[out_key].comm, ob.shared[in_key].comm
-                            )
-                            if comp not in (MPI.IDENT, MPI.CONGRUENT):
-                                msg = "Cannot copy to existing shared key {} with a different communicator".format(
-                                    out_key
-                                )
-                                log.error(msg)
-                                raise RuntimeError(msg)
-                        if ob.shared[out_key].dtype != ob.shared[in_key].dtype:
-                            msg = "Cannot copy to existing shared key {} with different dtype".format(
-                                out_key
-                            )
-                            log.error(msg)
-                            raise RuntimeError(msg)
-                        if ob.shared[out_key].shape != ob.shared[in_key].shape:
-                            msg = "Cannot copy to existing shared key {} with different shape".format(
-                                out_key
-                            )
-                            log.error(msg)
-                            raise RuntimeError(msg)
-                    else:
-                        ob.shared.create(
-                            out_key,
-                            shape=ob.shared[in_key].shape,
-                            dtype=ob.shared[in_key].dtype,
-                            comm=ob.shared[in_key].comm,
-                        )
-                    # Only one process per node copies the shared data.
-                    if (
-                        ob.shared[in_key].nodecomm is None
-                        or ob.shared[in_key].nodecomm.rank == 0
-                    ):
-                        ob.shared[out_key]._flat[:] = ob.shared[in_key]._flat
+                    # Although this is an internal function, the input arguments come
+                    # from existing shared objects and so should already be valid.
+                    ob.shared.assign_mpishared(
+                        out_key, ob.shared[in_key], ob.shared.comm_type(in_key)
+                    )
 
             if self.detdata is not None:
                 # Get the detectors we are using for this observation

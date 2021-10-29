@@ -747,47 +747,40 @@ class SimGround(Operator):
             # Create and set shared objects for timestamps, position, velocity, and
             # boresight.
 
-            ob.shared.create(
+            ob.shared.create_column(
                 self.times,
                 shape=(ob.n_local_samples,),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.position,
                 shape=(ob.n_local_samples, 3),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.velocity,
                 shape=(ob.n_local_samples, 3),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.azimuth,
                 shape=(ob.n_local_samples,),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.elevation,
                 shape=(ob.n_local_samples,),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.boresight_azel,
                 shape=(ob.n_local_samples, 4),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.boresight_radec,
                 shape=(ob.n_local_samples, 4),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
 
             # Optionally initialize detector data

@@ -86,7 +86,7 @@ def satellite_scanning(
 
     first_samp = ob.local_index_offset
     n_samp = ob.n_local_samples
-    ob.shared.create(ob_key, shape=(n_samp, 4), dtype=np.float64, comm=ob.comm_col)
+    ob.shared.create_column(ob_key, shape=(n_samp, 4), dtype=np.float64)
 
     # Temporary buffer
     boresight = None
@@ -455,29 +455,25 @@ class SimSatellite(Operator):
 
             # Create shared objects for timestamps, common flags, position,
             # and velocity.
-            ob.shared.create(
+            ob.shared.create_column(
                 self.times,
                 shape=(ob.n_local_samples,),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.shared_flags,
                 shape=(ob.n_local_samples,),
                 dtype=np.uint8,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.position,
                 shape=(ob.n_local_samples, 3),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
-            ob.shared.create(
+            ob.shared.create_column(
                 self.velocity,
                 shape=(ob.n_local_samples, 3),
                 dtype=np.float64,
-                comm=ob.comm_col,
             )
 
             # Rank zero of each grid column creates the data

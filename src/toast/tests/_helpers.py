@@ -341,35 +341,30 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         ob = Observation(toastcomm, tele, n_samples=nsamp, name=oname, uid=oid)
         # Create shared objects for timestamps, common flags, boresight, position,
         # and velocity.
-        ob.shared.create(
+        ob.shared.create_column(
             defaults.times,
             shape=(ob.n_local_samples,),
             dtype=np.float64,
-            comm=ob.comm_col,
         )
-        ob.shared.create(
+        ob.shared.create_column(
             defaults.shared_flags,
             shape=(ob.n_local_samples,),
             dtype=np.uint8,
-            comm=ob.comm_col,
         )
-        ob.shared.create(
+        ob.shared.create_column(
             defaults.position,
             shape=(ob.n_local_samples, 3),
             dtype=np.float64,
-            comm=ob.comm_col,
         )
-        ob.shared.create(
+        ob.shared.create_column(
             defaults.velocity,
             shape=(ob.n_local_samples, 3),
             dtype=np.float64,
-            comm=ob.comm_col,
         )
-        ob.shared.create(
+        ob.shared.create_column(
             defaults.boresight_radec,
             shape=(ob.n_local_samples, 4),
             dtype=np.float64,
-            comm=ob.comm_col,
         )
         # Rank zero of each grid column creates the data
         stamps = None
@@ -573,11 +568,10 @@ def fake_flags(
     for ob in data.obs:
         ob.detdata.ensure(det_name, sample_shape=(), dtype=np.uint8)
         if shared_name not in ob.shared:
-            ob.shared.create(
+            ob.shared.create_column(
                 shared_name,
                 shape=(ob.n_local_samples,),
                 dtype=np.uint8,
-                comm=ob.comm_col,
             )
         half = ob.n_local_samples // 2
         fshared = None

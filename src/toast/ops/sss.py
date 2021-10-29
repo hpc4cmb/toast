@@ -190,7 +190,7 @@ class SimScanSynchronousSignal(Operator):
 
         if comm is not None:
             npix = comm.bcast(npix)
-        obs.shared.create(self.sss_map, shape=(npix,), dtype=dtype)
+        obs.shared.create_group(self.sss_map, shape=(npix,), dtype=dtype)
         obs.shared[self.sss_map].set(sss_map, fromrank=0)
         obs["sss_realization"] = self.realization
 

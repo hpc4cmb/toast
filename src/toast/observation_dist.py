@@ -30,6 +30,7 @@ from .observation_data import (
     DetDataManager,
     SharedDataManager,
     IntervalsManager,
+    SharedDataType,
 )
 
 from .observation_view import DetDataView, SharedView, View, ViewManager, ViewInterface
@@ -636,144 +637,145 @@ def redistribute_shared_data(
 
     for field in shared_manager.keys():
         shobj = shared_manager[field]
-        if comm_equal(shobj.comm, old_dist.comm.comm_group):
-            # Using full group communicator, just copy to the new data manager.
-            new_shared_manager[field] = shobj
-        else:
-            # Full shape of the object
-            shp = shobj.shape
+        commtype = shared_manager.comm_type(field)
+        if commtype == "group":
+            # Using full group communicator, just copy to new data manager.
+            new_shared_manager.assign_mpishared(field, shobj, commtype)
+            continue
 
-            # Buffer type
-            buffer_class, _ = dtype_to_aligned(shobj.dtype)
-            mpibytesize, mpitype = mpi_data_type(shobj.comm, shobj.dtype)
+        # Full shape of the object
+        shp = shobj.shape
 
-            # Shape of the non-leading dimensions
-            other_shape = None
-            n_per_leading = 1
-            if len(shp) > 1:
-                other_shape = shp[1:]
-                for dim in other_shape:
-                    n_per_leading *= dim
+        # Buffer type
+        buffer_class, _ = dtype_to_aligned(shobj.dtype)
+        mpibytesize, mpitype = mpi_data_type(shobj.comm, shobj.dtype)
 
-            # slices for non-leading dimensions
-            dim_slices = None
-            if other_shape is not None:
-                dim_slices = [slice(0, x, 1) for x in other_shape]
+        # Shape of the non-leading dimensions
+        other_shape = None
+        n_per_leading = 1
+        if len(shp) > 1:
+            other_shape = shp[1:]
+            for dim in other_shape:
+                n_per_leading *= dim
 
-            if comm_equal(shobj.comm, old_dist.comm_row):
-                # Shared in the sample direction.
-                if shp[0] != old_det_n:
-                    msg = f"Shared object {field} uses the row communicator, "
-                    msg += f"but has leading dimension {shp[0]} rather than the "
-                    msg += f"number of local detectors ({old_det_n}).  "
-                    msg += f"Cannot redistribute."
-                    raise RuntimeError(msg)
+        # slices for non-leading dimensions
+        dim_slices = None
+        if other_shape is not None:
+            dim_slices = [slice(0, x, 1) for x in other_shape]
 
-                # Redistribution send / recv slices
-                send_info = [None for x in range(shobj.comm.size)]
-                recv_info = [None for x in range(shobj.comm.size)]
-
-                if old_dist.comm_row_rank == 0:
-                    # We are sending something
-                    send_info = list()
-                    for rproc, sinfo in enumerate(det_send_info):
-                        proc_slices = None
-                        if sinfo is not None and rproc % new_dist.comm_row_size == 0:
-                            proc_slices = [sinfo]
-                            if dim_slices is not None:
-                                proc_slices.extend(dim_slices)
-                            proc_slices = tuple(proc_slices)
-                        send_info.append(proc_slices)
-                if new_dist.comm_row_rank == 0:
-                    # We are receiving something
-                    recv_info = list()
-                    for sproc, rinfo in enumerate(det_recv_info):
-                        proc_slices = None
-                        if rinfo is not None and sproc % old_dist.comm_row_size == 0:
-                            proc_slices = [rinfo]
-                            if dim_slices is not None:
-                                proc_slices.extend(dim_slices)
-                            proc_slices = tuple(proc_slices)
-                        recv_info.append(proc_slices)
-
-                # Create the new object
-                new_shp = [new_det_n]
-                if other_shape is not None:
-                    new_shp.extend(other_shape)
-
-                new_shared_manager.create(
-                    field, new_shp, dtype=shobj.dtype, comm=new_dist.comm_row
-                )
-
-                # Redistribute
-                redistribute_buffer(
-                    old_dist.comm.comm_group,
-                    buffer_class,
-                    mpitype,
-                    shobj.data,
-                    new_shared_manager[field].data,
-                    send_info,
-                    recv_info,
-                )
-            elif comm_equal(shobj.comm, old_dist.comm_col):
-                # Shared in the detector direction
-                shp = shobj.shape
-                if shp[0] != old_samp_n:
-                    msg = f"Shared object {field} uses the column communicator, "
-                    msg += f"but has leading dimension {shp[0]} rather than the "
-                    msg += f"number of local samples {old_samp_n}.  "
-                    msg += f"Cannot redistribute."
-                    raise RuntimeError(msg)
-
-                # Redistribution send / recv slices
-                send_info = [None for x in range(shobj.comm.size)]
-                recv_info = [None for x in range(shobj.comm.size)]
-                if old_dist.comm_col_rank == 0:
-                    # We are sending something
-                    send_info = list()
-                    for rproc, sinfo in enumerate(samp_send_info):
-                        proc_slices = None
-                        if sinfo is not None and rproc % new_dist.comm_col_size == 0:
-                            proc_slices = [sinfo]
-                            if dim_slices is not None:
-                                proc_slices.extend(dim_slices)
-                            proc_slices = tuple(proc_slices)
-                        send_info.append(proc_slices)
-                if new_dist.comm_col_rank == 0:
-                    # We are receiving something
-                    recv_info = list()
-                    for sproc, rinfo in enumerate(samp_recv_info):
-                        proc_slices = None
-                        if rinfo is not None and sproc % old_dist.comm_col_size == 0:
-                            proc_slices = [rinfo]
-                            if dim_slices is not None:
-                                proc_slices.extend(dim_slices)
-                            proc_slices = tuple(proc_slices)
-                        recv_info.append(proc_slices)
-
-                # Create the new object
-                new_shp = [new_samp_n]
-                if other_shape is not None:
-                    new_shp.extend(other_shape)
-                new_shared_manager.create(
-                    field, new_shp, dtype=shobj.dtype, comm=new_dist.comm_col
-                )
-
-                # Redistribute
-                redistribute_buffer(
-                    old_dist.comm.comm_group,
-                    buffer_class,
-                    mpitype,
-                    shobj.data,
-                    new_shared_manager[field].data,
-                    send_info,
-                    recv_info,
-                )
-            else:
-                msg = "Only shared objects using the group, row, and column "
-                msg += "communicators can be redistributed"
-                log.error(msg)
+        if commtype == "row":
+            # Shared in the sample direction.
+            if shp[0] != old_det_n:
+                msg = f"Shared object {field} uses the row communicator, "
+                msg += f"but has leading dimension {shp[0]} rather than the "
+                msg += f"number of local detectors ({old_det_n}).  "
+                msg += f"Cannot redistribute."
                 raise RuntimeError(msg)
+
+            # Redistribution send / recv slices
+            send_info = [None for x in range(shobj.comm.size)]
+            recv_info = [None for x in range(shobj.comm.size)]
+
+            if old_dist.comm_row_rank == 0:
+                # We are sending something
+                send_info = list()
+                for rproc, sinfo in enumerate(det_send_info):
+                    proc_slices = None
+                    if sinfo is not None and rproc % new_dist.comm_row_size == 0:
+                        proc_slices = [sinfo]
+                        if dim_slices is not None:
+                            proc_slices.extend(dim_slices)
+                        proc_slices = tuple(proc_slices)
+                    send_info.append(proc_slices)
+            if new_dist.comm_row_rank == 0:
+                # We are receiving something
+                recv_info = list()
+                for sproc, rinfo in enumerate(det_recv_info):
+                    proc_slices = None
+                    if rinfo is not None and sproc % old_dist.comm_row_size == 0:
+                        proc_slices = [rinfo]
+                        if dim_slices is not None:
+                            proc_slices.extend(dim_slices)
+                        proc_slices = tuple(proc_slices)
+                    recv_info.append(proc_slices)
+
+            # Create the new object
+            new_shp = [new_det_n]
+            if other_shape is not None:
+                new_shp.extend(other_shape)
+
+            new_shared_manager.create_row(field, new_shp, dtype=shobj.dtype)
+
+            # Redistribute
+            redistribute_buffer(
+                old_dist.comm.comm_group,
+                buffer_class,
+                mpitype,
+                shobj.data,
+                new_shared_manager[field].data,
+                send_info,
+                recv_info,
+            )
+        elif commtype == "column":
+            # Shared in the detector direction
+            shp = shobj.shape
+            if shp[0] != old_samp_n:
+                msg = f"Shared object {field} uses the column communicator, "
+                msg += f"but has leading dimension {shp[0]} rather than the "
+                msg += f"number of local samples {old_samp_n}.  "
+                msg += f"Cannot redistribute."
+                raise RuntimeError(msg)
+
+            # Redistribution send / recv slices
+            send_info = [None for x in range(shobj.comm.size)]
+            recv_info = [None for x in range(shobj.comm.size)]
+            if old_dist.comm_col_rank == 0:
+                # We are sending something
+                send_info = list()
+                for rproc, sinfo in enumerate(samp_send_info):
+                    proc_slices = None
+                    if sinfo is not None and rproc % new_dist.comm_col_size == 0:
+                        proc_slices = [sinfo]
+                        if dim_slices is not None:
+                            proc_slices.extend(dim_slices)
+                        proc_slices = tuple(proc_slices)
+                    send_info.append(proc_slices)
+            if new_dist.comm_col_rank == 0:
+                # We are receiving something
+                recv_info = list()
+                for sproc, rinfo in enumerate(samp_recv_info):
+                    proc_slices = None
+                    if rinfo is not None and sproc % old_dist.comm_col_size == 0:
+                        proc_slices = [rinfo]
+                        if dim_slices is not None:
+                            proc_slices.extend(dim_slices)
+                        proc_slices = tuple(proc_slices)
+                    recv_info.append(proc_slices)
+
+            # Create the new object
+            new_shp = [new_samp_n]
+            if other_shape is not None:
+                new_shp.extend(other_shape)
+            new_shared_manager.create_column(field, new_shp, dtype=shobj.dtype)
+
+            # Redistribute
+            redistribute_buffer(
+                old_dist.comm.comm_group,
+                buffer_class,
+                mpitype,
+                shobj.data,
+                new_shared_manager[field].data,
+                send_info,
+                recv_info,
+            )
+        else:
+            # Note- this code should never be executed, since the commtype value
+            # comes from an existing object and is therefore guaranteed to be
+            # valid.
+            msg = "Only shared objects using the group, row, and column "
+            msg += "communicators can be redistributed"
+            log.error(msg)
+            raise RuntimeError(msg)
 
     return new_shared_manager
 

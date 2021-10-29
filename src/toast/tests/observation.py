@@ -96,22 +96,22 @@ class ObservationTest(MPITestCase):
             det_common = np.random.random((n_det, 3, 4, 5))
             all_common = np.random.random((2, 3, 4))
 
-            obs.shared.create(
+            # Explicit create_* functions and then assignment from array on one process
+
+            obs.shared.create_column(
                 "samp_A",
                 shape=sample_common.shape,
                 dtype=sample_common.dtype,
-                comm=obs.comm_col,
             )
             if obs.comm_col_rank == 0:
                 obs.shared["samp_A"][:, :] = sample_common
             else:
                 obs.shared["samp_A"][None] = None
 
-            obs.shared.create(
+            obs.shared.create_row(
                 "det_A",
                 shape=det_common.shape,
                 dtype=det_common.dtype,
-                comm=obs.comm_row,
             )
 
             if obs.comm_row_rank == 0:
@@ -119,27 +119,27 @@ class ObservationTest(MPITestCase):
             else:
                 obs.shared["det_A"][None] = None
 
-            obs.shared.create(
+            obs.shared.create_group(
                 "all_A",
                 shape=all_common.shape,
                 dtype=all_common.dtype,
-                comm=obs.comm.comm_group,
             )
             if obs.comm.group_rank == 0:
                 obs.shared["all_A"][:, :, :] = all_common
             else:
                 obs.shared["all_A"][None] = None
 
-            obs.shared.create(
+            obs.shared.create_column(
                 "flg_A",
                 shape=flag_common.shape,
                 dtype=flag_common.dtype,
-                comm=obs.comm_col,
             )
             if obs.comm_col_rank == 0:
                 obs.shared["flg_A"][:] = flag_common
             else:
                 obs.shared["flg_A"][None] = None
+
+            # Create and assign from MPIShared objects with explicit comm type
 
             sh = MPIShared(sample_common.shape, sample_common.dtype, obs.comm_col)
 
@@ -148,34 +148,69 @@ class ObservationTest(MPITestCase):
             else:
                 sh[None] = None
 
-            obs.shared["samp_B"] = sh
+            obs.shared["samp_B"] = (sh, "column")
 
             sh = MPIShared(flag_common.shape, flag_common.dtype, obs.comm_col)
             if obs.comm_col_rank == 0:
                 sh[:] = flag_common
             else:
                 sh[None] = None
-            obs.shared["flg_B"] = sh
+            obs.shared["flg_B"] = (sh, "column")
 
             sh = MPIShared(det_common.shape, det_common.dtype, obs.comm_row)
             if obs.comm_row_rank == 0:
                 sh[:, :, :, :] = det_common
             else:
                 sh[None] = None
-            obs.shared["det_B"] = sh
+            obs.shared["det_B"] = (sh, "row")
 
             sh = MPIShared(all_common.shape, all_common.dtype, obs.comm.comm_group)
             if obs.comm.group_rank == 0:
                 sh[:, :, :] = all_common
             else:
                 sh[None] = None
-            obs.shared["all_B"] = sh
+            obs.shared["all_B"] = (sh, "group")
 
-            # this style of assignment only works for the default obs.comm.comm_group
+            # Create and assign from array on one process with explicit comm type
+
+            del obs.shared["samp_B"]
+            sh = None
+            if obs.comm_col_rank == 0:
+                sh = sample_common
+            obs.shared["samp_B"] = (sh, "column")
+
+            del obs.shared["flg_B"]
+            sh = None
+            if obs.comm_col_rank == 0:
+                sh = flag_common
+            obs.shared["flg_B"] = (sh, "column")
+
+            del obs.shared["det_B"]
+            sh = None
+            if obs.comm_row_rank == 0:
+                sh = det_common
+            obs.shared["det_B"] = (sh, "row")
+
+            del obs.shared["all_B"]
+            sh = None
             if obs.comm.group_rank == 0:
-                obs.shared["all_C"] = all_common
+                sh = all_common
+            obs.shared["all_B"] = (sh, "group")
+
+            # Create and assign with assumed group comm type
+
+            sh = MPIShared(all_common.shape, all_common.dtype, obs.comm.comm_group)
+            if obs.comm.group_rank == 0:
+                sh[:, :, :] = all_common
             else:
-                obs.shared["all_C"] = None
+                sh[None] = None
+            obs.shared["all_C"] = sh
+
+            del obs.shared["all_C"]
+            sh = None
+            if obs.comm.group_rank == 0:
+                sh = all_common
+            obs.shared["all_C"] = sh
 
             np.testing.assert_equal(obs.shared["samp_A"][:], sample_common)
             np.testing.assert_equal(obs.shared["samp_B"][:], sample_common)
@@ -248,20 +283,16 @@ class ObservationTest(MPITestCase):
                 times = np.arange(n_samp, dtype=np.float64)
 
             # Construct some default shared objects from local buffers
-            obs.shared.create("boresight_azel", shape=(n_samp, 4), comm=obs.comm_col)
+            obs.shared.create_column("boresight_azel", shape=(n_samp, 4))
             obs.shared["boresight_azel"][:, :] = bore
 
-            obs.shared.create("boresight_radec", shape=(n_samp, 4), comm=obs.comm_col)
+            obs.shared.create_column("boresight_radec", shape=(n_samp, 4))
             obs.shared["boresight_radec"][:, :] = bore
 
-            obs.shared.create(
-                "flags", shape=(n_samp,), dtype=np.uint8, comm=obs.comm_col
-            )
+            obs.shared.create_column("flags", shape=(n_samp,), dtype=np.uint8)
             obs.shared["flags"][:] = common_flags
 
-            obs.shared.create(
-                "timestamps", shape=(n_samp,), dtype=np.float64, comm=obs.comm_col
-            )
+            obs.shared.create_column("timestamps", shape=(n_samp,), dtype=np.float64)
             obs.shared["timestamps"][:] = times
 
             # Create some shared objects over the whole comm
@@ -298,11 +329,10 @@ class ObservationTest(MPITestCase):
 
             # Make some shared objects, one per detector, shared across the process
             # rows.
-            obs.shared.create(
+            obs.shared.create_row(
                 "beam_profile",
                 shape=(len(dets), 1000, 1000),
                 dtype=np.float32,
-                comm=obs.comm_row,
             )
             for didx, det in enumerate(dets):
                 beam_data = None
@@ -353,18 +383,16 @@ class ObservationTest(MPITestCase):
                 )
 
             # Construct some default shared objects from local buffers
-            ob.shared.create("boresight_azel", shape=(n_samp, 4), comm=ob.comm_col)
+            ob.shared.create_column("boresight_azel", shape=(n_samp, 4))
             ob.shared["boresight_azel"][:, :] = bore
 
-            ob.shared.create("boresight_radec", shape=(n_samp, 4), comm=ob.comm_col)
+            ob.shared.create_column("boresight_radec", shape=(n_samp, 4))
             ob.shared["boresight_radec"][:, :] = bore
 
-            ob.shared.create("flags", shape=(n_samp,), dtype=np.uint8, comm=ob.comm_col)
+            ob.shared.create_column("flags", shape=(n_samp,), dtype=np.uint8)
             ob.shared["flags"][:] = common_flags
 
-            ob.shared.create(
-                "timestamps", shape=(n_samp,), dtype=np.float64, comm=ob.comm_col
-            )
+            ob.shared.create_column("timestamps", shape=(n_samp,), dtype=np.float64)
             ob.shared["timestamps"][:] = times
 
             # Allocate the default detector data and flags
@@ -499,11 +527,10 @@ class ObservationTest(MPITestCase):
 
             # Make some shared objects, one per detector, shared across the process
             # rows.
-            obs.shared.create(
+            obs.shared.create_row(
                 "beam_profile",
                 shape=(len(dets), 1000, 1000),
                 dtype=np.float32,
-                comm=obs.comm_row,
             )
             for didx, det in enumerate(dets):
                 beam_data = None

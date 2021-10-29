@@ -6,6 +6,8 @@ import sys
 
 from collections.abc import MutableMapping, Mapping
 
+from typing import NamedTuple
+
 import numpy as np
 
 from astropy import units as u
@@ -269,9 +271,8 @@ class DetectorData(object):
                 view = tuple(view)
             except TypeError:
                 log = Logger.get()
-                msg = "Detector indexing supports slice, int, string or iterable, not '{}'".format(
-                    key
-                )
+                msg = "Detector indexing supports slice, int, string or "
+                msg += f"iterable, not '{key}'"
                 log.error(msg)
                 raise TypeError(msg)
         return view
@@ -597,9 +598,8 @@ class DetDataManager(MutableMapping):
                     msg = "detector '{}' not in this observation".format(d)
                     raise ValueError(msg)
             if value.shape[1] != self.samples:
-                msg = "Assignment DetectorData object has {} samples instead of {} in the observation".format(
-                    value.shape[1], self.samples
-                )
+                msg = f"Assignment DetectorData object has {value.shape[1]} samples "
+                msg += "instead of {self.samples} in the observation"
                 raise ValueError(msg)
             if key not in self._internal:
                 # Create it first
@@ -624,9 +624,8 @@ class DetDataManager(MutableMapping):
                     msg = "detector '{}' not in this observation".format(d)
                     raise ValueError(msg)
                 if ddata.shape[0] != self.samples:
-                    msg = "Assigment dictionary detector {} has {} samples instead of {} in the observation".format(
-                        d, ddata.shape[0], self.samples
-                    )
+                    msg = "Assigment dictionary detector {d} has {ddata.shape[0]} "
+                    msg += f"samples instead of {self.samples} in the observation"
                     raise ValueError(msg)
                 if sample_shape is None:
                     sample_shape = ddata.shape[1:]
@@ -700,7 +699,8 @@ class DetDataManager(MutableMapping):
                 self._internal[key][:] = value
             else:
                 # Incompatible
-                msg = "Assignment of detector data from an array only supports full size or single detector"
+                msg = "Assignment of detector data from an array only supports full "
+                msg += "size or single detector"
                 raise ValueError(msg)
 
     def memory_use(self):
@@ -744,9 +744,9 @@ class DetDataManager(MutableMapping):
         for k in self._internal.keys():
             # if self._internal[k] != other._internal[k]:
             if not np.allclose(self._internal[k], other._internal[k]):
-                log.verbose(
-                    f"  detector data {k} not equal:  {self._internal[k]} != {other._internal[k]}"
-                )
+                msg = f"  detector data {k} not equal:  "
+                msg += f"{self._internal[k]} != {other._internal[k]}"
+                log.verbose(msg)
                 return False
         return True
 
@@ -754,17 +754,21 @@ class DetDataManager(MutableMapping):
         return not self.__eq__(other)
 
 
+class SharedDataType(NamedTuple):
+    """The shared data object and a string specifying the comm type."""
+
+    shdata: MPIShared
+    type: str
+
+
 class SharedDataManager(MutableMapping):
     """Class used to manage shared data objects in an Observation.
 
-    New objects can be created with the "create()" method:
+    New objects can be created with the "create_*()" methods:
 
-        obs.shared.create(name, shape=None, dtype=None, comm=None)
-
-    The communicator defaults to sharing the data across the observation comm, but
-    other options would be to pass in the observation comm_row or comm_col communicators
-    in order to share common detector information across the process grid row or to
-    share telescope data across the process grid column.
+        obs.shared.create_group(name, shape=None, dtype=None)
+        obs.shared.create_row(name, shape=None, dtype=None)
+        obs.shared.create_column(name, shape=None, dtype=None)
 
     You can also create shared objects by assignment from an existing MPIShared object
     or an array on one process.  In the case of creating from an array assignment, an
@@ -777,21 +781,28 @@ class SharedDataManager(MutableMapping):
             timestamps = np.arange(obs.n_local_samples, dtype=np.float32)
 
         # Explicitly create the shared data and assign:
-        obs.shared.create(
+        obs.shared.create_column(
             "times",
             shape=(obs.n_local_samples,),
-            dtype=np.float32,
-            comm=obs.comm_col
+            dtype=np.float32
         )
         obs.shared["times"].set(timestamps, offset=(0,), fromrank=0)
 
-        # Create from existing MPIShared object:
+        # Create from existing MPIShared object on the column communicator:
         sharedtime = MPIShared((obs.n_local_samples,), np.float32, obs.comm_col)
         sharedtime[:] = timestamps
-        obs.shared["times"] = sharedtime
+        obs.shared["times"] = (sharedtime, "column")
 
         # Create from array on one process, pre-communication needed:
-        obs.shared["times"] = timestamps
+        obs.shared["times"] = (timestamps, "column")
+
+    If you are creating data products shared over the whole group communicator, you
+    may leave off the "group" communicator type:
+
+        if obs.comm_col_rank == 0:
+            obs.shared["stuff"] = np.ones(100)
+        else:
+            obs.shared["stuff"] = None
 
     After creation, you can access a given object by name with standard dictionary
     syntax:
@@ -808,23 +819,22 @@ class SharedDataManager(MutableMapping):
         self.n_detectors = len(dist.dets[dist.comm.group_rank])
         self.n_samples = dist.samps[dist.comm.group_rank].n_elem
         self.dist = dist
+        # The internal dictionary stores tuples containing the shared
+        # data object and a string specifying which communicator it
+        # is distributed over:  "group", "row", or "column".
         self._internal = dict()
 
-    def create(self, name, shape, dtype=None, comm=None):
-        """Create a shared memory buffer.
+    def create_group(self, name, shape, dtype=None):
+        """Create a shared memory buffer on the group communicator.
 
         This buffer will be replicated across all nodes used by the processes owning
         the observation.  This uses the MPIShared class, which falls back to a simple
         numpy array if MPI is not being used.
 
         Args:
-            name (str): Name of the shared memory object (e.g. "boresight").
+            name (str): Name of the shared memory object.
             shape (tuple): The shape of the new buffer.
             dtype (np.dtype): Use this dtype for each element.
-            comm (MPI.Comm): The communicator to use for the shared data.  If None
-                then the communicator for the observation is used.  Other options
-                would be to specify the grid_comm_row (for shared detector objects) or
-                grid_comm_col (for shared timestream objects).
 
         Returns:
             None
@@ -836,47 +846,9 @@ class SharedDataManager(MutableMapping):
             log.error(msg)
             raise RuntimeError(msg)
 
-        shared_comm = comm
-        shared_comm_node = None
-        shared_comm_rank_node = None
-        if shared_comm is None:
-            # Use the observation group communicator.
-            shared_comm = self.dist.comm.comm_group
-            shared_comm_node = self.dist.comm.comm_group_node
-            shared_comm_rank_node = self.dist.comm.comm_group_node_rank
-
-        if comm_equal(self.dist.comm.comm_group, shared_comm):
-            # This is shared over the whole observation communicator, so it
-            # may have any shape.
-            shared_comm_node = self.dist.comm.comm_group_node
-            shared_comm_rank_node = self.dist.comm.comm_group_node_rank
-        elif comm_equal(self.dist.comm_row, shared_comm):
-            # This is shared over the row communicator, so the leading
-            # dimension must be the number of local detectors.
-            if shape[0] != self.n_detectors:
-                msg = f"When creating shared data '{name}' on the row communicator, "
-                msg += f"the leading dimension should be the number of local "
-                msg += f"detectors ({self.n_detectors}).  Shape given = {shape}."
-                log.error(msg)
-                raise RuntimeError(msg)
-            shared_comm_node = self.dist.comm_row_node
-            shared_comm_rank_node = self.dist.comm_row_rank_node
-        elif comm_equal(self.dist.comm_col, shared_comm):
-            # This is shared over the column communicator, so the leading
-            # dimension must be the number of local samples.
-            if shape[0] != self.n_samples:
-                msg = f"When creating shared data '{name}' on the column communicator, "
-                msg += f"the leading dimension should be the number of local "
-                msg += f"samples ({self.n_samples}).  Shape given = {shape}"
-                log.error(msg)
-                raise RuntimeError(msg)
-            shared_comm_node = self.dist.comm_col_node
-            shared_comm_rank_node = self.dist.comm_col_rank_node
-        else:
-            msg = f"When creating shared data '{name}', you must use either the "
-            msg += "observation communicator or the row or column communicators."
-            log.error(msg)
-            raise RuntimeError(msg)
+        shared_comm = self.dist.comm.comm_group
+        shared_comm_node = self.dist.comm.comm_group_node
+        shared_comm_rank_node = self.dist.comm.comm_group_node_rank
 
         shared_dtype = dtype
 
@@ -885,108 +857,316 @@ class SharedDataManager(MutableMapping):
             shared_dtype = np.float64
 
         # Create the data object
-        self._internal[name] = MPIShared(
-            shape,
-            shared_dtype,
-            shared_comm,
-            comm_node=shared_comm_node,
-            comm_node_rank=shared_comm_rank_node,
+        self._internal[name] = SharedDataType(
+            MPIShared(
+                shape,
+                shared_dtype,
+                shared_comm,
+                comm_node=shared_comm_node,
+                comm_node_rank=shared_comm_rank_node,
+            ),
+            "group",
         )
 
         return
 
+    def create_row(self, name, shape, dtype=None):
+        """Create a shared memory buffer on the process row communicator.
+
+        This buffer will be replicated across all nodes used by the processes in the
+        process grid row.  This uses the MPIShared class, which falls back to a simple
+        numpy array if MPI is not being used.
+
+        Args:
+            name (str): Name of the shared memory object (e.g. "beams").
+            shape (tuple): The shape of the new buffer.
+            dtype (np.dtype): Use this dtype for each element.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if name in self._internal:
+            msg = "Observation data with name '{}' already exists.".format(name)
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        # This is shared over the row communicator, so the leading
+        # dimension must be the number of local detectors.
+        if shape[0] != self.n_detectors:
+            msg = f"When creating shared data '{name}' on the row communicator, "
+            msg += f"the leading dimension should be the number of local "
+            msg += f"detectors ({self.n_detectors}).  Shape given = {shape}."
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        shared_comm = self.dist.comm_row
+        shared_comm_node = self.dist.comm_row_node
+        shared_comm_rank_node = self.dist.comm_row_rank_node
+
+        shared_dtype = dtype
+
+        # Use defaults for dtype if not set
+        if shared_dtype is None:
+            shared_dtype = np.float64
+
+        # Create the data object
+        self._internal[name] = SharedDataType(
+            MPIShared(
+                shape,
+                shared_dtype,
+                shared_comm,
+                comm_node=shared_comm_node,
+                comm_node_rank=shared_comm_rank_node,
+            ),
+            "row",
+        )
+
+        return
+
+    def create_column(self, name, shape, dtype=None):
+        """Create a shared memory buffer on the process column communicator.
+
+        This buffer will be replicated across all nodes used by the processes in the
+        process grid column.  This uses the MPIShared class, which falls back to a
+        simple numpy array if MPI is not being used.
+
+        Args:
+            name (str): Name of the shared memory object (e.g. "boresight").
+            shape (tuple): The shape of the new buffer.
+            dtype (np.dtype): Use this dtype for each element.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if name in self._internal:
+            msg = "Observation data with name '{}' already exists.".format(name)
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        # This is shared over the column communicator, so the leading
+        # dimension must be the number of local samples.
+        if shape[0] != self.n_samples:
+            msg = f"When creating shared data '{name}' on the column communicator, "
+            msg += f"the leading dimension should be the number of local "
+            msg += f"samples ({self.n_samples}).  Shape given = {shape}"
+            log.error(msg)
+            raise RuntimeError(msg)
+        shared_comm = self.dist.comm_col
+        shared_comm_node = self.dist.comm_col_node
+        shared_comm_rank_node = self.dist.comm_col_rank_node
+
+        shared_dtype = dtype
+
+        # Use defaults for dtype if not set
+        if shared_dtype is None:
+            shared_dtype = np.float64
+
+        # Create the data object
+        self._internal[name] = SharedDataType(
+            MPIShared(
+                shape,
+                shared_dtype,
+                shared_comm,
+                comm_node=shared_comm_node,
+                comm_node_rank=shared_comm_rank_node,
+            ),
+            "column",
+        )
+
+        return
+
+    def create_type(self, commtype, name, shape, dtype=None):
+        """Create a shared memory buffer of the specified type.
+
+        This is a convenience function that calls `create_group()`, `create_row()`,
+        or `create_column()` based on the value of commtype.
+
+        Args:
+            commtype (str):  "group", "row", or "column".
+            name (str): Name of the shared memory object (e.g. "boresight").
+            shape (tuple): The shape of the new buffer.
+            dtype (np.dtype): Use this dtype for each element.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if name in self._internal:
+            msg = "Observation data with name '{}' already exists.".format(name)
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        if commtype == "row":
+            self.create_row(name, shape, dtype=dtype)
+        elif commtype == "column":
+            self.create_column(name, shape, dtype=dtype)
+        elif commtype == "group":
+            self.create_group(name, shape, dtype=dtype)
+        else:
+            raise ValueError(f"Invalid communicator type '{commtype}'")
+
+    # Get the comm type for a key
+
+    def comm_type(self, key):
+        """Return the communicator type for a key.
+
+        The valid types are "group", "row", and "column".
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            (str):  The communicator name over which it is shared.
+
+        """
+        return self._internal[key].type
+
     # Mapping methods
 
     def __getitem__(self, key):
-        return self._internal[key]
+        return self._internal[key].shdata
 
     def __delitem__(self, key):
         if key in self._internal:
-            self._internal[key].close()
+            self._internal[key].shdata.close()
             del self._internal[key]
+
+    def _comm_from_type(self, commstr):
+        """Get the comm from the type string"""
+        if commstr == "row":
+            return self.dist.comm_row
+        elif commstr == "column":
+            return self.dist.comm_col
+        elif commstr == "group":
+            return self.dist.comm.comm_group
+        else:
+            raise ValueError(f"Invalid communicator type '{commstr}'")
+
+    def _valid_commtype(self, commstr, comm):
+        """Helper function to check that a comm matches the specified type."""
+        shcomm = self._comm_from_type(commstr)
+        if comm_equivalent(shcomm, comm):
+            return True
+        else:
+            return False
+
+    def _assign_array(self, key, value, commtype):
+        """Helper function to assign an array on one process to a shared object."""
+        if key in self._internal:
+            # Object already exists, so force the commtype
+            commtype = self._internal[key].type
+
+        # Get the communicator for this object
+        shcomm = self._comm_from_type(commtype)
+
+        # Verify that we only have incoming data on one process
+        fromrank = 0
+        myrank = 0
+        if shcomm is not None:
+            myrank = shcomm.rank
+            nproc = shcomm.size
+            check_rank = np.zeros(nproc, dtype=np.int32)
+            check_result = np.zeros(nproc, dtype=np.int32)
+            if value is not None:
+                check_rank[myrank] = 1
+            shcomm.Allreduce(check_rank, check_result, op=MPI.SUM)
+            tot = np.sum(check_result)
+            if tot > 1:
+                msg = "When assigning an array to a shared object, only one process"
+                msg += " should have a non-None value"
+                raise ValueError(msg)
+            fromrank = np.where(check_result == 1)[0][0]
+
+        # Create the object if needed
+        if key not in self._internal:
+            shshape = None
+            shdtype = None
+            if myrank == fromrank:
+                shshape = value.shape
+                shdtype = value.dtype
+            if shcomm is not None:
+                shshape = shcomm.bcast(shshape, root=fromrank)
+                shdtype = shcomm.bcast(shdtype, root=fromrank)
+            self.create_type(commtype, key, shshape, dtype=shdtype)
+
+        # Assign
+        off = None
+        if myrank == fromrank:
+            if value.shape != self._internal[key].shdata.shape:
+                raise ValueError(
+                    "When assigning directly to a shared object, the value must have the same dimensions"
+                )
+            off = tuple([0 for x in self._internal[key].shdata.shape])
+        self._internal[key].shdata.set(value, offset=off, fromrank=fromrank)
+
+    def assign_mpishared(self, key, value, commtype):
+        """Helper function to assign an existing MPIShared data object."""
+        log = Logger.get()
+        if key not in self._internal:
+            # Create the object, and check that value comm is correct.
+            if not self._valid_commtype(commtype, value.comm):
+                msg = f"Assignment value for '{key}' ('{commtype}') "
+                msg += "has incorrect communicator."
+                log.error(msg)
+                raise RuntimeError(msg)
+            self.create_type(commtype, key, value.shape, dtype=value.dtype)
+        else:
+            # Verify that communicators and dimensions match
+            if not self._valid_commtype(self._internal[key].type, value.comm):
+                msg = "Direct assignment object must have equivalent communicator."
+                log.error(msg)
+                raise RuntimeError(msg)
+            if value.shape != self._internal[key].shdata.shape:
+                msg = "Direct assignment of shared object must have the same shape."
+                log.error(msg)
+                raise RuntimeError(msg)
+            if value.dtype != self._internal[key].shdata.dtype:
+                msg = "Direct assignment of shared object must have the same dtype."
+                log.error(msg)
+                raise RuntimeError(msg)
+
+        # Assign data from just one process.
+        offset = None
+        dval = None
+        if value.comm is None or value.comm.rank == 0:
+            offset = tuple([0 for x in self._internal[key].shdata.shape])
+            dval = value.data
+        self._internal[key].shdata.set(dval, offset=offset, fromrank=0)
 
     def __setitem__(self, key, value):
         log = Logger.get()
-        if isinstance(value, MPIShared):
+        if key in self._internal:
             # This is an existing shared object.
-            if key not in self._internal:
-                self.create(
-                    key,
-                    shape=value.shape,
-                    dtype=value.dtype,
-                    comm=self.dist.comm.comm_group,
-                )
+            if isinstance(value, MPIShared):
+                self.assign_mpishared(key, value, self._internal[key].type)
             else:
-                # Verify that communicators and dimensions match
-                if value.shape != self._internal[key].shape:
-                    msg = "Direct assignment of shared object must have the same shape."
-                    log.error(msg)
-                    raise RuntimeError(msg)
-                if value.dtype != self._internal[key].dtype:
-                    msg = "Direct assignment of shared object must have the same dtype."
-                    log.error(msg)
-                    raise RuntimeError(msg)
-                if not comm_equivalent(value.comm, self._internal[key].comm):
-                    msg = "Direct assignment object must have equivalent communicator."
-                    log.error(msg)
-                    raise RuntimeError(msg)
-            # Assign from just one process.
-            offset = None
-            dval = None
-            if value.comm is None or value.comm.rank == 0:
-                offset = tuple([0 for x in self._internal[key].shape])
-                dval = value.data
-            self._internal[key].set(dval, offset=offset, fromrank=0)
+                # This must be an array on exactly one process.
+                self._assign_array(key, value, self._internal[key].type)
         else:
-            # This must be an array on one process.
-            if key not in self._internal:
-                # We need to create it.  In that case we use the default communicator
-                # (the full observation comm).  We also need to get the array
-                # properties to all processes in order to create the object.
-                if self.dist.comm.comm_group is None:
-                    # No MPI
-                    self.create(key, shape=value.shape, dtype=value.dtype)
-                    offset = tuple([0 for x in self._internal[key].shape])
-                    self._internal[key].set(value, offset=offset, fromrank=0)
+            # Creating a new object
+            if isinstance(value, (tuple, list, SharedDataType)) and len(value) == 2:
+                # We are specifying the data and the comm type
+                dvalue = value[0]
+                tvalue = value[1]
+                if isinstance(dvalue, MPIShared):
+                    # The passed value is already an MPIShared object
+                    self.assign_mpishared(key, dvalue, tvalue)
                 else:
-                    shp = None
-                    dt = None
-                    check_rank = np.zeros((self.dist.comm.group_size,), dtype=np.int32)
-                    check_result = np.zeros(
-                        (self.dist.comm.group_size,), dtype=np.int32
-                    )
-                    if value is not None:
-                        shp = value.shape
-                        dt = value.dtype
-                        check_rank[self.dist.comm.group_rank] = 1
-                    self.dist.comm.comm_group.Allreduce(
-                        check_rank, check_result, op=MPI.SUM
-                    )
-                    tot = np.sum(check_result)
-                    if tot > 1:
-                        msg = "When creating shared data with [] notation, only "
-                        msg += "one process may have a non-None value for the data"
-                        log.error_rank(msg)
-                        raise RuntimeError(msg)
-
-                    from_rank = np.where(check_result == 1)[0][0]
-                    shp = self.dist.comm.comm_group.bcast(shp, root=from_rank)
-                    dt = self.dist.comm.comm_group.bcast(dt, root=from_rank)
-                    self.create(key, shape=shp, dtype=dt)
-                    offset = None
-                    if self.dist.comm.group_rank == from_rank:
-                        offset = tuple([0 for x in self._internal[key].shape])
-                    self._internal[key].set(value, offset=offset, fromrank=from_rank)
+                    # This is a simple array on one process
+                    self._assign_array(key, dvalue, tvalue)
             else:
-                # Already exists, just do the assignment
-                slc = None
-                if value is not None:
-                    if value.shape != self._internal[key].shape:
-                        raise ValueError(
-                            "When assigning directly to a shared object, the value must have the same dimensions"
-                        )
-                    slc = tuple([slice(0, x) for x in self._internal[key].shape])
-                self._internal[key][slc] = value
+                # We are specifying just the data, so the comm type
+                # is assumed to be the group comm
+                if isinstance(value, MPIShared):
+                    self.assign_mpishared(key, value, "group")
+                else:
+                    # This is a simple array on one process
+                    self._assign_array(key, value, "group")
 
     def __iter__(self):
         return iter(self._internal)
@@ -996,7 +1176,7 @@ class SharedDataManager(MutableMapping):
 
     def clear(self):
         for k in self._internal.keys():
-            self._internal[k].close()
+            self._internal[k].shdata.close()
 
     def __del__(self):
         if hasattr(self, "_internal"):
@@ -1023,18 +1203,23 @@ class SharedDataManager(MutableMapping):
             log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
             return False
         for k in self._internal.keys():
-            if self._internal[k].shape != other._internal[k].shape:
+            if self._internal[k].shdata.shape != other._internal[k].shdata.shape:
                 log.verbose(
-                    f"  key {k} shape {self._internal[k].shape} != {other._internal[k].shape}"
+                    f"  key {k} shape {self._internal[k].shdata.shape} != {other._internal[k].shdata.shape}"
                 )
                 return False
-            if self._internal[k].dtype != other._internal[k].dtype:
+            if self._internal[k].shdata.dtype != other._internal[k].shdata.dtype:
                 log.verbose(
-                    f"  key {k} dtype {self._internal[k].dtype} != {other._internal[k].dtype}"
+                    f"  key {k} dtype {self._internal[k].shdata.dtype} != {other._internal[k].shdata.dtype}"
                 )
                 return False
-            if not comm_equivalent(self._internal[k].comm, other._internal[k].comm):
-                log.verbose(f"  key {k} shape comms not equivalent")
+            if not comm_equivalent(
+                self._internal[k].shdata.comm, other._internal[k].shdata.comm
+            ):
+                log.verbose(f"  key {k} comms not equivalent")
+                return False
+            if self._internal[k].type != other._internal[k].type:
+                log.verbose(f"  key {k} comm types not equal")
                 return False
         return True
 
@@ -1047,26 +1232,28 @@ class SharedDataManager(MutableMapping):
             shared_bytes = 0
             node_bytes = 0
             node_rank = 0
-            if self._internal[k].nodecomm is not None:
-                node_rank = self._internal[k].nodecomm.rank
+            if self._internal[k].shdata.nodecomm is not None:
+                node_rank = self._internal[k].shdata.nodecomm.rank
             if node_rank == 0:
                 node_elems = 1
-                for d in self._internal[k].shape:
+                for d in self._internal[k].shdata.shape:
                     node_elems *= d
-                node_bytes += node_elems * self._internal[k].data.itemsize
-            if self._internal[k].comm is None:
+                node_bytes += node_elems * self._internal[k].shdata.data.itemsize
+            if self._internal[k].shdata.comm is None:
                 shared_bytes = node_bytes
             else:
-                shared_bytes = self._internal[k].comm.allreduce(node_bytes, op=MPI.SUM)
+                shared_bytes = self._internal[k].shdata.comm.allreduce(
+                    node_bytes, op=MPI.SUM
+                )
             bytes += shared_bytes
         return bytes
 
     def __repr__(self):
         val = "<SharedDataManager"
         for k in self._internal.keys():
-            val += "\n    {}: shape = {}, dtype = {}".format(
-                k, self._internal[k].shape, self._internal[k].dtype
-            )
+            val += f"\n    {k} ({self._internal[k].type}): "
+            val += f"shape = {self._internal[k].shdata.shape}, "
+            val += f"dtype = {self._internal[k].shdata.dtype}"
         val += ">"
         return val
 

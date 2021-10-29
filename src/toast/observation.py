@@ -538,23 +538,7 @@ class Observation(MutableMapping):
         for name, data in self.shared.items():
             if shared is None or name in shared:
                 # Create the object on the corresponding communicator in the new obs
-                new_comm = None
-                if comm_equal(data.comm, self.dist.comm_row):
-                    # Row comm
-                    new_comm = new_obs.dist.comm_row
-                elif comm_equal(data.comm, self.dist.comm_col):
-                    # Col comm
-                    new_comm = new_obs.dist.comm_col
-                else:
-                    # Full obs comm
-                    new_comm = new_obs.dist.comm.comm_group
-                new_obs.shared.create(name, data.shape, dtype=data.dtype, comm=new_comm)
-                offset = None
-                dval = None
-                if new_comm is None or new_comm.rank == 0:
-                    offset = tuple([0 for x in data.shape])
-                    dval = data.data
-                new_obs.shared[name].set(dval, offset=offset, fromrank=0)
+                new_obs.shared.assign_mpishared(name, data, self.shared.comm_type(name))
         for name, data in self.intervals.items():
             if intervals is None or name in intervals:
                 timespans = [(x.start, x.stop) for x in data]

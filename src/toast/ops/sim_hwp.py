@@ -111,9 +111,7 @@ def simulate_hwp_response(
 
     # Store the angle and / or the Mueller matrix
     if ob_angle_key is not None:
-        ob.shared.create(
-            ob_angle_key, shape=(n_sample,), dtype=np.float64, comm=ob.comm_col
-        )
+        ob.shared.create_column(ob_angle_key, shape=(n_sample,), dtype=np.float64)
         ob.shared[ob_angle_key].set(hwp_angle, offset=(0,), fromrank=0)
 
     return

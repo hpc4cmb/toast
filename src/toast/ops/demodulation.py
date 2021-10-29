@@ -222,13 +222,11 @@ class Demodulate(Operator):
                     demod_dets.append(f"{prefix}_{det}")
             n_local = demod_obs.n_local_samples
 
-            demod_obs.shared.create(self.times, (n_local,), comm=demod_obs.comm_col)
+            demod_obs.shared.create_column(self.times, (n_local,))
             demod_obs.shared[self.times].set(demod_times, offset=(0,), fromrank=0)
-            demod_obs.shared.create(
-                self.boresight, (n_local, 4), comm=demod_obs.comm_col
-            )
-            demod_obs.shared.create(
-                self.shared_flags, (n_local,), dtype=np.uint8, comm=demod_obs.comm_col
+            demod_obs.shared.create_column(self.boresight, (n_local, 4))
+            demod_obs.shared.create_column(
+                self.shared_flags, (n_local,), dtype=np.uint8
             )
 
             demod_obs.detdata.ensure(
