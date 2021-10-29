@@ -5,6 +5,8 @@
 import os
 import numpy as np
 
+import datetime
+
 from astropy import units as u
 
 import h5py
@@ -14,24 +16,74 @@ import json
 from ..utils import (
     Environment,
     Logger,
-    have_hdf5_parallel,
     import_from_name,
     dtype_to_aligned,
+    have_hdf5_parallel,
 )
 
 from ..mpi import MPI
 
 from ..timing import Timer, function_timer, GlobalTimers
 
-from ..instrument import GroundSite, SpaceSite
+from ..instrument import GroundSite, SpaceSite, Focalplane, Telescope
 
 from ..weather import SimWeather
+
+from ..observation import Observation
 
 
 @function_timer
 def load_hdf5_shared(obs, hgrp, fields):
     log = Logger.get()
-    parallel = have_hdf5_parallel()
+
+    # Get references to the distribution of detectors and samples
+    proc_rows = obs.dist.process_rows
+    proc_cols = obs.dist.comm.group_size // proc_rows
+    dist_samps = obs.dist.samps
+    dist_dets = obs.dist.det_indices
+
+    for field in list(hgrp.keys()):
+        comm_type = hgrp[field].attrs["comm_type"]
+        full_shape = hgrp[field].shape
+        dtype = hgrp[field].dtype
+
+        slc = list()
+        shape = list()
+        if comm_type == "row":
+            off = dist_dets[obs.comm.group_rank].offset
+            nelem = dist_dets[obs.comm.group_rank].n_elem
+            slc.append(slice(off, off + nelem))
+            shape.append(nelem)
+        elif comm_type == "column":
+            off = dist_samps[obs.comm.group_rank].offset
+            nelem = dist_samps[obs.comm.group_rank].n_elem
+            slc.append(slice(off, off + nelem))
+            shape.append(nelem)
+        else:
+            slc.append(slice(0, full_shape[0]))
+            shape.append(full_shape[0])
+        if len(full_shape) > 1:
+            for dim in full_shape[1:]:
+                slc.append(slice(0, dim))
+                shape.append(dim)
+        slc = tuple(slc)
+        shape = tuple(shape)
+
+        print(f"create {field} ({comm_type}) with shape {shape}, dtype {dtype}")
+        obs.shared.create_type(comm_type, field, shape, dtype)
+        shcomm = obs.shared[field].comm
+        print(shcomm)
+
+        # Load the data on one process of the communicator
+        data = None
+        if shcomm is None or shcomm.rank == 0:
+            data = np.array(hgrp[field][slc], copy=False).astype(
+                obs.shared[field].dtype
+            )
+            print(f"shared data '{field}' ({data.dtype}) = {data}")
+
+        obs.shared[field].set(data, fromrank=0)
+
     return
 
 
@@ -98,7 +150,12 @@ def load_hdf5(
     # Observation properties
     obs_name = hgroup.attrs["observation_name"]
     obs_uid = hgroup.attrs["observation_uid"]
-    # det_sets = hgroup.attrs["observation_detector_sets"]
+    obs_dets = json.loads(hgroup.attrs["observation_detectors"])
+    obs_det_sets = json.loads(hgroup.attrs["observation_detector_sets"])
+    obs_samples = hgroup.attrs["observation_samples"]
+    obs_sample_sets = [
+        [int(x) for x in y] for y in json.loads(hgroup.attrs["observation_sample_sets"])
+    ]
 
     # Instrument properties
 
@@ -108,7 +165,7 @@ def load_hdf5(
     inst_group = hgroup["instrument"]
     telescope_name = inst_group.attrs["telescope_name"]
     telescope_class_name = inst_group.attrs["telescope_class"]
-    telescope_uid = inst_group.attrs["telescope_uid"] = obs.telescope.uid
+    telescope_uid = inst_group.attrs["telescope_uid"]
 
     site_name = inst_group.attrs["site_name"]
     site_class_name = inst_group.attrs["site_class"]
@@ -128,7 +185,9 @@ def load_hdf5(
             weather_max_pwv = None
             if inst_group.attrs["site_weather_max_pwv"] != "NONE":
                 weather_max_pwv = inst_group.attrs["site_weather_max_pwv"]
-            weather_time = inst_group.attrs["site_weather_time"]
+            weather_time = datetime.datetime.fromtimestamp(
+                inst_group.attrs["site_weather_time"]
+            )
             weather = SimWeather(
                 time=weather_time,
                 name=weather_name,
@@ -148,8 +207,7 @@ def load_hdf5(
     else:
         site = SpaceSite(site_name, uid=site_uid)
 
-    focalplane = Focalplane()
-    focalplane.load_hdf5(inst_group["focalplane"], comm=comm.comm_group)
+    focalplane = Focalplane(file=inst_group, comm=comm.comm_group)
 
     telescope = Telescope(
         telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
@@ -157,29 +215,35 @@ def load_hdf5(
 
     # Create the observation
 
+    obs = Observation(
+        comm,
+        telescope,
+        obs_samples,
+        name=obs_name,
+        uid=obs_uid,
+        detector_sets=obs_det_sets,
+        sample_sets=obs_sample_sets,
+        process_rows=process_rows,
+    )
+
     # Load other metadata
 
-    meta_group = hgroup.create_group("metadata")
-    for k, v in obs.items():
-        if hasattr(v, "save_hdf5"):
-            kgroup = meta_group.create_group(k)
-            v.save_hdf5(kgroup, comm=obs.comm.comm_group)
-        else:
-            try:
-                meta_group.attrs[k] = v
-            except ValueError as e:
-                msg = f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})"
-                log.verbose_rank(msg, comm=obs.comm.comm_group)
+    meta_group = hgroup["metadata"]
 
     # Load shared data
 
+    shared_group = hgroup["shared"]
+    load_hdf5_shared(obs, shared_group, shared)
+
     # Load intervals
+
+    intervals_group = hgroup["intervals"]
+    intervals_times = intervals_group.attrs["times"]
+    load_hdf5_intervals(obs, intervals_group, intervals)
 
     # Load detector data
 
-    shared_group = hgroup.create_group("shared")
-    detdata_group = hgroup.create_group("detdata")
-    intervals_group = hgroup.create_group("intervals")
-    intervals_group.attrs["times"] = times
+    detdata_group = hgroup["detdata"]
+    load_hdf5_detdata(obs, detdata_group, detdata)
 
-    return
+    return obs

@@ -726,7 +726,9 @@ class Focalplane(object):
             if isinstance(handle, h5py.Group):
                 self.detector_data = read_table_hdf5(handle, path="focalplane")
             else:
-                self.detector_data = QTable.read(file, format="hdf5", path="focalplane")
+                self.detector_data = QTable.read(
+                    handle, format="hdf5", path="focalplane"
+                )
             # Only use the sampling rate recorded in the file if it was not
             # overridden in the constructor
             if self.sample_rate is None:
@@ -759,7 +761,11 @@ class Focalplane(object):
             self.detector_data.meta["field_of_view"] = self.field_of_view
             if isinstance(handle, h5py.Group):
                 write_table_hdf5(
-                    self.detector_data, handle, path="focalplane", overwrite=True
+                    self.detector_data,
+                    handle,
+                    path="focalplane",
+                    serialize_meta=True,
+                    overwrite=True,
                 )
             else:
                 self.detector_data.write(

@@ -205,9 +205,7 @@ def save_hdf5_detdata(obs, hgrp, fields):
         hdata = None
         if parallel or obs.comm.group_rank == 0:
             hdata = hgrp.create_dataset(field, dshape, dtype=ddtype)
-            print(f"detdata {field} has units {local_data.units.to_string()}")
             hdata.attrs["units"] = local_data.units.to_string()
-            print(f"unit attr now {hdata.attrs['units']}")
 
         # If we have parallel support, every process can write independently.
         # Otherwise, send data to rank zero of the group for writing.
@@ -369,7 +367,16 @@ def save_hdf5(
         # Observation properties
         hgroup.attrs["observation_name"] = obs.name
         hgroup.attrs["observation_uid"] = obs.uid
-        # hgroup.attrs["observation_detector_sets"] = obs.all_detector_sets
+
+        obs_all_dets = json.dumps(obs.all_detectors)
+        obs_all_det_sets = json.dumps(obs.all_detector_sets)
+        obs_all_samp_sets = json.dumps(
+            [[str(x) for x in y] for y in obs.all_sample_sets]
+        )
+        hgroup.attrs["observation_detectors"] = obs_all_dets
+        hgroup.attrs["observation_detector_sets"] = obs_all_det_sets
+        hgroup.attrs["observation_samples"] = obs.n_all_samples
+        hgroup.attrs["observation_sample_sets"] = obs_all_samp_sets
 
         # Instrument properties
         inst_group = hgroup.create_group("instrument")
