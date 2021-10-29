@@ -181,6 +181,48 @@ class SimAtmTest(MPITestCase):
             if pfrac > 0.01:
                 raise RuntimeError("Simulated atmosphere is polarized")
 
+    def test_sim_interp(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        # Create fake observing of a small patch
+        data = create_ground_data(self.comm)
+
+        # Simple detector pointing
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_azel, quats="quats_azel"
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec, quats="quats_radec"
+        )
+
+        # Simulate atmosphere signal at full rate
+        sim_atm = ops.SimAtmosphere(
+            detector_pointing=detpointing_azel,
+            det_data="full_signal",
+        )
+        sim_atm.apply(data)
+
+        # Simulate atmosphere signal at quarter rate
+        sim_atm = ops.SimAtmosphere(
+            detector_pointing=detpointing_azel,
+            sample_rate=data.obs[0].telescope.focalplane.sample_rate / 4,
+            det_data="interpolated_signal",
+        )
+        sim_atm.apply(data)
+
+        # Compare
+
+        if rank == 0:
+            for obs in data.obs:
+                for det in obs.local_detectors:
+                    sig0 = obs.detdata["full_signal"][det]
+                    sig1 = obs.detdata["interpolated_signal"][det]
+                    assert np.std(sig1 - sig0) / np.std(sig0) < 1e-2
+
+        return
+
     def test_sim_pol(self):
         rank = 0
         if self.comm is not None:
