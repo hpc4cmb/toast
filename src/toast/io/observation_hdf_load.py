@@ -5,6 +5,7 @@
 import os
 import numpy as np
 
+import re
 import datetime
 
 from astropy import units as u
@@ -43,6 +44,8 @@ def load_hdf5_shared(obs, hgrp, fields):
     dist_dets = obs.dist.det_indices
 
     for field in list(hgrp.keys()):
+        if fields is not None and field not in fields:
+            continue
         comm_type = hgrp[field].attrs["comm_type"]
         full_shape = hgrp[field].shape
         dtype = hgrp[field].dtype
@@ -69,10 +72,8 @@ def load_hdf5_shared(obs, hgrp, fields):
         slc = tuple(slc)
         shape = tuple(shape)
 
-        print(f"create {field} ({comm_type}) with shape {shape}, dtype {dtype}")
         obs.shared.create_type(comm_type, field, shape, dtype)
         shcomm = obs.shared[field].comm
-        print(shcomm)
 
         # Load the data on one process of the communicator
         data = None
@@ -80,7 +81,6 @@ def load_hdf5_shared(obs, hgrp, fields):
             data = np.array(hgrp[field][slc], copy=False).astype(
                 obs.shared[field].dtype
             )
-            print(f"shared data '{field}' ({data.dtype}) = {data}")
 
         obs.shared[field].set(data, fromrank=0)
 
@@ -89,12 +89,57 @@ def load_hdf5_shared(obs, hgrp, fields):
 
 @function_timer
 def load_hdf5_detdata(obs, hgrp, fields):
-    pass
+    log = Logger.get()
+
+    # Get references to the distribution of detectors and samples
+    dist_samps = obs.dist.samps
+    dist_dets = obs.dist.det_indices
+
+    # Data ranges for this process
+    samp_off = dist_samps[obs.comm.group_rank].offset
+    samp_nelem = dist_samps[obs.comm.group_rank].n_elem
+    det_off = dist_dets[obs.comm.group_rank].offset
+    det_nelem = dist_dets[obs.comm.group_rank].n_elem
+
+    for field in list(hgrp.keys()):
+        if fields is not None and field not in fields:
+            continue
+        full_shape = hgrp[field].shape
+        dtype = hgrp[field].dtype
+        units = u.Unit(str(hgrp[field].attrs["units"]))
+
+        sample_shape = None
+        if len(full_shape) > 2:
+            sample_shape = full_shape[2:]
+
+        # All processes create their local detector data
+        obs.detdata.create(
+            field,
+            sample_shape=sample_shape,
+            dtype=dtype,
+            detectors=obs.local_detectors,
+            units=units,
+        )
+
+        # All processes independently load their data
+        for idet in range(det_nelem):
+            obs.detdata[field][idet] = hgrp[field][
+                det_off + idet, samp_off : samp_off + samp_nelem
+            ]
 
 
 @function_timer
-def load_hdf5_intervals(obs, hgrp, fields):
-    pass
+def load_hdf5_intervals(obs, hgrp, times, fields):
+    for field in list(hgrp.keys()):
+        if fields is not None and field not in fields:
+            continue
+
+        # Only the root process reads
+        global_times = None
+        if obs.comm.group_rank == 0:
+            global_times = np.transpose(hgrp[field])
+
+        obs.intervals.create(field, global_times, times, fromrank=0)
 
 
 # FIXME:  Add options here to prune detectors on load.
@@ -229,6 +274,44 @@ def load_hdf5(
     # Load other metadata
 
     meta_group = hgroup["metadata"]
+    for obj_name, obj in meta_group.items():
+        if meta is not None and obj_name not in meta:
+            continue
+        if isinstance(obj, h5py.Group):
+            # This is an object to restore
+            if "class" in obj.attrs:
+                objclass = import_from_name(obj.attrs["class"])
+                obs[obj_name] = objclass()
+                if hasattr(obs[obj_name], "load_hdf5"):
+                    obs[obj_name].load_hdf5(obj, comm=obs.comm.comm_group)
+                else:
+                    msg = f"metadata object group '{obj_name}' has class "
+                    msg += f"{obj.attrs['class']}, but instantiated "
+                    msg += f"object does not have a load_hdf5() method"
+                    log.error_rank(msg, comm=obs.comm.comm_group)
+        else:
+            # Array-like dataset that we can load
+            if "units" in obj.attrs:
+                # This array is a quantity
+                obs[obj_name] = u.Quantity(
+                    np.array(obj), unit=u.Unit(obj.attrs["units"])
+                )
+            else:
+                obs[obj_name] = np.array(obj)
+    # Now extract attributes
+    units_pat = re.compile(r"(.*)_units")
+    for k, v in meta_group.attrs.items():
+        if meta is not None and k not in meta:
+            continue
+        if units_pat.match(k) is not None:
+            # unit field, skip
+            continue
+        # Check for quantity
+        unit_name = f"{k}_units"
+        if unit_name in meta_group.attrs:
+            obs[k] = u.Quantity(v, unit=u.Unit(meta_group.attrs[unit_name]))
+        else:
+            obs[k] = v
 
     # Load shared data
 
@@ -239,7 +322,7 @@ def load_hdf5(
 
     intervals_group = hgroup["intervals"]
     intervals_times = intervals_group.attrs["times"]
-    load_hdf5_intervals(obs, intervals_group, intervals)
+    load_hdf5_intervals(obs, intervals_group, obs.shared[intervals_times], intervals)
 
     # Load detector data
 

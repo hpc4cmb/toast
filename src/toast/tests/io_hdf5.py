@@ -108,42 +108,43 @@ class IoHdf5Test(MPITestCase):
         for hfile in obfiles:
             check_data.obs.append(load_hdf5(hfile, check_data.comm))
 
-        # for ob in check_data.obs:
-        #     ob.redistribute(ob.comm_size, times="times")
+        # Verify
+        for ob, orig in zip(check_data.obs, original):
+            if ob != orig:
+                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
+            self.assertTrue(ob == orig)
 
-        # # Verify
-        # for ob, orig in zip(check_data.obs, original):
-        #     if ob != orig:
-        #         print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-        #     self.assertTrue(ob == orig)
+    def test_save_load_ops(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
 
-    # def test_save_load_ops(self):
-    #     rank = 0
-    #     if self.comm is not None:
-    #         rank = self.comm.rank
+        datadir = os.path.join(self.outdir, "save_load_ops")
+        if rank == 0:
+            os.makedirs(datadir)
+        if self.comm is not None:
+            self.comm.barrier()
 
-    #     datadir = os.path.join(self.outdir, "save_load_ops")
-    #     if rank == 0:
-    #         os.makedirs(datadir)
-    #     if self.comm is not None:
-    #         self.comm.barrier()
+        data, config = self.create_data()
 
-    #     data, config = self.create_data()
+        # Make a copy for later comparison.
+        original = dict()
+        for ob in data.obs:
+            original[ob.name] = ob.duplicate(times="times")
 
-    #     # Make a copy for later comparison.
-    #     original = list()
-    #     for ob in data.obs:
-    #         original.append(ob.duplicate(times="times"))
+        saver = ops.SaveHDF5(volume=datadir, config=config)
+        saver.apply(data)
 
-    #     saver = ops.SaveHDF5(volume=datadir, config=config)
-    #     saver.apply(data)
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
 
-    #     check_data = Data(data.comm)
-    #     loader = ops.LoadHDF5(volumne=datadir)
-    #     loader.apply(check_data)
+        check_data = Data(data.comm)
+        loader = ops.LoadHDF5(volume=datadir)
+        loader.apply(check_data)
 
-    #     # # Verify
-    #     # for ob, orig in zip(check_data.obs, original):
-    #     #     if ob != orig:
-    #     #         print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-    #     #     self.assertTrue(ob == orig)
+        # Verify
+        for ob in check_data.obs:
+            orig = original[ob.name]
+            if ob != orig:
+                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
+            self.assertTrue(ob == orig)

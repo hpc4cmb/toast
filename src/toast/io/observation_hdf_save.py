@@ -6,6 +6,7 @@ import os
 import numpy as np
 
 from astropy import units as u
+from astropy.table import Table
 
 import h5py
 
@@ -408,16 +409,37 @@ def save_hdf5(
         obs.telescope.focalplane.save_hdf5(inst_group, comm=obs.comm.comm_group)
 
         meta_group = hgroup.create_group("metadata")
+
+        save_comm = None
+        if parallel:
+            save_comm = obs.comm.comm_group
         for k, v in obs.items():
+            if meta is not None and k not in meta:
+                continue
             if hasattr(v, "save_hdf5"):
                 kgroup = meta_group.create_group(k)
-                v.save_hdf5(kgroup, comm=obs.comm.comm_group)
+                kgroup.attrs["class"] = object_fullname(v.__class__)
+                v.save_hdf5(kgroup, comm=save_comm)
+            elif isinstance(v, u.Quantity):
+                if isinstance(v.value, np.ndarray):
+                    # Array quantity
+                    qdata = meta_group.create_dataset(k, data=v.value)
+                    qdata.attrs["units"] = v.unit.to_string()
+                else:
+                    # Must be a scalar
+                    meta_group.attrs[f"{k}"] = v.value
+                    meta_group.attrs[f"{k}_units"] = v.unit.to_string()
+            elif isinstance(v, np.ndarray):
+                meta_group.create_dataset(k, data=v)
             else:
                 try:
-                    meta_group.attrs[k] = v
+                    if isinstance(v, u.Quantity):
+                        meta_group.attrs[k] = v.value
+                    else:
+                        meta_group.attrs[k] = v
                 except ValueError as e:
                     msg = f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})"
-                    log.verbose_rank(msg, comm=obs.comm.comm_group)
+                    log.verbose_rank(msg, comm=save_comm)
 
         shared_group = hgroup.create_group("shared")
         detdata_group = hgroup.create_group("detdata")
@@ -426,23 +448,33 @@ def save_hdf5(
 
     # Dump data
 
-    fields = shared
-    if fields is None:
-        fields = obs.shared.keys()
-    save_hdf5_shared(obs, shared_group, fields)
+    if shared is None:
+        fields = list(obs.shared.keys())
+    else:
+        fields = list(shared)
 
-    fields = detdata
-    if fields is None:
-        fields = obs.detdata.keys()
-    save_hdf5_detdata(obs, detdata_group, fields)
-
-    fields = intervals
-    if fields is None:
-        fields = obs.intervals.keys()
+    dump_intervals = True
     if times not in obs.shared:
         msg = f"Timestamp field '{times}' does not exist.  Not saving intervals."
         log.warning_rank(msg, comm=obs.comm.comm_group)
+        dump_intervals = False
     else:
+        if times not in fields:
+            fields.append(times)
+
+    save_hdf5_shared(obs, shared_group, fields)
+
+    if detdata is None:
+        fields = list(obs.detdata.keys())
+    else:
+        fields = list(detdata)
+    save_hdf5_detdata(obs, detdata_group, fields)
+
+    if intervals is None:
+        fields = list(obs.intervals.keys())
+    else:
+        fields = list(intervals)
+    if dump_intervals:
         save_hdf5_intervals(obs, intervals_group, fields)
 
     # Close file if we opened it
