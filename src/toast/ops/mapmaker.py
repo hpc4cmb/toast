@@ -173,7 +173,7 @@ class MapMaker(Operator):
 
     reset_pix_dist = Bool(
         False,
-        help="Clear any existing pixel distribution.  Useful when applying"
+        help="Clear any existing pixel distribution.  Useful when applying "
         "repeatedly to different data objects.",
     )
 
