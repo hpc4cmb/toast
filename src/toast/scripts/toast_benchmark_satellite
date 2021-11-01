@@ -110,6 +110,7 @@ def parse_arguments():
         toast.ops.PointingDetectorSimple(name="det_pointing"),
         toast.ops.PixelsHealpix(name="pixels"),
         toast.ops.StokesWeights(name="weights", mode="IQU"),
+        toast.ops.SaveHDF5(name="save_hdf5", enabled=False),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(
             name="mapmaker",
@@ -292,6 +293,11 @@ def main():
     # Simulate detector noise
     job_ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
+
+    # Optionally save to HDF5 in our output directory
+    job_ops.save_hdf5.volume = os.path.join(args.out_dir, "data")
+    job_ops.save_hdf5.apply(data)
+    log.info_rank("Saved data to HDF5 in", comm=world_comm, timer=timer)
 
     # Destripe and/or bin TOD
     if toast.ops.madam.available() and args.madam:

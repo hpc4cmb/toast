@@ -324,6 +324,12 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.mem_count.prefix = "After simulating noise"
     ops.mem_count.apply(data)
 
+    # Optionally write out the data
+    if ops.save_hdf5.volume is None:
+        ops.save_hdf5.volume = os.path.join(args.out_dir, "data")
+    ops.save_hdf5.apply(data)
+    log.info_rank("Saved HDF5 data in", comm=world_comm, timer=timer)
+
     return data
 
 
@@ -591,6 +597,7 @@ def main():
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, enabled=False
         ),
+        toast.ops.SaveHDF5(name="save_hdf5", enabled=False),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PixelsHealpix(name="pixels_radec"),
         toast.ops.StokesWeights(name="weights_radec", mode="IQU"),

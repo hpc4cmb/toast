@@ -370,10 +370,14 @@ def save_hdf5(
         hgroup.attrs["observation_uid"] = obs.uid
 
         obs_all_dets = json.dumps(obs.all_detectors)
-        obs_all_det_sets = json.dumps(obs.all_detector_sets)
-        obs_all_samp_sets = json.dumps(
-            [[str(x) for x in y] for y in obs.all_sample_sets]
-        )
+        obs_all_det_sets = "NONE"
+        if obs.all_detector_sets is not None:
+            obs_all_det_sets = json.dumps(obs.all_detector_sets)
+        obs_all_samp_sets = "NONE"
+        if obs.all_sample_sets is not None:
+            obs_all_samp_sets = json.dumps(
+                [[str(x) for x in y] for y in obs.all_sample_sets]
+            )
         hgroup.attrs["observation_detectors"] = obs_all_dets
         hgroup.attrs["observation_detector_sets"] = obs_all_det_sets
         hgroup.attrs["observation_samples"] = obs.n_all_samples

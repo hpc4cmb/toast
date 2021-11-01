@@ -271,6 +271,18 @@ class SimSatellite(Operator):
 
     velocity = Unicode(defaults.velocity, help="Observation shared key for velocity")
 
+    det_data = Unicode(
+        defaults.det_data,
+        allow_none=True,
+        help="Observation detdata key to initialize",
+    )
+
+    det_flags = Unicode(
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to initialize",
+    )
+
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
         tele = proposal["value"]
@@ -536,6 +548,16 @@ class SimSatellite(Operator):
                 hwp_step=self.hwp_step,
                 hwp_step_time=self.hwp_step_time,
             )
+
+            # Optionally initialize detector data
+
+            dets = ob.select_local_detectors(detectors)
+
+            if self.det_data is not None:
+                ob.detdata.ensure(self.det_data, dtype=np.float64, detectors=dets)
+
+            if self.det_flags is not None:
+                ob.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
 
             data.obs.append(ob)
 

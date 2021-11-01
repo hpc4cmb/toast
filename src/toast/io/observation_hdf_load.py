@@ -196,11 +196,16 @@ def load_hdf5(
     obs_name = hgroup.attrs["observation_name"]
     obs_uid = hgroup.attrs["observation_uid"]
     obs_dets = json.loads(hgroup.attrs["observation_detectors"])
-    obs_det_sets = json.loads(hgroup.attrs["observation_detector_sets"])
+    obs_det_sets = None
+    if hgroup.attrs["observation_detector_sets"] != "NONE":
+        obs_det_sets = json.loads(hgroup.attrs["observation_detector_sets"])
     obs_samples = hgroup.attrs["observation_samples"]
-    obs_sample_sets = [
-        [int(x) for x in y] for y in json.loads(hgroup.attrs["observation_sample_sets"])
-    ]
+    obs_sample_sets = None
+    if hgroup.attrs["observation_sample_sets"] != "NONE":
+        obs_sample_sets = [
+            [int(x) for x in y]
+            for y in json.loads(hgroup.attrs["observation_sample_sets"])
+        ]
 
     # Instrument properties
 
