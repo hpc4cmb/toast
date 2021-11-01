@@ -6,6 +6,8 @@ from ..mpi import MPI, use_mpi
 
 import sys
 import time
+import traceback
+import time
 
 import warnings
 
@@ -40,12 +42,14 @@ class MPITestResult(TestResult):
             stream=stream, descriptions=descriptions, verbosity=verbosity, **kwargs
         )
         self.comm = None
+        self.rank = 0
         if use_mpi:
             self.comm = MPI.COMM_WORLD
+            self.rank = self.comm.rank
         self.stream = stream
         self.descriptions = descriptions
         self.buffer = False
-        self.failfast = False
+        self.failfast = True
 
     def getDescription(self, test):
         doc_first_line = test.shortDescription()
@@ -59,7 +63,7 @@ class MPITestResult(TestResult):
         self.stream.flush()
         if self.comm is not None:
             self.comm.barrier()
-        if (self.comm is None) or (self.comm.rank == 0):
+        if (self.comm is None) or (self.rank == 0):
             self.stream.write("\n")
             self.stream.write(self.getDescription(test))
             self.stream.write(" ... ")
@@ -73,26 +77,47 @@ class MPITestResult(TestResult):
         if self.comm is None:
             self.stream.write("ok ")
         else:
-            self.stream.write("[{}]ok ".format(self.comm.rank))
+            self.stream.write("[{}]ok ".format(self.rank))
         self.stream.flush()
         return
 
+    def _print_tb(self, err):
+        exc_type, exc_value, exc_traceback = err
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = [f"Proc {self.rank}: {x}" for x in lines]
+        msg = "".join(lines)
+        print(msg, flush=True)
+
     def addError(self, test, err):
         super().addError(test, err)
+        self._print_tb(err)
         if self.comm is None:
             self.stream.write("error ")
         else:
-            self.stream.write("[{}]error ".format(self.comm.rank))
+            self.stream.write("[{}]error ".format(self.rank))
         self.stream.flush()
+        # If we are using MPI, an error will cause a deadlock.  In this case, we
+        # pause briefly to allow other procesess to write more information to the
+        # output and then abort.
+        if self.comm is not None:
+            time.sleep(5)
+            self.comm.Abort()
         return
 
     def addFailure(self, test, err):
         super().addFailure(test, err)
+        self._print_tb(err)
         if self.comm is None:
             self.stream.write("fail ")
         else:
-            self.stream.write("[{}]fail ".format(self.comm.rank))
+            self.stream.write("[{}]fail ".format(self.rank))
         self.stream.flush()
+        # If we are using MPI, an error will cause a deadlock.  In this case, we
+        # pause briefly to allow other procesess to write more information to the
+        # output and then abort.
+        if self.comm is not None:
+            time.sleep(5)
+            self.comm.Abort()
         return
 
     def addSkip(self, test, reason):
@@ -100,7 +125,7 @@ class MPITestResult(TestResult):
         if self.comm is None:
             self.stream.write("skipped({}) ".format(reason))
         else:
-            self.stream.write("[{}]skipped({}) ".format(self.comm.rank, reason))
+            self.stream.write("[{}]skipped({}) ".format(self.rank, reason))
         self.stream.flush()
         return
 
@@ -109,7 +134,7 @@ class MPITestResult(TestResult):
         if self.comm is None:
             self.stream.write("expected-fail ")
         else:
-            self.stream.write("[{}]expected-fail ".format(self.comm.rank))
+            self.stream.write("[{}]expected-fail ".format(self.rank))
         self.stream.flush()
         return
 
@@ -118,7 +143,7 @@ class MPITestResult(TestResult):
         if self.comm is None:
             self.stream.write("unexpected-success ")
         else:
-            self.stream.write("[{}]unexpected-success ".format(self.comm.rank))
+            self.stream.write("[{}]unexpected-success ".format(self.rank))
         return
 
     def printErrorList(self, flavour, errors):
@@ -129,14 +154,12 @@ class MPITestResult(TestResult):
                 self.stream.writeln("{}".format(self.separator2))
                 self.stream.writeln("{}".format(err))
             else:
-                self.stream.writeln("[{}] {}".format(self.comm.rank, self.separator1))
+                self.stream.writeln("[{}] {}".format(self.rank, self.separator1))
                 self.stream.writeln(
-                    "[{}] {}: {}".format(
-                        self.comm.rank, flavour, self.getDescription(test)
-                    )
+                    "[{}] {}: {}".format(self.rank, flavour, self.getDescription(test))
                 )
-                self.stream.writeln("[{}] {}".format(self.comm.rank, self.separator2))
-                self.stream.writeln("[{}] {}".format(self.comm.rank, err))
+                self.stream.writeln("[{}] {}".format(self.rank, self.separator2))
+                self.stream.writeln("[{}] {}".format(self.rank, err))
         return
 
     def printErrors(self):
@@ -147,10 +170,10 @@ class MPITestResult(TestResult):
             self.stream.flush()
         else:
             self.comm.barrier()
-            if self.comm.rank == 0:
+            if self.rank == 0:
                 self.stream.writeln()
             for p in range(self.comm.size):
-                if p == self.comm.rank:
+                if p == self.rank:
                     self.printErrorList("ERROR", self.errors)
                     self.printErrorList("FAIL", self.failures)
                     self.stream.flush()

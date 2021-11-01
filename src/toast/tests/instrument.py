@@ -36,14 +36,14 @@ class InstrumentTest(MPITestCase):
         check_file = os.path.join(self.outdir, "check.h5")
 
         if self.comm is None or self.comm.rank == 0:
-            fp.write(fp_file)
+            fp.save_hdf5(fp_file)
         if self.comm is not None:
             self.comm.barrier()
 
-        newfp = Focalplane(file=fp_file)
+        newfp = Focalplane(file=fp_file, comm=self.comm)
 
         if self.comm is None or self.comm.rank == 0:
-            newfp.write(check_file)
+            newfp.save_hdf5(check_file)
         if self.comm is not None:
             self.comm.barrier()
 
@@ -88,11 +88,11 @@ class InstrumentTest(MPITestCase):
         check_file = os.path.join(self.outdir, "check_full.h5")
 
         if self.comm is None or self.comm.rank == 0:
-            fp.write(fp_file)
+            fp.save_hdf5(fp_file)
         if self.comm is not None:
             self.comm.barrier()
 
-        newfp = Focalplane(file=fp_file)
+        newfp = Focalplane(file=fp_file, comm=self.comm)
 
         # Test getting noise PSD
         psd = newfp.noise.psd(names[-1])
@@ -104,7 +104,7 @@ class InstrumentTest(MPITestCase):
         result2 = newfp.bandpass.convolve(names[-1], freqs, values, rj=True)
 
         if self.comm is None or self.comm.rank == 0:
-            newfp.write(check_file)
+            newfp.save_hdf5(check_file)
         if self.comm is not None:
             self.comm.barrier()
 
@@ -125,6 +125,6 @@ class InstrumentTest(MPITestCase):
         fake_file = os.path.join(self.outdir, "fake_hex.h5")
 
         if self.comm is None or self.comm.rank == 0:
-            fp.write(fake_file)
+            fp.save_hdf5(fake_file)
         if self.comm is not None:
             self.comm.barrier()

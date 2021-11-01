@@ -756,18 +756,18 @@ class Focalplane(object):
             None
 
         """
-        if comm is None or comm.rank == 0:
-            self.detector_data.meta["sample_rate"] = self.sample_rate
-            self.detector_data.meta["field_of_view"] = self.field_of_view
-            if isinstance(handle, h5py.Group):
-                write_table_hdf5(
-                    self.detector_data,
-                    handle,
-                    path="focalplane",
-                    serialize_meta=True,
-                    overwrite=True,
-                )
-            else:
+        self.detector_data.meta["sample_rate"] = self.sample_rate
+        self.detector_data.meta["field_of_view"] = self.field_of_view
+        if isinstance(handle, h5py.Group):
+            write_table_hdf5(
+                self.detector_data,
+                handle,
+                path="focalplane",
+                serialize_meta=True,
+                overwrite=True,
+            )
+        else:
+            if comm is None or comm.rank == 0:
                 self.detector_data.write(
                     handle,
                     format="hdf5",

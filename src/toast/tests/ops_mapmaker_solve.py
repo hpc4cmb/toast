@@ -205,9 +205,6 @@ class MapmakerSolveTest(MPITestCase):
             low=-1000.0, high=1000.0, size=data["amplitudes"][tmpl.name].n_local
         )
 
-        for ob in data.obs:
-            ob.detdata.create(defaults.det_data)
-
         tmatrix.amplitudes = "amplitudes"
         tmatrix.det_data = defaults.det_data
         tmatrix.data = data
