@@ -11,6 +11,8 @@ from astropy import units as u
 
 import healpy as hp
 
+import scipy.interpolate
+
 from ..timing import function_timer, GlobalTimers
 
 from .. import qarray as qa
@@ -93,9 +95,11 @@ class ObserveAtmosphere(Operator):
         help="The number of sampling frequencies used when convolving the bandpass with atmosphere absorption and loading",
     )
 
-    n_interp = Int(
-        1,
-        help="Number of time samples to interpolate per simulated sample",
+    sample_rate = Quantity(
+        None,
+        allow_none=True,
+        help="Rate at which to sample atmospheric TOD before interpolation.  "
+        "Default is no interpolation.",
     )
 
     gain = Float(1.0, help="Scaling applied to the simulated TOD")
@@ -245,9 +249,23 @@ class ObserveAtmosphere(Operator):
                     tmin_det = times[good][0]
                     tmax_det = times[good][-1]
 
+                    # We may be interpolating some of the time samples
+
+                    if self.sample_rate is None:
+                        t_interp = times[good]
+                        az_interp = az
+                        el_interp = el
+                    else:
+                        n_interp = int(
+                            (tmax_det - tmin_det) * self.sample_rate.to_value(u.Hz)
+                        )
+                        t_interp = np.linspace(tmin_det, tmax_det, n_interp)
+                        az_interp = np.interp(t_interp, times[good], az)
+                        el_interp = np.interp(t_interp, times[good], el)
+
                     # Integrate detector signal across all slabs at different altitudes
 
-                    atmdata = np.zeros(ngood, dtype=np.float64)
+                    atmdata = np.zeros(t_interp.size, dtype=np.float64)
 
                     gt.stop("ObserveAtmosphere:  detector setup")
                     gt.start("ObserveAtmosphere:  detector AtmSim.observe")
@@ -289,23 +307,28 @@ class ObserveAtmosphere(Operator):
                             )
                             raise RuntimeError(msg)
 
-                        if self.n_interp == 1:
-                            err = cur_sim.observe(times[good], az, el, atmdata, -1.0)
-                        else:
-                            # Sample the TOD and interpolate to full resolution
-                            t_temp = times[good][:: self.n_interp].copy()
-                            atm_temp = np.zeros(t_temp.size, dtype=np.float64)
-                            az_temp = az[:: self.n_interp].copy()
-                            el_temp = el[:: self.n_interp].copy()
-                            err = cur_sim.observe(
-                                t_temp, az_temp, el_temp, atm_temp, -1.0
-                            )
-                            atmdata = np.interp(times[good], t_temp, atm_temp)
-                            del t_temp, atm_temp, az_temp, el_temp
+                        err = cur_sim.observe(
+                            t_interp, az_interp, el_interp, atmdata, -1.0
+                        )
 
                         if err != 0:
                             # Observing failed
-                            bad = np.abs(atmdata) < 1e-30
+                            if self.sample_rate is None:
+                                full_data = atmdata
+                            else:
+                                # Interpolate to full sample rate, make sure to flag
+                                # samples around a failed time sample
+                                test_data = atmdata.copy()
+                                for i in [-2, -1, 1, 2]:
+                                    test_data *= np.roll(atmdata, i)
+                                interp = scipy.interpolate.interp1d(
+                                    t_interp,
+                                    test_data,
+                                    kind="previous",
+                                    copy=False,
+                                )
+                                full_data = interp(times[good])
+                            bad = np.abs(full_data) < 1e-30
                             nbad = np.sum(bad)
                             msg = f"{log_prefix} : {det} "
                             msg += f"ObserveAtmosphere failed for {nbad} "
@@ -328,6 +351,16 @@ class ObserveAtmosphere(Operator):
                                         bad
                                     ] |= self.det_flag_mask
                                     nbad_tot += nbad
+                    # Optionally, interpolate the atmosphere to full sample rate
+                    if self.sample_rate is not None:
+                        interp = scipy.interpolate.interp1d(
+                            t_interp,
+                            atmdata,
+                            kind="quadratic",
+                            copy=False,
+                        )
+                        atmdata = interp(times[good])
+
                     gt.stop("ObserveAtmosphere:  detector AtmSim.observe")
                     gt.start("ObserveAtmosphere:  detector accumulate")
 

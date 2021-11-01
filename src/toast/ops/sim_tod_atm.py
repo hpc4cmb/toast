@@ -152,7 +152,12 @@ class SimAtmosphere(Operator):
         help="Maximum wind drift before discarding the volume and creating a new one",
     )
 
-    freq = Quantity(None, allow_none=True, help="Observing frequency")
+    sample_rate = Quantity(
+        None,
+        allow_none=True,
+        help="Rate at which to sample atmospheric TOD before interpolation.  "
+        "Default is no interpolation.",
+    )
 
     nelem_sim_max = Int(10000, help="Controls the size of the simulation slices")
 
@@ -311,6 +316,7 @@ class SimAtmosphere(Operator):
             n_bandpass_freqs=self.n_bandpass_freqs,
             gain=self.gain,
             polarization_fraction=self.polarization_fraction,
+            sample_rate=self.sample_rate,
         )
         if self.detector_weights is not None:
             observe_atm.weights_mode = self.detector_weights.mode
@@ -522,11 +528,13 @@ class SimAtmosphere(Operator):
             if rank == 0:
                 tmr.stop()
                 log.debug(
-                    f"{log_prefix}Simulate and observe atmosphere:  {tmr.seconds()} seconds"
+                    f"{log_prefix}Simulate and observe atmosphere:  "
+                    f"{tmr.seconds()} seconds"
                 )
 
             if temporary_view != wind_intervals:
                 del ob.intervals[temporary_view]
+            del ob.intervals[wind_intervals]
 
     def _get_rng_keys(self, obs):
         """Get random number keys and counters for an observation.
