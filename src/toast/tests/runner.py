@@ -234,8 +234,8 @@ def test(name=None, verbosity=2):
         # if tidas_available:
         #     suite.addTest(loader.loadTestsFromModule(testtidas))
 
-        # if spt3g_available:
-        #     suite.addTest(loader.loadTestsFromModule(test_spt3g))
+        if spt3g_available:
+            suite.addTest(loader.loadTestsFromModule(test_spt3g))
     elif name != "libtoast":
         if (name == "spt3g") and (not spt3g_available):
             print("Cannot run SPT3G tests- package not available")

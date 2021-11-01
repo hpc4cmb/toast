@@ -439,7 +439,7 @@ class Focalplane(object):
         self.sample_rate = sample_rate
 
         if file is not None:
-            log.info_rank(f"Loading focalplane from {file}", comm=comm)
+            log.debug_rank(f"Loading focalplane from {file}", comm=comm)
             self.read(file, comm=comm)
 
         # Add UID if not given
