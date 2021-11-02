@@ -227,6 +227,7 @@ class Noise(object):
                     ],
                     axis=-1,
                 )
+            del ds
         # Now store the mixing matrix as a separate dataset
         mixdata = list()
         maxstr = 0
@@ -242,6 +243,7 @@ class Noise(object):
         ds = hf.create_dataset("mixing_matrix", (len(mixdata),), dtype=mixdtype)
         if comm is None or comm.rank == 0:
             ds[:] = np.array(mixdata, dtype=mixdtype)
+        del ds
 
     def _save_hdf5(self, handle, comm=None, **kwargs):
         """Internal method which can be overridden by derived classes."""
@@ -271,7 +273,8 @@ class Noise(object):
         self._rates = dict()
         self._indices = dict()
         self._mixmatrix = dict()
-        for dsname, ds in hf.items():
+        for dsname in hf.keys():
+            ds = hf[dsname]
             if dsname == "mixing_matrix":
                 dets = set()
                 keys = set()
@@ -290,6 +293,7 @@ class Noise(object):
                 self._indices[dsname] = ds.attrs["index"]
                 self._freqs[dsname] = u.Quantity(ds[:, 0], u.Hz)
                 self._psds[dsname] = u.Quantity(ds[:, 1], u.K ** 2 * u.second)
+            del ds
 
     def _load_hdf5(self, handle, comm=None, **kwargs):
         """Internal method which can be overridden by derived classes."""

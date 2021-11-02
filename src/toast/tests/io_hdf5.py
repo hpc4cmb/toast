@@ -77,42 +77,38 @@ class IoHdf5Test(MPITestCase):
         if self.comm is not None:
             rank = self.comm.rank
 
-        datadir = os.path.join(self.outdir, "save_load")
-        if rank == 0:
-            os.makedirs(datadir)
-        if self.comm is not None:
-            self.comm.barrier()
+        for droot in ["default", "serial"]:
+            datadir = os.path.join(self.outdir, f"save_load_{droot}")
+            if rank == 0:
+                os.makedirs(datadir)
+            if self.comm is not None:
+                self.comm.barrier()
 
-        data, config = self.create_data()
+            data, config = self.create_data()
 
-        # Export the data, and make a copy for later comparison.
-        original = list()
-        obfiles = list()
-        for ob in data.obs:
-            original.append(ob.duplicate(times="times"))
-            try:
-                obf = save_hdf5(ob, datadir, config=config)
+            # Export the data, and make a copy for later comparison.
+            original = list()
+            obfiles = list()
+            for ob in data.obs:
+                original.append(ob.duplicate(times="times"))
+                obf = save_hdf5(
+                    ob, datadir, config=config, force_serial=(droot == "serial")
+                )
                 obfiles.append(obf)
-            except:
-                import traceback
 
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-                lines = [f"Proc {self.comm.rank}: {x}" for x in lines]
-                msg = "".join(lines)
-                print(msg)
+            # Import the data
+            check_data = Data(comm=data.comm)
 
-        # Import the data
-        check_data = Data(comm=data.comm)
+            for hfile in obfiles:
+                check_data.obs.append(load_hdf5(hfile, check_data.comm))
 
-        for hfile in obfiles:
-            check_data.obs.append(load_hdf5(hfile, check_data.comm))
-
-        # Verify
-        for ob, orig in zip(check_data.obs, original):
-            if ob != orig:
-                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-            self.assertTrue(ob == orig)
+            # Verify
+            for ob, orig in zip(check_data.obs, original):
+                if ob != orig:
+                    print(
+                        f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}"
+                    )
+                self.assertTrue(ob == orig)
 
     def test_save_load_ops(self):
         rank = 0

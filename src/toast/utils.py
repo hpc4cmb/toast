@@ -17,6 +17,10 @@ import numpy as np
 
 import h5py
 
+import astropy.io.misc.hdf5 as aspy5
+from astropy.table import meta as aspymeta
+
+
 from ._libtoast import Environment, Timer, GlobalTimers
 
 from ._libtoast import (
@@ -665,3 +669,61 @@ def have_hdf5_parallel():
         # Nope...
         hdf5_is_parallel = False
     return hdf5_is_parallel
+
+
+def table_write_parallel_hdf5(table, root, name, comm=None):
+    """Write astropy table to HDF5 with parallel support.
+
+    The astropy.io.misc.hdf5.write_table_hdf5() does not support situations
+    where the h5py package is using parallel HDF5 under the hood.  In this
+    case, we need to create datasets on all processes but only write to them
+    from one process.
+
+    Args:
+        table (Table):  The data table.
+        root (h5py.Group):  The group to use for creating datasets.
+        name (str):  The data set name
+        comm (MPI.Comm):  The communicator of processes containing duplicates
+            of the table.
+
+    Returns:
+        None
+
+    """
+    parallel = have_hdf5_parallel()
+    participating = parallel or comm is None or comm.rank == 0
+
+    # Encode any mixin columns as plain columns + appropriate metadata
+    table = aspy5._encode_mixins(table)
+
+    # Table with numpy unicode strings can't be written in HDF5 so
+    # to write such a table a copy of table is made containing columns as
+    # bytestrings.  Now this copy of the table can be written in HDF5.
+    if any(col.info.dtype.kind == "U" for col in table.itercols()):
+        table = table.copy(copy_data=False)
+        table.convert_unicode_to_bytestring()
+
+    # Write the table to the root group
+    tarray = table.as_array()
+    dset_shape = tarray.shape
+    dset_type = tarray.dtype
+    dset = None
+    if participating:
+        dset = root.create_dataset(name, dset_shape, dtype=dset_type)
+    if comm is None or comm.rank == 0:
+        dset[:] = tarray
+    del dset
+
+    # Serialize metadata
+    header_yaml = aspymeta.get_yaml_from_table(table)
+    header_encoded = np.array([h.encode("utf-8") for h in header_yaml])
+    mdset_shape = header_encoded.shape
+    mdset_type = header_encoded.dtype
+    mdset = None
+    if participating:
+        mdset = root.create_dataset(
+            aspy5.meta_path(name), mdset_shape, dtype=mdset_type
+        )
+    if comm is None or comm.rank == 0:
+        mdset[:] = header_encoded
+    del mdset

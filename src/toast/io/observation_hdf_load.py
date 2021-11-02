@@ -46,9 +46,10 @@ def load_hdf5_shared(obs, hgrp, fields):
     for field in list(hgrp.keys()):
         if fields is not None and field not in fields:
             continue
-        comm_type = hgrp[field].attrs["comm_type"]
-        full_shape = hgrp[field].shape
-        dtype = hgrp[field].dtype
+        ds = hgrp[field]
+        comm_type = ds.attrs["comm_type"]
+        full_shape = ds.shape
+        dtype = ds.dtype
 
         slc = list()
         shape = list()
@@ -78,11 +79,10 @@ def load_hdf5_shared(obs, hgrp, fields):
         # Load the data on one process of the communicator
         data = None
         if shcomm is None or shcomm.rank == 0:
-            data = np.array(hgrp[field][slc], copy=False).astype(
-                obs.shared[field].dtype
-            )
+            data = np.array(ds[slc], copy=False).astype(obs.shared[field].dtype)
 
         obs.shared[field].set(data, fromrank=0)
+        del ds
 
     return
 
@@ -104,9 +104,10 @@ def load_hdf5_detdata(obs, hgrp, fields):
     for field in list(hgrp.keys()):
         if fields is not None and field not in fields:
             continue
-        full_shape = hgrp[field].shape
-        dtype = hgrp[field].dtype
-        units = u.Unit(str(hgrp[field].attrs["units"]))
+        ds = hgrp[field]
+        full_shape = ds.shape
+        dtype = ds.dtype
+        units = u.Unit(str(ds.attrs["units"]))
 
         sample_shape = None
         if len(full_shape) > 2:
@@ -122,10 +123,10 @@ def load_hdf5_detdata(obs, hgrp, fields):
         )
 
         # All processes independently load their data
-        for idet in range(det_nelem):
-            obs.detdata[field][idet] = hgrp[field][
-                det_off + idet, samp_off : samp_off + samp_nelem
-            ]
+        obs.detdata[field][:] = ds[
+            det_off : det_off + det_nelem, samp_off : samp_off + samp_nelem
+        ]
+        del ds
 
 
 @function_timer
@@ -133,13 +134,15 @@ def load_hdf5_intervals(obs, hgrp, times, fields):
     for field in list(hgrp.keys()):
         if fields is not None and field not in fields:
             continue
-
+        # The dataset
+        ds = hgrp[field]
         # Only the root process reads
         global_times = None
         if obs.comm.group_rank == 0:
-            global_times = np.transpose(hgrp[field])
+            global_times = np.transpose(ds[:])
 
         obs.intervals.create(field, global_times, times, fromrank=0)
+        del ds
 
 
 # FIXME:  Add options here to prune detectors on load.
@@ -262,6 +265,7 @@ def load_hdf5(
     telescope = Telescope(
         telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
     )
+    del inst_group
 
     # Create the observation
 
@@ -279,7 +283,8 @@ def load_hdf5(
     # Load other metadata
 
     meta_group = hgroup["metadata"]
-    for obj_name, obj in meta_group.items():
+    for obj_name in meta_group.keys():
+        obj = meta_group[obj_name]
         if meta is not None and obj_name not in meta:
             continue
         if isinstance(obj, h5py.Group):
@@ -303,6 +308,8 @@ def load_hdf5(
                 )
             else:
                 obs[obj_name] = np.array(obj)
+        del obj
+
     # Now extract attributes
     units_pat = re.compile(r"(.*)_units")
     for k, v in meta_group.attrs.items():
@@ -317,6 +324,8 @@ def load_hdf5(
             obs[k] = u.Quantity(v, unit=u.Unit(meta_group.attrs[unit_name]))
         else:
             obs[k] = v
+
+    del meta_group
 
     # Load shared data
 
@@ -333,5 +342,9 @@ def load_hdf5(
 
     detdata_group = hgroup["detdata"]
     load_hdf5_detdata(obs, detdata_group, detdata)
+
+    del shared_group
+    del intervals_group
+    del detdata_group
 
     return obs

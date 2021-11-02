@@ -415,7 +415,6 @@ def write_healpix_hdf5(
         None
 
     """
-    global hdf5_is_parallel
     log = Logger.get()
 
     # The distribution

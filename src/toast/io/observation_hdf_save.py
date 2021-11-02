@@ -32,9 +32,8 @@ from ..observation_dist import global_interval_times
 
 
 @function_timer
-def save_hdf5_shared(obs, hgrp, fields):
+def save_hdf5_shared(obs, hgrp, fields, parallel):
     log = Logger.get()
-    parallel = have_hdf5_parallel()
 
     # Get references to the distribution of detectors and samples
     proc_rows = obs.dist.process_rows
@@ -157,18 +156,12 @@ def save_hdf5_shared(obs, hgrp, fields):
                     if obs.comm.comm_group is not None:
                         obs.comm.comm_group.barrier()
 
-
-def write_detdata_slice(dset, det_off, n_det, samp_off, n_samp, data):
-    """Helper function to write detector data into a larger dataset."""
-    # Data is arranged per detector
-    for d in range(n_det):
-        dset[det_off + d, samp_off : samp_off + n_samp] = data[d]
+        del hdata
 
 
 @function_timer
-def save_hdf5_detdata(obs, hgrp, fields):
+def save_hdf5_detdata(obs, hgrp, fields, parallel):
     log = Logger.get()
-    parallel = have_hdf5_parallel()
 
     # Get references to the distribution of detectors and samples
     proc_rows = obs.dist.process_rows
@@ -216,9 +209,10 @@ def save_hdf5_detdata(obs, hgrp, fields):
             samp_nelem = dist_samps[obs.comm.group_rank].n_elem
             det_off = dist_dets[obs.comm.group_rank].offset
             det_nelem = dist_dets[obs.comm.group_rank].n_elem
-            write_detdata_slice(
-                hdata, det_off, det_nelem, samp_off, samp_nelem, local_data
-            )
+            with hdata.collective:
+                hdata[
+                    det_off : det_off + det_nelem, samp_off : samp_off + samp_nelem
+                ] = local_data
         else:
             # Send data to root process
             for proc in range(obs.comm.group_size):
@@ -235,9 +229,10 @@ def save_hdf5_detdata(obs, hgrp, fields):
                 if proc == 0:
                     # Root process writes local data
                     if obs.comm.group_rank == 0:
-                        write_detdata_slice(
-                            hdata, det_off, det_nelem, samp_off, samp_nelem, local_data
-                        )
+                        hdata[
+                            det_off : det_off + det_nelem,
+                            samp_off : samp_off + samp_nelem,
+                        ] = local_data
                 elif proc == obs.comm.group_rank:
                     # We are sending
                     obs.comm.comm_group.Send(local_data.flatdata, dest=0, tag=proc)
@@ -245,24 +240,20 @@ def save_hdf5_detdata(obs, hgrp, fields):
                     # We are receiving and writing
                     recv = bufclass(nflat)
                     obs.comm.comm_group.Recv(recv, source=proc, tag=proc)
-                    write_detdata_slice(
-                        hdata,
-                        det_off,
-                        det_nelem,
-                        samp_off,
-                        samp_nelem,
-                        recv.array().reshape(shp),
-                    )
+                    hdata[
+                        det_off : det_off + det_nelem, samp_off : samp_off + samp_nelem
+                    ] = recv.array().reshape(shp)
                     recv.clear()
                     del recv
                 if obs.comm.comm_group is not None:
                     obs.comm.comm_group.barrier()
 
+        del hdata
+
 
 @function_timer
-def save_hdf5_intervals(obs, hgrp, fields):
+def save_hdf5_intervals(obs, hgrp, fields, parallel):
     log = Logger.get()
-    parallel = have_hdf5_parallel()
 
     for field in fields:
         if field not in obs.intervals:
@@ -292,6 +283,8 @@ def save_hdf5_intervals(obs, hgrp, fields):
         if obs.comm.comm_group is not None:
             obs.comm.comm_group.barrier()
 
+        del hdata
+
 
 @function_timer
 def save_hdf5(
@@ -303,6 +296,7 @@ def save_hdf5(
     intervals=None,
     config=None,
     times=defaults.times,
+    force_serial=False,
 ):
     """Save an observation to HDF5.
 
@@ -329,7 +323,9 @@ def save_hdf5(
         shared (list):  Only save this list of shared objects.
         intervals (list):  Only save this list of intervals objects.
         config (dict):  The job config dictionary to save.
-        times (str):  The name of the shared timestamp field.s
+        times (str):  The name of the shared timestamp field.
+        force_serial (bool):  If True, do not use HDF5 parallel support,
+            even if it is available.
 
     Returns:
         (str):  The full path of the file that was written.
@@ -338,6 +334,8 @@ def save_hdf5(
     log = Logger.get()
     env = Environment.get()
     parallel = have_hdf5_parallel()
+    if force_serial:
+        parallel = False
 
     if obs.name is None:
         raise RuntimeError("Cannot save observations that have no name")
@@ -348,7 +346,7 @@ def save_hdf5(
 
     # Create the file and get the root group
     hf = None
-    hfgroup = None
+    hgroup = None
     if parallel:
         hf = h5py.File(hfpath_temp, "w", driver="mpio", comm=obs.comm.comm_group)
         hgroup = hf
@@ -411,6 +409,7 @@ def save_hdf5(
                         "site_weather_time"
                     ] = site.weather.time.timestamp()
         obs.telescope.focalplane.save_hdf5(inst_group, comm=obs.comm.comm_group)
+        del inst_group
 
         meta_group = hgroup.create_group("metadata")
 
@@ -424,17 +423,20 @@ def save_hdf5(
                 kgroup = meta_group.create_group(k)
                 kgroup.attrs["class"] = object_fullname(v.__class__)
                 v.save_hdf5(kgroup, comm=save_comm)
+                del kgroup
             elif isinstance(v, u.Quantity):
                 if isinstance(v.value, np.ndarray):
                     # Array quantity
                     qdata = meta_group.create_dataset(k, data=v.value)
                     qdata.attrs["units"] = v.unit.to_string()
+                    del qdata
                 else:
                     # Must be a scalar
                     meta_group.attrs[f"{k}"] = v.value
                     meta_group.attrs[f"{k}_units"] = v.unit.to_string()
             elif isinstance(v, np.ndarray):
-                meta_group.create_dataset(k, data=v)
+                marr = meta_group.create_dataset(k, data=v)
+                del marr
             else:
                 try:
                     if isinstance(v, u.Quantity):
@@ -444,6 +446,8 @@ def save_hdf5(
                 except ValueError as e:
                     msg = f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})"
                     log.verbose_rank(msg, comm=save_comm)
+
+        del meta_group
 
         shared_group = hgroup.create_group("shared")
         detdata_group = hgroup.create_group("detdata")
@@ -466,26 +470,32 @@ def save_hdf5(
         if times not in fields:
             fields.append(times)
 
-    save_hdf5_shared(obs, shared_group, fields)
+    save_hdf5_shared(obs, shared_group, fields, parallel)
 
     if detdata is None:
         fields = list(obs.detdata.keys())
     else:
         fields = list(detdata)
-    save_hdf5_detdata(obs, detdata_group, fields)
+    save_hdf5_detdata(obs, detdata_group, fields, parallel)
 
     if intervals is None:
         fields = list(obs.intervals.keys())
     else:
         fields = list(intervals)
     if dump_intervals:
-        save_hdf5_intervals(obs, intervals_group, fields)
+        save_hdf5_intervals(obs, intervals_group, fields, parallel)
 
     # Close file if we opened it
+
+    del shared_group
+    del detdata_group
+    del intervals_group
+    del hgroup
 
     if hf is not None:
         hf.flush()
         hf.close()
+    del hf
 
     if obs.comm.comm_group is not None:
         obs.comm.comm_group.barrier()

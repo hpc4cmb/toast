@@ -10,7 +10,7 @@ import numpy as np
 
 from ..utils import Logger
 
-from ..traits import trait_docs, Int, Unicode, List, Dict
+from ..traits import trait_docs, Int, Unicode, List, Dict, Bool
 
 from ..timing import function_timer
 
@@ -51,6 +51,10 @@ class SaveHDF5(Operator):
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     config = Dict(None, allow_none=True, help="Write this job config to the file")
+
+    force_serial = Bool(
+        False, help="Use serial HDF5 operations, even if parallel support available"
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
