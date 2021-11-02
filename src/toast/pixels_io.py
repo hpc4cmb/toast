@@ -397,7 +397,7 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
 
 @function_timer
 def write_healpix_hdf5(
-    pix, path, nest=True, comm_bytes=10000000, single_precision=False
+    pix, path, nest=True, comm_bytes=10000000, single_precision=False, serial=True
 ):
     """Write pixel data to a HEALPix format HDF5 dataset.
 
@@ -410,6 +410,8 @@ def write_healpix_hdf5(
         nest (bool): If True, data is in NESTED ordering, else data is in RING.
         comm_bytes (int): The approximate message size to use.
         single_precision (bool): If True, write floats and integers in single precision
+        serial (bool):  If True, use the serial h5py implementation, even if
+            parallel support is available.
 
     Returns:
         None
@@ -457,7 +459,7 @@ def write_healpix_hdf5(
         elif dtype == np.int64:
             dtype = np.int32
 
-    if have_hdf5_parallel():
+    if have_hdf5_parallel() and not serial:
         # Open the file for parallel access.
         with h5py.File(path, "w", driver="mpio", comm=dist.comm) as f:
             # Each process writes their own submaps to the file
