@@ -458,8 +458,7 @@ def write_healpix_hdf5(
             dtype = np.int32
 
     if have_hdf5_parallel():
-        # Open the file for parallel access.  This will only work
-        # if HDF5 and h5py were compiled with MPI
+        # Open the file for parallel access.
         with h5py.File(path, "w", driver="mpio", comm=dist.comm) as f:
             # Each process writes their own submaps to the file
             dset = f.create_dataset(
