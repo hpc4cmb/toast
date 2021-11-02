@@ -271,13 +271,11 @@ class ObserveAtmosphere(Operator):
                     gt.start("ObserveAtmosphere:  detector AtmSim.observe")
                     for icur, cur_sim in enumerate(sim_list):
                         if cur_sim.tmin > tmin_det or cur_sim.tmax < tmax_det:
-                            msg = f"{log_prefix} : {det} "
-                            msg += "Detector time: [{:.1f}, {:.1f}], ".format(
-                                tmin_det, tmax_det
-                            )
-                            msg += "is not contained in [{:.1f}, {:.1f}]".format(
-                                cur_sim.tmin,
-                                cur_sim.tmax,
+                            msg = (
+                                f"{log_prefix} : {det} "
+                                f"Detector time: [{tmin_det:.1f}, {tmax_det:.1f}], "
+                                f"is not contained in [{cur_sim.tmin:.1f}, "
+                                f"{cur_sim.tmax:.1f}]"
                             )
                             raise RuntimeError(msg)
                         if (
@@ -292,18 +290,12 @@ class ObserveAtmosphere(Operator):
                         ) or not (
                             cur_sim.elmin <= elmin_det and elmin_det <= cur_sim.elmax
                         ):
-                            msg = f"{log_prefix} : {det} "
-                            msg += "Detector Az/El: [{:.5f}, {:.5f}], ".format(
-                                azmin_det, azmax_det
-                            )
-                            msg += "[{:.5f}, {:.5f}] is not contained in ".format(
-                                elmin_det, elmax_det
-                            )
-                            msg += "[{:.5f}, {:.5f}], [{:.5f} {:.5f}]".format(
-                                cur_sim.azmin,
-                                cur_sim.azmax,
-                                cur_sim.elmin,
-                                cur_sim.elmax,
+                            msg = (
+                                f"{log_prefix} : {det} "
+                                f"Detector Az/El: [{azmin_det:.5f}, {azmax_det:.5f}], "
+                                f"[{elmin_det:.5f}, {elmax_det:.5f}] is not contained "
+                                f"in [{cur_sim.azmin:.5f}, {cur_sim.azmax:.5f}], "
+                                f"[{cur_sim.elmin:.5f} {cur_sim.elmax:.5f}]"
                             )
                             raise RuntimeError(msg)
 
@@ -330,29 +322,31 @@ class ObserveAtmosphere(Operator):
                                 full_data = interp(times[good])
                             bad = np.abs(full_data) < 1e-30
                             nbad = np.sum(bad)
-                            msg = f"{log_prefix} : {det} "
-                            msg += f"ObserveAtmosphere failed for {nbad} "
-                            msg += "({:.2f} %) samples.  det = {}, rank = {}".format(
-                                nbad * 100 / ngood, det, rank
+                            log.error(
+                                f"{log_prefix} : {det} "
+                                f"ObserveAtmosphere failed for {nbad} "
+                                f"({nbad * 100 / ngood:.2f} %) samples.  "
+                                f"det = {det}, rank = {rank}"
                             )
-                            log.error(msg)
                             # If any samples failed the simulation, flag them as bad
                             if nbad > 0:
                                 atmdata[bad] = 0
                                 if self.det_flags is None:
-                                    msg = "Some samples failed atmosphere simulation, but "
-                                    msg += (
-                                        "no det flag field was specified.  Cannot flag "
+                                    log.warning(
+                                        "Some samples failed atmosphere simulation, "
+                                        "but no det flag field was specified.  "
+                                        "Cannot flag samples"
                                     )
-                                    msg += "samples"
-                                    log.warning(msg)
                                 else:
                                     views.detdata[self.det_flags][vw][det][good][
                                         bad
                                     ] |= self.det_flag_mask
                                     nbad_tot += nbad
+                    gt.stop("ObserveAtmosphere:  detector AtmSim.observe")
+
                     # Optionally, interpolate the atmosphere to full sample rate
                     if self.sample_rate is not None:
+                        gt.start("ObserveAtmosphere:  detector interpolate")
                         interp = scipy.interpolate.interp1d(
                             t_interp,
                             atmdata,
@@ -360,8 +354,8 @@ class ObserveAtmosphere(Operator):
                             copy=False,
                         )
                         atmdata = interp(times[good])
+                        gt.stop("ObserveAtmosphere:  detector interpolate")
 
-                    gt.stop("ObserveAtmosphere:  detector AtmSim.observe")
                     gt.start("ObserveAtmosphere:  detector accumulate")
 
                     # Calibrate the atmopsheric fluctuations to appropriate bandpass
