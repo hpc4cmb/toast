@@ -56,5 +56,7 @@ install(FILES
     filterbin.py
     save_hdf5.py
     load_hdf5.py
+    noise_estimation.py
+    noise_estimation_utils.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

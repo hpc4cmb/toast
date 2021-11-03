@@ -283,7 +283,7 @@ def main():
     operators = [
         toast.ops.SimSatellite(name="sim_satellite", detset_key="pixel"),
         toast.ops.DefaultNoiseModel(name="default_model"),
-        toast.ops.ScanHealpix(name="scan_map", enabled=False),
+        toast.ops.ScanHealpixMap(name="scan_map", enabled=False),
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, enabled=False
         ),

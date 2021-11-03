@@ -40,7 +40,7 @@ from .pointing_detector import PointingDetectorSimple
 
 from .scan_map import ScanMap, ScanMask, ScanScale
 
-from .scan_healpix import ScanHealpix
+from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 
 from .pointing import BuildPixelDistribution
 
@@ -103,3 +103,5 @@ from .filterbin import FilterBin, combine_observation_matrix
 from .save_hdf5 import SaveHDF5
 
 from .load_hdf5 import LoadHDF5
+
+from .noise_estimation import NoiseEstim

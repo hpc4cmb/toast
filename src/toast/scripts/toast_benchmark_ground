@@ -142,7 +142,7 @@ def parse_arguments():
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
         ),
-        toast.ops.ScanHealpix(name="scan_map"),
+        toast.ops.ScanHealpixMap(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
         default_sim_atmosphere(),
         toast.ops.TimeConstant(

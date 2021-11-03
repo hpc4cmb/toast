@@ -111,6 +111,7 @@ class PolyFilter2D(Operator):
         super().__init__(**kwargs)
         return
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         gt = GlobalTimers.get()
 

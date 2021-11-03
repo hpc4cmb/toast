@@ -19,7 +19,12 @@ from ..pixels import PixelData
 
 from ..pixels_io import write_healpix_fits, write_healpix_hdf5
 
-from ._helpers import create_outdir, create_satellite_data, create_fake_sky
+from ._helpers import (
+    create_outdir,
+    create_satellite_data,
+    create_fake_sky,
+    create_fake_mask,
+)
 
 
 class ScanHealpixTest(MPITestCase):
@@ -65,7 +70,7 @@ class ScanHealpixTest(MPITestCase):
 
         # Run the scanning from the file
 
-        scan_hpix = ops.ScanHealpix(
+        scan_hpix = ops.ScanHealpixMap(
             file=hpix_file,
             det_data="test",
             pixel_pointing=pixels,
@@ -79,6 +84,62 @@ class ScanHealpixTest(MPITestCase):
             for det in ob.local_detectors:
                 np.testing.assert_almost_equal(
                     ob.detdata["test"][det], ob.detdata[defaults.det_data][det]
+                )
+
+        del data
+        return
+
+    def test_healpix_mask(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake mask pixel values locally
+        create_fake_mask(data, "pixel_dist", "fake_mask")
+
+        # Write this to a file
+        hpix_file = os.path.join(self.outdir, "fake_mask.fits")
+        write_healpix_fits(data["fake_mask"], hpix_file, nest=pixels.nest)
+
+        # Scan map into timestreams
+        scanner = ops.ScanMask(
+            det_flags=defaults.det_flags,
+            det_flags_mask=defaults.det_mask_invalid,
+            pixels=pixels.pixels,
+            mask_key="fake_mask",
+        )
+        scanner.apply(data)
+
+        # Run the scanning from the file
+
+        scan_hpix = ops.ScanHealpixMask(
+            file=hpix_file,
+            det_flags="test_flags",
+            det_flags_mask=defaults.det_mask_invalid,
+            pixel_pointing=pixels,
+        )
+        scan_hpix.apply(data)
+
+        # Check that the sets of timestreams match.
+
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                np.testing.assert_almost_equal(
+                    ob.detdata["test_flags"][det], ob.detdata[defaults.det_flags][det]
                 )
 
         del data
@@ -121,7 +182,7 @@ class ScanHealpixTest(MPITestCase):
 
         # Run the scanning from the file
 
-        scan_hpix = ops.ScanHealpix(
+        scan_hpix = ops.ScanHealpixMap(
             file=hpix_file,
             det_data="test",
             pixel_pointing=pixels,

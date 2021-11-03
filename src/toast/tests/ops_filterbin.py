@@ -184,7 +184,7 @@ class FilterBinTest(MPITestCase):
             data.comm.comm_world.Barrier()
 
         # Scan map into timestreams
-        scan_hpix = ops.ScanHealpix(
+        scan_hpix = ops.ScanHealpixMap(
             file=input_map_file,
             det_data=defaults.det_data,
             pixel_pointing=pixels,
@@ -310,7 +310,7 @@ class FilterBinTest(MPITestCase):
             hp.write_map(input_map_file, input_map, nest=pixels.nest)
 
         # Scan map into timestreams
-        scan_hpix = ops.ScanHealpix(
+        scan_hpix = ops.ScanHealpixMap(
             file=input_map_file,
             det_data=defaults.det_data,
             pixel_pointing=pixels,
@@ -456,7 +456,7 @@ class FilterBinTest(MPITestCase):
             hp.write_map(input_map_file, input_map, nest=pixels.nest)
 
         # Scan map into timestreams
-        scan_hpix = ops.ScanHealpix(
+        scan_hpix = ops.ScanHealpixMap(
             file=input_map_file,
             det_data=defaults.det_data,
             pixel_pointing=pixels,

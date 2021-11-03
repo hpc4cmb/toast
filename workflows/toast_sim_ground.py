@@ -591,7 +591,7 @@ def main():
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
         ),
-        toast.ops.ScanHealpix(name="scan_map", enabled=False),
+        toast.ops.ScanHealpixMap(name="scan_map", enabled=False),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
         toast.ops.SimScanSynchronousSignal(name="sim_sss", enabled=False),
         toast.ops.TimeConstant(
