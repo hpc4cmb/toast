@@ -119,8 +119,7 @@ class NoiseEstim(Operator):
     )
 
     output_dir = Unicode(
-        None,
-        allow_none=True,
+        ".",
         help="If specified, write output data products to this directory",
     )
 
