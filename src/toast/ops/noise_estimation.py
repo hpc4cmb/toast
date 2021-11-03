@@ -155,8 +155,6 @@ class NoiseEstim(Operator):
 
     nocross = Bool(True, help="Do not evaluate cross-PSDs.  Overridden by `pairs`")
 
-    calibrate = Bool(False, help="Regress, not just subtract the signal estimate")
-
     nsum = Int(1, help="Downsampling factor for decimated data")
 
     naverage = Int(100, help="Smoothing kernel width for downsampled data")
@@ -215,7 +213,7 @@ class NoiseEstim(Operator):
             self.redistribute = True
             # Redistribute the data so each process has all detectors for some sample range
             # Duplicate just the fields of the observation we will use
-            dup_shared = list()
+            dup_shared = [self.times]
             if self.shared_flags is not None:
                 dup_shared.append(self.shared_flags)
             dup_detdata = [self.det_data]
@@ -231,14 +229,14 @@ class NoiseEstim(Operator):
             )
             log.debug_rank(
                 f"{data.comm.group:4} : Duplicated observation in",
-                comm=temp_obs.comm,
+                comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
             # Redistribute this temporary observation to be distributed by sample sets
             temp_obs.redistribute(1, times=self.times, override_sample_sets=None)
             log.debug_rank(
                 f"{data.comm.group:4} : Redistributed observation in",
-                comm=temp_obs.comm,
+                comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
             comm = None
@@ -255,21 +253,21 @@ class NoiseEstim(Operator):
         timer.start()
         if self.redistribute:
             # Redistribute data back
-            temp_ob.redistribute(
+            temp_obs.redistribute(
                 obs.dist.process_rows,
                 times=self.times,
                 override_sample_sets=obs.dist.sample_sets,
             )
             log.debug_rank(
                 f"{data.comm.group:4} : Re-redistributed observation in",
-                comm=temp_obs.comm,
+                comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
             # Copy data to original observation
             obs.detdata[self.det_data][:] = temp_obs.detdata[self.det_data][:]
             log.debug_rank(
                 f"{data.comm.group:4} : Copied observation data in",
-                comm=temp_obs.comm,
+                comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
             self.redistribute = False
@@ -285,20 +283,7 @@ class NoiseEstim(Operator):
 
         self.rank = data.comm.world_rank
 
-        if self.maskfile is None:
-            scan_mask = None
-        else:
-            scan_mask = ScanHealpixMask(
-                file=self.maskfile,
-                det_flags=self.mask_flags,
-                def_flags_value=self.mask_bit,
-                pixel_dist=self.pixel_dist,
-                pixel_pointing=self.pixel_pointing,
-            )
-
-        if self.mapfile is None:
-            scan_map = None
-        else:
+        if self.mapfile is not None:
             if self.pol:
                 weights = self.stokes_weights
             else:
@@ -311,8 +296,20 @@ class NoiseEstim(Operator):
                 pixel_pointing=self.pixel_pointing,
                 stokes_weights=weights,
             )
+            scan_map.apply(data, detectors=detectors)
+
+        if self.maskfile is not None:
+            scan_mask = ScanHealpixMask(
+                file=self.maskfile,
+                det_flags=self.mask_flags,
+                def_flags_value=self.mask_bit,
+                pixel_dist=self.pixel_dist,
+                pixel_pointing=self.pixel_pointing,
+            )
+            scan_mask.apply(data, detectors=detectors)
 
         for orig_obs in data.obs:
+
             obs = self._redistribute(data, orig_obs)
 
             det_names = obs.all_detectors
@@ -353,8 +350,6 @@ class NoiseEstim(Operator):
                 ]
             else:
                 intervals = obs.intervals[self.view]
-
-            self.subtract_signal(data, obs, scan_mask, scan_map)
 
             # self.highpass_signal(obs, comm, intervals)
 
@@ -432,31 +427,6 @@ class NoiseEstim(Operator):
                 sig -= trend
         if self.rank == 0:
             timer.report_clear("TOD high pass")
-        return
-
-    @function_timer
-    def subtract_signal(self, data, obs, scan_mask, scan_map):
-        """Subtract a signal estimate from the TOD and update the
-        flags for noise estimation.
-        """
-        if scan_map is None and scan_mask is None:
-            return
-        log = Logger.get()
-        log.debug_rank("Subtracting signal", comm=obs.comm.comm_group)
-        for det in obs.local_detectors:
-            if det.endswith("-diff") and not self.pol:
-                continue
-            obs_data = data.select(obs_uid=obs.uid)
-            if self.calibrate:
-                # If we are using linear regression, we must scan the
-                # signal onto another TOD object first
-                msg = "Linear regression of signal estimate not implemented"
-                raise RuntimeError(msg)
-            if scan_map is not None:
-                scan_map.apply(obs_data, detectors=[det])
-            if scan_mask is not None:
-                scan_mask.apply(obs_data, detectors=[det])
-        log.debug_rank("Subtracted signal", comm=obs.comm.comm_group)
         return
 
     @function_timer
@@ -634,6 +604,7 @@ class NoiseEstim(Operator):
     def save_psds(
         self, binfreq, all_psds, all_times, det1, det2, fsample, rootname, all_cov
     ):
+        log = Logger.get()
         timer = Timer()
         timer.start()
         if det1 == det2:
@@ -690,7 +661,8 @@ class NoiseEstim(Operator):
         with open(fn_out, "wb") as fits_out:
             hdulist.writeto(fits_out, overwrite=True)
 
-        print(f"Detector {det1} vs. {det2} PSDs stored in {fn_out}")
+        log.info(f"Detector {det1} vs. {det2} PSDs stored in {fn_out}")
+
         return
 
     @function_timer
@@ -961,8 +933,6 @@ class NoiseEstim(Operator):
             timer.report_clear("Collect PSDs")
 
         if self.rank == 0:
-            # FIXME: original code had no timing report here for the previous block.
-            # Was one intended?
             if len(all_times) != len(all_psds):
                 msg = (
                     f"ERROR: Process {self.rank} has len(all_times) = {len(all_times)},"
