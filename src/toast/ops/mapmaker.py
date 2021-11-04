@@ -135,6 +135,10 @@ class MapMaker(Operator):
         False, help="If True, outputs are in HDF5 rather than FITS format."
     )
 
+    write_hdf5_serial = Bool(
+        False, help="If True, force serial HDF5 write of output maps."
+    )
+
     write_noiseweighted_map = Bool(
         False,
         help="If True, write the noise-weighted map",
@@ -810,6 +814,7 @@ class MapMaker(Operator):
                         fname,
                         nest=map_binning.pixel_pointing.nest,
                         single_precision=True,
+                        force_serial=self.write_hdf5_serial,
                     )
                 else:
                     # Standard FITS output

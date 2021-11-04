@@ -36,10 +36,6 @@ class TemplateOffsetTest(MPITestCase):
         noise_model = ops.DefaultNoiseModel()
         noise_model.apply(data)
 
-        # Create some empty detector data
-        for ob in data.obs:
-            ob.detdata.create(defaults.det_data, dtype=np.float64)
-
         # Use 1/10 of an observation as the baseline length.  Make it not evenly
         # divisible in order to test handling of the final amplitude.
         ob_time = (

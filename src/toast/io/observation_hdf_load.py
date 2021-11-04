@@ -188,12 +188,21 @@ def load_hdf5(
     # enable reading detector and shared data in parallel.
     hf = None
     hfgroup = None
+    file_version = None
     if parallel:
         hf = h5py.File(path, "r", driver="mpio", comm=comm.comm_group)
         hgroup = hf
+
     else:
         hf = h5py.File(path, "r")
         hgroup = hf
+
+    # Data format version check
+    file_version = hgroup.attrs["toast_format_version"]
+    if file_version != 0:
+        msg = f"HDF5 file '{path}' using unsupported data format {file_version}"
+        log.error(msg)
+        raise RuntimeError(msg)
 
     # Observation properties
     obs_name = hgroup.attrs["observation_name"]

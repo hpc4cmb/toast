@@ -36,10 +36,6 @@ class TemplateFourier2DTest(MPITestCase):
         noise_model = ops.DefaultNoiseModel()
         noise_model.apply(data)
 
-        # Create some empty detector data
-        for ob in data.obs:
-            ob.detdata.create(defaults.det_data, dtype=np.float64)
-
         tmpl = Fourier2D(
             det_data=defaults.det_data,
             det_flags=None,

@@ -278,14 +278,14 @@ class export_obs_meta(object):
         # Serialize focalplane to HDF5 bytes and write to frame.
         byte_writer = io.BytesIO()
         with h5py.File(byte_writer, "w") as f:
-            obs.telescope.focalplane.save_hdf5(f)
+            obs.telescope.focalplane.save_hdf5(f, comm=None, force_serial=True)
         cal["focalplane"] = c3g.G3VectorUnsignedChar(byte_writer.getvalue())
         del byte_writer
 
         # Serialize noise models
         for m_in, m_out in self._noise_models:
             byte_writer = io.BytesIO()
-            obs[m_in].save_hdf5(byte_writer)
+            obs[m_in].save_hdf5(byte_writer, comm=None, force_serial=True)
             cal[m_out] = c3g.G3VectorUnsignedChar(byte_writer.getvalue())
             del byte_writer
             cal[f"{m_out}_class"] = c3g.G3String(object_fullname(obs[m_in].__class__))

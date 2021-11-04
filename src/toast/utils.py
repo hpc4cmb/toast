@@ -80,10 +80,13 @@ def _create_log_rank(level):
         if comm is not None:
             my_rank = comm.rank
 
-        if comm is not None and timer is not None:
-            comm.barrier()
-
         if timer is not None:
+            if not timer.is_running():
+                msg = f"Called {level}_rank with a timer that is not running.  "
+                msg += f"Did you forget to start it?"
+                raise RuntimeError(msg)
+            if comm is not None:
+                comm.barrier()
             timer.stop()
 
         if my_rank == rank:
@@ -156,7 +159,6 @@ def set_numba_threading():
     env = Environment.get()
     log = Logger.get()
     toastthreads = env.max_threads()
-    print("max toast threads = ", toastthreads, flush=True)
 
     rank = 0
     if use_mpi:
@@ -671,7 +673,7 @@ def have_hdf5_parallel():
     return hdf5_is_parallel
 
 
-def table_write_parallel_hdf5(table, root, name, comm=None):
+def table_write_parallel_hdf5(table, root, name, comm=None, force_serial=False):
     """Write astropy table to HDF5 with parallel support.
 
     The astropy.io.misc.hdf5.write_table_hdf5() does not support situations
@@ -685,12 +687,16 @@ def table_write_parallel_hdf5(table, root, name, comm=None):
         name (str):  The data set name
         comm (MPI.Comm):  The communicator of processes containing duplicates
             of the table.
+        force_serial (bool):  If True, use serial HDF5 even if parallel is
+            available.
 
     Returns:
         None
 
     """
     parallel = have_hdf5_parallel()
+    if force_serial:
+        parallel = False
     participating = parallel or comm is None or comm.rank == 0
 
     # Encode any mixin columns as plain columns + appropriate metadata

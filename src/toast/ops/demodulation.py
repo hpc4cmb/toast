@@ -305,7 +305,7 @@ class Demodulate(Operator):
         times = obs.shared[self.times].data.copy()
         if self.nskip != 1:
             offset = obs.local_index_offset
-            times = times[offset % self.nskip :: self.nskip]
+            times = np.array(times[offset % self.nskip :: self.nskip])
         return times
 
     @function_timer
@@ -383,7 +383,7 @@ class Demodulate(Operator):
         # flag invalid samples in both ends
         flags[: wkernel // 2] |= self.demod_flag_mask
         flags[-(wkernel // 2) :] |= self.demod_flag_mask
-        new_flags = flags[offset % self.nskip :: self.nskip]
+        new_flags = np.array(flags[offset % self.nskip :: self.nskip])
         return new_flags
 
     @function_timer
@@ -469,7 +469,7 @@ class Demodulate(Operator):
 
         quats = obs.shared[self.boresight].data
         demod_obs.shared[self.boresight].set(
-            quats[offset % self.nskip :: self.nskip],
+            np.array(quats[offset % self.nskip :: self.nskip]),
             offset=(0, 0),
             fromrank=0,
         )

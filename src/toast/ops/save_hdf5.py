@@ -108,6 +108,7 @@ class SaveHDF5(Operator):
                 intervals=intervals_fields,
                 config=self.config,
                 times=self.times,
+                force_serial=self.force_serial,
             )
 
         return
