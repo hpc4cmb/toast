@@ -43,6 +43,10 @@ from ..utils import (
 from .noise_estimation_utils import autocov_psd, crosscov_psd, flagged_running_average
 from .operator import Operator
 from .scan_healpix import ScanHealpixMap, ScanHealpixMask
+from .copy import Copy
+from .arithmetic import Subtract
+from .polyfilter import CommonModeFilter
+from .delete import Delete
 
 
 @trait_docs
@@ -169,6 +173,10 @@ class NoiseEstim(Operator):
         help="Detector pairs to estimate noise for.  Overrides `nosingle` and `nocross`",
     )
 
+    focalplane_key = Unicode(
+        None, allow_none=True, help="When set, PSDs are measured over averaged TODs"
+    )
+
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
         detpointing = proposal["value"]
@@ -210,7 +218,8 @@ class NoiseEstim(Operator):
         timer.start()
         if obs.comm_col is not None and obs.comm_col.size > 1:
             self.redistribute = True
-            # Redistribute the data so each process has all detectors for some sample range
+            # Redistribute the data so each process has all detectors
+            # for some sample range
             # Duplicate just the fields of the observation we will use
             dup_shared = [self.times]
             if self.shared_flags is not None:
@@ -280,6 +289,21 @@ class NoiseEstim(Operator):
 
         log = Logger.get()
 
+        if self.focalplane_key:
+            if self.pairs is not None:
+                msg = "focalplane_key is not compatible with pairs"
+                raise RuntimeError(msg)
+            # Measure the averages of the signal across the focalplane
+            Copy(detdata=[(self.det_data, "temp_signal")]).apply(data)
+            CommonModeFilter(
+                det_data="temp_signal",
+                det_flags=self.det_flags,
+                det_flag_mask=self.det_flag_mask,
+                focalplane_key=self.focalplane_key,
+            ).apply(data)
+            Subtract(first=self.det_data, second="temp_signal").apply(data)
+            Delete(detdata="temp_signal")
+
         self.rank = data.comm.world_rank
 
         if self.mapfile is not None:
@@ -311,25 +335,36 @@ class NoiseEstim(Operator):
 
             obs = self._redistribute(data, orig_obs)
 
-            det_names = obs.all_detectors
-            det_ids = {}
-            for idet, det in enumerate(det_names):
-                det_ids[det] = idet
-            ndet = len(det_ids)
-            if self.pairs is not None:
-                pairs = self.pairs
-            else:
-                # Construct a list of detector pairs
+            if self.focalplane_key is not None:
+                # Pick just one detector to represent each key value
+                fp = obs.telescope.focalplane
+                key2det = {}
+                for det in obs.all_detectors:
+                    key = fp[det][self.focalplane_key]
+                    if key not in key2det:
+                        key2det[key] = det
                 pairs = []
-                for idet1 in range(ndet):
-                    det1 = det_names[idet1]
-                    for idet2 in range(idet1, ndet):
-                        det2 = det_names[idet2]
-                        if det1 == det2 and self.nosingle:
-                            continue
-                        if det1 != det2 and self.nocross:
-                            continue
-                        pairs.append([det1, det2])
+                det_names = []
+                for det in key2det.values():
+                    det_names.append(det)
+                    pairs.append([det, det])
+            else:
+                det_names = obs.all_detectors
+                ndet = len(det_names)
+                if self.pairs is not None:
+                    pairs = self.pairs
+                else:
+                    # Construct a list of detector pairs
+                    pairs = []
+                    for idet1 in range(ndet):
+                        det1 = det_names[idet1]
+                        for idet2 in range(idet1, ndet):
+                            det2 = det_names[idet2]
+                            if det1 == det2 and self.nosingle:
+                                continue
+                            if det1 != det2 and self.nocross:
+                                continue
+                            pairs.append([det1, det2])
 
             times = np.array(obs.shared[self.times])
             nsample = times.size
