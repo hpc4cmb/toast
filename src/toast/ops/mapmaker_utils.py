@@ -117,10 +117,10 @@ class BuildHitMap(Operator):
             raise RuntimeError(msg)
 
         dist = data[self.pixel_dist]
-        if data.comm.world_rank == 0:
-            log.debug(
-                "Building hit map with pixel_distribution {}".format(self.pixel_dist)
-            )
+        log.verbose_rank(
+            f"Building hit map with pixel_distribution {self.pixel_dist}",
+            comm=data.comm.comm_world,
+        )
 
         hits = None
         if self.hits in data:
@@ -313,12 +313,10 @@ class BuildInverseCovariance(Operator):
             raise RuntimeError(msg)
 
         dist = data[self.pixel_dist]
-        if data.comm.world_rank == 0:
-            log.debug(
-                "Building inverse covariance with pixel_distribution {}".format(
-                    self.pixel_dist
-                )
-            )
+        log.verbose_rank(
+            f"Building inverse covariance with pixel_distribution {self.pixel_dist}",
+            comm=data.comm.comm_world,
+        )
 
         invcov = None
         weight_nnz = None

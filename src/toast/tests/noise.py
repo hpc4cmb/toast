@@ -45,11 +45,10 @@ class InstrumentTest(MPITestCase):
 
         nse_file = os.path.join(self.outdir, "noise.h5")
 
-        if self.comm is None or self.comm.rank == 0:
-            nse.save_hdf5(nse_file)
-            new_nse = Noise()
-            new_nse.load_hdf5(nse_file)
-            self.assertTrue(nse == new_nse)
+        nse.save_hdf5(nse_file, comm=self.comm)
+        new_nse = Noise()
+        new_nse.load_hdf5(nse_file, comm=self.comm)
+        self.assertTrue(nse == new_nse)
 
     def test_analytic_hdf5(self):
         detnames = ["det_01a", "det_01b", "det_02a", "det_02b"]
@@ -70,8 +69,7 @@ class InstrumentTest(MPITestCase):
 
         nse_file = os.path.join(self.outdir, "sim_noise.h5")
 
-        if self.comm is None or self.comm.rank == 0:
-            nse.save_hdf5(nse_file)
-            new_nse = AnalyticNoise()
-            new_nse.load_hdf5(nse_file)
-            self.assertTrue(nse == new_nse)
+        nse.save_hdf5(nse_file, comm=self.comm)
+        new_nse = AnalyticNoise()
+        new_nse.load_hdf5(nse_file, comm=self.comm)
+        self.assertTrue(nse == new_nse)

@@ -11,7 +11,15 @@ import importlib
 
 import datetime
 
+from tempfile import gettempdir
+
 import numpy as np
+
+import h5py
+
+import astropy.io.misc.hdf5 as aspy5
+from astropy.table import meta as aspymeta
+
 
 from ._libtoast import Environment, Timer, GlobalTimers
 
@@ -72,10 +80,13 @@ def _create_log_rank(level):
         if comm is not None:
             my_rank = comm.rank
 
-        if comm is not None and timer is not None:
-            comm.barrier()
-
         if timer is not None:
+            if not timer.is_running():
+                msg = f"Called {level}_rank with a timer that is not running.  "
+                msg += f"Did you forget to start it?"
+                raise RuntimeError(msg)
+            if comm is not None:
+                comm.barrier()
             timer.stop()
 
         if my_rank == rank:
@@ -148,7 +159,6 @@ def set_numba_threading():
     env = Environment.get()
     log = Logger.get()
     toastthreads = env.max_threads()
-    print("max toast threads = ", toastthreads, flush=True)
 
     rank = 0
     if use_mpi:
@@ -629,3 +639,97 @@ def import_from_name(name):
         msg = f"Cannot import class '{cls_name}' from module '{cls_mod_name}'"
         raise RuntimeError(msg)
     return cls
+
+
+# Test whether h5py supports parallel I/O
+
+hdf5_is_parallel = None
+
+
+def have_hdf5_parallel():
+    global hdf5_is_parallel
+    if hdf5_is_parallel is not None:
+        # Already checked
+        return hdf5_is_parallel
+
+    # Do we even have MPI?
+    if not use_mpi:
+        hdf5_is_parallel = False
+        return hdf5_is_parallel
+
+    # Try to open a temp file on each process with the mpio driver but using
+    # COMM_SELF.  This lets us test the presence of the driver without actually
+    # doing any communication
+    try:
+        tempdir = gettempdir()
+        tempfile = os.path.join(tempdir, f"test_hdf5_mpio_{MPI.COMM_WORLD.rank}.h5")
+        f = h5py.File(tempfile, "w", driver="mpio", comm=MPI.COMM_SELF)
+        # Yay!
+        hdf5_is_parallel = True
+        f.close()
+    except (ValueError, AssertionError) as e:
+        # Nope...
+        hdf5_is_parallel = False
+    return hdf5_is_parallel
+
+
+def table_write_parallel_hdf5(table, root, name, comm=None, force_serial=False):
+    """Write astropy table to HDF5 with parallel support.
+
+    The astropy.io.misc.hdf5.write_table_hdf5() does not support situations
+    where the h5py package is using parallel HDF5 under the hood.  In this
+    case, we need to create datasets on all processes but only write to them
+    from one process.
+
+    Args:
+        table (Table):  The data table.
+        root (h5py.Group):  The group to use for creating datasets.
+        name (str):  The data set name
+        comm (MPI.Comm):  The communicator of processes containing duplicates
+            of the table.
+        force_serial (bool):  If True, use serial HDF5 even if parallel is
+            available.
+
+    Returns:
+        None
+
+    """
+    parallel = have_hdf5_parallel()
+    if force_serial:
+        parallel = False
+    participating = parallel or comm is None or comm.rank == 0
+
+    # Encode any mixin columns as plain columns + appropriate metadata
+    table = aspy5._encode_mixins(table)
+
+    # Table with numpy unicode strings can't be written in HDF5 so
+    # to write such a table a copy of table is made containing columns as
+    # bytestrings.  Now this copy of the table can be written in HDF5.
+    if any(col.info.dtype.kind == "U" for col in table.itercols()):
+        table = table.copy(copy_data=False)
+        table.convert_unicode_to_bytestring()
+
+    # Write the table to the root group
+    tarray = table.as_array()
+    dset_shape = tarray.shape
+    dset_type = tarray.dtype
+    dset = None
+    if participating:
+        dset = root.create_dataset(name, dset_shape, dtype=dset_type)
+    if comm is None or comm.rank == 0:
+        dset[:] = tarray
+    del dset
+
+    # Serialize metadata
+    header_yaml = aspymeta.get_yaml_from_table(table)
+    header_encoded = np.array([h.encode("utf-8") for h in header_yaml])
+    mdset_shape = header_encoded.shape
+    mdset_type = header_encoded.dtype
+    mdset = None
+    if participating:
+        mdset = root.create_dataset(
+            aspy5.meta_path(name), mdset_shape, dtype=mdset_type
+        )
+    if comm is None or comm.rank == 0:
+        mdset[:] = header_encoded
+    del mdset

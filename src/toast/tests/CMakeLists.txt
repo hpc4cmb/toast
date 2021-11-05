@@ -57,5 +57,6 @@ install(FILES
     ops_sss.py
     ops_demodulate.py
     ops_filterbin.py
+    io_hdf5.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

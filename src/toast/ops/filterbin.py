@@ -348,6 +348,10 @@ class FilterBin(Operator):
         False, help="If True, output maps are in HDF5 rather than FITS format."
     )
 
+    write_hdf5_serial = Bool(
+        False, help="If True, force serial HDF5 write of output maps."
+    )
+
     reset_pix_dist = Bool(
         False,
         help="Clear any existing pixel distribution.  Useful when applying"
@@ -1164,6 +1168,7 @@ class FilterBin(Operator):
 
         log = Logger.get()
         timer = Timer()
+        timer.start()
 
         hits_name = f"{self.name}_hits"
         invcov_name = f"{self.name}_invcov"
@@ -1221,6 +1226,7 @@ class FilterBin(Operator):
                             data[key],
                             fname,
                             nest=self.binning.pixel_pointing.nest,
+                            force_serial=self.write_hdf5_serial,
                         )
                     else:
                         # Standard FITS output

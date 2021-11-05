@@ -36,10 +36,6 @@ class TemplateSubHarmonicTest(MPITestCase):
         noise_model = ops.DefaultNoiseModel()
         noise_model.apply(data)
 
-        # Create some empty detector data
-        for ob in data.obs:
-            ob.detdata.create(defaults.det_data, dtype=np.float64)
-
         tmpl = SubHarmonic(
             det_data=defaults.det_data,
             det_flags=None,

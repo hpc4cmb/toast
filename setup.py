@@ -237,7 +237,7 @@ conf["install_requires"] = [
     "matplotlib",
     "psutil",
     "h5py",
-    "pshmem>=0.2.9",
+    "pshmem>=0.2.10",
     "astropy",
     "healpy",
     "ephem",

@@ -54,5 +54,7 @@ install(FILES
     stokes_weights.py
     pixels_healpix.py
     filterbin.py
+    save_hdf5.py
+    load_hdf5.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )

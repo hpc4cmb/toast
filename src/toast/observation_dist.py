@@ -398,6 +398,75 @@ def redistribute_buffer(
     del recv_displ
 
 
+def global_interval_times(dist, intervals_manager, name, join=False):
+    """Return the global list of interval timespans on the root process.
+
+    After creation, the list of intervals is local to each process.  This function
+    reconstructs the full global list of interval times on the rank zero process
+    of the group.
+
+    Args:
+        dist (DistDetSamp):  The data distribution in the observation.
+        intervals_manager (IntervalsManager):  The manager instance (e.g. obs.intervals)
+        name (str):  The name of the object.
+        join (bool):  If True, join together intervals that are broken by distribution
+            boundaries in the sample direction.
+
+    Returns:
+        (list):  List of tuples on the root process, and None on other processes.
+
+    """
+    ilist = [(x.start, x.stop, x.first, x.last) for x in intervals_manager[name]]
+    all_ilist = None
+    if dist.comm_row is None:
+        all_ilist = [(ilist, dist.samps[dist.comm.group_rank].n_elem)]
+    else:
+        # Gather across the process row
+        if dist.comm_col_rank == 0:
+            all_ilist = dist.comm_row.gather(
+                (ilist, dist.samps[dist.comm.group_rank].n_elem), root=0
+            )
+    del ilist
+
+    glist = None
+    if dist.comm.group_rank == 0:
+        # Only one process builds the list of start / stop times.  By definition,
+        # the rank zero process of the observation is also the process with rank
+        # zero along both the rows and columns.
+        glist = list()
+        last_continue = False
+        last_start = 0
+        last_stop = 0
+        for pdata, pn in all_ilist:
+            if len(pdata) == 0:
+                continue
+            for start, stop, first, last in pdata:
+                if last_continue:
+                    if first == 0:
+                        last_stop = stop
+                    else:
+                        glist.append((last_start, last_stop))
+                        last_continue = False
+                        last_start = start
+                        last_stop = stop
+                else:
+                    last_start = start
+                    last_stop = stop
+
+                if join:
+                    if last == pn - 1:
+                        last_continue = True
+                    else:
+                        glist.append((last_start, last_stop))
+                        last_continue = False
+                else:
+                    glist.append((last_start, last_stop))
+        if last_continue:
+            # add final range
+            glist.append((last_start, last_stop))
+    return glist
+
+
 def extract_global_intervals(old_dist, intervals_manager):
     """Helper function to reconstruct global interval timespans.
 
@@ -421,57 +490,9 @@ def extract_global_intervals(old_dist, intervals_manager):
         global_intervals = dict()
 
     for iname in list(intervals_manager.keys()):
-        ilist = [(x.start, x.stop, x.first, x.last) for x in intervals_manager[iname]]
-        all_ilist = None
-        if old_dist.comm_row is None:
-            all_ilist = [(ilist, old_dist.samps[old_dist.comm_row_rank].n_elem)]
-        else:
-            # Gather across the process row
-            if old_dist.comm_col_rank == 0:
-                all_ilist = old_dist.comm_row.gather(
-                    (ilist, old_dist.samps[old_dist.comm_row_rank].n_elem), root=0
-                )
-        del ilist
+        result = global_interval_times(old_dist, intervals_manager, iname, join=False)
         if old_dist.comm.group_rank == 0:
-            # Only one process builds the list of start / stop times.  By definition,
-            # the rank zero process of the observation is also the process with rank
-            # zero along both the rows and columns.
-            glist = list()
-            last_continue = False
-            last_start = 0
-            last_stop = 0
-            for pdata, pn in all_ilist:
-                if len(pdata) == 0:
-                    continue
-                for start, stop, first, last in pdata:
-                    if last_continue:
-                        if first == 0:
-                            last_stop = stop
-                        else:
-                            glist.append((last_start, last_stop))
-                            last_continue = False
-                            last_start = start
-                            last_stop = stop
-                    else:
-                        last_start = start
-                        last_stop = stop
-
-                    glist.append((last_start, last_stop))
-                    #
-                    # Note:  If we enable this code, then intervals split by earlier
-                    # redistribution will be correctly recombined.  However, intervals
-                    # with genuine boundaries at the data distribution will be
-                    # combined too.  It seems safer to leave these split.
-                    #
-                    # if last == pn - 1:
-                    #     last_continue = True
-                    # else:
-                    #     glist.append((last_start, last_stop))
-                    #     last_continue = False
-            if last_continue:
-                # add final range
-                glist.append((last_start, last_stop))
-            global_intervals[iname] = glist
+            global_intervals[iname] = result
 
     return global_intervals
 

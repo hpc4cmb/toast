@@ -104,6 +104,20 @@ def parse_arguments():
         action="store_true",
         help="Save simulated data to SPT3G format.",
     )
+    parser.add_argument(
+        "--save_hdf5",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Save simulated data to HDF5 format.",
+    )
+    parser.add_argument(
+        "--max_n_det",
+        required=False,
+        default=None,
+        type=int,
+        help="Override the maximum number of detectors",
+    )
     if toast.ops.madam.available():
         parser.add_argument(
             "--madam",
@@ -144,6 +158,7 @@ def parse_arguments():
             tau=5 * u.ms,
             tau_sigma=0.01,
         ),
+        toast.ops.SaveHDF5(name="save_hdf5", enabled=False),
         toast.ops.Statistics(name="filtered_statistics"),
         toast.ops.GroundFilter(name="groundfilter"),
         toast.ops.PolyFilter(name="polyfilter1D"),
@@ -181,9 +196,10 @@ def parse_arguments():
     # hardcoded arguments
     # focal plane
     args.sample_rate = 100  # sample_rate is nb sample per second.
-    args.max_detector = (
-        2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
-    )
+    args.max_detector = 2054
+    if args.max_n_det is not None:
+        args.max_detector = args.max_n_det
+
     args.width = 10.0
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
@@ -468,6 +484,11 @@ def main():
     # Apply a time constant
     job_ops.convolve_time_constant.apply(data)
     log.info_rank("Convolved time constant in", comm=world_comm, timer=timer)
+
+    # Optionally save to HDF5 in our output directory
+    job_ops.save_hdf5.volume = os.path.join(args.out_dir, "data")
+    job_ops.save_hdf5.apply(data)
+    log.info_rank("Saved data to HDF5 in", comm=world_comm, timer=timer)
 
     # Optionally save data to SPT3G format.  This is expensive and the configuration
     # is specific to this particular workflow, which is why the details are not

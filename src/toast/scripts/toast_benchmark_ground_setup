@@ -119,8 +119,14 @@ def parse_arguments():
         "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
     ]
     args.schedule_start = "2027-01-01 00:00:00"
+
+    args.schedule_stop = "2027-04-01 00:00:00"
+
+    # This produces about 26000 scans:
     # args.schedule_stop = "2027-12-31 00:00:00"
-    args.schedule_stop = "2027-01-01 01:00:00"
+
+    # This produces 75 scans:
+    # args.schedule_stop = "2027-01-01 01:00:00"
 
     # scan map
     args.nside = 4096

@@ -211,6 +211,12 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
+    # Optionally write out the data
+    if ops.save_hdf5.volume is None:
+        ops.save_hdf5.volume = os.path.join(args.out_dir, "data")
+    ops.save_hdf5.apply(data)
+    log.info_rank("Saved HDF5 data in", comm=world_comm, timer=timer)
+
     return data
 
 
@@ -288,6 +294,7 @@ def main():
         toast.ops.TimeConstant(
             name="deconvolve_time_constant", deconvolve=True, enabled=False
         ),
+        toast.ops.SaveHDF5(name="save_hdf5", enabled=False),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(name="mapmaker"),
         toast.ops.PixelsHealpix(name="pixels_final", enabled=False),

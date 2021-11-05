@@ -347,8 +347,8 @@ class DetectorData(object):
             val = "<DetectorData (view)"
         else:
             val = "<DetectorData"
-        val += " {} detectors each with shape {} and type {}:".format(
-            len(self._detectors), self._shape[1:], self._dtype
+        val += " {} detectors each with shape {}, type {}, units {}:".format(
+            len(self._detectors), self._shape[1:], self._dtype, self._units
         )
         if self._shape[1] <= 4:
             for d in self._detectors:
@@ -724,8 +724,11 @@ class DetDataManager(MutableMapping):
             len(self.detectors), self.samples
         )
         for k in self._internal.keys():
-            val += "\n    {}: shape = {}, dtype = {}".format(
-                k, self._internal[k].shape, self._internal[k].dtype
+            val += "\n    {}: shape={}, dtype={}, units='{}'".format(
+                k,
+                self._internal[k].shape,
+                self._internal[k].dtype,
+                self._internal[k].units,
             )
         val += ">"
         return val
@@ -1252,8 +1255,8 @@ class SharedDataManager(MutableMapping):
         val = "<SharedDataManager"
         for k in self._internal.keys():
             val += f"\n    {k} ({self._internal[k].type}): "
-            val += f"shape = {self._internal[k].shdata.shape}, "
-            val += f"dtype = {self._internal[k].shdata.dtype}"
+            val += f"shape={self._internal[k].shdata.shape}, "
+            val += f"dtype={self._internal[k].shdata.dtype}"
         val += ">"
         return val
 
