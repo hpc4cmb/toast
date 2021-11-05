@@ -42,7 +42,7 @@ class LoadHDF5(Operator):
         None, allow_none=True, help="Top-level directory containing the data volume"
     )
 
-    # FIXME:  We should add a filtering mechanism here to dump a subset of
+    # FIXME:  We should add a filtering mechanism here to load a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
 
     meta = List(None, allow_none=True, help="Only load this list of meta objects")
