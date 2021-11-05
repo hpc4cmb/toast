@@ -46,7 +46,9 @@ class ScanMap(Operator):
     pixels = Unicode(defaults.pixels, help="Observation detdata key for pixel indices")
 
     weights = Unicode(
-        defaults.weights, help="Observation detdata key for Stokes weights"
+        defaults.weights,
+        allow_none=True,
+        help="Observation detdata key for Stokes weights",
     )
 
     map_key = Unicode(
@@ -91,17 +93,19 @@ class ScanMap(Operator):
                 # Nothing to do for this observation
                 continue
 
-            # Sanity check the number of non-zeros between the map and the
-            # pointing matrix
-            check_nnz = 1
-            if len(ob.detdata[self.weights].detector_shape) > 1:
-                check_nnz = ob.detdata[self.weights].detector_shape[-1]
-            if map_data.n_value != check_nnz:
-                msg = "Detector data '{}' in observation '{}' has {} nnz instead of {} in the map".format(
-                    self.weights, ob.name, check_nnz, map_data.n_value
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
+            if self.weights is not None:
+                # Sanity check the number of non-zeros between the map and the
+                # pointing matrix
+                check_nnz = 1
+                if len(ob.detdata[self.weights].detector_shape) > 1:
+                    check_nnz = ob.detdata[self.weights].detector_shape[-1]
+                if map_data.n_value != check_nnz:
+                    msg = (
+                        f"Detector data '{self.weights}' in observation '{ob.name}' "
+                        f"has {check_nnz} nnz instead of {map_data.n_value} in the map"
+                    )
+                    log.error(msg)
+                    raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
             ob.detdata.ensure(self.det_data, detectors=dets)
@@ -122,7 +126,10 @@ class ScanMap(Operator):
                 for det in dets:
                     # The pixels, weights, and data.
                     pix = views.detdata[self.pixels][ivw][det]
-                    wts = views.detdata[self.weights][ivw][det]
+                    if self.weights is None:
+                        wts = np.ones(pix.size, dtype=np.float64)
+                    else:
+                        wts = views.detdata[self.weights][ivw][det]
                     ddata = views.detdata[self.det_data][ivw][det]
 
                     # Get local submap and pixels
@@ -183,9 +190,11 @@ class ScanMap(Operator):
         req = {
             "meta": [map_key],
             "shared": list(),
-            "detdata": [self.pixels, self.weights, self.det_data],
+            "detdata": [self.pixels, self.det_data],
             "intervals": list(),
         }
+        if self.weights is not None:
+            req["detdata"].append(self.weights)
         if self.view is not None:
             req["intervals"].append(self.view)
         return req
@@ -203,7 +212,7 @@ class ScanMask(Operator):
     """Operator which uses the pointing matrix to set timestream flags from a mask.
 
     The mask must be a PixelData instance with an integer data type.  The data for each
-    pixel is bitwise-and combined with the mask_bits to form a result.  for each
+    pixel is bitwise-and combined with the mask_bits to form a result.  For each
     detector sample crossing a pixel with a non-zero result, the detector flag is
     bitwise-or'd with the specified value.
 

@@ -105,7 +105,7 @@ def parse_arguments():
             detset_key="pixel",
         ),
         toast.ops.DefaultNoiseModel(name="default_model"),
-        toast.ops.ScanHealpix(name="scan_map"),
+        toast.ops.ScanHealpixMap(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),
         toast.ops.PixelsHealpix(name="pixels"),

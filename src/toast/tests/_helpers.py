@@ -440,6 +440,20 @@ def create_fake_sky(data, dist_key, map_key):
     data[map_key] = pix_data
 
 
+def create_fake_mask(data, dist_key, mask_key):
+    np.random.seed(987654321)
+    dist = data[dist_key]
+    pix_data = PixelData(dist, np.uint8, n_value=1)
+    # Just replicate the fake data across all local submaps
+    off = 0
+    for submap in range(dist.n_submap):
+        mask_data = np.random.normal(size=dist.n_pix_submap) > 0.5
+        if submap in dist.local_submaps:
+            pix_data.data[off, :, 0] = mask_data
+            off += 1
+    data[mask_key] = pix_data
+
+
 def uniform_chunks(samples, nchunk=100):
     """Divide some number of samples into chunks.
 

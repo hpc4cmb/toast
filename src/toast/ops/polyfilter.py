@@ -111,6 +111,7 @@ class PolyFilter2D(Operator):
         super().__init__(**kwargs)
         return
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         gt = GlobalTimers.get()
 
@@ -144,7 +145,7 @@ class PolyFilter2D(Operator):
             )
             gt.stop("Poly2D:  Duplicate obs")
 
-            # Redistribute this temporary observation to be distributed by sample sets
+            # Redistribute this temporary observation to be distributed by samples
             gt.start("Poly2D:  Forward redistribution")
             temp_ob.redistribute(1, times=self.times, override_sample_sets=None)
             gt.stop("Poly2D:  Forward redistribution")

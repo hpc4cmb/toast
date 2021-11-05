@@ -58,5 +58,6 @@ install(FILES
     ops_demodulate.py
     ops_filterbin.py
     io_hdf5.py
+    ops_noise_estim.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
