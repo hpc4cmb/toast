@@ -338,17 +338,25 @@ class NoiseEstim(Operator):
             if self.focalplane_key is not None:
                 # Pick just one detector to represent each key value
                 fp = obs.telescope.focalplane
+                det_names = []
                 key2det = {}
+                det2key = {}
                 for det in obs.all_detectors:
                     key = fp[det][self.focalplane_key]
                     if key not in key2det:
+                        det_names.append(det)
                         key2det[key] = det
+                        det2key[det] = key
                 pairs = []
-                det_names = []
-                for det in key2det.values():
-                    det_names.append(det)
-                    pairs.append([det, det])
+                for det1 in key2det.values():
+                    for det2 in key2det.values():
+                        if det1 == det2 and self.nosingle:
+                            continue
+                        if det1 != det2 and self.nocross:
+                            continue
+                        pairs.append([det1, det2])
             else:
+                det2key = None
                 det_names = obs.all_detectors
                 ndet = len(det_names)
                 if self.pairs is not None:
@@ -416,8 +424,15 @@ class NoiseEstim(Operator):
                 if det1 != det2:
                     signal2 = obs.detdata[self.det_data][det2]
                     flags2 = obs.detdata[self.det_flags][det2]
-                    flags[flags2 & self._detmask != 0] = True
+                    flags[flags2 & self.det_flag_mask != 0] = True
                 flags[shared_flags] = True
+
+                if det2key is None:
+                    det1_name = det1
+                    det2_name = det2
+                else:
+                    det1_name = det2key[det1]
+                    det2_name = det2key[det2]
 
                 self.process_noise_estimate(
                     obs,
@@ -429,8 +444,8 @@ class NoiseEstim(Operator):
                     times,
                     fsample,
                     fileroot,
-                    det1,
-                    det2,
+                    det1_name,
+                    det2_name,
                     intervals,
                 )
 
