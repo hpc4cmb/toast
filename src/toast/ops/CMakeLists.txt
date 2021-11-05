@@ -58,5 +58,6 @@ install(FILES
     load_hdf5.py
     noise_estimation.py
     noise_estimation_utils.py
+    yield_cut.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
