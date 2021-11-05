@@ -277,7 +277,9 @@ def simulate_data(job, toast_comm, telescope, schedule):
         ops.sim_atmosphere.detector_weights = ops.weights_azel
     log.info_rank("  Simulating and observing atmosphere", comm=world_comm)
     ops.sim_atmosphere.apply(data)
-    log.info_rank("  Simulated and observed atmosphere in", comm=world_comm, timer=timer)
+    log.info_rank(
+        "  Simulated and observed atmosphere in", comm=world_comm, timer=timer
+    )
 
     ops.mem_count.prefix = "After simulating atmosphere"
     ops.mem_count.apply(data)

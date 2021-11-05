@@ -15,6 +15,7 @@ from astropy import units as u
 import healpy as hp
 
 from ..timing import function_timer
+from .. import rng
 
 from .. import qarray as qa
 
@@ -24,7 +25,7 @@ from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
 
 from .operator import Operator
 
-from ..utils import Environment, Logger, Timer
+from ..utils import Environment, Logger, Timer, name_UID
 
 from .._libtoast import bin_proj, bin_invcov, add_templates, legendre
 
@@ -49,9 +50,7 @@ class YieldCut(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
-    pixel_yield = Float(
-        0.9, help="Fraction of pixels that are not flagged."
-    )
+    keep_frac = Float(0.9, help="Fraction of detectors to keep")
 
     focalplane_key = Unicode(
         "pixel",
@@ -100,11 +99,11 @@ class YieldCut(Operator):
                 x = rng.random(
                     1,
                     sampler="uniform_01",
-                    key=(key1, self._realization),
+                    key=(key1, key2),
                     counter=(counter1, counter2),
-                    )[0]
-                if x > self.yield:
-                    obs.detdata[self.det_flags] |= self.det_flag_mask
+                )[0]
+                if x > self.keep_frac:
+                    obs.detdata[self.det_flags][det] |= self.det_flag_mask
 
         return
 

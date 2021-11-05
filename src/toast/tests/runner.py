@@ -71,6 +71,7 @@ from . import ops_sss as test_ops_sss
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_noise_estim as test_ops_noise_estim
+from . import ops_yield_cut as test_ops_yield_cut
 
 from . import covariance as test_covariance
 
@@ -204,6 +205,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_demodulate))
         suite.addTest(loader.loadTestsFromModule(test_ops_filterbin))
         suite.addTest(loader.loadTestsFromModule(test_ops_noise_estim))
+        suite.addTest(loader.loadTestsFromModule(test_ops_yield_cut))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
