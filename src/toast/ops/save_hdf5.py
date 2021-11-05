@@ -107,7 +107,7 @@ class SaveHDF5(Operator):
                 shared=shared_fields,
                 intervals=intervals_fields,
                 config=self.config,
-                times=self.times,
+                times=str(self.times),
                 force_serial=self.force_serial,
             )
 

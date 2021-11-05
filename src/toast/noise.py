@@ -6,8 +6,6 @@ from typing import Type
 import re
 import numpy as np
 
-import hashlib
-
 from astropy import units as u
 
 import h5py
@@ -216,6 +214,7 @@ class Noise(object):
         """
         return self._detector_weight(det)
 
+    @function_timer
     def _save_base_hdf5(self, hf, comm=None, force_serial=False):
         """Write internal data to an open HDF5 group."""
         parallel = have_hdf5_parallel()
@@ -235,6 +234,7 @@ class Noise(object):
                 mixdata.append((det, strm, weight))
         maxstr += 1
         mixdtype = np.dtype(f"a{maxstr}, a{maxstr}, f8")
+
         if participating:
             ds = hf.create_dataset("mixing_matrix", (len(mixdata),), dtype=mixdtype)
             if comm is None or comm.rank == 0:
@@ -251,8 +251,11 @@ class Noise(object):
         psd_sets = dict()
         for k in self.keys:
             freq = self.freq(k)
-            freq_str = f"{freq[:2]} {freq[-3:]}"
-            fhash = hashlib.md5(freq_str.encode("utf8")).hexdigest()
+            fhash = (
+                hash(freq[2] * 1000 + freq[-2] + freq[-1])
+                .to_bytes(8, "big", signed=True)
+                .hex()
+            )
             if fhash not in psd_sets:
                 psd_sets[fhash] = {
                     "freq": freq,
@@ -321,6 +324,7 @@ class Noise(object):
         """
         self._save_hdf5(handle, comm=comm, force_serial=force_serial, **kwargs)
 
+    @function_timer
     def _load_base_hdf5(self, hf, comm=None):
         """Read internal data from an open HDF5 group"""
         self._freqs = dict()
