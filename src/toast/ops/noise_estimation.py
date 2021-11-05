@@ -240,7 +240,7 @@ class NoiseEstim(Operator):
                 comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
-            # Redistribute this temporary observation to be distributed by sample sets
+            # Redistribute this temporary observation to be distributed by samples
             temp_obs.redistribute(1, times=self.times, override_sample_sets=None)
             log.debug_rank(
                 f"{data.comm.group:4} : Redistributed observation in",
