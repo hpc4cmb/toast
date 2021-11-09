@@ -10,9 +10,9 @@ install(PROGRAMS
     toast_benchmark_satellite
     toast_benchmark_ground
     toast_benchmark_ground_setup
-    benchmarking_utilities.py
     toast_healpix_convert
     toast_healpix_coadd
+    toast_hdf5_to_spt3g
     DESTINATION bin
 )
 

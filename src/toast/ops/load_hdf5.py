@@ -65,6 +65,10 @@ class LoadHDF5(Operator):
         help="The size of the rectangular process grid in the detector direction.",
     )
 
+    force_serial = Bool(
+        False, help="Use serial HDF5 operations, even if parallel support available"
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -146,6 +150,7 @@ class LoadHDF5(Operator):
                 detdata=detdata_fields,
                 shared=shared_fields,
                 intervals=intervals_fields,
+                force_serial=self.force_serial,
             )
 
             data.obs.append(ob)

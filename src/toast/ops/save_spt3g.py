@@ -49,6 +49,8 @@ class SaveSpt3g(Operator):
         help="Export class to create frames from an observation",
     )
 
+    purge = Bool(False, help="If True, delete observation data as it is saved")
+
     @traitlets.validate("obs_export")
     def _check_export(self, proposal):
         ex = proposal["value"]
@@ -117,9 +119,17 @@ class SaveSpt3g(Operator):
                 )
                 save_pipe.Run()
 
+                del save_pipe
+                del emitter
+
             if ob.comm.comm_group is not None:
                 ob.comm.comm_group.barrier()
 
+            if self.purge:
+                ob.clear()
+
+        if self.purge:
+            data.obs.clear()
         return
 
     def _finalize(self, data, **kwargs):
