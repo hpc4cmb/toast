@@ -59,5 +59,6 @@ install(FILES
     ops_filterbin.py
     io_hdf5.py
     ops_noise_estim.py
+    ops_yield_cut.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

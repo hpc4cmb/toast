@@ -192,7 +192,7 @@ def main():
     # Guard against being called with multiple processes
     mpiworld, procs, rank = get_world()
     if rank == 0:
-        fp.write(args.out)
+        fp.save_hdf5(args.out)
         plotfile = "{}.pdf".format(args.out)
         plot_focalplane(
             fp,

@@ -604,6 +604,7 @@ def create_ground_data(
     temp_dir=None,
     el_nod=False,
     el_nods=[-1 * u.degree, 1 * u.degree],
+    pixel_per_process=1,
 ):
     """Create a data object with a simple ground sim.
 
@@ -623,7 +624,11 @@ def create_ground_data(
     toastcomm = create_comm(mpicomm)
     data = Data(toastcomm)
 
-    tele = create_ground_telescope(toastcomm.group_size, sample_rate=sample_rate)
+    tele = create_ground_telescope(
+        toastcomm.group_size,
+        sample_rate=sample_rate,
+        pixel_per_process=pixel_per_process,
+    )
 
     # Create a schedule.
 
