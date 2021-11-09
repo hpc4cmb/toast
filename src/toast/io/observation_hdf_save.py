@@ -30,6 +30,8 @@ from ..observation import default_values as defaults
 
 from ..observation_dist import global_interval_times
 
+from .observation_hdf_utils import check_dataset_buffer_size
+
 
 @function_timer
 def save_hdf5_shared_parallel(obs, hgrp, fields, log_prefix):
@@ -77,20 +79,38 @@ def save_hdf5_shared_parallel(obs, hgrp, fields, log_prefix):
         if scomm == "group":
             # Easy...
             if obs.comm.group_rank == 0:
-                hdata[:] = sdata.data
+                msg = f"Shared field {field} ({scomm})"
+                slices = tuple([slice(0, x) for x in sshape])
+                check_dataset_buffer_size(msg, slices, sdtype, True)
+                hdata.write_direct(sdata.data, slices, slices)
         elif scomm == "column":
             # Rank zero of each column writes
             if sdata.comm is None or sdata.comm.rank == 0:
-                hdata[
-                    obs.local_index_offset : obs.local_index_offset
-                    + obs.n_local_samples
-                ] = sdata.data
+                sh_slices = tuple([slice(0, x) for x in sshape])
+                offset = dist_samps[obs.comm.group_rank].offset
+                nelem = dist_samps[obs.comm.group_rank].n_elem
+                hf_slices = [
+                    slice(offset, offset + nelem),
+                ]
+                hf_slices.extend([slice(0, x) for x in sdata.shape[1:]])
+                hf_slices = tuple(hf_slices)
+                msg = f"Shared field {field} ({scomm})"
+                check_dataset_buffer_size(msg, hf_slices, sdtype, True)
+                hdata.write_direct(sdata.data, sh_slices, hf_slices)
         else:
             # Rank zero of each row writes
             if sdata.comm is None or sdata.comm.rank == 0:
-                off = dist_dets[obs.comm.group_rank].offset
+                sh_slices = tuple([slice(0, x) for x in sshape])
+                offset = dist_dets[obs.comm.group_rank].offset
                 nelem = dist_dets[obs.comm.group_rank].n_elem
-                hdata[off : off + nelem] = sdata.data
+                hf_slices = [
+                    slice(offset, offset + nelem),
+                ]
+                hf_slices.extend([slice(0, x) for x in sdata.shape[1:]])
+                hf_slices = tuple(hf_slices)
+                msg = f"Shared field {field} ({scomm})"
+                check_dataset_buffer_size(msg, hf_slices, sdtype, True)
+                hdata.write_direct(sdata.data, sh_slices, hf_slices)
 
         log.verbose_rank(
             f"{log_prefix}  Shared finished {field} parallel write in",
@@ -267,10 +287,22 @@ def save_hdf5_detdata_parallel(obs, hgrp, fields, log_prefix):
         samp_nelem = dist_samps[obs.comm.group_rank].n_elem
         det_off = dist_dets[obs.comm.group_rank].offset
         det_nelem = dist_dets[obs.comm.group_rank].n_elem
+
+        detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
+        hf_slice = [
+            slice(det_off, det_off + det_nelem, 1),
+            slice(samp_off, samp_off + samp_nelem, 1),
+        ]
+        if dvalshape is not None:
+            detdata_slice.extend([slice(0, x) for x in dvalshape])
+            hf_slice.extend([slice(0, x) for x in dvalshape])
+        detdata_slice = tuple(detdata_slice)
+        hf_slice = tuple(hf_slice)
+        msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
+        check_dataset_buffer_size(msg, hf_slice, ddtype, True)
+
         with hdata.collective:
-            hdata[
-                det_off : det_off + det_nelem, samp_off : samp_off + samp_nelem
-            ] = local_data
+            hdata.write_direct(local_data.data, detdata_slice, hf_slice)
 
         del hdata
         log.verbose_rank(
@@ -342,16 +374,22 @@ def save_hdf5_detdata_serial(obs, hgrp, fields, log_prefix):
             det_nelem = dist_dets[proc].n_elem
             nflat = det_nelem * samp_nelem
             shp = (det_nelem, samp_nelem)
+            detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
+            hf_slice = [
+                slice(det_off, det_off + det_nelem, 1),
+                slice(samp_off, samp_off + samp_nelem, 1),
+            ]
             if dvalshape is not None:
-                nflat *= dvalshape
+                nflat *= np.prod(dvalshape)
                 shp += dvalshape
+                detdata_slice.extend([slice(0, x) for x in dvalshape])
+                hf_slice.extend([slice(0, x) for x in dvalshape])
+            detdata_slice = tuple(detdata_slice)
+            hf_slice = tuple(hf_slice)
             if proc == 0:
                 # Root process writes local data
                 if rank == 0:
-                    hdata[
-                        det_off : det_off + det_nelem,
-                        samp_off : samp_off + samp_nelem,
-                    ] = local_data
+                    hdata.write_direct(local_data.data, detdata_slice, hf_slice)
             elif proc == rank:
                 # We are sending
                 comm.Send(local_data.flatdata, dest=0, tag=tag_offset + proc)
@@ -359,9 +397,7 @@ def save_hdf5_detdata_serial(obs, hgrp, fields, log_prefix):
                 # We are receiving and writing
                 recv = bufclass(nflat)
                 comm.Recv(recv, source=proc, tag=tag_offset + proc)
-                hdata[
-                    det_off : det_off + det_nelem, samp_off : samp_off + samp_nelem
-                ] = recv.array().reshape(shp)
+                hdata.write_direct(recv.array().reshape(shp), detdata_slice, hf_slice)
                 recv.clear()
                 del recv
         log.verbose_rank(
@@ -590,7 +626,7 @@ def save_hdf5(
             if site.weather is not None:
                 if hasattr(site.weather, "name"):
                     # This is a simulated weather object, dump it.
-                    inst_group.attrs["site_weather_name"] = site.weather.name
+                    inst_group.attrs["site_weather_name"] = str(site.weather.name)
                     inst_group.attrs[
                         "site_weather_realization"
                     ] = site.weather.realization
@@ -617,7 +653,7 @@ def save_hdf5(
         del inst_group
 
         log.debug_rank(
-            f"{log_prefix} finished instrument model",
+            f"{log_prefix} Finished instrument model",
             comm=save_comm,
             timer=timer,
         )
@@ -652,13 +688,18 @@ def save_hdf5(
                     else:
                         meta_group.attrs[k] = v
                 except ValueError as e:
-                    msg = f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})"
+                    msg = (
+                        f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})."
+                    )
+                    msg += f" Try casting it to a supported type when storing in the "
+                    msg += f"observation dictionary or implement save_hdf5() and "
+                    msg += f"load_hdf5() methods."
                     log.verbose_rank(msg, comm=save_comm)
-            log.verbose_rank(
-                f"{log_prefix}  Meta finished {k} (parallel={parallel}) in",
-                comm=save_comm,
-                timer=vtimer,
-            )
+        log.verbose_rank(
+            f"{log_prefix}  Wrote other metadata (parallel={parallel}) in",
+            comm=save_comm,
+            timer=vtimer,
+        )
 
         del meta_group
 
@@ -694,7 +735,7 @@ def save_hdf5(
         save_hdf5_shared_serial(obs, shared_group, fields, log_prefix)
 
     log.debug_rank(
-        f"{log_prefix} finished shared data",
+        f"{log_prefix} Finished shared data",
         comm=obs.comm.comm_group,
         timer=timer,
     )
@@ -709,7 +750,7 @@ def save_hdf5(
         save_hdf5_detdata_serial(obs, detdata_group, fields, log_prefix)
 
     log.debug_rank(
-        f"{log_prefix} finished detector data",
+        f"{log_prefix} Finished detector data",
         comm=obs.comm.comm_group,
         timer=timer,
     )
@@ -725,7 +766,7 @@ def save_hdf5(
             save_hdf5_intervals_serial(obs, intervals_group, fields, log_prefix)
 
     log.debug_rank(
-        f"{log_prefix} finished intervals data",
+        f"{log_prefix} Finished intervals data",
         comm=obs.comm.comm_group,
         timer=timer,
     )

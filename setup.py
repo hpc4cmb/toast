@@ -257,6 +257,11 @@ conf["entry_points"] = {
         "toast_ground_schedule = toast.scripts.toast_ground_schedule:main",
         "toast_satellite_schedule = toast.scripts.toast_satellite_schedule:main",
         "toast_benchmark_satellite = toast.scripts.toast_benchmark_satellite:main",
+        "toast_benchmark_ground_setup = toast.scripts.toast_benchmark_ground_setup:main",
+        "toast_benchmark_ground = toast.scripts.toast_benchmark_ground:main",
+        "toast_healpix_convert = toast.scripts.toast_healpix_convert:main",
+        "toast_healpix_coadd = toast.scripts.toast_healpix_coadd:main",
+        "toast_hdf5_to_spt3g = toast.scripts.toast_hdf5_to_spt3g:main",
         "toast_timing_plot = toast.scripts.toast_timing_plot:main",
     ]
 }

@@ -222,6 +222,8 @@ class export_obs_meta(object):
 
     @function_timer
     def __call__(self, obs):
+        log = Logger.get()
+        log.verbose(f"Create observation frame for {obs.name}")
         # Construct observation frame
         ob = c3g.G3Frame(c3g.G3FrameType.Observation)
         ob["observation_name"] = c3g.G3String(obs.name)
@@ -353,6 +355,7 @@ class export_obs_data(object):
 
     @function_timer
     def __call__(self, obs):
+        log = Logger.get()
         frame_intervals = self._frame_intervals
         if frame_intervals is None:
             # We are using the sample set distribution for our frame boundaries.
@@ -379,6 +382,15 @@ class export_obs_data(object):
         output = list()
         frame_view = obs.view[frame_intervals]
         for ivw, tview in enumerate(frame_view.shared[self._timestamp_names[0]]):
+            msg = f"Create scan frame {obs.name}:{ivw} with fields:"
+            msg += f"\n  shared:  {self._timestamp_names[1]}"
+            nms = ", ".join([y for x, y, z in self._shared_names])
+            msg += f", {nms}"
+            nms = ", ".join([y for x, y, z in self._det_names])
+            msg += f"\n  detdata:  {nms}"
+            nms = ", ".join([y for x, y in self._interval_names])
+            msg += f"\n  intervals:  {nms}"
+            log.verbose(msg)
             # Construct the Scan frame
             frame = c3g.G3Frame(c3g.G3FrameType.Scan)
             # Add timestamps

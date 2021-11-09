@@ -96,6 +96,9 @@ class IoHdf5Test(MPITestCase):
                 )
                 obfiles.append(obf)
 
+            if self.comm is not None:
+                self.comm.barrier()
+
             # Import the data
             check_data = Data(comm=data.comm)
 
