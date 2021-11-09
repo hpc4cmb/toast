@@ -330,6 +330,11 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.mem_count.prefix = "After simulating noise"
     ops.mem_count.apply(data)
 
+    # Add random flags
+
+    ops.yield_cut.apply(data)
+    log.info_rank("  Applied yield flags in", comm=world_comm, timer=timer)
+
     log.info_rank("Simulated data in", comm=world_comm, timer=timer_sim)
 
     # Optionally write out the data
@@ -620,6 +625,7 @@ def main():
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PixelsHealpix(name="pixels_radec"),
         toast.ops.StokesWeights(name="weights_radec", mode="IQU"),
+        toast.ops.YieldCut(name="yield_cut", enabled=False),
         toast.ops.FlagSSO(name="flag_sso", enabled=False),
         toast.ops.CadenceMap(name="cadence_map", enabled=False),
         toast.ops.CrossLinking(name="crosslinking", enabled=False),
