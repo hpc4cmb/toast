@@ -423,6 +423,7 @@ class Focalplane(object):
         file (str):  Load the focalplane from this file.
         comm (MPI.Comm):  If loading from a file, optional communicator to broadcast
             across.
+        thinfp (int):  Only sample the detectors in the file.
 
     """
 
@@ -436,6 +437,7 @@ class Focalplane(object):
         sample_rate=None,
         file=None,
         comm=None,
+        thinfp=None,
     ):
         log = Logger.get()
         self.detector_data = detector_data
@@ -456,6 +458,9 @@ class Focalplane(object):
 
         # Build index of detector to table row
         self._det_to_row = {y["name"]: x for x, y in enumerate(self.detector_data)}
+
+        if thinfp is not None:
+            raise RuntimeError("thinfp not implemented yet.")
 
         if self.field_of_view is None:
             self._compute_fov()

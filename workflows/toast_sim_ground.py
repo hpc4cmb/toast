@@ -95,6 +95,13 @@ def parse_config(operators, templates, comm):
         help="Override focalplane sampling rate [Hz]",
     )
 
+    parser.add_argument(
+        "--thinfp",
+        required=False,
+        type=int,
+        help="Only sample the provided focalplane pixels",
+    )
+
     # Build a config dictionary starting from the operator defaults, overriding with any
     # config files specified with the '--config' commandline option, followed by any
     # individually specified parameter overrides.
@@ -130,7 +137,7 @@ def load_instrument_and_schedule(args, comm):
     else:
         sample_rate = None
     focalplane = toast.instrument.Focalplane(
-        file=args.focalplane, comm=comm, sample_rate=sample_rate
+        file=args.focalplane, comm=comm, sample_rate=sample_rate, thinfp=args.thinfp
     )
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
