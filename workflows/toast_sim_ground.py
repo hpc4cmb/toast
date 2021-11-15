@@ -147,10 +147,15 @@ def load_instrument_and_schedule(args, comm):
         sample_rate = args.sample_rate * u.Hz
     else:
         sample_rate = None
+<<<<<<< HEAD
 
     fname_pickle = (
         f"{os.path.basename(args.focalplane)}_"
         f"thinfp={args.thinfp}_fsample={args.sample_rate}.pck"
+=======
+    focalplane = toast.instrument.Focalplane(
+        file=args.focalplane, comm=comm, sample_rate=sample_rate, thinfp=args.thinfp
+>>>>>>> 26a4773d (Add thinfp parameter)
     )
     if os.path.isfile(fname_pickle):
         log.info_rank(f"Loading focalplane from {fname_pickle}", comm=comm)
