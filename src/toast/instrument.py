@@ -475,9 +475,6 @@ class Focalplane(object):
         # Build index of detector to table row
         self._det_to_row = {y["name"]: x for x, y in enumerate(self.detector_data)}
 
-        if thinfp is not None:
-            raise RuntimeError("thinfp not implemented yet.")
-
         if self.field_of_view is None:
             self._compute_fov()
         self._get_pol_angles()
