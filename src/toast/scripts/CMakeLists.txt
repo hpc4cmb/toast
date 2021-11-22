@@ -13,6 +13,7 @@ install(PROGRAMS
     toast_healpix_convert
     toast_healpix_coadd
     toast_hdf5_to_spt3g
+    toast_mini
     DESTINATION bin
 )
 

@@ -263,6 +263,7 @@ def reduce_data(job, args, data):
     return
 
 
+@toast.timing.function_timer
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()

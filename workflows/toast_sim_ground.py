@@ -582,6 +582,7 @@ def dump_spt3g(job, args, data):
     dumper.apply(data)
 
 
+@toast.timing.function_timer
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()

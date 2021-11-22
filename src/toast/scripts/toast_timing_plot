@@ -41,11 +41,8 @@ def main():
 
     print(f"Reading input timing from {args.file}")
 
-    raw = list()
-    values = list()
-
+    raw = dict()
     n_column = 0
-    n_rows = 0
 
     with open(args.file, "r") as f:
         reader = csv.reader(f)
@@ -57,28 +54,53 @@ def main():
                 trace = mat.group(1)
                 med = float(row[7])
                 levels = trace.split("|")
-                raw.append(levels)
-                values.append(med)
                 n_column = max(n_column, len(levels))
-                n_rows += 1
+                raw[trace] = med
+
+    # Compute untracked time.  For plotting, we add an "Other" category that
+    # contains the total minus all the tracked sub-categories.
+
+    subtotals = dict()
+    for trace, val in raw.items():
+        levels = trace.split("|")
+        parent = "|".join(levels[:-1])
+        if parent == "":
+            parent = "ROOT"
+        if parent not in subtotals:
+            subtotals[parent] = 0.0
+        subtotals[parent] += val
+
+    for trace in list(raw.keys()):
+        if trace in subtotals:
+            # This is a "parent" counter with at least one child.
+            other = raw[trace] - subtotals[trace]
+            othername = f"{trace}|Other"
+            del raw[trace]
+            raw[othername] = other
+
+    # Build the data needed for plotting
 
     lnames = [f"level{x}" for x in range(n_column)]
     data = list()
 
-    for row, val in zip(raw, values):
-        n_cols = len(row)
+    for trace, val in raw.items():
+        levels = trace.split("|")
+        n_cols = len(levels)
         rlist = list()
         for i in range(n_cols):
-            rlist.append(row[i])
+            rlist.append(levels[i])
         if n_cols < n_column:
-            rlist.append("Other")
-            for i in range(n_cols + 1, n_column):
+            for i in range(n_cols, n_column):
                 rlist.append(None)
         rlist.append(val)
         data.append(rlist)
 
     cnames = list(lnames)
     cnames.append("value")
+    print(f"{len(cnames)} columns = {cnames}")
+    print(f"data = ")
+    for row in data:
+        print(f" {len(row)}: {row}")
     df = pd.DataFrame(data=data, columns=cnames)
 
     fig = px.sunburst(

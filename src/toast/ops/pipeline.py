@@ -8,6 +8,8 @@ import traitlets
 
 from ..utils import Logger
 
+from ..timing import function_timer
+
 from ..traits import trait_docs, Int, Unicode, List
 
 from ..data import Data
@@ -73,6 +75,7 @@ class Pipeline(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
@@ -112,12 +115,13 @@ class Pipeline(Operator):
                     op.exec(data, detectors=[det])
         else:
             # We have explicit detector sets
+            det_check = set(detectors)
             for det_set in self.detector_sets:
                 selected_set = det_set
                 if detectors is not None:
                     selected_set = list()
                     for det in det_set:
-                        if det in detectors:
+                        if det in det_check:
                             selected_set.append(det)
                 if len(selected_set) == 0:
                     # Nothing in this detector set is being used, skip it
@@ -135,6 +139,7 @@ class Pipeline(Operator):
 
         return
 
+    @function_timer
     def _finalize(self, data, **kwargs):
         log = Logger.get()
         result = list()
