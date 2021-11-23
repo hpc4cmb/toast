@@ -25,16 +25,21 @@ an interactive python session.
 
 """
 
+# Import toast first to avoid thread addinity issues with numpy and OpenBLAS
+import toast
+
 import os
+import pickle
 import sys
 import traceback
 import argparse
+import datetime
 
 import numpy as np
 
 from astropy import units as u
 
-import toast
+# import toast
 import toast.ops
 
 from toast.mpi import MPI, Comm
@@ -102,6 +107,12 @@ def parse_config(operators, templates, comm):
         help="Only sample the provided focalplane pixels",
     )
 
+    parser.add_argument(
+        "--telescope",
+        required=False,
+        help="Override telescope name read from the schedule file",
+    )
+
     # Build a config dictionary starting from the operator defaults, overriding with any
     # config files specified with the '--config' commandline option, followed by any
     # individually specified parameter overrides.
@@ -136,9 +147,20 @@ def load_instrument_and_schedule(args, comm):
         sample_rate = args.sample_rate * u.Hz
     else:
         sample_rate = None
-    focalplane = toast.instrument.Focalplane(
-        file=args.focalplane, comm=comm, sample_rate=sample_rate, thinfp=args.thinfp
+
+    fname_pickle = (
+        f"{os.path.basename(args.focalplane)}_"
+        f"thinfp={args.thinfp}_fsample={args.sample_rate}.pck"
     )
+    if os.path.isfile(fname_pickle):
+        log.info_rank(f"Loading focalplane from {fname_pickle}", comm=comm)
+        focalplane = pickle.load(open(fname_pickle, "rb"))
+    else:
+        focalplane = toast.instrument.Focalplane(
+            file=args.focalplane, comm=comm, sample_rate=sample_rate, thinfp=args.thinfp
+        )
+        log.info_rank(f"Saving focalplane to {fname_pickle}", comm=comm)
+        pickle.dump(focalplane, open(fname_pickle, "wb"))
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
     log.info_rank(f"After loading focalplane:  {mem}", comm)
@@ -159,8 +181,12 @@ def load_instrument_and_schedule(args, comm):
         schedule.site_alt,
         weather=None,
     )
+    if args.telescope is None:
+        telescope_name = schedule.telescope_name
+    else:
+        telescope_name = args.telescope
     telescope = toast.instrument.Telescope(
-        schedule.telescope_name, focalplane=focalplane, site=site
+        telescope_name, focalplane=focalplane, site=site
     )
     return telescope, schedule
 
@@ -600,6 +626,13 @@ def main():
 
     # Get optional MPI parameters
     comm, procs, rank = toast.get_world()
+
+    nthread = os.environ["OMP_NUM_THREADS"]
+    log.info_rank(
+        f"Executing workflow with {procs} MPI tasks, each with "
+        f"{nthread} OpenMP threads at {datetime.datetime.now()}",
+        comm,
+    )
 
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
     log.info_rank(f"Start of the workflow:  {mem}", comm)
