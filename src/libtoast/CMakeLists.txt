@@ -151,7 +151,7 @@ if(CUDAToolkit_FOUND AND NOT CUDA_DISABLED)
     target_link_libraries(toast CUDA::cudart CUDA::cublas CUDA::cusolver CUDA::cufft CUDA::cufftw)
 else()
     message(WARNING "CUDA libs not found.") # TODO remove debug message
-endif(CUDAToolkit_FOUND)
+endif()
 
 # Installation
 

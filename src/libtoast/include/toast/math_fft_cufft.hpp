@@ -10,37 +10,38 @@
 
 #ifdef HAVE_CUDALIBS
 
-# include <cufftw.h>
+#include <cufftw.h>
 #include <toast/gpu_helpers.hpp>
 
-namespace toast {
-class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D {
+namespace toast
+{
+    class FFTPlanReal1DCUFFT : public toast::FFTPlanReal1D
+    {
     public:
-
         FFTPlanReal1DCUFFT(int64_t length, int64_t n, toast::fft_plan_type type,
-                          toast::fft_direction dir, double scale);
+                           toast::fft_direction dir, double scale);
         ~FFTPlanReal1DCUFFT();
 
         void exec();
-        double * tdata(int64_t indx);
-        double * fdata(int64_t indx);
+        double *tdata(int64_t indx);
+        double *fdata(int64_t indx);
 
     private:
         int64_t buflength_; // like length_ but takes overflow due to format conversion into account
         static void complexToHalfcomplex(const int64_t length, const int64_t nbBatch,
-                                         double* batchedComplexInputs[], double* batchedHalfcomplexOutputs[]);
+                                         double *batchedComplexInputs[], double *batchedHalfcomplexOutputs[]);
         static void halfcomplexToComplex(const int64_t length, const int64_t nbBatch,
-                                         double* batchedHalfcomplexInputs[], double* batchedHComplexOutputs[]);
+                                         double *batchedHalfcomplexInputs[], double *batchedHComplexOutputs[]);
 
         cufftHandle plan_;
         // this is all the actual data allocated as a continuous block
-        toast::AlignedVector <double> data_;
+        toast::AlignedVector<double> data_;
         // those are all views into the data
-        double * traw_;
-        double * fraw_;
-        std::vector <double *> tview_;
-        std::vector <double *> fview_;
-};
+        double *traw_;
+        double *fraw_;
+        std::vector<double *> tview_;
+        std::vector<double *> fview_;
+    };
 }
 
 #endif // ifdef HAVE_CUDALIBS

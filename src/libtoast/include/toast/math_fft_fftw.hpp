@@ -8,14 +8,17 @@
 
 #include <vector>
 
-#ifdef HAVE_FFTW
+// #ifdef HAVE_FFTW
+// the not HAVE_CUDALIBS is needed to deal with conflict in symbol names between both libs
+#if defined(HAVE_FFTW) && !defined(HAVE_CUDALIBS)
 
-# include <fftw3.h>
+#include <fftw3.h>
 
-namespace toast {
-class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D {
+namespace toast
+{
+    class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D
+    {
     public:
-
         FFTPlanReal1DFFTW(int64_t length, int64_t n, toast::fft_plan_type type,
                           toast::fft_direction dir, double scale);
 
@@ -23,18 +26,17 @@ class FFTPlanReal1DFFTW : public toast::FFTPlanReal1D {
 
         void exec();
 
-        double * tdata(int64_t indx);
-        double * fdata(int64_t indx);
+        double *tdata(int64_t indx);
+        double *fdata(int64_t indx);
 
     private:
-
         fftw_plan plan_;
-        toast::AlignedVector <double> data_;
-        double * traw_;
-        double * fraw_;
-        std::vector <double *> tview_;
-        std::vector <double *> fview_;
-};
+        toast::AlignedVector<double> data_;
+        double *traw_;
+        double *fraw_;
+        std::vector<double *> tview_;
+        std::vector<double *> fview_;
+    };
 }
 
 #endif // ifdef HAVE_FFTW
