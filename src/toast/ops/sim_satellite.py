@@ -351,6 +351,7 @@ class SimSatellite(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         zaxis = np.array([0, 0, 1], dtype=np.float64)
         log = Logger.get()

@@ -3,7 +3,7 @@
 # This minimum version is mostly set in order to get a newer version
 # of the FindMPI check.  Note that you can easily install a newer cmake version
 # using conda or pip.
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 
 foreach(policy
     CMP0048
@@ -55,6 +55,14 @@ endif()
 
 # OpenMP
 find_package(OpenMP)
+
+# OpenACC.  For now, we only check for this if it is explicitly enabled by the user.
+# The reason is that some compilers will report the correct compile flag even if
+# no suitable device exists (e.g. gcc -fopenacc).  Make this process more robust
+# before enabling by default.
+if(USE_OPENACC)
+    find_package(OpenACC)
+endif()
 
 if(TOAST_STATIC_DEPS)
     set(BLA_STATIC TRUE)

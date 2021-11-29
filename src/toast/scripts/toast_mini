@@ -181,7 +181,7 @@ def main():
         n_procs, n_nodes, 0.4, job_ops.pixels.nside, world_comm, nside_final=nside_final
     )
 
-    # Select appropriate data volume
+    # Select appropriate data volume.
     select_case(
         args,
         jobargs,

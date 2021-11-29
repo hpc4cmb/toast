@@ -532,6 +532,7 @@ class SolverLHS(Operator):
         return list()
 
 
+@function_timer
 def solve(
     data,
     detectors,

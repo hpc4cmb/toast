@@ -741,5 +741,6 @@ def system_state(comm=None):
     max, curmax = threading_state()
     msg = f"Threading snapshot:  Overall max = {max}, Current max = {curmax}\n"
     memstr = memreport(msg="system snapshot", comm=comm, silent=True)
-    msg += memstr
-    log.info_rank(msg, comm=comm)
+    if comm is None or comm.rank == 0:
+        msg += memstr
+        log.info(msg)

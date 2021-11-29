@@ -7,7 +7,6 @@
 """Plot global timing results
 """
 
-from pprint import PrettyPrinter
 import sys
 import argparse
 import re
@@ -19,6 +18,8 @@ import numpy as np
 import pandas as pd
 
 import plotly.express as px
+
+import plotly.io as pio
 
 
 def main():
@@ -39,10 +40,10 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"Reading input timing from {args.file}")
+    if re.match(r".*\.pdf", args.out) is None:
+        print("WARNING:  output file should have a .pdf extension")
 
     raw = dict()
-    n_column = 0
 
     with open(args.file, "r") as f:
         reader = csv.reader(f)
@@ -52,38 +53,82 @@ def main():
             if mat is not None:
                 # this is a function timer
                 trace = mat.group(1)
-                med = float(row[7])
-                levels = trace.split("|")
-                n_column = max(n_column, len(levels))
-                raw[trace] = med
+                value = float(row[7])
+                if trace == "main":
+                    # special case
+                    continue
+                else:
+                    levels = trace.split("|")
+                    parent = raw
+                    for lvl in levels:
+                        if lvl not in parent:
+                            parent[lvl] = dict()
+                        parent = parent[lvl]
+                    parent["TOTAL"] = value
 
-    # Compute untracked time.  For plotting, we add an "Other" category that
-    # contains the total minus all the tracked sub-categories.
+    # Prune lone branches and compute child node subtotals
 
-    subtotals = dict()
-    for trace, val in raw.items():
+    def process(node, name=None):
+        node_keys = list(node.keys())
+        n_child = 0
+        last_child = None
+        for chkey in node_keys:
+            if isinstance(node[chkey], dict):
+                process(node[chkey], name=chkey)
+                n_child += 1
+                last_child = chkey
+        if n_child == 0:
+            # We are a leaf
+            return
+        if "CHILD" not in node:
+            node["CHILD"] = 0.0
+        # Accumulate the totals from all children
+        for chkey in node_keys:
+            if isinstance(node[chkey], dict):
+                node["CHILD"] += node[chkey]["TOTAL"]
+        # Compute unaccounted time
+        if "TOTAL" not in node:
+            node["TOTAL"] = node["CHILD"]
+        node["OTHER"] = node["TOTAL"] - node["CHILD"]
+        if node["OTHER"] < 0:
+            # rounding
+            node["OTHER"] = 0.0
+
+    process(raw)
+
+    # Restructure the data for plotting
+
+    rows = list()
+
+    def append_counter(path, node):
+        node_keys = list(node.keys())
+        n_child = 0
+        for chkey in node_keys:
+            if isinstance(node[chkey], dict):
+                append_counter(f"{path}|{chkey}", node[chkey])
+                n_child += 1
+        if n_child > 0:
+            # We have some child counters, so add a counter for untracked
+            # time if any.
+            if node["OTHER"] > 0.05 * node["TOTAL"]:
+                rows.append((f"{path}|Other", node["OTHER"]))
+        else:
+            # Leaf node, add our value
+            rows.append((path, node["TOTAL"]))
+
+    append_counter("main", raw)
+
+    n_column = 0
+    for trace, val in rows:
         levels = trace.split("|")
-        parent = "|".join(levels[:-1])
-        if parent == "":
-            parent = "ROOT"
-        if parent not in subtotals:
-            subtotals[parent] = 0.0
-        subtotals[parent] += val
-
-    for trace in list(raw.keys()):
-        if trace in subtotals:
-            # This is a "parent" counter with at least one child.
-            other = raw[trace] - subtotals[trace]
-            othername = f"{trace}|Other"
-            del raw[trace]
-            raw[othername] = other
-
-    # Build the data needed for plotting
+        n_cols = len(levels)
+        if n_cols > n_column:
+            n_column = n_cols
 
     lnames = [f"level{x}" for x in range(n_column)]
     data = list()
 
-    for trace, val in raw.items():
+    for trace, val in rows:
         levels = trace.split("|")
         n_cols = len(levels)
         rlist = list()
@@ -97,18 +142,20 @@ def main():
 
     cnames = list(lnames)
     cnames.append("value")
-    print(f"{len(cnames)} columns = {cnames}")
-    print(f"data = ")
-    for row in data:
-        print(f" {len(row)}: {row}")
     df = pd.DataFrame(data=data, columns=cnames)
+
+    img_px = 800
+    pio.kaleido.scope.default_format = "pdf"
+    pio.kaleido.scope.default_width = img_px
+    pio.kaleido.scope.default_height = img_px
+    pio.kaleido.scope.mathjax = None
 
     fig = px.sunburst(
         data_frame=df,
         path=lnames,
         values="value",
         title="TOAST Timing",
-        height=700,
+        height=img_px,
         template="plotly",
         branchvalues="total",
     )
