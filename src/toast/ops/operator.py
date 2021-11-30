@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
-from toast.timing import function_timer_stackskip
+from ..timing import function_timer_stackskip
 from ..utils import Logger
 
 from ..traits import TraitConfig

@@ -15,21 +15,24 @@ import os
 import sys
 import argparse
 from datetime import datetime
+
 from astropy import units as u
+
 import toast
+
 import toast.ops
+
 from toast.timing import gather_timers, dump, function_timer
+
 from toast.schedule_sim_satellite import create_satellite_schedule
+
 from toast.scripts.benchmarking_utilities import (
     get_mpi_settings,
     select_case,
     make_focalplane,
-    scan_map,
-    run_mapmaker,
-    run_madam,
-    compute_science_metric,
     estimate_memory_overhead,
     python_startup_time,
+    default_sim_atmosphere,
 )
 
 
@@ -39,12 +42,12 @@ def parse_arguments():
     """
     # defines the parameters of the script
     parser = argparse.ArgumentParser(
-        description="Run a TOAST satellite workflow scaled appropriately to the MPI communicator size and available memory."
+        description="Run a TOAST mini-app for hackathon purposes"
     )
     parser.add_argument(
         "--out_dir",
         required=False,
-        default="toast_benchmark_satellite_out",
+        default="out_toast_mini",
         type=str,
         help="The output directory",
     )
@@ -62,38 +65,6 @@ def parse_arguments():
         type=str,
         help="Comma-separated total_procs,node_procs to simulate.",
     )
-    parser.add_argument(
-        "--case",
-        required=False,
-        default="auto",
-        choices=[
-            "auto",
-            "tiny",
-            "xsmall",
-            "small",
-            "medium",
-            "large",
-            "xlarge",
-            "heroic",
-        ],
-        type=str,
-        help="Size of the worflow to be run: 'tiny' (1GB), 'xsmall' (10GB), 'small' (100GB), 'medium' (1TB), 'large' (10TB), 'xlarge' (100TB), 'heroic' (1000TB) or 'auto' (deduced from MPI parameters).",
-    )
-    parser.add_argument(
-        "--print_input_map",
-        required=False,
-        default=False,
-        type=bool,
-        help="Should the healpy input map be exported as a PNG for debugging purposes.",
-    )
-    if toast.ops.madam.available():
-        parser.add_argument(
-            "--madam",
-            required=False,
-            default=False,
-            action="store_true",
-            help="Apply the Madam mapmaker in place of the TOAST mapmaker.",
-        )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
@@ -105,15 +76,14 @@ def parse_arguments():
             detset_key="pixel",
         ),
         toast.ops.DefaultNoiseModel(name="default_model"),
-        toast.ops.ScanHealpixMap(name="scan_map"),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PointingDetectorSimple(name="det_pointing"),
-        toast.ops.PixelsHealpix(name="pixels"),
+        toast.ops.PixelsHealpix(name="pixels", nside=2048),
         toast.ops.StokesWeights(name="weights", mode="IQU"),
-        toast.ops.SaveHDF5(name="save_hdf5", enabled=False),
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(
             name="mapmaker",
+            iter_max=10,
             write_map=True,
             write_noiseweighted_map=False,
             write_hits=True,
@@ -121,18 +91,11 @@ def parse_arguments():
             write_invcov=False,
             write_rcond=False,
         ),
-        toast.ops.PixelsHealpix(name="pixels_final", enabled=False),
-        toast.ops.BinMap(
-            name="binner_final", enabled=False, pixel_dist="pix_dist_final"
-        ),
         toast.ops.MemoryCounter(name="mem_count"),
     ]
 
-    if toast.ops.madam.available():
-        operators.append(toast.ops.Madam(name="madam"))
-
     # Templates we want to configure from the command line or a parameter file.
-    templates = [toast.templates.Offset(name="baselines")]
+    templates = [toast.templates.Offset(name="baselines", enabled=True)]
 
     # generates config
     config, args, jobargs = toast.parse_config(
@@ -140,29 +103,30 @@ def parse_arguments():
     )
 
     # hardcoded arguments
-    # focal plane
-    args.sample_rate = 100  # sample_rate is nb sample per second, we do (60 * obs_minutes * sample_rate) sample for one observation of one detector in a minute
+    # ----------------------
+    args.case = "auto"
+
+    # Focalplane
+    args.sample_rate = 100
     args.max_detector = (
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10
-    args.num_obs = 4320  # 6 months of one-hour observations
     args.obs_minutes = 60
+    args.num_obs = 4380
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
-    # schedule
+
+    # Schedule
     args.prec_period = 50.0
     args.spin_period = 10.0
-    # scan map
-    args.nside = 1024
-    args.input_map = f"fake_input_sky_nside{args.nside}.fits"
 
     return config, args, jobargs
 
 
 def make_schedule(args, world_comm):
     """
-    Creates a satellite schedule
+    Creates a satellite schedule.
     """
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
@@ -183,21 +147,22 @@ def make_schedule(args, world_comm):
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()
-    env.enable_function_timers()
-    global_timer = toast.timing.GlobalTimers.get()
-    global_timer.start("toast_benchmark_satellite (total)")
 
-    # defines and gets the arguments for the script
+    global_timer = toast.timing.GlobalTimers.get()
+    global_timer.start("toast_mini (total)")
+
+    # Define the arguments for the script
     config, args, jobargs = parse_arguments()
 
     # Instantiate our objects that were configured from the command line / files
     job = toast.create_from_config(config)
     job_ops = job.operators
 
-    # gets the MPI parameters
+    # Get the MPI parameters
     world_comm, n_procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(
         args, log, env
     )
+    toast.utils.system_state(comm=world_comm)
 
     # Log the config
     if rank == 0:
@@ -212,13 +177,11 @@ def main():
     # Estimate per-process memory use from map domain objects and
     # other sources.
     nside_final = None
-    if job_ops.pixels_final.enabled:
-        nside_final = job_ops.pixels_final.nside
     overhead_bytes = estimate_memory_overhead(
         n_procs, n_nodes, 0.4, job_ops.pixels.nside, world_comm, nside_final=nside_final
     )
 
-    # selects appropriate case size
+    # Select appropriate data volume.
     select_case(
         args,
         jobargs,
@@ -234,7 +197,6 @@ def main():
     focalplane = make_focalplane(args, world_comm, log)
 
     # from here on, we start the actual work (unless this is a dry run)
-    global_timer.start("toast_benchmark_satellite (science work)")
     if args.dry_run is not None:
         log.info_rank("Exit from dry run.", comm=world_comm)
         # We are done!
@@ -267,55 +229,30 @@ def main():
     log.info_rank("Created default noise model in", comm=world_comm, timer=timer)
 
     # Set the pointing matrix operators to use the detector pointing
-    job_ops.pixels.nside = args.nside
     job_ops.pixels.detector_pointing = job_ops.det_pointing
     job_ops.weights.detector_pointing = job_ops.det_pointing
-    job_ops.pixels_final.nside = args.nside
-    job_ops.pixels_final.detector_pointing = job_ops.det_pointing
 
-    # If we are not using a different pointing matrix for our final binning, then
-    # use the same one as the solve.
+    # Set up the binning operator
     job_ops.binner.pixel_pointing = job_ops.pixels
     job_ops.binner.stokes_weights = job_ops.weights
-    if not job_ops.pixels_final.enabled:
-        job_ops.pixels_final = job_ops.pixels
-
-    # If we are not using a different binner for our final binning, use the same one
-    # as the solve.
-    job_ops.binner_final.pixel_pointing = job_ops.pixels_final
-    job_ops.binner_final.stokes_weights = job_ops.weights
-    if not job_ops.binner_final.enabled:
-        job_ops.binner_final = job_ops.binner
-
-    # Simulate sky signal from a map.
-    scan_map(args, rank, job_ops, data, log)
-    log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
+    job_ops.binner.noise_model = job_ops.default_model.noise_model
 
     # Simulate detector noise
     job_ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
-    # Optionally save to HDF5 in our output directory
-    job_ops.save_hdf5.volume = os.path.join(args.out_dir, "data")
-    job_ops.save_hdf5.apply(data)
-    log.info_rank("Saved data to HDF5 in", comm=world_comm, timer=timer)
-
-    # Destripe and/or bin TOD
-    if toast.ops.madam.available() and args.madam:
-        run_madam(job_ops, args, job.templates, data)
-    else:
-        run_mapmaker(job_ops, args, job.templates, data)
+    # Mapmaking
+    job_ops.mapmaker.binning = job_ops.binner
+    job_ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(
+        templates=[job.templates.baselines],
+        view=job_ops.pixels.view,
+    )
+    job_ops.mapmaker.det_data = job_ops.sim_noise.det_data
+    job_ops.mapmaker.output_dir = args.out_dir
+    job_ops.mapmaker.apply(data)
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
-    # end of the computations, sync and computes efficiency
-    global_timer.stop_all()
-    log.info_rank("Gathering benchmarking metrics.", comm=world_comm)
-    if world_comm is not None:
-        world_comm.barrier()
-    runtime = global_timer.seconds("toast_benchmark_satellite (science work)")
-    compute_science_metric(args, runtime, n_nodes, rank, log)
-
-    # dumps all the timing information
+    # Dump all the timing information
 
     timer.stop()
     timer.clear()
@@ -325,7 +262,7 @@ def main():
         out = os.path.join(args.out_dir, "timing")
         dump(alltimers, out)
         timer.stop()
-        timer.report("toast_benchmark_satellite (gathering and dumping timing info)")
+        timer.report("toast_mini (gathering and dumping timing info)")
     else:
         timer.stop()
 

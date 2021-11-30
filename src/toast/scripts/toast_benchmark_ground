@@ -25,7 +25,7 @@ from toast import spt3g as t3g
 
 from toast.schedule_sim_ground import run_scheduler
 
-from toast.timing import gather_timers, dump
+from toast.timing import gather_timers, dump, function_timer
 
 from toast.scripts.benchmarking_utilities import (
     get_mpi_settings,
@@ -293,6 +293,7 @@ def dump_spt3g(args, job_ops, data):
     dumper.apply(data)
 
 
+@function_timer
 def main():
     env = toast.utils.Environment.get()
     log = toast.utils.Logger.get()

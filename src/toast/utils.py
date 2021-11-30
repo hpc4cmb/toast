@@ -21,7 +21,7 @@ import astropy.io.misc.hdf5 as aspy5
 from astropy.table import meta as aspymeta
 
 
-from ._libtoast import Environment, Timer, GlobalTimers
+from ._libtoast import Environment, Timer, GlobalTimers, threading_state
 
 from ._libtoast import (
     AlignedI8,
@@ -733,3 +733,14 @@ def table_write_parallel_hdf5(table, root, name, comm=None, force_serial=False):
     if comm is None or comm.rank == 0:
         mdset[:] = header_encoded
     del mdset
+
+
+def system_state(comm=None):
+    """Print a snapshot of the current system state across the job."""
+    log = Logger.get()
+    max, curmax = threading_state()
+    msg = f"Threading snapshot:  Overall max = {max}, Current max = {curmax}\n"
+    memstr = memreport(msg="system snapshot", comm=comm, silent=True)
+    if comm is None or comm.rank == 0:
+        msg += memstr
+        log.info(msg)

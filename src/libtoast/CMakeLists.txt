@@ -63,20 +63,14 @@ target_include_directories(toast BEFORE PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-# This compiler definition makes it possible to query the serial library
-# to see if we also have the MPI library.
-
-if(MPI_FOUND)
-    target_compile_definitions(toast PRIVATE HAVE_MPI=1)
-endif(MPI_FOUND)
-
-if(MPI4PY_FOUND)
-    target_compile_definitions(toast PRIVATE HAVE_MPI4PY=1)
-endif(MPI4PY_FOUND)
-
 # Dependencies
 
 target_link_libraries(toast gtest)
+
+if(OpenACC_CXX_FOUND)
+    target_compile_options(toast PRIVATE ${OpenACC_CXX_FLAGS})
+    target_link_libraries(toast PUBLIC OpenACC::OpenACC_CXX)
+endif(OpenACC_CXX_FOUND)
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")

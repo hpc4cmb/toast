@@ -40,6 +40,7 @@ class DefaultNoiseModel(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 

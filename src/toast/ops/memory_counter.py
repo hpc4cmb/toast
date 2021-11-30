@@ -42,6 +42,7 @@ class MemoryCounter(Operator):
         self.total_bytes = 0
         super().__init__(**kwargs)
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         for ob in data.obs:
             self.total_bytes += ob.memory_use()

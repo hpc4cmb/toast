@@ -6,6 +6,8 @@ import traitlets
 
 from ..utils import Logger
 
+from ..timing import function_timer
+
 from ..traits import trait_docs, Int, Unicode, List
 
 from .operator import Operator
@@ -45,6 +47,7 @@ class Delete(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         for ob in data.obs:
