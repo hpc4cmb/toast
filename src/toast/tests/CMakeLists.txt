@@ -60,5 +60,6 @@ install(FILES
     io_hdf5.py
     ops_noise_estim.py
     ops_yield_cut.py
+    accelerator.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

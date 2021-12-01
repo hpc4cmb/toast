@@ -28,20 +28,17 @@ from .pipeline import Pipeline
 
 from ..utils import Environment, Logger, Timer
 
-from ..atm import AtmSim, available_utils
+from ..atm import AtmSim, available_utils, available_atm
 
 from ..observation import default_values as defaults
 
 from .sim_tod_atm_utils import ObserveAtmosphere
 
-have_atm_utils = None
-if have_atm_utils is None:
-    try:
-        from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
+if available_atm:
+    from ..atm import AtmSim
 
-        have_atm_utils = True
-    except ImportError:
-        have_atm_utils = False
+if available_utils:
+    from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
 
 
 @trait_docs
@@ -254,9 +251,15 @@ class SimAtmosphere(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if not have_atm_utils:
+        if not available_utils:
             log = Logger.get()
             msg = "TOAST was compiled without the libaatm library, which is "
+            msg += "required for observations of simulated atmosphere."
+            log.error(msg)
+            raise RuntimeError(msg)
+        if not available_atm:
+            log = Logger.get()
+            msg = "TOAST was compiled without the SuiteSparse package, which is "
             msg += "required for observations of simulated atmosphere."
             log.error(msg)
             raise RuntimeError(msg)

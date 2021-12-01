@@ -17,13 +17,19 @@ from .rng import random as toast_rng
 
 from .mpi import MPI, MPIShared
 
-from ._libtoast import (
-    atm_sim_compute_slice,
-    atm_sim_observe,
-    atm_sim_compress_flag_hits_rank,
-    atm_sim_compress_flag_extend_rank,
-    atm_sim_kolmogorov_init_rank,
-)
+available_atm = None
+if available_atm is None:
+    available_atm = True
+    try:
+        from ._libtoast import (
+            atm_sim_compute_slice,
+            atm_sim_observe,
+            atm_sim_compress_flag_hits_rank,
+            atm_sim_compress_flag_extend_rank,
+            atm_sim_kolmogorov_init_rank,
+        )
+    except ImportError:
+        available_atm = False
 
 available_utils = None
 if available_utils is None:

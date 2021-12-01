@@ -47,6 +47,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/todmap_mapmaker.cpp
     _libtoast/atm.cpp
     _libtoast/template_offset.cpp
+    _libtoast/accelerator.cpp
 )
 
 # Handle recursion limit on NVC++ / PGI
@@ -56,6 +57,10 @@ endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL NVHPC)
     target_compile_options(_libtoast PRIVATE -Wc,--pending_instantiations=0)
 endif()
+
+if(OpenACC_CXX_FOUND)
+    target_compile_definitions(_libtoast PRIVATE HAVE_OPENACC=1)
+endif(OpenACC_CXX_FOUND)
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")

@@ -14,8 +14,7 @@ cmake \
     -DUSE_OPENACC=TRUE \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DBLAS_LIBRARIES="-L${NVHPC_ROOT}/math_libs/lib64 -lblas -lnvblas -lnvf -lm" \
-    -DLAPACK_LIBRARIES="-llapack" \
+    -DBLAS_LIBRARIES="-lopenblas -lgomp -lm" \
     ${opts} \
     ..
 
