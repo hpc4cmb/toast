@@ -123,6 +123,7 @@ class DetectorData(object):
             self._is_view = True
 
     def _set_detectors(self, detectors):
+        log = Logger.get()
         self._detectors = detectors
         if len(self._detectors) == 0:
             msg = "You must specify a list of at least one detector name"
@@ -131,6 +132,7 @@ class DetectorData(object):
         self._name2idx = {y: x for x, y in enumerate(self._detectors)}
 
     def _data_props(self, detectors, detshape, dtype):
+        log = Logger.get()
         dt = np.dtype(dtype)
         storage_class, itemsize = dtype_to_aligned(dtype)
 
@@ -599,7 +601,7 @@ class DetDataManager(MutableMapping):
         """
         if not acc_enabled:
             return
-        return acc_is_present(self._internal[key].data)
+        return acc_is_present(self._internal[key]._raw)
 
     def acc_copyin(self, key):
         """Copy the named detector data to the accelerator.
@@ -615,7 +617,7 @@ class DetDataManager(MutableMapping):
         """
         if not acc_enabled:
             return
-        acc_copyin(self._internal[key].data)
+        acc_copyin(self._internal[key]._raw)
 
     def acc_copyout(self, key):
         """Copy the named detector data from the accelerator to the host.
@@ -630,11 +632,11 @@ class DetDataManager(MutableMapping):
         log = Logger.get()
         if not acc_enabled:
             return
-        if not acc_is_present(self._internal[key].data):
+        if not acc_is_present(self._internal[key]._raw):
             msg = f"Detector data '{key}' is not present on device, cannot copy out"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_copyout(self._internal[key].data)
+        acc_copyout(self._internal[key]._raw)
 
     # Mapping methods
 

@@ -362,8 +362,10 @@ class Data(MutableMapping):
             None
 
         """
+        log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
+                log.verbose(f"Calling ob {ob.name} detdata copyin for {key}")
                 ob.detdata.acc_copyin(key)
             for key in names["shared"]:
                 ob.shared.acc_copyin(key)
@@ -381,11 +383,22 @@ class Data(MutableMapping):
             None
 
         """
+        log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
                 if ob.detdata.acc_is_present(key):
+                    log.verbose(f"Calling ob {ob.name} detdata copyout for {key}")
                     ob.detdata.acc_copyout(key)
+                else:
+                    log.verbose(
+                        f"Skip copyout for ob {ob.name} detdata {key}, data not present"
+                    )
             for key in names["shared"]:
                 if ob.shared.acc_is_present(key):
+                    log.verbose(f"Calling ob {ob.name} shared copyout for {key}")
                     ob.shared.acc_copyout(key)
+                else:
+                    log.verbose(
+                        f"Skip copyout for ob {ob.name} shared {key}, data not present"
+                    )
             # FIXME:  implement intervals too.

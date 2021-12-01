@@ -128,7 +128,7 @@ class AcceleratorTest(MPITestCase):
 
     #     # Update device copy
     #     for tname, buffer in data.items():
-    #         acc_copyin(buffer)
+    #         acc_update_device(buffer)
 
     #     # Reset host copy
     #     for tname, buffer in data.items():
@@ -136,7 +136,7 @@ class AcceleratorTest(MPITestCase):
 
     #     # Update host copy from device
     #     for tname, buffer in data.items():
-    #         acc_copyout(buffer)
+    #         acc_update_self(buffer)
 
     #     # Check Values
     #     for tname, buffer in data.items():
@@ -162,10 +162,11 @@ class AcceleratorTest(MPITestCase):
         acc_op.apply(data)
 
         # Stage the data
+        print(acc_op.requires(), flush=True)
         data.acc_copyin(acc_op.requires())
 
         # Run with staged data
         acc_op.apply(data)
 
         # Copy out
-        data.acc_copyout(acc_op.provides())
+        # data.acc_copyout(acc_op.provides())

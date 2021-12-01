@@ -33,6 +33,12 @@ void init_accelerator(py::module & m) {
             void * p_host = reinterpret_cast <void *> (info.ptr);
             size_t bytes = (size_t)(info.size);
             auto result = acc_is_present(p_host, bytes);
+
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "host pointer " << p_host << " is_present = " << result;
+            log.verbose(o.str().c_str());
+
             if (result == 0) {
                 return false;
             } else {
@@ -53,6 +59,12 @@ void init_accelerator(py::module & m) {
             void * p_host = reinterpret_cast <void *> (info.ptr);
             size_t bytes = (size_t)(info.size);
             auto p_device = acc_copyin(p_host, bytes);
+
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "copyin host pointer " << p_host << " (" << bytes << " bytes) on device at " << p_device;
+            log.verbose(o.str().c_str());
+
             return;
         }, py::arg(
             "data"), R"(
@@ -79,6 +91,12 @@ void init_accelerator(py::module & m) {
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
+
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "copyout host pointer " << p_host << " (" << bytes << " bytes) from device";
+            log.verbose(o.str().c_str());
+
             acc_copyout(p_host, bytes);
             return;
         }, py::arg(
@@ -106,6 +124,12 @@ void init_accelerator(py::module & m) {
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
+
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "update device with host pointer " << p_host << " (" << bytes << " bytes)";
+            log.verbose(o.str().c_str());
+
             acc_update_device(p_host, bytes);
             return;
         }, py::arg(
@@ -133,6 +157,12 @@ void init_accelerator(py::module & m) {
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
+
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "update host/self with host pointer " << p_host << " (" << bytes << " bytes)";
+            log.verbose(o.str().c_str());
+
             acc_update_self(p_host, bytes);
             return;
         }, py::arg(
@@ -160,6 +190,12 @@ void init_accelerator(py::module & m) {
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
+
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "delete device mem for host pointer " << p_host << " (" << bytes << " bytes)";
+            log.verbose(o.str().c_str());
+
             acc_delete(p_host, bytes);
             return;
         }, py::arg(

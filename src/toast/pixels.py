@@ -30,6 +30,13 @@ from .utils import (
 
 from ._libtoast import global_to_local as libtoast_global_to_local
 
+from ._libtoast import (
+    acc_enabled,
+    acc_is_present,
+    acc_copyin,
+    acc_copyout,
+)
+
 
 class PixelDistribution(object):
     """Class representing the distribution of submaps.
@@ -927,3 +934,43 @@ class PixelData(object):
                     loc = self._dist.global_submap_to_local[sm]
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
+
+    def acc_is_present(self):
+        """Check if the pixel data is present on the accelerator.
+
+        Returns:
+            (bool):  True if the data is present.
+
+        """
+        if not acc_enabled:
+            return
+        return acc_is_present(self.raw)
+
+    def acc_copyin(self):
+        """Copy the data to the accelerator.
+
+        This creates the device memory if it does not already exist.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled:
+            return
+        acc_copyin(self.raw)
+
+    def acc_copyout(self):
+        """Copy the data from the accelerator to the host.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not acc_enabled:
+            return
+        if not acc_is_present(self.raw):
+            msg = f"PixelData raw data is not present on device, cannot copy out"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_copyout(self.raw)
