@@ -80,10 +80,6 @@ class Add(Operator):
         prov = dict()
         return prov
 
-    def _accelerators(self):
-        # Eventually we can copy memory objects on devices...
-        return list()
-
 
 @trait_docs
 class Subtract(Operator):
@@ -149,7 +145,3 @@ class Subtract(Operator):
     def _provides(self):
         prov = dict()
         return prov
-
-    def _accelerators(self):
-        # Eventually we can copy memory objects on devices...
-        return list()

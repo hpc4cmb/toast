@@ -333,6 +333,3 @@ class StokesWeights(Operator):
         if self.quats is not None:
             prov["detdata"].append(self.quats)
         return prov
-
-    def _accelerators(self):
-        return list()

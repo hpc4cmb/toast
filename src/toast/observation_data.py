@@ -35,6 +35,13 @@ from .intervals import IntervalList
 
 from .timing import function_timer
 
+from ._libtoast import (
+    acc_enabled,
+    acc_is_present,
+    acc_copyin,
+    acc_copyout,
+)
+
 
 class DetectorData(object):
     """Class representing a logical collection of co-sampled detector data.
@@ -580,6 +587,55 @@ class DetDataManager(MutableMapping):
                 units=units,
             )
 
+    def acc_is_present(self, key):
+        """Check if the named detector data is present on the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            (bool):  True if the data is present.
+
+        """
+        if not acc_enabled:
+            return
+        return acc_is_present(self._internal[key].data)
+
+    def acc_copyin(self, key):
+        """Copy the named detector data to the accelerator.
+
+        This creates the device memory if it does not already exist.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled:
+            return
+        acc_copyin(self._internal[key].data)
+
+    def acc_copyout(self, key):
+        """Copy the named detector data from the accelerator to the host.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not acc_enabled:
+            return
+        if not acc_is_present(self._internal[key].data):
+            msg = f"Detector data '{key}' is not present on device, cannot copy out"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_copyout(self._internal[key].data)
+
     # Mapping methods
 
     def __getitem__(self, key):
@@ -1028,6 +1084,61 @@ class SharedDataManager(MutableMapping):
 
         """
         return self._internal[key].type
+
+    # Accelerator access
+
+    # FIXME:  These objects are in MPI shared memory, so we should think more
+    # carefully about whether we want each process doing these operations or
+    # having one process copy in and other processes attach to the device ptr.
+
+    def acc_is_present(self, key):
+        """Check if the named shared data is present on the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            (bool):  True if the data is present.
+
+        """
+        if not acc_enabled:
+            return
+        return acc_is_present(self._internal[key].shdata.data)
+
+    def acc_copyin(self, key):
+        """Copy the named shared data to the accelerator.
+
+        This creates the device memory if it does not already exist.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled:
+            return
+        acc_copyin(self._internal[key].shdata.data)
+
+    def acc_copyout(self, key):
+        """Copy the named shared data from the accelerator to the host.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not acc_enabled:
+            return
+        if not acc_is_present(self._internal[key].shdata.data):
+            msg = f"Detector data '{key}' is not present on device, cannot copy out"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_copyout(self._internal[key].shdata.data)
 
     # Mapping methods
 

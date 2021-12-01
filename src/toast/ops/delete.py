@@ -91,7 +91,3 @@ class Delete(Operator):
 
     def _provides(self):
         return dict()
-
-    def _accelerators(self):
-        # Eventually we can delete memory objects on devices...
-        return list()

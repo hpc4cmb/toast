@@ -9,7 +9,11 @@
 #endif // ifdef HAVE_OPENACC
 
 
+// FIXME: add registration function here to add stubs if openacc disabled
+
 void init_accelerator(py::module & m) {
+
+    // FIXME:  add ifdef around this.
 
     m.def(
         "acc_enabled", []() {
@@ -169,5 +173,27 @@ void init_accelerator(py::module & m) {
             None
 
     )");
+
+    // Small test code used by the unit tests.
+
+    m.def(
+        "test_acc_op", [](py::buffer data, size_t n_det) {
+            pybuffer_check_1D <double> (data);
+            py::buffer_info info = data.request();
+            double * raw = reinterpret_cast <double *> (info.ptr);
+            size_t n_total = (size_t)(info.size / sizeof(double));
+            size_t n_samp = (size_t)(n_total / n_det);
+
+            #pragma acc data present(raw)
+            {
+                #pragma acc parallel loop
+                for (size_t i = 0; i < n_det; i++) {
+                    for (size_t j = 0; j < n_samp; j++) {
+                        raw[i * n_samp + j] *= 2.0;
+                    }
+                }
+            }
+            return;
+        });
 
 }

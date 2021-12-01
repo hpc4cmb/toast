@@ -31,8 +31,6 @@ from .utils import (
 
 from .timing import function_timer
 
-from .cuda import use_pycuda
-
 from .observation_data import (
     DetectorData,
     DetDataManager,
@@ -664,68 +662,41 @@ class Observation(MutableMapping):
 
     # Accelerator use
 
-    # @property
-    # def accelerator(self):
-    #     """Return dictionary of objects mirrored to the accelerator.
-    #     """
-    #     return None
-    #
-    # def to_accelerator(self, keys, detectors=None):
-    #     """Copy data objects to the accelerator.
-    #
-    #     Keys may be standard key names ("SIGNAL", "FLAGS", etc) or arbitrary keys.
-    #     In the case of standard keys, any internal overrides specified at construction
-    #     are applied.
-    #
-    #     Args:
-    #         keys (iterable): the objects to stage to accelerator memory.  These must
-    #             be scalars or arrays of C-compatible types.
-    #         detectors (list): Copy only the selected detectors to the accelerator.
-    #
-    #     Returns:
-    #         None
-    #
-    #     """
-    #     log = Logger.get()
-    #
-    #     # Clear the dictionary of accelerator objects
-    #
-    #     if have_pycuda:
-    #         # Using NVIDIA GPUs
-    #         # Compute the set of data that needs to be copied to each GPU.
-    #         pass
-    #     else:
-    #         msg = "No supported accelerator found"
-    #         log.warning(msg)
-    #     return
-    #
-    # def from_accelerator(self, keys, detectors=None):
-    #     """Copy data objects from the accelerator.
-    #
-    #     Keys may be standard key names ("SIGNAL", "FLAGS", etc) or arbitrary keys.
-    #     In the case of standard keys, any internal overrides specified at construction
-    #     are applied.
-    #
-    #     Args:
-    #         keys (iterable): the objects to copy from accelerator memory.  These must
-    #             be scalars or arrays of C-compatible types.
-    #         detectors (list): Copy only the selected detectors to the accelerator.
-    #
-    #     Returns:
-    #         None
-    #
-    #     """
-    #     log = Logger.get()
-    #
-    #     if have_pycuda:
-    #         # Using NVIDIA GPUs
-    #         # Find the superset of all data that needs to move from each GPU
-    #         # Copy data
-    #         # Free GPU memory
-    #         pass
-    #     else:
-    #         msg = "No supported accelerator found"
-    #         log.warning(msg)
-    #         return
-    #
-    #     return
+    def acc_copyin(self, names):
+        """Copy a set of data objects to the device.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        for key in names["detdata"]:
+            self.detdata.acc_copyin(key)
+        for key in names["shared"]:
+            self.shared.acc_copyin(key)
+
+    def acc_copyout(self, names):
+        """Copy a set of data objects to the host.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        for key in names["detdata"]:
+            if self.detdata.acc_is_present(key):
+                self.detdata.acc_copyout(key)
+        for key in names["shared"]:
+            if self.shared.acc_is_present(key):
+                self.shared.acc_copyout(key)
+        # FIXME:  implement intervals too.

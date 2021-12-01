@@ -54,7 +54,10 @@ import numpy as np
 
 from pshmem import MPIShared, MPILock
 
-from .cuda import use_pycuda, cuda_devices, AcceleratorCuda
+# FIXME: import wrapped functions here to query number and type of devices.
+from ._libtoast import (
+    acc_enabled,
+)
 
 from ._libtoast import Logger
 
@@ -213,19 +216,21 @@ class Comm(object):
             self._gnoderankcomm = self._gcomm.Split(self._gnodecomm.rank, mygroupnode)
             self._cleanup_group_comm = True
 
-        # See if we are using CUDA and if so, determine which device each process will
-        # be using.
-        self._cuda = None
-        if use_pycuda:
+        # See if we are using OpenACC and if so, determine which device each
+        # process will be using.
+        self._acc_device = None
+        if acc_enabled:
             if self._wcomm is None:
                 # We are not using MPI, so we will just use the first device
-                self._cuda = AcceleratorCuda(0)
+                self._acc_device = 0
             else:
                 # Assign this process to one of the GPUs.
                 # FIXME:  Is it better for ranks to be spread across the devices
                 # or for contiguous ranks to be assigned to same device?
-                rank_dev = self._nodecomm.rank % cuda_devices
-                self._cuda = AcceleratorCuda(rank_dev)
+                # FIXME: call wrapped acc functions here
+                n_acc_devices = 1
+                rank_dev = self._nodecomm.rank % n_acc_devices
+                self._acc_device = rank_dev
 
         # Create a cache of row / column communicators for each group.  These can
         # then be re-used for observations with the same grid shapes.
@@ -422,9 +427,9 @@ class Comm(object):
         return self._rowcolcomm[process_rows]
 
     @property
-    def cuda(self):
-        """The CUDA device properties for this process."""
-        return self._cuda
+    def acc_device(self):
+        """The OpenACC device properties for this process."""
+        return self._acc_device
 
     def __repr__(self):
         lines = [
@@ -436,10 +441,10 @@ class Comm(object):
             "  Group MPI rank = {}".format(self._grank),
             "  Rank MPI communicator = {}".format(self._rcomm),
         ]
-        if self._cuda is None:
-            lines.append("  CUDA disabled")
+        if self._acc_device is None:
+            lines.append("  OpenACC disabled")
         else:
-            lines.append("  Using CUDA device {}".format(self._cuda.device_index))
+            lines.append("  Using OpenACC device {}".format(self._acc_device))
         return "<toast.Comm\n{}\n>".format("\n".join(lines))
 
 

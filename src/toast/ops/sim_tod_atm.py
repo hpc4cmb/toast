@@ -939,9 +939,6 @@ class SimAtmosphere(Operator):
         }
         return prov
 
-    def _accelerators(self):
-        return list()
-
     @function_timer
     def _plot_snapshots(
         self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax

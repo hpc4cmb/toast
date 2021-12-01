@@ -437,6 +437,3 @@ class SimNoise(Operator):
                 self.det_data,
             ]
         }
-
-    def _accelerators(self):
-        return list()

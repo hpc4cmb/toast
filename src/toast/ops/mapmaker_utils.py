@@ -215,9 +215,6 @@ class BuildHitMap(Operator):
         prov = {"meta": [self.hits]}
         return prov
 
-    def _accelerators(self):
-        return list()
-
 
 @trait_docs
 class BuildInverseCovariance(Operator):
@@ -455,9 +452,6 @@ class BuildInverseCovariance(Operator):
     def _provides(self):
         prov = {"meta": [self.inverse_covariance]}
         return prov
-
-    def _accelerators(self):
-        return list()
 
 
 @trait_docs
@@ -711,9 +705,6 @@ class BuildNoiseWeighted(Operator):
     def _provides(self):
         prov = {"meta": [self.zmap]}
         return prov
-
-    def _accelerators(self):
-        return list()
 
 
 @trait_docs
@@ -974,6 +965,3 @@ class CovarianceAndHits(Operator):
         if self.save_pointing:
             prov["detdata"].extend([self.pixels, self.weights])
         return prov
-
-    def _accelerators(self):
-        return list()

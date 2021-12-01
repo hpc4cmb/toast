@@ -564,9 +564,6 @@ class SimConviqt(Operator):
         prob["detdata"].append(self.det_data)
         return prov
 
-    def _accelerators(self):
-        return list()
-
 
 class SimWeightedConviqt(SimConviqt):
     """Operator which uses libconviqt to generate beam-convolved timestreams.

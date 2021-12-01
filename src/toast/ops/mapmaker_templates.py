@@ -224,6 +224,3 @@ class TemplateMatrix(Operator):
         if not self.transpose:
             prov["detdata"] = [self.det_data]
         return prov
-
-    def _accelerators(self):
-        return list()

@@ -125,6 +125,3 @@ class YieldCut(Operator):
             "detdata": list(),
         }
         return prov
-
-    def _accelerators(self):
-        return list()

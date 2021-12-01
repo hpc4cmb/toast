@@ -244,6 +244,3 @@ class SimScanSynchronousSignal(Operator):
             "detdata": [self.det_data],
         }
         return prov
-
-    def _accelerators(self):
-        return list()

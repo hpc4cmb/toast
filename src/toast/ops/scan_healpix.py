@@ -218,9 +218,6 @@ class ScanHealpixMap(Operator):
             prof["meta"] = [self.map_name]
         return prov
 
-    def _accelerators(self):
-        return list()
-
 
 @trait_docs
 class ScanHealpixMask(Operator):
@@ -376,6 +373,3 @@ class ScanHealpixMask(Operator):
         if self.save_map:
             prof["meta"] = [self.map_name]
         return prov
-
-    def _accelerators(self):
-        return list()

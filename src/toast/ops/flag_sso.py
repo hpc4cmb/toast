@@ -253,6 +253,3 @@ class FlagSSO(Operator):
             "detdata": [self.det_flags],
         }
         return prov
-
-    def _accelerators(self):
-        return list()

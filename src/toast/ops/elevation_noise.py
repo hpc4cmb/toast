@@ -231,6 +231,3 @@ class ElevationNoise(Operator):
         if self.out_model is None:
             prov["meta"].append(self.out_model)
         return prov
-
-    def _accelerators(self):
-        return list()

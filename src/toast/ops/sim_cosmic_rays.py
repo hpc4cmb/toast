@@ -293,6 +293,3 @@ class InjectCosmicRays(Operator):
             ],
         }
         return prov
-
-    def _accelerators(self):
-        return list()

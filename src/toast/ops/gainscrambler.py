@@ -122,6 +122,3 @@ class GainScrambler(Operator):
             "detdata": list(),
         }
         return prov
-
-    def _accelerators(self):
-        return list()

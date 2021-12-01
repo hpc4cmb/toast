@@ -188,7 +188,7 @@ class ScanMap(Operator):
 
     def _requires(self):
         req = {
-            "meta": [map_key],
+            "meta": [self.map_key],
             "shared": list(),
             "detdata": [self.pixels, self.det_data],
             "intervals": list(),
@@ -202,9 +202,6 @@ class ScanMap(Operator):
     def _provides(self):
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
-
-    def _accelerators(self):
-        return list()
 
 
 @trait_docs
@@ -314,9 +311,6 @@ class ScanMask(Operator):
     def _provides(self):
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
-
-    def _accelerators(self):
-        return list()
 
 
 @trait_docs
@@ -470,6 +464,3 @@ class ScanScale(Operator):
     def _provides(self):
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
-
-    def _accelerators(self):
-        return list()
