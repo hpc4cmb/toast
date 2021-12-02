@@ -49,6 +49,14 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/template_offset.cpp
 )
 
+# Handle recursion limit on NVC++ / PGI
+if (CMAKE_CXX_COMPILER_ID STREQUAL PGI)
+    target_compile_options(_libtoast PRIVATE -Wc,--pending_instantiations=0)
+endif()
+if (CMAKE_CXX_COMPILER_ID STREQUAL NVHPC)
+    target_compile_options(_libtoast PRIVATE -Wc,--pending_instantiations=0)
+endif()
+
 if(OpenMP_CXX_FOUND)
     target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")
     set_target_properties(_libtoast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
@@ -68,6 +76,12 @@ if(CHOLMOD_FOUND)
     target_compile_definitions(_libtoast PRIVATE HAVE_CHOLMOD=1)
     target_include_directories(_libtoast PUBLIC "${CHOLMOD_INCLUDE_DIR}")
 endif(CHOLMOD_FOUND)
+
+if(CUDAToolkit_FOUND AND NOT CUDA_DISABLED)
+    target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
+    target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
+    target_include_directories(toast PRIVATE "${CUDAToolkit_MATH_INCLUDE_DIRS}")
+endif()
 
 # Include path to the toast headers
 target_include_directories(_libtoast BEFORE PRIVATE
