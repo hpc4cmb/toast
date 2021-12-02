@@ -377,7 +377,7 @@ void toast::LinearAlgebra::syrk_batched(char UPLO, char TRANS, int N, int K, dou
 #endif // ifdef HAVE_LAPACK
 }
 
-#define wrapped_dgels LAPACK_FUNC(dgels, DGELSS)
+#define wrapped_dgels LAPACK_FUNC(dgels, DGELS)
 
 extern "C" void wrapped_dgels(char TRANS, int *M, int *N, int *NRHS, double *A, int *LDA,
                               double *B, int *LDB, double *WORK, int *LWORK, int *INFO);
