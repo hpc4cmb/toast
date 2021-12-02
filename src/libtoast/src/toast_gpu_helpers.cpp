@@ -223,13 +223,13 @@ GPU_memory_block_t::GPU_memory_block_t(void *gpu_ptr, size_t size_bytes_arg, voi
     // stores size of the allocation, in bytes
     size_bytes = size_bytes_arg;
     // align size with ALIGNEMENT_SIZE
-    if (size % ALIGNEMENT_SIZE != 0)
+    if (size_bytes % ALIGNEMENT_SIZE != 0)
     {
-        size += ALIGNEMENT_SIZE - (size % ALIGNEMENT_SIZE);
+        size_bytes += ALIGNEMENT_SIZE - (size_bytes % ALIGNEMENT_SIZE);
     }
     // defines the start and end gpu pointers
     start = gpu_ptr;
-    end = static_cast<char *>(start) + size;
+    end = static_cast<char *>(start) + size_bytes;
     // the block starts allocated (it might be freed later)
     isFree = false;
     // stores cpu pointer (or nullptr)

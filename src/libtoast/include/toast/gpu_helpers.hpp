@@ -102,7 +102,7 @@ public:
     {
         // memory allocation
         void *gpu_ptr = NULL;
-        const cudaError errorCodeMalloc = this->malloc(&gpu_ptr, nb_elements * sizeof(T), data);
+        const cudaError errorCodeMalloc = this->malloc(&gpu_ptr, nb_elements * sizeof(T), cpu_ptr);
         checkCudaErrorCode(errorCodeMalloc, "GPU_memory_pool_t::toDevice (malloc)");
         // data transfer
         const cudaError errorCodeMemcpy = cudaMemcpy(gpu_ptr, cpu_ptr, nb_elements * sizeof(T), cudaMemcpyHostToDevice);
@@ -113,13 +113,13 @@ public:
     // gets the given number of elements back from GPU to the given CPU location
     // frees the gpu memory
     template <typename T>
-    void fromDevice(T *data_cpu, T *data_gpu, size_t nb_elements)
+    void fromDevice(T *cpu_ptr, T *gpu_ptr, size_t nb_elements)
     {
         // data transfer
-        const cudaError errorCodeMemcpy = cudaMemcpy(data_cpu, data_gpu, nb_elements * sizeof(T), cudaMemcpyDeviceToHost);
+        const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, gpu_ptr, nb_elements * sizeof(T), cudaMemcpyDeviceToHost);
         checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool_t::fromDevice (memcpy)");
         // deallocation
-        this->free(data_gpu);
+        this->free(gpu_ptr);
     }
 
     // gets the given number of elements back from GPU to the given CPU location
