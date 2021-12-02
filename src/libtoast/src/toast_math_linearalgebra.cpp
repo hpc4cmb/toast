@@ -449,7 +449,8 @@ extern "C" void wrapped_dgelss(int *M, int *N, int *NRHS, double *A, int *LDA,
                                double *B, int *LDB, double *S, double *RCOND,
                                int *RANK, double *WORK, int *LWORK, int *INFO);
 
-// NOTE: there is no GPU dgelss implementation at the moment (there are dgels implementations however)
+// NOTE: there is no GPU dgelss implementation at the moment
+// but we could fall back to gels (a QR decomposition instead of an SVD)
 void toast::LinearAlgebra::gelss(int M, int N, int NRHS, double *A, int LDA,
                                  double *B, int LDB, double *S, double RCOND,
                                  int *RANK, double *WORK, int LWORK, int *INFO)
