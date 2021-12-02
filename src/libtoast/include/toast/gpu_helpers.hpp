@@ -14,6 +14,7 @@
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
 #include <cufft.h>
+#include <toast/sys_utils.hpp>
 
 // checks for various type of cuda error codes
 void checkCudaErrorCode(const cudaError errorCode, const std::string &functionName = "unknown");
