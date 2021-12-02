@@ -26,7 +26,8 @@ from .._libtoast import (
     acc_delete,
     acc_update_device,
     acc_update_self,
-    test_acc_op,
+    test_acc_op_buffer,
+    test_acc_op_array,
 )
 
 from ..observation import default_values as defaults
@@ -55,14 +56,15 @@ class AccOperator(ops.Operator):
                 # Base class has checked that data listed in our requirements
                 # is present.  Call compiled code that uses OpenACC to work
                 # with this data.
-                test_acc_op(
-                    ob.detdata[self.det_data].data.flatten(),
+                test_acc_op_buffer(
+                    ob.detdata[self.det_data].flatdata,
                     len(ob.detdata[self.det_data].detectors),
                 )
+                test_acc_op_array(ob.detdata[self.det_data].data)
             else:
                 # Just use python
                 for d in ob.detdata[self.det_data].detectors:
-                    ob.detdata[self.det_data][d] *= 2
+                    ob.detdata[self.det_data][d] *= 4
 
     def _finalize(self, data, use_acc=False, **kwargs):
         pass
@@ -99,56 +101,56 @@ class AcceleratorTest(MPITestCase):
             "u8": np.uint8,
         }
 
-    # def test_memory(self):
-    #     if not acc_enabled():
-    #         if self.rank == 0:
-    #             print("Not compiled with OpenACC support- skipping memory test")
-    #         return
-    #     data = dict()
-    #     check = dict()
-    #     for tname, tp in self.types.items():
-    #         data[tname] = np.ones(100, dtype=tp)
-    #         check[tname] = 2 * np.array(data[tname])
+    def test_memory(self):
+        if not acc_enabled():
+            if self.rank == 0:
+                print("Not compiled with OpenACC support- skipping memory test")
+            return
+        data = dict()
+        check = dict()
+        for tname, tp in self.types.items():
+            data[tname] = np.ones(100, dtype=tp)
+            check[tname] = 2 * np.array(data[tname])
 
-    #     # Verify that data is not on the device
-    #     for tname, buffer in data.items():
-    #         self.assertFalse(acc_is_present(buffer))
+        # Verify that data is not on the device
+        for tname, buffer in data.items():
+            self.assertFalse(acc_is_present(buffer))
 
-    #     # Copy to device
-    #     for tname, buffer in data.items():
-    #         acc_copyin(buffer)
+        # Copy to device
+        for tname, buffer in data.items():
+            acc_copyin(buffer)
 
-    #     # Check that it is present
-    #     for tname, buffer in data.items():
-    #         self.assertTrue(acc_is_present(buffer))
+        # Check that it is present
+        for tname, buffer in data.items():
+            self.assertTrue(acc_is_present(buffer))
 
-    #     # Change host copy
-    #     for tname, buffer in data.items():
-    #         buffer[:] *= 2
+        # Change host copy
+        for tname, buffer in data.items():
+            buffer[:] *= 2
 
-    #     # Update device copy
-    #     for tname, buffer in data.items():
-    #         acc_update_device(buffer)
+        # Update device copy
+        for tname, buffer in data.items():
+            acc_update_device(buffer)
 
-    #     # Reset host copy
-    #     for tname, buffer in data.items():
-    #         buffer[:] = 0
+        # Reset host copy
+        for tname, buffer in data.items():
+            buffer[:] = 0
 
-    #     # Update host copy from device
-    #     for tname, buffer in data.items():
-    #         acc_update_self(buffer)
+        # Update host copy from device
+        for tname, buffer in data.items():
+            acc_update_self(buffer)
 
-    #     # Check Values
-    #     for tname, buffer in data.items():
-    #         np.testing.assert_array_equal(buffer, check[tname])
+        # Check Values
+        for tname, buffer in data.items():
+            np.testing.assert_array_equal(buffer, check[tname])
 
-    #     # Delete device copy
-    #     for tname, buffer in data.items():
-    #         acc_delete(buffer)
+        # Delete device copy
+        for tname, buffer in data.items():
+            acc_delete(buffer)
 
-    #     # Verify that data is not on the device
-    #     for tname, buffer in data.items():
-    #         self.assertFalse(acc_is_present(buffer))
+        # Verify that data is not on the device
+        for tname, buffer in data.items():
+            self.assertFalse(acc_is_present(buffer))
 
     def test_operator_stage(self):
         if not acc_enabled():
