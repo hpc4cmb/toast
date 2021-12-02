@@ -71,8 +71,11 @@ if(TOAST_STATIC_DEPS)
     set(SUITESPARSE_USE_STATIC_LIBS TRUE)
 endif()
 
-# First look for MKL, since that will provide both FFT support and BLAS/LAPACK
+# First look for MKL and CUDA, since those will provide both
+# FFT support and BLAS/LAPACK
+
 find_package(MKL)
+find_package(CUDAToolkit)
 
 if(MKL_FOUND)
     # Use MKL for BLAS / LAPACK
@@ -81,10 +84,15 @@ if(MKL_FOUND)
     set(BLAS_FOUND TRUE)
     set(LAPACK_FOUND TRUE)
 else()
-    # Search for FFTW instead
-    find_package(FFTW)
-    if(NOT FFTW_FOUND)
-        message(FATAL_ERROR "Could not find a supported FFT library (MKL or FFTW)")
+    if(CUDAToolkit_FOUND)
+        # This provides FFT support
+	message(STATUS "Using CUDA FFT")
+    else()
+        # Search for FFTW instead
+        find_package(FFTW)
+        if(NOT FFTW_FOUND)
+            message(FATAL_ERROR "Could not find a supported FFT library (MKL, cuFFT or FFTW)")
+        endif()
     endif()
     find_package(BLAS)
     find_package(LAPACK)
@@ -109,8 +117,6 @@ find_package(AATM)
 find_package(SuiteSparse)
 
 find_package(PythonInterp REQUIRED)
-
-find_package(CUDAToolkit)
 
 # Internal products
 
