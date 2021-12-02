@@ -162,10 +162,17 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t *flags,
         // Fit the templates against the data.
         // DGELS minimizes the norm of the difference and the solution vector
         // and overwrites proj with the fitting coefficients.
-        int info;
-        toast::LinearAlgebra::gels(norder, norder, nsignal,
-                                   invcov.data(), norder,
-                                   proj.data(), norder, &info);
+        toast::AlignedVector <double> singular_values(norder);
+        int rank, info;
+        double rcond_limit = 1e-3;
+        int lwork = std::max(10 * (norder + nsignal), 1000000);
+        toast::AlignedVector <double> work(lwork);
+
+        toast::LinearAlgebra::gelss(
+            norder, norder, nsignal, invcov.data(), norder,
+            proj.data(), norder, singular_values.data(), rcond_limit,
+            &rank, work.data(), lwork, &info
+        );
 
         for (int iorder = 0; iorder < norder; ++iorder)
         {
@@ -408,7 +415,6 @@ void toast::add_templates(double *signal, double *templates, double *coeff,
             istop = nsample;
         if (istop <= istart)
             continue;
-        size_t n = istop - istart;
         for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate)
         {
             double *ptemplate = templates + itemplate * nsample;

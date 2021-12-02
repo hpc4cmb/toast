@@ -359,6 +359,6 @@ size_t FractionOfGPUMemory(const double fraction)
 }
 
 // global variable, preallocates 90% of the total GPU memory
-GPU_memory_pool_t GPU_memory_pool(FractionOfGPUMemory(0.9));
+GPU_memory_pool_t GPU_memory_pool(FractionOfGPUMemory(0.5));
 
 #endif
