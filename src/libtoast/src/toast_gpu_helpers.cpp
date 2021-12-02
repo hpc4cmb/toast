@@ -11,7 +11,7 @@
 //---------------------------------------------------------------------------------------
 // ERROR CODE CHECKING
 
-// displays an error message if the computation did not end in success
+// displays an error message if the cuda runtime computation did not end in success
 void checkCudaErrorCode(const cudaError errorCode, const std::string &functionName)
 {
     if (errorCode != cudaSuccess)
@@ -19,13 +19,15 @@ void checkCudaErrorCode(const cudaError errorCode, const std::string &functionNa
         auto log = toast::Logger::get();
         std::string msg = "The CUDA Runtime threw a '" + std::string(cudaGetErrorString(errorCode)) + "' error code";
         if (functionName != "unknown")
+        {
             msg += " in function '" + functionName + "'.";
+        }
         log.error(msg.c_str());
         throw std::runtime_error(msg.c_str());
     }
 }
 
-// turns an error code into human readable text
+// turns a cublas error code into human readable text
 std::string cublasGetErrorString(const cublasStatus_t errorCode)
 {
     switch (errorCode)
@@ -55,7 +57,7 @@ std::string cublasGetErrorString(const cublasStatus_t errorCode)
     return "unknown";
 }
 
-// displays an error message if the computation did not end in sucess
+// displays an error message if the cublas computation did not end in sucess
 void checkCublasErrorCode(const cublasStatus_t errorCode, const std::string &functionName)
 {
     if (errorCode != CUBLAS_STATUS_SUCCESS)
@@ -63,13 +65,15 @@ void checkCublasErrorCode(const cublasStatus_t errorCode, const std::string &fun
         auto log = toast::Logger::get();
         std::string msg = "CUBLAS threw a '" + cublasGetErrorString(errorCode) + "' error code";
         if (functionName != "unknown")
+        {
             msg += " in function '" + functionName + "'.";
+        }
         log.error(msg.c_str());
         throw std::runtime_error(msg.c_str());
     }
 }
 
-// turns an error code into human readable text
+// turns a cusolver error code into human readable text
 std::string cusolverGetErrorString(const cusolverStatus_t errorCode)
 {
     switch (errorCode)
@@ -129,7 +133,7 @@ std::string cusolverGetErrorString(const cusolverStatus_t errorCode)
     return "unknown";
 }
 
-// displays an error message if the computation did not end in sucess
+// displays an error message if the cusolver computation did not end in sucess
 void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string &functionName)
 {
     if (errorCode != CUSOLVER_STATUS_SUCCESS)
@@ -137,13 +141,15 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode, const std::string 
         auto log = toast::Logger::get();
         std::string msg = "CUSOLVER threw a '" + cusolverGetErrorString(errorCode) + "' error code";
         if (functionName != "unknown")
+        {
             msg += " in function '" + functionName + "'.";
+        }
         log.error(msg.c_str());
         throw std::runtime_error(msg.c_str());
     }
 }
 
-// turns an error code into human readable text
+// turns a cufft error code into human readable text
 std::string cufftGetErrorString(cufftResult error)
 {
     switch (error)
@@ -187,7 +193,7 @@ std::string cufftGetErrorString(cufftResult error)
     return "unknown";
 }
 
-// displays an error message if the computation did not end in sucess
+// displays an error message if the cufft computation did not end in sucess
 void checkCufftErrorCode(const cufftResult errorCode, const std::string &functionName)
 {
     if (errorCode != CUFFT_SUCCESS)
@@ -195,7 +201,9 @@ void checkCufftErrorCode(const cufftResult errorCode, const std::string &functio
         auto log = toast::Logger::get();
         std::string msg = "CUFFT threw a '" + cufftGetErrorString(errorCode) + "' error code";
         if (functionName != "unknown")
+        {
             msg += " in function '" + functionName + "'.";
+        }
         log.error(msg.c_str());
         throw std::runtime_error(msg.c_str());
     }
@@ -208,18 +216,21 @@ void checkCufftErrorCode(const cufftResult errorCode, const std::string &functio
 const int ALIGNEMENT_SIZE = 512;
 
 // creating a new `GPU_memory_block_t`
-// `cpu_ptr` is an, optional, pointer to the cpu memory that was moved into the block
+// `cpu_ptr` is optional but can be passed to keep trace of the origin of the data
+// when allocating during a cpu-2-gpu copy operation
 GPU_memory_block_t::GPU_memory_block_t(void *gpu_ptr, size_t size_bytes_arg, void *cpu_ptr_arg)
 {
     // stores size of the allocation, in bytes
     size_bytes = size_bytes_arg;
-    // align size with 512
+    // align size with ALIGNEMENT_SIZE
     if (size % ALIGNEMENT_SIZE != 0)
+    {
         size += ALIGNEMENT_SIZE - (size % ALIGNEMENT_SIZE);
+    }
     // defines the start and end gpu pointers
     start = gpu_ptr;
     end = static_cast<char *>(start) + size;
-    // the block starts allocated (and not freed)
+    // the block starts allocated (it might be freed later)
     isFree = false;
     // stores cpu pointer (or nullptr)
     cpu_ptr = cpu_ptr_arg;
@@ -261,26 +272,27 @@ GPU_memory_pool_t::~GPU_memory_pool_t()
     checkCusolverErrorCode(statusJacobiParams);
 }
 
-// allocates memory starting from the end of the latest block
-// input_ptr is an optional pointer to the cpu memory from which the data store into memory might come from
-cudaError GPU_memory_pool_t::malloc(void **output_ptr, size_t size_bytes, void *input_ptr)
+// allocates memory, starting from the end of the latest allocated block
+// `cpu_ptr` is optional but can be passed to keep trace of the origin of the data
+// when allocating during a cpu-2-gpu copy operation
+cudaError GPU_memory_pool_t::malloc(void **gpu_ptr, size_t size_bytes, void *cpu_ptr)
 {
     // insure two threads cannot interfere
     const std::lock_guard<std::mutex> lock(alloc_mutex);
 
     // builds a block starting at the end of the existing blocks
-    *output_ptr = blocks.back().end;
-    const GPU_memory_block_t memoryBlock(*output_ptr, size_bytes, input_ptr);
+    *gpu_ptr = blocks.back().end;
+    const GPU_memory_block_t memoryBlock(*gpu_ptr, size_bytes, cpu_ptr);
 
     // errors out if the allocation goes beyond the preallocated memory
     const size_t usedMemory = static_cast<char *>(memoryBlock.end) - static_cast<char *>(start);
     if (usedMemory > available_memory_bytes)
     {
         std::cerr << "INSUFICIENT GPU MEMORY PREALOCATION"
-                  << " memory that will be allocated:" << usedMemory
-                  << " total memory available:" << available_memory_bytes
-                  << " size requested:" << size_bytes << std::endl;
-        *output_ptr = NULL;
+                  << " GPU memory that would be taken after this allocation:" << usedMemory
+                  << " (number of bytes requested by this allocation:" << size_bytes << ")"
+                  << " total GPU-memory preallocated:" << available_memory_bytes << std::endl;
+        *gpu_ptr = nullptr;
         return cudaErrorMemoryAllocation;
     }
 
@@ -295,23 +307,28 @@ void GPU_memory_pool_t::free(void *gpu_ptr)
     // insure two threads cannot interfere
     const std::lock_guard<std::mutex> lock(alloc_mutex);
 
-    // gets index of ptr in block, starting from the end
+    // gets the index of gpu_ptr in the blocks vector, starting from the end
     int i = blocks.size() - 1;
-    while (blocks[i].start != gpu_ptr)
+    while ((blocks[i].start != gpu_ptr) and (i >= 0))
     {
         i--;
     }
+    // errors-out if we cannot find `gpu_ptr`
+    if (i < 0)
+    {
+        auto log = toast::Logger::get();
+        std::string msg = "GPU_memory_pool_t::free: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
+    }
 
-    // frees ptr
+    // frees gpu_ptr
     blocks[i].isFree = true;
 
-    // if ptr was the last elements, frees a maximum of elements
-    if (i == blocks.size() - 1)
+    // if gpu_ptr was the last elements, frees a maximum of blocks
+    while (blocks.back().isFree)
     {
-        while (blocks.back().isFree)
-        {
-            blocks.pop_back();
-        }
+        blocks.pop_back();
     }
 }
 
@@ -321,8 +338,7 @@ size_t GigagbytesToBytes(const size_t nbGB)
     return nbGB * 1073741824l;
 }
 
-// returns a fraction of the GPU available memory, in bytes
-// either the full GPU memory (default) or only the free memory left
+// returns a given fraction of the total GPU memory, in bytes
 size_t FractionOfGPUMemory(const double fraction)
 {
     // computes the GPU memory available
@@ -335,11 +351,14 @@ size_t FractionOfGPUMemory(const double fraction)
     // computes the portion that we want to reserve
     size_t result = fraction * totalGPUmemory;
     // makes sure the end of the reservation is a multiple of the alignement
-    result -= result % ALIGNEMENT_SIZE;
+    if (result % ALIGNEMENT_SIZE != 0)
+    {
+        result += ALIGNEMENT_SIZE - (result % ALIGNEMENT_SIZE);
+    }
     return result;
 }
 
-// global variable, preallocates 90% of the total GPU memory available
+// global variable, preallocates 90% of the total GPU memory
 GPU_memory_pool_t GPU_memory_pool(FractionOfGPUMemory(0.9));
 
 #endif
