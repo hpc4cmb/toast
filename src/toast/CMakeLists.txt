@@ -87,9 +87,9 @@ if(CHOLMOD_FOUND)
 endif(CHOLMOD_FOUND)
 
 if(CUDAToolkit_FOUND AND NOT CUDA_DISABLED)
-    target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
-    target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
-    target_include_directories(toast PRIVATE "${CUDAToolkit_MATH_INCLUDE_DIRS}")
+    target_compile_definitions(_libtoast PRIVATE HAVE_CUDALIBS=1)
+    target_include_directories(_libtoast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
+    target_include_directories(_libtoast PRIVATE "${CUDAToolkit_MATH_INCLUDE_DIRS}")
 endif()
 
 # Include path to the toast headers

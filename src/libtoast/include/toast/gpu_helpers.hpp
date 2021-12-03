@@ -175,7 +175,7 @@ class GPU_memory_pool {
             }
 
             // extract the gpu_ptr and the size of the allocation in bytes
-            T * data_gpu = blocks[i].start;
+            T * data_gpu = reinterpret_cast <T *> (blocks[i].start);
             const size_t size = blocks[i].size_bytes;
 
             // data transfer
@@ -186,6 +186,21 @@ class GPU_memory_pool {
 
             // deallocation
             this->free(data_gpu);
+        }
+
+        // Determine if the data is present in the pool
+        template <typename T>
+        bool is_present(T * cpu_ptr) {
+            // gets the index of cpu_ptr in the blocks vector, starting from the end
+            int i = blocks.size() - 1;
+            while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0)) {
+                i--;
+            }
+            if (i < 0) {
+                return false;
+            } else {
+                return true;
+            }
         }
 };
 

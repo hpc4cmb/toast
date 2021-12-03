@@ -4,6 +4,8 @@
 
 #include <module.hpp>
 
+#include <toast/gpu_helpers.hpp>
+
 #ifdef HAVE_OPENACC
 # include <openacc.h>
 #endif // ifdef HAVE_OPENACC
@@ -73,7 +75,13 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-            auto result = acc_is_present(p_host, n_bytes);
+            #ifdef USE_OPENACC_MEMPOOL
+            auto & pool = GPU_memory_pool::get();
+            bool test = pool.is_present(reinterpret_cast <char *> (p_host));
+            int result = test ? 1 : 0;
+            #else
+            int result = acc_is_present(p_host, n_bytes);
+            #endif
 
             auto log = toast::Logger::get();
             std::ostringstream o;
@@ -102,7 +110,12 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
+            #ifdef USE_OPENACC_MEMPOOL
+            auto & pool = GPU_memory_pool::get();
+            auto p_device = pool.toDevice(reinterpret_cast <char *> (p_host), n_bytes);
+            #else
             auto p_device = acc_copyin(p_host, n_bytes);
+            #endif
 
             auto log = toast::Logger::get();
             std::ostringstream o;
@@ -144,7 +157,12 @@ void init_accelerator(py::module & m) {
             o << "copyout host pointer " << p_host << " (" << n_bytes << " bytes) from device";
             log.verbose(o.str().c_str());
 
+            #ifdef USE_OPENACC_MEMPOOL
+            auto & pool = GPU_memory_pool::get();
+            pool.fromDevice <char> (reinterpret_cast <char *> (p_host));
+            #else
             acc_copyout(p_host, n_bytes);
+            #endif
             return;
         }, py::arg(
             "data"), R"(
@@ -180,7 +198,13 @@ void init_accelerator(py::module & m) {
             o << "update device with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
+            #ifdef USE_OPENACC_MEMPOOL
+            // FIXME: Does the pool have an update device / host equivalent?
+            auto & pool = GPU_memory_pool::get();
+            auto p_device = pool.toDevice(reinterpret_cast <char *> (p_host), n_bytes);
+            #else
             acc_update_device(p_host, n_bytes);
+            #endif
             return;
         }, py::arg(
             "data"), R"(
@@ -216,7 +240,13 @@ void init_accelerator(py::module & m) {
             o << "update host/self with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
+            #ifdef USE_OPENACC_MEMPOOL
+            // FIXME: Does the pool have an update device / host equivalent?
+            auto & pool = GPU_memory_pool::get();
+            pool.fromDevice(reinterpret_cast <char *> (p_host));
+            #else
             acc_update_self(p_host, n_bytes);
+            #endif
             return;
         }, py::arg(
             "data"), R"(
@@ -252,7 +282,13 @@ void init_accelerator(py::module & m) {
             o << "delete device mem for host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
+            #ifdef USE_OPENACC_MEMPOOL
+            // FIXME:  If there was a pool.Free(cpu pointer), we would call that here.
+            auto & pool = GPU_memory_pool::get();
+            pool.fromDevice(reinterpret_cast <char *> (p_host));
+            #else
             acc_delete(p_host, n_bytes);
+            #endif
             return;
         }, py::arg(
             "data"), R"(

@@ -5,6 +5,11 @@
 
 opts="$@"
 
+# NOTE:  You can toggle use of the mempool with OpenACC by
+# passing:
+#    -DUSE_OPENACC_MEMPOOL=TRUE
+# to this script.
+
 cmake \
     -DCMAKE_C_COMPILER="nvc" \
     -DCMAKE_CXX_COMPILER="nvc++" \
@@ -13,7 +18,6 @@ cmake \
     -DMKL_DISABLED=TRUE \
     -DUSE_OPENACC=TRUE \
     -DUSE_CUDA=TRUE \
-    -DUSE_OPENACC_MEMPOOL=FALSE \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
     -DBLAS_LIBRARIES="-lopenblas -lgomp -lm" \
