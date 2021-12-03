@@ -19,21 +19,23 @@
 // outputs.
 
 // #ifdef HAVE_FFTW
-// the not HAVE_CUDALIBS is needed to deal with conflict in symbol names between both libs
+// the not HAVE_CUDALIBS is needed to deal with conflict in symbol names between both
+// libs
 #if defined(HAVE_FFTW) && !defined(HAVE_CUDALIBS)
 
 toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
     int64_t length, int64_t n, toast::fft_plan_type type,
-    toast::fft_direction dir, double scale) : toast::FFTPlanReal1D(length, n, type, dir, scale)
+    toast::fft_direction dir, double scale) : toast::FFTPlanReal1D(length, n, type, dir,
+                                                                   scale)
 {
     int threads = 1;
 
-// enable threads
-#ifdef HAVE_FFTW_THREADS
+    // enable threads
+# ifdef HAVE_FFTW_THREADS
     auto env = toast::Environment::get();
     threads = env.max_threads();
     fftw_plan_with_nthreads(threads);
-#endif // ifdef HAVE_FFTW_THREADS
+# endif // ifdef HAVE_FFTW_THREADS
 
     // allocate memory
 
@@ -42,8 +44,8 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
 
     // create vector views and raw pointers
 
-    traw_ = static_cast<double *>(&data_[0]);
-    fraw_ = static_cast<double *>(&data_[n_ * length_]);
+    traw_ = static_cast <double *> (&data_[0]);
+    fraw_ = static_cast <double *> (&data_[n_ * length_]);
 
     tview_.clear();
     fview_.clear();
@@ -56,12 +58,12 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
 
     // create plan
 
-    int ilength = static_cast<int>(length_);
-    int iN = static_cast<int>(n_);
+    int ilength = static_cast <int> (length_);
+    int iN = static_cast <int> (n_);
 
     unsigned flags = 0;
-    double *rawin;
-    double *rawout;
+    double * rawin;
+    double * rawout;
 
     fftw_r2r_kind kind;
 
@@ -106,7 +108,7 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
 
 toast::FFTPlanReal1DFFTW::~FFTPlanReal1DFFTW()
 {
-    fftw_destroy_plan(static_cast<fftw_plan>(plan_));
+    fftw_destroy_plan(static_cast <fftw_plan> (plan_));
     tview_.clear();
     fview_.clear();
     data_.clear();
@@ -116,7 +118,7 @@ void toast::FFTPlanReal1DFFTW::exec()
 {
     fftw_execute(plan_);
 
-    double *rawout;
+    double * rawout;
     double norm;
 
     if (dir_ == toast::fft_direction::forward)
@@ -127,7 +129,7 @@ void toast::FFTPlanReal1DFFTW::exec()
     else
     {
         rawout = traw_;
-        norm = scale_ / static_cast<double>(length_);
+        norm = scale_ / static_cast <double> (length_);
     }
 
     int64_t len = n_ * length_;
@@ -140,7 +142,7 @@ void toast::FFTPlanReal1DFFTW::exec()
     return;
 }
 
-double *toast::FFTPlanReal1DFFTW::tdata(int64_t indx)
+double * toast::FFTPlanReal1DFFTW::tdata(int64_t indx)
 {
     if ((indx < 0) || (indx >= n_))
     {
@@ -153,7 +155,7 @@ double *toast::FFTPlanReal1DFFTW::tdata(int64_t indx)
     return tview_[indx];
 }
 
-double *toast::FFTPlanReal1DFFTW::fdata(int64_t indx)
+double * toast::FFTPlanReal1DFFTW::fdata(int64_t indx)
 {
     if ((indx < 0) || (indx >= n_))
     {

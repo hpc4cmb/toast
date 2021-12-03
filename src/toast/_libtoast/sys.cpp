@@ -464,22 +464,23 @@ void init_sys(py::module & m) {
     auto env = toast::Environment::get();
 
     m.def("threading_state",
-        []() {
-            int max = 0;
+          []() {
+              int max = 0;
             #ifdef _OPENMP
-            max = omp_get_max_threads();
+              max = omp_get_max_threads();
             #endif // ifdef _OPENMP
 
-            int cur;
+              int cur;
             #pragma omp parallel
-            {
-                cur = 0;
+              {
+                  cur = 0;
                 #ifdef _OPENMP
-                cur = omp_get_num_threads();
+                  cur = omp_get_num_threads();
                 #endif // ifdef _OPENMP
-            }
-            return py::make_tuple(max, cur);
-        },
+              }
+              return py::make_tuple(max,
+                                    cur);
+          },
           R"(
         Get the currently configured OpenMP threading state.
 
@@ -487,5 +488,4 @@ void init_sys(py::module & m) {
             (tuple):  The (global max, current max) number of threads.
 
     )");
-
 }

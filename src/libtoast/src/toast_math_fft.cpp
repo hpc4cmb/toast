@@ -39,17 +39,20 @@ toast::FFTPlanReal1D * toast::FFTPlanReal1D::create(int64_t length, int64_t n,
                                                     double scale) {
 #ifdef HAVE_CUDALIBS
     return new FFTPlanReal1DCUFFT(length, n, type, dir, scale);
+
 #elif HAVE_MKL
     return new FFTPlanReal1DMKL(length, n, type, dir, scale);
+
 #elif HAVE_FFTW
     return new FFTPlanReal1DFFTW(length, n, type, dir, scale);
-#else
+
+#else // ifdef HAVE_CUDALIBS
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
     std::string msg("FFTs require MKL, FFTW or CUFFT");
     log.error(msg.c_str(), here);
     throw std::runtime_error(msg.c_str());
-#endif
+#endif // ifdef HAVE_CUDALIBS
 }
 
 // Persistant storage of 1D plans for a fixed size
