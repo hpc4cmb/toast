@@ -32,18 +32,20 @@ void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
                                 int LDC) {
 #ifdef HAVE_CUDALIBS
 
+    auto & pool = GPU_memory_pool::get();
+
     // prepare inputs
     cublasOperation_t transA_gpu = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB_gpu = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
 
     // send data to GPU
-    double * A_gpu = GPU_memory_pool.toDevice(A, LDA * ((TRANSA == 'N') ? K : M));
-    double * B_gpu = GPU_memory_pool.toDevice(B, LDB * ((TRANSB == 'N') ? N : K));
-    double * C_gpu = (BETA == 0.) ? GPU_memory_pool.alloc <double> (LDC * N)
-                                 : GPU_memory_pool.toDevice(C, LDC * N);
+    double * A_gpu = pool.toDevice(A, LDA * ((TRANSA == 'N') ? K : M));
+    double * B_gpu = pool.toDevice(B, LDB * ((TRANSB == 'N') ? N : K));
+    double * C_gpu = (BETA == 0.) ? pool.alloc <double> (LDC * N)
+                                 : pool.toDevice(C, LDC * N);
 
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDgemm(GPU_memory_pool.handleBlas, transA_gpu,
+    cublasStatus_t errorCodeOp = cublasDgemm(pool.handleBlas, transA_gpu,
                                              transB_gpu, M, N, K, &ALPHA, A_gpu, LDA,
                                              B_gpu, LDB, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
@@ -52,9 +54,9 @@ void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
 
     // gets result back from GPU
     // and frees input memory
-    GPU_memory_pool.free(A_gpu);
-    GPU_memory_pool.free(B_gpu);
-    GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
+    pool.free(A_gpu);
+    pool.free(B_gpu);
+    pool.fromDevice(C, C_gpu, LDC * N);
 #elif HAVE_LAPACK
     wrapped_dgemm(&TRANSA, &TRANSB, &M, &N, &K, &ALPHA, A, &LDA, B, &LDB, &BETA, C,
                   &LDC);
@@ -80,16 +82,18 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
     size_t C_size = LDC * N;
 #ifdef HAVE_CUDALIBS
 
+    auto & pool = GPU_memory_pool::get();
+
     // prepare inputs
     cublasOperation_t transA_gpu = (TRANSA == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB_gpu = (TRANSB == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
 
     // send data to GPU
-    double * A_batch_gpu = GPU_memory_pool.toDevice(A_batch, batchCount * A_size);
-    double * B_batch_gpu = GPU_memory_pool.toDevice(B_batch, batchCount * B_size);
-    double * C_batch_gpu = (BETA == 0.) ? GPU_memory_pool.alloc <double> (
+    double * A_batch_gpu = pool.toDevice(A_batch, batchCount * A_size);
+    double * B_batch_gpu = pool.toDevice(B_batch, batchCount * B_size);
+    double * C_batch_gpu = (BETA == 0.) ? pool.alloc <double> (
         batchCount * C_size)
-                                       : GPU_memory_pool.toDevice(C_batch,
+                                       : pool.toDevice(C_batch,
                                                                   batchCount * C_size);
 
     // gets pointers to each batch matrix
@@ -103,12 +107,12 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
         B_ptrs[batchid] = B_batch_gpu + batchid * B_size;
         C_ptrs[batchid] = C_batch_gpu + batchid * C_size;
     }
-    double ** A_ptrs_gpu = GPU_memory_pool.toDevice(A_ptrs.data(), batchCount);
-    double ** B_ptrs_gpu = GPU_memory_pool.toDevice(B_ptrs.data(), batchCount);
-    double ** C_ptrs_gpu = GPU_memory_pool.toDevice(C_ptrs.data(), batchCount);
+    double ** A_ptrs_gpu = pool.toDevice(A_ptrs.data(), batchCount);
+    double ** B_ptrs_gpu = pool.toDevice(B_ptrs.data(), batchCount);
+    double ** C_ptrs_gpu = pool.toDevice(C_ptrs.data(), batchCount);
 
     // compute batched blas operation
-    cublasStatus_t errorCodeOp = cublasDgemmBatched(GPU_memory_pool.handleBlas,
+    cublasStatus_t errorCodeOp = cublasDgemmBatched(pool.handleBlas,
                                                     transA_gpu, transB_gpu, M, N, K,
                                                     &ALPHA, A_ptrs_gpu, LDA, B_ptrs_gpu,
                                                     LDB, &BETA, C_ptrs_gpu, LDC,
@@ -119,15 +123,15 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
 
     // deletes pointers to each batch matrices
     // no need for a copy back to CPU
-    GPU_memory_pool.free(A_ptrs_gpu);
-    GPU_memory_pool.free(B_ptrs_gpu);
-    GPU_memory_pool.free(C_ptrs_gpu);
+    pool.free(A_ptrs_gpu);
+    pool.free(B_ptrs_gpu);
+    pool.free(C_ptrs_gpu);
 
     // gets result back from GPU
     // and frees niput n=memory
-    GPU_memory_pool.fromDevice(C_batch, C_batch_gpu, batchCount * C_size);
-    GPU_memory_pool.free(A_batch_gpu);
-    GPU_memory_pool.free(B_batch_gpu);
+    pool.fromDevice(C_batch, C_batch_gpu, batchCount * C_size);
+    pool.free(A_batch_gpu);
+    pool.free(B_batch_gpu);
 #elif HAVE_LAPACK
 
     // use naive opemMP paralellism
@@ -160,47 +164,49 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
                                         const int batchCount) {
 #ifdef HAVE_CUDALIBS
 
+    auto & pool = GPU_memory_pool::get();
+
     // prepare inputs
     cusolverEigMode_t jobz_gpu =
         (JOBZ == 'V') ? CUSOLVER_EIG_MODE_VECTOR : CUSOLVER_EIG_MODE_NOVECTOR;
     cublasFillMode_t uplo_gpu =
         (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
-    int * INFO_batch_gpu = GPU_memory_pool.alloc <int> (batchCount);
+    int * INFO_batch_gpu = pool.alloc <int> (batchCount);
 
     // send data to GPU
-    double * A_batch_gpu = GPU_memory_pool.toDevice(A_batch, batchCount * N * LDA);
-    double * W_batch_gpu = GPU_memory_pool.alloc <double> (batchCount * N); // output,
+    double * A_batch_gpu = pool.toDevice(A_batch, batchCount * N * LDA);
+    double * W_batch_gpu = pool.alloc <double> (batchCount * N); // output,
                                                                             // no need
                                                                             // to send
     // computes workspace size
     int LWORK = 0;
     cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(
-        GPU_memory_pool.handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA,
-        W_batch_gpu, &LWORK, GPU_memory_pool.jacobiParameters, batchCount);
+        pool.handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA,
+        W_batch_gpu, &LWORK, pool.jacobiParameters, batchCount);
     checkCusolverErrorCode(statusBuffer);
 
     // allocates workspace
-    double * WORK_gpu = GPU_memory_pool.alloc <double> (LWORK);
+    double * WORK_gpu = pool.alloc <double> (LWORK);
 
     // compute cusolver operation
     cusolverStatus_t statusSolver = cusolverDnDsyevjBatched(
-        GPU_memory_pool.handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA,
-        W_batch_gpu, WORK_gpu, LWORK, INFO_batch_gpu, GPU_memory_pool.jacobiParameters,
+        pool.handleSolver, jobz_gpu, uplo_gpu, N, A_batch_gpu, LDA,
+        W_batch_gpu, WORK_gpu, LWORK, INFO_batch_gpu, pool.jacobiParameters,
         batchCount);
     checkCusolverErrorCode(statusSolver);
     cudaError statusSync = cudaDeviceSynchronize();
     checkCudaErrorCode(statusSync);
 
     // gets info back to CPU
-    GPU_memory_pool.fromDevice(W_batch, W_batch_gpu, batchCount * N);
-    GPU_memory_pool.free(WORK_gpu);
-    GPU_memory_pool.fromDevice(INFO_batch, INFO_batch_gpu, batchCount);
+    pool.fromDevice(W_batch, W_batch_gpu, batchCount * N);
+    pool.free(WORK_gpu);
+    pool.fromDevice(INFO_batch, INFO_batch_gpu, batchCount);
 
     // copies only if the eigenvectors have been stored in A
     if (JOBZ == 'V') {
-        GPU_memory_pool.fromDevice(A_batch, A_batch_gpu, batchCount * N * LDA);
+        pool.fromDevice(A_batch, A_batch_gpu, batchCount * N * LDA);
     } else {
-        GPU_memory_pool.free(A_batch_gpu);
+        pool.free(A_batch_gpu);
     }
 #elif HAVE_LAPACK
 
@@ -260,19 +266,21 @@ void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
                                 int LDB, double BETA, double * C, int LDC) {
 #ifdef HAVE_CUDALIBS
 
+    auto & pool = GPU_memory_pool::get();
+
     // prepare inputs
     cublasSideMode_t side_gpu = (SIDE == 'L') ? CUBLAS_SIDE_LEFT : CUBLAS_SIDE_RIGHT;
     cublasFillMode_t uplo_gpu =
         (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
 
     // send data to GPU
-    double * A_gpu = GPU_memory_pool.toDevice(A, LDA * ((SIDE == 'L') ? M : N));
-    double * B_gpu = GPU_memory_pool.toDevice(B, LDB * N);
-    double * C_gpu = (BETA == 0.) ? GPU_memory_pool.alloc <double> (LDC * N)
-                                 : GPU_memory_pool.toDevice(C, LDC * N);
+    double * A_gpu = pool.toDevice(A, LDA * ((SIDE == 'L') ? M : N));
+    double * B_gpu = pool.toDevice(B, LDB * N);
+    double * C_gpu = (BETA == 0.) ? pool.alloc <double> (LDC * N)
+                                 : pool.toDevice(C, LDC * N);
 
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDsymm(GPU_memory_pool.handleBlas, side_gpu,
+    cublasStatus_t errorCodeOp = cublasDsymm(pool.handleBlas, side_gpu,
                                              uplo_gpu, M, N, &ALPHA, A_gpu, LDA, B_gpu,
                                              LDB, &BETA, C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
@@ -281,9 +289,9 @@ void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
 
     // gets data back from GPU
     // frees input memory that does not need to go back
-    GPU_memory_pool.free(A_gpu);
-    GPU_memory_pool.free(B_gpu);
-    GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
+    pool.free(A_gpu);
+    pool.free(B_gpu);
+    pool.fromDevice(C, C_gpu, LDC * N);
 #elif HAVE_LAPACK
     wrapped_dsymm(&SIDE, &UPLO, &M, &N, &ALPHA, A, &LDA, B, &LDB, &BETA, C, &LDC);
 #else // ifdef HAVE_LAPACK
@@ -361,18 +369,20 @@ void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
                                 double * C, int LDC) {
 #ifdef HAVE_CUDALIBS
 
+    auto & pool = GPU_memory_pool::get();
+
     // prepare inputs
     cublasFillMode_t uplo_gpu =
         (UPLO == 'L') ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
     cublasOperation_t trans_gpu = (TRANS == 'T') ? CUBLAS_OP_T : CUBLAS_OP_N;
 
     // send data to GPU
-    double * A_gpu = GPU_memory_pool.toDevice(A, LDA * ((TRANS == 'T') ? N : K));
-    double * C_gpu = (BETA == 0.) ? GPU_memory_pool.alloc <double> (LDC * N)
-                                 : GPU_memory_pool.toDevice(C, LDC * N);
+    double * A_gpu = pool.toDevice(A, LDA * ((TRANS == 'T') ? N : K));
+    double * C_gpu = (BETA == 0.) ? pool.alloc <double> (LDC * N)
+                                 : pool.toDevice(C, LDC * N);
 
     // compute blas operation
-    cublasStatus_t errorCodeOp = cublasDsyrk(GPU_memory_pool.handleBlas, uplo_gpu,
+    cublasStatus_t errorCodeOp = cublasDsyrk(pool.handleBlas, uplo_gpu,
                                              trans_gpu, N, K, &ALPHA, A_gpu, LDA, &BETA,
                                              C_gpu, LDC);
     checkCublasErrorCode(errorCodeOp);
@@ -380,8 +390,8 @@ void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
     checkCudaErrorCode(statusSync);
 
     // gets data back from GPU and frees input memory
-    GPU_memory_pool.free(A_gpu);
-    GPU_memory_pool.fromDevice(C, C_gpu, LDC * N);
+    pool.free(A_gpu);
+    pool.fromDevice(C, C_gpu, LDC * N);
 #elif HAVE_LAPACK
     wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
 #else // ifdef HAVE_LAPACK
@@ -437,31 +447,33 @@ void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
                                 double * B, int LDB, int * INFO) {
 #ifdef HAVE_CUDALIBS
 
+    auto & pool = GPU_memory_pool::get();
+
     // prepare inputs
-    int * INFO_gpu = GPU_memory_pool.alloc <int> (1);
+    int * INFO_gpu = pool.alloc <int> (1);
 
     // send data to GPU
-    double * A_gpu = GPU_memory_pool.toDevice(A, N * LDA);
-    double * B_gpu = GPU_memory_pool.toDevice(B, N * NRHS);
+    double * A_gpu = pool.toDevice(A, N * LDA);
+    double * B_gpu = pool.toDevice(B, N * NRHS);
 
     // get output ready
     int LDX = LDB;
-    double * X_gpu = GPU_memory_pool.alloc <double> (N * NRHS);
+    double * X_gpu = pool.alloc <double> (N * NRHS);
 
     // computes workspace size
     size_t LWORK = 0;
     cusolverStatus_t statusBuffer = cusolverDnDDgels_bufferSize(
-        GPU_memory_pool.handleSolver, M, N, NRHS, A_gpu, LDA, B_gpu, LDB, X_gpu, LDX,
+        pool.handleSolver, M, N, NRHS, A_gpu, LDA, B_gpu, LDB, X_gpu, LDX,
 
         /*WORK=*/ NULL, &LWORK);
     checkCusolverErrorCode(statusBuffer);
 
     // allocates workspace
-    double * WORK_gpu = GPU_memory_pool.alloc <double> (LWORK);
+    double * WORK_gpu = pool.alloc <double> (LWORK);
 
     // compute cusolver operation
     int NITER = 0;
-    cusolverStatus_t statusSolver = cusolverDnDDgels(GPU_memory_pool.handleSolver, M, N,
+    cusolverStatus_t statusSolver = cusolverDnDDgels(pool.handleSolver, M, N,
                                                      NRHS, A_gpu, LDA, B_gpu, LDB,
                                                      X_gpu, LDX, WORK_gpu, LWORK,
                                                      &NITER, INFO_gpu);
@@ -470,12 +482,12 @@ void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
     checkCudaErrorCode(statusSync);
 
     // gets info back to CPU
-    GPU_memory_pool.free(A_gpu);
-    GPU_memory_pool.free(B_gpu);
-    GPU_memory_pool.fromDevice(B, X_gpu, N * NRHS); // copy X to B in order to follow
+    pool.free(A_gpu);
+    pool.free(B_gpu);
+    pool.fromDevice(B, X_gpu, N * NRHS); // copy X to B in order to follow
                                                     // CPU behaviour
-    GPU_memory_pool.free(WORK_gpu);
-    GPU_memory_pool.fromDevice(INFO, INFO_gpu, 1);
+    pool.free(WORK_gpu);
+    pool.fromDevice(INFO, INFO_gpu, 1);
 #elif HAVE_LAPACK
     char TRANS = 'N';
 

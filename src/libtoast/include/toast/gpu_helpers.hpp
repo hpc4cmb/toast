@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -60,8 +60,11 @@ class GPU_memory_block_t {
 };
 
 // allocates a slab of memory and then recycles allocations
-class GPU_memory_pool_t {
+class GPU_memory_pool {
     private:
+
+        // allocates a number of bytes on the gpu
+        GPU_memory_pool();
 
         // used to make class threadsafe
         std::mutex alloc_mutex;
@@ -77,16 +80,16 @@ class GPU_memory_pool_t {
 
     public:
 
+        // Singleton access
+        static GPU_memory_pool & get();
+
+        // frees the pool
+        ~GPU_memory_pool();
+
         // handles for linear algebra, to be re-used (as they are expensive to create)
         cublasHandle_t handleBlas = NULL;
         cusolverDnHandle_t handleSolver = NULL;
         syevjInfo_t jacobiParameters = NULL;
-
-        // allocates a number of bytes on the gpu
-        GPU_memory_pool_t(size_t bytesPreallocated);
-
-        // frees the pool
-        ~GPU_memory_pool_t();
 
         // gets a pointer to a number of preallocated bytes
         // `cpu_ptr` is optional but can be passed to keep trace of the origin of the
@@ -108,7 +111,7 @@ class GPU_memory_pool_t {
             T * output_ptr = NULL;
             const cudaError errorCode = this->malloc((void **)&output_ptr,
                                                      nb_elements * sizeof(T));
-            checkCudaErrorCode(errorCode, "GPU_memory_pool_t::alloc");
+            checkCudaErrorCode(errorCode, "GPU_memory_pool::alloc");
             return output_ptr;
         }
 
@@ -123,13 +126,13 @@ class GPU_memory_pool_t {
             const cudaError errorCodeMalloc = this->malloc(&gpu_ptr,
                                                            nb_elements * sizeof(T),
                                                            cpu_ptr);
-            checkCudaErrorCode(errorCodeMalloc, "GPU_memory_pool_t::toDevice (malloc)");
+            checkCudaErrorCode(errorCodeMalloc, "GPU_memory_pool::toDevice (malloc)");
 
             // data transfer
             const cudaError errorCodeMemcpy = cudaMemcpy(gpu_ptr, cpu_ptr,
                                                          nb_elements * sizeof(T),
                                                          cudaMemcpyHostToDevice);
-            checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool_t::toDevice (memcpy)");
+            checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::toDevice (memcpy)");
             return static_cast <T *> (gpu_ptr);
         }
 
@@ -142,7 +145,7 @@ class GPU_memory_pool_t {
                                                          nb_elements * sizeof(T),
                                                          cudaMemcpyDeviceToHost);
             checkCudaErrorCode(errorCodeMemcpy,
-                               "GPU_memory_pool_t::fromDevice (memcpy)");
+                               "GPU_memory_pool::fromDevice (memcpy)");
 
             // deallocation
             this->free(gpu_ptr);
@@ -166,7 +169,7 @@ class GPU_memory_pool_t {
             if (i < 0) {
                 auto log = toast::Logger::get();
                 std::string msg =
-                    "GPU_memory_pool_t::fromDevice(T*): either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";
+                    "GPU_memory_pool::fromDevice(T*): either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";
                 log.error(msg.c_str());
                 throw std::runtime_error(msg.c_str());
             }
@@ -179,15 +182,13 @@ class GPU_memory_pool_t {
             const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, data_gpu, size,
                                                          cudaMemcpyDeviceToHost);
             checkCudaErrorCode(errorCodeMemcpy,
-                               "GPU_memory_pool_t::fromDevice(T *cpu_ptr) (memcpy)");
+                               "GPU_memory_pool::fromDevice(T *cpu_ptr) (memcpy)");
 
             // deallocation
             this->free(data_gpu);
         }
 };
 
-// global variable containing the TOAST GPU memory pool
-extern GPU_memory_pool_t GPU_memory_pool;
 
 #endif // HAVE_CUDALIBS
 #endif // TOAST_GPU_HELPER_H

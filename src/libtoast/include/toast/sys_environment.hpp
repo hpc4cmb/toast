@@ -36,6 +36,8 @@ class Environment {
         void set_threads(int nthread);
         std::string version() const;
         int64_t tod_buffer_length() const;
+        void set_acc(int n_acc_device, int n_acc_proc_per_device, int my_acc_device);
+        void get_acc(int * n_acc_device, int * n_acc_proc_per_device, int * my_acc_device) const;
 
     private:
 
@@ -53,6 +55,9 @@ class Environment {
         std::string release_version_;
         std::string version_;
         int64_t tod_buffer_length_;
+        int n_acc_device_;
+        int n_acc_proc_per_device_;
+        int my_acc_device_;
 };
 }
 

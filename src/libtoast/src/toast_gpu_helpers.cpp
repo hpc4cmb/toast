@@ -5,6 +5,9 @@
 
 #include <toast/gpu_helpers.hpp>
 #include <toast/sys_utils.hpp>
+#include <toast/sys_environment.hpp>
+
+#include <cstring>
 
 #ifdef HAVE_CUDALIBS
 
@@ -255,6 +258,33 @@ void checkCufftErrorCode(const cufftResult errorCode,
 // constant used to make sure allocations are aligned
 const int ALIGNEMENT_SIZE = 512;
 
+// converts a number of gigabytes into a number of bytes
+size_t GigagbytesToBytes(const size_t nbGB) {
+    return nbGB * 1073741824l;
+}
+
+// returns a given fraction of the total GPU memory, in bytes
+size_t FractionOfGPUMemory(const double fraction) {
+    // computes the GPU memory available
+    int deviceId;
+    cudaGetDevice(&deviceId);
+    cudaDeviceProp deviceProp;
+    const cudaError errorCodeGetProperties = cudaGetDeviceProperties(&deviceProp,
+                                                                     deviceId);
+    checkCudaErrorCode(errorCodeGetProperties,
+                       "FractionOfGPUMemory::cudaGetDeviceProperties");
+    const size_t totalGPUmemory = deviceProp.totalGlobalMem;
+
+    // computes the portion that we want to reserve
+    size_t result = fraction * totalGPUmemory;
+
+    // makes sure the end of the reservation is a multiple of the alignement
+    if (result % ALIGNEMENT_SIZE != 0) {
+        result += ALIGNEMENT_SIZE - (result % ALIGNEMENT_SIZE);
+    }
+    return result;
+}
+
 // creating a new `GPU_memory_block_t`
 // `cpu_ptr` is optional but can be passed to keep trace of the origin of the data
 // when allocating during a cpu-2-gpu copy operation
@@ -280,8 +310,34 @@ GPU_memory_block_t::GPU_memory_block_t(void * gpu_ptr, size_t size_bytes_arg,
 }
 
 // constructor, does the initial allocation
-GPU_memory_pool_t::GPU_memory_pool_t(size_t bytesPreallocated) : available_memory_bytes(
-        bytesPreallocated), blocks() {
+GPU_memory_pool::GPU_memory_pool() : blocks() {
+
+    // Get the requested fraction of per-process memory from the environment.
+    // If the user does not specify this, use something conservative that is
+    // likely to work.
+    double fraction = 0.5;
+    char * envval = ::getenv("CUDA_MEMPOOL_FRACTION");
+    if (envval != NULL) {
+        try {
+            fraction = ::atof(envval);
+        } catch (...) {
+            fraction = 0.5;
+        }
+    }
+
+    // Reduce this by the number of processes sharing a device
+    auto & env = toast::Environment::get();
+    int n_acc;
+    int n_proc_per_dev;
+    int my_dev;
+    env.get_acc(&n_acc, &n_proc_per_dev, &my_dev);
+    if (n_proc_per_dev > 1) {
+        fraction /= (double)n_proc_per_dev;
+    }
+
+    // Get the number of bytes for this fraction
+    available_memory_bytes = FractionOfGPUMemory(fraction);
+
     // allocates the memory
     const cudaError errorCode = cudaMalloc(&start, available_memory_bytes);
     checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
@@ -304,7 +360,7 @@ GPU_memory_pool_t::GPU_memory_pool_t(size_t bytesPreallocated) : available_memor
 }
 
 // destructor, insures that the pre-allocation is released
-GPU_memory_pool_t::~GPU_memory_pool_t() {
+GPU_memory_pool::~GPU_memory_pool() {
     const cudaError errorCode = cudaFree(start);
     checkCudaErrorCode(errorCode, "GPU memory de-allocation");
 
@@ -319,10 +375,16 @@ GPU_memory_pool_t::~GPU_memory_pool_t() {
     checkCusolverErrorCode(statusJacobiParams);
 }
 
+GPU_memory_pool & GPU_memory_pool::get() {
+    static GPU_memory_pool instance;
+
+    return instance;
+}
+
 // allocates memory, starting from the end of the latest allocated block
 // `cpu_ptr` is optional but can be passed to keep trace of the origin of the data
 // when allocating during a cpu-2-gpu copy operation
-cudaError GPU_memory_pool_t::malloc(void ** gpu_ptr, size_t size_bytes,
+cudaError GPU_memory_pool::malloc(void ** gpu_ptr, size_t size_bytes,
                                     void * cpu_ptr) {
     // insure two threads cannot interfere
     const std::lock_guard <std::mutex> lock(alloc_mutex);
@@ -352,7 +414,7 @@ cudaError GPU_memory_pool_t::malloc(void ** gpu_ptr, size_t size_bytes,
 }
 
 // frees memory by releasing the block
-void GPU_memory_pool_t::free(void * gpu_ptr) {
+void GPU_memory_pool::free(void * gpu_ptr) {
     // insure two threads cannot interfere
     const std::lock_guard <std::mutex> lock(alloc_mutex);
 
@@ -366,7 +428,7 @@ void GPU_memory_pool_t::free(void * gpu_ptr) {
     if (i < 0) {
         auto log = toast::Logger::get();
         std::string msg =
-            "GPU_memory_pool_t::free: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
+            "GPU_memory_pool::free: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
         log.error(msg.c_str());
         throw std::runtime_error(msg.c_str());
     }
@@ -380,34 +442,5 @@ void GPU_memory_pool_t::free(void * gpu_ptr) {
     }
 }
 
-// converts a number of gigabytes into a number of bytes
-size_t GigagbytesToBytes(const size_t nbGB) {
-    return nbGB * 1073741824l;
-}
-
-// returns a given fraction of the total GPU memory, in bytes
-size_t FractionOfGPUMemory(const double fraction) {
-    // computes the GPU memory available
-    int deviceId;
-    cudaGetDevice(&deviceId);
-    cudaDeviceProp deviceProp;
-    const cudaError errorCodeGetProperties = cudaGetDeviceProperties(&deviceProp,
-                                                                     deviceId);
-    checkCudaErrorCode(errorCodeGetProperties,
-                       "FractionOfGPUMemory::cudaGetDeviceProperties");
-    const size_t totalGPUmemory = deviceProp.totalGlobalMem;
-
-    // computes the portion that we want to reserve
-    size_t result = fraction * totalGPUmemory;
-
-    // makes sure the end of the reservation is a multiple of the alignement
-    if (result % ALIGNEMENT_SIZE != 0) {
-        result += ALIGNEMENT_SIZE - (result % ALIGNEMENT_SIZE);
-    }
-    return result;
-}
-
-// global variable, preallocates 90% of the total GPU memory
-GPU_memory_pool_t GPU_memory_pool(FractionOfGPUMemory(0.5));
 
 #endif // ifdef HAVE_CUDALIBS

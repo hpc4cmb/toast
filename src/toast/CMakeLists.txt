@@ -60,7 +60,11 @@ endif()
 
 if(OpenACC_CXX_FOUND)
     target_compile_definitions(_libtoast PRIVATE HAVE_OPENACC=1)
-endif(OpenACC_CXX_FOUND)
+endif()
+
+if(USE_OPENACC_MEMPOOL)
+    target_compile_definitions(_libtoast PRIVATE USE_OPENACC_MEMPOOL=1)
+endif()
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")

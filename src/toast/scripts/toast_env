@@ -25,11 +25,18 @@ def main():
     if rank == 0:
         print(env)
         log.info("Numba threading layer set to '{}'".format(numba_threading_layer))
+        n_acc, proc_per_acc, my_acc = env.get_acc()
+        if n_acc <= 0:
+            log.info("OpenACC unavailable")
+        else:
+            log.info(
+                f"OpenACC: {n_acc} devices, using up to {proc_per_acc} processes per device"
+            )
     if mpiworld is None:
-        log.info("Running serially with one process")
+        log.info("Running with one process")
     else:
         if rank == 0:
-            log.info("Running with {} processes".format(procs))
+            log.info("Running with {} MPI processes".format(procs))
 
     return
 

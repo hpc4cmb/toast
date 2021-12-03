@@ -90,6 +90,34 @@ void init_sys(py::module & m) {
                 None
 
         )")
+    .def("set_acc", &toast::Environment::set_acc,
+         py::arg("n_acc_device"), py::arg("n_acc_proc_per_device"), py::arg("my_acc_device"), R"(
+            Set the OpenACC device properties.
+
+            Args:
+                n_acc_device (int):  The number of accelerator devices.
+                n_acc_proc_per_device (int):  The number of processes sharing
+                    each device.
+                my_acc_device (int):  The device to use for this process.
+
+            Returns:
+                None
+
+        )")
+    .def("get_acc",
+        [](toast::Environment const & self) {
+            int n_acc_device;
+            int n_acc_proc_per_device;
+            int my_acc_device;
+            self.get_acc(&n_acc_device, &n_acc_proc_per_device, &my_acc_device);
+            return py::make_tuple(n_acc_device, n_acc_proc_per_device, my_acc_device);
+        }, R"(
+            Get the OpenACC device properties.
+
+            Returns:
+                (tuple):  The (num devices, proc per device, my device) integers.
+
+        )")
     .def("__repr__",
          [](toast::Environment const & self) {
              std::ostringstream o;

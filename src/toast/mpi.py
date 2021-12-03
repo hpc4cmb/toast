@@ -5,6 +5,12 @@
 import os
 import time
 
+from ._libtoast import (
+    Logger,
+    Environment,
+    acc_enabled,
+)
+
 use_mpi = None
 MPI = None
 # traitlets require the MPI communicator type to be an actual class,
@@ -35,15 +41,44 @@ if use_mpi is None:
                 MPI_Comm = MPI.Comm
             except:
                 # There could be many possible exceptions raised...
-                from ._libtoast import Logger
-
                 log = Logger.get()
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-# We put other imports and checks for accelerators *after* the MPI check, since
-# usually the MPI initialization is time sensitive and may timeout the job if it does
-# not happen quickly enough.
+    # FIXME:  The code below assumes that OpenACC only has accelerator devices, not
+    # CPUs.  We should eventually get the device properties for each device and
+    # get just the accelerators (or track all devices by type).
+
+    env = Environment.get()
+    if acc_enabled():
+        # We have support
+        from ._libtoast import acc_get_num_devices
+
+        n_acc_devices = acc_get_num_devices()
+        if n_acc_devices > 0:
+            if use_mpi:
+                # We need to compute which process goes to which device
+                nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                node_procs = nodecomm.size
+                procs_per_device = node_procs // n_acc_devices
+                if procs_per_device * n_acc_devices < node_procs:
+                    procs_per_device += 1
+                my_device = nodecomm.rank % n_acc_devices
+                env.set_acc(n_acc_devices, procs_per_device, my_device)
+                nodecomm.Free()
+                del nodecomm
+            else:
+                # One process- just use the first device.
+                env.set_acc(n_acc_devices, 1, 0)
+        else:
+            # No devices!
+            env.set_acc(-1, -1, -1)
+    else:
+        # No support
+        env.set_acc(-1, -1, -1)
+
+
+# We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
 
 import sys
 import itertools
@@ -53,11 +88,6 @@ import traceback
 import numpy as np
 
 from pshmem import MPIShared, MPILock
-
-# FIXME: import wrapped functions here to query number and type of devices.
-from ._libtoast import (
-    acc_enabled,
-)
 
 from ._libtoast import Logger
 
@@ -215,22 +245,6 @@ class Comm(object):
             mygroupnode = self._grank // self._gnodeprocs
             self._gnoderankcomm = self._gcomm.Split(self._gnodecomm.rank, mygroupnode)
             self._cleanup_group_comm = True
-
-        # See if we are using OpenACC and if so, determine which device each
-        # process will be using.
-        self._acc_device = None
-        if acc_enabled:
-            if self._wcomm is None:
-                # We are not using MPI, so we will just use the first device
-                self._acc_device = 0
-            else:
-                # Assign this process to one of the GPUs.
-                # FIXME:  Is it better for ranks to be spread across the devices
-                # or for contiguous ranks to be assigned to same device?
-                # FIXME: call wrapped acc functions here
-                n_acc_devices = 1
-                rank_dev = self._nodecomm.rank % n_acc_devices
-                self._acc_device = rank_dev
 
         # Create a cache of row / column communicators for each group.  These can
         # then be re-used for observations with the same grid shapes.
@@ -426,11 +440,6 @@ class Comm(object):
                 }
         return self._rowcolcomm[process_rows]
 
-    @property
-    def acc_device(self):
-        """The OpenACC device properties for this process."""
-        return self._acc_device
-
     def __repr__(self):
         lines = [
             "  World MPI communicator = {}".format(self._wcomm),
@@ -441,10 +450,6 @@ class Comm(object):
             "  Group MPI rank = {}".format(self._grank),
             "  Rank MPI communicator = {}".format(self._rcomm),
         ]
-        if self._acc_device is None:
-            lines.append("  OpenACC disabled")
-        else:
-            lines.append("  Using OpenACC device {}".format(self._acc_device))
         return "<toast.Comm\n{}\n>".format("\n".join(lines))
 
 

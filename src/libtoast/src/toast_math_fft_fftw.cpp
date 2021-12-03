@@ -31,7 +31,7 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
 
     // enable threads
 # ifdef HAVE_FFTW_THREADS
-    auto env = toast::Environment::get();
+    auto & env = toast::Environment::get();
     threads = env.max_threads();
     fftw_plan_with_nthreads(threads);
 # endif // ifdef HAVE_FFTW_THREADS

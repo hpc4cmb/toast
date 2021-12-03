@@ -251,6 +251,22 @@ void toast::Environment::set_threads(int nthread) {
     return;
 }
 
+void toast::Environment::set_acc(int n_acc_device, int n_acc_proc_per_device,
+                                 int my_acc_device) {
+    n_acc_device_ = n_acc_device;
+    n_acc_proc_per_device_ = n_acc_proc_per_device;
+    my_acc_device_ = my_acc_device;
+    return;
+}
+
+void toast::Environment::get_acc(int * n_acc_device, int * n_acc_proc_per_device,
+                                 int * my_acc_device) const {
+    (*n_acc_device) = n_acc_device_;
+    (*n_acc_proc_per_device) = n_acc_proc_per_device_;
+    (*my_acc_device) = my_acc_device_;
+    return;
+}
+
 std::vector <std::string> toast::Environment::signals() const {
     return signals_avail_;
 }

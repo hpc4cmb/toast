@@ -10,6 +10,7 @@ cmake \
     -DMKL_DISABLED=TRUE \
     -DUSE_CUDA=TRUE \
     -DUSE_OPENACC=TRUE \
+    -DUSE_OPENACC_MEMPOOL=TRUE \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
     -DBLAS_LIBRARIES="-lopenblas -lgomp -lm" \

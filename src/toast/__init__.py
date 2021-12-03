@@ -34,6 +34,14 @@ MPI_DISABLE=<value>
       some systems where mpi4py is available but does not work.
     * The same variable also controls the `pshmem` package used by toast.
 
+CUDA_MEMPOOL_FRACTION=<float>
+    * If compiled with CUDA support (-DUSE_CUDA), create a memory pool that
+      pre-allocates this fraction of the device memory allocated to each process.
+      Note that if compiled with -DUSE_OPENACC_MEMPOOL, then OpenACC code will
+      use this memory pool.  If you set this fraction to be very large, then you
+      should enable this option so that regular OpenACC allocations do not
+      exhaust the device memory.
+
 """
 import sys
 import os

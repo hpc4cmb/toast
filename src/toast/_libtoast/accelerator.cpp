@@ -51,6 +51,18 @@ void init_accelerator(py::module & m) {
         )"
     );
 
+    m.def(
+        "acc_get_num_devices", []() {
+            #ifdef HAVE_OPENACC
+            return acc_get_num_devices(acc_device_not_host);
+            #else
+            return 0;
+            #endif
+        }, R"(
+            Return the total number of OpenACC devices.
+        )"
+    );
+
     #ifdef HAVE_OPENACC
 
     m.def(
