@@ -50,7 +50,6 @@ class AccOperator(ops.Operator):
         super().__init__(**kwargs)
 
     def _exec(self, data, detectors=None, use_acc=False, **kwargs):
-        print(f"AccOperator got use_acc={use_acc}")
         for ob in data.obs:
             if use_acc:
                 # Base class has checked that data listed in our requirements
@@ -164,7 +163,6 @@ class AcceleratorTest(MPITestCase):
         acc_op.apply(data)
 
         # Stage the data
-        print(acc_op.requires(), flush=True)
         data.acc_copyin(acc_op.requires())
 
         # Run with staged data
