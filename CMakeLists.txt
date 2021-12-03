@@ -64,6 +64,12 @@ if(USE_OPENACC)
     find_package(OpenACC)
 endif()
 
+# CUDA.  In some cases, the CUDA toolkit is available (and will be detected) even
+# if we want to build without it.  Force the user to request using CUDA.
+if(USE_CUDA)
+    find_package(CUDAToolkit)
+endif()
+
 if(TOAST_STATIC_DEPS)
     set(BLA_STATIC TRUE)
     set(FFTW_USE_STATIC_LIBS TRUE)
@@ -74,8 +80,10 @@ endif()
 # First look for MKL and CUDA, since those will provide both
 # FFT support and BLAS/LAPACK
 
+# FIXME:  We should default this to "OFF" and force the user to request it,
+# just like CUDA and OpenACC.  Not changing this yet, since it breaks existing
+# behavior.
 find_package(MKL)
-find_package(CUDAToolkit)
 
 if(MKL_FOUND)
     # Use MKL for BLAS / LAPACK
