@@ -99,8 +99,7 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
     toast::AlignedVector <double *> B_ptrs(batchCount);
     toast::AlignedVector <double *> C_ptrs(batchCount);
 # pragma omp parallel for schedule(static)
-    for (int64_t batchid = 0; batchid < batchCount; batchid++)
-    {
+    for (int64_t batchid = 0; batchid < batchCount; batchid++) {
         // using GPU adresses
         A_ptrs[batchid] = A_batch_gpu + batchid * A_size;
         B_ptrs[batchid] = B_batch_gpu + batchid * B_size;
@@ -135,8 +134,7 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
 
     // use naive opemMP paralellism
 # pragma omp parallel for schedule(static)
-    for (unsigned int b = 0; b < batchCount; b++)
-    {
+    for (unsigned int b = 0; b < batchCount; b++) {
         double * A = &A_batch[b * A_size];
         double * B = &B_batch[b * B_size];
         double * C = &C_batch[b * C_size];
@@ -202,12 +200,9 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     GPU_memory_pool.fromDevice(INFO_batch, INFO_batch_gpu, batchCount);
 
     // copies only if the eigenvectors have been stored in A
-    if (JOBZ == 'V')
-    {
+    if (JOBZ == 'V') {
         GPU_memory_pool.fromDevice(A_batch, A_batch_gpu, batchCount * N * LDA);
-    }
-    else
-    {
+    } else   {
         GPU_memory_pool.free(A_batch_gpu);
     }
 #elif HAVE_LAPACK
@@ -219,12 +214,9 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     double * W = &W_batch[0];
     int * INFO = &INFO_batch[0];
     wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, &optimal_LWORK, &LWORK, INFO);
-    if (*INFO == 0)
-    {
+    if (*INFO == 0) {
         LWORK = optimal_LWORK;
-    }
-    else
-    {
+    } else   {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg(
@@ -241,8 +233,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
 
         // use naive opemMP paralellism
 # pragma omp for schedule(static)
-        for (unsigned int b = 0; b < batchCount; b++)
-        {
+        for (unsigned int b = 0; b < batchCount; b++) {
             // gets batch element
             double * A = &A_batch[b * N * LDA];
             double * W = &W_batch[b * N];
@@ -321,20 +312,14 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N,
 
     // fills A to make it truly symmetrical
 # pragma omp parallel for schedule(static)
-    for (unsigned int b = 0; b < batchCount; b++)
-    {
+    for (unsigned int b = 0; b < batchCount; b++) {
         double * A = &A_batch[b * LDA * K];
-        for (int r = 0; r < K; r++)
-        {
-            for (int c = 0; c < r; c++)
-            {
-                if (UPLO == 'U')
-                {
+        for (int r = 0; r < K; r++) {
+            for (int c = 0; c < r; c++) {
+                if (UPLO == 'U') {
                     // fill lower part of A
                     A[r + LDA * c] = A[c + LDA * r];
-                }
-                else
-                {
+                } else   {
                     // fill upper part of A
                     A[c + LDA * r] = A[r + LDA * c];
                 }
@@ -343,8 +328,7 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N,
     }
 
     // take side into account
-    if (SIDE == 'R')
-    {
+    if (SIDE == 'R') {
         std::swap(A_batch, B_batch);
         std::swap(LDA, LDB);
     }
@@ -356,8 +340,7 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N,
 
     // use naive opemMP paralellism
 # pragma omp parallel for schedule(static)
-    for (unsigned int b = 0; b < batchCount; b++)
-    {
+    for (unsigned int b = 0; b < batchCount; b++) {
         double * A = &A_batch[b * LDA * ((SIDE == 'L') ? M : N)];
         double * B = &B_batch[b * LDB * N];
         double * C = &C_batch[b * LDC * N];
@@ -435,8 +418,7 @@ void toast::LinearAlgebra::syrk_batched(char UPLO, char TRANS, int N, int K,
 
     // use naive opemMP paralellism
 # pragma omp parallel for schedule(static)
-    for (unsigned int b = 0; b < batchCount; b++)
-    {
+    for (unsigned int b = 0; b < batchCount; b++) {
         double * A = &A_batched[b * LDA * ((TRANS == 'T') ? N : K)];
         double * C = &C_batched[b * LDC * N];
         wrapped_dsyrk(&UPLO, &TRANS, &N, &K, &ALPHA, A, &LDA, &BETA, C, &LDC);
@@ -478,6 +460,7 @@ void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
     size_t LWORK = 0;
     cusolverStatus_t statusBuffer = cusolverDnDDgels_bufferSize(
         GPU_memory_pool.handleSolver, M, N, NRHS, A_gpu, LDA, B_gpu, LDB, X_gpu, LDX,
+
         /*WORK=*/ NULL, &LWORK);
     checkCusolverErrorCode(statusBuffer);
 
@@ -508,12 +491,9 @@ void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
     int LWORK = -1; // -1 triggers LWORK computation instead of dgels
     double optimal_LWORK = 0;
     wrapped_dgels(TRANS, &M, &N, &NRHS, A, &LDA, B, &LDB, &optimal_LWORK, &LWORK, INFO);
-    if (*INFO == 0)
-    {
+    if (*INFO == 0) {
         LWORK = optimal_LWORK;
-    }
-    else
-    {
+    } else   {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg(
@@ -558,8 +538,7 @@ int toast::LinearAlgebra::gelss_buffersize(int M, int N, int NRHS, int LDA, int 
                    &LWORK, &INFO);
 
     // errors out if the computation failed
-    if (INFO != 0)
-    {
+    if (INFO != 0) {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg(

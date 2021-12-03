@@ -14,13 +14,11 @@
 // displays an error message if the cuda runtime computation did not end in success
 void checkCudaErrorCode(const cudaError errorCode, const std::string & functionName)
 {
-    if (errorCode != cudaSuccess)
-    {
+    if (errorCode != cudaSuccess) {
         auto log = toast::Logger::get();
         std::string msg = "The CUDA Runtime threw a '" +
                           std::string(cudaGetErrorString(errorCode)) + "' error code";
-        if (functionName != "unknown")
-        {
+        if (functionName != "unknown") {
             msg += " in function '" + functionName + "'.";
         }
         log.error(msg.c_str());
@@ -31,8 +29,7 @@ void checkCudaErrorCode(const cudaError errorCode, const std::string & functionN
 // turns a cublas error code into human readable text
 std::string cublasGetErrorString(const cublasStatus_t errorCode)
 {
-    switch (errorCode)
-    {
+    switch (errorCode) {
         case CUBLAS_STATUS_SUCCESS:
             return "CUBLAS_STATUS_SUCCESS";
 
@@ -71,13 +68,11 @@ std::string cublasGetErrorString(const cublasStatus_t errorCode)
 void checkCublasErrorCode(const cublasStatus_t errorCode,
                           const std::string & functionName)
 {
-    if (errorCode != CUBLAS_STATUS_SUCCESS)
-    {
+    if (errorCode != CUBLAS_STATUS_SUCCESS) {
         auto log = toast::Logger::get();
         std::string msg = "CUBLAS threw a '" + cublasGetErrorString(errorCode) +
                           "' error code";
-        if (functionName != "unknown")
-        {
+        if (functionName != "unknown") {
             msg += " in function '" + functionName + "'.";
         }
         log.error(msg.c_str());
@@ -88,8 +83,7 @@ void checkCublasErrorCode(const cublasStatus_t errorCode,
 // turns a cusolver error code into human readable text
 std::string cusolverGetErrorString(const cusolverStatus_t errorCode)
 {
-    switch (errorCode)
-    {
+    switch (errorCode) {
         case CUSOLVER_STATUS_SUCCESS:
             return "CUSOLVER_STATUS_SUCCESS";
 
@@ -173,13 +167,11 @@ std::string cusolverGetErrorString(const cusolverStatus_t errorCode)
 void checkCusolverErrorCode(const cusolverStatus_t errorCode,
                             const std::string & functionName)
 {
-    if (errorCode != CUSOLVER_STATUS_SUCCESS)
-    {
+    if (errorCode != CUSOLVER_STATUS_SUCCESS) {
         auto log = toast::Logger::get();
         std::string msg = "CUSOLVER threw a '" + cusolverGetErrorString(errorCode) +
                           "' error code";
-        if (functionName != "unknown")
-        {
+        if (functionName != "unknown") {
             msg += " in function '" + functionName + "'.";
         }
         log.error(msg.c_str());
@@ -190,8 +182,7 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode,
 // turns a cufft error code into human readable text
 std::string cufftGetErrorString(cufftResult error)
 {
-    switch (error)
-    {
+    switch (error) {
         case CUFFT_SUCCESS:
             return "CUFFT_SUCCESS";
 
@@ -250,13 +241,11 @@ std::string cufftGetErrorString(cufftResult error)
 // displays an error message if the cufft computation did not end in sucess
 void checkCufftErrorCode(const cufftResult errorCode, const std::string & functionName)
 {
-    if (errorCode != CUFFT_SUCCESS)
-    {
+    if (errorCode != CUFFT_SUCCESS) {
         auto log = toast::Logger::get();
         std::string msg = "CUFFT threw a '" + cufftGetErrorString(errorCode) +
                           "' error code";
-        if (functionName != "unknown")
-        {
+        if (functionName != "unknown") {
             msg += " in function '" + functionName + "'.";
         }
         log.error(msg.c_str());
@@ -280,8 +269,7 @@ GPU_memory_block_t::GPU_memory_block_t(void * gpu_ptr, size_t size_bytes_arg,
     size_bytes = size_bytes_arg;
 
     // align size with ALIGNEMENT_SIZE
-    if (size_bytes % ALIGNEMENT_SIZE != 0)
-    {
+    if (size_bytes % ALIGNEMENT_SIZE != 0) {
         size_bytes += ALIGNEMENT_SIZE - (size_bytes % ALIGNEMENT_SIZE);
     }
 
@@ -353,15 +341,14 @@ cudaError GPU_memory_pool_t::malloc(void ** gpu_ptr, size_t size_bytes, void * c
     // errors out if the allocation goes beyond the preallocated memory
     const size_t usedMemory = static_cast <char *> (memoryBlock.end) -
                               static_cast <char *> (start);
-    if (usedMemory > available_memory_bytes)
-    {
+    if (usedMemory > available_memory_bytes) {
         std::cerr << "INSUFICIENT GPU MEMORY PREALOCATION"
                   << " GPU memory that would be taken after this allocation:" <<
-        usedMemory
+            usedMemory
                   << " (number of bytes requested by this allocation:" << size_bytes <<
-        ")"
+            ")"
                   << " total GPU-memory preallocated:" << available_memory_bytes <<
-        std::endl;
+            std::endl;
         *gpu_ptr = nullptr;
         return cudaErrorMemoryAllocation;
     }
@@ -379,14 +366,12 @@ void GPU_memory_pool_t::free(void * gpu_ptr)
 
     // gets the index of gpu_ptr in the blocks vector, starting from the end
     int i = blocks.size() - 1;
-    while ((blocks[i].start != gpu_ptr) and (i >= 0))
-    {
+    while ((blocks[i].start != gpu_ptr) and (i >= 0)) {
         i--;
     }
 
     // errors-out if we cannot find `gpu_ptr`
-    if (i < 0)
-    {
+    if (i < 0) {
         auto log = toast::Logger::get();
         std::string msg =
             "GPU_memory_pool_t::free: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
@@ -398,8 +383,7 @@ void GPU_memory_pool_t::free(void * gpu_ptr)
     blocks[i].isFree = true;
 
     // if gpu_ptr was the last elements, frees a maximum of blocks
-    while (blocks.back().isFree)
-    {
+    while (blocks.back().isFree) {
         blocks.pop_back();
     }
 }
@@ -427,8 +411,7 @@ size_t FractionOfGPUMemory(const double fraction)
     size_t result = fraction * totalGPUmemory;
 
     // makes sure the end of the reservation is a multiple of the alignement
-    if (result % ALIGNEMENT_SIZE != 0)
-    {
+    if (result % ALIGNEMENT_SIZE != 0) {
         result += ALIGNEMENT_SIZE - (result % ALIGNEMENT_SIZE);
     }
     return result;

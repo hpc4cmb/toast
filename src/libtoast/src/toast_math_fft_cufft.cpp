@@ -18,8 +18,7 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     toast::fft_direction dir, double scale) :
     toast::FFTPlanReal1D(length, n, type, dir, scale) {
     // Verifies that datatype sizes are as expected.
-    if (sizeof(cufftDoubleComplex) != 2 * sizeof(double))
-    {
+    if (sizeof(cufftDoubleComplex) != 2 * sizeof(double)) {
         // this would kill the complexToHalfcomplex and halfcomplexToComplex functions
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
@@ -44,8 +43,7 @@ toast::FFTPlanReal1DCUFFT::FFTPlanReal1DCUFFT(
     // creates vector views that will be used by user to send and receive data
     tview_.clear();
     fview_.clear();
-    for (int64_t batchId = 0; batchId < n_; batchId++)
-    {
+    for (int64_t batchId = 0; batchId < n_; batchId++) {
         tview_.push_back(&traw_[batchId * buflength_]);
         fview_.push_back(&fraw_[batchId * buflength_]);
     }
@@ -96,8 +94,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     // actual execution of the FFT
 
     // R2C, real input in traw_ and complex output in fraw_
-    if (dir_ == toast::fft_direction::forward)
-    {
+    if (dir_ == toast::fft_direction::forward) {
         // get input data from CPU
         cufftDoubleReal * idata = GPU_memory_pool.toDevice(traw_, nb_elements_real);
         cufftDoubleComplex * odata = GPU_memory_pool.alloc <cufftDoubleComplex> (
@@ -116,9 +113,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
 
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
         complexToHalfcomplex(length_, n_, tview_.data(), fview_.data());
-    }
-    else // C2R, complex input in fraw_ and real output in traw_
-    {
+    } else   { // C2R, complex input in fraw_ and real output in traw_
         // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
         halfcomplexToComplex(length_, n_, fview_.data(), tview_.data());
 
@@ -144,11 +139,9 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     double * output = (dir_ == toast::fft_direction::forward) ? fraw_ : traw_;
     const double scaling =
         (dir_ == toast::fft_direction::forward) ? scale_ : (scale_ / length_);
-    if (scaling != 1.0) // usually 1.0 in the forward case
-    {
+    if (scaling != 1.0) { // usually 1.0 in the forward case
         # pragma omp parallel for schedule(static)
-        for (int64_t i = 0; i < n_ * buflength_; i++)
-        {
+        for (int64_t i = 0; i < n_ * buflength_; i++) {
             output[i] *= scaling;
         }
     }
@@ -168,8 +161,7 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex(const int64_t length,
     const bool is_even = (length % 2) == 0;
 
     // iterates on all batches one after the other
-    for (int64_t batchId = 0; batchId < nbBatch; batchId++)
-    {
+    for (int64_t batchId = 0; batchId < nbBatch; batchId++) {
         // 0th value
 
         // real
@@ -179,8 +171,7 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex(const int64_t length,
 
         // all intermediate values
         # pragma omp parallel for schedule(static)
-        for (int64_t i = 1; i < half; i++)
-        {
+        for (int64_t i = 1; i < half; i++) {
             batchedHalfcomplexOutputs[batchId][i] =
                 batchedComplexInputs[batchId][2 * i];     // real
             batchedHalfcomplexOutputs[batchId][length -
@@ -189,8 +180,7 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex(const int64_t length,
         }
 
         // n/2th value
-        if (is_even)
-        {
+        if (is_even) {
             batchedHalfcomplexOutputs[batchId][half] =
                 batchedComplexInputs[batchId][length]; // real
             // imag is zero by convention and thus not encoded
@@ -211,8 +201,7 @@ void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex(const int64_t length,
     const bool is_even = (length % 2) == 0;
 
     // iterates on all batches one after the other
-    for (int64_t batchId = 0; batchId < nbBatch; batchId++)
-    {
+    for (int64_t batchId = 0; batchId < nbBatch; batchId++) {
         // 0th value
 
         // real
@@ -223,20 +212,22 @@ void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex(const int64_t length,
 
         // all intermediate values
         # pragma omp parallel for schedule(static)
-        for (int64_t i = 1; i < half; i++)
-        {
+        for (int64_t i = 1; i < half; i++) {
             batchedHComplexOutputs[batchId][2 *
                                             i] = batchedHalfcomplexInputs[batchId][i]; //
+                                                                                       //
+                                                                                       //
                                                                                        // real
             batchedHComplexOutputs[batchId][2 * i +
                                             1] =
                 batchedHalfcomplexInputs[batchId][length - i];                         //
+                                                                                       //
+                                                                                       //
                                                                                        // imag
         }
 
         // n/2th value
-        if (is_even)
-        {
+        if (is_even) {
             // real
             batchedHComplexOutputs[batchId][length] =
                 batchedHalfcomplexInputs[batchId][half];

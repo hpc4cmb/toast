@@ -203,21 +203,18 @@ void toast::FFTPlanReal1DMKL::cce2hc() {
     const int64_t half = length_ / 2;
     const bool even = (length_ % 2 == 0);
 
-    for (int64_t i = 0; i < n_; i++)
-    {
+    for (int64_t i = 0; i < n_; i++) {
         // copy the first element.
         tview_[i][0] = fview_[i][0];
 
-        if (even)
-        {
+        if (even) {
             // copy in the real part of the last element of the
             // CCE data, which has N/2+1 complex element pairs.
             // This element is located at 2 * half == length_.
             tview_[i][half] = fview_[i][length_];
         }
 
-        for (int64_t j = 1; j < half; j++)
-        {
+        for (int64_t j = 1; j < half; j++) {
             const int64_t offcce = 2 * j;
             tview_[i][j] = fview_[i][offcce];
             tview_[i][length_ - j] = fview_[i][offcce + 1];
@@ -239,20 +236,17 @@ void toast::FFTPlanReal1DMKL::hc2cce() {
     const int64_t half = length_ / 2;
     const bool even = (length_ % 2 == 0);
 
-    for (int64_t i = 0; i < n_; i++)
-    {
+    for (int64_t i = 0; i < n_; i++) {
         // copy the first element.
         tview_[i][0] = fview_[i][0];
         tview_[i][1] = 0.0;
 
-        if (even)
-        {
+        if (even) {
             tview_[i][length_] = fview_[i][half];
             tview_[i][length_ + 1] = 0.0;
         }
 
-        for (int64_t j = 1; j < half; j++)
-        {
+        for (int64_t j = 1; j < half; j++) {
             const int64_t offcce = 2 * j;
             tview_[i][offcce] = fview_[i][j];
             tview_[i][offcce + 1] = fview_[i][length_ - j];

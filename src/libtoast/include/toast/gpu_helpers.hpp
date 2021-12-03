@@ -161,15 +161,13 @@ class GPU_memory_pool_t {
         {
             // gets the index of cpu_ptr in the blocks vector, starting from the end
             int i = blocks.size() - 1;
-            while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0))
-            {
+            while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0)) {
                 i--;
             }
 
             // errors-out if `cpu_ptr` was not use in a `toDevice` call
             // meaning that we cannot find the associated block of gpu memory
-            if (i < 0)
-            {
+            if (i < 0) {
                 auto log = toast::Logger::get();
                 std::string msg =
                     "GPU_memory_pool_t::fromDevice(T*): either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";

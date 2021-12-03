@@ -61,8 +61,7 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
                 ", (len / 2) = " << ((double)length / 2.0) <<
                 " sigma = " << sigma << " outlier = " << outlier
                       << std::endl;
-        }
-        else {
+        } else   {
             ASSERT_TRUE(outlier < 3.0 * sigma);
         }
     }
