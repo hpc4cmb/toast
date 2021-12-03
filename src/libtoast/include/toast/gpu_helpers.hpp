@@ -104,8 +104,7 @@ class GPU_memory_pool_t {
         // - it takes a number of elements rather than a number of bytes
         // - it returns a pointer rather than taking it as an input
         template <typename T>
-        T * alloc(size_t nb_elements)
-        {
+        T * alloc(size_t nb_elements) {
             T * output_ptr = NULL;
             const cudaError errorCode = this->malloc((void **)&output_ptr,
                                                      nb_elements * sizeof(T));
@@ -118,8 +117,7 @@ class GPU_memory_pool_t {
         // stores the `cpu_ptr` for a potential transfer back when freeing with
         // `fromDevice`
         template <typename T>
-        T * toDevice(T * cpu_ptr, size_t nb_elements)
-        {
+        T * toDevice(T * cpu_ptr, size_t nb_elements) {
             // memory allocation
             void * gpu_ptr = NULL;
             const cudaError errorCodeMalloc = this->malloc(&gpu_ptr,
@@ -138,8 +136,7 @@ class GPU_memory_pool_t {
         // gets the given number of elements back from GPU to the given CPU location
         // frees the gpu memory
         template <typename T>
-        void fromDevice(T * cpu_ptr, T * gpu_ptr, size_t nb_elements)
-        {
+        void fromDevice(T * cpu_ptr, T * gpu_ptr, size_t nb_elements) {
             // data transfer
             const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, gpu_ptr,
                                                          nb_elements * sizeof(T),
@@ -157,8 +154,7 @@ class GPU_memory_pool_t {
         //          it will use this assumption to identify the gpu pointer and the size
         // of the allocation
         template <typename T>
-        void fromDevice(T * cpu_ptr)
-        {
+        void fromDevice(T * cpu_ptr) {
             // gets the index of cpu_ptr in the blocks vector, starting from the end
             int i = blocks.size() - 1;
             while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0)) {

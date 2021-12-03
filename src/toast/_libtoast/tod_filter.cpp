@@ -19,8 +19,7 @@ void sum_detectors(py::array_t <int64_t,
                    py::array_t <double,
                                 py::array::c_style | py::array::forcecast> sum_data,
                    py::array_t <int64_t,
-                                py::array::c_style | py::array::forcecast> hits)
-{
+                                py::array::c_style | py::array::forcecast> hits) {
     auto fast_detectors = detectors.unchecked <1>();
     auto fast_shared_flags = shared_flags.unchecked <1>();
     auto fast_det_data = det_data.unchecked <2>();
@@ -59,8 +58,7 @@ void subtract_mean(py::array_t <int64_t,
                    py::array_t <double,
                                 py::array::c_style | py::array::forcecast> sum_data,
                    py::array_t <int64_t,
-                                py::array::c_style | py::array::forcecast> hits)
-{
+                                py::array::c_style | py::array::forcecast> hits) {
     auto fast_detectors = detectors.unchecked <1>();
     auto fast_det_data = det_data.mutable_unchecked <2>();
     auto fast_sum_data = sum_data.mutable_unchecked <1>();

@@ -16,8 +16,7 @@
 
 void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                               std::vector <double *> const & signals, size_t nscan,
-                              int64_t const * starts, int64_t const * stops)
-{
+                              int64_t const * starts, int64_t const * stops) {
     // Process the signals, one subscan at a time.  There is only one
     // flag vector, because the flags must be identical to apply the
     // same template matrix.
@@ -65,13 +64,13 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             if (iorder == 0) {
 #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) current[i] = 1;
-            } else if (iorder == 1)   {
+            } else if (iorder == 1) {
 #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) {
                     const double x = xstart + i * dx;
                     current[i] = x;
                 }
-            } else   {
+            } else {
                 last = &full_templates[(iorder - 1) * scanlen];
                 lastlast = &full_templates[(iorder - 2) * scanlen];
                 double orderinv = 1. / iorder;
@@ -157,7 +156,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 if (toast::is_aligned(signal) && toast::is_aligned(temp)) {
 #pragma omp simd
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
-                } else   {
+                } else {
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
                 }
             }
@@ -167,8 +166,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
 
 void toast::bin_proj(double * signal, double * templates,
                      uint8_t * good, double * proj,
-                     size_t nsample, size_t ntemplate)
-{
+                     size_t nsample, size_t ntemplate) {
     for (size_t row = 0; row < ntemplate; row++) {
         proj[row] = 0;
     }
@@ -186,8 +184,7 @@ void toast::bin_proj(double * signal, double * templates,
 }
 
 void toast::bin_invcov(double * templates, uint8_t * good, double * invcov,
-                       size_t nsample, size_t ntemplate)
-{
+                       size_t nsample, size_t ntemplate) {
     for (size_t row = 0; row < ntemplate; row++) {
         for (size_t col = 0; col < ntemplate; col++) {
             invcov[ntemplate * row + col] = 0;
@@ -224,8 +221,7 @@ void toast::bin_invcov(double * templates, uint8_t * good, double * invcov,
 }
 
 void toast::chebyshev(double * x, double * templates, size_t start_order,
-                      size_t stop_order, size_t nsample)
-{
+                      size_t stop_order, size_t nsample) {
     // order == 0
     if ((start_order == 0) && (stop_order > 0)) {
         for (size_t i = 0; i < nsample; ++i) templates[i] = 1;
@@ -277,8 +273,7 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
 }
 
 void toast::legendre(double * x, double * templates, size_t start_order,
-                     size_t stop_order, size_t nsample)
-{
+                     size_t stop_order, size_t nsample) {
     // order == 0
     double norm = 1. / sqrt(2);
     if ((start_order == 0) && (stop_order > 0)) {
@@ -342,8 +337,7 @@ void toast::legendre(double * x, double * templates, size_t start_order,
 }
 
 void toast::add_templates(double * signal, double * templates, double * coeff,
-                          size_t nsample, size_t ntemplate)
-{
+                          size_t nsample, size_t ntemplate) {
     const size_t buflen = 1000;
     size_t nbuf = nsample / buflen + 1;
 
@@ -369,8 +363,7 @@ void toast::add_templates(double * signal, double * templates, double * coeff,
 void toast::filter_poly2D_solve(
     int64_t nsample, int32_t ndet, int32_t ngroup, int32_t nmode,
     int32_t const * det_group, double const * templates, uint8_t const * masks,
-    double const * signals, double * coeff)
-{
+    double const * signals, double * coeff) {
     // For each sample, solve for the regression coefficients.
     // The templates are flat packed across (detectors, modes).
     // The mask is flat packed across (samples, detectors).
@@ -469,7 +462,7 @@ void toast::filter_poly2D_solve(
                     for (int64_t m = 0; m < nmode; ++m) {
                         coeff[offset + m] = rhs[m];
                     }
-                } else   {
+                } else {
                     // Failed
                     for (int64_t m = 0; m < nmode; ++m) {
                         coeff[offset + m] = 0.0;

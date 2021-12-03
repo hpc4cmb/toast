@@ -26,8 +26,7 @@
 toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
     int64_t length, int64_t n, toast::fft_plan_type type,
     toast::fft_direction dir, double scale) : toast::FFTPlanReal1D(length, n, type, dir,
-                                                                   scale)
-{
+                                                                   scale) {
     int threads = 1;
 
     // enable threads
@@ -70,7 +69,7 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
         rawin = traw_;
         rawout = fraw_;
         kind = FFTW_R2HC;
-    } else   {
+    } else {
         rawin = fraw_;
         rawout = traw_;
         kind = FFTW_HC2R;
@@ -80,7 +79,7 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
 
     if (type == toast::fft_plan_type::best) {
         flags = flags | FFTW_MEASURE;
-    } else   {
+    } else {
         flags = flags | FFTW_ESTIMATE;
     }
 
@@ -98,16 +97,14 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
     }
 }
 
-toast::FFTPlanReal1DFFTW::~FFTPlanReal1DFFTW()
-{
+toast::FFTPlanReal1DFFTW::~FFTPlanReal1DFFTW() {
     fftw_destroy_plan(static_cast <fftw_plan> (plan_));
     tview_.clear();
     fview_.clear();
     data_.clear();
 }
 
-void toast::FFTPlanReal1DFFTW::exec()
-{
+void toast::FFTPlanReal1DFFTW::exec() {
     fftw_execute(plan_);
 
     double * rawout;
@@ -116,7 +113,7 @@ void toast::FFTPlanReal1DFFTW::exec()
     if (dir_ == toast::fft_direction::forward) {
         rawout = fraw_;
         norm = scale_;
-    } else   {
+    } else {
         rawout = traw_;
         norm = scale_ / static_cast <double> (length_);
     }
@@ -130,8 +127,7 @@ void toast::FFTPlanReal1DFFTW::exec()
     return;
 }
 
-double * toast::FFTPlanReal1DFFTW::tdata(int64_t indx)
-{
+double * toast::FFTPlanReal1DFFTW::tdata(int64_t indx) {
     if ((indx < 0) || (indx >= n_)) {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
@@ -142,8 +138,7 @@ double * toast::FFTPlanReal1DFFTW::tdata(int64_t indx)
     return tview_[indx];
 }
 
-double * toast::FFTPlanReal1DFFTW::fdata(int64_t indx)
-{
+double * toast::FFTPlanReal1DFFTW::fdata(int64_t indx) {
     if ((indx < 0) || (indx >= n_)) {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();

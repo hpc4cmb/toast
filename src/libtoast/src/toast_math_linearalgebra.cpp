@@ -29,8 +29,7 @@ extern "C" void wrapped_dgemm(char * TRANSA, char * TRANSB, int * M, int * N, in
 void toast::LinearAlgebra::gemm(char TRANSA, char TRANSB, int M, int N,
                                 int K, double ALPHA, double * A, int LDA,
                                 double * B, int LDB, double BETA, double * C,
-                                int LDC)
-{
+                                int LDC) {
 #ifdef HAVE_CUDALIBS
 
     // prepare inputs
@@ -74,8 +73,7 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
                                         double ALPHA, double * A_batch, int LDA,
                                         double * B_batch, int LDB,
                                         double BETA, double * C_batch, int LDC,
-                                        const int batchCount)
-{
+                                        const int batchCount) {
     // size of the various matrices
     size_t A_size = LDA * ((TRANSA == 'N') ? K : M);
     size_t B_size = LDB * ((TRANSB == 'N') ? N : K);
@@ -159,8 +157,7 @@ extern "C" void wrapped_dsyev(char * JOBZ, char * UPLO, int * N, double * A, int
 // elements)
 void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_batch,
                                         int LDA, double * W_batch, int * INFO_batch,
-                                        const int batchCount)
-{
+                                        const int batchCount) {
 #ifdef HAVE_CUDALIBS
 
     // prepare inputs
@@ -202,7 +199,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     // copies only if the eigenvectors have been stored in A
     if (JOBZ == 'V') {
         GPU_memory_pool.fromDevice(A_batch, A_batch_gpu, batchCount * N * LDA);
-    } else   {
+    } else {
         GPU_memory_pool.free(A_batch_gpu);
     }
 #elif HAVE_LAPACK
@@ -216,7 +213,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, &optimal_LWORK, &LWORK, INFO);
     if (*INFO == 0) {
         LWORK = optimal_LWORK;
-    } else   {
+    } else {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg(
@@ -260,8 +257,7 @@ extern "C" void wrapped_dsymm(char * SIDE, char * UPLO, int * M, int * N,
 
 void toast::LinearAlgebra::symm(char SIDE, char UPLO, int M, int N,
                                 double ALPHA, double * A, int LDA, double * B,
-                                int LDB, double BETA, double * C, int LDC)
-{
+                                int LDB, double BETA, double * C, int LDC) {
 #ifdef HAVE_CUDALIBS
 
     // prepare inputs
@@ -303,8 +299,7 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N,
                                         double ALPHA,
                                         double * A_batch, int LDA, double * B_batch,
                                         int LDB, double BETA,
-                                        double * C_batch, int LDC, int batchCount)
-{
+                                        double * C_batch, int LDC, int batchCount) {
 #ifdef HAVE_CUDALIBS
     char TRANSA = 'N';
     char TRANSB = 'N';
@@ -319,7 +314,7 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N,
                 if (UPLO == 'U') {
                     // fill lower part of A
                     A[r + LDA * c] = A[c + LDA * r];
-                } else   {
+                } else {
                     // fill upper part of A
                     A[c + LDA * r] = A[r + LDA * c];
                 }
@@ -363,8 +358,7 @@ extern "C" void wrapped_dsyrk(char * UPLO, char * TRANS, int * N, int * K,
 
 void toast::LinearAlgebra::syrk(char UPLO, char TRANS, int N, int K,
                                 double ALPHA, double * A, int LDA, double BETA,
-                                double * C, int LDC)
-{
+                                double * C, int LDC) {
 #ifdef HAVE_CUDALIBS
 
     // prepare inputs
@@ -404,8 +398,7 @@ void toast::LinearAlgebra::syrk_batched(char UPLO, char TRANS, int N, int K,
                                         double ALPHA,
                                         double * A_batched, int LDA, double BETA,
                                         double * C_batched, int LDC,
-                                        int batchCount)
-{
+                                        int batchCount) {
 #ifdef HAVE_CUDALIBS
 
     // the GPU version calls gemm, and not a true syrk, as it can be batched on GPU
@@ -441,8 +434,7 @@ extern "C" void wrapped_dgels(char TRANS, int * M, int * N, int * NRHS, double *
 
 // NOTE: cublas has the needed info for a batched gpu version
 void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
-                                double * B, int LDB, int * INFO)
-{
+                                double * B, int LDB, int * INFO) {
 #ifdef HAVE_CUDALIBS
 
     // prepare inputs
@@ -493,7 +485,7 @@ void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
     wrapped_dgels(TRANS, &M, &N, &NRHS, A, &LDA, B, &LDB, &optimal_LWORK, &LWORK, INFO);
     if (*INFO == 0) {
         LWORK = optimal_LWORK;
-    } else   {
+    } else {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg(
@@ -522,8 +514,7 @@ extern "C" void wrapped_dgelss(int * M, int * N, int * NRHS, double * A, int * L
 
 // computes optimal workspace (WORK) size (LWORK) for a given lapack implementation
 int toast::LinearAlgebra::gelss_buffersize(int M, int N, int NRHS, int LDA, int LDB,
-                                           double RCOND)
-{
+                                           double RCOND) {
 #ifdef HAVE_LAPACK
 
     // computes workspace size
@@ -561,8 +552,7 @@ int toast::LinearAlgebra::gelss_buffersize(int M, int N, int NRHS, int LDA, int 
 // but we could fall back to gels (a QR decomposition instead of an SVD)
 void toast::LinearAlgebra::gelss(int M, int N, int NRHS, double * A, int LDA,
                                  double * B, int LDB, double * S, double RCOND,
-                                 int * RANK, double * WORK, int LWORK, int * INFO)
-{
+                                 int * RANK, double * WORK, int LWORK, int * INFO) {
 #ifdef HAVE_LAPACK
     wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, RANK, WORK, &LWORK,
                    INFO);

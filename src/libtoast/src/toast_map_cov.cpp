@@ -16,8 +16,7 @@ void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_submap,
                            int64_t const * indx_pix, double const * weights,
                            double scale, double const * signal, double * zdata,
-                           int64_t * hits, double * invnpp)
-{
+                           int64_t * hits, double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
 #pragma omp parallel
     {
@@ -64,8 +63,7 @@ void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 void toast::cov_accum_diag_hits(int64_t nsub, int64_t subsize, int64_t nnz,
                                 int64_t nsamp,
                                 int64_t const * indx_submap,
-                                int64_t const * indx_pix, int64_t * hits)
-{
+                                int64_t const * indx_pix, int64_t * hits) {
 #pragma omp parallel
     {
 #ifdef _OPENMP
@@ -96,8 +94,7 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                                   int64_t const * indx_pix,
                                   double const * weights,
                                   double scale,
-                                  double * invnpp)
-{
+                                  double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
 #pragma omp parallel
     {
@@ -152,8 +149,7 @@ void toast::cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nn
                                        int64_t const * indx_pix,
                                        double const * weights,
                                        double scale, int64_t * hits,
-                                       double * invnpp)
-{
+                                       double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
 #pragma omp parallel
     {
@@ -198,8 +194,7 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_submap,
                            int64_t const * indx_pix, double const * weights,
                            double scale, double const * signal,
-                           double * zdata)
-{
+                           double * zdata) {
 #pragma omp parallel
     {
 #ifdef _OPENMP
@@ -235,8 +230,7 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
 
 void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                                     double * data, double * cond,
-                                    double threshold, bool invert)
-{
+                                    double threshold, bool invert) {
     if (nnz == 1) {
         // shortcut for NNZ == 1
         if (!invert) {
@@ -248,7 +242,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                     }
                 }
             }
-        } else   {
+        } else {
             if (cond != NULL) {
                 for (int64_t i = 0; i < nsub; ++i) {
                     for (int64_t j = 0; j < subsize; ++j) {
@@ -259,7 +253,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                         }
                     }
                 }
-            } else   {
+            } else {
                 for (int64_t i = 0; i < nsub; ++i) {
                     for (int64_t j = 0; j < subsize; ++j) {
                         int64_t dpx = (i * subsize) + j;
@@ -270,7 +264,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                 }
             }
         }
-    } else   {
+    } else {
         // problem size parameters
         int batchNumber = nsub * subsize;
         int64_t blockSize = (int64_t)(nnz * (nnz + 1) / 2);
@@ -366,7 +360,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                             offset += 1;
                         }
                     }
-                } else   {
+                } else {
                     // data = 0.
                     for (int64_t k = batchid * blockSize; k < (batchid + 1) * blockSize;
                          k++) {
@@ -384,8 +378,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 }
 
 void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
-                          double * data1, double const * data2)
-{
+                          double * data1, double const * data2) {
     if (nnz == 1) {
         // shortcut for NNZ == 1
         int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
@@ -395,7 +388,7 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                 data1[px] *= data2[px];
             }
         }
-    } else   {
+    } else {
         // problem size
         int batchNumber = nsub * subsize;
         int64_t blockSize = nnz * (nnz + 1) / 2;
@@ -455,8 +448,7 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 }
 
 void toast::cov_apply_diag(int64_t nsub, int64_t subsize, int64_t nnz,
-                           double const * mat, double * vec)
-{
+                           double const * mat, double * vec) {
     int64_t i, j, k;
     int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
     int64_t mpx;
@@ -472,7 +464,7 @@ void toast::cov_apply_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                 vec[vpx] *= mat[mpx];
             }
         }
-    } else   {
+    } else {
         // We do this manually now, but could use dsymv if needed...
         // Since this is just multiply / add operations, the overhead of
         // threading

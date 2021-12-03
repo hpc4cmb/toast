@@ -8,12 +8,11 @@
 
 #ifdef HAVE_CUDALIBS
 
-// ---------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------
 // ERROR CODE CHECKING
 
 // displays an error message if the cuda runtime computation did not end in success
-void checkCudaErrorCode(const cudaError errorCode, const std::string & functionName)
-{
+void checkCudaErrorCode(const cudaError errorCode, const std::string & functionName) {
     if (errorCode != cudaSuccess) {
         auto log = toast::Logger::get();
         std::string msg = "The CUDA Runtime threw a '" +
@@ -27,8 +26,7 @@ void checkCudaErrorCode(const cudaError errorCode, const std::string & functionN
 }
 
 // turns a cublas error code into human readable text
-std::string cublasGetErrorString(const cublasStatus_t errorCode)
-{
+std::string cublasGetErrorString(const cublasStatus_t errorCode) {
     switch (errorCode) {
         case CUBLAS_STATUS_SUCCESS:
             return "CUBLAS_STATUS_SUCCESS";
@@ -66,8 +64,7 @@ std::string cublasGetErrorString(const cublasStatus_t errorCode)
 
 // displays an error message if the cublas computation did not end in sucess
 void checkCublasErrorCode(const cublasStatus_t errorCode,
-                          const std::string & functionName)
-{
+                          const std::string & functionName) {
     if (errorCode != CUBLAS_STATUS_SUCCESS) {
         auto log = toast::Logger::get();
         std::string msg = "CUBLAS threw a '" + cublasGetErrorString(errorCode) +
@@ -81,8 +78,9 @@ void checkCublasErrorCode(const cublasStatus_t errorCode,
 }
 
 // turns a cusolver error code into human readable text
-std::string cusolverGetErrorString(const cusolverStatus_t errorCode)
-{
+std::string cusolverGetErrorString(
+    const cusolverStatus_t errorCode
+    ) {
     switch (errorCode) {
         case CUSOLVER_STATUS_SUCCESS:
             return "CUSOLVER_STATUS_SUCCESS";
@@ -165,8 +163,7 @@ std::string cusolverGetErrorString(const cusolverStatus_t errorCode)
 
 // displays an error message if the cusolver computation did not end in sucess
 void checkCusolverErrorCode(const cusolverStatus_t errorCode,
-                            const std::string & functionName)
-{
+                            const std::string & functionName) {
     if (errorCode != CUSOLVER_STATUS_SUCCESS) {
         auto log = toast::Logger::get();
         std::string msg = "CUSOLVER threw a '" + cusolverGetErrorString(errorCode) +
@@ -180,8 +177,7 @@ void checkCusolverErrorCode(const cusolverStatus_t errorCode,
 }
 
 // turns a cufft error code into human readable text
-std::string cufftGetErrorString(cufftResult error)
-{
+std::string cufftGetErrorString(cufftResult error) {
     switch (error) {
         case CUFFT_SUCCESS:
             return "CUFFT_SUCCESS";
@@ -239,8 +235,8 @@ std::string cufftGetErrorString(cufftResult error)
 }
 
 // displays an error message if the cufft computation did not end in sucess
-void checkCufftErrorCode(const cufftResult errorCode, const std::string & functionName)
-{
+void checkCufftErrorCode(const cufftResult errorCode,
+                         const std::string & functionName) {
     if (errorCode != CUFFT_SUCCESS) {
         auto log = toast::Logger::get();
         std::string msg = "CUFFT threw a '" + cufftGetErrorString(errorCode) +
@@ -253,7 +249,7 @@ void checkCufftErrorCode(const cufftResult errorCode, const std::string & functi
     }
 }
 
-// ---------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------
 // MEMORY POOL
 
 // constant used to make sure allocations are aligned
@@ -263,8 +259,7 @@ const int ALIGNEMENT_SIZE = 512;
 // `cpu_ptr` is optional but can be passed to keep trace of the origin of the data
 // when allocating during a cpu-2-gpu copy operation
 GPU_memory_block_t::GPU_memory_block_t(void * gpu_ptr, size_t size_bytes_arg,
-                                       void * cpu_ptr_arg)
-{
+                                       void * cpu_ptr_arg) {
     // stores size of the allocation, in bytes
     size_bytes = size_bytes_arg;
 
@@ -286,8 +281,7 @@ GPU_memory_block_t::GPU_memory_block_t(void * gpu_ptr, size_t size_bytes_arg,
 
 // constructor, does the initial allocation
 GPU_memory_pool_t::GPU_memory_pool_t(size_t bytesPreallocated) : available_memory_bytes(
-        bytesPreallocated), blocks()
-{
+        bytesPreallocated), blocks() {
     // allocates the memory
     const cudaError errorCode = cudaMalloc(&start, available_memory_bytes);
     checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
@@ -310,8 +304,7 @@ GPU_memory_pool_t::GPU_memory_pool_t(size_t bytesPreallocated) : available_memor
 }
 
 // destructor, insures that the pre-allocation is released
-GPU_memory_pool_t::~GPU_memory_pool_t()
-{
+GPU_memory_pool_t::~GPU_memory_pool_t() {
     const cudaError errorCode = cudaFree(start);
     checkCudaErrorCode(errorCode, "GPU memory de-allocation");
 
@@ -329,8 +322,8 @@ GPU_memory_pool_t::~GPU_memory_pool_t()
 // allocates memory, starting from the end of the latest allocated block
 // `cpu_ptr` is optional but can be passed to keep trace of the origin of the data
 // when allocating during a cpu-2-gpu copy operation
-cudaError GPU_memory_pool_t::malloc(void ** gpu_ptr, size_t size_bytes, void * cpu_ptr)
-{
+cudaError GPU_memory_pool_t::malloc(void ** gpu_ptr, size_t size_bytes,
+                                    void * cpu_ptr) {
     // insure two threads cannot interfere
     const std::lock_guard <std::mutex> lock(alloc_mutex);
 
@@ -359,8 +352,7 @@ cudaError GPU_memory_pool_t::malloc(void ** gpu_ptr, size_t size_bytes, void * c
 }
 
 // frees memory by releasing the block
-void GPU_memory_pool_t::free(void * gpu_ptr)
-{
+void GPU_memory_pool_t::free(void * gpu_ptr) {
     // insure two threads cannot interfere
     const std::lock_guard <std::mutex> lock(alloc_mutex);
 
@@ -389,14 +381,12 @@ void GPU_memory_pool_t::free(void * gpu_ptr)
 }
 
 // converts a number of gigabytes into a number of bytes
-size_t GigagbytesToBytes(const size_t nbGB)
-{
+size_t GigagbytesToBytes(const size_t nbGB) {
     return nbGB * 1073741824l;
 }
 
 // returns a given fraction of the total GPU memory, in bytes
-size_t FractionOfGPUMemory(const double fraction)
-{
+size_t FractionOfGPUMemory(const double fraction) {
     // computes the GPU memory available
     int deviceId;
     cudaGetDevice(&deviceId);

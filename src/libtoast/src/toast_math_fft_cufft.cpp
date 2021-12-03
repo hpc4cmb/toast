@@ -113,7 +113,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
 
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
         complexToHalfcomplex(length_, n_, tview_.data(), fview_.data());
-    } else   { // C2R, complex input in fraw_ and real output in traw_
+    } else { // C2R, complex input in fraw_ and real output in traw_
         // reorder data from rr...cc (stored in fraw_) to rcrc... (stored in traw_)
         halfcomplexToComplex(length_, n_, fview_.data(), tview_.data());
 
@@ -195,7 +195,8 @@ void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex(const int64_t length,
 // https://www.fftw.org/fftw3_doc/The-Halfcomplex_002dformat-DFT.html
 void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex(const int64_t length,
                                                      const int64_t nbBatch,
-                                                     double * batchedHalfcomplexInputs[], double * batchedHComplexOutputs[])
+                                                     double * batchedHalfcomplexInputs[],
+                                                     double * batchedHComplexOutputs[])
 {
     const int64_t half = length / 2;
     const bool is_even = (length % 2) == 0;
@@ -213,17 +214,13 @@ void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex(const int64_t length,
         // all intermediate values
         # pragma omp parallel for schedule(static)
         for (int64_t i = 1; i < half; i++) {
-            batchedHComplexOutputs[batchId][2 *
-                                            i] = batchedHalfcomplexInputs[batchId][i]; //
-                                                                                       //
-                                                                                       //
-                                                                                       // real
-            batchedHComplexOutputs[batchId][2 * i +
-                                            1] =
-                batchedHalfcomplexInputs[batchId][length - i];                         //
-                                                                                       //
-                                                                                       //
-                                                                                       // imag
+            // real
+            batchedHComplexOutputs[batchId][2 * i] = \
+                batchedHalfcomplexInputs[batchId][i];
+
+            // imag
+            batchedHComplexOutputs[batchId][2 * i + 1] = \
+                batchedHalfcomplexInputs[batchId][length - i];
         }
 
         // n/2th value
