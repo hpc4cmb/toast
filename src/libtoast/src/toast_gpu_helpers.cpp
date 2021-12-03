@@ -281,8 +281,8 @@ size_t GigagbytesToBytes(const size_t nbGB)
     return nbGB * 1073741824l;
 }
 
-// returns a given fraction of the total GPU memory, in bytes
-size_t FractionOfGPUMemory(const double fraction)
+// returns a given fraction of the free (currently unused) GPU memory, in bytes
+size_t FractionOfFreeGPUMemory(const double fraction)
 {
     // computes the GPU memory available
     size_t free_byte;
@@ -291,7 +291,7 @@ size_t FractionOfGPUMemory(const double fraction)
     checkCudaErrorCode(errorCodeMemGetInfo, "FractionOfGPUMemory::cudaMemGetInfo");
 
     // computes the portion that we want to reserve
-    size_t result = fraction * total_byte;
+    size_t result = fraction * free_byte;
 
     // makes sure the end of the reservation is a multiple of the alignement
     if (result % ALIGNEMENT_SIZE != 0)
@@ -334,7 +334,7 @@ GPU_memory_pool::GPU_memory_pool() : blocks()
     // Get the requested fraction of per-process memory from the environment.
     // If the user does not specify this, use something conservative that is
     // likely to work.
-    double fraction = 0.5;
+    double fraction = 0.9;
     char *envval = ::getenv("CUDA_MEMPOOL_FRACTION");
     if (envval != NULL)
     {
@@ -344,7 +344,7 @@ GPU_memory_pool::GPU_memory_pool() : blocks()
         }
         catch (...)
         {
-            fraction = 0.5;
+            fraction = 0.9;
         }
     }
 
@@ -360,7 +360,7 @@ GPU_memory_pool::GPU_memory_pool() : blocks()
     }
 
     // Get the number of bytes for this fraction
-    available_memory_bytes = FractionOfGPUMemory(fraction);
+    available_memory_bytes = FractionOfFreeGPUMemory(fraction);
 
     // allocates the memory
     const cudaError errorCode = cudaMalloc(&start, available_memory_bytes);
