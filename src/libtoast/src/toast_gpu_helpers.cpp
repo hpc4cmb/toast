@@ -281,8 +281,9 @@ size_t GigagbytesToBytes(const size_t nbGB)
     return nbGB * 1073741824l;
 }
 
-// returns a given fraction of the free (currently unused) GPU memory, in bytes
-size_t FractionOfFreeGPUMemory(const double fraction)
+// returns a given fraction of the GPU memory in bytes
+// either of the total memory or (if `useFree` is set to true) of the free memory
+size_t FractionOfGPUMemory(const double fraction, const bool useFree)
 {
     // computes the GPU memory available
     size_t free_byte;
@@ -291,7 +292,7 @@ size_t FractionOfFreeGPUMemory(const double fraction)
     checkCudaErrorCode(errorCodeMemGetInfo, "FractionOfGPUMemory::cudaMemGetInfo");
 
     // computes the portion that we want to reserve
-    size_t result = fraction * free_byte;
+    size_t result = (useFree) ? (fraction * free_byte) : (fraction * total_byte);
 
     // makes sure the end of the reservation is a multiple of the alignement
     if (result % ALIGNEMENT_SIZE != 0)
@@ -350,17 +351,21 @@ GPU_memory_pool::GPU_memory_pool() : blocks()
 
     // Reduce this by the number of processes sharing a device
     auto &env = toast::Environment::get();
-    int n_acc;
-    int n_proc_per_dev;
-    int my_dev;
-    env.get_acc(&n_acc, &n_proc_per_dev, &my_dev);
-    if (n_proc_per_dev > 1)
+    int nb_acc;
+    int nb_proc_per_dev;
+    int my_device;
+    env.get_acc(&nb_acc, &nb_proc_per_dev, &my_device);
+    if (nb_proc_per_dev > 1)
     {
-        fraction /= (double)n_proc_per_dev;
+        fraction /= (double)nb_proc_per_dev;
     }
 
+    // defines the GPU to be used
+    const cudaError errorStatusSetDevice = cudaSetDevice(my_device);
+    checkCudaErrorCode(errorStatusSetDevice, "GPU_memory_pool::cudaSetDevice");
+
     // Get the number of bytes for this fraction
-    available_memory_bytes = FractionOfFreeGPUMemory(fraction);
+    available_memory_bytes = FractionOfGPUMemory(fraction, true);
 
     // allocates the memory
     const cudaError errorCode = cudaMalloc(&start, available_memory_bytes);
