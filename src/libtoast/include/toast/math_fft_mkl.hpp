@@ -8,7 +8,6 @@
 
 #include <vector>
 
-
 #ifdef HAVE_MKL
 
 # include <mkl_dfti.h>

@@ -4,13 +4,12 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 #include <toast/sys_utils.hpp>
-#include <toast/math_lapack.hpp>
+#include <toast/math_linearalgebra.hpp>
 #include <toast/map_cov.hpp>
 
 #ifdef _OPENMP
 # include <omp.h>
 #endif // ifdef _OPENMP
-
 
 void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t nsamp,
@@ -19,15 +18,15 @@ void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                            double scale, double const * signal, double * zdata,
                            int64_t * hits, double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-    #pragma omp parallel
+#pragma omp parallel
     {
-        #ifdef _OPENMP
+#ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-        #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
 
         for (size_t i = 0; i < nsamp; ++i) {
             const int64_t isubmap = indx_submap[i] * subsize;
@@ -35,9 +34,9 @@ void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             if ((isubmap < 0) || (ipix < 0)) continue;
 
             const int64_t hpx = isubmap + ipix;
-            #ifdef _OPENMP
+#ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-            #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
             const int64_t zpx = hpx * nnz;
             const int64_t ipx = hpx * block;
 
@@ -65,23 +64,23 @@ void toast::cov_accum_diag_hits(int64_t nsub, int64_t subsize, int64_t nnz,
                                 int64_t nsamp,
                                 int64_t const * indx_submap,
                                 int64_t const * indx_pix, int64_t * hits) {
-    #pragma omp parallel
+#pragma omp parallel
     {
-        #ifdef _OPENMP
+#ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-        #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
 
         for (size_t i = 0; i < nsamp; ++i) {
             if ((indx_submap[i] < 0) || (indx_pix[i] < 0)) continue;
 
             const int64_t hpx = (indx_submap[i] * subsize) + indx_pix[i];
-            #ifdef _OPENMP
+#ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-            #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
             hits[hpx] += 1;
         }
     }
@@ -97,15 +96,15 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                                   double scale,
                                   double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-    #pragma omp parallel
+#pragma omp parallel
     {
-        #ifdef _OPENMP
+#ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-        #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
 
         for (size_t i = 0; i < nsamp; ++i) {
             const int64_t isubmap = indx_submap[i] * subsize;
@@ -113,9 +112,9 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
             if ((isubmap < 0) || (ipix < 0)) continue;
 
             const int64_t hpx = isubmap + ipix;
-            #ifdef _OPENMP
+#ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-            #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
             const int64_t ipx = hpx * block;
 
             const double * wpointer = weights + i * nnz;
@@ -152,15 +151,15 @@ void toast::cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nn
                                        double scale, int64_t * hits,
                                        double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-    #pragma omp parallel
+#pragma omp parallel
     {
-        #ifdef _OPENMP
+#ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-        #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
 
         for (size_t i = 0; i < nsamp; ++i) {
             const int64_t isubmap = indx_submap[i] * subsize;
@@ -168,9 +167,9 @@ void toast::cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nn
             if ((isubmap < 0) || (ipix < 0)) continue;
 
             const int64_t hpx = isubmap + ipix;
-            #ifdef _OPENMP
+#ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-            #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
             const int64_t ipx = hpx * block;
 
             const double * wpointer = weights + i * nnz;
@@ -196,15 +195,15 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_pix, double const * weights,
                            double scale, double const * signal,
                            double * zdata) {
-    #pragma omp parallel
+#pragma omp parallel
     {
-        #ifdef _OPENMP
+#ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-        #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
 
         for (int64_t i = 0; i < nsamp; ++i) {
             const int64_t isubmap = indx_submap[i] * subsize;
@@ -212,9 +211,9 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
             if ((isubmap < 0) || (ipix < 0)) continue;
 
             const int64_t hpx = isubmap + ipix;
-            #ifdef _OPENMP
+#ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-            #endif // ifdef _OPENMP
+#endif // ifdef _OPENMP
             const int64_t zpx = hpx * nnz;
 
             const double scaled_signal = scale * signal[i];
@@ -266,140 +265,116 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             }
         }
     } else {
-        // Even if the actual BLAS/LAPACK library is threaded, these are very
-        // small matrices.  So instead we divide up the map data across threads
-        // and each thread does some large number of small eigenvalue problems.
+        // problem size parameters
+        int batchNumber = nsub * subsize;
+        int64_t blockSize = (int64_t)(nnz * (nnz + 1) / 2);
 
-        #pragma \
-        omp parallel default(none) shared(nsub, subsize, nnz, data, cond, threshold, invert)
-        {
-            // thread-private variables
-            // We assume a large value here, since the work space needed
-            // will still be small.
-            int NB = 256;
+        // solver parameters
+        char jobz = (invert) ? 'V' : 'N';
+        char uplo = 'L';
+        char transN = 'N';
+        char transT = 'T';
 
-            int lwork = NB * 2 + (int)nnz;
-            int fnnz = (int)nnz;
-
-            double fzero = 0.0;
-            double fone = 1.0;
-
-            char jobz_vec = 'V';
-            char jobz_val = 'N';
-            char uplo = 'L';
-            char transN = 'N';
-            char transT = 'T';
-
-            int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-            int64_t off;
-
-            double emin;
-            double emax;
-            double rcond;
-
-            int info;
-
-            toast::AlignedVector <double> fdata(nnz * nnz);
-            toast::AlignedVector <double> ftemp(nnz * nnz);
-            toast::AlignedVector <double> finv(nnz * nnz);
-            toast::AlignedVector <double> evals(nnz);
-            toast::AlignedVector <double> work(lwork);
-
-            // Here we "unroll" the loop over submaps and pixels within each submap.
-            // This allows us to distribute the total pixels across all threads.
-
-            #pragma omp for schedule(static)
-            for (int64_t i = 0; i < (nsub * subsize); ++i) {
-                int64_t dpx = i * block;
-
-                // copy to fortran buffer
-                off = 0;
-                std::fill(fdata.begin(), fdata.end(), 0);
-                for (int64_t k = 0; k < nnz; ++k) {
-                    for (int64_t m = k; m < nnz; ++m) {
-                        fdata[k * nnz + m] = data[dpx + off];
-                        off += 1;
-                    }
+        // fdata = data (reordering)
+        toast::AlignedVector <double> fdata_batch(batchNumber * nnz * nnz);
+#pragma omp parallel for schedule(static)
+        for (int64_t batchid = 0; batchid < batchNumber; batchid++) {
+            int offset = 0;
+            for (int64_t k = 0; k < nnz; k++) {
+                // zero half matrix
+                for (int64_t m = 0; m < k; m++) {
+                    fdata_batch[batchid * nnz * nnz + k * nnz + m] = 0.;
                 }
 
-                // eigendecompose
-                if (!invert) {
-                    toast::lapack_syev(&jobz_val, &uplo, &fnnz,
-                                       fdata.data(), &fnnz, evals.data(),
-                                       work.data(), &lwork, &info);
-                } else {
-                    toast::lapack_syev(&jobz_vec, &uplo, &fnnz,
-                                       fdata.data(), &fnnz, evals.data(),
-                                       work.data(), &lwork, &info);
-                }
-
-                rcond = 0.0;
-
-                if (info == 0) {
-                    // it worked, compute condition number
-                    emin = 1.0e100;
-                    emax = 0.0;
-                    for (int64_t k = 0; k < nnz; ++k) {
-                        if (evals[k] < emin) {
-                            emin = evals[k];
-                        }
-                        if (evals[k] > emax) {
-                            emax = evals[k];
-                        }
-                    }
-                    if (emax > 0.0) {
-                        rcond = emin / emax;
-                    }
-
-                    // compare to threshold
-                    if (rcond >= threshold) {
-                        if (invert) {
-                            for (int64_t k = 0; k < nnz; ++k) {
-                                evals[k] = 1.0 / evals[k];
-                                for (int64_t m = 0; m < nnz; ++m) {
-                                    ftemp[k * nnz + m] = evals[k] *
-                                                         fdata[k * nnz + m];
-                                }
-                            }
-                            toast::lapack_gemm(&transN, &transT, &fnnz, &fnnz,
-                                               &fnnz, &fone, ftemp.data(),
-                                               &fnnz, fdata.data(), &fnnz,
-                                               &fzero, finv.data(), &fnnz);
-
-                            off = 0;
-                            for (int64_t k = 0; k < nnz; ++k) {
-                                for (int64_t m = k; m < nnz; ++m) {
-                                    data[dpx + off] = finv[k * nnz + m];
-                                    off += 1;
-                                }
-                            }
-                        }
-                    } else {
-                        // reject this pixel
-                        rcond = 0.0;
-                        info = 1;
-                    }
-                }
-
-                if (invert) {
-                    if (info != 0) {
-                        off = 0;
-                        for (int64_t k = 0; k < nnz; ++k) {
-                            for (int64_t m = k; m < nnz; ++m) {
-                                data[dpx + off] = 0.0;
-                                off += 1;
-                            }
-                        }
-                    }
-                }
-                if (cond != NULL) {
-                    cond[i] = rcond;
+                // copies other half matrix
+                for (int64_t m = k; m < nnz; m++) {
+                    fdata_batch[batchid * nnz * nnz + k * nnz +
+                                m] = data[batchid * blockSize + offset];
+                    offset += 1;
                 }
             }
         }
-    }
 
-    return;
+        // compute eigenvalues of fdata (stored in evals)
+        // and, potentially, eigenvectors (which are then stored in fdata)
+        toast::AlignedVector <int> info_batch(batchNumber);
+        toast::AlignedVector <double> evals_batch(batchNumber * nnz);
+        toast::LinearAlgebra::syev_batched(jobz, uplo, nnz,
+                                           fdata_batch.data(), nnz,
+                                           evals_batch.data(), info_batch.data(),
+                                           batchNumber);
+
+        // compute condition number as the ratio of the eigenvalues
+        // and sets ftemp = fdata / evals
+        toast::AlignedVector <double> rcond_batch(batchNumber);
+        toast::AlignedVector <double> ftemp_batch(batchNumber * nnz * nnz);
+#pragma omp parallel for schedule(static)
+        for (int64_t batchid = 0; batchid < batchNumber; batchid++) {
+            double emin = 1.0e100;
+            double emax = 0.0;
+            for (int64_t k = batchid * nnz; k < (batchid + 1) * nnz; k++) {
+                // computes the maximum and minimum eigenvalues
+                if (evals_batch[k] < emin) emin = evals_batch[k];
+                if (evals_batch[k] > emax) emax = evals_batch[k];
+
+                // ftemp = fdata / evals (eigenvectors divided by eigenvalues)
+                for (int64_t m = 0; m < nnz; m++) {
+                    ftemp_batch[k * nnz + m] = fdata_batch[k * nnz + m] /
+                                               evals_batch[k];
+                }
+            }
+
+            // stores the condition number
+            rcond_batch[batchid] = (emax > 0.0) ? (emin / emax) : 0.;
+        }
+
+        // finv = ftemp x fdata
+        toast::AlignedVector <double> finv_batch(batchNumber * nnz * nnz);
+        if (invert) {
+            double fzero = 0.0;
+            double fone = 1.0;
+            toast::LinearAlgebra::gemm_batched(transN, transT, nnz, nnz,
+                                               nnz, fone, ftemp_batch.data(),
+                                               nnz, fdata_batch.data(), nnz,
+                                               fzero,
+                                               finv_batch.data(), nnz, batchNumber);
+        }
+
+        // data = finv
+#pragma omp parallel for schedule(static)
+        for (int64_t batchid = 0; batchid < batchNumber; batchid++) {
+            // did the computation of finv succeed
+            const bool success =
+                (info_batch[batchid] == 0) and (rcond_batch[batchid] >= threshold);
+
+            // stores result in data
+            if (invert) {
+                if (success) {
+                    // data = finv (reordering)
+                    int offset = 0;
+                    for (int64_t k = 0; k < nnz; k++) {
+                        for (int64_t m = k; m < nnz; m++) {
+                            data[batchid * blockSize +
+                                 offset] =
+                                finv_batch[batchid * nnz * nnz + k * nnz + m];
+                            offset += 1;
+                        }
+                    }
+                } else {
+                    // data = 0.
+                    for (int64_t k = batchid * blockSize; k < (batchid + 1) * blockSize;
+                         k++) {
+                        data[k] = 0.;
+                    }
+                }
+            }
+
+            // if we have an output parameter for the condition number
+            if (cond != NULL) {
+                cond[batchid] = (success) ? rcond_batch[batchid] : 0.;
+            }
+        }
+    }
 }
 
 void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
@@ -414,68 +389,56 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             }
         }
     } else {
-        // Even if the actual BLAS/LAPACK library is threaded, these are very
-        // small matrices.  So instead we divide up the map data across threads
-        // and each thread does some large number of small eigenvalue problems.
+        // problem size
+        int batchNumber = nsub * subsize;
+        int64_t blockSize = nnz * (nnz + 1) / 2;
 
-        #pragma \
-        omp parallel default(none) shared(nsub, subsize, nnz, data1, data2)
-        {
-            // thread-private variables
-            int fnnz = (int)nnz;
+        // temporary buffer for the data
+        toast::AlignedVector <double> fdata1(batchNumber * nnz * nnz);
+        toast::AlignedVector <double> fdata2(batchNumber * nnz * nnz);
+        toast::AlignedVector <double> fdata3(batchNumber * nnz * nnz);
 
-            double fzero = 0.0;
-            double fone = 1.0;
+        // copy data to buffers
+#pragma omp parallel for schedule(static)
+        for (int64_t b = 0; b < batchNumber; b++) {
+            // zero out data
+            std::fill(fdata1.begin() + b * (nnz * nnz),
+                      fdata1.begin() + (b + 1) * (nnz * nnz), 0.0);
+            std::fill(fdata2.begin() + b * (nnz * nnz),
+                      fdata2.begin() + (b + 1) * (nnz * nnz), 0.0);
 
-            char uplo = 'L';
-            char side = 'L';
-
-            int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-
-            int64_t off;
-
-            toast::AlignedVector <double> fdata1(nnz * nnz);
-            toast::AlignedVector <double> fdata2(nnz * nnz);
-            toast::AlignedVector <double> fdata3(nnz * nnz);
-
-            // Here we "unroll" the loop over submaps and pixels within each
-            // submap.
-            // This allows us to distribute the total pixels across all
-            // threads.
-
-            #pragma omp for schedule(static)
-            for (int64_t i = 0; i < (nsub * subsize); ++i) {
-                int64_t px = i * block;
-
-                // copy to fortran buffer
-
-                std::fill(fdata1.begin(), fdata1.end(), 0);
-                std::fill(fdata2.begin(), fdata2.end(), 0);
-                std::fill(fdata3.begin(), fdata3.end(), 0);
-
-                off = 0;
-                for (int64_t k = 0; k < nnz; ++k) {
-                    for (int64_t m = k; m < nnz; ++m) {
-                        fdata1[k * nnz + m] = data1[px + off];
-                        fdata2[k * nnz + m] = data2[px + off];
-                        if (k != m) {
-                            // Second argument to dsymm must be full
-                            fdata2[m * nnz + k] = data2[px + off];
-                        }
-                        off += 1;
+            // copies inputs and reshape them for the upcoming computation
+            int64_t offset1 = 0;
+            for (int64_t k = 0; k < nnz; k++) {
+                for (int64_t m = k; m < nnz; m++) {
+                    fdata1[k * nnz + m] = data1[b * blockSize + offset1];
+                    fdata2[k * nnz + m] = data2[b * blockSize + offset1];
+                    if (k != m) {
+                        // Second argument to dsymm must be full
+                        fdata2[m * nnz + k] = data2[b * blockSize + offset1];
                     }
+                    offset1 += 1;
                 }
+            }
+        }
 
-                toast::lapack_symm(&side, &uplo, &fnnz, &fnnz, &fone,
-                                   fdata1.data(), &fnnz, fdata2.data(), &fnnz,
-                                   &fzero, fdata3.data(), &fnnz);
+        // batched symmetric matrix product
+        const double fzero = 0.0;
+        const double fone = 1.0;
+        const char uplo = 'L';
+        const char side = 'L';
+        toast::LinearAlgebra::symm_batched(side, uplo, nnz, nnz, fone,
+                                           fdata1.data(), nnz, fdata2.data(), nnz,
+                                           fzero, fdata3.data(), nnz, batchNumber);
 
-                off = 0;
-                for (int64_t k = 0; k < nnz; ++k) {
-                    for (int64_t m = k; m < nnz; ++m) {
-                        data1[px + off] = fdata3[k * nnz + m];
-                        off += 1;
-                    }
+        // copy data back from buffer
+#pragma omp parallel for schedule(static)
+        for (int64_t b = 0; b < batchNumber; b++) {
+            int64_t offset2 = 0;
+            for (int64_t k = 0; k < nnz; k++) {
+                for (int64_t m = k; m < nnz; m++) {
+                    data1[b * blockSize + offset2] = fdata3[k * nnz + m];
+                    offset2 += 1;
                 }
             }
         }

@@ -14,20 +14,17 @@ const int64_t TOASTfftTest::n = 3;
 
 void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
                             toast::FFTPlanReal1D::pshr reverse) {
-    bool debug = false;
+    const bool debug = false;
 
     if (debug) {
-        std::cout << "------- FFT batch of " << nbatch << " --------" <<
-            std::endl;
+        std::cout << "------- FFT batch of " << nbatch << " --------" << std::endl;
     }
 
     std::vector <toast::AlignedVector <double> > compare(nbatch);
 
     // First generate some gaussian random noise
-
     for (int64_t i = 0; i < nbatch; ++i) {
-        toast::rng_dist_normal(length, 0, 0, 0, i * length,
-                               forward->tdata(i));
+        toast::rng_dist_normal(length, 0, 0, 0, i * length, forward->tdata(i));
         compare[i].resize(length);
         for (int64_t j = 0; j < length; ++j) {
             compare[i][j] = forward->tdata(i)[j];
@@ -35,13 +32,10 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
     }
 
     // Do forward transform
-
     forward->exec();
 
     // Verify that normalization and spectrum are correct.
-
-    double sigma = ((double)length / 2.0) *
-                   ::sqrt(2.0 / ((double)length - 1.0));
+    double sigma = ((double)length / 2.0) * ::sqrt(2.0 / ((double)length - 1.0));
 
     for (int64_t i = 0; i < nbatch; ++i) {
         double mean = 0.0;
@@ -67,26 +61,20 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
                 ", (len / 2) = " << ((double)length / 2.0) <<
                 " sigma = " << sigma << " outlier = " << outlier
                       << std::endl;
-        }
-
-        if (!debug) {
+        } else {
             ASSERT_TRUE(outlier < 3.0 * sigma);
         }
     }
 
     // Copy data to reverse transform
-
     for (int64_t i = 0; i < nbatch; ++i) {
-        std::copy(forward->fdata(i),
-                  forward->fdata(i) + length, reverse->fdata(i));
+        std::copy(forward->fdata(i), forward->fdata(i) + length, reverse->fdata(i));
     }
 
     // Do reverse transform
-
     reverse->exec();
 
     // Verify roundtrip values
-
     for (int64_t i = 0; i < nbatch; ++i) {
         if (debug) {
             std::cout << "  fft " << i << ":" << std::endl;
@@ -101,8 +89,6 @@ void TOASTfftTest::runbatch(int64_t nbatch, toast::FFTPlanReal1D::pshr forward,
             }
         }
     }
-
-    return;
 }
 
 TEST_F(TOASTfftTest, roundtrip_single) {

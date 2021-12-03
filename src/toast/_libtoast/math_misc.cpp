@@ -48,8 +48,7 @@ double integrate_simpson(py::array_t <double> x, py::array_t <double> f) {
     return result;
 }
 
-void init_math_misc(py::module & m)
-{
+void init_math_misc(py::module & m) {
     m.doc() = "Miscellaneous match functions";
 
     m.def("integrate_simpson", &integrate_simpson);

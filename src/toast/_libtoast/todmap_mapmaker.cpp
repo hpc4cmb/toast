@@ -185,8 +185,9 @@ void accumulate_observation_matrix(py::array_t <double,
                                    py::array_t <double,
                                                 py::array::c_style | py::array::forcecast> template_covariance,
                                    py::array_t <unsigned char, py::array::c_style | py::array::forcecast> good_fit,
-                                   py::array_t <unsigned char, py::array::c_style | py::array::forcecast> good_bin)
-{
+                                   py::array_t <unsigned char,
+                                                py::array::c_style |
+                                                py::array::forcecast> good_bin) {
     /* This function evaluates the cumulative parts of the observation matrix:  P^T N^-1
        Z P,  where Z = I - F(F^T N^-1_F F)^-1 F^T N^-1_F and F is the template matrix,
        (F^T N^-1_F F)^-1 is the template covariance matrix, N^-1_F diagonal has the
@@ -315,8 +316,7 @@ void accumulate_observation_matrix(py::array_t <double,
     }
 }
 
-void init_todmap_mapmaker(py::module & m)
-{
+void init_todmap_mapmaker(py::module & m) {
     m.doc() = "Compiled kernels to support TOAST mapmaker";
 
     m.def("project_signal_offsets", &project_signal_offsets);

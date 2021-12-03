@@ -64,6 +64,12 @@ if(USE_OPENACC)
     find_package(OpenACC)
 endif()
 
+# CUDA.  In some cases, the CUDA toolkit is available (and will be detected) even
+# if we want to build without it.  Force the user to request using CUDA.
+if(USE_CUDA)
+    find_package(CUDAToolkit)
+endif()
+
 if(TOAST_STATIC_DEPS)
     set(BLA_STATIC TRUE)
     set(FFTW_USE_STATIC_LIBS TRUE)
@@ -71,7 +77,12 @@ if(TOAST_STATIC_DEPS)
     set(SUITESPARSE_USE_STATIC_LIBS TRUE)
 endif()
 
-# First look for MKL, since that will provide both FFT support and BLAS/LAPACK
+# First look for MKL and CUDA, since those will provide both
+# FFT support and BLAS/LAPACK
+
+# FIXME:  We should default this to "OFF" and force the user to request it,
+# just like CUDA and OpenACC.  Not changing this yet, since it breaks existing
+# behavior.
 find_package(MKL)
 
 if(MKL_FOUND)
@@ -81,10 +92,15 @@ if(MKL_FOUND)
     set(BLAS_FOUND TRUE)
     set(LAPACK_FOUND TRUE)
 else()
-    # Search for FFTW instead
-    find_package(FFTW)
-    if(NOT FFTW_FOUND)
-        message(FATAL_ERROR "Could not find a supported FFT library (MKL or FFTW)")
+    if(CUDAToolkit_FOUND)
+        # This provides FFT support
+	message(STATUS "Using CUDA FFT")
+    else()
+        # Search for FFTW instead
+        find_package(FFTW)
+        if(NOT FFTW_FOUND)
+            message(FATAL_ERROR "Could not find a supported FFT library (MKL, cuFFT or FFTW)")
+        endif()
     endif()
     find_package(BLAS)
     find_package(LAPACK)

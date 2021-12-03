@@ -8,7 +8,10 @@
 
 #include <vector>
 
-#ifdef HAVE_FFTW
+// #ifdef HAVE_FFTW
+// the not HAVE_CUDALIBS is needed to deal with conflict in symbol names between both
+// libs
+#if defined(HAVE_FFTW) && !defined(HAVE_CUDALIBS)
 
 # include <fftw3.h>
 

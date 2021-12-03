@@ -20,12 +20,16 @@ add_custom_command(OUTPUT ${versioncpp}
 
 set(toast_SOURCES
     toast.cpp
+    src/toast_gpu_helpers.cpp
     src/toast_sys_environment.cpp
     src/toast_sys_utils.cpp
-    src/toast_math_lapack.cpp
+    src/toast_math_linearalgebra.cpp
     src/toast_math_sf.cpp
     src/toast_math_rng.cpp
     src/toast_math_qarray.cpp
+    src/toast_math_fft_fftw.cpp
+    src/toast_math_fft_mkl.cpp
+    src/toast_math_fft_cufft.cpp
     src/toast_math_fft.cpp
     src/toast_math_healpix.cpp
     src/toast_map_cov.cpp
@@ -135,6 +139,20 @@ if(LAPACK_FOUND)
     target_link_libraries(toast "${LAPACK_LIBRARIES}")
     target_link_libraries(toast "${BLAS_LIBRARIES}")
 endif(LAPACK_FOUND)
+
+# CUDA
+
+# https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html#module:FindCUDAToolkit
+if(CUDAToolkit_FOUND AND NOT CUDA_DISABLED)
+    message(STATUS "CUDA libs found.")
+    target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
+    target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
+    target_include_directories(toast PRIVATE "${CUDAToolkit_MATH_INCLUDE_DIRS}")
+    # there are also static versions of those libs
+    target_link_libraries(toast CUDA::cudart CUDA::cublas CUDA::cusolver CUDA::cufft CUDA::cufftw)
+else()
+    message(STATUS "CUDA libs not found.")
+endif()
 
 # Installation
 

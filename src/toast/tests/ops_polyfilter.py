@@ -130,8 +130,10 @@ class PolyFilterTest(MPITestCase):
                 new_signal = ob.detdata[defaults.det_data][det]
                 old_rms = np.std(old_signal[good])
                 new_rms = np.std(new_signal[good])
-                # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(new_rms / old_rms < 1e-6)
+                # print(
+                #     f"new_rms = {new_rms}, old_rms = {old_rms}, new/old = {new_rms / old_rms}"
+                # )
+                self.assertLess(new_rms / old_rms, 1e-6)
 
         del data
         return
@@ -294,7 +296,7 @@ class PolyFilterTest(MPITestCase):
             good = ob.detdata["flags"].data == 0
             good *= ob.shared["flags"].data == 0
             check_rms = np.std(ob.detdata["signal"].data[good])
-            self.assertTrue(check_rms < 1e-3 * rms[ob.name])
+            self.assertLess(check_rms, 1e-3 * rms[ob.name])
 
         del data
         return
@@ -365,7 +367,7 @@ class PolyFilterTest(MPITestCase):
                 good = flags == 0
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(check_rms < 1e-3 * rms[ob.name][det])
+                self.assertLess(check_rms, 1e-3 * rms[ob.name][det])
 
         del data
         return
