@@ -9,8 +9,6 @@
 #endif // ifdef HAVE_OPENACC
 
 
-// FIXME: add registration function here to add stubs if openacc disabled
-
 void extract_buffer_info(py::buffer_info const & info, void ** host_ptr, size_t * n_elem, size_t * n_bytes) {
     (*host_ptr) = reinterpret_cast <void *> (info.ptr);
     (*n_elem) = 1;
