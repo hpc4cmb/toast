@@ -449,14 +449,46 @@ extern "C" void wrapped_dgelss(int *M, int *N, int *NRHS, double *A, int *LDA,
                                double *B, int *LDB, double *S, double *RCOND,
                                int *RANK, double *WORK, int *LWORK, int *INFO);
 
+// computes optimal workspace (WORK) size (LWORK) for a given lapack implementation
+int toast::LinearAlgebra::gelss_buffersize(int M, int N, int NRHS, int LDA, int LDB, double RCOND)
+{
+#ifdef HAVE_LAPACK
+    // computes workspace size
+    double *A = nullptr;
+    double *B = nullptr;
+    double *S = nullptr;
+    int RANK;
+    int INFO;
+    int LWORK = -1; // -1 triggers LWORK computation instead of dgelss
+    double optimal_LWORK = 0;
+    wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, &RANK, &optimal_LWORK, &LWORK, &INFO);
+    // errors out if the computation failed
+    if (INFO != 0)
+    {
+        auto here = TOAST_HERE();
+        auto log = toast::Logger::get();
+        std::string msg("TOAST was unable to determine the workspace size (LWORK) to call DGELSS.");
+        log.error(msg.c_str(), here);
+        throw std::runtime_error(msg.c_str());
+    }
+    return static_cast<int>(optimal_LWORK);
+#else  // ifdef HAVE_LAPACK
+    auto here = TOAST_HERE();
+    auto log = toast::Logger::get();
+    std::string msg("TOAST was not compiled with BLAS/LAPACK support.");
+    log.error(msg.c_str(), here);
+    throw std::runtime_error(msg.c_str());
+#endif // ifdef HAVE_LAPACK
+}
+
 // NOTE: there is no GPU dgelss implementation at the moment
 // but we could fall back to gels (a QR decomposition instead of an SVD)
 void toast::LinearAlgebra::gelss(int M, int N, int NRHS, double *A, int LDA,
                                  double *B, int LDB, double *S, double RCOND,
-                                 int *RANK, double *WORK, int LWORK, int *INFO)
+                                 int *RANK, double *WORK, int *LWORK, int *INFO)
 {
 #ifdef HAVE_LAPACK
-    wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, RANK, WORK, &LWORK, INFO);
+    wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, RANK, WORK, LWORK, INFO);
 #else  // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();

@@ -160,19 +160,17 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t *flags,
         }
 
         // Fit the templates against the data.
-        // DGELS minimizes the norm of the difference and the solution vector
+        // DGELSS minimizes the norm of the difference and the solution vector
         // and overwrites proj with the fitting coefficients.
-        toast::AlignedVector <double> singular_values(norder);
         int rank, info;
         double rcond_limit = 1e-3;
-        int lwork = std::max(10 * (norder + nsignal), 1000000);
-        toast::AlignedVector <double> work(lwork);
-
+        int LWORK = toast::LinearAlgebra::gelss_buffersize(norder, norder, nsignal, norder, norder, rcond_limit);
+        toast::AlignedVector<double> WORK(LWORK);
+        toast::AlignedVector<double> singular_values(norder);
         toast::LinearAlgebra::gelss(
             norder, norder, nsignal, invcov.data(), norder,
             proj.data(), norder, singular_values.data(), rcond_limit,
-            &rank, work.data(), lwork, &info
-        );
+            &rank, WORK.data(), &LWORK, &info);
 
         for (int iorder = 0; iorder < norder; ++iorder)
         {
@@ -443,17 +441,16 @@ void toast::filter_poly2D_solve(
 #pragma omp parallel default(shared)
     {
         // These are all thread-private
-        toast::AlignedVector<double> rhs(nmode);
-        toast::AlignedVector<double> A(nmode * nmode);
-        toast::AlignedVector<double> singular_values(nmode);
-
         int inmode = (int)nmode;
         int rank;
         int info;
         int one = 1;
         double rcond_limit = 1e-3;
-        int lwork = std::max(5 * inmode, 1000000);
-        toast::AlignedVector<double> work(lwork);
+        int LWORK = toast::LinearAlgebra::gelss_buffersize(inmode, inmode, one, inmode, inmode, rcond_limit);
+        toast::AlignedVector<double> rhs(nmode);
+        toast::AlignedVector<double> A(nmode * nmode);
+        toast::AlignedVector<double> singular_values(nmode);
+        toast::AlignedVector<double> WORK(LWORK);
 
 #pragma omp for schedule(static)
         for (int64_t isamp = 0; isamp < nsample; ++isamp)
@@ -532,7 +529,7 @@ void toast::filter_poly2D_solve(
                 toast::LinearAlgebra::gelss(
                     inmode, inmode, one, A.data(), inmode,
                     rhs.data(), inmode, singular_values.data(), rcond_limit,
-                    &rank, work.data(), lwork, &info);
+                    &rank, WORK.data(), &LWORK, &info);
                 int64_t offset = isamp * (ngroup * nmode) + igroup * nmode;
                 if (info == 0)
                 {
