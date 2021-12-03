@@ -170,7 +170,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t *flags,
         toast::LinearAlgebra::gelss(
             norder, norder, nsignal, invcov.data(), norder,
             proj.data(), norder, singular_values.data(), rcond_limit,
-            &rank, WORK.data(), &LWORK, &info);
+            &rank, WORK.data(), LWORK, &info);
 
         for (int iorder = 0; iorder < norder; ++iorder)
         {
@@ -529,7 +529,7 @@ void toast::filter_poly2D_solve(
                 toast::LinearAlgebra::gelss(
                     inmode, inmode, one, A.data(), inmode,
                     rhs.data(), inmode, singular_values.data(), rcond_limit,
-                    &rank, WORK.data(), &LWORK, &info);
+                    &rank, WORK.data(), LWORK, &info);
                 int64_t offset = isamp * (ngroup * nmode) + igroup * nmode;
                 if (info == 0)
                 {

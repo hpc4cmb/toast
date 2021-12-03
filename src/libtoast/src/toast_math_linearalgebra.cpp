@@ -485,10 +485,10 @@ int toast::LinearAlgebra::gelss_buffersize(int M, int N, int NRHS, int LDA, int 
 // but we could fall back to gels (a QR decomposition instead of an SVD)
 void toast::LinearAlgebra::gelss(int M, int N, int NRHS, double *A, int LDA,
                                  double *B, int LDB, double *S, double RCOND,
-                                 int *RANK, double *WORK, int *LWORK, int *INFO)
+                                 int *RANK, double *WORK, int LWORK, int *INFO)
 {
 #ifdef HAVE_LAPACK
-    wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, RANK, WORK, LWORK, INFO);
+    wrapped_dgelss(&M, &N, &NRHS, A, &LDA, B, &LDB, S, &RCOND, RANK, WORK, &LWORK, INFO);
 #else  // ifdef HAVE_LAPACK
     auto here = TOAST_HERE();
     auto log = toast::Logger::get();
