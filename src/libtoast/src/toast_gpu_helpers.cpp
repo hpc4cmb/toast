@@ -362,7 +362,15 @@ GPU_memory_pool::GPU_memory_pool() : blocks()
 
     // defines the GPU to be used
     const cudaError errorStatusSetDevice = cudaSetDevice(my_device);
-    checkCudaErrorCode(errorStatusSetDevice, "GPU_memory_pool::cudaSetDevice");
+    if (errorStatusSetDevice != cudaSuccess)
+    {
+        auto log = toast::Logger::get();
+        std::string msg = "The CUDA Runtime threw a '" +
+                          std::string(cudaGetErrorString(errorStatusSetDevice)) + "' error code when asking for device " + std::to_string(my_device) + " in function GPU_memory_pool::cudaSetDevice";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
+    }
+    // checkCudaErrorCode(errorStatusSetDevice, "GPU_memory_pool::cudaSetDevice");
 
     // Get the number of bytes for this fraction
     available_memory_bytes = FractionOfGPUMemory(fraction, true);
@@ -386,7 +394,9 @@ GPU_memory_pool::GPU_memory_pool() : blocks()
         // displays error message
         auto log = toast::Logger::get();
         std::string msg = "GPU_memory_pool: Unable to pre-allocate " +
-                          std::to_string(requested_mb) + "MB (" + std::to_string(free_mb) + "MB available, " +
+                          std::to_string(requested_mb) + "MB which should be " +
+                          std::to_string(fraction * 100) + "% of the total memory (" +
+                          std::to_string(free_mb) + "MB available, " +
                           std::to_string(used_mb) + "MB used, " +
                           std::to_string(total_mb) + "MB total on this GPU).";
         log.error(msg.c_str());
