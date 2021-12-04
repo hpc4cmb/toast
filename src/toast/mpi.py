@@ -67,14 +67,20 @@ if use_mpi is None:
             if procs_per_device * n_acc_devices < node_procs:
                 procs_per_device += 1
             my_device = nodecomm.rank % n_acc_devices
+            msg = f"node rank {nodecomm.rank} found {n_acc_devices} "
+            msg += f"accelerators, {procs_per_device} procs per device, "
+            msg += f"using device {my_device}"
+            log.verbose(msg)
             env.set_acc(n_acc_devices, procs_per_device, my_device)
         else:
             # No devices detected, we point all processes to the 0th device
+            log.verbose_rank(f"found {n_acc_devices} accelerators", comm=nodecomm)
             env.set_acc(n_acc_devices, node_procs, 0)
         nodecomm.Free()
         del nodecomm
     else:
         # One process- just use the first device.
+        log.verbose(f"get_num_devices found {n_acc_devices} accelerators")
         env.set_acc(n_acc_devices, 1, 0)
 
 # We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
