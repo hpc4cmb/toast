@@ -75,7 +75,7 @@ if use_mpi is None:
                 my_device = nodecomm.rank % n_acc_devices
                 env.set_acc(n_acc_devices, procs_per_device, my_device)
             else:
-                # no devices detected, we point all proces to the 0th device
+                # no devices detected, we point all processes to the 0th device
                 env.set_acc(n_acc_devices, node_procs, 0)
             nodecomm.Free()
             del nodecomm
