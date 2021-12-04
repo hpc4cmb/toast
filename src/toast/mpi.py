@@ -9,6 +9,7 @@ from ._libtoast import (
     Logger,
     Environment,
     acc_enabled,
+    acc_get_num_devices,
 )
 
 use_mpi = None
@@ -50,35 +51,28 @@ if use_mpi is None:
     # get just the accelerators (or track all devices by type).
 
     env = Environment.get()
-    # gets the number of devices
-    if acc_enabled():
-        # We have support
-        from ._libtoast import acc_get_num_devices
-        n_acc_devices = acc_get_num_devices()
-        if n_acc_devices <= 0:
-             # No devices!
-            n_acc_devices = -1
-    else:
-        # No support
-        n_acc_devices = -1
 
-    # split devices amongst processes
+    # This always returns the number of supported devices, trying first OpenACC,
+    # then CUDA, then returning zero.
+    n_acc_devices = acc_get_num_devices()
+
+    # Assign each process to a device
     if use_mpi:
-            # We need to compute which process goes to which device
-            nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
-            node_procs = nodecomm.size
-            if n_acc_devices != -1:
-                # devices detected
-                procs_per_device = node_procs // n_acc_devices
-                if procs_per_device * n_acc_devices < node_procs:
-                    procs_per_device += 1
-                my_device = nodecomm.rank % n_acc_devices
-                env.set_acc(n_acc_devices, procs_per_device, my_device)
-            else:
-                # no devices detected, we point all processes to the 0th device
-                env.set_acc(n_acc_devices, node_procs, 0)
-            nodecomm.Free()
-            del nodecomm
+        # We need to compute which process goes to which device
+        nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
+        node_procs = nodecomm.size
+        if n_acc_devices > 0:
+            # Devices detected
+            procs_per_device = node_procs // n_acc_devices
+            if procs_per_device * n_acc_devices < node_procs:
+                procs_per_device += 1
+            my_device = nodecomm.rank % n_acc_devices
+            env.set_acc(n_acc_devices, procs_per_device, my_device)
+        else:
+            # No devices detected, we point all processes to the 0th device
+            env.set_acc(n_acc_devices, node_procs, 0)
+        nodecomm.Free()
+        del nodecomm
     else:
         # One process- just use the first device.
         env.set_acc(n_acc_devices, 1, 0)
