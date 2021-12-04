@@ -64,16 +64,21 @@ if use_mpi is None:
 
     # split devices amongst processes
     if use_mpi:
-        # We need to compute which process goes to which device
-        nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
-        node_procs = nodecomm.size
-        procs_per_device = node_procs // n_acc_devices
-        if procs_per_device * n_acc_devices < node_procs:
-            procs_per_device += 1
-        my_device = nodecomm.rank % n_acc_devices
-        env.set_acc(n_acc_devices, procs_per_device, my_device)
-        nodecomm.Free()
-        del nodecomm
+            # We need to compute which process goes to which device
+            nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
+            node_procs = nodecomm.size
+            if n_acc_devices != -1:
+                # devices detected
+                procs_per_device = node_procs // n_acc_devices
+                if procs_per_device * n_acc_devices < node_procs:
+                    procs_per_device += 1
+                my_device = nodecomm.rank % n_acc_devices
+                env.set_acc(n_acc_devices, procs_per_device, my_device)
+            else:
+                # no devices detected, we point all proces to the 0th device
+                env.set_acc(n_acc_devices, node_procs, 0)
+            nodecomm.Free()
+            del nodecomm
     else:
         # One process- just use the first device.
         env.set_acc(n_acc_devices, 1, 0)
