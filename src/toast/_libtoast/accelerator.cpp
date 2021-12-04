@@ -10,6 +10,9 @@
 # include <openacc.h>
 #endif // ifdef HAVE_OPENACC
 
+#ifdef HAVE_CUDALIBS
+# include <cuda_runtime_api.h>
+#endif
 
 void extract_buffer_info(py::buffer_info const & info, void ** host_ptr, size_t * n_elem, size_t * n_bytes) {
     (*host_ptr) = reinterpret_cast <void *> (info.ptr);
@@ -58,7 +61,13 @@ void init_accelerator(py::module & m) {
             #ifdef HAVE_OPENACC
             return acc_get_num_devices(acc_device_not_host);
             #else
+            # ifdef HAVE_CUDALIBS
+            int ncuda;
+            auto ret = cudaGetDeviceCount(&ncuda);
+            return ncuda;
+            # else
             return 0;
+            # endif
             #endif
         }, R"(
             Return the total number of OpenACC devices.
