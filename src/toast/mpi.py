@@ -21,6 +21,7 @@ class MPI_Comm:
 
 
 if use_mpi is None:
+    log = Logger.get()
     # See if the user has explicitly disabled MPI.
     if "MPI_DISABLE" in os.environ:
         use_mpi = False
@@ -42,7 +43,6 @@ if use_mpi is None:
                 MPI_Comm = MPI.Comm
             except:
                 # There could be many possible exceptions raised...
-                log = Logger.get()
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
@@ -74,7 +74,9 @@ if use_mpi is None:
             env.set_acc(n_acc_devices, procs_per_device, my_device)
         else:
             # No devices detected, we point all processes to the 0th device
-            log.verbose_rank(f"found {n_acc_devices} accelerators", comm=nodecomm)
+            log.verbose(
+                f"node rank {nodecomm.rank} found {n_acc_devices} accelerators",
+            )
             env.set_acc(n_acc_devices, node_procs, 0)
         nodecomm.Free()
         del nodecomm
