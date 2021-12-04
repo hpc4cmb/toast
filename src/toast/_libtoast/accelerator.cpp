@@ -58,14 +58,23 @@ void init_accelerator(py::module & m) {
 
     m.def(
         "acc_get_num_devices", []() {
+            auto & log = toast::Logger::get();
+            std::ostringstream o;
             #ifdef HAVE_OPENACC
-            return acc_get_num_devices(acc_device_not_host);
+            int nacc = acc_get_num_devices(acc_device_not_host);
+            o << "OpenACC has " << nacc << " accelerators";
+            log.verbose(o.str().c_str());
+            return nacc;
             #else
             # ifdef HAVE_CUDALIBS
             int ncuda;
             auto ret = cudaGetDeviceCount(&ncuda);
+            o << "CUDA has " << ncuda << " accelerators";
+            log.verbose(o.str().c_str());
             return ncuda;
             # else
+            o << "No OpenACC or CUDA devices found";
+            log.verbose(o.str().c_str());
             return 0;
             # endif
             #endif
@@ -78,6 +87,7 @@ void init_accelerator(py::module & m) {
 
     m.def(
         "acc_is_present", [](py::buffer data) {
+            auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
             void * p_host;
             size_t n_elem;
@@ -92,7 +102,6 @@ void init_accelerator(py::module & m) {
             int result = acc_is_present(p_host, n_bytes);
             #endif
 
-            auto log = toast::Logger::get();
             std::ostringstream o;
             o << "host pointer " << p_host << " is_present = " << result;
             log.verbose(o.str().c_str());
@@ -113,6 +122,7 @@ void init_accelerator(py::module & m) {
 
     m.def(
         "acc_copyin", [](py::buffer data) {
+            auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
             void * p_host;
             size_t n_elem;
@@ -126,7 +136,6 @@ void init_accelerator(py::module & m) {
             auto p_device = acc_copyin(p_host, n_bytes);
             #endif
 
-            auto log = toast::Logger::get();
             std::ostringstream o;
             o << "copyin host pointer " << p_host << " (" << n_bytes << " bytes) on device at " << p_device;
             log.verbose(o.str().c_str());
@@ -146,6 +155,7 @@ void init_accelerator(py::module & m) {
 
     m.def(
         "acc_copyout", [](py::buffer data) {
+            auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
             void * p_host;
             size_t n_elem;
@@ -154,14 +164,12 @@ void init_accelerator(py::module & m) {
 
             bool present = acc_is_present(p_host, n_bytes);
             if (! present) {
-                auto log = toast::Logger::get();
                 std::ostringstream o;
                 o << "Data is not present on device, cannot copy out.";
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
 
-            auto log = toast::Logger::get();
             std::ostringstream o;
             o << "copyout host pointer " << p_host << " (" << n_bytes << " bytes) from device";
             log.verbose(o.str().c_str());
@@ -187,6 +195,7 @@ void init_accelerator(py::module & m) {
 
     m.def(
         "acc_update_device", [](py::buffer data) {
+            auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
             void * p_host;
             size_t n_elem;
@@ -195,14 +204,12 @@ void init_accelerator(py::module & m) {
 
             bool present = acc_is_present(p_host, n_bytes);
             if (! present) {
-                auto log = toast::Logger::get();
                 std::ostringstream o;
                 o << "Data is not present on device, cannot update.";
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
 
-            auto log = toast::Logger::get();
             std::ostringstream o;
             o << "update device with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
@@ -229,6 +236,7 @@ void init_accelerator(py::module & m) {
 
     m.def(
         "acc_update_self", [](py::buffer data) {
+            auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
             void * p_host;
             size_t n_elem;
@@ -237,14 +245,12 @@ void init_accelerator(py::module & m) {
 
             bool present = acc_is_present(p_host, n_bytes);
             if (! present) {
-                auto log = toast::Logger::get();
                 std::ostringstream o;
                 o << "Data is not present on device, cannot update host.";
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
 
-            auto log = toast::Logger::get();
             std::ostringstream o;
             o << "update host/self with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
@@ -271,6 +277,7 @@ void init_accelerator(py::module & m) {
 
     m.def(
         "acc_delete", [](py::buffer data) {
+            auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
             void * p_host;
             size_t n_elem;
@@ -279,14 +286,12 @@ void init_accelerator(py::module & m) {
 
             bool present = acc_is_present(p_host, n_bytes);
             if (! present) {
-                auto log = toast::Logger::get();
                 std::ostringstream o;
                 o << "Data is not present on device, cannot delete.";
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
 
-            auto log = toast::Logger::get();
             std::ostringstream o;
             o << "delete device mem for host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
