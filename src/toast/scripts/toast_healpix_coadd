@@ -86,7 +86,20 @@ def main():
         help="Reciprocal condition number limit",
     )
 
+    parser.add_argument(
+        "--double_precision",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Output in double precision",
+    )
+
     args = parser.parse_args()
+
+    if args.double_precision:
+        dtype = np.float64
+    else:
+        dtype = np.float32
 
     noiseweighted_sum = None
     invcov_sum = None
@@ -197,7 +210,9 @@ def main():
     if args.invcov is not None:
         log.info(f"Writing {args.invcov}")
         if rank == 0:
-            write_healpix(args.invcov, invcov_sum, nest=True, overwrite=True)
+            write_healpix(
+                args.invcov, invcov_sum, nest=True, overwrite=True, dtype=dtype
+            )
         log.info_rank(f"Wrote {args.invcov} in", timer=timer, comm=comm)
 
     log.info_rank("Inverting matrix", comm=comm)
@@ -213,7 +228,7 @@ def main():
     if args.rcond is not None:
         log.info_rank(f"Writing {args.rcond}", comm=comm)
         if rank == 0:
-            write_healpix(args.rcond, rcond, nest=True, overwrite=True)
+            write_healpix(args.rcond, rcond, nest=True, overwrite=True, dtype=dtype)
         log.info_rank(f"Wrote {args.rcond}", timer=timer, comm=comm)
     if rank == 0:
         del rcond
@@ -229,7 +244,7 @@ def main():
         log.info_rank(f"Writing {args.cov}", comm=comm)
         if rank == 0:
             cov = cov.reshape(npix, -1).T.copy()
-            write_healpix(args.cov, cov, nest=True, overwrite=True)
+            write_healpix(args.cov, cov, nest=True, overwrite=True, dtype=dtype)
         log.info_rank(f"Wrote {args.cov}", timer=timer, comm=comm)
     if rank == 0:
         del cov
@@ -237,10 +252,13 @@ def main():
     log.info_rank(f"Writing {args.outmap}", comm=comm)
     if rank == 0:
         coadd_map = coadd_map.reshape(npix, -1).T.copy()
-        write_healpix(args.outmap, coadd_map, nest=True, overwrite=True)
+        write_healpix(args.outmap, coadd_map, nest=True, overwrite=True, dtype=dtype)
     log.info_rank(f"Wrote {args.outmap}", timer=timer, comm=comm)
 
     log.info_rank(f"Co-add done in", timer=timer0, comm=comm)
+
+    if comm is not None:
+        comm.Barrier()
 
     return
 
