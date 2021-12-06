@@ -234,16 +234,8 @@ def main():
 
     if args.rcond is not None:
         log.info_rank(f"Writing {args.rcond}", comm=comm)
-        if filename_is_fits(args.rcond):
-            write_healpix_fits(dist_rcond, args.rcond, nest=True)
-        else:
-            write_healpix_hdf5(
-                dist_rcond,
-                args.rcond,
-                nest=True,
-                single_precision=not args.double_precision,
-                force_serial=True,
-            )
+        if rank == 0:
+            write_healpix(args.rcond, rcond, nest=True, overwrite=True, dtype=dtype)
         log.info_rank(f"Wrote {args.rcond}", timer=timer, comm=comm)
     del dist_rcond
 
@@ -253,30 +245,16 @@ def main():
 
     if args.cov is not None:
         log.info_rank(f"Writing {args.cov}", comm=comm)
-        if filename_is_fits(args.cov):
-            write_healpix_fits(dist_cov, args.cov, nest=True)
-        else:
-            write_healpix_hdf5(
-                dist_cov,
-                args.cov,
-                nest=True,
-                single_precision=not args.double_precision,
-                force_serial=True,
-            )
+        if rank == 0:
+            cov = cov.reshape(npix, -1).T.copy()
+            write_healpix(args.cov, cov, nest=True, overwrite=True, dtype=dtype)
         log.info_rank(f"Wrote {args.cov}", timer=timer, comm=comm)
     del dist_cov
 
     log.info_rank(f"Writing {args.outmap}", comm=comm)
-    if filename_is_fits(args.outmap):
-        write_healpix_fits(dist_map, args.outmap, nest=True)
-    else:
-        write_healpix_hdf5(
-            dist_map,
-            args.outmap,
-            nest=True,
-            single_precision=not args.double_precision,
-            force_serial=True,
-        )
+    if rank == 0:
+        coadd_map = coadd_map.reshape(npix, -1).T.copy()
+        write_healpix(args.outmap, coadd_map, nest=True, overwrite=True, dtype=dtype)
     log.info_rank(f"Wrote {args.outmap}", timer=timer, comm=comm)
 
     log.info_rank(f"Co-add done in", timer=timer0, comm=comm)
