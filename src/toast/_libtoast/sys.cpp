@@ -91,7 +91,9 @@ void init_sys(py::module & m) {
 
         )")
     .def("set_acc", &toast::Environment::set_acc,
-         py::arg("n_acc_device"), py::arg("n_acc_proc_per_device"), py::arg("my_acc_device"), R"(
+         py::arg("n_acc_device"), py::arg("n_acc_proc_per_device"),
+         py::arg(
+             "my_acc_device"), R"(
             Set the OpenACC device properties.
 
             Args:
@@ -105,13 +107,14 @@ void init_sys(py::module & m) {
 
         )")
     .def("get_acc",
-        [](toast::Environment const & self) {
-            int n_acc_device;
-            int n_acc_proc_per_device;
-            int my_acc_device;
-            self.get_acc(&n_acc_device, &n_acc_proc_per_device, &my_acc_device);
-            return py::make_tuple(n_acc_device, n_acc_proc_per_device, my_acc_device);
-        }, R"(
+         [](toast::Environment const & self) {
+             int n_acc_device;
+             int n_acc_proc_per_device;
+             int my_acc_device;
+             self.get_acc(&n_acc_device, &n_acc_proc_per_device, &my_acc_device);
+             return py::make_tuple(n_acc_device, n_acc_proc_per_device,
+                                   my_acc_device);
+         }, R"(
             Get the OpenACC device properties.
 
             Returns:

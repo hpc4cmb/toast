@@ -37,7 +37,8 @@ class Environment {
         std::string version() const;
         int64_t tod_buffer_length() const;
         void set_acc(int n_acc_device, int n_acc_proc_per_device, int my_acc_device);
-        void get_acc(int * n_acc_device, int * n_acc_proc_per_device, int * my_acc_device) const;
+        void get_acc(int * n_acc_device, int * n_acc_proc_per_device,
+                     int * my_acc_device) const;
 
     private:
 

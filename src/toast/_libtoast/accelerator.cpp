@@ -12,9 +12,10 @@
 
 #ifdef HAVE_CUDALIBS
 # include <cuda_runtime_api.h>
-#endif
+#endif // ifdef HAVE_CUDALIBS
 
-void extract_buffer_info(py::buffer_info const & info, void ** host_ptr, size_t * n_elem, size_t * n_bytes) {
+void extract_buffer_info(py::buffer_info const & info, void ** host_ptr,
+                         size_t * n_elem, size_t * n_bytes) {
     (*host_ptr) = reinterpret_cast <void *> (info.ptr);
     (*n_elem) = 1;
     for (py::ssize_t d = 0; d < info.ndim; d++) {
@@ -33,28 +34,28 @@ void extract_buffer_info(py::buffer_info const & info, void ** host_ptr, size_t 
 
 void register_stub(py::module & m, char const * name) {
     m.def(name, [](py::buffer data) {
-        auto log = toast::Logger::get();
-        std::ostringstream o;
-        o << "TOAST was not built with OpenACC support.";
-        log.error(o.str().c_str());
-        throw std::runtime_error(o.str().c_str());
-    });
+              auto log = toast::Logger::get();
+              std::ostringstream o;
+              o << "TOAST was not built with OpenACC support.";
+              log.error(o.str().c_str());
+              throw std::runtime_error(o.str().c_str());
+          });
 }
 
-
 void init_accelerator(py::module & m) {
-
     m.def(
         "acc_enabled", []() {
             #ifdef HAVE_OPENACC
             return true;
-            #else
+
+            #else // ifdef HAVE_OPENACC
             return false;
-            #endif
+
+            #endif // ifdef HAVE_OPENACC
         }, R"(
             Return True if TOAST was compiled with OpenACC support.
         )"
-    );
+        );
 
     m.def(
         "acc_get_num_devices", []() {
@@ -65,23 +66,26 @@ void init_accelerator(py::module & m) {
             o << "OpenACC has " << nacc << " accelerators";
             log.verbose(o.str().c_str());
             return nacc;
-            #else
+
+            #else // ifdef HAVE_OPENACC
             # ifdef HAVE_CUDALIBS
             int ncuda;
             auto ret = cudaGetDeviceCount(&ncuda);
             o << "CUDA has " << ncuda << " accelerators";
             log.verbose(o.str().c_str());
             return ncuda;
-            # else
+
+            # else // ifdef HAVE_CUDALIBS
             o << "No OpenACC or CUDA devices found";
             log.verbose(o.str().c_str());
             return 0;
-            # endif
-            #endif
+
+            # endif // ifdef HAVE_CUDALIBS
+            #endif // ifdef HAVE_OPENACC
         }, R"(
             Return the total number of OpenACC devices.
         )"
-    );
+        );
 
     #ifdef HAVE_OPENACC
 
@@ -94,13 +98,13 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-            #ifdef USE_OPENACC_MEMPOOL
+            # ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
             bool test = pool.is_present(reinterpret_cast <char *> (p_host));
             int result = test ? 1 : 0;
-            #else
+            # else // ifdef USE_OPENACC_MEMPOOL
             int result = acc_is_present(p_host, n_bytes);
-            #endif
+            # endif // ifdef USE_OPENACC_MEMPOOL
 
             std::ostringstream o;
             o << "host pointer " << p_host << " is_present = " << result;
@@ -129,12 +133,13 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-            #ifdef USE_OPENACC_MEMPOOL
+            # ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
             auto p_device = pool.toDevice(reinterpret_cast <char *> (p_host), n_bytes);
-            #else
-            auto p_device = acc_copyin(p_host, n_bytes);
-            #endif
+            # else // ifdef USE_OPENACC_MEMPOOL
+            auto p_device = acc_copyin(p_host,
+                                       n_bytes);
+            # endif // ifdef USE_OPENACC_MEMPOOL
 
             std::ostringstream o;
             o << "copyin host pointer " << p_host << " (" << n_bytes << " bytes) on device at " << p_device;
@@ -163,23 +168,24 @@ void init_accelerator(py::module & m) {
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
             bool present = acc_is_present(p_host, n_bytes);
-            if (! present) {
+            if (!present) {
                 std::ostringstream o;
                 o << "Data is not present on device, cannot copy out.";
                 log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
+                throw std::runtime_error(
+                          o.str().c_str());
             }
 
             std::ostringstream o;
             o << "copyout host pointer " << p_host << " (" << n_bytes << " bytes) from device";
             log.verbose(o.str().c_str());
 
-            #ifdef USE_OPENACC_MEMPOOL
+            # ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
             pool.fromDevice <char> (reinterpret_cast <char *> (p_host));
-            #else
+            # else // ifdef USE_OPENACC_MEMPOOL
             acc_copyout(p_host, n_bytes);
-            #endif
+            # endif // ifdef USE_OPENACC_MEMPOOL
             return;
         }, py::arg(
             "data"), R"(
@@ -203,24 +209,26 @@ void init_accelerator(py::module & m) {
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
             bool present = acc_is_present(p_host, n_bytes);
-            if (! present) {
+            if (!present) {
                 std::ostringstream o;
                 o << "Data is not present on device, cannot update.";
                 log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
+                throw std::runtime_error(
+                          o.str().c_str());
             }
 
             std::ostringstream o;
             o << "update device with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-            #ifdef USE_OPENACC_MEMPOOL
+            # ifdef USE_OPENACC_MEMPOOL
+
             // FIXME: Does the pool have an update device / host equivalent?
             auto & pool = GPU_memory_pool::get();
             auto p_device = pool.toDevice(reinterpret_cast <char *> (p_host), n_bytes);
-            #else
+            # else // ifdef USE_OPENACC_MEMPOOL
             acc_update_device(p_host, n_bytes);
-            #endif
+            # endif // ifdef USE_OPENACC_MEMPOOL
             return;
         }, py::arg(
             "data"), R"(
@@ -244,24 +252,26 @@ void init_accelerator(py::module & m) {
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
             bool present = acc_is_present(p_host, n_bytes);
-            if (! present) {
+            if (!present) {
                 std::ostringstream o;
                 o << "Data is not present on device, cannot update host.";
                 log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
+                throw std::runtime_error(
+                          o.str().c_str());
             }
 
             std::ostringstream o;
             o << "update host/self with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-            #ifdef USE_OPENACC_MEMPOOL
+            # ifdef USE_OPENACC_MEMPOOL
+
             // FIXME: Does the pool have an update device / host equivalent?
             auto & pool = GPU_memory_pool::get();
             pool.fromDevice(reinterpret_cast <char *> (p_host));
-            #else
+            # else // ifdef USE_OPENACC_MEMPOOL
             acc_update_self(p_host, n_bytes);
-            #endif
+            # endif // ifdef USE_OPENACC_MEMPOOL
             return;
         }, py::arg(
             "data"), R"(
@@ -285,24 +295,26 @@ void init_accelerator(py::module & m) {
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
             bool present = acc_is_present(p_host, n_bytes);
-            if (! present) {
+            if (!present) {
                 std::ostringstream o;
                 o << "Data is not present on device, cannot delete.";
                 log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
+                throw std::runtime_error(
+                          o.str().c_str());
             }
 
             std::ostringstream o;
             o << "delete device mem for host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-            #ifdef USE_OPENACC_MEMPOOL
+            # ifdef USE_OPENACC_MEMPOOL
+
             // FIXME:  If there was a pool.Free(cpu pointer), we would call that here.
             auto & pool = GPU_memory_pool::get();
             pool.fromDevice(reinterpret_cast <char *> (p_host));
-            #else
+            # else // ifdef USE_OPENACC_MEMPOOL
             acc_delete(p_host, n_bytes);
-            #endif
+            # endif // ifdef USE_OPENACC_MEMPOOL
             return;
         }, py::arg(
             "data"), R"(
@@ -316,7 +328,7 @@ void init_accelerator(py::module & m) {
 
     )");
 
-    #else
+    #else // ifdef HAVE_OPENACC
 
     register_stub(m, "acc_is_present");
     register_stub(m, "acc_copyin");
@@ -364,7 +376,7 @@ void init_accelerator(py::module & m) {
 
     m.def(
         "test_acc_op_array", [](py::array_t <double, py::array::c_style> data) {
-            auto fast_data = data.mutable_unchecked<2>();
+            auto fast_data = data.mutable_unchecked <2>();
             double * raw = fast_data.mutable_data(0, 0);
 
             auto log = toast::Logger::get();
@@ -386,5 +398,4 @@ void init_accelerator(py::module & m) {
             }
             return;
         });
-
 }

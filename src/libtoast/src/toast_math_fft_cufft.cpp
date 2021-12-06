@@ -111,7 +111,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         // send output data to CPU
         pool.free(idata);
         pool.fromDevice((cufftDoubleComplex *)(traw_), odata,
-                                   nb_elements_complex);
+                        nb_elements_complex);
 
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
         complexToHalfcomplex(length_, n_, tview_.data(), fview_.data());
@@ -122,7 +122,7 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         // get input data from CPU
         cufftDoubleComplex * idata =
             pool.toDevice((cufftDoubleComplex *)(traw_),
-                                     nb_elements_complex);
+                          nb_elements_complex);
         cufftDoubleReal * odata = pool.alloc <cufftDoubleReal> (
             nb_elements_real);
 

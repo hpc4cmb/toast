@@ -94,7 +94,7 @@ void toast::LinearAlgebra::gemm_batched(char TRANSA, char TRANSB, int M, int N, 
     double * C_batch_gpu = (BETA == 0.) ? pool.alloc <double> (
         batchCount * C_size)
                                        : pool.toDevice(C_batch,
-                                                                  batchCount * C_size);
+                                                       batchCount * C_size);
 
     // gets pointers to each batch matrix
     toast::AlignedVector <double *> A_ptrs(batchCount);
@@ -176,8 +176,8 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     // send data to GPU
     double * A_batch_gpu = pool.toDevice(A_batch, batchCount * N * LDA);
     double * W_batch_gpu = pool.alloc <double> (batchCount * N); // output,
-                                                                            // no need
-                                                                            // to send
+    // no need
+    // to send
     // computes workspace size
     int LWORK = 0;
     cusolverStatus_t statusBuffer = cusolverDnDsyevjBatched_bufferSize(
@@ -485,7 +485,7 @@ void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
     pool.free(A_gpu);
     pool.free(B_gpu);
     pool.fromDevice(B, X_gpu, N * NRHS); // copy X to B in order to follow
-                                                    // CPU behaviour
+    // CPU behaviour
     pool.free(WORK_gpu);
     pool.fromDevice(INFO, INFO_gpu, 1);
 #elif HAVE_LAPACK
