@@ -7,23 +7,20 @@
 #include <toast/gpu_helpers.hpp>
 
 #ifdef HAVE_OPENACC
-#include <openacc.h>
+# include <openacc.h>
 #endif // ifdef HAVE_OPENACC
 
 #ifdef HAVE_CUDALIBS
-#include <cuda_runtime_api.h>
+# include <cuda_runtime_api.h>
 #endif // ifdef HAVE_CUDALIBS
 
-void extract_buffer_info(py::buffer_info const &info, void **host_ptr,
-                         size_t *n_elem, size_t *n_bytes)
-{
-    (*host_ptr) = reinterpret_cast<void *>(info.ptr);
+void extract_buffer_info(py::buffer_info const & info, void ** host_ptr,
+                         size_t * n_elem, size_t * n_bytes) {
+    (*host_ptr) = reinterpret_cast <void *> (info.ptr);
     (*n_elem) = 1;
-    for (py::ssize_t d = 0; d < info.ndim; d++)
-    {
+    for (py::ssize_t d = 0; d < info.ndim; d++) {
         (*n_elem) *= info.shape[d];
-        if (info.strides[d] != info.itemsize)
-        {
+        if (info.strides[d] != info.itemsize) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Cannot use python buffers with stride != itemsize.";
@@ -35,19 +32,18 @@ void extract_buffer_info(py::buffer_info const &info, void **host_ptr,
     return;
 }
 
-void register_stub(py::module &m, char const *name)
-{
+void register_stub(py::module & m, char const * name) {
     m.def(name, [](py::buffer data)
           {
               auto log = toast::Logger::get();
               std::ostringstream o;
               o << "TOAST was not built with OpenACC support.";
               log.error(o.str().c_str());
-              throw std::runtime_error(o.str().c_str()); });
+              throw std::runtime_error(o.str().c_str());
+          });
 }
 
-void init_accelerator(py::module &m)
-{
+void init_accelerator(py::module & m) {
     m.def(
         "acc_enabled", []()
         {
@@ -66,7 +62,7 @@ void init_accelerator(py::module &m)
     m.def(
         "acc_get_num_devices", []()
         {
-            auto &log = toast::Logger::get();
+            auto & log = toast::Logger::get();
             std::ostringstream o;
 #ifdef HAVE_OPENACC
             int nacc = acc_get_num_devices(acc_device_not_host);
@@ -75,20 +71,20 @@ void init_accelerator(py::module &m)
             return nacc;
 
 #else // ifdef HAVE_OPENACC
-#ifdef HAVE_CUDALIBS
+# ifdef HAVE_CUDALIBS
             int ncuda;
             auto ret = cudaGetDeviceCount(&ncuda);
             o << "CUDA has " << ncuda << " accelerators";
             log.verbose(o.str().c_str());
             return ncuda;
 
-#else // ifdef HAVE_CUDALIBS
+# else // ifdef HAVE_CUDALIBS
             o << "No OpenACC or CUDA devices found";
             log.verbose(o.str().c_str());
             return 0;
 
-#endif // ifdef HAVE_CUDALIBS
-#endif // ifdef HAVE_OPENACC
+# endif // ifdef HAVE_CUDALIBS
+#endif  // ifdef HAVE_OPENACC
         },
         R"(
             Return the total number of OpenACC devices.
@@ -106,13 +102,13 @@ void init_accelerator(py::module &m)
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-#ifdef USE_OPENACC_MEMPOOL
+# ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
             bool test = pool.is_present(p_host);
             int result = test ? 1 : 0;
-#else // ifdef USE_OPENACC_MEMPOOL
+# else // ifdef USE_OPENACC_MEMPOOL
             int result = acc_is_present(p_host, n_bytes);
-#endif // ifdef USE_OPENACC_MEMPOOL
+# endif // ifdef USE_OPENACC_MEMPOOL
 
             std::ostringstream o;
             o << "host pointer " << p_host << " is_present = " << result;
@@ -122,7 +118,8 @@ void init_accelerator(py::module &m)
                 return false;
             } else {
                 return true;
-            } },
+            }
+        },
         py::arg(
             "data"),
         R"(
@@ -143,19 +140,20 @@ void init_accelerator(py::module &m)
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-#ifdef USE_OPENACC_MEMPOOL
+# ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
-            auto p_device = pool.toDevice(static_cast<char*>(p_host), n_bytes);
-#else // ifdef USE_OPENACC_MEMPOOL
+            auto p_device = pool.toDevice(static_cast <char *> (p_host), n_bytes);
+# else // ifdef USE_OPENACC_MEMPOOL
             auto p_device = acc_copyin(p_host,
                                        n_bytes);
-#endif // ifdef USE_OPENACC_MEMPOOL
+# endif // ifdef USE_OPENACC_MEMPOOL
 
             std::ostringstream o;
             o << "copyin host pointer " << p_host << " (" << n_bytes << " bytes) on device at " << p_device;
             log.verbose(o.str().c_str());
 
-            return; },
+            return;
+        },
         py::arg(
             "data"),
         R"(
@@ -192,13 +190,14 @@ void init_accelerator(py::module &m)
             o << "copyout host pointer " << p_host << " (" << n_bytes << " bytes) from device";
             log.verbose(o.str().c_str());
 
-#ifdef USE_OPENACC_MEMPOOL
+# ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
             pool.fromDevice(p_host);
-#else // ifdef USE_OPENACC_MEMPOOL
+# else // ifdef USE_OPENACC_MEMPOOL
             acc_copyout(p_host, n_bytes);
-#endif // ifdef USE_OPENACC_MEMPOOL
-            return; },
+# endif // ifdef USE_OPENACC_MEMPOOL
+            return;
+        },
         py::arg(
             "data"),
         R"(
@@ -235,13 +234,14 @@ void init_accelerator(py::module &m)
             o << "update device with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-#ifdef USE_OPENACC_MEMPOOL
+# ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
             pool.update_gpu_memory(p_host);
-#else // ifdef USE_OPENACC_MEMPOOL
+# else // ifdef USE_OPENACC_MEMPOOL
             acc_update_device(p_host, n_bytes);
-#endif // ifdef USE_OPENACC_MEMPOOL
-            return; },
+# endif // ifdef USE_OPENACC_MEMPOOL
+            return;
+        },
         py::arg(
             "data"),
         R"(
@@ -278,13 +278,14 @@ void init_accelerator(py::module &m)
             o << "update host/self with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-#ifdef USE_OPENACC_MEMPOOL
+# ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
             pool.update_cpu_memory(p_host);
-#else // ifdef USE_OPENACC_MEMPOOL
+# else // ifdef USE_OPENACC_MEMPOOL
             acc_update_self(p_host, n_bytes);
-#endif // ifdef USE_OPENACC_MEMPOOL
-            return; },
+# endif // ifdef USE_OPENACC_MEMPOOL
+            return;
+        },
         py::arg(
             "data"),
         R"(
@@ -321,13 +322,14 @@ void init_accelerator(py::module &m)
             o << "delete device mem for host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-#ifdef USE_OPENACC_MEMPOOL
+# ifdef USE_OPENACC_MEMPOOL
             auto & pool = GPU_memory_pool::get();
             pool.free_associated_memory(p_host);
-#else // ifdef USE_OPENACC_MEMPOOL
+# else // ifdef USE_OPENACC_MEMPOOL
             acc_delete(p_host, n_bytes);
-#endif // ifdef USE_OPENACC_MEMPOOL
-            return; },
+# endif // ifdef USE_OPENACC_MEMPOOL
+            return;
+        },
         py::arg(
             "data"),
         R"(
@@ -376,19 +378,20 @@ void init_accelerator(py::module &m)
             size_t n_total = (size_t)(info.size / sizeof(double));
             size_t n_samp = (size_t)(n_total / n_det);
 
-#pragma acc data present(raw)
+            #pragma acc data present(raw)
             {
-#pragma acc parallel loop
+                #pragma acc parallel loop
                 for (size_t i = 0; i < n_det; i++) {
                     for (size_t j = 0; j < n_samp; j++) {
                         raw[i * n_samp + j] *= 2.0;
                     }
                 }
             }
-            return; });
+            return;
+        });
 
     m.def(
-        "test_acc_op_array", [](py::array_t<double, py::array::c_style> data)
+        "test_acc_op_array", [](py::array_t <double, py::array::c_style> data)
         {
             auto fast_data = data.mutable_unchecked <2>();
             double * raw = fast_data.mutable_data(0, 0);
@@ -401,14 +404,15 @@ void init_accelerator(py::module &m)
             size_t n_det = fast_data.shape(0);
             size_t n_samp = fast_data.shape(1);
 
-#pragma acc data present(raw)
+            #pragma acc data present(raw)
             {
-#pragma acc parallel loop
+                #pragma acc parallel loop
                 for (size_t i = 0; i < n_det; i++) {
                     for (size_t j = 0; j < n_samp; j++) {
                         raw[i * n_samp + j] *= 2.0;
                     }
                 }
             }
-            return; });
+            return;
+        });
 }
