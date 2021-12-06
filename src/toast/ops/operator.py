@@ -30,6 +30,11 @@ class Operator(TraitConfig):
         If a list of detectors is specified, only process these detectors.  Any extra
         kwargs are passed to the derived class internal method.
 
+        Accelerator use:  If the derived class supports OpenACC and all the required
+        data objects exist on the device, then the `_exec()` method will be called
+        with the "use_acc=True" option.  Any operator that returns "True" from its
+        _supports_acc() method should also accept the "use_acc" keyword argument.
+
         Args:
             data (toast.Data):  The distributed data.
             detectors (list):  A list of detector names or indices.  If None, this
@@ -41,7 +46,7 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            self._exec(data, detectors=detectors, **kwargs)
+            self._exec(data, detectors=detectors, use_acc=self._use_acc(data), **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to exec()"
@@ -67,7 +72,7 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            return self._finalize(data, **kwargs)
+            return self._finalize(data, use_acc=self._use_acc(data), **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
@@ -114,7 +119,12 @@ class Operator(TraitConfig):
             (dict):  The keys in the Observation dictionary required by the operator.
 
         """
-        return self._requires()
+        # Ensure that all keys exist
+        req = self._requires()
+        for key in ["metadata", "detdata", "shared", "intervals"]:
+            if key not in req:
+                req[key] = list()
+        return req
 
     def _provides(self):
         raise NotImplementedError("Fell through to Operator base class")
@@ -134,23 +144,48 @@ class Operator(TraitConfig):
                 or modified.
 
         """
-        return self._provides()
+        # Ensure that all keys exist
+        prov = self._provides()
+        for key in ["metadata", "detdata", "shared", "intervals"]:
+            if key not in prov:
+                prov[key] = list()
+        return prov
 
-    def _accelerators(self):
-        # Do not force descendent classes to implement this.  If it is not
-        # implemented, then it is clear that the class does not support any
-        # accelerators
-        return list()
+    def _supports_acc(self):
+        return False
 
-    def accelerators(self):
-        """List of accelerators supported by this Operator.
+    def supports_acc(self):
+        """Query whether the operator supports OpenACC
 
         Returns:
-            (list):  List of pre-defined accelerator names supported by this
-                operator (and by TOAST).
+            (bool):  True if the operator can use OpenACC, else False.
 
         """
-        return self._accelerators()
+        return self._supports_acc()
+
+    def _use_acc(self, data):
+        # Helper function to determine if all requirements are met to use OpenACC
+        # for a data object.
+        log = Logger.get()
+        if not self.supports_acc():
+            # No support for OpenACC
+            return False
+        req = self.requires()
+        for ob in data.obs:
+            for key in req["detdata"]:
+                if not ob.detdata.acc_is_present(key):
+                    log.verbose(
+                        f"obs {ob.name}, detdata {key} not on device- not using OpenACC"
+                    )
+                    return False
+            for key in req["shared"]:
+                if not ob.shared.acc_is_present(key):
+                    log.verbose(
+                        f"obs {ob.name}, shared {key} not on device- not using OpenACC"
+                    )
+                    return False
+            # FIXME: check intervals too eventually
+        return True
 
     @classmethod
     def get_class_config_path(cls):

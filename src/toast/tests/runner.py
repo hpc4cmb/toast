@@ -82,6 +82,8 @@ from . import template_subharmonic as test_template_subharmonic
 
 from . import io_hdf5 as test_io_hdf5
 
+from . import accelerator as test_accelerator
+
 #
 # from . import psd_math as testpsdmath
 #
@@ -215,6 +217,8 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_template_subharmonic))
 
         suite.addTest(loader.loadTestsFromModule(test_io_hdf5))
+
+        suite.addTest(loader.loadTestsFromModule(test_accelerator))
 
         #
         # suite.addTest(loader.loadTestsFromModule(testopssimsss))

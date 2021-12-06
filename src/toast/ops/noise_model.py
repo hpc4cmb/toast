@@ -60,6 +60,3 @@ class DefaultNoiseModel(Operator):
     def _provides(self):
         prov = {"meta": [self.noise_model]}
         return prov
-
-    def _accelerators(self):
-        return list()

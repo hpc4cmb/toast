@@ -581,6 +581,3 @@ class SimSatellite(Operator):
                 self.velocity,
             ]
         }
-
-    def _accelerators(self):
-        return list()

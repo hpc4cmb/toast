@@ -440,6 +440,3 @@ class ObserveAtmosphere(Operator):
             "intervals": list(),
         }
         return prov
-
-    def _accelerators(self):
-        return list()

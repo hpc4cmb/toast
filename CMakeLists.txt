@@ -70,6 +70,15 @@ if(USE_CUDA)
     find_package(CUDAToolkit)
 endif()
 
+# Check consistency
+if(USE_OPENACC_MEMPOOL)
+    if(CUDAToolkit_FOUND AND OpenACC_CXX_FOUND)
+        message(STATUS "Using CUDA memory pool for OpenACC")
+    else()
+        message(ERROR "Both CUDA and OpenACC must be found to use the memory pool with OpenACC")
+    endif()
+endif()
+
 if(TOAST_STATIC_DEPS)
     set(BLA_STATIC TRUE)
     set(FFTW_USE_STATIC_LIBS TRUE)

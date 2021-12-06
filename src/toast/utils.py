@@ -54,8 +54,6 @@ from .mpi import MPI, use_mpi
 
 from ._libtoast import Logger
 
-from .timing import function_timer
-
 
 def _create_log_rank(level):
     def log_rank(self, msg, comm=None, rank=0, timer=None):
@@ -524,7 +522,6 @@ def name_UID(name):
     return uid
 
 
-@function_timer
 def rate_from_times(timestamps, mean=False):
     """Compute effective sample rate in Hz from timestamps.
 

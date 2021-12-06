@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -60,7 +60,13 @@ class GPU_memory_block_t {
 };
 
 // allocates a slab of memory and then recycles allocations
-class GPU_memory_pool_t {
+// TODO - now that we express a lot of operation from the cpu_ptr point of view,
+//        we might want to store the blocks in an ordered Map instead of a vector
+//        and to reformulate function to all run from this point of view (removing
+// things like free(gpu_ptr))
+//      - there is now a lot of redundancy in the code used to locate the memory amongst
+// the blocks
+class GPU_memory_pool {
     private:
 
         // used to make class threadsafe
@@ -75,6 +81,9 @@ class GPU_memory_pool_t {
         // memory blocks that have been allocated but cannot be freed yet
         std::vector <GPU_memory_block_t> blocks;
 
+        // allocates a number of bytes on the gpu
+        GPU_memory_pool();
+
     public:
 
         // handles for linear algebra, to be re-used (as they are expensive to create)
@@ -82,20 +91,22 @@ class GPU_memory_pool_t {
         cusolverDnHandle_t handleSolver = NULL;
         syevjInfo_t jacobiParameters = NULL;
 
-        // allocates a number of bytes on the gpu
-        GPU_memory_pool_t(size_t bytesPreallocated);
+        // Singleton access
+        static GPU_memory_pool & get();
 
         // frees the pool
-        ~GPU_memory_pool_t();
+        ~GPU_memory_pool();
 
         // gets a pointer to a number of preallocated bytes
         // `cpu_ptr` is optional but can be passed to keep trace of the origin of the
-        // data
-        // when allocating during a cpu-2-gpu copy operation
+        // data when allocating during a cpu-2-gpu copy operation
         cudaError malloc(void ** gpu_ptr, size_t size_bytes, void * cpu_ptr = nullptr);
 
-        // free the memory pointed to
+        // frees the gpu memory pointed to
         void free(void * gpu_ptr);
+
+        // frees the gpu memory associated with the given cpu pointer
+        void free_associated_memory(void * cpu_ptr);
 
         // allocates memory for the given number of elements and returns a pointer to
         // the allocated memory
@@ -108,7 +119,7 @@ class GPU_memory_pool_t {
             T * output_ptr = NULL;
             const cudaError errorCode = this->malloc((void **)&output_ptr,
                                                      nb_elements * sizeof(T));
-            checkCudaErrorCode(errorCode, "GPU_memory_pool_t::alloc");
+            checkCudaErrorCode(errorCode, "GPU_memory_pool::alloc");
             return output_ptr;
         }
 
@@ -123,13 +134,13 @@ class GPU_memory_pool_t {
             const cudaError errorCodeMalloc = this->malloc(&gpu_ptr,
                                                            nb_elements * sizeof(T),
                                                            cpu_ptr);
-            checkCudaErrorCode(errorCodeMalloc, "GPU_memory_pool_t::toDevice (malloc)");
+            checkCudaErrorCode(errorCodeMalloc, "GPU_memory_pool::toDevice (malloc)");
 
             // data transfer
             const cudaError errorCodeMemcpy = cudaMemcpy(gpu_ptr, cpu_ptr,
                                                          nb_elements * sizeof(T),
                                                          cudaMemcpyHostToDevice);
-            checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool_t::toDevice (memcpy)");
+            checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::toDevice (memcpy)");
             return static_cast <T *> (gpu_ptr);
         }
 
@@ -142,7 +153,7 @@ class GPU_memory_pool_t {
                                                          nb_elements * sizeof(T),
                                                          cudaMemcpyDeviceToHost);
             checkCudaErrorCode(errorCodeMemcpy,
-                               "GPU_memory_pool_t::fromDevice (memcpy)");
+                               "GPU_memory_pool::fromDevice (memcpy)");
 
             // deallocation
             this->free(gpu_ptr);
@@ -152,42 +163,22 @@ class GPU_memory_pool_t {
         // frees the gpu memory
         // WARNING: this function assumes that `toDevice` was called with `cpu_ptr`
         //          it will use this assumption to identify the gpu pointer and the size
-        // of the allocation
-        template <typename T>
-        void fromDevice(T * cpu_ptr) {
-            // gets the index of cpu_ptr in the blocks vector, starting from the end
-            int i = blocks.size() - 1;
-            while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0)) {
-                i--;
-            }
+        //          of the allocation
+        void fromDevice(void * cpu_ptr);
 
-            // errors-out if `cpu_ptr` was not use in a `toDevice` call
-            // meaning that we cannot find the associated block of gpu memory
-            if (i < 0) {
-                auto log = toast::Logger::get();
-                std::string msg =
-                    "GPU_memory_pool_t::fromDevice(T*): either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";
-                log.error(msg.c_str());
-                throw std::runtime_error(msg.c_str());
-            }
+        // sends data from gpu to the associated cpu_ptr in order to keep it up to date
+        void update_cpu_memory(void * cpu_ptr);
 
-            // extract the gpu_ptr and the size of the allocation in bytes
-            T * data_gpu = blocks[i].start;
-            const size_t size = blocks[i].size_bytes;
+        // sends data from cpu_ptr to the associated gpu memory in order to keep it up
+        // to date
+        // WARNING: this function assumes that `toDevice` was called with `cpu_ptr`
+        //          it will use this assumption to identify the gpu pointer and the size
+        //          of the allocation
+        void update_gpu_memory(void * cpu_ptr);
 
-            // data transfer
-            const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, data_gpu, size,
-                                                         cudaMemcpyDeviceToHost);
-            checkCudaErrorCode(errorCodeMemcpy,
-                               "GPU_memory_pool_t::fromDevice(T *cpu_ptr) (memcpy)");
-
-            // deallocation
-            this->free(data_gpu);
-        }
+        // Determine if the cpu_ptr has an associated gpu_ptr in the pool
+        bool is_present(void * cpu_ptr);
 };
-
-// global variable containing the TOAST GPU memory pool
-extern GPU_memory_pool_t GPU_memory_pool;
 
 #endif // HAVE_CUDALIBS
 #endif // TOAST_GPU_HELPER_H

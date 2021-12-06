@@ -346,3 +346,59 @@ class Data(MutableMapping):
                 elif obs_val == ob[obs_key]:
                     new_data.obs.append(ob)
         return new_data
+
+    # Accelerator use
+
+    def acc_copyin(self, names):
+        """Copy a set of data objects to the device.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        for ob in self.obs:
+            for key in names["detdata"]:
+                log.verbose(f"Calling ob {ob.name} detdata copyin for {key}")
+                ob.detdata.acc_copyin(key)
+            for key in names["shared"]:
+                ob.shared.acc_copyin(key)
+
+    def acc_copyout(self, names):
+        """Copy a set of data objects to the host.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        for ob in self.obs:
+            for key in names["detdata"]:
+                if ob.detdata.acc_is_present(key):
+                    log.verbose(f"Calling ob {ob.name} detdata copyout for {key}")
+                    ob.detdata.acc_copyout(key)
+                else:
+                    log.verbose(
+                        f"Skip copyout for ob {ob.name} detdata {key}, data not present"
+                    )
+            for key in names["shared"]:
+                if ob.shared.acc_is_present(key):
+                    log.verbose(f"Calling ob {ob.name} shared copyout for {key}")
+                    ob.shared.acc_copyout(key)
+                else:
+                    log.verbose(
+                        f"Skip copyout for ob {ob.name} shared {key}, data not present"
+                    )
+            # FIXME:  implement intervals too.

@@ -143,6 +143,3 @@ class BuildPixelDistribution(Operator):
         if self.save_pointing:
             prov["detdata"].extend([self.pixels])
         return prov
-
-    def _accelerators(self):
-        return list()

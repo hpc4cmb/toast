@@ -5,6 +5,9 @@
 
 #include <toast/gpu_helpers.hpp>
 #include <toast/sys_utils.hpp>
+#include <toast/sys_environment.hpp>
+
+#include <cstring>
 
 #ifdef HAVE_CUDALIBS
 
@@ -79,8 +82,7 @@ void checkCublasErrorCode(const cublasStatus_t errorCode,
 
 // turns a cusolver error code into human readable text
 std::string cusolverGetErrorString(
-    const cusolverStatus_t errorCode
-    ) {
+    const cusolverStatus_t errorCode) {
     switch (errorCode) {
         case CUSOLVER_STATUS_SUCCESS:
             return "CUSOLVER_STATUS_SUCCESS";
@@ -255,6 +257,30 @@ void checkCufftErrorCode(const cufftResult errorCode,
 // constant used to make sure allocations are aligned
 const int ALIGNEMENT_SIZE = 512;
 
+// converts a number of gigabytes into a number of bytes
+size_t GigagbytesToBytes(const size_t nbGB) {
+    return nbGB * 1073741824l;
+}
+
+// returns a given fraction of the GPU memory in bytes
+// either of the total memory or (if `useFree` is set to true) of the free memory
+size_t FractionOfGPUMemory(const double fraction, const bool useFree) {
+    // computes the GPU memory available
+    size_t free_byte;
+    size_t total_byte;
+    const cudaError errorCodeMemGetInfo = cudaMemGetInfo(&free_byte, &total_byte);
+    checkCudaErrorCode(errorCodeMemGetInfo, "FractionOfGPUMemory::cudaMemGetInfo");
+
+    // computes the portion that we want to reserve
+    size_t result = (useFree) ? (fraction * free_byte) : (fraction * total_byte);
+
+    // makes sure the end of the reservation is a multiple of the alignement
+    if (result % ALIGNEMENT_SIZE != 0) {
+        result += ALIGNEMENT_SIZE - (result % ALIGNEMENT_SIZE);
+    }
+    return result;
+}
+
 // creating a new `GPU_memory_block_t`
 // `cpu_ptr` is optional but can be passed to keep trace of the origin of the data
 // when allocating during a cpu-2-gpu copy operation
@@ -280,11 +306,83 @@ GPU_memory_block_t::GPU_memory_block_t(void * gpu_ptr, size_t size_bytes_arg,
 }
 
 // constructor, does the initial allocation
-GPU_memory_pool_t::GPU_memory_pool_t(size_t bytesPreallocated) : available_memory_bytes(
-        bytesPreallocated), blocks() {
+GPU_memory_pool::GPU_memory_pool() : blocks() {
+    // Get the requested fraction of per-process memory from the environment.
+    // If the user does not specify this, use something conservative that is
+    // likely to work.
+    double fraction = 0.9;
+    char * envval = ::getenv("CUDA_MEMPOOL_FRACTION");
+    if (envval != NULL) {
+        try
+        {
+            fraction = ::atof(envval);
+        }
+        catch (...)
+        {
+            fraction = 0.9;
+        }
+    }
+
+    // Reduce this by the number of processes sharing a device
+    auto & env = toast::Environment::get();
+    int nb_acc;
+    int nb_proc_per_dev;
+    int my_device;
+    env.get_acc(&nb_acc, &nb_proc_per_dev, &my_device);
+    if (nb_proc_per_dev > 1) {
+        fraction /= (double)nb_proc_per_dev;
+    }
+
+    // defines the GPU to be used
+    const cudaError errorStatusSetDevice = cudaSetDevice(my_device);
+    if (errorStatusSetDevice != cudaSuccess) {
+        auto log = toast::Logger::get();
+        std::string msg = "The CUDA Runtime threw a '" +
+                          std::string(cudaGetErrorString(errorStatusSetDevice)) +
+                          "' error code when asking for device " + std::to_string(
+            my_device) +
+                          " in function GPU_memory_pool::cudaSetDevice";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
+    }
+
+    // checkCudaErrorCode(errorStatusSetDevice, "GPU_memory_pool::cudaSetDevice");
+
+    // Get the number of bytes for this fraction
+    available_memory_bytes = FractionOfGPUMemory(fraction, true);
+
     // allocates the memory
     const cudaError errorCode = cudaMalloc(&start, available_memory_bytes);
-    checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
+
+    // checks the error code and try to give an informative message in case of
+    // insufficient memory
+    if (errorCode == cudaErrorMemoryAllocation) {
+        // gets memory information
+        size_t free_byte;
+        size_t total_byte;
+        const cudaError errorCodeMemGetInfo = cudaMemGetInfo(&free_byte, &total_byte);
+        checkCudaErrorCode(errorCodeMemGetInfo,
+                           "GPU_memory_pool_t::GPU_memory_pool_t::cudaMemGetInfo");
+
+        // converts it from bytes to MB
+        const double requested_mb = double(available_memory_bytes) / 1024.0 / 1024.0;
+        const double free_mb = double(free_byte) / 1024.0 / 1024.0;
+        const double total_mb = double(total_byte) / 1024.0 / 1024.0;
+        const double used_mb = double(total_mb - free_mb);
+
+        // displays error message
+        auto log = toast::Logger::get();
+        std::string msg = "GPU_memory_pool: Unable to pre-allocate " +
+                          std::to_string(requested_mb) + "MB which should be " +
+                          std::to_string(fraction * 100) + "% of the total memory (" +
+                          std::to_string(free_mb) + "MB available, " +
+                          std::to_string(used_mb) + "MB used, " +
+                          std::to_string(total_mb) + "MB total on this GPU).";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
+    } else {
+        checkCudaErrorCode(errorCode, "GPU memory pre-allocation");
+    }
 
     // first block to mark the starting point
     GPU_memory_block_t initialBlock(start, 0);
@@ -304,7 +402,7 @@ GPU_memory_pool_t::GPU_memory_pool_t(size_t bytesPreallocated) : available_memor
 }
 
 // destructor, insures that the pre-allocation is released
-GPU_memory_pool_t::~GPU_memory_pool_t() {
+GPU_memory_pool::~GPU_memory_pool() {
     const cudaError errorCode = cudaFree(start);
     checkCudaErrorCode(errorCode, "GPU memory de-allocation");
 
@@ -319,11 +417,17 @@ GPU_memory_pool_t::~GPU_memory_pool_t() {
     checkCusolverErrorCode(statusJacobiParams);
 }
 
+GPU_memory_pool & GPU_memory_pool::get() {
+    static GPU_memory_pool instance;
+
+    return instance;
+}
+
 // allocates memory, starting from the end of the latest allocated block
 // `cpu_ptr` is optional but can be passed to keep trace of the origin of the data
 // when allocating during a cpu-2-gpu copy operation
-cudaError GPU_memory_pool_t::malloc(void ** gpu_ptr, size_t size_bytes,
-                                    void * cpu_ptr) {
+cudaError GPU_memory_pool::malloc(void ** gpu_ptr, size_t size_bytes,
+                                  void * cpu_ptr) {
     // insure two threads cannot interfere
     const std::lock_guard <std::mutex> lock(alloc_mutex);
 
@@ -351,8 +455,8 @@ cudaError GPU_memory_pool_t::malloc(void ** gpu_ptr, size_t size_bytes,
     return cudaSuccess;
 }
 
-// frees memory by releasing the block
-void GPU_memory_pool_t::free(void * gpu_ptr) {
+// frees the gpu memory by releasing the block
+void GPU_memory_pool::free(void * gpu_ptr) {
     // insure two threads cannot interfere
     const std::lock_guard <std::mutex> lock(alloc_mutex);
 
@@ -366,7 +470,7 @@ void GPU_memory_pool_t::free(void * gpu_ptr) {
     if (i < 0) {
         auto log = toast::Logger::get();
         std::string msg =
-            "GPU_memory_pool_t::free: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
+            "GPU_memory_pool::free: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
         log.error(msg.c_str());
         throw std::runtime_error(msg.c_str());
     }
@@ -380,34 +484,139 @@ void GPU_memory_pool_t::free(void * gpu_ptr) {
     }
 }
 
-// converts a number of gigabytes into a number of bytes
-size_t GigagbytesToBytes(const size_t nbGB) {
-    return nbGB * 1073741824l;
-}
+// frees the gpu memory associated with the given cpu pointer
+void GPU_memory_pool::free_associated_memory(void * cpu_ptr) {
+    // insure two threads cannot interfere
+    const std::lock_guard <std::mutex> lock(alloc_mutex);
 
-// returns a given fraction of the total GPU memory, in bytes
-size_t FractionOfGPUMemory(const double fraction) {
-    // computes the GPU memory available
-    int deviceId;
-    cudaGetDevice(&deviceId);
-    cudaDeviceProp deviceProp;
-    const cudaError errorCodeGetProperties = cudaGetDeviceProperties(&deviceProp,
-                                                                     deviceId);
-    checkCudaErrorCode(errorCodeGetProperties,
-                       "FractionOfGPUMemory::cudaGetDeviceProperties");
-    const size_t totalGPUmemory = deviceProp.totalGlobalMem;
-
-    // computes the portion that we want to reserve
-    size_t result = fraction * totalGPUmemory;
-
-    // makes sure the end of the reservation is a multiple of the alignement
-    if (result % ALIGNEMENT_SIZE != 0) {
-        result += ALIGNEMENT_SIZE - (result % ALIGNEMENT_SIZE);
+    // gets the index of cpu_ptr in the blocks vector, starting from the end
+    int i = blocks.size() - 1;
+    while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0)) {
+        i--;
     }
-    return result;
+
+    // errors-out if we cannot find `cpu_ptr`
+    if (i < 0) {
+        auto log = toast::Logger::get();
+        std::string msg =
+            "GPU_memory_pool::free_associated_memory: either `cpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
+    }
+
+    // frees gpu_ptr
+    blocks[i].isFree = true;
+
+    // if gpu_ptr was the last elements, frees a maximum of blocks
+    while (blocks.back().isFree) {
+        blocks.pop_back();
+    }
 }
 
-// global variable, preallocates 90% of the total GPU memory
-GPU_memory_pool_t GPU_memory_pool(FractionOfGPUMemory(0.5));
+// gets the given number of elements back from GPU to the given CPU location
+// frees the gpu memory
+// WARNING: this function assumes that `toDevice` was called with `cpu_ptr`
+//          it will use this assumption to identify the gpu pointer and the size
+//          of the allocation
+void GPU_memory_pool::fromDevice(void * cpu_ptr) {
+    // gets the index of cpu_ptr in the blocks vector, starting from the end
+    int i = blocks.size() - 1;
+    while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0)) {
+        i--;
+    }
+
+    // errors-out if `cpu_ptr` was not use in a `toDevice` call
+    // meaning that we cannot find the associated block of gpu memory
+    if (i < 0) {
+        auto log = toast::Logger::get();
+        std::string msg =
+            "GPU_memory_pool::fromDevice(void*): either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
+    }
+
+    // extract the gpu_ptr and the size of the allocation in bytes
+    void * gpu_ptr = blocks[i].start;
+    const size_t size = blocks[i].size_bytes;
+
+    // data transfer
+    const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, gpu_ptr, size,
+                                                 cudaMemcpyDeviceToHost);
+    checkCudaErrorCode(errorCodeMemcpy,
+                       "GPU_memory_pool::fromDevice(T *cpu_ptr) (memcpy)");
+
+    // deallocation
+    this->free(gpu_ptr);
+}
+
+// sends data from gpu to the associated cpu_ptr in order to keep it up to date
+void GPU_memory_pool::update_cpu_memory(void * cpu_ptr) {
+    // gets the index of cpu_ptr in the blocks vector, starting from the end
+    int i = blocks.size() - 1;
+    while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0)) {
+        i--;
+    }
+
+    // errors-out if `cpu_ptr` was not use in a `toDevice` call
+    // meaning that we cannot find the associated block of gpu memory
+    if (i < 0) {
+        auto log = toast::Logger::get();
+        std::string msg =
+            "GPU_memory_pool::update_cpu_memory: either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
+    }
+
+    // extract the gpu_ptr and the size of the allocation in bytes
+    void * gpu_ptr = blocks[i].start;
+    const size_t size = blocks[i].size_bytes;
+
+    // data transfer
+    const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, gpu_ptr, size,
+                                                 cudaMemcpyDeviceToHost);
+    checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::update_cpu_memory (memcpy)");
+}
+
+// sends data from cpu_ptr to the associated gpu memory in order to keep it up to date
+// WARNING: this function assumes that `toDevice` was called with `cpu_ptr`
+//          it will use this assumption to identify the gpu pointer and the size
+//          of the allocation
+void GPU_memory_pool::update_gpu_memory(void * cpu_ptr) {
+    // gets the index of cpu_ptr in the blocks vector, starting from the end
+    int i = blocks.size() - 1;
+    while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0)) {
+        i--;
+    }
+
+    // errors-out if `cpu_ptr` was not use in a `toDevice` call
+    // meaning that we cannot find the associated block of gpu memory
+    if (i < 0) {
+        auto log = toast::Logger::get();
+        std::string msg =
+            "GPU_memory_pool::update_associated_memory: either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
+    }
+
+    // extract the gpu_ptr and the size of the allocation in bytes
+    void * gpu_ptr = blocks[i].start;
+    const size_t size = blocks[i].size_bytes;
+
+    // data transfer
+    const cudaError errorCodeMemcpy = cudaMemcpy(gpu_ptr, cpu_ptr, size,
+                                                 cudaMemcpyHostToDevice);
+    checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::update_gpu_memory (memcpy)");
+}
+
+// Determine if the cpu_ptr has an associated gpu_ptr in the pool
+bool GPU_memory_pool::is_present(void * cpu_ptr) {
+    // starting from the end, where the latest blocks are stored
+    for (int i = blocks.size() - 1; i >= 0; i--) {
+        if (blocks[i].cpu_ptr == cpu_ptr) {
+            return true;
+        }
+    }
+    return false;
+}
 
 #endif // ifdef HAVE_CUDALIBS

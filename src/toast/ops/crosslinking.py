@@ -252,6 +252,3 @@ class CrossLinking(Operator):
 
     def _provides(self):
         return {}
-
-    def _accelerators(self):
-        return list()

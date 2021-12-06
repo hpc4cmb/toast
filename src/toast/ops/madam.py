@@ -467,9 +467,6 @@ class Madam(Operator):
             prov["detdata"].append(self.det_out)
         return prov
 
-    def _accelerators(self):
-        return list()
-
     @function_timer
     def _prepare(self, params, data, detectors):
         """Examine the data and determine quantities needed to set up Madam buffers"""

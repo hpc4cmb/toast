@@ -43,6 +43,7 @@ PYBIND11_MODULE(_libtoast, m) {
     init_todmap_mapmaker(m);
     init_atm(m);
     init_template_offset(m);
+    init_accelerator(m);
 
     // Internal unit test runner
     m.def(

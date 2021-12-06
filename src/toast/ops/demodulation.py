@@ -594,9 +594,6 @@ class Demodulate(Operator):
     def _provides(self):
         return dict()
 
-    def _accelerators(self):
-        return list()
-
 
 @trait_docs
 class StokesWeightsDemod(Operator):
@@ -681,6 +678,3 @@ class StokesWeightsDemod(Operator):
 
     def _provides(self):
         return {"detdata": self.weights}
-
-    def _accelerators(self):
-        return list()

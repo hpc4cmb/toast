@@ -47,6 +47,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/todmap_mapmaker.cpp
     _libtoast/atm.cpp
     _libtoast/template_offset.cpp
+    _libtoast/accelerator.cpp
 )
 
 # Handle recursion limit on NVC++ / PGI
@@ -55,6 +56,14 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL PGI)
 endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL NVHPC)
     target_compile_options(_libtoast PRIVATE -Wc,--pending_instantiations=0)
+endif()
+
+if(OpenACC_CXX_FOUND)
+    target_compile_definitions(_libtoast PRIVATE HAVE_OPENACC=1)
+endif()
+
+if(USE_OPENACC_MEMPOOL)
+    target_compile_definitions(_libtoast PRIVATE USE_OPENACC_MEMPOOL=1)
 endif()
 
 if(OpenMP_CXX_FOUND)
@@ -78,9 +87,9 @@ if(CHOLMOD_FOUND)
 endif(CHOLMOD_FOUND)
 
 if(CUDAToolkit_FOUND AND NOT CUDA_DISABLED)
-    target_compile_definitions(toast PRIVATE HAVE_CUDALIBS=1)
-    target_include_directories(toast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
-    target_include_directories(toast PRIVATE "${CUDAToolkit_MATH_INCLUDE_DIRS}")
+    target_compile_definitions(_libtoast PRIVATE HAVE_CUDALIBS=1)
+    target_include_directories(_libtoast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
+    target_include_directories(_libtoast PRIVATE "${CUDAToolkit_MATH_INCLUDE_DIRS}")
 endif()
 
 # Include path to the toast headers
@@ -104,7 +113,6 @@ install(FILES
     pixels.py
     pixels_io.py
     covariance.py
-    cuda.py
     dist.py
     data.py
     intervals.py

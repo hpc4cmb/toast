@@ -184,7 +184,3 @@ class Copy(Operator):
         if self.intervals is not None:
             prov["intervals"] = [x[1] for x in self.intervals]
         return prov
-
-    def _accelerators(self):
-        # Eventually we can copy memory objects on devices...
-        return list()

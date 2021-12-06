@@ -345,9 +345,6 @@ class CrossTalk(Operator):
         }
         return prov
 
-    def _accelerators(self):
-        return list()
-
 
 @trait_docs
 class MitigateCrossTalk(Operator):
@@ -477,6 +474,3 @@ class MitigateCrossTalk(Operator):
             ],
         }
         return prov
-
-    def _accelerators(self):
-        return list()

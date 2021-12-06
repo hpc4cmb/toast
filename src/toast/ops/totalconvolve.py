@@ -819,6 +819,3 @@ class SimTotalconvolve(Operator):
         prov = self.detector_pointing.provides()
         prov["detdata"].append(self.det_data)
         return prov
-
-    def _accelerators(self):
-        return list()

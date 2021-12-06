@@ -149,6 +149,3 @@ class LoadSpt3g(Operator):
 
     def _provides(self):
         return dict()
-
-    def _accelerators(self):
-        return list()

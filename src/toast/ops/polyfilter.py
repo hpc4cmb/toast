@@ -427,9 +427,6 @@ class PolyFilter2D(Operator):
         }
         return prov
 
-    def _accelerators(self):
-        return list()
-
 
 @trait_docs
 class PolyFilter(Operator):
@@ -601,9 +598,6 @@ class PolyFilter(Operator):
             "detdata": list(),
         }
         return prov
-
-    def _accelerators(self):
-        return list()
 
 
 class CommonModeFilter(Operator):
@@ -854,6 +848,3 @@ class CommonModeFilter(Operator):
             "detdata": list(),
         }
         return prov
-
-    def _accelerators(self):
-        return list()

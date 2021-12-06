@@ -6,7 +6,7 @@
 #ifndef TOAST_MATH_LINEARALGEBRA_HPP
 #define TOAST_MATH_LINEARALGEBRA_HPP
 
-#include "gpu_helpers.hpp"
+#include <toast/gpu_helpers.hpp>
 
 namespace toast {
 namespace LinearAlgebra {

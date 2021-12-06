@@ -284,9 +284,6 @@ class SolverRHS(Operator):
         prov["meta"].append(self.template_matrix.amplitudes)
         return prov
 
-    def _accelerators(self):
-        return list()
-
 
 @trait_docs
 class SolverLHS(Operator):
@@ -527,9 +524,6 @@ class SolverLHS(Operator):
         prov = self.binning.provides()
         prov["meta"].append(self.out)
         return prov
-
-    def _accelerators(self):
-        return list()
 
 
 @function_timer

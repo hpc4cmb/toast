@@ -281,6 +281,3 @@ class BinMap(Operator):
     def _provides(self):
         prov = {"meta": [self.binned], "shared": list(), "detdata": list()}
         return prov
-
-    def _accelerators(self):
-        return list()

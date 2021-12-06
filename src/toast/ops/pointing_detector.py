@@ -208,6 +208,3 @@ class PointingDetectorSimple(Operator):
             "detdata": [self.quats],
         }
         return prov
-
-    def _accelerators(self):
-        return list()

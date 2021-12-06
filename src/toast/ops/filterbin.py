@@ -1284,6 +1284,3 @@ class FilterBin(Operator):
         prov = dict()
         prov["meta"] = [self.binning.binned]
         return prov
-
-    def _accelerators(self):
-        return list()

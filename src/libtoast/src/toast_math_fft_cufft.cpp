@@ -91,13 +91,15 @@ void toast::FFTPlanReal1DCUFFT::exec() {
     const int64_t nb_elements_real = n_ * buflength_;
     const int64_t nb_elements_complex = n_ * (buflength_ / 2);
 
+    auto & pool = GPU_memory_pool::get();
+
     // actual execution of the FFT
 
     // R2C, real input in traw_ and complex output in fraw_
     if (dir_ == toast::fft_direction::forward) {
         // get input data from CPU
-        cufftDoubleReal * idata = GPU_memory_pool.toDevice(traw_, nb_elements_real);
-        cufftDoubleComplex * odata = GPU_memory_pool.alloc <cufftDoubleComplex> (
+        cufftDoubleReal * idata = pool.toDevice(traw_, nb_elements_real);
+        cufftDoubleComplex * odata = pool.alloc <cufftDoubleComplex> (
             nb_elements_complex);
 
         // execute plan
@@ -107,9 +109,9 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
 
         // send output data to CPU
-        GPU_memory_pool.free(idata);
-        GPU_memory_pool.fromDevice((cufftDoubleComplex *)(traw_), odata,
-                                   nb_elements_complex);
+        pool.free(idata);
+        pool.fromDevice((cufftDoubleComplex *)(traw_), odata,
+                        nb_elements_complex);
 
         // reorder data from rcrc... (stored in traw_) to rr...cc (stored in fraw_)
         complexToHalfcomplex(length_, n_, tview_.data(), fview_.data());
@@ -119,9 +121,9 @@ void toast::FFTPlanReal1DCUFFT::exec() {
 
         // get input data from CPU
         cufftDoubleComplex * idata =
-            GPU_memory_pool.toDevice((cufftDoubleComplex *)(traw_),
-                                     nb_elements_complex);
-        cufftDoubleReal * odata = GPU_memory_pool.alloc <cufftDoubleReal> (
+            pool.toDevice((cufftDoubleComplex *)(traw_),
+                          nb_elements_complex);
+        cufftDoubleReal * odata = pool.alloc <cufftDoubleReal> (
             nb_elements_real);
 
         // execute plan
@@ -131,8 +133,8 @@ void toast::FFTPlanReal1DCUFFT::exec() {
         checkCudaErrorCode(statusSync, "FFTPlanReal1DCUFFT::cudaDeviceSynchronize");
 
         // send output data to CPU
-        GPU_memory_pool.free(idata);
-        GPU_memory_pool.fromDevice(traw_, odata, nb_elements_real);
+        pool.free(idata);
+        pool.fromDevice(traw_, odata, nb_elements_real);
     }
 
     // normalize output

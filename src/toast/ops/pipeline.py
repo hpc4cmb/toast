@@ -16,6 +16,8 @@ from ..data import Data
 
 from .operator import Operator
 
+from .._libtoast import acc_enabled
+
 
 @trait_docs
 class Pipeline(Operator):
@@ -76,16 +78,24 @@ class Pipeline(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
         log = Logger.get()
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
-        acc = self.accelerators()
+        # By default, if the calling code passed use_acc=True, then we assume the
+        # data staging is being handled at a higher level.
+        staged_acc = False
 
-        if "CUDA" in acc:
-            # All our operators support CUDA.  Stage any required data
-            pass
+        if not use_acc:
+            # The calling code determined that we do not have all the data present to
+            # use the accelerator.  However, if our operators support it, we can stage
+            # the data to and from the device.
+            if acc_enabled() and self.supports_acc():
+                # All our operators support it.
+                data.acc_copyin(self.requires())
+                use_acc = True
+                staged_acc = True
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -99,7 +109,10 @@ class Pipeline(Operator):
                     pstr, op.name
                 )
                 log.verbose(msg)
-                op.exec(data, detectors=None)
+                if use_acc:
+                    op.exec(data, detectors=None, use_acc=True)
+                else:
+                    op.exec(data, detectors=None)
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
             all_local_dets = data.all_local_detectors(selection=detectors)
@@ -112,7 +125,10 @@ class Pipeline(Operator):
                         pstr, op.name
                     )
                     log.verbose(msg)
-                    op.exec(data, detectors=[det])
+                    if use_acc:
+                        op.exec(data, detectors=[det], use_acc=True)
+                    else:
+                        op.exec(data, detectors=[det])
         else:
             # We have explicit detector sets
             det_check = set(detectors)
@@ -133,14 +149,19 @@ class Pipeline(Operator):
                         pstr, op.name
                     )
                     log.verbose(msg)
-                    op.exec(data, detectors=selected_set)
+                    if use_acc:
+                        op.exec(data, detectors=selected_set, use_acc=True)
+                    else:
+                        op.exec(data, detectors=selected_set)
 
-        # Copy from accelerator...
+        # Copy out from accelerator if we did the copy in.
+        if staged_acc:
+            data.acc_copyout(self.provides())
 
         return
 
     @function_timer
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_acc=False, **kwargs):
         log = Logger.get()
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
@@ -148,7 +169,10 @@ class Pipeline(Operator):
             for op in self.operators:
                 msg = f"{pstr} Pipeline calling operator '{op.name}' finalize()"
                 log.verbose(msg)
-                result.append(op.finalize(data))
+                if use_acc:
+                    result.append(op.finalize(data, use_acc=True))
+                else:
+                    result.append(op.finalize(data))
         return result
 
     def _requires(self):
@@ -158,7 +182,7 @@ class Pipeline(Operator):
             return dict()
         keys = ["meta", "detdata", "shared", "intervals"]
         req = {x: set() for x in keys}
-        for op in reverse(self.operators):
+        for op in self.operators.reverse():
             oreq = op.requires()
             oprov = op.provides()
             for k in keys:
@@ -188,17 +212,9 @@ class Pipeline(Operator):
             prov[k] = list(prov[k])
         return prov
 
-    def _accelerators(self):
-        # This is just the intersection of results from all operators in our list.
-        if self.operators is None:
-            return list()
-        acc = set()
+    def _supports_acc(self):
+        # This is a logical AND of our operators
         for op in self.operators:
-            for support in op.accelerators():
-                acc.add(support)
-        for op in self.operators:
-            supported = op.accelerators()
-            for a in list(acc):
-                if a not in supported:
-                    acc.remove(a)
-        return list(acc)
+            if not op.supports_acc():
+                return False
+        return True

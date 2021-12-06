@@ -865,6 +865,3 @@ class MapMaker(Operator):
         else:
             prov["meta"] = [self.binning.binned]
         return prov
-
-    def _accelerators(self):
-        return list()
