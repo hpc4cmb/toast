@@ -46,10 +46,7 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if self._use_acc(data):
-                self._exec(data, detectors=detectors, use_acc=True, **kwargs)
-            else:
-                self._exec(data, detectors=detectors, **kwargs)
+            self._exec(data, detectors=detectors, use_acc=self._use_acc(data), **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to exec()"
@@ -75,10 +72,7 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if self._use_acc(data):
-                return self._finalize(data, use_acc=True, **kwargs)
-            else:
-                return self._finalize(data, **kwargs)
+            return self._finalize(data, use_acc=self._use_acc(data), **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"

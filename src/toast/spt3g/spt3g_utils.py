@@ -10,13 +10,11 @@ from astropy import units as u
 from ..utils import Environment, Logger
 
 
-available = None
-if available is None:
-    available = True
-    try:
-        from spt3g import core as c3g
-    except ImportError:
-        available = False
+available = True
+try:
+    from spt3g import core as c3g
+except ImportError:
+    available = False
 
 
 def from_g3_scalar_type(val, unit=None):
