@@ -60,9 +60,10 @@ public:
 };
 
 // allocates a slab of memory and then recycles allocations
-// TODO now that we express a lot of operation from the cpu_ptr point of view,
-//      we might want to store the blocks in an ordered Map instead of a vector
-//      and to reformulate function to all run from this point of view (removing things like free(gpu_ptr))
+// TODO - now that we express a lot of operation from the cpu_ptr point of view,
+//        we might want to store the blocks in an ordered Map instead of a vector
+//        and to reformulate function to all run from this point of view (removing things like free(gpu_ptr))
+//      - there is now a lot of redundancy in the code used to locate the memory amongst the blocks
 class GPU_memory_pool
 {
 private:
@@ -163,119 +164,19 @@ public:
     // WARNING: this function assumes that `toDevice` was called with `cpu_ptr`
     //          it will use this assumption to identify the gpu pointer and the size
     //          of the allocation
-    template <typename T>
-    void fromDevice(T *cpu_ptr)
-    {
-        // gets the index of cpu_ptr in the blocks vector, starting from the end
-        int i = blocks.size() - 1;
-        while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0))
-        {
-            i--;
-        }
+    void fromDevice(void *cpu_ptr);
 
-        // errors-out if `cpu_ptr` was not use in a `toDevice` call
-        // meaning that we cannot find the associated block of gpu memory
-        if (i < 0)
-        {
-            auto log = toast::Logger::get();
-            std::string msg =
-                "GPU_memory_pool::fromDevice(T*): either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";
-            log.error(msg.c_str());
-            throw std::runtime_error(msg.c_str());
-        }
-
-        // extract the gpu_ptr and the size of the allocation in bytes
-        T *gpu_ptr = reinterpret_cast<T *>(blocks[i].start);
-        const size_t size = blocks[i].size_bytes;
-
-        // data transfer
-        const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, gpu_ptr, size,
-                                                     cudaMemcpyDeviceToHost);
-        checkCudaErrorCode(errorCodeMemcpy,
-                           "GPU_memory_pool::fromDevice(T *cpu_ptr) (memcpy)");
-
-        // deallocation
-        this->free(gpu_ptr);
-    }
-
-    // sends data from gpu_ptr to the associated cpu memory in order to keep it up to date
-    template <typename T>
-    void update_cpu_memory(T *gpu_ptr)
-    {
-        // gets the index of gpu_ptr in the blocks vector, starting from the end
-        int i = blocks.size() - 1;
-        while ((blocks[i].start != gpu_ptr) and (i >= 0))
-        {
-            i--;
-        }
-
-        // errors-out if we cannot find `gpu_ptr`
-        if (i < 0)
-        {
-            auto log = toast::Logger::get();
-            std::string msg =
-                "GPU_memory_pool::update_cpu_memory: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
-            log.error(msg.c_str());
-            throw std::runtime_error(msg.c_str());
-        }
-
-        // extract the cpu_ptr and the size of the allocation in bytes
-        T *cpu_ptr = reinterpret_cast<T *>(blocks[i].cpu_ptr);
-        const size_t size = blocks[i].size_bytes;
-
-        // data transfer
-        const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, gpu_ptr, size, cudaMemcpyDeviceToHost);
-        checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::update_cpu_memory (memcpy)");
-    }
+    // sends data from gpu to the associated cpu_ptr in order to keep it up to date
+    void update_cpu_memory(void *cpu_ptr);
 
     // sends data from cpu_ptr to the associated gpu memory in order to keep it up to date
     // WARNING: this function assumes that `toDevice` was called with `cpu_ptr`
     //          it will use this assumption to identify the gpu pointer and the size
     //          of the allocation
-    template <typename T>
-    void update_gpu_memory(T *cpu_ptr)
-    {
-        // gets the index of cpu_ptr in the blocks vector, starting from the end
-        int i = blocks.size() - 1;
-        while ((blocks[i].cpu_ptr != cpu_ptr) and (i >= 0))
-        {
-            i--;
-        }
-
-        // errors-out if `cpu_ptr` was not use in a `toDevice` call
-        // meaning that we cannot find the associated block of gpu memory
-        if (i < 0)
-        {
-            auto log = toast::Logger::get();
-            std::string msg =
-                "GPU_memory_pool::update_associated_memory: either `cpu_ptr` was never used to send memory to the gpu with the `toDevice` function or you have already freed the associated GPU memory.";
-            log.error(msg.c_str());
-            throw std::runtime_error(msg.c_str());
-        }
-
-        // extract the gpu_ptr and the size of the allocation in bytes
-        T *gpu_ptr = reinterpret_cast<T *>(blocks[i].start);
-        const size_t size = blocks[i].size_bytes;
-
-        // data transfer
-        const cudaError errorCodeMemcpy = cudaMemcpy(gpu_ptr, cpu_ptr, size, cudaMemcpyHostToDevice);
-        checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::update_gpu_memory (memcpy)");
-    }
+    void update_gpu_memory(void *cpu_ptr);
 
     // Determine if the cpu_ptr has an associated gpu_ptr in the pool
-    template <typename T>
-    bool is_present(T *cpu_ptr)
-    {
-        // starting from the end, where the latest blocks are stored
-        for (int i = blocks.size() - 1; i >= 0; i--)
-        {
-            if (blocks[i].cpu_ptr == cpu_ptr)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    bool is_present(void *cpu_ptr);
 };
 
 #endif // HAVE_CUDALIBS
