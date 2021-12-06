@@ -185,17 +185,47 @@ public:
         }
 
         // extract the gpu_ptr and the size of the allocation in bytes
-        T *data_gpu = reinterpret_cast<T *>(blocks[i].start);
+        T *gpu_ptr = reinterpret_cast<T *>(blocks[i].start);
         const size_t size = blocks[i].size_bytes;
 
         // data transfer
-        const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, data_gpu, size,
+        const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, gpu_ptr, size,
                                                      cudaMemcpyDeviceToHost);
         checkCudaErrorCode(errorCodeMemcpy,
                            "GPU_memory_pool::fromDevice(T *cpu_ptr) (memcpy)");
 
         // deallocation
-        this->free(data_gpu);
+        this->free(gpu_ptr);
+    }
+
+    // sends data from gpu_ptr to the associated cpu memory in order to keep it up to date
+    template <typename T>
+    void update_cpu_memory(T *gpu_ptr)
+    {
+        // gets the index of gpu_ptr in the blocks vector, starting from the end
+        int i = blocks.size() - 1;
+        while ((blocks[i].start != gpu_ptr) and (i >= 0))
+        {
+            i--;
+        }
+
+        // errors-out if we cannot find `gpu_ptr`
+        if (i < 0)
+        {
+            auto log = toast::Logger::get();
+            std::string msg =
+                "GPU_memory_pool::update_cpu_memory: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
+            log.error(msg.c_str());
+            throw std::runtime_error(msg.c_str());
+        }
+
+        // extract the cpu_ptr and the size of the allocation in bytes
+        T *cpu_ptr = reinterpret_cast<T *>(blocks[i].cpu_ptr);
+        const size_t size = blocks[i].size_bytes;
+
+        // data transfer
+        const cudaError errorCodeMemcpy = cudaMemcpy(cpu_ptr, gpu_ptr, size, cudaMemcpyDeviceToHost);
+        checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::update_cpu_memory (memcpy)");
     }
 
     // sends data from cpu_ptr to the associated gpu memory in order to keep it up to date
@@ -203,7 +233,7 @@ public:
     //          it will use this assumption to identify the gpu pointer and the size
     //          of the allocation
     template <typename T>
-    void update_associated_memory(T *cpu_ptr)
+    void update_gpu_memory(T *cpu_ptr)
     {
         // gets the index of cpu_ptr in the blocks vector, starting from the end
         int i = blocks.size() - 1;
@@ -229,7 +259,7 @@ public:
 
         // data transfer
         const cudaError errorCodeMemcpy = cudaMemcpy(gpu_ptr, cpu_ptr, size, cudaMemcpyHostToDevice);
-        checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::update_associated_memory (memcpy)");
+        checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::update_gpu_memory (memcpy)");
     }
 
     // Determine if the cpu_ptr has an associated gpu_ptr in the pool
