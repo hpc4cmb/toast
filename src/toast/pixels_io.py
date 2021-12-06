@@ -323,7 +323,11 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
 
     fdata = None
     if rank == 0:
-        f = h5py.File(path, "r")
+        try:
+            f = h5py.File(path, "r")
+        except OSError as e:
+            msg = f"Failed to open {path} for reading: {e}"
+            raise RuntimeError(msg)
 
         dset = f["map"]
         header = dict(dset.attrs)
@@ -569,36 +573,42 @@ def read_healpix(filename, *args, **kwargs):
             verbose = True
 
         # Load an HDF5 map
-        with h5py.File(filename, "r") as f:
-            dset = f["map"]
-            if "field" in kwargs and kwargs["field"] is not None:
-                mapdata = []
-                for field in kwargs["field"]:
-                    mapdata.append(dset[field])
-                mapdata = np.vstack(mapdata)
-            else:
-                mapdata = dset[:]
+        try:
+            f = h5py.File(filename, "r")
+        except OSError as e:
+            msg = f"Failed to open {filename} for reading: {e}"
+            raise RuntimeError(msg)
 
-            header = dict(dset.attrs)
-            if "ORDERING" not in header or header["ORDERING"] not in ["NESTED", "RING"]:
-                raise RuntimeError("Cannot determine pixel ordering")
+        dset = f["map"]
+        if "field" in kwargs and kwargs["field"] is not None:
+            mapdata = []
+            for field in kwargs["field"]:
+                mapdata.append(dset[field])
+            mapdata = np.vstack(mapdata)
+        else:
+            mapdata = dset[:]
+
+        header = dict(dset.attrs)
+        if "ORDERING" not in header or header["ORDERING"] not in ["NESTED", "RING"]:
+            raise RuntimeError("Cannot determine pixel ordering")
+        if verbose:
+            print("")
+        if "nest" in kwargs:
+            nest = kwargs["nest"]
+        else:
+            nest = False
+        if header["ORDERING"] == "NESTED" and nest == False:
             if verbose:
-                print("")
-            if "nest" in kwargs:
-                nest = kwargs["nest"]
-            else:
-                nest = False
-            if header["ORDERING"] == "NESTED" and nest == False:
-                if verbose:
-                    print(f"Reordering {filename} to RING")
-                mapdata = hp.reorder(mapdata, n2r=True)
-            elif header["ORDERING"] == "RING" and nest == True:
-                if verbose:
-                    print(f"Reordering {filename} to NESTED")
-                mapdata = hp.reorder(mapdata, r2n=True)
-            else:
-                if verbose:
-                    print(f"{filename} is already {header['ORDERING']}")
+                print(f"Reordering {filename} to RING")
+            mapdata = hp.reorder(mapdata, n2r=True)
+        elif header["ORDERING"] == "RING" and nest == True:
+            if verbose:
+                print(f"Reordering {filename} to NESTED")
+            mapdata = hp.reorder(mapdata, r2n=True)
+        else:
+            if verbose:
+                print(f"{filename} is already {header['ORDERING']}")
+        f.close()
 
         if "dtype" in kwargs and kwargs["dtype"] is not None:
             mapdata = mapdata.astype(kwargs["dtype"])
