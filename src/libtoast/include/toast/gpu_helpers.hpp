@@ -79,8 +79,9 @@ private:
     // memory blocks that have been allocated but cannot be freed yet
     std::vector<GPU_memory_block_t> blocks;
 
-    // map from cpu pointers to block indexes
+    // map from pointers to block indexes
     std::unordered_map<void *, size_t> cpu_ptr_to_block_index;
+    std::unordered_map<void *, size_t> gpu_ptr_to_block_index;
 
     // allocates a number of bytes on the gpu
     GPU_memory_pool();
