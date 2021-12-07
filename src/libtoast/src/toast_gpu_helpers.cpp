@@ -495,11 +495,11 @@ cudaError GPU_memory_pool::malloc(void ** gpu_ptr, size_t size_bytes,
     if (usedMemory > available_memory_bytes) {
         std::cerr << "INSUFICIENT GPU MEMORY PREALOCATION"
                   << " GPU memory that would be taken after this allocation:" <<
-        usedMemory
+            usedMemory
                   << " (number of bytes requested by this allocation:" << size_bytes <<
-        ")"
+            ")"
                   << " total GPU-memory preallocated:" << available_memory_bytes <<
-        std::endl;
+            std::endl;
         *gpu_ptr = nullptr;
         return cudaErrorMemoryAllocation;
     }

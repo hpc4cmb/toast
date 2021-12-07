@@ -153,7 +153,7 @@ void build_template_covariance(std::vector <int64_t> & starts,
 
     size_t ntemplate = templates.size();
 
-#pragma omp parallel for schedule(static, 1)
+    #pragma omp parallel for schedule(static, 1)
     for (size_t row = 0; row < ntemplate; ++row) {
         auto rowtemplate = templates[row].unchecked <1>();
         size_t rowoffset = starts[row];
@@ -222,7 +222,7 @@ void accumulate_observation_matrix(py::array_t <double,
 
     // Build lists of non-zeros for each row of the template matrix
     std::vector <std::vector <size_t> > nonzeros(nsample);
-#pragma omp parallel for schedule(static, 1)
+    #pragma omp parallel for schedule(static, 1)
     for (size_t isample = 0; isample < nsample; ++isample) {
         for (size_t itemplate = ndense; itemplate < ntemplate; ++itemplate) {
             if (fast_templates(isample, itemplate) != 0) {
@@ -231,14 +231,14 @@ void accumulate_observation_matrix(py::array_t <double,
         }
     }
 
-#pragma omp parallel
+    #pragma omp parallel
     {
         int nthreads = 1;
         int idthread = 0;
-#ifdef _OPENMP
+        #ifdef _OPENMP
         nthreads = omp_get_num_threads();
         idthread = omp_get_thread_num();
-#endif // ifdef _OPENMP
+        #endif // ifdef _OPENMP
 
         for (size_t isample = 0; isample < nsample; ++isample) {
             if (!fast_good_bin(isample)) continue;

@@ -33,7 +33,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     double fzero = 0.0;
     double fone = 1.0;
 
-#pragma \
+    #pragma \
     omp parallel for schedule(static) default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder, upper, lower, notrans, trans, fzero, fone)
     for (size_t iscan = 0; iscan < nscan; ++iscan) {
         int64_t start = starts[iscan];
@@ -62,10 +62,10 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         for (size_t iorder = 0; iorder < norder; ++iorder) {
             current = &full_templates[iorder * scanlen];
             if (iorder == 0) {
-#pragma omp simd
+                #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) current[i] = 1;
             } else if (iorder == 1) {
-#pragma omp simd
+                #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) {
                     const double x = xstart + i * dx;
                     current[i] = x;
@@ -74,7 +74,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 last = &full_templates[(iorder - 1) * scanlen];
                 lastlast = &full_templates[(iorder - 2) * scanlen];
                 double orderinv = 1. / iorder;
-#pragma omp simd
+                #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) {
                     const double x = xstart + i * dx;
                     current[i] =
@@ -154,7 +154,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 double * signal = &signals[isignal][start];
                 double amp = proj[iorder + isignal * norder];
                 if (toast::is_aligned(signal) && toast::is_aligned(temp)) {
-#pragma omp simd
+                    #pragma omp simd
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
                 } else {
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
@@ -171,7 +171,7 @@ void toast::bin_proj(double * signal, double * templates,
         proj[row] = 0;
     }
 
-#pragma \
+    #pragma \
     omp parallel for schedule(static) default(none) shared(proj, templates, signal, good, ntemplate, nsample)
     for (size_t row = 0; row < ntemplate; ++row) {
         double * ptemplate = templates + row * nsample;
@@ -191,14 +191,15 @@ void toast::bin_invcov(double * templates, uint8_t * good, double * invcov,
         }
     }
 
-#pragma omp parallel default(none) shared(invcov, templates, good, ntemplate, nsample)
+    #pragma \
+    omp parallel default(none) shared(invcov, templates, good, ntemplate, nsample)
     {
         int nthread = 1;
         int id_thread = 0;
-#ifdef _OPENMP
+        #ifdef _OPENMP
         nthread = omp_get_num_threads();
         id_thread = omp_get_thread_num();
-#endif // ifdef _OPENMP
+        #endif // ifdef _OPENMP
 
         int worker = -1;
         for (size_t row = 0; row < ntemplate; row++) {
@@ -237,7 +238,7 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
     const size_t buflen = 1000;
     size_t nbuf = nsample / buflen + 1;
 
-#pragma omp parallel for schedule(static) default(none) \
+    #pragma omp parallel for schedule(static) default(none) \
     shared(x, templates, start_order, stop_order, nsample, nbuf)
     for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
         size_t istart = ibuf * buflen;
@@ -292,7 +293,7 @@ void toast::legendre(double * x, double * templates, size_t start_order,
     const size_t buflen = 1000;
     size_t nbuf = nsample / buflen + 1;
 
-#pragma omp parallel for schedule(static) default(none) \
+    #pragma omp parallel for schedule(static) default(none) \
     shared(x, templates, start_order, stop_order, nsample, nbuf)
     for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
         size_t istart = ibuf * buflen;
@@ -341,7 +342,7 @@ void toast::add_templates(double * signal, double * templates, double * coeff,
     const size_t buflen = 1000;
     size_t nbuf = nsample / buflen + 1;
 
-#pragma \
+    #pragma \
     omp parallel for schedule(static) default(none) shared(signal, templates, coeff, nsample, ntemplate, nbuf)
     for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
         size_t istart = ibuf * buflen;
@@ -370,7 +371,7 @@ void toast::filter_poly2D_solve(
     // The signals are flat packed across (samples, detectors).
     // The coefficients are flat packed across (samples, groups, modes).
 
-#pragma omp parallel default(shared)
+    #pragma omp parallel default(shared)
     {
         // These are all thread-private
         int inmode = (int)nmode;
@@ -385,7 +386,7 @@ void toast::filter_poly2D_solve(
         toast::AlignedVector <double> singular_values(nmode);
         toast::AlignedVector <double> WORK(LWORK);
 
-#pragma omp for schedule(static)
+        #pragma omp for schedule(static)
         for (int64_t isamp = 0; isamp < nsample; ++isamp) {
             // For this sample...
             for (int32_t igroup = 0; igroup < ngroup; ++igroup) {

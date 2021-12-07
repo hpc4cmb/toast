@@ -7,7 +7,7 @@
 
 
 void init_atm(py::module & m) {
-#ifdef HAVE_AATM
+    #ifdef HAVE_AATM
     m.def("atm_absorption_coefficient", &toast::atm_get_absorption_coefficient,
           py::arg("altitude"), py::arg("temperature"), py::arg("pressure"),
           py::arg("pwv"), py::arg(
@@ -102,9 +102,9 @@ void init_atm(py::module & m) {
                 (array):  The temperatures at the specified frequencies.
 
     )");
-#endif // ifdef HAVE_AATM
+    #endif // ifdef HAVE_AATM
 
-#ifdef HAVE_CHOLMOD
+    #ifdef HAVE_CHOLMOD
 
     m.def("atm_sim_compute_slice",
           [](int64_t ind_start,
@@ -474,7 +474,7 @@ void init_atm(py::module & m) {
        Internal function used by AtmSim class.
       )");
 
-#endif // ifdef HAVE_CHOLMOD
+    #endif // ifdef HAVE_CHOLMOD
 
     return;
 }

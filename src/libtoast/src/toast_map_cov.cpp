@@ -18,15 +18,15 @@ void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                            double scale, double const * signal, double * zdata,
                            int64_t * hits, double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-#pragma omp parallel
+    #pragma omp parallel
     {
-#ifdef _OPENMP
+        #ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-#endif // ifdef _OPENMP
+        #endif // ifdef _OPENMP
 
         for (size_t i = 0; i < nsamp; ++i) {
             const int64_t isubmap = indx_submap[i] * subsize;
@@ -34,9 +34,9 @@ void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
             if ((isubmap < 0) || (ipix < 0)) continue;
 
             const int64_t hpx = isubmap + ipix;
-#ifdef _OPENMP
+            #ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-#endif // ifdef _OPENMP
+            #endif // ifdef _OPENMP
             const int64_t zpx = hpx * nnz;
             const int64_t ipx = hpx * block;
 
@@ -64,23 +64,23 @@ void toast::cov_accum_diag_hits(int64_t nsub, int64_t subsize, int64_t nnz,
                                 int64_t nsamp,
                                 int64_t const * indx_submap,
                                 int64_t const * indx_pix, int64_t * hits) {
-#pragma omp parallel
+    #pragma omp parallel
     {
-#ifdef _OPENMP
+        #ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-#endif // ifdef _OPENMP
+        #endif // ifdef _OPENMP
 
         for (size_t i = 0; i < nsamp; ++i) {
             if ((indx_submap[i] < 0) || (indx_pix[i] < 0)) continue;
 
             const int64_t hpx = (indx_submap[i] * subsize) + indx_pix[i];
-#ifdef _OPENMP
+            #ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-#endif // ifdef _OPENMP
+            #endif // ifdef _OPENMP
             hits[hpx] += 1;
         }
     }
@@ -96,15 +96,15 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                                   double scale,
                                   double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-#pragma omp parallel
+    #pragma omp parallel
     {
-#ifdef _OPENMP
+        #ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-#endif // ifdef _OPENMP
+        #endif // ifdef _OPENMP
 
         for (size_t i = 0; i < nsamp; ++i) {
             const int64_t isubmap = indx_submap[i] * subsize;
@@ -112,9 +112,9 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
             if ((isubmap < 0) || (ipix < 0)) continue;
 
             const int64_t hpx = isubmap + ipix;
-#ifdef _OPENMP
+            #ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-#endif // ifdef _OPENMP
+            #endif // ifdef _OPENMP
             const int64_t ipx = hpx * block;
 
             const double * wpointer = weights + i * nnz;
@@ -151,15 +151,15 @@ void toast::cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nn
                                        double scale, int64_t * hits,
                                        double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
-#pragma omp parallel
+    #pragma omp parallel
     {
-#ifdef _OPENMP
+        #ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-#endif // ifdef _OPENMP
+        #endif // ifdef _OPENMP
 
         for (size_t i = 0; i < nsamp; ++i) {
             const int64_t isubmap = indx_submap[i] * subsize;
@@ -167,9 +167,9 @@ void toast::cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nn
             if ((isubmap < 0) || (ipix < 0)) continue;
 
             const int64_t hpx = isubmap + ipix;
-#ifdef _OPENMP
+            #ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-#endif // ifdef _OPENMP
+            #endif // ifdef _OPENMP
             const int64_t ipx = hpx * block;
 
             const double * wpointer = weights + i * nnz;
@@ -195,15 +195,15 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_pix, double const * weights,
                            double scale, double const * signal,
                            double * zdata) {
-#pragma omp parallel
+    #pragma omp parallel
     {
-#ifdef _OPENMP
+        #ifdef _OPENMP
         int nthread = omp_get_num_threads();
         int trank = omp_get_thread_num();
         int64_t npix_thread = nsub * subsize / nthread + 1;
         int64_t first_pix = trank * npix_thread;
         int64_t last_pix = first_pix + npix_thread - 1;
-#endif // ifdef _OPENMP
+        #endif // ifdef _OPENMP
 
         for (int64_t i = 0; i < nsamp; ++i) {
             const int64_t isubmap = indx_submap[i] * subsize;
@@ -211,9 +211,9 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
             if ((isubmap < 0) || (ipix < 0)) continue;
 
             const int64_t hpx = isubmap + ipix;
-#ifdef _OPENMP
+            #ifdef _OPENMP
             if ((hpx < first_pix) || (hpx > last_pix)) continue;
-#endif // ifdef _OPENMP
+            #endif // ifdef _OPENMP
             const int64_t zpx = hpx * nnz;
 
             const double scaled_signal = scale * signal[i];
@@ -277,7 +277,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
         // fdata = data (reordering)
         toast::AlignedVector <double> fdata_batch(batchNumber * nnz * nnz);
-#pragma omp parallel for schedule(static)
+        #pragma omp parallel for schedule(static)
         for (int64_t batchid = 0; batchid < batchNumber; batchid++) {
             int offset = 0;
             for (int64_t k = 0; k < nnz; k++) {
@@ -308,7 +308,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         // and sets ftemp = fdata / evals
         toast::AlignedVector <double> rcond_batch(batchNumber);
         toast::AlignedVector <double> ftemp_batch(batchNumber * nnz * nnz);
-#pragma omp parallel for schedule(static)
+        #pragma omp parallel for schedule(static)
         for (int64_t batchid = 0; batchid < batchNumber; batchid++) {
             double emin = 1.0e100;
             double emax = 0.0;
@@ -341,7 +341,7 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         }
 
         // data = finv
-#pragma omp parallel for schedule(static)
+        #pragma omp parallel for schedule(static)
         for (int64_t batchid = 0; batchid < batchNumber; batchid++) {
             // did the computation of finv succeed
             const bool success =
@@ -399,7 +399,7 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
         toast::AlignedVector <double> fdata3(batchNumber * nnz * nnz);
 
         // copy data to buffers
-#pragma omp parallel for schedule(static)
+        #pragma omp parallel for schedule(static)
         for (int64_t b = 0; b < batchNumber; b++) {
             // zero out data
             std::fill(fdata1.begin() + b * (nnz * nnz),
@@ -432,7 +432,7 @@ void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                                            fzero, fdata3.data(), nnz, batchNumber);
 
         // copy data back from buffer
-#pragma omp parallel for schedule(static)
+        #pragma omp parallel for schedule(static)
         for (int64_t b = 0; b < batchNumber; b++) {
             int64_t offset2 = 0;
             for (int64_t k = 0; k < nnz; k++) {

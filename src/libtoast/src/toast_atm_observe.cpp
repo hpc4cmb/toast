@@ -74,7 +74,7 @@ double toast::atm_sim_interp(
     double dy = (y - (ystart + (double)iy * ystep)) * ystepinv;
     double dz = (z - (zstart + (double)iz * zstep)) * zstepinv;
 
-# ifndef NO_ATM_CHECKS
+    # ifndef NO_ATM_CHECKS
     if ((dx < 0) || (dx > 1) || (dy < 0) || (dy > 1) || (dz < 0) || (dz > 1)) {
         std::ostringstream o;
         o.precision(16);
@@ -89,12 +89,12 @@ double toast::atm_sim_interp(
         logger.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
-# endif // ifndef NO_ATM_CHECKS
+    # endif // ifndef NO_ATM_CHECKS
 
     double c000, c001, c010, c011, c100, c101, c110, c111;
 
     if ((ix != last_ind[0]) || (iy != last_ind[1]) || (iz != last_ind[2])) {
-# ifndef NO_ATM_CHECKS
+        # ifndef NO_ATM_CHECKS
         if ((ix < 0) || (ix > nx - 2) || (iy < 0) || (iy > ny - 2)
             || (iz < 0) || (iz > nz - 2)) {
             std::ostringstream o;
@@ -109,7 +109,7 @@ double toast::atm_sim_interp(
             logger.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifndef NO_ATM_CHECKS
+        # endif // ifndef NO_ATM_CHECKS
 
         int64_t offset = ix * xstride + iy * ystride + iz * zstride;
 
@@ -122,7 +122,7 @@ double toast::atm_sim_interp(
         int64_t ifull110 = ifull100 + ystride;
         int64_t ifull111 = ifull110 + zstride;
 
-# ifndef NO_ATM_CHECKS
+        # ifndef NO_ATM_CHECKS
         int64_t ifullmax = nn - 1;
         if (
             (ifull000 < 0) || (ifull000 > ifullmax) ||
@@ -149,7 +149,7 @@ double toast::atm_sim_interp(
             logger.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifndef NO_ATM_CHECKS
+        # endif // ifndef NO_ATM_CHECKS
 
         int64_t i000 = compressed_index[ifull000];
         int64_t i001 = compressed_index[ifull001];
@@ -160,7 +160,7 @@ double toast::atm_sim_interp(
         int64_t i110 = compressed_index[ifull110];
         int64_t i111 = compressed_index[ifull111];
 
-# ifndef NO_ATM_CHECKS
+        # ifndef NO_ATM_CHECKS
         int64_t imax = nelem - 1;
         if (
             (i000 < 0) || (i000 > imax) ||
@@ -196,7 +196,7 @@ double toast::atm_sim_interp(
             logger.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
-# endif // ifndef NO_ATM_CHECKS
+        # endif // ifndef NO_ATM_CHECKS
 
         c000 = realization[i000];
         c001 = realization[i001];
@@ -323,7 +323,7 @@ int toast::atm_sim_observe(
             if ((!((azmin <= az[i]) && (az[i] <= azmax)) &&
                  !((azmin <= az[i] - 2 * M_PI) && (az[i] - 2 * M_PI <= azmax)))
                 || !((elmin <= el[i]) && (el[i] <= elmax))) {
-            # pragma omp flush(error)
+                # pragma omp flush(error)
                 if (error == 0) {
                     if (atm_verbose()) {
                         o.str("");
@@ -337,7 +337,7 @@ int toast::atm_sim_observe(
                         logger.warning(o.str().c_str());
                     }
                     error = 1;
-                # pragma omp flush(error)
+                    # pragma omp flush(error)
                 }
                 continue;
             }
@@ -393,11 +393,11 @@ int toast::atm_sim_observe(
                 y += ytel_now;
                 z += ztel_now;
 
-# ifndef NO_ATM_CHECKS
+                # ifndef NO_ATM_CHECKS
                 if ((x < xstart) || (x > xstart + delta_x) ||
                     (y < ystart) || (y > ystart + delta_y) ||
                     (z < zstart) || (z > zstart + delta_z)) {
-                #  pragma omp flush (error)
+                    #  pragma omp flush (error)
                     if (error == 0) {
                         if (atm_verbose()) {
                             o.str("");
@@ -410,12 +410,12 @@ int toast::atm_sim_observe(
                             logger.warning(o.str().c_str());
                         }
                         error = 1;
-                    #  pragma omp flush (error)
+                        #  pragma omp flush (error)
                     }
                     val = 0;
                     break;
                 }
-# endif // ifndef NO_ATM_CHECKS
+                # endif // ifndef NO_ATM_CHECKS
 
                 // Combine atmospheric emission (via interpolation) with the
                 // ambient temperature.
@@ -465,7 +465,7 @@ int toast::atm_sim_observe(
                             logger.warning(o.str().c_str());
                         }
                         error = 1;
-                    # pragma omp flush(error)
+                        # pragma omp flush(error)
                     }
                     val = 0;
                     break;

@@ -16,7 +16,7 @@ double integrate_simpson(py::array_t <double> x, py::array_t <double> f) {
     size_t n = x.size();
     double result = 0;
 
-#pragma omp parallel for reduction(+: result)
+    #pragma omp parallel for reduction(+: result)
     for (size_t i = 0; i < (n - 1) / 2; ++i) {
         size_t ii = 2 * i;
         double h1 = fast_x(ii + 1) - fast_x(ii);
