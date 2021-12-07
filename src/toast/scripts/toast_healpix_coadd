@@ -26,8 +26,12 @@ from toast.pixels_io import (
     filename_is_hdf5,
     read_healpix,
     write_healpix,
+    write_healpix_fits,
+    write_healpix_hdf5,
 )
 from toast._libtoast import cov_eigendecompose_diag, cov_apply_diag
+from toast import PixelDistribution, PixelData
+from toast.covariance import covariance_invert, covariance_apply
 
 
 def main():
@@ -193,66 +197,86 @@ def main():
         if noiseweighted_sum is None:
             noiseweighted_sum = np.zeros([nnz, npix], dtype=float)
             invcov_sum = np.zeros([nnz2, npix], dtype=float)
-        if rank == 0:
-            comm.Reduce(MPI.IN_PLACE, noiseweighted_sum, op=MPI.SUM, root=0)
-            comm.Reduce(MPI.IN_PLACE, invcov_sum, op=MPI.SUM, root=0)
-        else:
-            comm.Reduce(noiseweighted_sum, None, op=MPI.SUM, root=0)
-            comm.Reduce(invcov_sum, None, op=MPI.SUM, root=0)
+        comm.Allreduce(MPI.IN_PLACE, noiseweighted_sum, op=MPI.SUM)
+        comm.Allreduce(MPI.IN_PLACE, invcov_sum, op=MPI.SUM)
         log.info_rank(f"Reduced inputs in", timer=timer, comm=comm)
-        if rank != 0:
-            del noiseweighted_sum
-            del invcov_sum
-
-    nsubmap = npix
-    npix_submap = 1
 
     if args.invcov is not None:
-        log.info(f"Writing {args.invcov}")
+        log.info_rank(f"Writing {args.invcov}", comm=comm)
         if rank == 0:
             write_healpix(
                 args.invcov, invcov_sum, nest=True, overwrite=True, dtype=dtype
             )
         log.info_rank(f"Wrote {args.invcov} in", timer=timer, comm=comm)
 
+    # Assign submaps, invert and apply local portions of the matrix
+
+    npix_submap = 12 * args.nside_submap ** 2
+    nsubmap = npix // npix_submap
+    local_submaps = [submap for submap in range(nsubmap) if submap % ntask == rank]
+    dist = PixelDistribution(
+        n_pix=npix, n_submap=nsubmap, local_submaps=local_submaps, comm=comm
+    )
+    dist_map = PixelData(dist, float, n_value=nnz)
+    dist_cov = PixelData(dist, float, n_value=nnz2)
+    for local_submap, global_submap in enumerate(local_submaps):
+        pix_start = global_submap * npix_submap
+        pix_stop = pix_start + npix_submap
+        dist_map.data[local_submap] = noiseweighted_sum[:, pix_start : pix_stop].T
+        dist_cov.data[local_submap] = invcov_sum[:, pix_start : pix_stop].T
+    del noiseweighted_sum
+    del invcov_sum
+
     log.info_rank("Inverting matrix", comm=comm)
-    if rank == 0:
-        rcond = np.zeros(npix, dtype=float)
-        cov = invcov_sum.T.ravel().astype(float).copy()
-        del invcov_sum
-        cov_eigendecompose_diag(
-            nsubmap, npix_submap, nnz, cov, rcond, args.rcond_limit, True
-        )
+    dist_rcond = PixelData(dist, float, n_value=1)
+    covariance_invert(dist_cov, args.rcond_limit, rcond=dist_rcond, use_alltoallv=True)
     log.info_rank(f"Inverted matrix", timer=timer, comm=comm)
 
     if args.rcond is not None:
         log.info_rank(f"Writing {args.rcond}", comm=comm)
-        if rank == 0:
-            write_healpix(args.rcond, rcond, nest=True, overwrite=True, dtype=dtype)
+        if filename_is_fits(args.rcond):
+            write_healpix_fits(dist_rcond, args.rcond, nest=True)
+        else:
+            write_healpix_hdf5(
+                dist_rcond,
+                args.rcond,
+                nest=True,
+                single_precision=not args.double_precision,
+                force_serial=True
+            )
         log.info_rank(f"Wrote {args.rcond}", timer=timer, comm=comm)
-    if rank == 0:
-        del rcond
+    del dist_rcond
 
-    log.info("Applying matrix")
-    if rank == 0:
-        coadd_map = noiseweighted_sum.T.ravel().astype(float).copy()
-        del noiseweighted_sum
-        cov_apply_diag(nsubmap, npix_submap, nnz, cov.data, coadd_map.data)
+    log.info_rank("Applying matrix", comm=comm)
+    covariance_apply(dist_cov, dist_map, use_alltoallv=True)
     log.info_rank(f"Applied matrix in", timer=timer, comm=comm)
 
     if args.cov is not None:
         log.info_rank(f"Writing {args.cov}", comm=comm)
-        if rank == 0:
-            cov = cov.reshape(npix, -1).T.copy()
-            write_healpix(args.cov, cov, nest=True, overwrite=True, dtype=dtype)
+        if filename_is_fits(args.cov):
+            write_healpix_fits(dist_cov, args.cov, nest=True)
+        else:
+            write_healpix_hdf5(
+                dist_cov,
+                args.cov,
+                nest=True,
+                single_precision=not args.double_precision,
+                force_serial=True
+            )
         log.info_rank(f"Wrote {args.cov}", timer=timer, comm=comm)
-    if rank == 0:
-        del cov
+    del dist_cov
 
     log.info_rank(f"Writing {args.outmap}", comm=comm)
-    if rank == 0:
-        coadd_map = coadd_map.reshape(npix, -1).T.copy()
-        write_healpix(args.outmap, coadd_map, nest=True, overwrite=True, dtype=dtype)
+    if filename_is_fits(args.outmap):
+        write_healpix_fits(dist_map, args.outmap, nest=True)
+    else:
+        write_healpix_hdf5(
+            dist_map,
+            args.outmap,
+            nest=True,
+            single_precision=not args.double_precision,
+            force_serial=True
+        )
     log.info_rank(f"Wrote {args.outmap}", timer=timer, comm=comm)
 
     log.info_rank(f"Co-add done in", timer=timer0, comm=comm)
