@@ -61,9 +61,6 @@ class GPU_memory_block_t {
 };
 
 // allocates a slab of memory and then recycles allocations
-// NOTE: blocks are located with a linear lookup
-//       if it ever impacts runtime then we could couple the vector
-//       with a hastable (cpu_ptr->index)
 class GPU_memory_pool {
     private:
 
