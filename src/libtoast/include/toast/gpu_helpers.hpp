@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <unordered_map>
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
@@ -78,16 +79,24 @@ private:
     // memory blocks that have been allocated but cannot be freed yet
     std::vector<GPU_memory_block_t> blocks;
 
+    // map from cpu pointers to block indexes
+    std::unordered_map<void *, size_t> cpu_ptr_to_block_index;
+
     // allocates a number of bytes on the gpu
     GPU_memory_pool();
 
     // takes a cpu pointer and returns the index of the associated block
     // returns an error if there is no associated block
-    int block_index_of_cpu_ptr(void *cpu_ptr);
+    size_t block_index_of_cpu_ptr(void *cpu_ptr);
 
     // takes a gpu pointer and returns the index of the associated block
     // returns an error if there is no associated block
-    int block_index_of_gpu_ptr(void *gpu_ptr);
+    size_t block_index_of_gpu_ptr(void *gpu_ptr);
+
+    // removes as many memory blocks as possible
+    // going from last to first
+    // until we hit a block that is not free
+    void garbage_collection();
 
 public:
     // handles for linear algebra, to be re-used (as they are expensive to create)

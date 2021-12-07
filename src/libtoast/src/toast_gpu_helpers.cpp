@@ -332,7 +332,7 @@ GPU_memory_block_t::GPU_memory_block_t(void *gpu_ptr, size_t size_bytes_arg,
 // MEMORY POOL
 
 // constructor, does the initial allocation
-GPU_memory_pool::GPU_memory_pool() : blocks()
+GPU_memory_pool::GPU_memory_pool() : blocks(), cpu_ptr_to_block_index()
 {
     // Get the requested fraction of per-process memory from the environment.
     // If the user does not specify this, use something conservative that is
@@ -454,31 +454,32 @@ GPU_memory_pool &GPU_memory_pool::get()
 
 // takes a cpu pointer and returns the index of the associated block
 // returns an error if there is no associated block
-int GPU_memory_pool::block_index_of_cpu_ptr(void *cpu_ptr)
+size_t GPU_memory_pool::block_index_of_cpu_ptr(void *cpu_ptr)
 {
-    // gets the index of `cpu_ptr` in the blocks vector
-    for (int i = 0; i < blocks.size(); i++)
+    auto entry = cpu_ptr_to_block_index.find(cpu_ptr);
+    if (entry == cpu_ptr_to_block_index.end())
     {
-        if (blocks[i].cpu_ptr == cpu_ptr)
-        {
-            return i;
-        }
+        // errors-out if we cannot find `cpu_ptr`
+        auto log = toast::Logger::get();
+        std::string msg =
+            "GPU_memory_pool::block_index_of_cpu_ptr: either `cpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
+        log.error(msg.c_str());
+        throw std::runtime_error(msg.c_str());
     }
-
-    // errors-out if we cannot find `cpu_ptr`
-    auto log = toast::Logger::get();
-    std::string msg =
-        "GPU_memory_pool::block_index_of_cpu_ptr: either `cpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
-    log.error(msg.c_str());
-    throw std::runtime_error(msg.c_str());
+    else
+    {
+        // returns the index
+        return entry->second;
+    }
 }
 
 // takes a gpu pointer and returns the index of the associated block
 // returns an error if there is no associated block
-int GPU_memory_pool::block_index_of_gpu_ptr(void *gpu_ptr)
+size_t GPU_memory_pool::block_index_of_gpu_ptr(void *gpu_ptr)
 {
     // gets the index of `gpu_ptr` in the blocks vector
-    for (int i = 0; i < blocks.size(); i++)
+    // iterates from the end as it is where the latest block are stored
+    for (size_t i = blocks.size() - 1; i >= 0; i--)
     {
         if (blocks[i].start == gpu_ptr)
         {
@@ -492,6 +493,23 @@ int GPU_memory_pool::block_index_of_gpu_ptr(void *gpu_ptr)
         "GPU_memory_pool::block_index_of_gpu_ptr: either `gpu_ptr` does not map to GPU memory allocated with this GPU_memory_pool or you have already freed this memory.";
     log.error(msg.c_str());
     throw std::runtime_error(msg.c_str());
+}
+
+// removes as many memory blocks as possible
+// going from last to first
+// until we hit a block that is not free
+void GPU_memory_pool::garbage_collection()
+{
+    GPU_memory_block_t &block = blocks.back();
+    while (block.is_free)
+    {
+        // removes cpu_ptr from map
+        cpu_ptr_to_block_index.erase(block.cpu_ptr);
+        // deletes block
+        blocks.pop_back();
+        // goes on to the next block
+        block = blocks.back();
+    }
 }
 
 // allocates memory, starting from the end of the latest allocated block
@@ -522,6 +540,7 @@ cudaError GPU_memory_pool::malloc(void **gpu_ptr, size_t size_bytes,
 
     // stores the block and returns
     blocks.push_back(memoryBlock);
+    cpu_ptr_to_block_index[cpu_ptr] = blocks.size() - 1;
     return cudaSuccess;
 }
 
@@ -539,10 +558,7 @@ void GPU_memory_pool::free(void *gpu_ptr)
     block.is_free = true;
 
     // if gpu_ptr was the last elements, frees a maximum of blocks
-    while (blocks.back().is_free)
-    {
-        blocks.pop_back();
-    }
+    this->garbage_collection();
 }
 
 // frees the gpu memory associated with the given cpu pointer
@@ -559,10 +575,7 @@ void GPU_memory_pool::free_associated_memory(void *cpu_ptr)
     block.is_free = true;
 
     // if gpu_ptr was the last elements, frees a maximum of blocks
-    while (blocks.back().is_free)
-    {
-        blocks.pop_back();
-    }
+    this->garbage_collection();
 }
 
 // gets the given number of elements back from GPU to the given CPU location
@@ -587,10 +600,7 @@ void GPU_memory_pool::fromDevice(void *cpu_ptr)
     block.is_free = true;
 
     // if gpu_ptr was the last elements, frees a maximum of blocks
-    while (blocks.back().is_free)
-    {
-        blocks.pop_back();
-    }
+    this->garbage_collection();
 }
 
 // sends data from gpu to the associated cpu_ptr in order to keep it up to date
@@ -628,14 +638,8 @@ void GPU_memory_pool::update_gpu_memory(void *cpu_ptr)
 // Determine if the cpu_ptr has an associated gpu_ptr in the pool
 bool GPU_memory_pool::is_present(void *cpu_ptr)
 {
-    for (int i = 0; i < blocks.size(); i++)
-    {
-        if (blocks[i].cpu_ptr == cpu_ptr)
-        {
-            return true;
-        }
-    }
-    return false;
+    auto entry = cpu_ptr_to_block_index.find(cpu_ptr);
+    return (entry != cpu_ptr_to_block_index.end());
 }
 
 #endif // ifdef HAVE_CUDALIBS
