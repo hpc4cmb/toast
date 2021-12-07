@@ -205,7 +205,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     // copies only if the eigenvectors have been stored in A
     if (JOBZ == 'V') {
         pool.fromDevice(A_batch, A_batch_gpu, batchCount * N * LDA);
-    } else {
+    } else   {
         pool.free(A_batch_gpu);
     }
 #elif HAVE_LAPACK
@@ -219,7 +219,7 @@ void toast::LinearAlgebra::syev_batched(char JOBZ, char UPLO, int N, double * A_
     wrapped_dsyev(&JOBZ, &UPLO, &N, A, &LDA, W, &optimal_LWORK, &LWORK, INFO);
     if (*INFO == 0) {
         LWORK = optimal_LWORK;
-    } else {
+    } else   {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg(
@@ -322,7 +322,7 @@ void toast::LinearAlgebra::symm_batched(char SIDE, char UPLO, int M, int N,
                 if (UPLO == 'U') {
                     // fill lower part of A
                     A[r + LDA * c] = A[c + LDA * r];
-                } else {
+                } else   {
                     // fill upper part of A
                     A[c + LDA * r] = A[r + LDA * c];
                 }
@@ -497,7 +497,7 @@ void toast::LinearAlgebra::gels(int M, int N, int NRHS, double * A, int LDA,
     wrapped_dgels(TRANS, &M, &N, &NRHS, A, &LDA, B, &LDB, &optimal_LWORK, &LWORK, INFO);
     if (*INFO == 0) {
         LWORK = optimal_LWORK;
-    } else {
+    } else   {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg(

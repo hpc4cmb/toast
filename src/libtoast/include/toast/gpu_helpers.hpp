@@ -10,6 +10,7 @@
 # include <string>
 # include <vector>
 # include <mutex>
+# include <unordered_map>
 # include <cublas_v2.h>
 # include <cusolverDn.h>
 # include <cuda_runtime_api.h>
@@ -45,7 +46,7 @@ class GPU_memory_block_t {
 
         // whether that block has been freed (meaning it could be garbage collected
         // later)
-        bool isFree;
+        bool is_free;
 
         // pointer to the cpu data that was put in the block
         // optional (might be nullptr) if the block was not allocated in a cpu-2-gpu
@@ -60,12 +61,6 @@ class GPU_memory_block_t {
 };
 
 // allocates a slab of memory and then recycles allocations
-// TODO - now that we express a lot of operation from the cpu_ptr point of view,
-//        we might want to store the blocks in an ordered Map instead of a vector
-//        and to reformulate function to all run from this point of view (removing
-// things like free(gpu_ptr))
-//      - there is now a lot of redundancy in the code used to locate the memory amongst
-// the blocks
 class GPU_memory_pool {
     private:
 
@@ -81,8 +76,25 @@ class GPU_memory_pool {
         // memory blocks that have been allocated but cannot be freed yet
         std::vector <GPU_memory_block_t> blocks;
 
+        // map from pointers to block indexes
+        std::unordered_map <void *, size_t> cpu_ptr_to_block_index;
+        std::unordered_map <void *, size_t> gpu_ptr_to_block_index;
+
         // allocates a number of bytes on the gpu
         GPU_memory_pool();
+
+        // takes a cpu pointer and returns the index of the associated block
+        // returns an error if there is no associated block
+        size_t block_index_of_cpu_ptr(void * cpu_ptr);
+
+        // takes a gpu pointer and returns the index of the associated block
+        // returns an error if there is no associated block
+        size_t block_index_of_gpu_ptr(void * gpu_ptr);
+
+        // removes as many memory blocks as possible
+        // going from last to first
+        // until we hit a block that is not free
+        void garbage_collection();
 
     public:
 
@@ -114,13 +126,15 @@ class GPU_memory_pool {
         // - it is typed,
         // - it takes a number of elements rather than a number of bytes
         // - it returns a pointer rather than taking it as an input
+        // `cpu_ptr` is optional but can be passed to keep trace of the origin of the
+        // data when allocating during a cpu-2-gpu copy operation
         template <typename T>
-        T * alloc(size_t nb_elements) {
-            T * output_ptr = NULL;
-            const cudaError errorCode = this->malloc((void **)&output_ptr,
-                                                     nb_elements * sizeof(T));
+        T * alloc(size_t nb_elements, void * cpu_ptr = nullptr) {
+            T * gpu_ptr = NULL;
+            const cudaError errorCode = this->malloc((void **)&gpu_ptr,
+                                                     nb_elements * sizeof(T), cpu_ptr);
             checkCudaErrorCode(errorCode, "GPU_memory_pool::alloc");
-            return output_ptr;
+            return gpu_ptr;
         }
 
         // allocates gpu memory for the given number of elements
@@ -130,21 +144,17 @@ class GPU_memory_pool {
         template <typename T>
         T * toDevice(T * cpu_ptr, size_t nb_elements) {
             // memory allocation
-            void * gpu_ptr = NULL;
-            const cudaError errorCodeMalloc = this->malloc(&gpu_ptr,
-                                                           nb_elements * sizeof(T),
-                                                           cpu_ptr);
-            checkCudaErrorCode(errorCodeMalloc, "GPU_memory_pool::toDevice (malloc)");
+            T * gpu_ptr = this->alloc(nb_elements, cpu_ptr);
 
             // data transfer
             const cudaError errorCodeMemcpy = cudaMemcpy(gpu_ptr, cpu_ptr,
                                                          nb_elements * sizeof(T),
                                                          cudaMemcpyHostToDevice);
             checkCudaErrorCode(errorCodeMemcpy, "GPU_memory_pool::toDevice (memcpy)");
-            return static_cast <T *> (gpu_ptr);
+            return gpu_ptr;
         }
 
-        // gets the given number of elements back from GPU to the given CPU location
+        // gets the given number of elements back from the given GPU location to CPU
         // frees the gpu memory
         template <typename T>
         void fromDevice(T * cpu_ptr, T * gpu_ptr, size_t nb_elements) {
@@ -161,9 +171,6 @@ class GPU_memory_pool {
 
         // gets the given number of elements back from GPU to the given CPU location
         // frees the gpu memory
-        // WARNING: this function assumes that `toDevice` was called with `cpu_ptr`
-        //          it will use this assumption to identify the gpu pointer and the size
-        //          of the allocation
         void fromDevice(void * cpu_ptr);
 
         // sends data from gpu to the associated cpu_ptr in order to keep it up to date
@@ -171,12 +178,9 @@ class GPU_memory_pool {
 
         // sends data from cpu_ptr to the associated gpu memory in order to keep it up
         // to date
-        // WARNING: this function assumes that `toDevice` was called with `cpu_ptr`
-        //          it will use this assumption to identify the gpu pointer and the size
-        //          of the allocation
         void update_gpu_memory(void * cpu_ptr);
 
-        // Determine if the cpu_ptr has an associated gpu_ptr in the pool
+        // determines if the cpu_ptr has an associated gpu_ptr in the pool
         bool is_present(void * cpu_ptr);
 };
 
