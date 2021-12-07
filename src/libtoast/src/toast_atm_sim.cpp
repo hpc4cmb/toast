@@ -407,7 +407,7 @@ int64_t toast::atm_sim_coord2ind(
     int64_t iy = (y - ystart) * ystepinv;
     int64_t iz = (z - zstart) * zstepinv;
 
-# ifndef NO_ATM_CHECKS
+    # ifndef NO_ATM_CHECKS
     if ((ix < 0) || (ix > nx - 1) || (iy < 0) || (iy > ny - 1) || (iz < 0) ||
         (iz > nz - 1)) {
         std::ostringstream o;
@@ -420,7 +420,7 @@ int64_t toast::atm_sim_coord2ind(
         logger.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
-# endif // ifndef NO_ATM_CHECKS
+    # endif // ifndef NO_ATM_CHECKS
 
     size_t ifull = ix * xstride + iy * ystride + iz * zstride;
 

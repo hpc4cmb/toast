@@ -30,11 +30,11 @@ toast::FFTPlanReal1DFFTW::FFTPlanReal1DFFTW(
     int threads = 1;
 
     // enable threads
-# ifdef HAVE_FFTW_THREADS
+    # ifdef HAVE_FFTW_THREADS
     auto & env = toast::Environment::get();
     threads = env.max_threads();
     fftw_plan_with_nthreads(threads);
-# endif // ifdef HAVE_FFTW_THREADS
+    # endif // ifdef HAVE_FFTW_THREADS
 
     // allocate memory
 

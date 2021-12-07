@@ -497,17 +497,17 @@ void init_sys(py::module & m) {
     m.def("threading_state",
           []() {
               int max = 0;
-            #ifdef _OPENMP
+              #ifdef _OPENMP
               max = omp_get_max_threads();
-            #endif // ifdef _OPENMP
+              #endif // ifdef _OPENMP
 
               int cur;
-            #pragma omp parallel
+              #pragma omp parallel
               {
                   cur = 0;
-                #ifdef _OPENMP
+                  #ifdef _OPENMP
                   cur = omp_get_num_threads();
-                #endif // ifdef _OPENMP
+                  #endif // ifdef _OPENMP
               }
               return py::make_tuple(max,
                                     cur);
