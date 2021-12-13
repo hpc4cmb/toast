@@ -124,6 +124,29 @@ class ElevationNoise(Operator):
         help="Extra multiplier to the NET scaling",
     )
 
+    pwv_a0 = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'a0' in (a0 + pwv * a1 + pwv ** 2 * a2). "
+        " If not set, look for one in the Focalplane.",
+    )
+
+    pwv_a1 = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'a1' in (a0 + pwv * a1 + pwv ** 2 * a2). "
+        " If not set, look for one in the Focalplane.",
+    )
+
+    pwv_a2 = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'a2' in (a0 + pwv * a1 + pwv ** 2 * a2). "
+        " If not set, look for one in the Focalplane.",
+    )
+
+    modulate_pwv = Bool(True, help="If True, modulate the NET based on PWV")
+
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
         detpointing = proposal["value"]
