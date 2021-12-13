@@ -104,7 +104,7 @@ class ElevationNoise(Operator):
         " If not set, look for one in the Focalplane.",
     )
 
-    modulate_pwv = Bool(True, help="If True, modulate the NET based on PWV")
+    modulate_pwv = Bool(False, help="If True, modulate the NET based on PWV")
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
