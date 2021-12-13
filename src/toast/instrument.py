@@ -413,6 +413,8 @@ class Focalplane(object):
         "elevation_noise_a" and "elevation_noise_c":  Parameters of elevation scaling
             noise model: PSD_{out} = PSD_{ref} * (a / sin(el) + c)^2.  Only applicable
             to ground data.
+        "pwv_a0", "pwv_a1" and "pwv_a2":  quadratic fit of the NET modulation by
+            PWV.  Only applicable to ground data.
 
     Args:
         detector_data (QTable):  Table of detector properties.

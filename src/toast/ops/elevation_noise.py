@@ -26,6 +26,7 @@ from .operator import Operator
 @trait_docs
 class ElevationNoise(Operator):
     """Modify detector noise model based on elevation.
+    Optionally include PWV modulation.
 
     This adjusts the detector PSDs in a noise model based on the median elevation of
     each detector in each observation.
@@ -71,14 +72,39 @@ class ElevationNoise(Operator):
     noise_a = Float(
         None,
         allow_none=True,
-        help="Parameter 'a' in (a / sin(el) + c).  If not set, look for one in the Focalplane.",
+        help="Parameter 'a' in (a / sin(el) + c).  "
+        "If not set, look for one in the Focalplane.",
     )
 
     noise_c = Float(
         None,
         allow_none=True,
-        help="Parameter 'c' in (a / sin(el) + c).  If not set, look for one in the Focalplane.",
+        help="Parameter 'c' in (a / sin(el) + c).  "
+        "If not set, look for one in the Focalplane.",
     )
+
+    pwv_a0 = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'a0' in (a0 + pwv * a1 + pwv ** 2 * a2). "
+        " If not set, look for one in the Focalplane.",
+    )
+
+    pwv_a1 = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'a1' in (a0 + pwv * a1 + pwv ** 2 * a2). "
+        " If not set, look for one in the Focalplane.",
+    )
+
+    pwv_a2 = Float(
+        None,
+        allow_none=True,
+        help="Parameter 'a2' in (a0 + pwv * a1 + pwv ** 2 * a2). "
+        " If not set, look for one in the Focalplane.",
+    )
+
+    modulate_pwv = Bool(True, help="If True, modulate the NET based on PWV")
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
@@ -126,9 +152,8 @@ class ElevationNoise(Operator):
 
             # Check that the noise model exists
             if self.noise_model not in ob:
-                msg = "Noise model {} does not exist in observation {}".format(
-                    self.noise_model, ob.name
-                )
+                msg = "Noise model {self.noise_model} does not exist in " \
+                    "observation {ob.name}"
                 raise RuntimeError(msg)
 
             # Check that the view in the detector pointing operator covers
@@ -144,9 +169,8 @@ class ElevationNoise(Operator):
                 detector_intervals = ob.intervals[self.detector_pointing.view]
                 intersection = detector_intervals & intervals
                 if intersection != intervals:
-                    msg = "view {} is not fully covered by valid detector pointing".format(
-                        self.view
-                    )
+                    msg = f"view {self.view} is not fully covered by valid " \
+                        "detector pointing"
                     raise RuntimeError(msg)
 
             noise = ob[self.noise_model]
@@ -189,6 +213,19 @@ class ElevationNoise(Operator):
                 else:
                     continue
 
+                if self.modulate_pwv and self.pwv_a0 is not None:
+                    pwv_a0 = self.pwv_a0
+                    pwv_a1 = self.pwv_a1
+                    pwv_a2 = self.pwv_a2
+                    modulate_pwv = True
+                elif self.modulate_pwv and "pwv_noise_a0" in focalplane[det].colnames:
+                    pwv_a0 = focalplane[det]["pwv_noise_a0"]
+                    pwv_a1 = focalplane[det]["pwv_noise_a1"]
+                    pwv_a2 = focalplane[det]["pwv_noise_a2"]
+                    modulate_pwv = True
+                else:
+                    modulate_pwv = False
+
                 # Compute detector quaternions one detector at a time.
                 self.detector_pointing.apply(data, detectors=[det])
                 el_view = list()
@@ -208,7 +245,13 @@ class ElevationNoise(Operator):
 
                 # Scale the PSD
                 el_factor = noise_a / np.sin(el) + noise_c
-                out_noise.psd(det)[:] *= el_factor ** 2
+                if modulate_pwv:
+                    pwv = ob.telescope.site.weather.pwv.to_value(u.mm)
+                    pwv_factor = pwv_a0 + pwv_a1 * pwv + pwv_a2 * pwv ** 2
+                else:
+                    pwv_factor = 1
+
+                out_noise.psd(det)[:] *= el_factor ** 2 * pwv_factor ** 2
         return
 
     def _finalize(self, data, **kwargs):
