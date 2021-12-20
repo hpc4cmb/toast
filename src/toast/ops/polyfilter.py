@@ -11,6 +11,9 @@ from astropy import units as u
 import numpy as np
 import traitlets
 
+from jax import jit
+import jax.numpy as jnp
+
 from ..mpi import MPI, MPI_Comm, use_mpi, Comm
 
 from .operator import Operator
@@ -848,3 +851,189 @@ class CommonModeFilter(Operator):
             "detdata": list(),
         }
         return prov
+
+def filter_polynomial_jax(order, flags, signals, starts, stops):
+    """
+    Process the signals, one subscan at a time.
+    There is only one flag vector, because the flags must be identical to apply the same template matrix.
+    
+    Inputs:
+    order: integer
+    flags: integer array ??
+    signals: double array array ??
+    starts: numpy array of integers
+    stops: numpy array of integers
+
+    NOTE: port of filter_polynomial from compiled code to JAX
+    """
+
+"""
+void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
+                              std::vector <double *> const & signals, size_t nscan,
+                              int64_t const * starts, int64_t const * stops) {
+    if (order < 0) return;
+
+    int nsignal = signals.size();
+    int norder = order + 1;
+
+    char upper = 'U';
+    char lower = 'L';
+    char notrans = 'N';
+    char trans = 'T';
+    double fzero = 0.0;
+    double fone = 1.0;
+
+    for (size_t iscan = 0; iscan < nscan; ++iscan) {
+        int64_t start = starts[iscan];
+        int64_t stop = stops[iscan];
+        if (start < 0) start = 0;
+        if (stop > n - 1) stop = n - 1;
+        if (stop < start) continue;
+        int scanlen = stop - start + 1;
+
+        int ngood = 0;
+        for (size_t i = 0; i < scanlen; ++i) {
+            if (flags[start + i] == 0) ngood++;
+        }
+        if (ngood == 0) continue;
+
+        // Build the full template matrix used to clean the signal.
+        // We subtract the template value even from flagged samples to
+        // support point source masking etc.
+        toast::AlignedVector <double> full_templates(scanlen * norder);
+
+        double dx = 2. / scanlen;
+        double xstart = 0.5 * dx - 1;
+        double * current, * last, * lastlast;
+
+        for (size_t iorder = 0; iorder < norder; ++iorder) 
+        {
+            current = &full_templates[iorder * scanlen];
+            if (iorder == 0) 
+            {
+                for (size_t i = 0; i < scanlen; ++i) 
+                {
+                    current[i] = 1;
+                }
+            } 
+            else if (iorder == 1) 
+            {
+                for (size_t i = 0; i < scanlen; ++i) 
+                {
+                    const double x = xstart + i * dx;
+                    current[i] = x;
+                }
+            } 
+            else 
+            {
+                last = &full_templates[(iorder - 1) * scanlen];
+                lastlast = &full_templates[(iorder - 2) * scanlen];
+                double orderinv = 1. / iorder;
+
+                for (size_t i = 0; i < scanlen; ++i) 
+                {
+                    const double x = xstart + i * dx;
+                    current[i] = ((2 * iorder - 1) * x * last[i] - (iorder - 1) * lastlast[i]) * orderinv;
+                }
+            }
+        }
+
+        // Assemble the flagged template matrix used in the linear
+        // regression
+
+        toast::AlignedVector <double> masked_templates(ngood * norder);
+
+        for (size_t iorder = 0; iorder < norder; ++iorder) 
+        {
+            size_t offset = iorder * ngood;
+            current = &full_templates[iorder * scanlen];
+            for (size_t i = 0; i < scanlen; ++i) 
+            {
+                if (flags[start + i] == 0) 
+                {
+                    masked_templates[offset++] = current[i];
+                }
+            }
+        }
+
+        // Square the template matrix for A^T.A
+        toast::AlignedVector <double> invcov(norder * norder);
+        toast::LinearAlgebra::syrk(upper, trans, norder, ngood, fone,
+                                   masked_templates.data(), ngood, fzero, invcov.data(),
+                                   norder);
+
+        // Project the signals against the templates
+
+        toast::AlignedVector <double> masked_signals(ngood * nsignal);
+
+        for (size_t isignal = 0; isignal < nsignal; ++isignal) 
+        {
+            size_t offset = isignal * ngood;
+            double * signal = signals[isignal] + start;
+            for (int64_t i = 0; i < scanlen; ++i) 
+            {
+                if (flags[start + i] == 0) 
+                {
+                    masked_signals[offset++] = signal[i];
+                }
+            }
+        }
+
+        toast::AlignedVector <double> proj(norder * nsignal);
+
+        toast::LinearAlgebra::gemm(trans, notrans, norder, nsignal, ngood,
+                                   fone, masked_templates.data(), ngood,
+                                   masked_signals.data(), ngood,
+                                   fzero, proj.data(), norder);
+
+        // Symmetrize the covariance matrix, dgells is written for
+        // generic matrices
+
+        for (size_t row = 0; row < norder; ++row) 
+        {
+            for (size_t col = row + 1; col < norder; ++col) 
+            {
+                invcov[col + row * norder] = invcov[row + col * norder];
+            }
+        }
+
+        // Fit the templates against the data.
+        // DGELSS minimizes the norm of the difference and the solution vector
+        // and overwrites proj with the fitting coefficients.
+        int rank, info;
+        double rcond_limit = 1e-3;
+        int LWORK = toast::LinearAlgebra::gelss_buffersize(norder, norder, nsignal,
+                                                           norder, norder, rcond_limit);
+        toast::AlignedVector <double> WORK(LWORK);
+        toast::AlignedVector <double> singular_values(norder);
+        toast::LinearAlgebra::gelss(
+            norder, norder, nsignal, invcov.data(), norder,
+            proj.data(), norder, singular_values.data(), rcond_limit,
+            &rank, WORK.data(), LWORK, &info);
+
+        for (int iorder = 0; iorder < norder; ++iorder) 
+        {
+            double * temp = &full_templates[iorder * scanlen];
+            for (int isignal = 0; isignal < nsignal; ++isignal) 
+            {
+                double * signal = &signals[isignal][start];
+                double amp = proj[iorder + isignal * norder];
+                if (toast::is_aligned(signal) && toast::is_aligned(temp)) 
+                {
+                    for (size_t i = 0; i < scanlen; ++i) 
+                    {
+                        signal[i] -= amp * temp[i];
+                    }
+                } 
+                else 
+                {
+                    for (size_t i = 0; i < scanlen; ++i) 
+                    {
+                        signal[i] -= amp * temp[i];
+                    }
+                }
+            }
+        }
+    }
+}
+"""
