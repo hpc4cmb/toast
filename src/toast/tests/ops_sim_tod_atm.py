@@ -26,6 +26,8 @@ from ..dipole import dipole
 
 from ._helpers import create_outdir, create_ground_data
 
+from ..atm import available_atm, available_utils
+
 
 class SimAtmTest(MPITestCase):
     def setUp(self):
@@ -34,6 +36,10 @@ class SimAtmTest(MPITestCase):
         self.nside = 256
 
     def test_sim(self):
+        if not available_atm:
+            print("TOAST was compiled without atmosphere support, skipping tests")
+            return
+
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
@@ -182,6 +188,10 @@ class SimAtmTest(MPITestCase):
                 raise RuntimeError("Simulated atmosphere is polarized")
 
     def test_sim_interp(self):
+        if not available_atm:
+            print("TOAST was compiled without atmosphere support, skipping tests")
+            return
+
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
@@ -224,6 +234,10 @@ class SimAtmTest(MPITestCase):
         return
 
     def test_sim_pol(self):
+        if not available_atm:
+            print("TOAST was compiled without atmosphere support, skipping tests")
+            return
+
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
@@ -381,6 +395,10 @@ class SimAtmTest(MPITestCase):
                 raise RuntimeError("Simulated atmosphere is not polarized")
 
     def test_loading(self):
+        if not available_atm:
+            print("TOAST was compiled without atmosphere support, skipping tests")
+            return
+
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
@@ -434,6 +452,10 @@ class SimAtmTest(MPITestCase):
         return
 
     def test_bandpass(self):
+        if not available_atm:
+            print("TOAST was compiled without atmosphere support, skipping tests")
+            return
+
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank

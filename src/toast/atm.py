@@ -17,17 +17,6 @@ from .rng import random as toast_rng
 
 from .mpi import MPI, MPIShared
 
-available_atm = True
-try:
-    from ._libtoast import (
-        atm_sim_compute_slice,
-        atm_sim_observe,
-        atm_sim_compress_flag_hits_rank,
-        atm_sim_compress_flag_extend_rank,
-        atm_sim_kolmogorov_init_rank,
-    )
-except ImportError:
-    available_atm = False
 
 available_utils = True
 try:
@@ -39,6 +28,18 @@ try:
     )
 except ImportError:
     available_utils = False
+
+available_atm = available_utils
+try:
+    from ._libtoast import (
+        atm_sim_compute_slice,
+        atm_sim_observe,
+        atm_sim_compress_flag_hits_rank,
+        atm_sim_compress_flag_extend_rank,
+        atm_sim_kolmogorov_init_rank,
+    )
+except ImportError:
+    available_atm = False
 
 
 class AtmSim(object):
