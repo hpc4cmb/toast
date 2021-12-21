@@ -879,7 +879,9 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         None: The signals are updated in place.
 
     NOTE: port of `filter_polynomial` from compiled code to Numpy
-    TODO: scanlen and nzero_flags might be variable from one function call to the other which would be bad for JAX (to be tested)
+    TODO: scanlen and nb_zero_flags might be variable from one function call to the other which would be bad for JAX (to be tested)
+          (scanlen appears to be extremely similar, about 40, at least when running tests)
+          (nb_zero_flags seems to be very close)
           `mask` might solve this https://github.com/google/jax/issues/2521#issuecomment-604759386
     """
     # validate order
@@ -889,7 +891,7 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
     n = flags.size
     nsignal = len(signals)
     norder = order + 1
-    print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder}") # TODO debug
+    #print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder}") # TODO debug
 
     # converts signal into a numpy array to avoid having to loop over them
     # TODO this could be done by default removing the need for this step
@@ -912,7 +914,6 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         zero_flags = np.where(flags_interval == 0)
         nb_zero_flags = zero_flags[0].size
         if (nb_zero_flags == 0): continue
-        print(f"DEBUG: scanlen:{scanlen}") # TODO debug
 
         # Build the full template matrix used to clean the signal.
         # We subtract the template value even from flagged samples to
@@ -927,11 +928,11 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         # deals with order 1
         if norder > 1: full_templates[:,1] = x
         # deals with other orders
-        # NOTE: this formulation is inherently sequential but this should be okay as `order`` is likely small
+        # NOTE: this formulation is inherently sequential but this should be okay as `order` is likely small
         for iorder in range(2,norder):
-            previous_previous_template = full_templates[:,iorder-2]
-            previous_template = full_templates[:,iorder-1]
-            full_templates[:,iorder] = ((2 * iorder - 1) * x * previous_template - (iorder - 1) * previous_previous_template) / iorder
+            previous_previous_order = full_templates[:,iorder-2]
+            previous_order = full_templates[:,iorder-1]
+            full_templates[:,iorder] = ((2 * iorder - 1) * x * previous_order - (iorder - 1) * previous_previous_order) / iorder
         
         # Assemble the flagged template matrix used in the linear regression
         masked_templates = full_templates[zero_flags] # nzero_flags*norder
@@ -951,23 +952,7 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
     
     # puts resulting signals back into list form
     for isignal in range(nsignal):
-        signals[isignal] = signals_np[:,isignal]
-
-
-"""
-    for (int iorder = 0; iorder < norder; ++iorder) 
-    {
-        double * temp = &full_templates[iorder * scanlen];
-        for (int isignal = 0; isignal < nsignal; ++isignal) 
-        {
-            double * signal = &signals[isignal][start];
-            for (size_t i = 0; i < scanlen; ++i) 
-            {
-                signal[i] -= proj[iorder + isignal * norder] * temp[i];
-            }
-        }
-    }
-"""
+        signals[isignal][:] = signals_np[:,isignal]
 
 """
 void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
