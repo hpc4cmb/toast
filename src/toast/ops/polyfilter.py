@@ -9,6 +9,7 @@ import warnings
 
 from astropy import units as u
 import numpy as np
+import scipy
 import traitlets
 
 from jax import jit
@@ -560,14 +561,14 @@ class PolyFilter(Operator):
                 if last_flags is None or np.all(last_flags == flags):
                     signals.append(signal)
                 else:
-                    filter_polynomial(
+                    filter_polynomial_switch(
                         self.order, last_flags, signals, local_starts, local_stops
                     )
                     signals = [signal]
                 last_flags = flags.copy()
 
             if len(signals) > 0:
-                filter_polynomial(
+                filter_polynomial_switch(
                     self.order, last_flags, signals, local_starts, local_stops
                 )
 
@@ -861,20 +862,93 @@ class CommonModeFilter(Operator):
         }
         return prov
 
-def filter_polynomial_jax(order, flags, signals, starts, stops):
+def filter_polynomial_switch(order, flags, signals, starts, stops, use_compiled=True):
     """
-    Process the signals, one subscan at a time.
-    There is only one flag vector, because the flags must be identical to apply the same template matrix.
-    
-    Inputs:
-    order: integer
-    flags: integer array ??
-    signals: double array array ??
-    starts: numpy array of integers
-    stops: numpy array of integers
+    Used in test to select the `filter_polynomial` implementation
+    TODO: remove once tests are done
+    """
+    if use_compiled: filter_polynomial(order, flags, signals, starts, stops)
+    else: filter_polynomial_numpy(order, flags, signals, starts, stops)
 
-    NOTE: port of filter_polynomial from compiled code to JAX
+def filter_polynomial_numpy(order, flags, signals, starts, stops):
     """
+    Fit and subtract a polynomial from one or more signals.
+
+    Args:
+        order (int):  The order of the polynomial.
+        flags (numpy array, uint8):  The common flags to use for all signals
+        signals (list of numpy array of double):  A list of float64 arrays containing the signals.
+        starts (numpy array, int64):  The start samples of each scan.
+        stops (numpyarray, int64):  The stop samples of each scan.
+
+    Returns:
+        None: The signals are updated in place.
+
+    NOTE: port of `filter_polynomial` from compiled code to Numpy
+    TODO: `signals` is a list rather than a numpy array so we have to iterate on it
+    """
+    # validate order
+    if (order < 0): return
+
+    # problem size
+    n = flags.size
+    nsignal = signals.len()
+    norder = order + 1
+    
+    # NOTE: that loop is parallel in the C++ code
+    for (start, stop) in zip(starts, stops):
+        # validates interval
+        if (start < 0): start = 0
+        if (stop > n - 1): stop = n - 1
+        if (stop < start): continue
+        scanlen = stop - start + 1
+
+        # set aside the indexes of the zero flags
+        flags_interval = flags[start:(stop+1)]
+        zero_flags = np.where(flags_interval == 0)
+        ngood = zero_flags.size
+        if (ngood == 0): continue
+
+        # Build the full template matrix used to clean the signal.
+        # We subtract the template value even from flagged samples to
+        # support point source masking etc.
+        full_templates = np.zeros(shape=(scanlen, norder))
+        dx = 2. / scanlen
+        xstart = 0.5 * dx - 1
+        xstop = 1. + 1. / scanlen
+        x = np.arange(start=xstart, stop=xstop, step=dx)
+        # deals with order 0
+        full_templates[:,0] = 1
+        # deals with order 1
+        full_templates[:,1] = x
+        # deals with other orders
+        # TODO this formulation is inherently sequential
+        for iorder in range(2,norder):
+            lastlast = full_templates[:,(iorder-2)]
+            last = full_templates[:,(iorder-1)]
+            full_templates[:,iorder] = ((2 * iorder - 1) * x * last - (iorder - 1) * lastlast) / iorder
+        
+        # Assemble the flagged template matrix used in the linear regression
+        masked_templates = full_templates[zero_flags,:] # ngood*norder
+
+        # Square the template matrix for A^T.A
+        invcov = np.dot(masked_templates.T, masked_templates) # norder*norder
+
+        # Project the signals against the templates
+        masked_signals = np.zeros(shape=(ngood, nsignal))
+        # TODO: signals is a list so we have to iterate on it
+        for isignal in range(nsignal): 
+            signal = signals[isignal][start:(stop+1)]
+            masked_signals[:, isignal] = signal[zero_flags]
+        proj = np.dot(masked_templates, masked_signals) # norder*nsignal
+
+        # Fit the templates against the data
+        # by minimizing the norm2 of the difference and the solution vector
+        # puts the result in `proj`
+        proj = scipy.linalg.lstsq(invcov, proj, cond=1e-3, lapack_driverstr='gelss') # norder*nsignal
+        # TODO: signals is a list so we have to iterate on it
+        for isignal in range(nsignal): 
+            signals[isignal][start:(stop+1)] -= proj[:, isignal] * full_templates
 
 """
 void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
@@ -892,7 +966,8 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     double fzero = 0.0;
     double fone = 1.0;
 
-    for (size_t iscan = 0; iscan < nscan; ++iscan) {
+    for (size_t iscan = 0; iscan < nscan; ++iscan) 
+    {
         int64_t start = starts[iscan];
         int64_t stop = stops[iscan];
         if (start < 0) start = 0;
@@ -901,7 +976,8 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         int scanlen = stop - start + 1;
 
         int ngood = 0;
-        for (size_t i = 0; i < scanlen; ++i) {
+        for (size_t i = 0; i < scanlen; ++i) 
+        {
             if (flags[start + i] == 0) ngood++;
         }
         if (ngood == 0) continue;
