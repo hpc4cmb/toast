@@ -888,20 +888,22 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         None: The signals are updated in place.
 
     NOTE: port of `filter_polynomial` from compiled code to Numpy
-    TODO: scnalen and ngood might be variable from one function call to the other which would be bad for JAX, to be tested
+    TODO: scanlen and nzero_flags might be variable from one function call to the other which would be bad for JAX (to be tested)
+          `mask` might solve this https://github.com/google/jax/issues/2521#issuecomment-604759386
     """
     # validate order
     if (order < 0): return
 
     # problem size
     n = flags.size
-    nsignal = signals.len()
+    nsignal = len(signals)
     norder = order + 1
+    print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder}") # TODO debug
 
     # converts signal into a numpy array to avoid having to loop over them
     # TODO this could be done by default removing the need for this step
-    signals_np = np.hstack(signals) # norder*nsignal
-    
+    signals_np = np.vstack(signals).T # n*nsignal
+
     # NOTE: that loop is parallel in the C++ code
     # a `vmap` over starts and stops could do the trick elegantly in JAX
     for (start, stop) in zip(starts, stops):
@@ -912,18 +914,19 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         scanlen = stop - start + 1
 
         # extracts the signals that will be impacted by this interval
-        signals_interval = signals_np[start:(stop+1), :]
+        signals_interval = signals_np[start:(stop+1),:] # scanlen*nsignal
 
-        # set aside the indexes of the zero flags
-        flags_interval = flags[start:(stop+1)]
+        # set aside the indexes of the zero flags to be used as a mask
+        flags_interval = flags[start:(stop+1)] # scanlen
         zero_flags = np.where(flags_interval == 0)
-        ngood = zero_flags.size
-        if (ngood == 0): continue
+        nb_zero_flags = zero_flags[0].size
+        if (nb_zero_flags == 0): continue
+        print(f"DEBUG: scanlen:{scanlen}") # TODO debug
 
         # Build the full template matrix used to clean the signal.
         # We subtract the template value even from flagged samples to
         # support point source masking etc.
-        full_templates = np.zeros(shape=(scanlen, norder))
+        full_templates = np.zeros(shape=(scanlen, norder)) # scanlen*norder
         xstart = (1. / scanlen) - 1.
         xstop = (1. / scanlen) + 1.
         dx = 2. / scanlen
@@ -940,25 +943,40 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
             full_templates[:,iorder] = ((2 * iorder - 1) * x * previous_template - (iorder - 1) * previous_previous_template) / iorder
         
         # Assemble the flagged template matrix used in the linear regression
-        masked_templates = full_templates[zero_flags,:] # ngood*norder
+        masked_templates = full_templates[zero_flags] # nzero_flags*norder
 
         # Square the template matrix for A^T.A
         invcov = np.dot(masked_templates.T, masked_templates) # norder*norder
 
         # Project the signals against the templates
-        masked_signals = signals_interval[zero_flags, :]
-        proj = np.dot(masked_templates, masked_signals) # norder*nsignal
+        masked_signals = signals_interval[zero_flags] # nzero_flags*nsignal
+        proj = np.dot(masked_templates.T, masked_signals) # norder*nsignal
 
         # Fit the templates against the data
         # by minimizing the norm2 of the difference and the solution vector
-        # puts the result in `proj`
-        proj = scipy.linalg.lstsq(invcov, proj, cond=1e-3, lapack_driverstr='gelss') # norder*nsignal
-        signals_interval -= proj * full_templates
+        (x, _residue, _rank, _singular_values) = scipy.linalg.lstsq(invcov, proj, cond=1e-3, lapack_driver='gelss') # norder*nsignal
+        # signals_interval[scanlen,nsignal] -= x[norder,nsignal] * full_templates[scanlen,norder]
+        signals_interval -= np.einsum('ij,ki->kj', x, full_templates)
     
     # puts resulting signals back into list form
     for isignal in range(nsignal):
         signals[isignal] = signals_np[:,isignal]
 
+
+"""
+    for (int iorder = 0; iorder < norder; ++iorder) 
+    {
+        double * temp = &full_templates[iorder * scanlen];
+        for (int isignal = 0; isignal < nsignal; ++isignal) 
+        {
+            double * signal = &signals[isignal][start];
+            for (size_t i = 0; i < scanlen; ++i) 
+            {
+                signal[i] -= proj[iorder + isignal * norder] * temp[i];
+            }
+        }
+    }
+"""
 
 """
 void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
