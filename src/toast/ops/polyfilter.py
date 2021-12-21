@@ -879,7 +879,6 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         None: The signals are updated in place.
 
     NOTE: port of `filter_polynomial` from compiled code to Numpy
-    TODO: `signals` is a list rather than a numpy array so we have to iterate on it
     """
     # validate order
     if (order < 0): return
@@ -888,6 +887,10 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
     n = flags.size
     nsignal = signals.len()
     norder = order + 1
+
+    # converts signal into a numpy array to avoid having to loop over them
+    # TODO this could be done by default removing the need for this step
+    signals_np = np.hstack(signals) # norder*nsignal
     
     # NOTE: that loop is parallel in the C++ code
     for (start, stop) in zip(starts, stops):
@@ -896,6 +899,9 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         if (stop > n - 1): stop = n - 1
         if (stop < start): continue
         scanlen = stop - start + 1
+
+        # extracts the signals that will be impacted by this interval
+        signals_interval = signals_np[start:(stop+1), :]
 
         # set aside the indexes of the zero flags
         flags_interval = flags[start:(stop+1)]
@@ -907,16 +913,16 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         # We subtract the template value even from flagged samples to
         # support point source masking etc.
         full_templates = np.zeros(shape=(scanlen, norder))
+        xstart = (1. / scanlen) - 1.
+        xstop = (1. / scanlen) + 1.
         dx = 2. / scanlen
-        xstart = 0.5 * dx - 1
-        xstop = 1. + 1. / scanlen
         x = np.arange(start=xstart, stop=xstop, step=dx)
         # deals with order 0
-        full_templates[:,0] = 1
+        if norder > 0: full_templates[:,0] = 1
         # deals with order 1
-        full_templates[:,1] = x
+        if norder > 1: full_templates[:,1] = x
         # deals with other orders
-        # TODO this formulation is inherently sequential
+        # NOTE: this formulation is inherently sequential but this should be okay as order is likely small
         for iorder in range(2,norder):
             lastlast = full_templates[:,(iorder-2)]
             last = full_templates[:,(iorder-1)]
@@ -929,20 +935,19 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         invcov = np.dot(masked_templates.T, masked_templates) # norder*norder
 
         # Project the signals against the templates
-        masked_signals = np.zeros(shape=(ngood, nsignal))
-        # TODO: signals is a list so we have to iterate on it
-        for isignal in range(nsignal): 
-            signal = signals[isignal][start:(stop+1)]
-            masked_signals[:, isignal] = signal[zero_flags]
+        masked_signals = signals_interval[zero_flags, :]
         proj = np.dot(masked_templates, masked_signals) # norder*nsignal
 
         # Fit the templates against the data
         # by minimizing the norm2 of the difference and the solution vector
         # puts the result in `proj`
         proj = scipy.linalg.lstsq(invcov, proj, cond=1e-3, lapack_driverstr='gelss') # norder*nsignal
-        # TODO: signals is a list so we have to iterate on it
-        for isignal in range(nsignal): 
-            signals[isignal][start:(stop+1)] -= proj[:, isignal] * full_templates
+        signals_interval -= proj * full_templates
+    
+    # puts resulting signals back into list form
+    for isignal in range(nsignal):
+        signals[isignal] = signals_np[:,isignal]
+
 
 """
 void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
