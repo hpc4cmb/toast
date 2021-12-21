@@ -13,7 +13,10 @@ import scipy
 import traitlets
 
 from jax import jit
+from jax.config import config as jax_config
 import jax.numpy as jnp
+# enable 64bits precision
+jax_config.update("jax_enable_x64", True)
 
 from ..mpi import MPI, MPI_Comm, use_mpi, Comm
 
@@ -862,7 +865,7 @@ class CommonModeFilter(Operator):
         }
         return prov
 
-def filter_polynomial_switch(order, flags, signals, starts, stops, use_compiled=True):
+def filter_polynomial_switch(order, flags, signals, starts, stops, use_compiled=False):
     """
     Used in test to select the `filter_polynomial` implementation
     TODO: remove once tests are done
