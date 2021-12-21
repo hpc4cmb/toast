@@ -879,6 +879,7 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         None: The signals are updated in place.
 
     NOTE: port of `filter_polynomial` from compiled code to Numpy
+    TODO: scnalen and ngood might be variable from one function call to the other which would be bad for JAX, to be tested
     """
     # validate order
     if (order < 0): return
@@ -893,6 +894,7 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
     signals_np = np.hstack(signals) # norder*nsignal
     
     # NOTE: that loop is parallel in the C++ code
+    # a `vmap` over starts and stops could do the trick elegantly in JAX
     for (start, stop) in zip(starts, stops):
         # validates interval
         if (start < 0): start = 0
@@ -922,11 +924,11 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         # deals with order 1
         if norder > 1: full_templates[:,1] = x
         # deals with other orders
-        # NOTE: this formulation is inherently sequential but this should be okay as order is likely small
+        # NOTE: this formulation is inherently sequential but this should be okay as `order`` is likely small
         for iorder in range(2,norder):
-            lastlast = full_templates[:,(iorder-2)]
-            last = full_templates[:,(iorder-1)]
-            full_templates[:,iorder] = ((2 * iorder - 1) * x * last - (iorder - 1) * lastlast) / iorder
+            previous_previous_template = full_templates[:,iorder-2]
+            previous_template = full_templates[:,iorder-1]
+            full_templates[:,iorder] = ((2 * iorder - 1) * x * previous_template - (iorder - 1) * previous_previous_template) / iorder
         
         # Assemble the flagged template matrix used in the linear regression
         masked_templates = full_templates[zero_flags,:] # ngood*norder
