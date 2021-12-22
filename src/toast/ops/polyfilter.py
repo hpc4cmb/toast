@@ -963,8 +963,10 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     
     # process a batch of intervals, returns the shift that should be applied to result (starting at the interval)
     # scanlen_upperbound is an upperbound that should be known at JIT time, it will be used for masking
-    def filter_polynomial_intervals(flags, signals, starts, stops, scanlen_upperbound):
+    def filter_polynomial_intervals(flags, signals_list, starts, stops, scanlen_upperbound):
         #print(f"DEBUG: jit-compiling for {starts.size} intervals and an upper scanlen of {scanlen_upperbound}")
+        # converts signal into a flat array to avoid having to loop over them and simplify further processing
+        signals = jnp.vstack(signals_list).T # n*nsignal
         # padds signals and flags to insure that calls to dynamic_slice with scanlen_upperbound will fall inside the arrays
         flags = jnp.pad(flags, pad_width=((0,scanlen_upperbound),), mode='empty')
         signals = jnp.pad(signals, pad_width=((0,scanlen_upperbound),(0,0)), mode='empty')
@@ -976,16 +978,11 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         shift_signal = jnp.sum(shift_signal_batched, axis=0)
         # corrects signals with the shift
         return signals + shift_signal
-    
     # JIT compiles the JAX function
     filter_polynomial_intervals = jax.jit(filter_polynomial_intervals, static_argnames='scanlen_upperbound')
 
-    # converts signal into a numpy array to avoid having to loop over them
-    # NOTE: this could be done by default, removing the need for this step and its reversing
-    signals = jnp.vstack(signals_list).T # n*nsignal
-
     # updates the signals
-    new_signals = filter_polynomial_intervals(flags, signals, starts, stops, scanlen_upperbound)
+    new_signals = filter_polynomial_intervals(flags, signals_list, starts, stops, scanlen_upperbound)
 
     # puts resulting signals back into list form
     for isignal in range(nsignal):
