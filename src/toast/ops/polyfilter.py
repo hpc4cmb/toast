@@ -891,14 +891,14 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     scanlen_upperbound = np.max(stops + 1 - starts) # known at jit time and used combined with masking
     #print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder} scanlen_upperbound:{scanlen_upperbound}") # DEBUG
 
-    # process a single interval, returns the shift that should be applied to result
+    # process a single interval, returns a correction that should be added to signals
     def filter_polynomial_interval(flags, signals, start, stop):
         # validates interval
         start = jnp.maximum(0, start)
         stop = jnp.minimum(n-1, stop)
         scanlen = stop - start + 1
 
-        # extracts the interval of flags and signals
+        # extracts the interval from flags and signals
         # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to have a constant size for all intervals
         #       we will mask it later to cover only the part of the interval that is of interest
         # flags_interval = flags[start:(stop+1)] # scanlen
@@ -906,7 +906,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         # signals_interval = signals[start:(stop+1),:] # scanlen*nsignal
         signals_interval = jax.lax.dynamic_slice(signals, (start,0), (scanlen_upperbound,nsignal)) # scanlen_upperbound*nsignal
 
-        # builds masks operate within the actual interval and where flags are set to 0
+        # builds masks to operate within the actual interval and where flags are set to 0
         indices = jnp.arange(start=0, stop=scanlen_upperbound)
         mask_interval = indices < scanlen
         mask_flag = flags_interval == 0
@@ -914,7 +914,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
 
         # Build the full template matrix used to clean the signal.
         # We subtract the template value even from flagged samples to support point source masking etc.
-        full_templates = jnp.zeros(shape=(scanlen_upperbound, norder)) # scanlen_upperbound*norder
+        full_templates = jnp.empty(shape=(scanlen_upperbound, norder)) # scanlen_upperbound*norder
         # defines x
         xstart = (1. / scanlen) - 1.
         dx = 2. / scanlen
@@ -928,7 +928,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
             # full_templates[:,1] = x
             full_templates = full_templates.at[:,1].set(x)
         # deals with other orders
-        # NOTE: this formulation is inherently sequential but this should be okay as `order` is likely small
+        # this loop will be unrolled but this should be okay as `order` is likely small
         for iorder in range(2,norder):
             previous_previous_order = full_templates[:,iorder-2]
             previous_order = full_templates[:,iorder-1]
@@ -962,7 +962,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         shift_signal = -jnp.einsum('ij,ki->kj', x, full_templates)
         return jax.lax.dynamic_update_slice(result, shift_signal, (start,0))
     
-    # process a batch of intervals, returns the shift that should be applied to result
+    # process a batch of intervals, returns updated signals as a flat numpy array
     def filter_polynomial_intervals(flags, signals_list, starts, stops):
         #print(f"DEBUG: jit-compiling for {starts.size} intervals and an upper scanlen of {scanlen_upperbound}")
         # converts signals into a flat array to avoid having to loop over them and simplify further processing
@@ -986,8 +986,8 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
 
     # puts new signals back into the list
     for isignal in range(nsignal):
-        # we give size inormation (0:n) as we added some padding to new_signals
-        signals_list[isignal][:] = new_signals[0:n,isignal]
+        # we give size information (:n) as we added some padding to new_signals
+        signals_list[isignal][:] = new_signals[:n,isignal]
 
 def filter_polynomial_numpy(order, flags, signals, starts, stops):
     """
