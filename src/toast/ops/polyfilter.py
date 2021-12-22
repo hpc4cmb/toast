@@ -880,9 +880,6 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         None: The signals are updated in place.
 
     NOTE: port of `filter_polynomial` from compiled code to JAX
-    TODO: when calling dynamic_slice, the *start* index will be adjusted if there is not enough space
-          that is problematic because it means the later intervals might be shifted silently!
-          one solution would be to pad the end of signals and flags with zeroes
     """
     # validate order
     if (order < 0): return
@@ -891,7 +888,8 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     n = flags.size
     nsignal = len(signals_list)
     norder = order + 1
-    #print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder}") # TODO debug
+    scanlen_upperbound = np.max(stops + 1 - starts)
+    #print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder} scanlen_upperbound:{scanlen_upperbound}") # DEBUG
 
     # process a single interval, returns the shift that should be applied to result (starting at the interval)
     # scanlen_upperbound is an upperbound that should be known at JIT time, it will be used for masking
@@ -902,19 +900,19 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         scanlen = stop - start + 1
 
         # extracts the signals that will be impacted by this interval
-        # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to use a size known at JIT time
+        # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to have a size known at JIT time
         # signals_interval = signals[start:(stop+1),:] # scanlen*nsignal
         signals_interval = jax.lax.dynamic_slice(signals, (start,0), (scanlen_upperbound,nsignal)) # scanlen_upperbound*nsignal
 
         # set aside the indexes of the zero flags to be used as a mask
-        # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to use a size known at JIT time
+        # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to have a size known at JIT time
         # flags_interval = flags[start:(stop+1)] # scanlen
         flags_interval = jax.lax.dynamic_slice(flags, (start,), (scanlen_upperbound,)) # scanlen_upperbound
         # builds masks operate within the interval and where flags are set to 0
         indices = jnp.arange(start=0, stop=scanlen_upperbound)
         mask_interval = indices < scanlen
-        mask_indices = flags_interval == 0
-        mask = mask_interval & mask_indices
+        mask_flag = flags_interval == 0
+        mask = mask_interval & mask_flag
 
         # Build the full template matrix used to clean the signal.
         # We subtract the template value even from flagged samples to support point source masking etc.
@@ -966,32 +964,33 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     # process a batch of intervals, returns the shift that should be applied to result (starting at the interval)
     # scanlen_upperbound is an upperbound that should be known at JIT time, it will be used for masking
     def filter_polynomial_intervals(flags, signals, starts, stops, scanlen_upperbound):
-        print(f"DEBUG: compiling for {starts.size} intervals and an upper scanlen of {scanlen_upperbound}")
+        #print(f"DEBUG: jit-compiling for {starts.size} intervals and an upper scanlen of {scanlen_upperbound}")
+        # padds signals and flags to insure that calls to dynamic_slice with scanlen_upperbound will fall inside the arrays
+        flags = jnp.pad(flags, pad_width=((0,scanlen_upperbound),), mode='empty')
+        signals = jnp.pad(signals, pad_width=((0,scanlen_upperbound),(0,0)), mode='empty')
         # converts the function to batch it over start and stop, the new function will return batched results
         batched_filter_polynomial = jax.vmap(filter_polynomial_interval, in_axes=(None,None,0,0,None), out_axes=0)
         # gets shifts, batched along the 0 dimenssion
         shift_signal_batched = batched_filter_polynomial(flags, signals, starts, stops, scanlen_upperbound)
         # sums along the 0 dimension to get the overall shift
         shift_signal = jnp.sum(shift_signal_batched, axis=0)
-        # subtracts from signals
+        # corrects signals with the shift
         return signals + shift_signal
     
     # JIT compiles the JAX function
     filter_polynomial_intervals = jax.jit(filter_polynomial_intervals, static_argnames='scanlen_upperbound')
 
     # converts signal into a numpy array to avoid having to loop over them
-    # TODO this could be done by default, removing the need for this step and its reversing
+    # NOTE: this could be done by default, removing the need for this step and its reversing
     signals = jnp.vstack(signals_list).T # n*nsignal
-
-    # computes the shift that should be applied to the signals
-    scanlen_upperbound = np.max(stops + 1 - starts)
 
     # updates the signals
     new_signals = filter_polynomial_intervals(flags, signals, starts, stops, scanlen_upperbound)
 
     # puts resulting signals back into list form
     for isignal in range(nsignal):
-        signals_list[isignal][:] = new_signals[:,isignal]
+        # we give size inormation (0:n) as we added some padding to new_signals
+        signals_list[isignal][:] = new_signals[0:n,isignal]
 
 def filter_polynomial_numpy(order, flags, signals, starts, stops):
     """
@@ -1008,10 +1007,6 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
         None: The signals are updated in place.
 
     NOTE: port of `filter_polynomial` from compiled code to Numpy
-    TODO: scanlen and nb_zero_flags might be variable from one function call to the other which would be bad for JAX (to be tested)
-          (scanlen appears to be extremely similar, about 40, at least when running tests)
-          (nb_zero_flags seems to be very close)
-          `mask` might solve this https://github.com/google/jax/issues/2521#issuecomment-604759386
     """
     # validate order
     if (order < 0): return
@@ -1020,14 +1015,12 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
     n = flags.size
     nsignal = len(signals)
     norder = order + 1
-    #print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder}") # TODO debug
 
     # converts signal into a numpy array to avoid having to loop over them
-    # TODO this could be done by default removing the need for this step
+    # NOTE: this could be done by default removing the need for this step
     signals_np = np.vstack(signals).T # n*nsignal
 
     # NOTE: that loop is parallel in the C++ code
-    # a `vmap` over starts and stops could do the trick elegantly in JAX
     for (start, stop) in zip(starts, stops):
         # validates interval
         if (start < 0): start = 0
