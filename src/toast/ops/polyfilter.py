@@ -899,8 +899,8 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         scanlen = stop - start + 1
 
         # extracts the interval of flags and signals
-        # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to have a size known at JIT time
-        #       we will mask it later to cover only the interval of interest
+        # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to have a constant size for all intervals
+        #       we will mask it later to cover only the part of the interval that is of interest
         # flags_interval = flags[start:(stop+1)] # scanlen
         flags_interval = jax.lax.dynamic_slice(flags, (start,), (scanlen_upperbound,)) # scanlen_upperbound
         # signals_interval = signals[start:(stop+1),:] # scanlen*nsignal
@@ -935,17 +935,17 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
             current_order = ((2 * iorder - 1) * x * previous_order - (iorder - 1) * previous_previous_order) / iorder
             # full_templates[:,iorder] = current_order
             full_templates = full_templates.at[:,iorder].set(current_order)
-        # zero out rows that fall outside the interval
+        # zero out the rows that fall outside the interval
         full_templates = full_templates * mask_interval[:, jnp.newaxis] # scanlen*norder
 
         # Assemble the flagged template matrix used in the linear regression
-        # We zero out the rows that are flagged or outside the interval
+        # zero out the rows that are flagged or outside the interval
         masked_templates = full_templates * mask[:, jnp.newaxis] # nb_zero_flags*norder
 
         # Square the template matrix for A^T.A
         invcov = jnp.dot(masked_templates.T, masked_templates) # norder*norder
 
-        # We zero out the rows that are flagged or outside the interval
+        # zero out the rows that are flagged or outside the interval
         masked_signals = signals_interval * mask[:, jnp.newaxis] # nb_zero_flags*nsignal
 
         # Project the signals against the templates
@@ -967,10 +967,10 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         #print(f"DEBUG: jit-compiling for {starts.size} intervals and an upper scanlen of {scanlen_upperbound}")
         # converts signals into a flat array to avoid having to loop over them and simplify further processing
         signals = jnp.vstack(signals_list).T # n*nsignal
-        # padds signals and flags to insure that calls to dynamic_slice with scanlen_upperbound will fall inside the arrays
+        # padds signals and flags to insure that calls to dynamic_slice with intervals of size scanlen_upperbound will fall inside the arrays
         flags = jnp.pad(flags, pad_width=((0,scanlen_upperbound),), mode='empty') # (n+scanlen_upperbound)
         signals = jnp.pad(signals, pad_width=((0,scanlen_upperbound),(0,0)), mode='empty') # (n+scanlen_upperbound)*nsignal
-        # converts the function to batch it over start and stop, the new function will return batched results
+        # converts the function to batch it over starts and stops, the new function will return batched results
         batched_filter_polynomial = jax.vmap(filter_polynomial_interval, in_axes=(None,None,0,0), out_axes=0)
         # gets shifts, batched along the 0 dimenssion
         shift_signal_batched = batched_filter_polynomial(flags, signals, starts, stops)
@@ -981,10 +981,10 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     # JIT compiles the JAX function
     filter_polynomial_intervals = jax.jit(filter_polynomial_intervals)
 
-    # updates the signals
+    # gets updated signals as a numpy array
     new_signals = filter_polynomial_intervals(flags, signals_list, starts, stops)
 
-    # puts resulting signals back into list form
+    # puts new signals back into the list
     for isignal in range(nsignal):
         # we give size inormation (0:n) as we added some padding to new_signals
         signals_list[isignal][:] = new_signals[0:n,isignal]
