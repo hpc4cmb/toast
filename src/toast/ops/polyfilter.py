@@ -891,24 +891,26 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     scanlen_upperbound = np.max(stops + 1 - starts)
     #print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder} scanlen_upperbound:{scanlen_upperbound}") # DEBUG
 
-    # process a single interval, returns the shift that should be applied to result (starting at the interval)
-    # scanlen_upperbound is an upperbound that should be known at JIT time, it will be used for masking
+    # process a single interval, returns the shift that should be applied to result
+    # scanlen_upperbound is an upperbound that should be known at JIT time
     def filter_polynomial_interval(flags, signals, start, stop, scanlen_upperbound):
         # validates interval
         start = jnp.maximum(0, start)
         stop = jnp.minimum(n-1, stop)
         scanlen = stop - start + 1
 
-        # extracts the signals that will be impacted by this interval
+        # extracts the interval of signals
         # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to have a size known at JIT time
+        #       we will mask it later to cover only the interval of interest
         # signals_interval = signals[start:(stop+1),:] # scanlen*nsignal
         signals_interval = jax.lax.dynamic_slice(signals, (start,0), (scanlen_upperbound,nsignal)) # scanlen_upperbound*nsignal
-
-        # set aside the indexes of the zero flags to be used as a mask
+        # extracts the interval of flags
         # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to have a size known at JIT time
+        #       we will mask it later to cover only the interval of interest
         # flags_interval = flags[start:(stop+1)] # scanlen
         flags_interval = jax.lax.dynamic_slice(flags, (start,), (scanlen_upperbound,)) # scanlen_upperbound
-        # builds masks operate within the interval and where flags are set to 0
+
+        # builds masks operate within the actual interval and where flags are set to 0
         indices = jnp.arange(start=0, stop=scanlen_upperbound)
         mask_interval = indices < scanlen
         mask_flag = flags_interval == 0
@@ -947,22 +949,25 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         # Square the template matrix for A^T.A
         invcov = jnp.dot(masked_templates.T, masked_templates) # norder*norder
 
-        # Project the signals against the templates
         # We zero out the rows that are flagged or outside the interval
         masked_signals = signals_interval * mask[:, jnp.newaxis] # nb_zero_flags*nsignal
+
+        # Project the signals against the templates
         proj = jnp.dot(masked_templates.T, masked_signals) # norder*nsignal
 
         # Fit the templates against the data
         # by minimizing the norm2 of the difference and the solution vector
         (x, _residue, _rank, _singular_values) = jnp.linalg.lstsq(invcov, proj, rcond=1e-3) # norder*nsignal
+
+        # computes the value to be subtracted from the signals
         # signals_interval[scanlen,nsignal] -= x[norder,nsignal] * full_templates[scanlen,norder]
         # signals_interval -= jnp.einsum('ij,ki->kj', x, full_templates)
         result = jnp.zeros_like(signals)
         shift_signal = -jnp.einsum('ij,ki->kj', x, full_templates)
         return jax.lax.dynamic_update_slice(result, shift_signal, (start,0))
     
-    # process a batch of intervals, returns the shift that should be applied to result (starting at the interval)
-    # scanlen_upperbound is an upperbound that should be known at JIT time, it will be used for masking
+    # process a batch of intervals, returns the shift that should be applied to result
+    # scanlen_upperbound is an upperbound that should be known at JIT time
     def filter_polynomial_intervals(flags, signals_list, starts, stops, scanlen_upperbound):
         #print(f"DEBUG: jit-compiling for {starts.size} intervals and an upper scanlen of {scanlen_upperbound}")
         # converts signal into a flat array to avoid having to loop over them and simplify further processing
