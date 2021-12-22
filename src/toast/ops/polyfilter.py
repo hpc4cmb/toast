@@ -12,9 +12,9 @@ import numpy as np
 import scipy
 import traitlets
 
-from jax import jit
-from jax.config import config as jax_config
+import jax
 import jax.numpy as jnp
+from jax.config import config as jax_config
 # enable 64bits precision
 jax_config.update("jax_enable_x64", True)
 
@@ -862,7 +862,137 @@ def filter_polynomial_switch(order, flags, signals, starts, stops, use_compiled=
     TODO: remove once tests are done
     """
     if use_compiled: filter_polynomial(order, flags, signals, starts, stops)
-    else: filter_polynomial_numpy(order, flags, signals, starts, stops)
+    else: filter_polynomial_jax(order, flags, signals, starts, stops)
+
+
+def filter_polynomial_jax(order, flags, signals_list, starts, stops):
+    """
+    Fit and subtract a polynomial from one or more signals.
+
+    Args:
+        order (int):  The order of the polynomial.
+        flags (numpy array, uint8):  The common flags to use for all signals
+        signals_list (list of numpy array of double):  A list of float64 arrays containing the signals.
+        starts (numpy array, int64):  The start samples of each scan.
+        stops (numpyarray, int64):  The stop samples of each scan.
+
+    Returns:
+        None: The signals are updated in place.
+
+    NOTE: port of `filter_polynomial` from compiled code to JAX
+    TODO: when calling dynamic_slice, the *start* index will be adjusted if there is not enough space
+          that is problematic because it means the later intervals might be shifted silently!
+          one solution would be to pad the end of signals and flags with zeroes
+    """
+    # validate order
+    if (order < 0): return
+
+    # problem size
+    n = flags.size
+    nsignal = len(signals_list)
+    norder = order + 1
+    #print(f"DEBUG: n:{n} nsignal:{nsignal} norder:{norder}") # TODO debug
+
+    # process a single interval, returns the shift that should be applied to result (starting at the interval)
+    # scanlen_upperbound is an upperbound that should be known at JIT time, it will be used for masking
+    def filter_polynomial_interval(flags, signals, start, stop, scanlen_upperbound):
+        # validates interval
+        start = jnp.maximum(0, start)
+        stop = jnp.minimum(n-1, stop)
+        scanlen = stop - start + 1
+
+        # extracts the signals that will be impacted by this interval
+        # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to use a size known at JIT time
+        # signals_interval = signals[start:(stop+1),:] # scanlen*nsignal
+        signals_interval = jax.lax.dynamic_slice(signals, (start,0), (scanlen_upperbound,nsignal)) # scanlen_upperbound*nsignal
+
+        # set aside the indexes of the zero flags to be used as a mask
+        # NOTE: we take an upper bound (scanlen_upperbound rather than scanlen) in order to use a size known at JIT time
+        # flags_interval = flags[start:(stop+1)] # scanlen
+        flags_interval = jax.lax.dynamic_slice(flags, (start,), (scanlen_upperbound,)) # scanlen_upperbound
+        # builds masks operate within the interval and where flags are set to 0
+        indices = jnp.indices(scanlen_upperbound)
+        mask_interval = indices < scanlen
+        mask_indices = flags_interval == 0
+        mask = mask_interval & mask_indices
+
+        # Build the full template matrix used to clean the signal.
+        # We subtract the template value even from flagged samples to support point source masking etc.
+        # By construction the rows that fall outside of scanlen will be set to 0
+        full_templates = jnp.zeros(shape=(scanlen_upperbound, norder)) # scanlen_upperbound*norder
+        # defines x
+        xstart = (1. / scanlen) - 1.
+        dx = 2. / scanlen
+        x = jnp.where(mask_interval, xstart + dx*indices, jnp.zeroes_like(indices)) # 0 outside the interval
+        # deals with order 0
+        if norder > 0: 
+            # full_templates[:,0] = 1
+            one_masked = mask_interval # 1 inside the interval, 0 elsewhere
+            full_templates = full_templates.at[:,0].set(one_masked)
+        # deals with order 1
+        if norder > 1: 
+            # full_templates[:,1] = x
+            full_templates = full_templates.at[:,1].set(x)
+        # deals with other orders
+        # NOTE: this formulation is inherently sequential but this should be okay as `order` is likely small
+        for iorder in range(2,norder):
+            previous_previous_order = full_templates[:,iorder-2]
+            previous_order = full_templates[:,iorder-1]
+            current_order = ((2 * iorder - 1) * x * previous_order - (iorder - 1) * previous_previous_order) / iorder
+            # full_templates[:,iorder] = current_order
+            full_templates = full_templates.at[:,iorder].set(current_order)
+        
+        # Assemble the flagged template matrix used in the linear regression
+        # We zero out the rows that are flagged or outside the interval
+        masked_templates = full_templates * mask[:, jnp.newaxis] # nb_zero_flags*norder
+
+        # Square the template matrix for A^T.A
+        invcov = jnp.dot(masked_templates.T, masked_templates) # norder*norder
+
+        # Project the signals against the templates
+        # We zero out the rows that are flagged or outside the interval
+        masked_signals = signals_interval * mask[:, jnp.newaxis] # nb_zero_flags*nsignal
+        proj = jnp.dot(masked_templates.T, masked_signals) # norder*nsignal
+
+        # Fit the templates against the data
+        # by minimizing the norm2 of the difference and the solution vector
+        (x, _residue, _rank, _singular_values) = jnp.linalg.lstsq(invcov, proj, rcond=1e-3) # norder*nsignal
+        # signals_interval[scanlen,nsignal] -= x[norder,nsignal] * full_templates[scanlen,norder]
+        # signals_interval -= jnp.einsum('ij,ki->kj', x, full_templates)
+        result = jnp.zeroes_like(signals)
+        shift_signal = -jnp.einsum('ij,ki->kj', x, full_templates)
+        return jax.lax.dynamic_update_slice(result, shift_signal, (start,0))
+    
+    # process a batch of intervals, returns the shift that should be applied to result (starting at the interval)
+    # scanlen_upperbound is an upperbound that should be known at JIT time, it will be used for masking
+    #@jax.jit(static_argname='scanlen_upperbound')
+    def filter_polynomial_intervals(flags, signals, starts, stops, scanlen_upperbound):
+        print(f"DEBUG: nb_intervals:{starts.shape}") # TODO DEBUG
+        # converts the function to batch it over start and stop, the new function will return batched results
+        batched_filter_polynomial = jax.vmap(filter_polynomial_interval, in_axes=(None,None,0,0,None), out_axes=0)
+        # gets shifts, batched along the 0 dimenssion
+        shift_signal_batched = batched_filter_polynomial(flags, signals, starts, stops, scanlen_upperbound)
+        print(f"DEBUG: result_batched:{shift_signal_batched.shape}") # TODO DEBUG
+        # sums along the 0 dimension to get the overall shift
+        shift_signal = np.sum(shift_signal_batched, axis=0)
+        print(f"DEBUG: shift_signal:{shift_signal.shape}") # TODO DEBUG
+        # subtrcat from signals
+        return signals - shift_signal
+    
+    # converts signal into a numpy array to avoid having to loop over them
+    # TODO this could be done by default, removing the need for this step and its reversing
+    signals = jnp.vstack(signals_list).T # n*nsignal
+
+    # computes the shift that should be applied to the signals
+    scanlen_upperbound = jnp.max(stops-starts)
+
+    # updates the signals
+    # TODO shift_signal = filter_polynomial_interval(flags, signals_np, starts[0], stops[0]) # DEBUG
+    new_signals = filter_polynomial_intervals(flags, signals, starts, stops, scanlen_upperbound)
+
+    # puts resulting signals back into list form
+    for isignal in range(nsignal):
+        signals_list[isignal][:] = new_signals[:,isignal]
 
 def filter_polynomial_numpy(order, flags, signals, starts, stops):
     """
@@ -935,18 +1065,18 @@ def filter_polynomial_numpy(order, flags, signals, starts, stops):
             full_templates[:,iorder] = ((2 * iorder - 1) * x * previous_order - (iorder - 1) * previous_previous_order) / iorder
         
         # Assemble the flagged template matrix used in the linear regression
-        masked_templates = full_templates[zero_flags] # nzero_flags*norder
+        masked_templates = full_templates[zero_flags] # nb_zero_flags*norder
 
         # Square the template matrix for A^T.A
         invcov = np.dot(masked_templates.T, masked_templates) # norder*norder
 
         # Project the signals against the templates
-        masked_signals = signals_interval[zero_flags] # nzero_flags*nsignal
+        masked_signals = signals_interval[zero_flags] # nb_zero_flags*nsignal
         proj = np.dot(masked_templates.T, masked_signals) # norder*nsignal
 
         # Fit the templates against the data
         # by minimizing the norm2 of the difference and the solution vector
-        (x, _residue, _rank, _singular_values) = scipy.linalg.lstsq(invcov, proj, cond=1e-3, lapack_driver='gelss') # norder*nsignal
+        (x, _residue, _rank, _singular_values) = np.linalg.lstsq(invcov, proj, rcond=1e-3) # norder*nsignal
         # signals_interval[scanlen,nsignal] -= x[norder,nsignal] * full_templates[scanlen,norder]
         signals_interval -= np.einsum('ij,ki->kj', x, full_templates)
     
