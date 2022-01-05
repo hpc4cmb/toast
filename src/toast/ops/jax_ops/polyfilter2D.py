@@ -13,23 +13,48 @@ from ..._libtoast import filter_poly2D as filter_poly2D_compiled
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def filter_poly2D_jax(order, flags, signals_list, starts, stops):
+def filter_poly2D_jax(det_groups, templates, signals, masks, coeff):
     """
     Solves for 2D polynomial coefficients at each sample.
 
     Args:
-        det_groups (numpy array, int32):  The group index for each detector index.
+        det_groups (numpy array, int32):  The group index for each of the N_detectors detector index.
         templates (numpy array, float64):  The N_detectors x N_modes templates.
         signals (numpy array, float64):  The N_sample x N_detector data.
         masks (numpy array, uint8):  The N_sample x N_detector mask.
         coeff (numpy array, float64):  The N_sample x N_group x N_mode output coefficients.
 
     Returns:
-        None: The signals are updated in place.
+        None: The coefficients are updated in place.
 
-    NOTE: port of `filter_poly2D` from compiled code to JAX
+    NOTE: port of `filter_poly2D` from compiled code to Jax
     """
-    # TODO
+    # problem size
+    (nsample, ngroup, nmode) = coeff.shape
+    ndet = det_groups.size
+
+    # For each sample
+    for isamp in range(nsample):
+        # templates # N_detectors x N_modes
+        mask_sample = masks[isamp,:] # N_detector
+        signals_sample = signals[isamp,:] # N_detector
+
+        # For each group of detectors
+        for igroup in range(ngroup): 
+            # Masks detectors not in this group
+            mask_group = np.copy(mask_sample)
+            mask_group[det_groups != igroup] = 0.0
+
+            # rhs =  (mask * templates).T  @  (mask * signals.T)
+            # A = (mask * templates).T  @  (mask * templates)
+            masked_template = mask_group[:,np.newaxis] * templates # N_detectors x N_modes
+            masked_signal_T = mask_group * signals_sample.T # N_detector
+            rhs =  np.dot(masked_template.T, masked_signal_T) # N_modes
+            A = np.dot(masked_template.T, masked_signal_T) # N_modes x N_modes
+    
+            # Fits the coefficients
+            (x, _residue, _rank, _singular_values) = np.linalg.lstsq(A, rhs, rcond=1e-3)
+            coeff[isamp,igroup,:] = x
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -51,47 +76,29 @@ def filter_poly2D_numpy(det_groups, templates, signals, masks, coeff):
     NOTE: port of `filter_poly2D` from compiled code to Numpy
     """
     # problem size
-    nsample = signals.shape[0]
-    ndet = signals.shape[1]
-    ngroup = coeff.shape[1]
-    nmode = templates.shape[1]
-    #(nsample, ngroup, nmode) = coeff.shape
-    #ndet = det_groups.size
+    (nsample, ngroup, nmode) = coeff.shape
+    ndet = det_groups.size
 
     # For each sample
     for isamp in range(nsample):
+        # templates # N_detectors x N_modes
+        mask_sample = masks[isamp,:] # N_detector
+        signals_sample = signals[isamp,:] # N_detector
+
         # For each group of detectors
         for igroup in range(ngroup): 
-            # Gets solve buffers
-            rhs = np.zeros(nmode)
-            A = np.zeros((nmode, nmode))
+            # Masks detectors not in this group
+            mask_group = np.copy(mask_sample)
+            mask_group[det_groups != igroup] = 0.0
 
-            # TODO try and rewrite using the following formulas
-            # TODO this will have to take `det_groups` into account 
             # rhs =  (mask * templates).T  @  (mask * signals.T)
             # A = (mask * templates).T  @  (mask * templates)
-
-            # For each detector
-            for idet in range(ndet): 
-                # This detectors is not in this group
-                if (det_groups[idet] != igroup) : continue
-
-                # Mask value for this detector
-                det_mask = 0.0 if (masks[isamp,idet] == 0) else 1.0
-
-                # Signal value for this detector
-                det_sig = signals[isamp,idet]
-
-                for imode in range(nmode): 
-                    rhs[imode] += templates[idet,imode] * det_sig * det_mask
-
-                    for jmode in range(imode, nmode): 
-                        val = templates[idet,imode] * templates[idet,jmode] * det_mask
-                        A[imode,jmode] += val
-                        if (jmode > imode): 
-                            A[jmode,imode] += val
+            masked_template = mask_group[:,np.newaxis] * templates # N_detectors x N_modes
+            masked_signal_T = mask_group * signals_sample.T # N_detector
+            rhs =  np.dot(masked_template.T, masked_signal_T) # N_modes
+            A = np.dot(masked_template.T, masked_signal_T) # N_modes x N_modes
     
-            # gets the fitting coefficients.
+            # Fits the coefficients
             (x, _residue, _rank, _singular_values) = np.linalg.lstsq(A, rhs, rcond=1e-3)
             coeff[isamp,igroup,:] = x
 
