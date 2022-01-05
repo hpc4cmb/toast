@@ -61,3 +61,5 @@ install(FILES
     yield_cut.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
+
+add_subdirectory(jax_ops)

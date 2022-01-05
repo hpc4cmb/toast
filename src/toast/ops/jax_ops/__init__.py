@@ -1,3 +1,4 @@
+
 from jax.config import config as jax_config
 # enable 64bits precision
 jax_config.update("jax_enable_x64", True)
