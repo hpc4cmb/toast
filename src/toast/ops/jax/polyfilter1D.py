@@ -7,22 +7,8 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from .utils import get_compile_time
+from .utils import get_compile_time, select_implementation, ImplementationType
 from ..._libtoast import filter_polynomial as filter_polynomial_compiled
-
-#-------------------------------------------------------------------------------------------------
-# IMPLEMENTATION SWITCH
-
-def filter_polynomial(order, flags, signals, starts, stops, use_compiled=True):
-    """
-    Used in test to select the `filter_polynomial` implementation
-    TODO: this is for test purposes
-    """
-    if use_compiled: filter_polynomial_compiled(order, flags, signals, starts, stops)
-    else: filter_polynomial_jax(order, flags, signals, starts, stops)
-
-# TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-filter_polynomial = get_compile_time(filter_polynomial)
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -100,7 +86,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         flags (numpy array, uint8):  The common flags to use for all signals
         signals_list (list of numpy array of double):  A list of float64 arrays containing the signals.
         starts (numpy array, int64):  The start samples of each scan.
-        stops (numpyarray, int64):  The stop samples of each scan.
+        stops (numpy array, int64):  The stop samples of each scan.
 
     Returns:
         None: The signals are updated in place.
@@ -142,7 +128,7 @@ def filter_polynomial_numpy(order, flags, signals_list, starts, stops):
         flags (numpy array, uint8):  The common flags to use for all signals
         signals_list (list of numpy array of double):  A list of float64 arrays containing the signals.
         starts (numpy array, int64):  The start samples of each scan.
-        stops (numpyarray, int64):  The stop samples of each scan.
+        stops (numpy array, int64):  The stop samples of each scan.
 
     Returns:
         None: The signals are updated in place.
@@ -389,3 +375,15 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     }
 }
 """
+
+#-------------------------------------------------------------------------------------------------
+# IMPLEMENTATION SWITCH
+
+# lets us play with the various implementations
+filter_polynomial = select_implementation(filter_polynomial_compiled, 
+                                          filter_polynomial_numpy, 
+                                          filter_polynomial_jax, 
+                                          default_implementationType=ImplementationType.JAX)
+
+# TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
+filter_polynomial = get_compile_time(filter_polynomial)
