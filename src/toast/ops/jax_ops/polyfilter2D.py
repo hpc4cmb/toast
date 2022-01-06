@@ -19,7 +19,7 @@ def filter_poly2D_sample_group(igroup, det_groups, templates, signals_sample, ma
     igroup is the group number
     """
     # Masks detectors not in this group
-    masks_group = jnp.where(det_groups != igroup, 0.0, masks_sample)
+    masks_group = jnp.where(det_groups != igroup[None], 0.0, masks_sample)
 
     # rhs = (mask * templates).T  @  (mask * signals.T)
     # A = (mask * templates).T  @  (mask * templates)
@@ -29,10 +29,9 @@ def filter_poly2D_sample_group(igroup, det_groups, templates, signals_sample, ma
     A = jnp.dot(masked_template.T, masked_template) # N_modes x N_modes
 
     # Fits the coefficients
-    (x, _residue, _rank, _singular_values) = jnp.linalg.lstsq(A, rhs, rcond=1e-3)
-    #x = jnp.linalg.solve(A, rhs) # TODO is this faster?
-    return x
-    
+    (coeff_sample_group, _residue, _rank, _singular_values) = jnp.linalg.lstsq(A, rhs, rcond=1e-3)
+    return coeff_sample_group
+
 def filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks):
     """
     ngroup is the number of groups
@@ -99,15 +98,13 @@ def filter_poly2D_numpy(det_groups, templates, signals, masks, coeff):
 
     # For each sample
     for isamp in range(nsample):
-        # templates # N_detectors x N_modes
         masks_sample = masks[isamp,:] # N_detector
         signals_sample = signals[isamp,:] # N_detector
 
         # For each group of detectors
         for igroup in range(ngroup): 
             # Masks detectors not in this group
-            masks_group = np.copy(masks_sample)
-            masks_group[det_groups != igroup] = 0.0
+            masks_group = np.where(det_groups != igroup, 0.0, masks_sample)
 
             # rhs = (mask * templates).T  @  (mask * signals.T)
             # A = (mask * templates).T  @  (mask * templates)
@@ -117,8 +114,8 @@ def filter_poly2D_numpy(det_groups, templates, signals, masks, coeff):
             A = np.dot(masked_template.T, masked_template) # N_modes x N_modes
 
             # Fits the coefficients
-            (x, _residue, _rank, _singular_values) = np.linalg.lstsq(A, rhs, rcond=1e-3)
-            coeff[isamp,igroup,:] = x
+            (coeff_sample_group, _residue, _rank, _singular_values) = np.linalg.lstsq(A, rhs, rcond=1e-3)
+            coeff[isamp,igroup,:] = coeff_sample_group
 
 #-------------------------------------------------------------------------------------------------
 # C++
