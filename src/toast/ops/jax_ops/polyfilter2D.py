@@ -19,7 +19,7 @@ def filter_poly2D_sample_group(igroup, det_groups, templates, signals_sample, ma
     igroup is the group number
     """
     # Masks detectors not in this group
-    masks_group = jnp.where(det_groups != igroup[None], 0.0, masks_sample)
+    masks_group = jnp.where(det_groups != igroup, 0.0, masks_sample)
 
     # rhs = (mask * templates).T  @  (mask * signals.T)
     # A = (mask * templates).T  @  (mask * templates)
@@ -30,6 +30,10 @@ def filter_poly2D_sample_group(igroup, det_groups, templates, signals_sample, ma
 
     # Fits the coefficients
     (coeff_sample_group, _residue, _rank, _singular_values) = jnp.linalg.lstsq(A, rhs, rcond=1e-3)
+    # Sometimes the mask will be all zeroes in which case A=0 and rhs=0 which pcausses the coeffs to be nan
+    # We thus replace nans with 0
+    # Numpy does it by default
+    coeff_sample_group = jnp.nan_to_num(coeff_sample_group, nan=0.0)
     return coeff_sample_group
 
 def filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks):
@@ -47,7 +51,7 @@ def filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks):
     # batch on sample dimenssion
     filter_poly2D_sample_group_batched = jax.vmap(filter_poly2D_group_batched, in_axes=(None,None,None,0,0), out_axes=0)
 
-    # runs on all the groups and samples simultaneously
+    # runs for all the groups and samples simultaneously
     igroup = jnp.arange(start=0, stop=ngroup)
     return filter_poly2D_sample_group_batched(igroup, det_groups, templates, signals, masks)
 
