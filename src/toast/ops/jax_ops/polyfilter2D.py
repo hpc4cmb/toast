@@ -30,9 +30,8 @@ def filter_poly2D_sample_group(igroup, det_groups, templates, signals_sample, ma
 
     # Fits the coefficients
     (coeff_sample_group, _residue, _rank, _singular_values) = jnp.linalg.lstsq(A, rhs, rcond=1e-3)
-    # Sometimes the mask will be all zeroes in which case A=0 and rhs=0 which pcausses the coeffs to be nan
-    # We thus replace nans with 0
-    # Numpy does it by default
+    # Sometimes the mask will be all zeroes in which case A=0 and rhs=0 causing the coeffs to be nan
+    # We thus replace nans with 0s (Numpy does it by default)
     coeff_sample_group = jnp.nan_to_num(coeff_sample_group, nan=0.0)
     return coeff_sample_group
 
@@ -55,8 +54,8 @@ def filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks):
     igroup = jnp.arange(start=0, stop=ngroup)
     return filter_poly2D_sample_group_batched(igroup, det_groups, templates, signals, masks)
 
-# TODO JIT compiles the code
-#filter_poly2D_coeffs = jax.jit(filter_poly2D_coeffs, static_argnames='ngroup')
+# JIT compiles the code
+filter_poly2D_coeffs = jax.jit(filter_poly2D_coeffs, static_argnames='ngroup')
 
 def filter_poly2D_jax(det_groups, templates, signals, masks, coeff):
     """
