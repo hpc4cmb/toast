@@ -21,7 +21,7 @@ def filter_polynomial_interval(flags_interval, signals_interval, order):
     # problem size
     norder = order + 1
     scanlen = flags_interval.size
-    print(f"DEBUG: jit-compiling scanlen:{scanlen} nsignal:{signals_interval.shape[1]} order:{order}")
+    print(f"DEBUG: jit-compiling 'filter_polynomial' scanlen:{scanlen} nsignal:{signals_interval.shape[1]} order:{order}")
 
     # Build the full template matrix used to clean the signal.
     # We subtract the template value even from flagged samples to support point source masking etc.
