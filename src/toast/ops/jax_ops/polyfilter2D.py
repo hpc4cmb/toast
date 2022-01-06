@@ -13,6 +13,48 @@ from ..._libtoast import filter_poly2D as filter_poly2D_compiled
 #-------------------------------------------------------------------------------------------------
 # JAX
 
+def filter_poly2D_sample_group(igroup, det_groups, templates, signals_sample, masks_sample):
+    """
+    filter_poly2D for a given group and sample
+    igroup is the group number
+    """
+    # Masks detectors not in this group
+    masks_group = jnp.where(det_groups != igroup, 0.0, masks_sample)
+
+    # rhs = (mask * templates).T  @  (mask * signals.T)
+    # A = (mask * templates).T  @  (mask * templates)
+    masked_template = masks_group[:,jnp.newaxis] * templates # N_detectors x N_modes
+    masked_signal_T = masks_group * signals_sample.T # N_detector
+    rhs = jnp.dot(masked_template.T, masked_signal_T) # N_modes
+    A = jnp.dot(masked_template.T, masked_template) # N_modes x N_modes
+
+    # Fits the coefficients
+    (x, _residue, _rank, _singular_values) = jnp.linalg.lstsq(A, rhs, rcond=1e-3)
+    #x = jnp.linalg.solve(A, rhs) # TODO is this faster?
+    return x
+    
+def filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks):
+    """
+    ngroup is the number of groups
+    returns coeffs
+    """
+    # problem size
+    (nsample, ndet) = masks.shape
+    nmode = templates.shape[1]
+    print(f"DEBUG: jit-compiling 'filter_poly2D' nsample:{nsample} ngroup:{ngroup} nmode:{nmode} ndet:{ndet}")
+
+    # batch on group dimenssion
+    filter_poly2D_group_batched = jax.vmap(filter_poly2D_sample_group, in_axes=(0,None,None,None,None), out_axes=0)
+    # batch on sample dimenssion
+    filter_poly2D_sample_group_batched = jax.vmap(filter_poly2D_group_batched, in_axes=(None,None,None,0,0), out_axes=0)
+
+    # runs on all the groups and samples simultaneously
+    igroup = jnp.arange(start=0, stop=ngroup)
+    return filter_poly2D_sample_group_batched(igroup, det_groups, templates, signals, masks)
+
+# TODO JIT compiles the code
+#filter_poly2D_coeffs = jax.jit(filter_poly2D_coeffs, static_argnames='ngroup')
+
 def filter_poly2D_jax(det_groups, templates, signals, masks, coeff):
     """
     Solves for 2D polynomial coefficients at each sample.
@@ -29,32 +71,8 @@ def filter_poly2D_jax(det_groups, templates, signals, masks, coeff):
 
     NOTE: port of `filter_poly2D` from compiled code to Jax
     """
-    # problem size
-    (nsample, ngroup, nmode) = coeff.shape
-    ndet = det_groups.size
-
-    # For each sample
-    for isamp in range(nsample):
-        # templates # N_detectors x N_modes
-        mask_sample = masks[isamp,:] # N_detector
-        signals_sample = signals[isamp,:] # N_detector
-
-        # For each group of detectors
-        for igroup in range(ngroup): 
-            # Masks detectors not in this group
-            mask_group = np.copy(mask_sample)
-            mask_group[det_groups != igroup] = 0.0
-
-            # rhs =  (mask * templates).T  @  (mask * signals.T)
-            # A = (mask * templates).T  @  (mask * templates)
-            masked_template = mask_group[:,np.newaxis] * templates # N_detectors x N_modes
-            masked_signal_T = mask_group * signals_sample.T # N_detector
-            rhs =  np.dot(masked_template.T, masked_signal_T) # N_modes
-            A = np.dot(masked_template.T, masked_signal_T) # N_modes x N_modes
-    
-            # Fits the coefficients
-            (x, _residue, _rank, _singular_values) = np.linalg.lstsq(A, rhs, rcond=1e-3)
-            coeff[isamp,igroup,:] = x
+    ngroup = coeff.shape[1]
+    coeff[:] = filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -76,28 +94,28 @@ def filter_poly2D_numpy(det_groups, templates, signals, masks, coeff):
     NOTE: port of `filter_poly2D` from compiled code to Numpy
     """
     # problem size
-    (nsample, ngroup, nmode) = coeff.shape
-    ndet = det_groups.size
+    (nsample, ngroup, _nmode) = coeff.shape
+    _ndet = det_groups.size
 
     # For each sample
     for isamp in range(nsample):
         # templates # N_detectors x N_modes
-        mask_sample = masks[isamp,:] # N_detector
+        masks_sample = masks[isamp,:] # N_detector
         signals_sample = signals[isamp,:] # N_detector
 
         # For each group of detectors
         for igroup in range(ngroup): 
             # Masks detectors not in this group
-            mask_group = np.copy(mask_sample)
-            mask_group[det_groups != igroup] = 0.0
+            masks_group = np.copy(masks_sample)
+            masks_group[det_groups != igroup] = 0.0
 
-            # rhs =  (mask * templates).T  @  (mask * signals.T)
+            # rhs = (mask * templates).T  @  (mask * signals.T)
             # A = (mask * templates).T  @  (mask * templates)
-            masked_template = mask_group[:,np.newaxis] * templates # N_detectors x N_modes
-            masked_signal_T = mask_group * signals_sample.T # N_detector
-            rhs =  np.dot(masked_template.T, masked_signal_T) # N_modes
-            A = np.dot(masked_template.T, masked_signal_T) # N_modes x N_modes
-    
+            masked_template = masks_group[:,np.newaxis] * templates # N_detectors x N_modes
+            masked_signal_T = masks_group * signals_sample.T # N_detector
+            rhs = np.dot(masked_template.T, masked_signal_T) # N_modes
+            A = np.dot(masked_template.T, masked_template) # N_modes x N_modes
+
             # Fits the coefficients
             (x, _residue, _rank, _singular_values) = np.linalg.lstsq(A, rhs, rcond=1e-3)
             coeff[isamp,igroup,:] = x
@@ -229,7 +247,7 @@ void toast::filter_poly2D_solve(
 filter_poly2D = select_implementation(filter_poly2D_compiled, 
                                       filter_poly2D_numpy, 
                                       filter_poly2D_jax, 
-                                      default_implementationType=ImplementationType.NUMPY)
+                                      default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 #filter_poly2D = get_compile_time(filter_poly2D)
