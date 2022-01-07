@@ -32,6 +32,7 @@ def filter_poly2D_sample_group(igroup, det_groups, templates, signals_sample, ma
     # Sometimes the mask will be all zeroes in which case A=0 and rhs=0 causing the coeffs to be nan
     # We thus replace nans with 0s (Numpy does it by default)
     coeff_sample_group = jnp.nan_to_num(coeff_sample_group, nan=0.0)
+
     return coeff_sample_group
 
 def filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks):
@@ -72,6 +73,7 @@ def filter_poly2D_jax(det_groups, templates, signals, masks, coeff):
 
     NOTE: port of `filter_poly2D` from compiled code to Jax
     """
+    # does computation with JAX function and assign result to coeffs
     ngroup = coeff.shape[1]
     coeff[:] = filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks)
 
