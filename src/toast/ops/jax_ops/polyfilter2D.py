@@ -21,11 +21,10 @@ def filter_poly2D_sample_group(igroup, det_groups, templates, signals_sample, ma
     # Masks detectors not in this group
     masks_group = jnp.where(det_groups != igroup, 0.0, masks_sample)
 
-    # rhs = (mask * templates).T  @  (mask * signals.T)
+    # rhs = (mask * templates).T  @  (mask * signals.T) = (mask * templates).T  @  signals.T
     # A = (mask * templates).T  @  (mask * templates)
     masked_template = masks_group[:,jnp.newaxis] * templates # N_detectors x N_modes
-    masked_signal_T = masks_group * signals_sample.T # N_detector
-    rhs = jnp.dot(masked_template.T, masked_signal_T) # N_modes
+    rhs = jnp.dot(masked_template.T, signals_sample.T) # N_modes
     A = jnp.dot(masked_template.T, masked_template) # N_modes x N_modes
 
     # Fits the coefficients
@@ -109,11 +108,10 @@ def filter_poly2D_numpy(det_groups, templates, signals, masks, coeff):
             # Masks detectors not in this group
             masks_group = np.where(det_groups != igroup, 0.0, masks_sample)
 
-            # rhs = (mask * templates).T  @  (mask * signals.T)
+            # rhs = (mask * templates).T  @  (mask * signals.T) = (mask * templates).T  @  signals.T
             # A = (mask * templates).T  @  (mask * templates)
             masked_template = masks_group[:,np.newaxis] * templates # N_detectors x N_modes
-            masked_signal_T = masks_group * signals_sample.T # N_detector
-            rhs = np.dot(masked_template.T, masked_signal_T) # N_modes
+            rhs = np.dot(masked_template.T, signals_sample.T) # N_modes
             A = np.dot(masked_template.T, masked_template) # N_modes x N_modes
 
             # Fits the coefficients
@@ -250,7 +248,7 @@ filter_poly2D = select_implementation(filter_poly2D_compiled,
                                       default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-#filter_poly2D = get_compile_time(filter_poly2D)
+filter_poly2D = get_compile_time(filter_poly2D)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'
