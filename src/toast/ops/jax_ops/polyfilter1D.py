@@ -50,8 +50,8 @@ def filter_polynomial_interval(flags_interval, signals_interval, order):
 
     # Assemble the flagged template matrix used in the linear regression
     # builds masks to operate where flags are set to 0
-    mask = flags_interval == 0
-    # zero out the rows that are flagged or outside the interval
+    mask = (flags_interval == 0)
+    # zero out the rows that are flagged
     masked_templates = full_templates * mask[:, jnp.newaxis] # nb_zero_flags*norder
 
     # Square the template matrix for A^T.A
@@ -67,15 +67,8 @@ def filter_polynomial_interval(flags_interval, signals_interval, order):
     # computes the value to be subtracted from the signals
     return signals_interval - jnp.dot(full_templates, x)
 
-# JIT compiles the JAX function
+# JIT compiles the code
 filter_polynomial_interval = jax.jit(filter_polynomial_interval, static_argnames=['order'])
-# dummy call to warm-up the jit
-dummy_order = 1
-dummy_scanlen = 2
-dummy_nsignal = 1
-dummy_flags = np.zeros(shape=(dummy_scanlen,))
-dummy_interval = np.zeros(shape=(dummy_scanlen,dummy_nsignal))
-filter_polynomial_interval(dummy_flags, dummy_interval, dummy_order)
 
 def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     """
@@ -383,10 +376,10 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
 filter_polynomial = select_implementation(filter_polynomial_compiled, 
                                           filter_polynomial_numpy, 
                                           filter_polynomial_jax, 
-                                          default_implementationType=ImplementationType.COMPILED)
+                                          default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-#filter_polynomial = get_compile_time(filter_polynomial)
+filter_polynomial = get_compile_time(filter_polynomial)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'
