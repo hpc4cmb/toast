@@ -18,6 +18,10 @@ from ..noise_sim import AnalyticNoise
 
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
 
+from ..observation import default_values as defaults
+
+from ..intervals import IntervalList
+
 from .. import qarray as qa
 
 from .operator import Operator
@@ -51,6 +55,8 @@ class ElevationNoise(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
+
     noise_model = Unicode(
         "noise_model", help="The observation key containing the input noise model"
     )
@@ -66,7 +72,9 @@ class ElevationNoise(Operator):
     )
 
     view = Unicode(
-        None, allow_none=True, help="Use this view of the data in all observations"
+        None, allow_none=True, help="Use this view of the data in all observations.  "
+        "Use 'middle' if the middle 10 seconds of each observation is enough to "
+        "determine the effective observing elevation",
     )
 
     noise_a = Float(
@@ -141,53 +149,69 @@ class ElevationNoise(Operator):
             log.error(msg)
             raise RuntimeError(msg)
 
-        for ob in data.obs:
-            focalplane = ob.telescope.focalplane
+        for obs in data.obs:
+            obs_data = data.select(obs_uid=obs.uid)
+            focalplane = obs.telescope.focalplane
+
+            if self.view == "middle" and self.view not in obs.intervals:
+                # Create a view that is just one minute in the middle
+                length = 10.  # in seconds
+                times = obs.shared[self.times]
+                t_start = times[0]
+                t_stop = times[-1]
+                t_middle = np.mean([t_start, t_stop])
+                t_start = max(t_start, t_middle - length / 2)
+                t_stop = min(t_stop, t_middle + length / 2)
+                obs.intervals[self.view] = IntervalList(
+                    timestamps=times, timespans=[(t_start, t_stop)]
+                )
 
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
 
             # Check that the noise model exists
-            if self.noise_model not in ob:
+            if self.noise_model not in obs:
                 msg = "Noise model {self.noise_model} does not exist in " \
-                    "observation {ob.name}"
+                    "observation {obs.name}"
                 raise RuntimeError(msg)
 
             # Check that the view in the detector pointing operator covers
             # all the samples needed by this operator
 
             view = self.view
+            detector_pointing_view = self.detector_pointing.view
             if view is None:
                 # Use the same data view as detector pointing
                 view = self.detector_pointing.view
             elif self.detector_pointing.view is not None:
                 # Check that our view is fully covered by detector pointing
-                intervals = ob.intervals[self.view]
-                detector_intervals = ob.intervals[self.detector_pointing.view]
+                intervals = obs.intervals[self.view]
+                detector_intervals = obs.intervals[self.detector_pointing.view]
                 intersection = detector_intervals & intervals
                 if intersection != intervals:
                     msg = f"view {self.view} is not fully covered by valid " \
                         "detector pointing"
                     raise RuntimeError(msg)
+            self.detector_pointing.view = view
 
-            noise = ob[self.noise_model]
+            noise = obs[self.noise_model]
 
             out_noise = None
             if self.out_model is None or self.noise_model == self.out_model:
                 out_noise = noise
             else:
-                ob[self.out_model] = copy.deepcopy(noise)
-                out_noise = ob[self.out_model]
+                obs[self.out_model] = copy.deepcopy(noise)
+                out_noise = obs[self.out_model]
 
             # We are building up a data product (a noise model) which has values for
             # all detectors.  For each detector we need to expand the detector pointing.
             # Since the contributions for all views contribute to the scaling for each
             # detector, we loop over detectors first and then views.
 
-            views = ob.view[view]
+            views = obs.view[view]
 
             # The flags are common to all detectors, so we compute them once.
 
@@ -227,7 +251,8 @@ class ElevationNoise(Operator):
                     modulate_pwv = False
 
                 # Compute detector quaternions one detector at a time.
-                self.detector_pointing.apply(data, detectors=[det])
+                self.detector_pointing.apply(obs_data, detectors=[det])
+
                 el_view = list()
                 for vw in range(len(views)):
                     # Detector elevation
@@ -246,12 +271,15 @@ class ElevationNoise(Operator):
                 # Scale the PSD
                 el_factor = noise_a / np.sin(el) + noise_c
                 if modulate_pwv:
-                    pwv = ob.telescope.site.weather.pwv.to_value(u.mm)
+                    pwv = obs.telescope.site.weather.pwv.to_value(u.mm)
                     pwv_factor = pwv_a0 + pwv_a1 * pwv + pwv_a2 * pwv ** 2
                 else:
                     pwv_factor = 1
 
                 out_noise.psd(det)[:] *= el_factor ** 2 * pwv_factor ** 2
+
+            self.detector_pointing.view = detector_pointing_view
+
         return
 
     def _finalize(self, data, **kwargs):

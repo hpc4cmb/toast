@@ -273,7 +273,6 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     ops.elevation_model.noise_model = ops.default_model.noise_model
     ops.elevation_model.detector_pointing = ops.det_pointing_azel
-    ops.elevation_model.view = ops.det_pointing_azel.view
     ops.elevation_model.apply(data)
     log.info_rank("  Created elevation noise model in", comm=world_comm, timer=timer)
 
