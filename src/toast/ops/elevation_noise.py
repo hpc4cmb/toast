@@ -114,6 +114,12 @@ class ElevationNoise(Operator):
 
     modulate_pwv = Bool(False, help="If True, modulate the NET based on PWV")
 
+    extra_factor = Float(
+        None,
+        allow_none=True,
+        help="Extra multiplier to the NET scaling",
+    )
+
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
         detpointing = proposal["value"]
@@ -269,14 +275,17 @@ class ElevationNoise(Operator):
                 el = np.median(np.concatenate(el_view))
 
                 # Scale the PSD
-                el_factor = noise_a / np.sin(el) + noise_c
+
+                net_factor = noise_a / np.sin(el) + noise_c
+
                 if modulate_pwv:
                     pwv = obs.telescope.site.weather.pwv.to_value(u.mm)
-                    pwv_factor = pwv_a0 + pwv_a1 * pwv + pwv_a2 * pwv ** 2
-                else:
-                    pwv_factor = 1
+                    net_factor *= pwv_a0 + pwv_a1 * pwv + pwv_a2 * pwv ** 2
 
-                out_noise.psd(det)[:] *= el_factor ** 2 * pwv_factor ** 2
+                if self.extra_factor is not None:
+                    net_factor *= self.extra_factor
+
+                out_noise.psd(det)[:] *= net_factor ** 2
 
             self.detector_pointing.view = detector_pointing_view
 
