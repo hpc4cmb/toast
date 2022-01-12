@@ -158,15 +158,20 @@ def filter_polynomial_numpy(order, flags, signals_list, starts, stops):
         # Build the full template matrix used to clean the signal.
         # We subtract the template value even from flagged samples to
         # support point source masking etc.
-        full_templates = np.zeros(shape=(scanlen, norder)) # scanlen*norder
-        xstart = (1. / scanlen) - 1.
-        xstop = (1. / scanlen) + 1.
-        dx = 2. / scanlen
-        x = np.arange(start=xstart, stop=xstop, step=dx)
+        # NOTE: we could recycle full_template if the previous scanlen is identical
+        full_templates = np.empty(shape=(scanlen, norder)) # scanlen*norder
         # deals with order 0
-        if norder > 0: full_templates[:,0] = 1
+        if norder > 0: 
+            full_templates[:,0] = 1
         # deals with order 1
-        if norder > 1: full_templates[:,1] = x
+        if norder > 1: 
+            # defines x
+            xstart = (1. / scanlen) - 1.
+            xstop = (1. / scanlen) + 1.
+            dx = 2. / scanlen
+            x = np.arange(start=xstart, stop=xstop, step=dx)
+            # sets ordre 1
+            full_templates[:,1] = x
         # deals with other orders
         # NOTE: this formulation is inherently sequential but this should be okay as `order` is likely small
         for iorder in range(2,norder):
@@ -379,7 +384,7 @@ filter_polynomial = select_implementation(filter_polynomial_compiled,
                                           default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-filter_polynomial = get_compile_time(filter_polynomial)
+#filter_polynomial = get_compile_time(filter_polynomial)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'
