@@ -6,5 +6,6 @@ install(FILES
     utils.py
     polyfilter1D.py
     polyfilter2D.py
+    scan_map.py
     DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops
 )

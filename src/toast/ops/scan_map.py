@@ -16,7 +16,7 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..observation import default_values as defaults
 
-from .._libtoast import scan_map_float64, scan_map_float32
+from .jax_ops import scan_map
 
 from .operator import Operator
 
@@ -136,33 +136,13 @@ class ScanMap(Operator):
                     local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
 
                     # We support projecting from either float64 or float32 maps.
-
                     maptod[:] = 0.0
-
-                    if map_data.dtype.char == "d":
-                        scan_map_float64(
-                            map_data.distribution.n_pix_submap,
-                            map_data.n_value,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            map_data.raw,
-                            wts.astype(np.float64).reshape(-1),
-                            maptod,
-                        )
-                    elif map_data.dtype.char == "f":
-                        scan_map_float32(
-                            map_data.distribution.n_pix_submap,
-                            map_data.n_value,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            map_data.raw,
-                            wts.astype(np.float64).reshape(-1),
-                            maptod,
-                        )
-                    else:
-                        raise RuntimeError(
-                            "Projection supports only float32 and float64 binned maps"
-                        )
+                    scan_map(map_data, 
+                             map_data.n_value, 
+                             local_sm.astype(np.int64), 
+                             local_pix.astype(np.int64), 
+                             wts.astype(np.float64), 
+                             maptod)
 
                     # zero-out if needed
                     if self.zero:
@@ -414,32 +394,12 @@ class ScanScale(Operator):
                     # pixel values times the original timestream.
 
                     maptod[:] = 0.0
-
-                    if map_data.dtype.char == "d":
-                        scan_map_float64(
-                            map_data.distribution.n_pix_submap,
-                            1,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            map_data.raw,
-                            ddata.astype(np.float64).reshape(-1),
-                            maptod,
-                        )
-                    elif map_data.dtype.char == "f":
-                        scan_map_float32(
-                            map_data.distribution.n_pix_submap,
-                            1,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            map_data.raw,
-                            ddata.astype(np.float64).reshape(-1),
-                            maptod,
-                        )
-                    else:
-                        raise RuntimeError(
-                            "Projection supports only float32 and float64 binned maps"
-                        )
-
+                    scan_map(map_data, 
+                             1, 
+                             local_sm.astype(np.int64), 
+                             local_pix.astype(np.int64), 
+                             ddata.astype(np.float64), 
+                             maptod)
                     ddata[:] = maptod
 
                 del maptod
