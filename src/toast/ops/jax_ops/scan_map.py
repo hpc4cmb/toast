@@ -25,8 +25,8 @@ def scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights, tod):
     mapdata = mapdata[submap,subpix,:]
 
     # zero-out samples with invalid indices
-    #mask = (subpix >= 0) & (submap >= 0)
-    #mapdata = mapdata * mask[:, jnp.newaxis]
+    #valid_samples = (subpix >= 0) & (submap >= 0)
+    #mapdata = mapdata * valid_samples[:, jnp.newaxis]
 
     # does the computation
     shift = jnp.sum(mapdata * weights, axis=1)
@@ -171,10 +171,10 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 scan_map = select_implementation(scan_map_compiled, 
                                  scan_map_numpy, 
                                  scan_map_jax, 
-                                 default_implementationType=ImplementationType.JAX)
+                                 default_implementationType=ImplementationType.COMPILED)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-#scan_map = get_compile_time(scan_map)
+scan_map = get_compile_time(scan_map)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_scan_map")'

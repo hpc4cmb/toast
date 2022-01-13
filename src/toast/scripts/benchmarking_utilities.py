@@ -694,6 +694,8 @@ def scan_map(args, rank, job_ops, data, log):
         job_ops.scan_map.save_pointing = job_ops.binner_final.full_pointing
         job_ops.scan_map.file = args.input_map
         job_ops.scan_map.apply(data)
+        print("DEBUG: scan_map was just called!") # TODO
+    else: print("DEBUG: scan_map disabled!") # TODO
 
 
 def default_sim_atmosphere():
