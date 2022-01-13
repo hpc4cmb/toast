@@ -291,8 +291,6 @@ class Madam(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if not available():
-            raise RuntimeError("Madam is either not installed or MPI is disabled")
         self._cached = False
         self._logprefix = "Madam:"
 
@@ -324,8 +322,8 @@ class Madam(Operator):
     def _exec(self, data, detectors=None):
         log = Logger.get()
 
-        if not available:
-            raise RuntimeError("libmadam is not available")
+        if not available():
+            raise RuntimeError("Madam is either not installed or MPI is disabled")
 
         if len(data.obs) == 0:
             raise RuntimeError(
