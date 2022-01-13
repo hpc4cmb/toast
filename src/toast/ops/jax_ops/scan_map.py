@@ -13,19 +13,18 @@ from ..._libtoast import scan_map_float64 as scan_map_float64_compiled, scan_map
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def scan_map_raw(mapdata, npix_submap, nmap, submap, subpix, weights, tod):
+def scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights, tod):
     """
-    takes mapdata as a numpy array
+    takes mapdata as a jax array and npix_submap as an integer
     """
     # display size information for debugging purposes
     print(f"DEBUG: jit compiling scan_map! npix_submap:{npix_submap} nsamp:{tod.size} nmap:{nmap} mapdata:{mapdata.shape} weights:{weights.shape}")
 
     # turns mapdata into an array of shape nsamp*nmap
-    map_offsets = (submap * npix_submap + subpix) * nmap
-    map_indices = map_offsets[:,np.newaxis] + np.arange(nmap)[np.newaxis,:]
-    mapdata = mapdata[map_indices]
+    mapdata = jnp.reshape(mapdata, newshape=(-1,npix_submap,nmap))
+    mapdata = mapdata[submap,subpix,:]
 
-    # keeps only samples with valid indices
+    # zero-out samples with invalid indices
     #mask = (subpix >= 0) & (submap >= 0)
     #mapdata = mapdata * mask[:, jnp.newaxis]
 
@@ -35,7 +34,7 @@ def scan_map_raw(mapdata, npix_submap, nmap, submap, subpix, weights, tod):
     return tod + shift
 
 # Jit compiles the function
-scan_map_raw = jax.jit(scan_map_raw, static_argnames=['npix_submap', 'nmap'])
+scan_map_jitted = jax.jit(scan_map_jitted, static_argnames=['npix_submap', 'nmap'])
 
 def scan_map_jax(mapdata, nmap, submap, subpix, weights, tod):
     """
@@ -45,23 +44,24 @@ def scan_map_jax(mapdata, nmap, submap, subpix, weights, tod):
     to generate timestream values.
 
     Args:
-        mapdata:  The local piece of the map.
+        mapdata (Pixels):  The local piece of the map.
         nmap (int):  The number of non-zeros in each row of the pointing matrix.
         submap (array, int64):  For each time domain sample, the submap index within the local map (i.e. including only submap)
         subpix (array, int64):  For each time domain sample, the pixel index within the submap.
         weights (array, float64):  The pointing matrix weights (size: nsample*nmap).
         tod (array, float64):  The timestream on which to accumulate the map values.
 
-        (npix_submap (int):  The number of pixels in each submap. This quantity is extracted from mapdata.)
-
     Returns:
         None.
 
     NOTE: JAX port of the C++ implementation.
     """
+    # gets number of pixels in each submap
     npix_submap = mapdata.distribution.n_pix_submap
+    # converts mapdata to a jax array
     mapdata = jnp.array(mapdata.raw)
-    tod[:] = scan_map_raw(mapdata, npix_submap, nmap, submap, subpix, weights, tod)
+    # runs computations
+    tod[:] = scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights, tod)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -74,32 +74,31 @@ def scan_map_numpy(mapdata, nmap, submap, subpix, weights, tod):
     to generate timestream values.
 
     Args:
-        mapdata:  The local piece of the map.
+        mapdata (Pixels):  The local piece of the map.
         nmap (int):  The number of non-zeros in each row of the pointing matrix.
         submap (array, int64):  For each time domain sample, the submap index within the local map (i.e. including only submap)
         subpix (array, int64):  For each time domain sample, the pixel index within the submap.
         weights (array, float64):  The pointing matrix weights (size: nsample*nmap).
         tod (array, float64):  The timestream on which to accumulate the map values.
 
-        (npix_submap (int):  The number of pixels in each submap. This quantity is extracted from mapdata.)
-
     Returns:
         None.
 
     NOTE: Numpy port of the C++ implementation.
     """
-    # skip invalid lines
-    #ignored_samples = (subpix < 0) | (submap < 0)
-    #mapdata[ignored_samples, :] = 0.0
+    # raise an error if samples with invalid indices do exist
     if np.any((subpix < 0) | (submap < 0)):
         raise RuntimeError("Some lines should be skipped which we though would never happen!")
+        # TODO: in this case we will have to introduce some masking
+        #valid_samples = (subpix >= 0) & (submap >= 0)
 
-    # turns mapdata into an array of shape nsamp*nmap
+    # gets number of pixels in each submap
     npix_submap = mapdata.distribution.n_pix_submap
-    map_offsets = (submap * npix_submap + subpix) * nmap
-    map_indices = map_offsets[:,np.newaxis] + np.arange(nmap)[np.newaxis,:]
+
+    # turns mapdata into a numpy array of shape nsamp*nmap
     mapdata = np.array(mapdata.raw)
-    mapdata = mapdata[map_indices]
+    mapdata = np.reshape(mapdata, newshape=(-1,npix_submap,nmap))
+    mapdata = mapdata[submap,subpix,:]
 
     # adds shift to tod
     tod[:] += np.sum(mapdata * weights, axis=1)
@@ -115,28 +114,26 @@ def scan_map_compiled(mapdata, nmap, submap, subpix, weights, tod):
     to generate timestream values.
 
     Args:
-        mapdata:  The local piece of the map.
+        mapdata (Pixels):  The local piece of the map.
         nmap (int):  The number of non-zeros in each row of the pointing matrix.
         submap (array, int64):  For each time domain sample, the submap index within the local map (i.e. including only submap)
         subpix (array, int64):  For each time domain sample, the pixel index within the submap.
         weights (array, float64):  The pointing matrix weights for each time sample and map.
         tod (array, float64):  The timestream on which to accumulate the map values.
 
-        (npix_submap (int):  The number of pixels in each submap. This quantity is extracted from mapdata.)
-
     Returns:
         None.
 
-    NOTE: Wraps implementations of scan_map to factor the datatype detection
+    NOTE: Wraps implementations of scan_map to factor the datatype handling
     """
-    # nsamp = tod.size
-    # nw = (size_t)(weights.size / nmap);
     # picks the correct implementation as a function of the data-type used
-    if mapdata.dtype.char == 'd': scan_map = scan_map_float64_compiled
-    elif mapdata.dtype.char == 'f': scan_map = scan_map_float32_compiled
+    if mapdata.dtype.char == 'd': scan_map_function = scan_map_float64_compiled
+    elif mapdata.dtype.char == 'f': scan_map_function = scan_map_float32_compiled
     else: raise RuntimeError("Projection supports only float32 and float64 binned maps")
-    # runs the function
-    scan_map(mapdata.distribution.n_pix_submap, nmap, submap, subpix, mapdata.raw, weights.reshape(-1), tod)
+    # gets number of pixels in each submap
+    npix_submap = mapdata.distribution.n_pix_submap
+    # runs the function (and flattens the weights)
+    scan_map_function(npix_submap, nmap, submap, subpix, mapdata.raw, weights.reshape(-1), tod)
 
 """
 template <typename T>
@@ -174,10 +171,10 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 scan_map = select_implementation(scan_map_compiled, 
                                  scan_map_numpy, 
                                  scan_map_jax, 
-                                 default_implementationType=ImplementationType.COMPILED)
+                                 default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-scan_map = get_compile_time(scan_map)
+#scan_map = get_compile_time(scan_map)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_scan_map")'
