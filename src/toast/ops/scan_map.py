@@ -281,6 +281,7 @@ class ScanMask(Operator):
     def _requires(self):
         req = {
             "global": [self.mask_key],
+            "meta": list(),
             "shared": list(),
             "detdata": [self.pixels, self.det_flags],
             "intervals": list(),
@@ -414,6 +415,7 @@ class ScanScale(Operator):
     def _requires(self):
         req = {
             "global": [self.map_key],
+            "meta": list(),
             "shared": list(),
             "detdata": [self.pixels, self.weights, self.det_data],
             "intervals": list(),
