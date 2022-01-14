@@ -52,6 +52,8 @@ def filter_polynomial_interval(flags_interval, signals_interval, order):
     # builds masks to operate where flags are set to 0
     mask = (flags_interval == 0)
     # zero out the rows that are flagged
+    # TODO try jnp.where for increased redeability
+    #masked_templates = jnp.where(mask[:, jnp.newaxis], full_templates, 0.0) # nb_zero_flags*norder
     masked_templates = full_templates * mask[:, jnp.newaxis] # nb_zero_flags*norder
 
     # Square the template matrix for A^T.A
