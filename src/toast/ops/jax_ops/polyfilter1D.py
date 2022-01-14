@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from re import S
 import numpy as np
 
 import jax
@@ -49,12 +50,9 @@ def filter_polynomial_interval(flags_interval, signals_interval, order):
         full_templates = full_templates.at[:,iorder].set(current_order)
 
     # Assemble the flagged template matrix used in the linear regression
-    # builds masks to operate where flags are set to 0
-    mask = (flags_interval == 0)
-    # zero out the rows that are flagged
-    # TODO try jnp.where for increased redeability
-    #masked_templates = jnp.where(mask[:, jnp.newaxis], full_templates, 0.0) # nb_zero_flags*norder
-    masked_templates = full_templates * mask[:, jnp.newaxis] # nb_zero_flags*norder
+    # by zeroing out the rows that are flagged
+    valid_rows = (flags_interval == 0)
+    masked_templates = jnp.where(valid_rows[:, jnp.newaxis], full_templates, 0.0) # nb_zero_flags*norder
 
     # Square the template matrix for A^T.A
     invcov = jnp.dot(masked_templates.T, masked_templates) # norder*norder
@@ -140,7 +138,6 @@ def filter_polynomial_numpy(order, flags, signals_list, starts, stops):
     # converts signal into a numpy array to avoid having to loop over them
     signals = np.array(signals_list).T # n*nsignal
 
-    # NOTE: that loop is parallel in the C++ code
     for (start, stop) in zip(starts, stops):
         # validates interval
         start = np.maximum(0, start)
@@ -386,7 +383,7 @@ filter_polynomial = select_implementation(filter_polynomial_compiled,
                                           default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-#filter_polynomial = get_compile_time(filter_polynomial)
+filter_polynomial = get_compile_time(filter_polynomial)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

@@ -10,8 +10,6 @@ import jax.numpy as jnp
 from .utils import get_compile_time, select_implementation, ImplementationType
 from ..._libtoast import scan_map_float64 as scan_map_float64_compiled, scan_map_float32 as scan_map_float32_compiled
 
-# TODO we need to include negative numbers in submap and subpix in the tests 
-
 #-------------------------------------------------------------------------------------------------
 # JAX
 
