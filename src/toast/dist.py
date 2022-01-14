@@ -74,47 +74,48 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
             f"{groups} groups."
         )
         raise RuntimeError(msg)
+    elif len(sizes) == groups:
+        # One chunk per group, trivial solution
+        dist = [DistRange(off, 1) for off in range(len(sizes))]
+    else:
+        chunks = np.array(sizes, dtype=np.int64)
+        weights = np.power(chunks.astype(np.float64), pow)
+        max_per_proc = float(distribute_partition(weights.astype(np.int64), groups))
+        target = np.sum(weights) / groups
 
-    chunks = np.array(sizes, dtype=np.int64)
-    weights = np.power(chunks.astype(np.float64), pow)
-    max_per_proc = float(distribute_partition(weights.astype(np.int64), groups))
+        dist = []
 
-    target = np.sum(weights) / groups
-
-    dist = []
-
-    off = 0
-    curweight = 0.0
-
-    all_breaks = None
-    if breaks is not None:
-        # Check that the problem makes sense
-        all_breaks = np.unique(breaks)
-        all_breaks = all_breaks[all_breaks > 0]
-        all_breaks = all_breaks[all_breaks < chunks.size]
-        all_breaks = np.sort(all_breaks)
-        if all_breaks.size + 1 > groups:
-            raise RuntimeError(
-                "Cannot divide {} chunks to {} groups with {} breaks.".format(
-                    chunks.size, groups, all_breaks.size
+        all_breaks = None
+        if breaks is not None:
+            # Check that the problem makes sense
+            all_breaks = np.unique(breaks)
+            all_breaks = all_breaks[all_breaks > 0]
+            all_breaks = all_breaks[all_breaks < chunks.size]
+            all_breaks = np.sort(all_breaks)
+            if all_breaks.size + 1 > groups:
+                raise RuntimeError(
+                    "Cannot divide {} chunks to {} groups with {} breaks.".format(
+                        chunks.size, groups, all_breaks.size
+                    )
                 )
-            )
 
-    at_break = False
-    for cur in range(0, weights.shape[0]):
-        if curweight + weights[cur] > max_per_proc or at_break:
-            dist.append(DistRange(off, cur - off))
-            over = curweight - target
-            curweight = weights[cur] + over
-            off = cur
-        else:
-            curweight += weights[cur]
-        if all_breaks is not None:
-            at_break = False
-            if cur + 1 in all_breaks:
-                at_break = True
+        off = 0
+        curweight = 0.0
+        at_break = False
+        for cur in range(0, weights.shape[0]):
+            if curweight + weights[cur] > max_per_proc or at_break:
+                dist.append(DistRange(off, cur - off))
+                over = curweight - target
+                curweight = weights[cur] + over
+                off = cur
+            else:
+                curweight += weights[cur]
+            if all_breaks is not None:
+                at_break = False
+                if cur + 1 in all_breaks:
+                    at_break = True
 
-    dist.append(DistRange(off, weights.shape[0] - off))
+        dist.append(DistRange(off, weights.shape[0] - off))
 
     if len(dist) != groups:
         msg = (
