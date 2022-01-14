@@ -92,6 +92,8 @@ class SimGround(Operator):
         help="Name of built-in weather site (e.g. 'atacama', 'south_pole') or path to HDF5 file",
     )
 
+    realization = Int(0, help="The realization index")
+
     schedule = Instance(
         klass=GroundSchedule, allow_none=True, help="Instance of a GroundSchedule"
     )
@@ -701,6 +703,7 @@ class SimGround(Operator):
                         time=mid_time,
                         name=self.weather,
                         site_uid=site.uid,
+                        realization=self.realization,
                         max_pwv=self.max_pwv,
                         median_weather=self.median_weather,
                     )
@@ -710,6 +713,7 @@ class SimGround(Operator):
                         time=mid_time,
                         file=self.weather,
                         site_uid=site.uid,
+                        realization=self.realization,
                         max_pwv=self.max_pwv,
                         median_weather=self.median_weather,
                     )
