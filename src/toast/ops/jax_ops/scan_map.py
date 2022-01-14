@@ -18,19 +18,18 @@ def scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights, tod):
     takes mapdata as a jax array and npix_submap as an integer
     """
     # display size information for debugging purposes
-    print(f"DEBUG: jit compiling scan_map! npix_submap:{npix_submap} nsamp:{tod.size} nmap:{nmap} mapdata:{mapdata.shape} weights:{weights.shape}")
+    print(f"DEBUG: jit compiling scan_map! npix_submap:{npix_submap} nsamp:{submap.size} nmap:{nmap} mapdata:{mapdata.shape} weights:{weights.shape}")
 
     # turns mapdata into an array of shape nsamp*nmap
     mapdata = jnp.reshape(mapdata, newshape=(-1,npix_submap,nmap))
     mapdata = mapdata[submap,subpix,:]
 
     # zero-out samples with invalid indices
-    #valid_samples = (subpix >= 0) & (submap >= 0)
-    #mapdata = mapdata * valid_samples[:, jnp.newaxis]
+    valid_samples = (subpix >= 0) & (submap >= 0)
+    mapdata = mapdata * valid_samples[:, jnp.newaxis]
 
     # does the computation
     shift = jnp.sum(mapdata * weights, axis=1)
-    # TODO maybe exporting just shift and adding on CPU would be faster as we would not need to import tod
     return tod + shift
 
 # Jit compiles the function
@@ -86,22 +85,22 @@ def scan_map_numpy(mapdata, nmap, submap, subpix, weights, tod):
 
     NOTE: Numpy port of the C++ implementation.
     """
-    # raise an error if samples with invalid indices do exist
-    if np.any((subpix < 0) | (submap < 0)):
-        raise RuntimeError("Some lines should be skipped which we though would never happen!")
-        # TODO: in this case we will have to introduce some masking
-        #valid_samples = (subpix >= 0) & (submap >= 0)
-
     # gets number of pixels in each submap
     npix_submap = mapdata.distribution.n_pix_submap
+
+    # uses only samples with valid indices
+    valid_samples = (subpix >= 0) & (submap >= 0)
+    valid_weights = weights[valid_samples,:]
+    valid_submap = submap[valid_samples]
+    valid_subpix = subpix[valid_samples]
 
     # turns mapdata into a numpy array of shape nsamp*nmap
     mapdata = np.array(mapdata.raw)
     mapdata = np.reshape(mapdata, newshape=(-1,npix_submap,nmap))
-    mapdata = mapdata[submap,subpix,:]
+    valid_mapdata = mapdata[valid_submap,valid_subpix,:]
 
     # adds shift to tod
-    tod[:] += np.sum(mapdata * weights, axis=1)
+    tod[valid_samples] += np.sum(valid_mapdata * valid_weights, axis=1)
 
 #-------------------------------------------------------------------------------------------------
 # C++
@@ -171,10 +170,10 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 scan_map = select_implementation(scan_map_compiled, 
                                  scan_map_numpy, 
                                  scan_map_jax, 
-                                 default_implementationType=ImplementationType.COMPILED)
+                                 default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-scan_map = get_compile_time(scan_map)
+#scan_map = get_compile_time(scan_map)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_scan_map")'

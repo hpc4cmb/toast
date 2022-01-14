@@ -68,7 +68,6 @@ class ScanMap(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        print("DEBUG: calling scan_map!") # TODO
         log = Logger.get()
 
         # Check that the detector data is set
