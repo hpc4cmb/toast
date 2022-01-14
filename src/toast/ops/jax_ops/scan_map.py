@@ -10,10 +10,12 @@ import jax.numpy as jnp
 from .utils import get_compile_time, select_implementation, ImplementationType
 from ..._libtoast import scan_map_float64 as scan_map_float64_compiled, scan_map_float32 as scan_map_float32_compiled
 
+# TODO we need to include negative numbers in submap and subpix in the tests 
+
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights, tod):
+def scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights):
     """
     takes mapdata as a jax array and npix_submap as an integer
     """
@@ -26,11 +28,10 @@ def scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights, tod):
 
     # zero-out samples with invalid indices
     valid_samples = (subpix >= 0) & (submap >= 0)
-    mapdata = mapdata * valid_samples[:, jnp.newaxis]
+    mapdata = jnp.where(valid_samples[:,jnp.newaxis], mapdata, 0.0)
 
     # does the computation
-    shift = jnp.sum(mapdata * weights, axis=1)
-    return tod + shift
+    return jnp.sum(mapdata * weights, axis=1)
 
 # Jit compiles the function
 scan_map_jitted = jax.jit(scan_map_jitted, static_argnames=['npix_submap', 'nmap'])
@@ -51,16 +52,17 @@ def scan_map_jax(mapdata, nmap, submap, subpix, weights, tod):
         tod (array, float64):  The timestream on which to accumulate the map values.
 
     Returns:
-        None.
+        None: the result is put in tod.
 
     NOTE: JAX port of the C++ implementation.
+    NOTE: as tod is always set to 0 just before calling the function, we put the value in to instead of adding them to tod
     """
     # gets number of pixels in each submap
     npix_submap = mapdata.distribution.n_pix_submap
     # converts mapdata to a jax array
-    mapdata = jnp.array(mapdata.raw)
+    mapdata = mapdata.raw.array()
     # runs computations
-    tod[:] = scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights, tod)
+    tod[:] = scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -81,9 +83,10 @@ def scan_map_numpy(mapdata, nmap, submap, subpix, weights, tod):
         tod (array, float64):  The timestream on which to accumulate the map values.
 
     Returns:
-        None.
+        None: the result is put in tod.
 
     NOTE: Numpy port of the C++ implementation.
+    NOTE: as tod is always set to 0 just before calling the function, we put the value in to instead of adding them to tod
     """
     # gets number of pixels in each submap
     npix_submap = mapdata.distribution.n_pix_submap
@@ -95,12 +98,12 @@ def scan_map_numpy(mapdata, nmap, submap, subpix, weights, tod):
     valid_subpix = subpix[valid_samples]
 
     # turns mapdata into a numpy array of shape nsamp*nmap
-    mapdata = np.array(mapdata.raw)
+    mapdata = mapdata.raw.array()
     mapdata = np.reshape(mapdata, newshape=(-1,npix_submap,nmap))
     valid_mapdata = mapdata[valid_submap,valid_subpix,:]
 
-    # adds shift to tod
-    tod[valid_samples] += np.sum(valid_mapdata * valid_weights, axis=1)
+    # updates tod
+    tod[valid_samples] = np.sum(valid_mapdata * valid_weights, axis=1)
 
 #-------------------------------------------------------------------------------------------------
 # C++
@@ -121,7 +124,7 @@ def scan_map_compiled(mapdata, nmap, submap, subpix, weights, tod):
         tod (array, float64):  The timestream on which to accumulate the map values.
 
     Returns:
-        None.
+        None: the result is put in tod.
 
     NOTE: Wraps implementations of scan_map to factor the datatype handling
     """
@@ -170,7 +173,7 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 scan_map = select_implementation(scan_map_compiled, 
                                  scan_map_numpy, 
                                  scan_map_jax, 
-                                 default_implementationType=ImplementationType.JAX)
+                                 default_implementationType=ImplementationType.NUMPY)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 #scan_map = get_compile_time(scan_map)
