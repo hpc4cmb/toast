@@ -7,133 +7,77 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # JAX
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # NUMPY
 
-def list_dot_numpy(a, b):
+
+def rotate_one_one_numpy(q, v_in):
     """
-    Dot product of lists of arrays.
+    Rotate a vector by a quaternion.
 
     Args:
-        a(double const *): array of shape (n,4)
-        b(double const *): array of shape (n,4)
+        q(array, double): quaternion of shape (4)
+        v_in(array, double): vector of size 3
 
     Returns:
-        dotprot(double *): array of size n
+        v_out(array, double): vector of size 3
+
+    TODO can this be turned into linear algebra?
     """
-    return np.sum(a * b, axis=1)
+    # normalize q
+    q_unit = q / np.linalg.norm(q)
 
-def amplitude_numpy(v):
-    """
-    Norm of quaternion array.
+    # matrix product
+    xw = q_unit[3] * q_unit[0]
+    yw = q_unit[3] * q_unit[1]
+    zw = q_unit[3] * q_unit[2]
+    x2 = -q_unit[0] * q_unit[0]
+    xy = q_unit[0] * q_unit[1]
+    xz = q_unit[0] * q_unit[2]
+    y2 = -q_unit[1] * q_unit[1]
+    yz = q_unit[1] * q_unit[2]
+    z2 = -q_unit[2] * q_unit[2]
 
-    Args:
-        v(double const *): array of shape (n,4)
+    v_out = np.empty(3)
+    v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) *
+                    v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
+    v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) *
+                    v_in[1] + (yz - xw) * v_in[2]) + v_in[1]
+    v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) *
+                    v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
 
-    Returns:
-        norm(double *): array of shape n
-    """
-    norm2 = list_dot_numpy(v, v)
-    norm = np.sqrt(norm2)
-    return norm
+    return v_out
 
-def normalize_numpy(q_in):
-    """
-    Normalize quaternion array.
 
-    Args:
-        q_in(double const *): array of shape (n,4)
-    
-    Returns:
-        q_out(double *): array of shape (n,4)
-    """
-    norm = amplitude_numpy(q_in)
-    # TODO might need to add axis here
-    return q_in / norm
-
-def rotate_many_one_numpy(q, v_in, v_out):
+def rotate_many_one_numpy(q, v_in):
     """
     Rotate an array of vectors by an array of quaternions.
 
     Args:
-        q(double const *): array of quaternions of shape (nq,4)
-        v_in(double const *): vector of size 3
-    
+        q(array, double): array of quaternions of shape (nq,4)
+        v_in(array, double): vector of size 3
+
     Returns:
-        v_out(double *): array of vectors of shape (nq,3)
+        v_out(array, double): array of vectors of shape (nq,3)
+
+    TODO this function cold be a simple vmap in JAX
     """
-    q_unit = normalize_numpy(q)
-
     nq = q.shape[0]
-    v_out = np.zeros(shape=(nq,3))
-    # TODO can the inner loop be turned into linear algebra that would then be vectorized?
+    v_out = np.zeros(shape=(nq, 3))
+
     for i in range(nq):
-        q_uniti = q_unit[i,:] # quaternion of size 4
-        v_outi = v_out[i,:] # v of size 3
-
-        xw =  q_uniti[3] * q_uniti[0]
-        yw =  q_uniti[3] * q_uniti[1]
-        zw =  q_uniti[3] * q_uniti[2]
-        x2 = -q_uniti[0] * q_uniti[0]
-        xy =  q_uniti[0] * q_uniti[1]
-        xz =  q_uniti[0] * q_uniti[2]
-        y2 = -q_uniti[1] * q_uniti[1]
-        yz =  q_uniti[1] * q_uniti[2]
-        z2 = -q_uniti[2] * q_uniti[2]
-
-        v_outi[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
-        v_outi[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] + (yz - xw) * v_in[2]) + v_in[1]
-        v_outi[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
+        v_out[i, :] = rotate_one_one_numpy(q[i, :], v_in)
 
     return v_out
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # C++
 
+
 """
-// Dot product of lists of arrays.
-void toast::qa_list_dot(size_t n, size_t m, size_t d, double const * a,
-                        double const * b, double * dotprod) 
-{
-    for (size_t i = 0; i < n; ++i) 
-    {
-        dotprod[i] = 0.0;
-        size_t off = m * i;
-        for (size_t j = 0; j < d; ++j) 
-        {
-            dotprod[i] += a[off + j] * b[off + j];
-        }
-    }
-}
-
-// Norm of quaternion array
-void toast::qa_amplitude(size_t n, size_t m, size_t d, double const * v, double * norm) 
-{
-    toast::AlignedVector <double> temp(n);
-    toast::qa_list_dot(n, m, d, v, v, temp.data());
-    toast::vsqrt(n, temp.data(), norm); // sqrt(n, input, output)
-}
-
-// Normalize quaternion array.
-void toast::qa_normalize(size_t n, size_t m, size_t d,
-                         double const * q_in, double * q_out) 
-{
-    toast::AlignedVector <double> norm(n);
-    toast::qa_amplitude(n, m, d, q_in, norm.data());
-
-    for (size_t i = 0; i < n; ++i) 
-    {
-        size_t off = m * i;
-        for (size_t j = 0; j < d; ++j) 
-        {
-            q_out[off + j] = q_in[off + j] / norm[i];
-        }
-    }
-}
-
 // Rotate an array of vectors by an array of quaternions.
 void toast::qa_rotate_many_one(size_t nq, double const * q,
                                double const * v_in, double * v_out) 
