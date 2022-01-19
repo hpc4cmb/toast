@@ -1,6 +1,9 @@
 # Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
+"""
+NOTE: if we port all functions then it might be much easier to port that class to python
+"""
 
 import numpy as np
 
@@ -14,6 +17,17 @@ import jax.numpy as jnp
 # NUMPY
 
 TWOINVPI = 0.63661977236758134308
+
+
+def xy2pix(hpix, x, y):
+    return hpix.utab[x & 0xff] \
+        | (hpix.utab[(x >> 8) & 0xff] << 16) \
+        | (hpix.utab[(x >> 16) & 0xff] << 32) \
+        | (hpix.utab[(x >> 24) & 0xff] << 48) \
+        | (hpix.utab[y & 0xff] << 1) \
+        | (hpix.utab[(y >> 8) & 0xff] << 17) \
+        | (hpix.utab[(y >> 16) & 0xff] << 33) \
+        | (hpix.utab[(y >> 24) & 0xff] << 49)
 
 
 def zphi2nest(hpix, phi, region, z, rtz):
@@ -39,14 +53,14 @@ def zphi2nest(hpix, phi, region, z, rtz):
         tt += 4.0
 
     if (np.abs(region) == 1):
-        temp1 = hpix.halfnside_ + hpix.dnside_ * tt
-        temp2 = hpix.tqnside_ * z
+        temp1 = hpix.halfnside + hpix.dnside * tt
+        temp2 = hpix.tqnside * z
 
         jp = np.int64(temp1 - temp2)
         jm = np.int64(temp1 + temp2)
 
-        ifp = jp >> hpix.factor_
-        ifm = jm >> hpix.factor_
+        ifp = jp >> hpix.factor
+        ifm = jm >> hpix.factor
 
         if (ifp == ifm):
             face = 4 if ifp == 4 else ifp + 4
@@ -55,35 +69,35 @@ def zphi2nest(hpix, phi, region, z, rtz):
         else:
             face = ifm + 8
 
-        x = jm & hpix.nsideminusone_
-        y = hpix.nsideminusone_ - (jp & hpix.nsideminusone_)
+        x = jm & hpix.nsideminusone
+        y = hpix.nsideminusone - (jp & hpix.nsideminusone)
     else:
         ntt = np.int64(tt)
 
         tp = tt - np.double(ntt)
 
-        temp1 = hpix.dnside_ * rtz
+        temp1 = hpix.dnside * rtz
 
         jp = np.int64(tp * temp1)
         jm = np.int64((1.0 - tp) * temp1)
 
-        if (jp >= hpix.nside_):
-            jp = hpix.nsideminusone_
+        if (jp >= hpix.nside):
+            jp = hpix.nsideminusone
 
-        if (jm >= hpix.nside_):
-            jm = hpix.nsideminusone_
+        if (jm >= hpix.nside):
+            jm = hpix.nsideminusone
 
         if (z >= 0):
             face = ntt
-            x = hpix.nsideminusone_ - jm
-            y = hpix.nsideminusone_ - jp
+            x = hpix.nsideminusone - jm
+            y = hpix.nsideminusone - jp
         else:
             face = ntt + 8
             x = jp
             y = jm
 
-    sipf = hpix.xy2pix_(np.int64(x), np.int64(y))
-    pix = np.int64(sipf) + (face << (2 * hpix.factor_))
+    sipf = xy2pix(hpix, np.int64(x), np.int64(y))
+    pix = np.int64(sipf) + (face << (2 * hpix.factor))
     return pix
 
 
@@ -110,23 +124,23 @@ def zphi2ring(hpix, phi, region, z, rtz, pix):
         tt += 4.0
 
     if (np.abs(region) == 1):
-        temp1 = hpix.halfnside_ + hpix.dnside_ * tt
-        temp2 = hpix.tqnside_ * z
+        temp1 = hpix.halfnside + hpix.dnside * tt
+        temp2 = hpix.tqnside * z
 
         jp = np.int64(temp1 - temp2)
         jm = np.int64(temp1 + temp2)
 
-        ir = hpix.nsideplusone_ + jp - jm
+        ir = hpix.nsideplusone + jp - jm
         kshift = 1 - (ir & 1)
 
-        ip = (jp + jm - hpix.nside_ + kshift + 1) >> 1
-        ip = ip % hpix.fournside_
+        ip = (jp + jm - hpix.nside + kshift + 1) >> 1
+        ip = ip % hpix.fournside
 
-        pix = hpix.ncap_ + ((ir - 1) * hpix.fournside_ + ip)
+        pix = hpix.ncap + ((ir - 1) * hpix.fournside + ip)
     else:
         tp = tt - np.floor(tt)
 
-        temp1 = hpix.dnside_ * rtz[i]
+        temp1 = hpix.dnside * rtz[i]
 
         jp = np.int64(tp * temp1)
         jm = np.int64((1.0 - tp) * temp1)
@@ -136,7 +150,7 @@ def zphi2ring(hpix, phi, region, z, rtz, pix):
         ip -= longpart
 
         pix = (2 * ir * (ir - 1) + ip) if (region >
-                                           0) else (hpix.npix_ - 2 * ir * (ir + 1) + ip)
+                                           0) else (hpix.npix - 2 * ir * (ir + 1) + ip)
 
     return pix
 
@@ -166,7 +180,7 @@ def vec2zphi(vec):
 
     work2 = vec[0]
     work3 = vec[1]
-    phi = np.atan(work3, work2)
+    phi = np.arctan2(work3, work2)
 
     return (phi, region, z, rtz)
 

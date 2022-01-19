@@ -5,11 +5,11 @@
 
 #include <module.hpp>
 
-
-void init_math_healpix(py::module & m) {
+void init_math_healpix(py::module &m)
+{
     m.def(
-        "healpix_ang2vec", [](py::buffer theta, py::buffer phi,
-                              py::buffer vec) {
+        "healpix_ang2vec", [](py::buffer theta, py::buffer phi, py::buffer vec)
+        {
             pybuffer_check_1D <double> (theta);
             pybuffer_check_1D <double> (phi);
             pybuffer_check_1D <double> (vec);
@@ -29,9 +29,8 @@ void init_math_healpix(py::module & m) {
             double * rawphi = reinterpret_cast <double *> (info_phi.ptr);
             double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
             toast::healpix_ang2vec(info_theta.size, rawtheta, rawphi, rawvec);
-            return;
-        }, py::arg("theta"), py::arg("phi"), py::arg(
-            "vec"), R"(
+            return; },
+        py::arg("theta"), py::arg("phi"), py::arg("vec"), R"(
         Convert spherical coordinates to a unit vector.
 
         The theta angle is measured down from the North pole and phi is
@@ -53,8 +52,8 @@ void init_math_healpix(py::module & m) {
     )");
 
     m.def(
-        "healpix_vec2ang", [](py::buffer vec, py::buffer theta,
-                              py::buffer phi) {
+        "healpix_vec2ang", [](py::buffer vec, py::buffer theta, py::buffer phi)
+        {
             pybuffer_check_1D <double> (theta);
             pybuffer_check_1D <double> (phi);
             pybuffer_check_1D <double> (vec);
@@ -74,9 +73,8 @@ void init_math_healpix(py::module & m) {
             double * rawphi = reinterpret_cast <double *> (info_phi.ptr);
             double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
             toast::healpix_vec2ang(info_theta.size, rawvec, rawtheta, rawphi);
-            return;
-        }, py::arg("vec"), py::arg("theta"), py::arg(
-            "phi"), R"(
+            return; },
+        py::arg("vec"), py::arg("theta"), py::arg("phi"), R"(
         Convert unit vectors to spherical coordinates.
 
         The theta angle is measured down from the North pole and phi is
@@ -99,8 +97,8 @@ void init_math_healpix(py::module & m) {
     )");
 
     m.def(
-        "healpix_vecs2angpa", [](py::buffer vec, py::buffer theta,
-                                 py::buffer phi, py::buffer pa) {
+        "healpix_vecs2angpa", [](py::buffer vec, py::buffer theta, py::buffer phi, py::buffer pa)
+        {
             pybuffer_check_1D <double> (theta);
             pybuffer_check_1D <double> (phi);
             pybuffer_check_1D <double> (pa);
@@ -124,9 +122,8 @@ void init_math_healpix(py::module & m) {
             double * rawpa = reinterpret_cast <double *> (info_pa.ptr);
             double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
             toast::healpix_vecs2angpa(info_theta.size, rawvec, rawtheta, rawphi, rawpa);
-            return;
-        }, py::arg("vec"), py::arg("theta"), py::arg("phi"), py::arg(
-            "pa"), R"(
+            return; },
+        py::arg("vec"), py::arg("theta"), py::arg("phi"), py::arg("pa"), R"(
         Convert direction / orientation unit vectors.
 
         The inputs are flat-packed pairs of direction and orientation unit
@@ -157,7 +154,7 @@ void init_math_healpix(py::module & m) {
 
     )");
 
-    py::class_ <toast::HealpixPixels, toast::HealpixPixels::puniq> (
+    py::class_<toast::HealpixPixels, toast::HealpixPixels::puniq>(
         m, "HealpixPixels",
         R"(
         Healpix conversions at a particular NSIDE value.
@@ -169,10 +166,9 @@ void init_math_healpix(py::module & m) {
             nside (int):  The NSIDE value to use.
 
         )")
-    .def(py::init <> ())
-    .def(py::init <int64_t> (), py::arg("nside"))
-    .def("reset", &toast::HealpixPixels::reset, py::arg(
-             "nside"), R"(
+        .def(py::init<>())
+        .def(py::init<int64_t>(), py::arg("nside"))
+        .def("reset", &toast::HealpixPixels::reset, py::arg("nside"), R"(
         Reset the NSIDE value used for conversions
 
         Args:
@@ -182,8 +178,22 @@ void init_math_healpix(py::module & m) {
             None
 
     )")
-    .def("ang2nest", [](toast::HealpixPixels & self, py::buffer theta,
-                        py::buffer phi, py::buffer pix) {
+        .def_readonly("nside", &toast::HealpixPixels::nside_)
+        .def_readonly("npix", &toast::HealpixPixels::npix_)
+        .def_readonly("ncap", &toast::HealpixPixels::ncap_)
+        .def_readonly("dnside", &toast::HealpixPixels::dnside_)
+        .def_readonly("twonside", &toast::HealpixPixels::twonside_)
+        .def_readonly("fournside", &toast::HealpixPixels::fournside_)
+        .def_readonly("nsideplusone", &toast::HealpixPixels::nsideplusone_)
+        .def_readonly("nsideminusone", &toast::HealpixPixels::nsideminusone_)
+        .def_readonly("halfnside", &toast::HealpixPixels::halfnside_)
+        .def_readonly("tqnside", &toast::HealpixPixels::tqnside_)
+        .def_readonly("factor", &toast::HealpixPixels::factor_)
+        .def_readonly("utab", &toast::HealpixPixels::utab_)
+        .def_readonly("ctab", &toast::HealpixPixels::ctab_)
+        .def(
+            "ang2nest", [](toast::HealpixPixels &self, py::buffer theta, py::buffer phi, py::buffer pix)
+            {
              pybuffer_check_1D <double> (theta);
              pybuffer_check_1D <double> (phi);
              pybuffer_check_1D <int64_t> (pix);
@@ -202,9 +212,8 @@ void init_math_healpix(py::module & m) {
              double * rawphi = reinterpret_cast <double *> (info_phi.ptr);
              int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
              self.ang2nest(info_theta.size, rawtheta, rawphi, rawpix);
-             return;
-         }, py::arg("theta"), py::arg("phi"), py::arg(
-             "pix"), R"(
+             return; },
+            py::arg("theta"), py::arg("phi"), py::arg("pix"), R"(
             Convert spherical coordinates to pixels in NESTED ordering.
 
             The theta angle is measured down from the North pole and phi is
@@ -225,8 +234,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("ang2ring", [](toast::HealpixPixels & self, py::buffer theta,
-                        py::buffer phi, py::buffer pix) {
+        .def(
+            "ang2ring", [](toast::HealpixPixels &self, py::buffer theta, py::buffer phi, py::buffer pix)
+            {
              pybuffer_check_1D <double> (theta);
              pybuffer_check_1D <double> (phi);
              pybuffer_check_1D <int64_t> (pix);
@@ -245,9 +255,8 @@ void init_math_healpix(py::module & m) {
              double * rawphi = reinterpret_cast <double *> (info_phi.ptr);
              int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
              self.ang2ring(info_theta.size, rawtheta, rawphi, rawpix);
-             return;
-         }, py::arg("theta"), py::arg("phi"), py::arg(
-             "pix"), R"(
+             return; },
+            py::arg("theta"), py::arg("phi"), py::arg("pix"), R"(
             Convert spherical coordinates to pixels in RING ordering.
 
             The theta angle is measured down from the North pole and phi is
@@ -268,8 +277,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("vec2nest", [](toast::HealpixPixels & self, py::buffer vec,
-                        py::buffer pix) {
+        .def(
+            "vec2nest", [](toast::HealpixPixels &self, py::buffer vec, py::buffer pix)
+            {
              pybuffer_check_1D <double> (vec);
              pybuffer_check_1D <int64_t> (pix);
              py::buffer_info info_vec = vec.request();
@@ -285,9 +295,8 @@ void init_math_healpix(py::module & m) {
              double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
              int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
              self.vec2nest(nvec, rawvec, rawpix);
-             return;
-         }, py::arg("vec"), py::arg(
-             "pix"), R"(
+             return; },
+            py::arg("vec"), py::arg("pix"), R"(
             Convert unit vectors to pixels in NESTED ordering.
 
             The theta angle is measured down from the North pole and phi is
@@ -305,8 +314,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("vec2ring", [](toast::HealpixPixels & self, py::buffer vec,
-                        py::buffer pix) {
+        .def(
+            "vec2ring", [](toast::HealpixPixels &self, py::buffer vec, py::buffer pix)
+            {
              pybuffer_check_1D <double> (vec);
              pybuffer_check_1D <int64_t> (pix);
              py::buffer_info info_vec = vec.request();
@@ -322,9 +332,8 @@ void init_math_healpix(py::module & m) {
              double * rawvec = reinterpret_cast <double *> (info_vec.ptr);
              int64_t * rawpix = reinterpret_cast <int64_t *> (info_pix.ptr);
              self.vec2ring(nvec, rawvec, rawpix);
-             return;
-         }, py::arg("vec"), py::arg(
-             "pix"), R"(
+             return; },
+            py::arg("vec"), py::arg("pix"), R"(
             Convert unit vectors to pixels in RING ordering.
 
             The theta angle is measured down from the North pole and phi is
@@ -342,8 +351,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("ring2nest", [](toast::HealpixPixels & self, py::buffer in,
-                         py::buffer out) {
+        .def(
+            "ring2nest", [](toast::HealpixPixels &self, py::buffer in, py::buffer out)
+            {
              pybuffer_check_1D <int64_t> (in);
              pybuffer_check_1D <int64_t> (out);
              py::buffer_info info_in = in.request();
@@ -358,9 +368,8 @@ void init_math_healpix(py::module & m) {
              int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.ring2nest(info_in.size, rawin, rawout);
-             return;
-         }, py::arg("in"), py::arg(
-             "out"), R"(
+             return; },
+            py::arg("in"), py::arg("out"), R"(
             Convert RING ordered pixel numbers into NESTED ordering.
 
             The results are stored in the output buffer.  To guarantee SIMD
@@ -375,8 +384,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("nest2ring", [](toast::HealpixPixels & self, py::buffer in,
-                         py::buffer out) {
+        .def(
+            "nest2ring", [](toast::HealpixPixels &self, py::buffer in, py::buffer out)
+            {
              pybuffer_check_1D <int64_t> (in);
              pybuffer_check_1D <int64_t> (out);
              py::buffer_info info_in = in.request();
@@ -391,9 +401,8 @@ void init_math_healpix(py::module & m) {
              int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.nest2ring(info_in.size, rawin, rawout);
-             return;
-         }, py::arg("in"), py::arg(
-             "out"), R"(
+             return; },
+            py::arg("in"), py::arg("out"), R"(
             Convert NESTED ordered pixel numbers into RING ordering.
 
             The results are stored in the output buffer.  To guarantee SIMD
@@ -408,8 +417,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("degrade_ring", [](toast::HealpixPixels & self, int factor,
-                            py::buffer in, py::buffer out) {
+        .def(
+            "degrade_ring", [](toast::HealpixPixels &self, int factor, py::buffer in, py::buffer out)
+            {
              pybuffer_check_1D <int64_t> (in);
              pybuffer_check_1D <int64_t> (out);
              py::buffer_info info_in = in.request();
@@ -424,9 +434,8 @@ void init_math_healpix(py::module & m) {
              int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.degrade_ring(info_in.size, factor, rawin, rawout);
-             return;
-         }, py::arg("factor"), py::arg("in"), py::arg(
-             "out"), R"(
+             return; },
+            py::arg("factor"), py::arg("in"), py::arg("out"), R"(
             Degrade RING ordered pixel numbers.
 
             Each 'factor' is one division by two in the NSIDE resolution.  So
@@ -445,8 +454,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("degrade_nest", [](toast::HealpixPixels & self, int factor,
-                            py::buffer in, py::buffer out) {
+        .def(
+            "degrade_nest", [](toast::HealpixPixels &self, int factor, py::buffer in, py::buffer out)
+            {
              pybuffer_check_1D <int64_t> (in);
              pybuffer_check_1D <int64_t> (out);
              py::buffer_info info_in = in.request();
@@ -461,9 +471,8 @@ void init_math_healpix(py::module & m) {
              int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.degrade_nest(info_in.size, factor, rawin, rawout);
-             return;
-         }, py::arg("factor"), py::arg("in"), py::arg(
-             "out"), R"(
+             return; },
+            py::arg("factor"), py::arg("in"), py::arg("out"), R"(
             Degrade NESTED ordered pixel numbers.
 
             Each 'factor' is one division by two in the NSIDE resolution.  So
@@ -482,8 +491,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("upgrade_ring", [](toast::HealpixPixels & self, int factor,
-                            py::buffer in, py::buffer out) {
+        .def(
+            "upgrade_ring", [](toast::HealpixPixels &self, int factor, py::buffer in, py::buffer out)
+            {
              pybuffer_check_1D <int64_t> (in);
              pybuffer_check_1D <int64_t> (out);
              py::buffer_info info_in = in.request();
@@ -498,9 +508,8 @@ void init_math_healpix(py::module & m) {
              int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.upgrade_ring(info_in.size, factor, rawin, rawout);
-             return;
-         }, py::arg("factor"), py::arg("in"), py::arg(
-             "out"), R"(
+             return; },
+            py::arg("factor"), py::arg("in"), py::arg("out"), R"(
             Upgrade RING ordered pixel numbers.
 
             Each 'factor' is one multiplication by two in the NSIDE
@@ -520,8 +529,9 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )")
-    .def("upgrade_nest", [](toast::HealpixPixels & self, int factor,
-                            py::buffer in, py::buffer out) {
+        .def(
+            "upgrade_nest", [](toast::HealpixPixels &self, int factor, py::buffer in, py::buffer out)
+            {
              pybuffer_check_1D <int64_t> (in);
              pybuffer_check_1D <int64_t> (out);
              py::buffer_info info_in = in.request();
@@ -536,9 +546,8 @@ void init_math_healpix(py::module & m) {
              int64_t * rawin = reinterpret_cast <int64_t *> (info_in.ptr);
              int64_t * rawout = reinterpret_cast <int64_t *> (info_out.ptr);
              self.degrade_nest(info_in.size, factor, rawin, rawout);
-             return;
-         }, py::arg("factor"), py::arg("in"), py::arg(
-             "out"), R"(
+             return; },
+            py::arg("factor"), py::arg("in"), py::arg("out"), R"(
             Upgrade NESTED ordered pixel numbers.
 
             Each 'factor' is one multiplication by two in the NSIDE
@@ -558,7 +567,6 @@ void init_math_healpix(py::module & m) {
                 None.
 
         )");
-
 
     return;
 }
