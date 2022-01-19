@@ -51,11 +51,9 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     dir = qarray.rotate_many_one_numpy(pin, zaxis)
 
     if (nest):
-        # TODO
         healpix.vec2nest(hpix, dir, pixels)
     else:
-        # TODO
-        healpix.vec2ring(n, dir, pixels)
+        healpix.vec2ring(hpix, dir, pixels)
 
     if (flags is not None):
         pixels[:] = np.where(flags == 0, pixels, -1)
