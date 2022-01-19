@@ -28,16 +28,21 @@ def healpix_pixels_single_jax(hpix, nest, pdata, flag):
 
     Returns:
         pixel (int64):  The detector pixel indice
+    TODO is hpix constant from one run to the other? it could be signaled as static then
     """
+    # problem size
+    print(
+        f"DEBUG: jit-compiling 'healpix_pixels' nest:{nest} n:{pdata.shape[0]}")
+
     # initialize pin
     if (flag is None):
-        pin = np.copy(pdata)
+        pin = pdata
     else:
-        nullquat = np.array([0.0, 0.0, 0.0, 1.0])
-        pin = np.where(flag == 0, pdata, nullquat)
+        nullquat = jnp.array([0.0, 0.0, 0.0, 1.0])
+        pin = jnp.where(flag == 0, pdata, nullquat)
 
     # initialize dir
-    zaxis = np.array([0.0, 0.0, 1.0])
+    zaxis = jnp.array([0.0, 0.0, 1.0])
     dir = qarray.rotate_one_one_jax(pin, zaxis)
 
     if (nest):
@@ -46,7 +51,7 @@ def healpix_pixels_single_jax(hpix, nest, pdata, flag):
         pixel = healpix.vec2ring_jax(hpix, dir)
 
     if (flag is not None):
-        pixel = np.where(flag == 0, pixel, -1)
+        pixel = jnp.where(flag == 0, pixel, -1)
 
     return pixel
 
@@ -54,8 +59,9 @@ def healpix_pixels_single_jax(hpix, nest, pdata, flag):
 # batch healpix_pixels on the n dimenssion
 healpix_pixels_several_jax = jax.vmap(
     healpix_pixels_single_jax, in_axes=(None, None, 0, 0), out_axes=0)
-# TODO jit
-#healpix_pixels_several_jax = jax.jit(healpix_pixels_several_jax, static_argnames='nest')
+# jit
+healpix_pixels_several_jax = jax.jit(
+    healpix_pixels_several_jax, static_argnames='nest')
 
 
 def healpix_pixels_jax(hpix, nest, pdata, flags, pixels):
@@ -74,7 +80,8 @@ def healpix_pixels_jax(hpix, nest, pdata, flags, pixels):
     """
     # puts pdata back into shape
     pdata = np.reshape(pdata, newshape=(-1, 4))
-    # TODO we might need to convert hpix into a pytree compatible format
+    # convert hpix into a pytree compatible format
+    hpix = healpix.HealpixPixels_JAX.from_HealpixPixels(hpix)
     # does the computation
     pixels[:] = healpix_pixels_several_jax(hpix, nest, pdata, flags)
 
@@ -189,8 +196,8 @@ void toast::healpix_pixels(toast::HealpixPixels const & hpix, bool nest,
 # lets us play with the various implementations
 healpix_pixels = select_implementation(healpix_pixels_compiled,
                                        healpix_pixels_numpy,
-                                       healpix_pixels_compiled,
-                                       default_implementationType=ImplementationType.NUMPY)
+                                       healpix_pixels_jax,
+                                       default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 #healpix_pixels = get_compile_time(healpix_pixels)
