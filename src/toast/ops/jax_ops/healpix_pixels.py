@@ -12,11 +12,12 @@ from .utils import get_compile_time, select_implementation, ImplementationType
 from .utils import math_qarray as qarray, math_healpix as healpix
 from ..._libtoast import healpix_pixels as healpix_pixels_compiled
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # JAX
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # NUMPY
+
 
 def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     """
@@ -37,7 +38,7 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     nullquat = np.array([0.0, 0.0, 0.0, 1.0])
 
     # puts pdata back into shape
-    pdata = np.reshape(pdata, newshape=(n,4))
+    pdata = np.reshape(pdata, newshape=(n, 4))
 
     # initialize pin
     if (flags is None):
@@ -51,7 +52,7 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
 
     if (nest):
         # TODO
-        healpix.vec2nest(n, dir, pixels)
+        healpix.vec2nest(hpix, dir, pixels)
     else:
         # TODO
         healpix.vec2ring(n, dir, pixels)
@@ -59,8 +60,9 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     if (flags is not None):
         pixels[:] = np.where(flags == 0, pixels, -1)
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # C++
+
 
 """
 void toast::healpix_pixels(toast::HealpixPixels const & hpix, bool nest,
@@ -121,13 +123,13 @@ void toast::healpix_pixels(toast::HealpixPixels const & hpix, bool nest,
 }
 """
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-healpix_pixels = select_implementation(healpix_pixels_compiled, 
-                                       healpix_pixels_compiled, 
-                                       healpix_pixels_compiled, 
+healpix_pixels = select_implementation(healpix_pixels_compiled,
+                                       healpix_pixels_compiled,
+                                       healpix_pixels_compiled,
                                        default_implementationType=ImplementationType.COMPILED)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU

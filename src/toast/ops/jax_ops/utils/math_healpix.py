@@ -1,5 +1,144 @@
-# see toast_math_healpix.cpp
+# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
+# a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
+
+import jax
+import jax.numpy as jnp
+
+# -------------------------------------------------------------------------------------------------
+# JAX
+
+# -------------------------------------------------------------------------------------------------
+# NUMPY
+
+TWOINVPI = 0.63661977236758134308
+
+
+def zphi2nest(hpix, phi, region, z, rtz, pix):
+    """
+    Args:
+        hpix (HealpixPixels):  The healpix projection object.
+        phi (array, double) of size n
+        region (array, int) of size n
+        z (array, double) of size n
+        rtz (array, double) of size n
+        pix (array, int) of size n
+
+    Returns:
+        None (the results are put in pix)
+    """
+    # machine epsilon
+    eps = np.finfo(np.float).eps
+
+    # TODO vectorize that loop once it passes tests
+    n = pix.size
+    for i in range(n):
+        ph = phi[i]
+        if np.abs(ph) < eps:
+            ph = 0.0
+
+        tt = ph * TWOINVPI
+        if ph < 0.0:
+            tt += 4.0
+
+        if (np.abs(region[i]) == 1):
+            temp1 = hpix.halfnside_ + hpix.dnside_ * tt
+            temp2 = hpix.tqnside_ * z[i]
+
+            jp = np.int64(temp1 - temp2)
+            jm = np.int64(temp1 + temp2)
+
+            ifp = jp >> hpix.factor_
+            ifm = jm >> hpix.factor_
+
+            if (ifp == ifm):
+                face = 4 if ifp == 4 else ifp + 4
+            elif (ifp < ifm):
+                face = ifp
+            else:
+                face = ifm + 8
+
+            x = jm & hpix.nsideminusone_
+            y = hpix.nsideminusone_ - (jp & hpix.nsideminusone_)
+        else:
+            ntt = np.int64(tt)
+
+            tp = tt - np.double(ntt)
+
+            temp1 = hpix.dnside_ * rtz[i]
+
+            jp = np.int64(tp * temp1)
+            jm = np.int64((1.0 - tp) * temp1)
+
+            if (jp >= hpix.nside_):
+                jp = hpix.nsideminusone_
+
+            if (jm >= hpix.nside_):
+                jm = hpix.nsideminusone_
+
+            if (z[i] >= 0):
+                face = ntt
+                x = hpix.nsideminusone_ - jm
+                y = hpix.nsideminusone_ - jp
+            else:
+                face = ntt + 8
+                x = jp
+                y = jm
+
+        sipf = hpix.xy2pix_(np.int64(x), np.int64(y))
+        pix[i] = np.int64(sipf) + (face << (2 * hpix.factor_))
+
+
+def vec2zphi(vec):
+    """
+    Args:
+        vec (array, double) of shape (n,3)
+
+    Returns:
+        (phi, region, z, rtz)
+        phi (array, double) of size n
+        region (array, int) of size n
+        z (array, double) of size n
+        rtz (array, double) of size n
+    """
+    z = vec[:, 2]
+    za = np.abs(z)
+
+    # region encodes BOTH the sign of Z and whether its
+    # absolute value is greater than 2/3.
+    itemps = np.where(z > 0.0, 1, -1)
+    region = np.where(za <= 2./3., itemps, 2*itemps)
+
+    work1 = 3.0 * (1.0 - za)
+    rtz = np.sqrt(work1)
+
+    work2 = vec[:, 0]
+    work3 = vec[:, 1]
+    phi = np.atan(work3, work2)
+
+    return (phi, region, z, rtz)
+
+
+def vec2nest(hpix, vec, pix):
+    """
+    Args:
+        hpix (HealpixPixels):  The healpix projection object.
+        vec (array, double) of shape (n,3)
+        pix (array, int) of size n
+
+    Returns:
+        None, the result will be stored in pix
+    """
+    (phi, region, z, rtz) = vec2zphi(vec)
+    zphi2nest(hpix, phi, region, z, rtz, pix)
+
+# -------------------------------------------------------------------------------------------------
+# C++
+
+
+# see toast_math_healpix.cpp
 """
 void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
                                     double * phi, int * region, double * z,
@@ -31,8 +170,6 @@ void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
 
     toast::vfast_sqrt(n, work1.data(), rtz);
     toast::vatan2(n, work3.data(), work2.data(), phi);
-
-    return;
 }
 
 void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
