@@ -33,12 +33,11 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     Returns:
         None (results are stored in pixels).
     """
-    n = pixels.size
     zaxis = np.array([0.0, 0.0, 1.0])
     nullquat = np.array([0.0, 0.0, 0.0, 1.0])
 
     # puts pdata back into shape
-    pdata = np.reshape(pdata, newshape=(n, 4))
+    pdata = np.reshape(pdata, newshape=(-1, 4))
 
     # initialize pin
     if (flags is None):
@@ -50,6 +49,7 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     # initialize dir
     dir = qarray.rotate_many_one_numpy(pin, zaxis)
 
+    # NOTE: those operations overwrite pixels
     if (nest):
         healpix.vec2nest(hpix, dir, pixels)
     else:
