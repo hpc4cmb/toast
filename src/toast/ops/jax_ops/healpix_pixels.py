@@ -126,13 +126,13 @@ void toast::healpix_pixels(toast::HealpixPixels const & hpix, bool nest,
 
 # lets us play with the various implementations
 healpix_pixels = select_implementation(healpix_pixels_compiled,
+                                       healpix_pixels_numpy,
                                        healpix_pixels_compiled,
-                                       healpix_pixels_compiled,
-                                       default_implementationType=ImplementationType.COMPILED)
+                                       default_implementationType=ImplementationType.NUMPY)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-healpix_pixels = get_compile_time(healpix_pixels)
+#healpix_pixels = get_compile_time(healpix_pixels)
 
 # To test:
 # TODO find test name
-# python -c 'import toast.tests; toast.tests.run("ops_")'
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
