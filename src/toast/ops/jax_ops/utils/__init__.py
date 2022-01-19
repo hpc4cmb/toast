@@ -1,4 +1,3 @@
-import os
 from time import time
 from enum import Enum
 import jax
@@ -98,7 +97,8 @@ def get_compile_time(f):
 # PMAP
 
 # used so that CPUs can be detected as devices by pmap
-#os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=64'
+# import os
+# os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=64'
 
 def get_divisor_device_number(nb_devices, axis_size):
     """

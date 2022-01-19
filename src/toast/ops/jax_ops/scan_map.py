@@ -25,6 +25,7 @@ def scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights):
     mapdata = mapdata[submap,subpix,:]
 
     # zero-out samples with invalid indices
+    # by default JAX will put any value where the indices were invalid instead of erroring out
     valid_samples = (subpix >= 0) & (submap >= 0)
     mapdata = jnp.where(valid_samples[:,jnp.newaxis], mapdata, 0.0)
 
