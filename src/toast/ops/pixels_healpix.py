@@ -20,7 +20,7 @@ from ..pixels import PixelDistribution
 
 from ..observation import default_values as defaults
 
-from .._libtoast import healpix_pixels
+from .jax_ops import healpix_pixels
 
 from .operator import Operator
 
