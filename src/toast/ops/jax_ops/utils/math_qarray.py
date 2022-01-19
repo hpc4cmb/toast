@@ -10,6 +10,42 @@ import jax.numpy as jnp
 # -------------------------------------------------------------------------------------------------
 # JAX
 
+
+def rotate_one_one_jax(q, v_in):
+    """
+    Rotate a vector by a quaternion.
+
+    Args:
+        q(array, double): quaternion of shape (4)
+        v_in(array, double): vector of size 3
+
+    Returns:
+        v_out(array, double): vector of size 3
+    """
+    # normalize quaternion
+    q_unit = q / jnp.linalg.norm(q)
+
+    # builds the elements that make the matrix representation of the quaternion
+    xw = q_unit[3] * q_unit[0]
+    yw = q_unit[3] * q_unit[1]
+    zw = q_unit[3] * q_unit[2]
+    x2 = -q_unit[0] * q_unit[0]
+    xy = q_unit[0] * q_unit[1]
+    xz = q_unit[0] * q_unit[2]
+    y2 = -q_unit[1] * q_unit[1]
+    yz = q_unit[1] * q_unit[2]
+    z2 = -q_unit[2] * q_unit[2]
+
+    # matrix product
+    v_out_0 = 2 * ((y2 + z2) * v_in[0] + (xy - zw) *
+                   v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
+    v_out_1 = 2 * ((zw + xy) * v_in[0] + (x2 + z2) *
+                   v_in[1] + (yz - xw) * v_in[2]) + v_in[1]
+    v_out_2 = 2 * ((xz - yw) * v_in[0] + (xw + yz) *
+                   v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
+
+    return jnp.array([v_out_0, v_out_1, v_out_2])
+
 # -------------------------------------------------------------------------------------------------
 # NUMPY
 
@@ -24,13 +60,11 @@ def rotate_one_one_numpy(q, v_in):
 
     Returns:
         v_out(array, double): vector of size 3
-
-    TODO can this be turned into linear algebra?
     """
-    # normalize q
+    # normalize quaternion
     q_unit = q / np.linalg.norm(q)
 
-    # matrix product
+    # builds the elments that make the matrix representation of the quaternion
     xw = q_unit[3] * q_unit[0]
     yw = q_unit[3] * q_unit[1]
     zw = q_unit[3] * q_unit[2]
@@ -41,6 +75,7 @@ def rotate_one_one_numpy(q, v_in):
     yz = q_unit[1] * q_unit[2]
     z2 = -q_unit[2] * q_unit[2]
 
+    # matrix product
     v_out = np.empty(3)
     v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) *
                     v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
@@ -62,8 +97,6 @@ def rotate_many_one_numpy(q, v_in):
 
     Returns:
         v_out(array, double): array of vectors of shape (nq,3)
-
-    TODO this function cold be a simple vmap in JAX
     """
     nq = q.shape[0]
     v_out = np.zeros(shape=(nq, 3))
