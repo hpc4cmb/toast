@@ -84,26 +84,6 @@ def rotate_one_one_numpy(q, v_in):
 
     return v_out
 
-
-def rotate_many_one_numpy(q, v_in):
-    """
-    Rotate an array of vectors by an array of quaternions.
-
-    Args:
-        q(array, double): array of quaternions of shape (nq,4)
-        v_in(array, double): vector of size 3
-
-    Returns:
-        v_out(array, double): array of vectors of shape (nq,3)
-    """
-    nq = q.shape[0]
-    v_out = np.zeros(shape=(nq, 3))
-
-    for i in range(nq):
-        v_out[i, :] = rotate_one_one_numpy(q[i, :], v_in)
-
-    return v_out
-
 # -------------------------------------------------------------------------------------------------
 # C++
 
