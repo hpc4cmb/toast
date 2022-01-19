@@ -393,38 +393,32 @@ def vec2zphi_numpy(vec):
     return (phi, region, z, rtz)
 
 
-def vec2nest_numpy(hpix, vec, pix):
+def vec2nest_numpy(hpix, vec):
     """
     Args:
         hpix (HealpixPixels):  The healpix projection object.
-        vec (array, double) of shape (n,3)
-        pix (array, int) of size n
+        vec (array, double) of sise 3
 
     Returns:
-        None, the result will be stored in pix
+        pix (int)
     """
-    n = pix.size
-    # TODO that loop is a prime target for a vmap in jax
-    for i in range(n):
-        (phi, region, z, rtz) = vec2zphi_numpy(vec[i, :])
-        pix[i] = zphi2nest_numpy(hpix, phi, region, z, rtz)
+    (phi, region, z, rtz) = vec2zphi_numpy(vec)
+    pix = zphi2nest_numpy(hpix, phi, region, z, rtz)
+    return pix
 
 
-def vec2ring_numpy(hpix, vec, pix):
+def vec2ring_numpy(hpix, vec):
     """
     Args:
         hpix (HealpixPixels):  The healpix projection object.
-        vec (array, double) of shape (n,3)
-        pix (array, int) of size n
+        vec (array, double) of sise 3
 
     Returns:
-        None, the result will be stored in pix
+        pix (int)
     """
-    n = pix.size
-    # TODO that loop is a prime target for a vmap in jax
-    for i in range(n):
-        (phi, region, z, rtz) = vec2zphi_numpy(vec[i, :])
-        pix[i] = zphi2ring_numpy(hpix, phi, region, z, rtz)
+    (phi, region, z, rtz) = vec2zphi_numpy(vec)
+    pix = zphi2ring_numpy(hpix, phi, region, z, rtz)
+    return pix
 
 # -------------------------------------------------------------------------------------------------
 # C++

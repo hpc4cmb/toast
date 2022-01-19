@@ -103,29 +103,34 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     Returns:
         None (results are stored in pixels).
     """
+    # puts pdata back into shape
+    n = pixels.size
+    pdata = np.reshape(pdata, newshape=(-1, 4))
+
+    # constants
     zaxis = np.array([0.0, 0.0, 1.0])
     nullquat = np.array([0.0, 0.0, 0.0, 1.0])
 
-    # puts pdata back into shape
-    pdata = np.reshape(pdata, newshape=(-1, 4))
+    for i in range(n):
+        # initialize pin
+        if (flags is None):
+            pin = np.copy(pdata[i, :])
+        else:
+            pin = np.where(flags == 0, pdata[i, :], nullquat)
 
-    # initialize pin
-    if (flags is None):
-        pin = np.copy(pdata)
-    else:
-        pin = np.where(flags == 0, pdata, nullquat)
+        # initialize dir
+        dir = qarray.rotate_one_one_numpy(pin, zaxis)
 
-    # initialize dir
-    dir = qarray.rotate_many_one_numpy(pin, zaxis)
+        # computes pixel
+        if (nest):
+            pixel = healpix.vec2nest_numpy(hpix, dir)
+        else:
+            pixel = healpix.vec2ring_numpy(hpix, dir)
 
-    # NOTE: those operations overwrite pixels
-    if (nest):
-        healpix.vec2nest_numpy(hpix, dir, pixels)
-    else:
-        healpix.vec2ring_numpy(hpix, dir, pixels)
+        if (flags is not None):
+            pixel = pixel if (flags[i] == 0) else -1
 
-    if (flags is not None):
-        pixels[:] = np.where(flags == 0, pixels, -1)
+        pixels[i] = pixel
 
 # -------------------------------------------------------------------------------------------------
 # C++
@@ -197,10 +202,10 @@ void toast::healpix_pixels(toast::HealpixPixels const & hpix, bool nest,
 healpix_pixels = select_implementation(healpix_pixels_compiled,
                                        healpix_pixels_numpy,
                                        healpix_pixels_jax,
-                                       default_implementationType=ImplementationType.COMPILED)
+                                       default_implementationType=ImplementationType.NUMPY)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-healpix_pixels = get_compile_time(healpix_pixels)
+#healpix_pixels = get_compile_time(healpix_pixels)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
