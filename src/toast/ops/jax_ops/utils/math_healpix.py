@@ -1,19 +1,47 @@
 # Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-"""
-NOTE: if we port all functions then it might be much easier to port that class to python
-"""
+
+from typing import NamedTuple
 
 import numpy as np
 
 import jax
 import jax.numpy as jnp
+from jax.tree_util import register_pytree_node
 
 TWOINVPI = 0.63661977236758134308
+MACHINE_EPSILON = np.finfo(np.float).eps
 
 # -------------------------------------------------------------------------------------------------
 # JAX
+
+
+class HealpixPixels_JAX(NamedTuple):
+    """
+    Encapsulate the information found in a HealpixPixels in a JAX compatible way
+    NOTE: if we port all funciton to JAX, it might be better to drop the C++ class and always use a Python one
+    """
+    nside: np.int64
+    npix: np.int64
+    ncap: np.int64
+    dnside: np.double
+    twonside: np.int64
+    fournside: np.int64
+    nsideplusone: np.int64
+    nsideminusone: np.int64
+    halfnside: np.double
+    tqnside: np.double
+    factor: np.int64
+    utab: np.array
+    ctab: np.array
+
+    @classmethod
+    def from_HealpixPixels(cls, hpix):
+        return cls(hpix.nside, hpix.npix, hpix.ncap, hpix.dnside, hpix.twonside, hpix.fournside,
+                   hpix.nsideplusone, hpix.nsideminusone, hpix.halfnside, hpix.tqnside, hpix.factor,
+                   # we convert lists into numpy array to be able to index into them with indices unknown at compile time
+                   jnp.asarray(hpix.utab), jnp.asarray(hpix.ctab))
 
 
 def xy2pix_jax(hpix, x, y):
@@ -39,8 +67,7 @@ def zphi2nest_jax(hpix, phi, region, z, rtz):
     Returns:
         pix (int)
     """
-    eps = jnp.finfo(jnp.float).eps  # machine epsilon
-    phi = jnp.where(jnp.abs(phi) < eps, 0.0, phi)
+    phi = jnp.where(jnp.abs(phi) < MACHINE_EPSILON, 0.0, phi)
 
     tt = phi * TWOINVPI
     tt = jnp.where(phi < 0.0, tt+4.0, tt)
@@ -101,8 +128,7 @@ def zphi2ring_jax(hpix, phi, region, z, rtz, pix):
     Returns:
         pix (int)
     """
-    eps = jnp.finfo(jnp.float).eps  # machine epsilon
-    phi = jnp.where(jnp.abs(phi) < eps, 0.0, phi)
+    phi = jnp.where(jnp.abs(phi) < MACHINE_EPSILON, 0.0, phi)
 
     tt = phi * TWOINVPI
     tt = jnp.where(phi < 0.0, tt+4.0, tt)
