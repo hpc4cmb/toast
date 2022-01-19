@@ -10,16 +10,13 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
+TWOINVPI = 0.63661977236758134308
+
 # -------------------------------------------------------------------------------------------------
 # JAX
 
-# -------------------------------------------------------------------------------------------------
-# NUMPY
 
-TWOINVPI = 0.63661977236758134308
-
-
-def xy2pix(hpix, x, y):
+def xy2pix_jax(hpix, x, y):
     return hpix.utab[x & 0xff] \
         | (hpix.utab[(x >> 8) & 0xff] << 16) \
         | (hpix.utab[(x >> 16) & 0xff] << 32) \
@@ -30,7 +27,196 @@ def xy2pix(hpix, x, y):
         | (hpix.utab[(y >> 24) & 0xff] << 49)
 
 
-def zphi2nest(hpix, phi, region, z, rtz):
+def zphi2nest_jax(hpix, phi, region, z, rtz):
+    """
+    Args:
+        hpix (HealpixPixels):  The healpix projection object.
+        phi (double)
+        region (int)
+        z (double)
+        rtz (double)
+
+    Returns:
+        pix (int)
+    """
+    eps = jnp.finfo(jnp.float).eps  # machine epsilon
+    phi = jnp.where(jnp.abs(phi) < eps, 0.0, phi)
+
+    tt = phi * TWOINVPI
+    tt = jnp.where(phi < 0.0, tt+4.0, tt)
+
+    # NOTE: we convert the branch into a jnp.where
+    # if (jnp.abs(region) == 1)
+    # then:
+    temp1 = hpix.halfnside + hpix.dnside * tt
+    temp2 = hpix.tqnside * z
+
+    jp = jnp.int64(temp1 - temp2)
+    jm = jnp.int64(temp1 + temp2)
+
+    ifp = jp >> hpix.factor
+    ifm = jm >> hpix.factor
+
+    face_then = jnp.where(ifp == ifm,
+                          jnp.where(ifp == 4, 4, ifp + 4),
+                          jnp.where(ifp < ifm, ifp, ifm + 8))
+
+    x_then = jm & hpix.nsideminusone
+    y_then = hpix.nsideminusone - (jp & hpix.nsideminusone)
+    # else:
+    ntt = jnp.int64(tt)
+
+    tp = tt - jnp.double(ntt)
+
+    temp1 = hpix.dnside * rtz
+
+    jp = jnp.int64(tp * temp1)
+    jp = jnp.where(jp >= hpix.nside, hpix.nsideminusone, jp)
+
+    jm = jnp.int64((1.0 - tp) * temp1)
+    jm = jnp.where(jm >= hpix.nside, hpix.nsideminusone, jm)
+
+    face_else = jnp.where(z >= 0, ntt, ntt + 8)
+    x_else = jnp.where(z >= 0, hpix.nsideminusone - jm, jp)
+    y_else = jnp.where(z >= 0, hpix.nsideminusone - jp, jm)
+    # where
+    face = jnp.where(jnp.abs(region) == 1, face_then, face_else)
+    x = jnp.where(jnp.abs(region) == 1, x_then, x_else)
+    y = jnp.where(jnp.abs(region) == 1, y_then, y_else)
+
+    sipf = xy2pix_jax(hpix, jnp.int64(x), jnp.int64(y))
+    pix = jnp.int64(sipf) + (face << (2 * hpix.factor))
+    return pix
+
+
+def zphi2ring_jax(hpix, phi, region, z, rtz, pix):
+    """
+    Args:
+        hpix (HealpixPixels):  The healpix projection object.
+        phi (double)
+        region (int)
+        z (double)
+        rtz (double)
+
+    Returns:
+        pix (int)
+    """
+    eps = jnp.finfo(jnp.float).eps  # machine epsilon
+    phi = jnp.where(jnp.abs(phi) < eps, 0.0, phi)
+
+    tt = phi * TWOINVPI
+    tt = jnp.where(phi < 0.0, tt+4.0, tt)
+
+    # NOTE: we convert the branch into a jnp.where
+    # if (jnp.abs(region) == 1)
+    # then:
+    temp1 = hpix.halfnside + hpix.dnside * tt
+    temp2 = hpix.tqnside * z
+
+    jp = jnp.int64(temp1 - temp2)
+    jm = jnp.int64(temp1 + temp2)
+
+    ir = hpix.nsideplusone + jp - jm
+    kshift = 1 - (ir & 1)
+
+    ip = (jp + jm - hpix.nside + kshift + 1) >> 1
+    ip = ip % hpix.fournside
+
+    pix_then = hpix.ncap + ((ir - 1) * hpix.fournside + ip)
+    # else:
+    tp = tt - jnp.floor(tt)
+
+    temp1 = hpix.dnside * rtz
+
+    jp = jnp.int64(tp * temp1)
+    jm = jnp.int64((1.0 - tp) * temp1)
+    ir = jp + jm + 1
+    ip = jnp.int64(tt * jnp.double(ir))
+    longpart = jnp.int64(ip / (4 * ir))
+    ip = ip - longpart
+
+    pix_pos = 2 * ir * (ir - 1) + ip
+    pix_neg = hpix.npix - 2 * ir * (ir + 1) + ip
+    pix_else = jnp.where(region > 0, pix_pos, pix_neg)
+    # where
+    pix = jnp.where(jnp.abs(region) == 1, pix_then, pix_else)
+
+    return pix
+
+
+def vec2zphi_jax(vec):
+    """
+    Args:
+        vec (array, double) of size 3
+
+    Returns:
+        (phi, region, z, rtz)
+        phi (double)
+        region (int)
+        z (double)
+        rtz (double)
+    """
+    z = vec[2]
+    za = jnp.abs(z)
+
+    # region encodes BOTH the sign of Z and whether its
+    # absolute value is greater than 2/3.
+    itemps = jnp.where(z > 0.0, 1, -1)
+    region = jnp.where(za <= 2./3., itemps, 2*itemps)
+
+    work1 = 3.0 * (1.0 - za)
+    rtz = jnp.sqrt(work1)
+
+    work2 = vec[0]
+    work3 = vec[1]
+    phi = jnp.arctan2(work3, work2)
+
+    return (phi, region, z, rtz)
+
+
+def vec2nest_jax(hpix, vec):
+    """
+    Args:
+        hpix (HealpixPixels):  The healpix projection object.
+        vec (double) of size 3
+
+    Returns:
+        pix (int)
+    """
+    (phi, region, z, rtz) = vec2zphi_jax(vec)
+    pix = zphi2nest_jax(hpix, phi, region, z, rtz)
+    return pix
+
+
+def vec2ring_jax(hpix, vec):
+    """
+    Args:
+        hpix (HealpixPixels):  The healpix projection object.
+        vec (array, double) of size 3
+
+    Returns:
+        pix (int)
+    """
+    (phi, region, z, rtz) = vec2zphi_jax(vec)
+    pix = zphi2ring_jax(hpix, phi, region, z, rtz)
+    return pix
+
+# -------------------------------------------------------------------------------------------------
+# NUMPY
+
+
+def xy2pix_numpy(hpix, x, y):
+    return hpix.utab[x & 0xff] \
+        | (hpix.utab[(x >> 8) & 0xff] << 16) \
+        | (hpix.utab[(x >> 16) & 0xff] << 32) \
+        | (hpix.utab[(x >> 24) & 0xff] << 48) \
+        | (hpix.utab[y & 0xff] << 1) \
+        | (hpix.utab[(y >> 8) & 0xff] << 17) \
+        | (hpix.utab[(y >> 16) & 0xff] << 33) \
+        | (hpix.utab[(y >> 24) & 0xff] << 49)
+
+
+def zphi2nest_numpy(hpix, phi, region, z, rtz):
     """
     Args:
         hpix (HealpixPixels):  The healpix projection object.
@@ -96,19 +282,19 @@ def zphi2nest(hpix, phi, region, z, rtz):
             x = jp
             y = jm
 
-    sipf = xy2pix(hpix, np.int64(x), np.int64(y))
+    sipf = xy2pix_numpy(hpix, np.int64(x), np.int64(y))
     pix = np.int64(sipf) + (face << (2 * hpix.factor))
     return pix
 
 
-def zphi2ring(hpix, phi, region, z, rtz, pix):
+def zphi2ring_numpy(hpix, phi, region, z, rtz, pix):
     """
     Args:
         hpix (HealpixPixels):  The healpix projection object.
-        phi (array, double) of size n
-        region (array, int) of size n
-        z (array, double) of size n
-        rtz (array, double) of size n
+        phi (double)
+        region (int)
+        z (double)
+        rtz (double)
 
     Returns:
         pix (int)
@@ -140,7 +326,7 @@ def zphi2ring(hpix, phi, region, z, rtz, pix):
     else:
         tp = tt - np.floor(tt)
 
-        temp1 = hpix.dnside * rtz[i]
+        temp1 = hpix.dnside * rtz
 
         jp = np.int64(tp * temp1)
         jm = np.int64((1.0 - tp) * temp1)
@@ -155,7 +341,7 @@ def zphi2ring(hpix, phi, region, z, rtz, pix):
     return pix
 
 
-def vec2zphi(vec):
+def vec2zphi_numpy(vec):
     """
     Args:
         vec (array, double) of size 3
@@ -185,7 +371,7 @@ def vec2zphi(vec):
     return (phi, region, z, rtz)
 
 
-def vec2nest(hpix, vec, pix):
+def vec2nest_numpy(hpix, vec, pix):
     """
     Args:
         hpix (HealpixPixels):  The healpix projection object.
@@ -198,11 +384,11 @@ def vec2nest(hpix, vec, pix):
     n = pix.size
     # TODO that loop is a prime target for a vmap in jax
     for i in range(n):
-        (phi, region, z, rtz) = vec2zphi(vec[i, :])
-        pix[i] = zphi2nest(hpix, phi, region, z, rtz)
+        (phi, region, z, rtz) = vec2zphi_numpy(vec[i, :])
+        pix[i] = zphi2nest_numpy(hpix, phi, region, z, rtz)
 
 
-def vec2ring(hpix, vec, pix):
+def vec2ring_numpy(hpix, vec, pix):
     """
     Args:
         hpix (HealpixPixels):  The healpix projection object.
@@ -215,8 +401,8 @@ def vec2ring(hpix, vec, pix):
     n = pix.size
     # TODO that loop is a prime target for a vmap in jax
     for i in range(n):
-        (phi, region, z, rtz) = vec2zphi(vec[i, :])
-        pix[i] = zphi2ring(hpix, phi, region, z, rtz)
+        (phi, region, z, rtz) = vec2zphi_numpy(vec[i, :])
+        pix[i] = zphi2ring_numpy(hpix, phi, region, z, rtz)
 
 # -------------------------------------------------------------------------------------------------
 # C++

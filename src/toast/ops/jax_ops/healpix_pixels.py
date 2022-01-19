@@ -15,6 +15,69 @@ from ..._libtoast import healpix_pixels as healpix_pixels_compiled
 # -------------------------------------------------------------------------------------------------
 # JAX
 
+
+def healpix_pixels_single_jax(hpix, nest, pdata, flag):
+    """
+    Compute the healpix pixel indices for one detector.
+
+    Args:
+        hpix (HealpixPixels):  The healpix projection object.
+        nest (bool):  If True, then use NESTED ordering, else RING.
+        pdata (array, float64):  The flat-packed array of detector quaternions (size 4).
+        flag (uint8):  The pointing flag (could also be None).
+
+    Returns:
+        pixel (int64):  The detector pixel indice
+    """
+    # initialize pin
+    if (flag is None):
+        pin = np.copy(pdata)
+    else:
+        nullquat = np.array([0.0, 0.0, 0.0, 1.0])
+        pin = np.where(flag == 0, pdata, nullquat)
+
+    # initialize dir
+    zaxis = np.array([0.0, 0.0, 1.0])
+    dir = qarray.rotate_one_one_jax(pin, zaxis)
+
+    if (nest):
+        pixel = healpix.vec2nest_jax(hpix, dir)
+    else:
+        pixel = healpix.vec2ring_jax(hpix, dir)
+
+    if (flag is not None):
+        pixel = np.where(flag == 0, pixel, -1)
+
+    return pixel
+
+
+# batch healpix_pixels on the n dimenssion
+healpix_pixels_several_jax = jax.vmap(
+    healpix_pixels_single_jax, in_axes=(None, None, 0, 0), out_axes=0)
+# TODO jit
+#healpix_pixels_several_jax = jax.jit(healpix_pixels_several_jax, static_argnames='nest')
+
+
+def healpix_pixels_jax(hpix, nest, pdata, flags, pixels):
+    """
+    Compute the healpix pixel indices for one detector.
+
+    Args:
+        hpix (HealpixPixels):  The healpix projection object.
+        nest (bool):  If True, then use NESTED ordering, else RING.
+        pdata (array, float64):  The flat-packed array of detector quaternions (size 4*n).
+        flags (array, uint8):  The pointing flags (could also be None).
+        pixels (array, int64):  The detector pixel indices to store the result (size n).
+
+    Returns:
+        None (results are stored in pixels).
+    """
+    # puts pdata back into shape
+    pdata = np.reshape(pdata, newshape=(-1, 4))
+    # TODO we might need to convert hpix into a pytree compatible format
+    # does the computation
+    pixels[:] = healpix_pixels_several_jax(hpix, nest, pdata, flags)
+
 # -------------------------------------------------------------------------------------------------
 # NUMPY
 
@@ -43,7 +106,6 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     if (flags is None):
         pin = np.copy(pdata)
     else:
-        # TODO this might require adding dimensions in the proper places so that it match
         pin = np.where(flags == 0, pdata, nullquat)
 
     # initialize dir
@@ -51,9 +113,9 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
 
     # NOTE: those operations overwrite pixels
     if (nest):
-        healpix.vec2nest(hpix, dir, pixels)
+        healpix.vec2nest_numpy(hpix, dir, pixels)
     else:
-        healpix.vec2ring(hpix, dir, pixels)
+        healpix.vec2ring_numpy(hpix, dir, pixels)
 
     if (flags is not None):
         pixels[:] = np.where(flags == 0, pixels, -1)
@@ -134,5 +196,4 @@ healpix_pixels = select_implementation(healpix_pixels_compiled,
 #healpix_pixels = get_compile_time(healpix_pixels)
 
 # To test:
-# TODO find test name
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
