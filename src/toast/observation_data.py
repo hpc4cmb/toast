@@ -104,6 +104,7 @@ class DetectorData(object):
 
         self._fullsize = 0
         self._memsize = 0
+        self._raw = None
 
         if view_data is None:
             # Allocate the data
@@ -151,8 +152,11 @@ class DetectorData(object):
         return (storage_class, itemsize, dt, shp, flatshape)
 
     def _allocate(self):
+        log = Logger.get()
         self._fullsize = self._flatshape
         self._memsize = self.itemsize * self._fullsize
+        if self._raw is not None:
+            del self._raw
         self._raw = self._storage_class.zeros(self._fullsize)
         self._flatdata = self._raw.array()[: self._flatshape]
         self._data = self._flatdata.reshape(self._shape)
@@ -163,6 +167,18 @@ class DetectorData(object):
 
     def keys(self):
         return list(self._detectors)
+
+    def indices(self, names):
+        """Return the detector indices of the specified detectors.
+
+        Args:
+            names (iterable):  The detector names.
+
+        Returns:
+            (array):  The detector indices.
+
+        """
+        return np.array([self._name2idx[x] for x in names], dtype=np.int32)
 
     @property
     def dtype(self):
@@ -202,11 +218,13 @@ class DetectorData(object):
         is allocated.  If the new list of detectors is shorter than the original, the
         buffer is kept and only a subset is used.
 
+        The return value indicates whether the underlying memory was re-allocated.
+
         Args:
             detectors (list):  A list of detector names in exactly the order you wish.
 
         Returns:
-            None
+            (bool):  True if the data was re-allocated, else False.
 
         """
         log = Logger.get()
@@ -232,6 +250,7 @@ class DetectorData(object):
             self._shape = shp
             self._flatshape = flatshape
             self._allocate()
+            realloced = True
         else:
             # We can re-use the existing memory
             self._shape = shp
@@ -239,6 +258,16 @@ class DetectorData(object):
             self._flatdata = self._raw.array()[: self._flatshape]
             self._flatdata[:] = 0
             self._data = self._flatdata.reshape(self._shape)
+            realloced = False
+
+        # Any time we change detectors (even without an alloc), it invalidates
+        # the contents of the memory.  If the buffer is staged to a device,
+        # its contents will be stale.  We could call self.acc_update_device()
+        # here to reset it to zero, but that would cause an extra host to device
+        # transfer.  Calling code should instead take care when using
+        # change_detectors.
+
+        return realloced
 
     def clear(self):
         """Delete the underlying memory.
@@ -254,8 +283,10 @@ class DetectorData(object):
             if hasattr(self, "_flatdata"):
                 del self._flatdata
             if hasattr(self, "_raw"):
-                self._raw.clear()
+                if self._raw is not None:
+                    self._raw.clear()
                 del self._raw
+                self._raw = None
 
     def __del__(self):
         self.clear()
@@ -290,6 +321,7 @@ class DetectorData(object):
         if isinstance(key, (tuple, Mapping)):
             # We are slicing in both detector and sample dimensions
             if len(key) > len(self._shape):
+                log = Logger.get()
                 msg = "DetectorData has only {} dimensions".format(len(self._shape))
                 log.error(msg)
                 raise TypeError(msg)
@@ -527,6 +559,9 @@ class DetDataManager(MutableMapping):
         DetectorData.change_detectors() method to re-use this existing memory buffer if
         possible.
 
+        The boolean return value indicates whether the change_detectors() method was
+        called (which invalidates the contents of the memory).
+
         Args:
             name (str): The name of the detector data (signal, flags, etc)
             sample_shape (tuple): Use this shape for the data of each detector sample.
@@ -536,7 +571,7 @@ class DetDataManager(MutableMapping):
             units (Unit):  Optional scalar unit associated with this data.
 
         Returns:
-            None
+            (bool):  True if the specified detectors already exist, else False.
 
         """
         log = Logger.get()
@@ -550,6 +585,8 @@ class DetDataManager(MutableMapping):
                     raise ValueError(msg)
 
         data_shape = self._data_shape(sample_shape)
+
+        existing = True
 
         if name in self._internal:
             # The object already exists.  Check properties.
@@ -573,14 +610,16 @@ class DetDataManager(MutableMapping):
                 log.error(msg)
                 raise RuntimeError(msg)
             # Ok, we can re-use this.  Are the detectors already included in the data?
-            change = False
-            for d in detectors:
-                if d not in self._internal[name].detectors:
-                    change = True
-            if change:
-                self._internal[name].change_detectors(detectors)
+            internal_dets = set(self._internal[name].detectors)
+            for test_det in detectors:
+                if test_det not in internal_dets:
+                    # At least one detector is not included
+                    existing = False
+                    realloced = self._internal[name].change_detectors(detectors)
+                    break
         else:
             # Create the data object
+            existing = False
             self.create(
                 name,
                 sample_shape=sample_shape,
@@ -588,6 +627,7 @@ class DetDataManager(MutableMapping):
                 detectors=detectors,
                 units=units,
             )
+        return existing
 
     def acc_is_present(self, key):
         """Check if the named detector data is present on the accelerator.
@@ -599,8 +639,8 @@ class DetDataManager(MutableMapping):
             (bool):  True if the data is present.
 
         """
-        if not acc_enabled:
-            return
+        if not acc_enabled():
+            return False
         return acc_is_present(self._internal[key]._raw)
 
     def acc_copyin(self, key):
@@ -615,7 +655,7 @@ class DetDataManager(MutableMapping):
             None
 
         """
-        if not acc_enabled:
+        if not acc_enabled():
             return
         acc_copyin(self._internal[key]._raw)
 
@@ -629,13 +669,8 @@ class DetDataManager(MutableMapping):
             None
 
         """
-        log = Logger.get()
-        if not acc_enabled:
+        if not acc_enabled():
             return
-        if not acc_is_present(self._internal[key]._raw):
-            msg = f"Detector data '{key}' is not present on device, cannot copy out"
-            log.error(msg)
-            raise RuntimeError(msg)
         acc_copyout(self._internal[key]._raw)
 
     # Mapping methods
@@ -1093,6 +1128,9 @@ class SharedDataManager(MutableMapping):
     # carefully about whether we want each process doing these operations or
     # having one process copy in and other processes attach to the device ptr.
 
+    # FIXME:  We should add a public parameter to MPIShared to access the
+    # flat-packed data.
+
     def acc_is_present(self, key):
         """Check if the named shared data is present on the accelerator.
 
@@ -1103,8 +1141,8 @@ class SharedDataManager(MutableMapping):
             (bool):  True if the data is present.
 
         """
-        if not acc_enabled:
-            return
+        if not acc_enabled():
+            return False
         return acc_is_present(self._internal[key].shdata.data)
 
     def acc_copyin(self, key):
@@ -1119,12 +1157,14 @@ class SharedDataManager(MutableMapping):
             None
 
         """
-        if not acc_enabled:
+        if not acc_enabled():
             return
         acc_copyin(self._internal[key].shdata.data)
 
     def acc_copyout(self, key):
         """Copy the named shared data from the accelerator to the host.
+
+        This deletes the copy on the device.
 
         Args:
             key (str):  The object name.
@@ -1134,8 +1174,13 @@ class SharedDataManager(MutableMapping):
 
         """
         log = Logger.get()
-        if not acc_enabled:
+        if not acc_enabled():
             return
+        if key not in self._internal:
+            msg = f"Cannot copy non-existent data {key} from accelerator"
+            log.error(msg)
+            raise RuntimeError(msg)
+
         if not acc_is_present(self._internal[key].shdata.data):
             msg = f"Detector data '{key}' is not present on device, cannot copy out"
             log.error(msg)
@@ -1292,6 +1337,8 @@ class SharedDataManager(MutableMapping):
 
     def clear(self):
         for k in self._internal.keys():
+            if self.acc_is_present(k):
+                self.acc_delete(k)
             self._internal[k].shdata.close()
 
     def __del__(self):

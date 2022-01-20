@@ -366,6 +366,8 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
             shape=(ob.n_local_samples, 4),
             dtype=np.float64,
         )
+        ob.detdata.create(defaults.det_data, dtype=np.float64)
+        ob.detdata.create(defaults.det_flags, dtype=np.uint8)
         # Rank zero of each grid column creates the data
         stamps = None
         position = None

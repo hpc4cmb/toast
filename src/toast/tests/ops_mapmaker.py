@@ -77,7 +77,9 @@ class MapmakerTest(MPITestCase):
         scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
-        delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights])
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights]
+        )
         delete_pointing.apply(data)
         pixels.create_dist = None
 
@@ -94,7 +96,6 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -204,7 +205,6 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -421,7 +421,6 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -649,7 +648,6 @@ class MapmakerTest(MPITestCase):
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,

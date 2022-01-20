@@ -173,9 +173,6 @@ class TemplateMatrix(Operator):
             for d in all_dets:
                 for tmpl in self.templates:
                     tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
-            # Synchronize the result
-            for tmpl in self.templates:
-                data[self.amplitudes][tmpl.name].sync()
         else:
             if self.amplitudes not in data:
                 msg = "Template amplitudes '{}' do not exist in data".format(
@@ -190,7 +187,7 @@ class TemplateMatrix(Operator):
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
-                ob.detdata.ensure(self.det_data, detectors=dets)
+                exists = ob.detdata.ensure(self.det_data, detectors=dets)
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
 
@@ -200,10 +197,15 @@ class TemplateMatrix(Operator):
         return
 
     def _finalize(self, data, **kwargs):
+        if self.transpose:
+            # Synchronize the result
+            for tmpl in self.templates:
+                data[self.amplitudes][tmpl.name].sync()
         return
 
     def _requires(self):
         req = {
+            "global": list(),
             "meta": list(),
             "shared": list(),
             "detdata": list(),
@@ -217,10 +219,14 @@ class TemplateMatrix(Operator):
                 req["shared"].append(self.shared_flags)
             if self.det_flags is not None:
                 req["detdata"].append(self.det_flags)
+        else:
+            req["global"].append(self.amplitudes)
         return req
 
     def _provides(self):
         prov = dict()
-        if not self.transpose:
+        if self.transpose:
+            prov["global"] = [self.amplitudes]
+        else:
             prov["detdata"] = [self.det_data]
         return prov

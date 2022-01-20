@@ -78,24 +78,10 @@ class Pipeline(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
-
-        # By default, if the calling code passed use_acc=True, then we assume the
-        # data staging is being handled at a higher level.
-        staged_acc = False
-
-        if not use_acc:
-            # The calling code determined that we do not have all the data present to
-            # use the accelerator.  However, if our operators support it, we can stage
-            # the data to and from the device.
-            if acc_enabled() and self.supports_acc():
-                # All our operators support it.
-                data.acc_copyin(self.requires())
-                use_acc = True
-                staged_acc = True
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -109,10 +95,7 @@ class Pipeline(Operator):
                     pstr, op.name
                 )
                 log.verbose(msg)
-                if use_acc:
-                    op.exec(data, detectors=None, use_acc=True)
-                else:
-                    op.exec(data, detectors=None)
+                op.exec(data, detectors=None)
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
             all_local_dets = data.all_local_detectors(selection=detectors)
@@ -125,10 +108,7 @@ class Pipeline(Operator):
                         pstr, op.name
                     )
                     log.verbose(msg)
-                    if use_acc:
-                        op.exec(data, detectors=[det], use_acc=True)
-                    else:
-                        op.exec(data, detectors=[det])
+                    op.exec(data, detectors=[det])
         else:
             # We have explicit detector sets
             det_check = set(detectors)
@@ -149,30 +129,22 @@ class Pipeline(Operator):
                         pstr, op.name
                     )
                     log.verbose(msg)
-                    if use_acc:
-                        op.exec(data, detectors=selected_set, use_acc=True)
-                    else:
-                        op.exec(data, detectors=selected_set)
-
-        # Copy out from accelerator if we did the copy in.
-        if staged_acc:
-            data.acc_copyout(self.provides())
+                    op.exec(data, detectors=selected_set)
 
         return
 
     @function_timer
-    def _finalize(self, data, use_acc=False, **kwargs):
+    def _finalize(self, data, **kwargs):
         log = Logger.get()
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
+
         if self.operators is not None:
             for op in self.operators:
                 msg = f"{pstr} Pipeline calling operator '{op.name}' finalize()"
                 log.verbose(msg)
-                if use_acc:
-                    result.append(op.finalize(data, use_acc=True))
-                else:
-                    result.append(op.finalize(data))
+                result.append(op.finalize(data))
+
         return result
 
     def _requires(self):
@@ -180,37 +152,52 @@ class Pipeline(Operator):
         # products.
         if self.operators is None:
             return dict()
-        keys = ["meta", "detdata", "shared", "intervals"]
+        keys = ["global", "meta", "detdata", "shared", "intervals"]
         req = {x: set() for x in keys}
-        for op in self.operators.reverse():
+        for op in reversed(self.operators):
             oreq = op.requires()
             oprov = op.provides()
             for k in keys:
                 if k in oreq:
-                    req[k] |= oreq[k]
+                    req[k] |= set(oreq[k])
                 if k in oprov:
-                    req[k] -= oprov[k]
+                    req[k] -= set(oprov[k])
         for k in keys:
             req[k] = list(req[k])
+
         return req
 
     def _provides(self):
         # Work through the operator list and prune intermediate products.
         if self.operators is None:
             return dict()
-        keys = ["meta", "detdata", "shared", "intervals"]
+        keys = ["global", "meta", "detdata", "shared", "intervals"]
         prov = {x: set() for x in keys}
         for op in self.operators:
             oreq = op.requires()
             oprov = op.provides()
             for k in keys:
                 if k in oprov:
-                    prov[k] |= oprov[k]
+                    prov[k] |= set(oprov[k])
                 if k in oreq:
-                    prov[k] -= oreq[k]
+                    prov[k] -= set(oreq[k])
         for k in keys:
             prov[k] = list(prov[k])
         return prov
+
+    def _get_intermediate(self):
+        keys = ["global", "meta", "detdata", "shared", "intervals"]
+        prov = self.provides()
+        interm = {x: set() for x in keys}
+        for op in self.operators:
+            oprov = op.provides()
+            for k in keys:
+                if k in oprov:
+                    interm[k] |= set(oprov[k])
+        for k in keys:
+            interm[k] -= set(prov[k])
+            interm[k] = list(interm[k])
+        return interm
 
     def _supports_acc(self):
         # This is a logical AND of our operators

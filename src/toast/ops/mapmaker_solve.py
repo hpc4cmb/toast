@@ -281,7 +281,7 @@ class SolverRHS(Operator):
 
     def _provides(self):
         prov = self.binning.provides()
-        prov["meta"].append(self.template_matrix.amplitudes)
+        prov["global"].append(self.template_matrix.amplitudes)
         return prov
 
 
@@ -522,7 +522,7 @@ class SolverLHS(Operator):
 
     def _provides(self):
         prov = self.binning.provides()
-        prov["meta"].append(self.out)
+        prov["global"].append(self.out)
         return prov
 
 

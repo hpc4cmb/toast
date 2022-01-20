@@ -1055,3 +1055,17 @@ class Madam(Operator):
             if self.mcmode:
                 self._cached = True
         return
+
+    def _requires(self):
+        req = self.pixel_pointing.requires()
+        req.update(self.stokes_weights.requires())
+        req["meta"].extend([self.noise_model])
+        req["detdata"].extend([self.det_data])
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
+        if self.det_flags is not None:
+            req["detdata"].append(self.det_flags)
+        return req
+
+    def _provides(self):
+        return dict()

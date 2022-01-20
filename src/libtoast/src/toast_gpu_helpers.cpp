@@ -507,7 +507,7 @@ cudaError GPU_memory_pool::malloc(void ** gpu_ptr, size_t size_bytes,
     // stores the block, its index and returns
     const size_t block_index = blocks.size();
     cpu_ptr_to_block_index[cpu_ptr] = block_index;
-    gpu_ptr_to_block_index[gpu_ptr] = block_index;
+    gpu_ptr_to_block_index[*gpu_ptr] = block_index;
     blocks.push_back(memoryBlock);
     return cudaSuccess;
 }

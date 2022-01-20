@@ -128,7 +128,7 @@ class GainDrifter(Operator):
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank
             # Make sure detector data output exists
-            ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(self.det_data, detectors=dets)
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane

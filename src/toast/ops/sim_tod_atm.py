@@ -303,13 +303,23 @@ class SimAtmosphere(Operator):
         loading_key = f"{self.name}_loading"
 
         # Set up the observing operator
+        if self.shared_flags is None:
+            # Cannot observe samples that have no pointing
+            shared_flags = self.detector_pointing.shared_flags
+            shared_flag_mask = self.detector_pointing.shared_flag_mask
+        else:
+            # Trust that the user has provided a flag that excludes smaples
+            # without pointing
+            shared_flags = self.shared_flags
+            shared_flag_mask = self.shared_flag_mask
+
         observe_atm = ObserveAtmosphere(
             times=self.times,
             det_data=self.det_data,
             quats=self.detector_pointing.quats,
             view=temporary_view,
-            shared_flags=self.shared_flags,
-            shared_flag_mask=self.shared_flag_mask,
+            shared_flags=shared_flags,
+            shared_flag_mask=shared_flag_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             wind_view=wind_intervals,
@@ -354,7 +364,7 @@ class SimAtmosphere(Operator):
             weather = site.weather
 
             # Make sure detector data output exists
-            ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(self.det_data, detectors=dets)
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own

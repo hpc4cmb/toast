@@ -338,8 +338,8 @@ class QarrayTest(MPITestCase):
         check[check > np.pi] -= 2.0 * np.pi
 
         comp_pa = np.copy(pa)
-        comp_pa[comp_pa < -np.pi] += 2.0 * np.pi
-        comp_pa[comp_pa > np.pi] -= 2.0 * np.pi
+        comp_pa[comp_pa - check < -np.pi] += 2.0 * np.pi
+        comp_pa[comp_pa - check > np.pi] -= 2.0 * np.pi
 
         np.testing.assert_array_almost_equal(check, comp_pa, decimal=6)
 

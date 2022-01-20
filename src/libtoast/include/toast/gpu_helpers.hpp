@@ -129,7 +129,7 @@ class GPU_memory_pool {
         // `cpu_ptr` is optional but can be passed to keep trace of the origin of the
         // data when allocating during a cpu-2-gpu copy operation
         template <typename T>
-        T * alloc(size_t nb_elements, void * cpu_ptr = nullptr) {
+        T * alloc(size_t nb_elements, T * cpu_ptr = nullptr) {
             T * gpu_ptr = NULL;
             const cudaError errorCode = this->malloc((void **)&gpu_ptr,
                                                      nb_elements * sizeof(T), cpu_ptr);

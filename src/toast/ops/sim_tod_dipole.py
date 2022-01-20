@@ -160,7 +160,7 @@ class SimDipole(Operator):
                 continue
 
             # Make sure detector data output exists
-            ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(self.det_data, detectors=dets)
 
             # Loop over views
             views = ob.view[self.view]

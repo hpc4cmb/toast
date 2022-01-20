@@ -110,7 +110,7 @@ class SimScanSynchronousSignal(Operator):
             dets = obs.select_local_detectors(detectors)
             log_prefix = f"{group} : {obs.name} : "
 
-            obs.detdata.ensure(self.det_data, detectors=dets)
+            exists = obs.detdata.ensure(self.det_data, detectors=dets)
 
             site = obs.telescope.site
             weather = site.weather

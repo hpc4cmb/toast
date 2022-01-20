@@ -1282,5 +1282,5 @@ class FilterBin(Operator):
 
     def _provides(self):
         prov = dict()
-        prov["meta"] = [self.binning.binned]
+        prov["global"] = [self.binning.binned]
         return prov

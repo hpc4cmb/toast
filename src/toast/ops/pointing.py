@@ -136,7 +136,7 @@ class BuildPixelDistribution(Operator):
 
     def _provides(self):
         prov = {
-            "meta": [self.pixel_dist],
+            "global": [self.pixel_dist],
             "shared": list(),
             "detdata": list(),
         }

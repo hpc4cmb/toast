@@ -72,7 +72,6 @@ class MapmakerSolveTest(MPITestCase):
         # Set up binner
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            det_flags=None,
             covariance=cov_and_hits.covariance,
             det_data=sim_noise.det_data,
             pixel_pointing=pixels,
@@ -235,7 +234,6 @@ class MapmakerSolveTest(MPITestCase):
         # Set up binner
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            det_flags=None,
             covariance=cov_and_hits.covariance,
             det_data=defaults.det_data,
             pixel_pointing=pixels,

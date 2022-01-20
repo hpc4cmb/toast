@@ -158,7 +158,7 @@ class PixelsHealpix(Operator):
             raise RuntimeError("The detector_pointing trait must be set")
 
         if self._local_submaps is None and self.create_dist is not None:
-            self._local_submaps = np.zeros(self._n_submap, dtype=np.bool)
+            self._local_submaps = np.zeros(self._n_submap, dtype=np.uint8)
 
         # Expand detector pointing
         if self.quats is not None:
@@ -167,7 +167,7 @@ class PixelsHealpix(Operator):
             if self.detector_pointing.quats is not None:
                 quats_name = self.detector_pointing.quats
             else:
-                quats_name = "quats"
+                quats_name = defaults.quats
 
         view = self.view
         if view is None:
@@ -189,6 +189,18 @@ class PixelsHealpix(Operator):
                 # Nothing to do for this observation
                 continue
 
+            # Create (or re-use) output data for the pixels, weights and optionally the
+            # detector quaternions.
+
+            if self.single_precision:
+                existed = ob.detdata.ensure(
+                    self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
+                )
+            else:
+                existed = ob.detdata.ensure(
+                    self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
+                )
+
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own
             # view was None, then it would have been set to the detector_pointing
@@ -207,43 +219,26 @@ class PixelsHealpix(Operator):
                         raise RuntimeError(msg)
 
             # Do we already have pointing for all requested detectors?
-            if self.pixels in ob.detdata:
-                pix_dets = ob.detdata[self.pixels].detectors
-                for d in dets:
-                    if d not in pix_dets:
-                        break
-                else:  # no break
-                    # We already have pointing for all specified detectors
-                    if self.create_dist is not None:
-                        # but the caller wants the pixel distribution
-                        for ob in data.obs:
-                            views = ob.view[self.view]
-                            for det in ob.select_local_detectors(detectors):
-                                for view in range(len(views)):
-                                    self._local_submaps[
-                                        views.detdata[self.pixels][view][det]
-                                        // self._n_pix_submap
-                                    ] = True
+            if existed:
+                # Yes...
+                if self.create_dist is not None:
+                    # but the caller wants the pixel distribution
+                    for ob in data.obs:
+                        views = ob.view[self.view]
+                        for det in ob.select_local_detectors(detectors):
+                            for view in range(len(views)):
+                                self._local_submaps[
+                                    views.detdata[self.pixels][view][det]
+                                    // self._n_pix_submap
+                                ] = True
 
-                    if data.comm.group_rank == 0:
-                        msg = (
-                            f"Group {data.comm.group}, ob {ob.name}, pointing "
-                            f"already computed for {dets}"
-                        )
-                        log.verbose(msg)
-                    continue
-
-            # Create (or re-use) output data for the pixels, weights and optionally the
-            # detector quaternions.
-
-            if self.single_precision:
-                ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
-                )
-            else:
-                ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
-                )
+                if data.comm.group_rank == 0:
+                    msg = (
+                        f"Group {data.comm.group}, ob {ob.name}, healpix pixels "
+                        f"already computed for {dets}"
+                    )
+                    log.verbose(msg)
+                continue
 
             # Focalplane for this observation
             focalplane = ob.telescope.focalplane
@@ -283,9 +278,9 @@ class PixelsHealpix(Operator):
                             fslice = flags[bslice].reshape(-1)
 
                         # Pixel buffer
-                        pxslice = views.detdata[self.pixels][vw][det, bslice].reshape(
-                            -1
-                        )
+                        pxslice = views.detdata[self.pixels][vw][
+                            det, bslice
+                        ].reshape(-1)
 
                         if self.single_precision:
                             pbuf = np.zeros(len(pxslice), dtype=np.int64)
@@ -307,8 +302,9 @@ class PixelsHealpix(Operator):
 
                     if self.create_dist is not None:
                         self._local_submaps[
-                            views.detdata[self.pixels][vw][det] // self._n_pix_submap
-                        ] = True
+                            views.detdata[self.pixels][vw][det]
+                            // self._n_pix_submap
+                        ] = 1
 
         return
 
@@ -316,9 +312,14 @@ class PixelsHealpix(Operator):
         if self.create_dist is not None:
             submaps = None
             if self.single_precision:
-                submaps = np.arange(self._n_submap, dtype=np.int32)[self._local_submaps]
+                submaps = np.arange(self._n_submap, dtype=np.int32)[
+                    self._local_submaps == 1
+                ]
             else:
-                submaps = np.arange(self._n_submap, dtype=np.int64)[self._local_submaps]
+                submaps = np.arange(self._n_submap, dtype=np.int64)[
+                    self._local_submaps == 1
+                ]
+
             data[self.create_dist] = PixelDistribution(
                 n_pix=self._n_pix,
                 n_submap=self._n_submap,
@@ -329,22 +330,16 @@ class PixelsHealpix(Operator):
 
     def _requires(self):
         req = self.detector_pointing.requires()
-        if self.cal is not None:
-            req["meta"].append(self.cal)
-        if self.hwp_angle is not None:
-            req["shared"].append(self.hwp_angle)
         if self.view is not None:
             req["intervals"].append(self.view)
         return req
 
     def _provides(self):
-        prov = {
-            "meta": list(),
-            "shared": list(),
-            "detdata": [self.pixels],
-        }
+        prov = self.detector_pointing.provides()
+        prov["detdata"].append(self.pixels)
         if self.create_dist is not None:
-            prov["meta"].append(self.create_dist)
-        if self.quats is not None:
-            prov["detdata"].append(self.quats)
+            prov["global"].append(self.create_dist)
         return prov
+
+    def _supports_acc(self):
+        return self.detector_pointing.supports_acc()

@@ -294,7 +294,7 @@ class MapMaker(Operator):
 
         mc_root = None
         if self.mc_mode and self.mc_index is not None:
-            mc_root = "{}_{:05d}".format(self.name, mc_index)
+            mc_root = "{}_{:05d}".format(self.name, self.mc_index)
         else:
             mc_root = self.name
 
@@ -373,7 +373,7 @@ class MapMaker(Operator):
                         # Nothing to do for this observation
                         continue
                     # Create the new solver flags
-                    ob.detdata.ensure(
+                    exists = ob.detdata.ensure(
                         self.flag_name, dtype=np.uint8, detectors=detectors
                     )
                     # The data views
@@ -532,6 +532,9 @@ class MapMaker(Operator):
                 if comm is None:
                     total = local_total
                     cut = local_cut
+                    msg = "Solver flags cut {} / {} = {:0.2f}% of samples".format(
+                        cut, total, 100.0 * (cut / total)
+                    )
                 else:
                     total = comm.reduce(local_total, op=MPI.SUM, root=0)
                     cut = comm.reduce(local_cut, op=MPI.SUM, root=0)
@@ -861,7 +864,7 @@ class MapMaker(Operator):
     def _provides(self):
         prov = dict()
         if self.map_binning is not None:
-            prov["meta"] = [self.map_binning.binned]
+            prov["global"] = [self.map_binning.binned]
         else:
-            prov["meta"] = [self.binning.binned]
+            prov["global"] = [self.binning.binned]
         return prov

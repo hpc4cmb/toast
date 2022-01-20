@@ -347,7 +347,7 @@ if (SUITESPARSE_CONFIG_FOUND)
   # timing by default when compiled on Linux or Unix, but not on OSX (which
   # does not have librt).
   if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR UNIX AND NOT APPLE)
-    suitesparse_find_component(LIBRT LIBRARIES rt)
+    # suitesparse_find_component(LIBRT LIBRARIES rt)
     if (LIBRT_FOUND)
       message(STATUS "Adding librt: ${LIBRT_LIBRARY} to "
         "SuiteSparse_config libraries (required on Linux & Unix [not OSX] if "

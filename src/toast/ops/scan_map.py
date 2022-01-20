@@ -108,7 +108,7 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(self.det_data, detectors=dets)
 
             views = ob.view[self.view]
             for ivw, vw in enumerate(views):
@@ -188,7 +188,8 @@ class ScanMap(Operator):
 
     def _requires(self):
         req = {
-            "meta": [self.map_key],
+            "global": [self.map_key],
+            "meta": list(),
             "shared": list(),
             "detdata": [self.pixels, self.det_data],
             "intervals": list(),
@@ -299,7 +300,7 @@ class ScanMask(Operator):
 
     def _requires(self):
         req = {
-            "meta": [mask_key],
+            "global": [self.mask_key],
             "shared": list(),
             "detdata": [self.pixels, self.det_flags],
             "intervals": list(),
@@ -452,7 +453,7 @@ class ScanScale(Operator):
 
     def _requires(self):
         req = {
-            "meta": [map_key],
+            "global": [self.map_key],
             "shared": list(),
             "detdata": [self.pixels, self.weights, self.det_data],
             "intervals": list(),

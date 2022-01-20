@@ -178,7 +178,7 @@ class ScanHealpixMap(Operator):
                 # Nothing to do for this observation
                 continue
             # If our output detector data does not yet exist, create it
-            ob.detdata.ensure(self.det_data, detectors=dets)
+            exists_data = ob.detdata.ensure(self.det_data, detectors=dets)
 
         # Configure the low-level map scanning operator
 
@@ -213,9 +213,9 @@ class ScanHealpixMap(Operator):
         return req
 
     def _provides(self):
-        prov = {"detdata": [self.det_data]}
+        prov = {"global": list(), "detdata": [self.det_data]}
         if self.save_map:
-            prof["meta"] = [self.map_name]
+            prov["global"] = [self.map_name]
         return prov
 
 
@@ -335,7 +335,9 @@ class ScanHealpixMask(Operator):
                 # Nothing to do for this observation
                 continue
             # If our output detector data does not yet exist, create it
-            ob.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
+            exists_flags = ob.detdata.ensure(
+                self.det_flags, dtype=np.uint8, detectors=dets
+            )
 
         # Configure the low-level map scanning operator
 
@@ -369,7 +371,7 @@ class ScanHealpixMask(Operator):
         return req
 
     def _provides(self):
-        prov = {"detdata": [self.det_data]}
+        prov = {"global": list(), "detdata": [self.det_data]}
         if self.save_map:
-            prof["meta"] = [self.map_name]
+            prov["global"] = [self.map_name]
         return prov

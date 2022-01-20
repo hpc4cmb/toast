@@ -82,7 +82,7 @@ class YieldCut(Operator):
         for obs in data.obs:
             focalplane = obs.telescope.focalplane
             dets = obs.select_local_detectors(detectors)
-            obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
+            exists = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
             for det in dets:
                 key1 = obs.telescope.uid
                 if self.fixed:
