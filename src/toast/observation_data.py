@@ -35,12 +35,20 @@ from .intervals import IntervalList
 
 from .timing import function_timer
 
-from ._libtoast import (
-    acc_enabled,
-    acc_is_present,
-    acc_copyin,
-    acc_copyout,
+from .accelerator import (
+    use_accel_jax,
+    use_accel_omp,
+    accel_enabled,
+    accel_present,
+    accel_create,
+    accel_delete,
+    accel_update_device,
+    accel_update_host,
 )
+
+if use_accel_jax:
+    import jax
+    import jax.numpy as jnp
 
 
 class DetectorData(object):
@@ -105,6 +113,7 @@ class DetectorData(object):
         self._fullsize = 0
         self._memsize = 0
         self._raw = None
+        self._raw_jax = None
 
         if view_data is None:
             # Allocate the data
@@ -155,11 +164,20 @@ class DetectorData(object):
         log = Logger.get()
         self._fullsize = self._flatshape
         self._memsize = self.itemsize * self._fullsize
+        recreate = False
         if self._raw is not None:
+            if self.accel_present():
+                msg = "Reallocation of DetectorData which is staged to accelerator- "
+                msg += "Deleting device copy and re-allocating."
+                log.verbose(msg)
+                self.accel_delete()
+                recreate = True
             del self._raw
         self._raw = self._storage_class.zeros(self._fullsize)
         self._flatdata = self._raw.array()[: self._flatshape]
         self._data = self._flatdata.reshape(self._shape)
+        if recreate:
+            self.accel_create()
 
     @property
     def detectors(self):
@@ -255,14 +273,19 @@ class DetectorData(object):
             # We can re-use the existing memory
             self._shape = shp
             self._flatshape = flatshape
-            self._flatdata = self._raw.array()[: self._flatshape]
-            self._flatdata[:] = 0
+            if use_accel_jax and self.accel_present():
+                # FIXME:  Is there really no way to "clear" a jax array?
+                self._raw_jax = jnp.zeros_like(self._raw_jax)
+                self._flatdata = self._raw_jax[: self._flatshape]
+            else:
+                self._flatdata = self._raw.array()[: self._flatshape]
+                self._flatdata[:] = 0
             self._data = self._flatdata.reshape(self._shape)
             realloced = False
 
         # Any time we change detectors (even without an alloc), it invalidates
         # the contents of the memory.  If the buffer is staged to a device,
-        # its contents will be stale.  We could call self.acc_update_device()
+        # its contents will be stale.  We could call self.accel_update_device()
         # here to reset it to zero, but that would cause an extra host to device
         # transfer.  Calling code should instead take care when using
         # change_detectors.
@@ -283,6 +306,16 @@ class DetectorData(object):
             if hasattr(self, "_flatdata"):
                 del self._flatdata
             if hasattr(self, "_raw"):
+                if self.accel_present():
+                    log = Logger.get()
+                    msg = "clear() of DetectorData which is staged to accelerator- "
+                    msg += "Deleting device copy."
+                    log.verbose(msg)
+                    if use_accel_omp:
+                        accel_delete(self._raw)
+                    elif use_accel_jax:
+                        del self._raw_jax
+                        self._raw_jax = None
                 if self._raw is not None:
                     self._raw.clear()
                 del self._raw
@@ -423,6 +456,95 @@ class DetectorData(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def accel_present(self):
+        """Check if the data is present on the accelerator.
+
+        Returns:
+            (bool):  True if the data is present.
+
+        """
+        if not accel_enabled():
+            return False
+        elif self._raw is None:
+            # We have a view
+            return False
+        else:
+            if use_accel_omp:
+                return accel_present(self._raw)
+            elif use_accel_jax:
+                return accel_present(self._raw_jax)
+            else:
+                return False
+
+    def accel_create(self):
+        """Create a copy of the data on the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if use_accel_omp:
+            accel_create(self._raw)
+        elif use_accel_jax:
+            accel_create(self._raw_jax)
+
+    def accel_update_device(self):
+        """Copy the data to the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if use_accel_omp:
+            _ = accel_update_device(self._raw)
+        elif use_accel_jax:
+            self._raw_jax = accel_update_device(self._raw.array())
+            self._flatdata = self._raw_jax[: self._flatshape]
+            self._data = self._flatdata.reshape(self._shape)
+
+    def accel_update_host(self):
+        """Copy the data to the host.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if not self.accel_present():
+            log = Logger.get()
+            msg = f"Data is not present on device, cannot update host"
+            log.error(msg)
+            raise RuntimeError(msg)
+        if use_accel_omp:
+            _ = accel_update_host(self._raw)
+        elif use_accel_jax:
+            self._raw[:] = accel_update_host(self._raw_jax)
+            self._flatdata = self._raw.array()[: self._flatshape]
+            self._data = self._flatdata.reshape(self._shape)
+
+    def accel_delete(self):
+        """Delete the data from the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if self.accel_present():
+            if use_accel_omp:
+                accel_delete(self._raw)
+            elif use_accel_jax:
+                del self._raw_jax
+                self._raw_jax = None
+                self._flatdata = self._raw.array()[: self._flatshape]
+                self._data = self._flatdata.reshape(self._shape)
+
 
 class DetDataManager(MutableMapping):
     """Class used to manage DetectorData objects in an Observation.
@@ -559,8 +681,8 @@ class DetDataManager(MutableMapping):
         DetectorData.change_detectors() method to re-use this existing memory buffer if
         possible.
 
-        The boolean return value indicates whether the change_detectors() method was
-        called (which invalidates the contents of the memory).
+        The return value is true if the data already exists and includes the specified
+        detectors.
 
         Args:
             name (str): The name of the detector data (signal, flags, etc)
@@ -571,7 +693,7 @@ class DetDataManager(MutableMapping):
             units (Unit):  Optional scalar unit associated with this data.
 
         Returns:
-            (bool):  True if the specified detectors already exist, else False.
+            (bool):  True if the data exists.
 
         """
         log = Logger.get()
@@ -629,7 +751,7 @@ class DetDataManager(MutableMapping):
             )
         return existing
 
-    def acc_is_present(self, key):
+    def accel_present(self, key):
         """Check if the named detector data is present on the accelerator.
 
         Args:
@@ -639,14 +761,47 @@ class DetDataManager(MutableMapping):
             (bool):  True if the data is present.
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return False
-        return acc_is_present(self._internal[key]._raw)
+        log = Logger.get()
+        result = self._internal[key].accel_present()
+        log.verbose(f"DetDataMgr {key} accel_present = {result}")
+        return result
 
-    def acc_copyin(self, key):
+    def accel_create(self, key):
+        """Create the named detector data on the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        log.verbose(f"DetDataMgr {key} accel_create")
+        self._internal[key].accel_create()
+
+    def accel_update_device(self, key):
         """Copy the named detector data to the accelerator.
 
-        This creates the device memory if it does not already exist.
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        log.verbose(f"DetDataMgr {key} accel_update_device")
+        self._internal[key].accel_update_device()
+
+    def accel_update_host(self, key):
+        """Copy the named detector data from the accelerator.
 
         Args:
             key (str):  The object name.
@@ -655,12 +810,14 @@ class DetDataManager(MutableMapping):
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
-        acc_copyin(self._internal[key]._raw)
+        log = Logger.get()
+        log.verbose(f"DetDataMgr {key} accel_update_host")
+        self._internal[key].accel_update_host()
 
-    def acc_copyout(self, key):
-        """Copy the named detector data from the accelerator to the host.
+    def accel_delete(self, key):
+        """Delete the named detector data from the accelerator.
 
         Args:
             key (str):  The object name.
@@ -669,9 +826,30 @@ class DetDataManager(MutableMapping):
             None
 
         """
-        if not acc_enabled():
+        log = Logger.get()
+        if not accel_enabled():
             return
-        acc_copyout(self._internal[key]._raw)
+        if not self._internal[key].accel_present():
+            msg = f"Detector data '{key}' is not present on device, cannot delete"
+            log.error(msg)
+            raise RuntimeError(msg)
+        log.verbose(f"DetDataMgr {key} accel_delete")
+        self._internal[key].accel_delete()
+
+    def accel_clear(self):
+        """Clear all data from accelerators
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        for key in self._internal:
+            if self._internal[key].accel_present():
+                log.verbose(f"DetDataMgr {key} accel_delete")
+                self._internal[key].accel_delete()
 
     # Mapping methods
 
@@ -919,6 +1097,7 @@ class SharedDataManager(MutableMapping):
         # data object and a string specifying which communicator it
         # is distributed over:  "group", "row", or "column".
         self._internal = dict()
+        self.jax = dict()
 
     def create_group(self, name, shape, dtype=None):
         """Create a shared memory buffer on the group communicator.
@@ -1131,7 +1310,7 @@ class SharedDataManager(MutableMapping):
     # FIXME:  We should add a public parameter to MPIShared to access the
     # flat-packed data.
 
-    def acc_is_present(self, key):
+    def accel_present(self, key):
         """Check if the named shared data is present on the accelerator.
 
         Args:
@@ -1141,14 +1320,26 @@ class SharedDataManager(MutableMapping):
             (bool):  True if the data is present.
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return False
-        return acc_is_present(self._internal[key].shdata.data)
+        log = Logger.get()
+        if key not in self._internal:
+            msg = f"Cannot check accelerator status of non-existent data {key}"
+            log.error(msg)
+            raise RuntimeError(msg)
 
-    def acc_copyin(self, key):
-        """Copy the named shared data to the accelerator.
+        if use_accel_omp:
+            result = accel_present(self._internal[key].shdata._flat)
+        elif use_accel_jax:
+            result = key in self.jax
+        else:
+            result = False
 
-        This creates the device memory if it does not already exist.
+        log.verbose(f"SharedDataMgr {key} accel_present = {result}")
+        return result
+
+    def accel_create(self, key):
+        """Create the named shared data on the accelerator.
 
         Args:
             key (str):  The object name.
@@ -1157,14 +1348,49 @@ class SharedDataManager(MutableMapping):
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
-        acc_copyin(self._internal[key].shdata.data)
+        log = Logger.get()
+        if key not in self._internal:
+            msg = f"Cannot create non-existent data {key} on accelerator"
+            log.error(msg)
+            raise RuntimeError(msg)
 
-    def acc_copyout(self, key):
+        log.verbose(f"SharedDataMgr {key} accel_create")
+        if use_accel_omp:
+            accel_create(self._internal[key].shdata._flat)
+
+    def accel_update_device(self, key):
+        """Copy the named shared data to the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        if key not in self._internal:
+            msg = f"Cannot copy non-existent data {key} to accelerator"
+            log.error(msg)
+            raise RuntimeError(msg)
+        if not self.accel_present(key):
+            msg = f"Shared data '{key}' is not present on device, cannot update"
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        log.verbose(f"SharedDataMgr {key} accel_update_device")
+        if use_accel_omp:
+            _ = accel_update_device(self._internal[key].shdata._flat)
+        elif use_accel_jax:
+            # FIXME: add device ID here
+            self.jax[key] = jax.device_put(self._internal[key].shdata._flat)
+
+    def accel_update_host(self, key):
         """Copy the named shared data from the accelerator to the host.
-
-        This deletes the copy on the device.
 
         Args:
             key (str):  The object name.
@@ -1174,18 +1400,74 @@ class SharedDataManager(MutableMapping):
 
         """
         log = Logger.get()
-        if not acc_enabled():
+        if not accel_enabled():
             return
         if key not in self._internal:
             msg = f"Cannot copy non-existent data {key} from accelerator"
             log.error(msg)
             raise RuntimeError(msg)
 
-        if not acc_is_present(self._internal[key].shdata.data):
-            msg = f"Detector data '{key}' is not present on device, cannot copy out"
+        if not self.accel_present(key):
+            msg = f"Shared data '{key}' is not present on device, cannot copy to host"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_copyout(self._internal[key].shdata.data)
+        log.verbose(f"SharedDataMgr {key} accel_update_host")
+        if use_accel_omp:
+            _ = accel_update_host(self._internal[key].shdata._flat)
+        elif use_accel_jax:
+            rnk = 0
+            if self._internal[key].shdata.comm is not None:
+                rnk = self._internal[key].shdata.comm.rank
+            dt = None
+            if rnk == 0:
+                dt = self.jax[key].copy()
+            self._internal[key].shdata.set(dt, fromrank=0)
+
+    def accel_delete(self, key):
+        """Delete the named data object on the device
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not accel_enabled():
+            return
+        if key not in self._internal:
+            msg = f"Cannot copy non-existent data {key} from accelerator"
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        if not accel_present(self._internal[key].shdata._flat):
+            msg = f"Shared data '{key}' is not present on device, cannot delete"
+            log.error(msg)
+            raise RuntimeError(msg)
+        log.verbose(f"SharedDataMgr {key} accel_delete")
+        if use_accel_omp:
+            accel_delete(self._internal[key].shdata._flat)
+        elif use_accel_jax:
+            del self.jax[key]
+
+    def accel_clear(self):
+        """Clear all data from accelerators
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        for key in self._internal:
+            if self.accel_present(key):
+                log.verbose(f"SharedDataMgr {key} accel_delete")
+                if use_accel_omp:
+                    accel_delete(self._internal[key].shdata._flat)
+                elif use_accel_jax:
+                    del self.jax[key]
 
     # Mapping methods
 
@@ -1336,9 +1618,8 @@ class SharedDataManager(MutableMapping):
         return len(self._internal)
 
     def clear(self):
+        self.accel_clear()
         for k in self._internal.keys():
-            if self.acc_is_present(k):
-                self.acc_delete(k)
             self._internal[k].shdata.close()
 
     def __del__(self):
@@ -1434,12 +1715,16 @@ class IntervalsManager(MutableMapping):
 
     """
 
-    def __init__(self, dist):
+    # This could be anything, just has to be unique
+    all_name = "ALL_OBSERVATION_SAMPLES"
+
+    def __init__(self, dist, local_samples):
         self.comm = dist.comm
         self.comm_col = dist.comm_col
         self.comm_row = dist.comm_row
         self._internal = dict()
         self._del_callbacks = dict()
+        self._local_samples = local_samples
 
     def create_col(self, name, global_timespans, local_times, fromrank=0):
         """Create local interval lists on the same process column.
@@ -1527,10 +1812,24 @@ class IntervalsManager(MutableMapping):
 
     # Mapping methods
 
+    def _real_key(self, key):
+        if key is None or key == self.all_name:
+            if self.all_name not in self._internal:
+                # Create fake intervals
+                faketimes = -1.0 * np.ones(self._local_samples, dtype=np.float64)
+                self._internal[self.all_name] = IntervalList(
+                    faketimes, samplespans=[(0, self._local_samples - 1)]
+                )
+            return self.all_name
+        else:
+            return key
+
     def __getitem__(self, key):
+        key = self._real_key(key)
         return self._internal[key]
 
     def __delitem__(self, key):
+        key = self._real_key(key)
         if key in self._del_callbacks:
             try:
                 self._del_callbacks[key](key)
@@ -1561,7 +1860,8 @@ class IntervalsManager(MutableMapping):
     def __repr__(self):
         val = "<IntervalsManager {} lists".format(len(self._internal))
         for k in self._internal.keys():
-            val += "\n  {}: {} intervals".format(k, len(self._internal[k]))
+            if k != self.all_name:
+                val += "\n  {}: {} intervals".format(k, len(self._internal[k]))
         val += ">"
         return val
 
@@ -1576,14 +1876,129 @@ class IntervalsManager(MutableMapping):
         if not comm_equivalent(self.comm_col, other.comm_col):
             log.verbose(f"  comm_col not equivalent")
             return False
-        if set(self._internal.keys()) != set(other._internal.keys()):
+        this_set = set(self._internal.keys())
+        try:
+            this_set.remove(self.all_name)
+        except KeyError:
+            pass
+        other_set = set(other._internal.keys())
+        try:
+            other_set.remove(self.all_name)
+        except KeyError:
+            pass
+
+        if this_set != other_set:
             log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
             return False
-        for k in self._internal.keys():
+        for k in this_set:
             if self._internal[k] != other._internal[k]:
-                log.verbose(f"  key {k} interval lists not equal")
                 return False
         return True
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def accel_present(self, key):
+        """Check if the named interval list is present on the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            (bool):  True if the data is present.
+
+        """
+        if not accel_enabled():
+            return False
+        log = Logger.get()
+        key = self._real_key(key)
+        result = self._internal[key].accel_present()
+        log.verbose(f"IntervalsManager {key} accel_present = {result}")
+        return result
+
+    def accel_create(self, key):
+        """Create the named interval list on the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        key = self._real_key(key)
+        log.verbose(f"IntervalsManager {key} accel_create")
+        self._internal[key].accel_create()
+
+    def accel_update_device(self, key):
+        """Copy the named interval list to the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        key = self._real_key(key)
+        log.verbose(f"IntervalsManager {key} accel_update_device")
+        self._internal[key].accel_update_device()
+
+    def accel_update_host(self, key):
+        """Copy the named interval list from the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        key = self._real_key(key)
+        log.verbose(f"IntervalsManager {key} accel_update_host")
+        self._internal[key].accel_update_host()
+
+    def accel_delete(self, key):
+        """Delete the named interval list from the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not accel_enabled():
+            return
+        key = self._real_key(key)
+        if not self._internal[key].accel_present():
+            msg = f"Intervals list '{key}' is not present on device, cannot delete"
+            log.error(msg)
+            raise RuntimeError(msg)
+        log.verbose(f"IntervalsManager {key} accel_delete")
+        self._internal[key].accel_delete()
+
+    def accel_clear(self):
+        """Clear all interval lists from accelerators
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        for key in self._internal:
+            if self._internal[key].accel_present():
+                log.verbose(f"IntervalsManager {key} accel_delete")
+                self._internal[key].accel_delete()

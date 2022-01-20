@@ -32,6 +32,9 @@ class TemplateOffsetTest(MPITestCase):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
+        for ob in data.obs:
+            print(f"ob {ob.name}: all = {ob.intervals[None]}")
+
         # Create a default noise model
         noise_model = ops.DefaultNoiseModel()
         noise_model.apply(data)
@@ -46,7 +49,6 @@ class TemplateOffsetTest(MPITestCase):
 
         tmpl = Offset(
             det_data=defaults.det_data,
-            det_flags=None,
             times=defaults.times,
             noise_model=noise_model.noise_model,
             step_time=step_seconds * u.second,

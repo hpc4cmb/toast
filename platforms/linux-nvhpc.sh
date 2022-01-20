@@ -5,21 +5,13 @@
 
 opts="$@"
 
-# NOTE:  You can toggle use of the mempool with OpenACC by
-# passing:
-#    -DUSE_OPENACC_MEMPOOL=TRUE
-# to this script.
-
 cmake \
     -DCMAKE_C_COMPILER="nvc" \
     -DCMAKE_CXX_COMPILER="nvc++" \
-    -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread" \
-    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
-    -DMKL_DISABLED=TRUE \
-    -DUSE_OPENACC=TRUE \
-    -DUSE_CUDA=TRUE \
+    -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread -mp=gpu -Minfo=mp -gpu=cc86" \
+    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11 -mp=gpu -Minfo=mp -gpu=cc86 -cuda" \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
+    -DUSE_OPENMP_TARGET=TRUE \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DBLAS_LIBRARIES="-lopenblas -lgomp -lm" \
     ${opts} \
     ..

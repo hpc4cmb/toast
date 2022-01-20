@@ -30,12 +30,20 @@ from .utils import (
 
 from ._libtoast import global_to_local as libtoast_global_to_local
 
-from ._libtoast import (
-    acc_enabled,
-    acc_is_present,
-    acc_copyin,
-    acc_copyout,
+from .accelerator import (
+    use_accel_jax,
+    use_accel_omp,
+    accel_enabled,
+    accel_present,
+    accel_create,
+    accel_delete,
+    accel_update_device,
+    accel_update_host,
 )
+
+if use_accel_jax:
+    import jax
+    import jax.numpy as jnp
 
 
 class PixelDistribution(object):
@@ -468,6 +476,7 @@ class PixelData(object):
 
         self.raw = self.storage_class.zeros(self._flatshape)
         self.data = self.raw.array().reshape(self._shape)
+        self.data_jax = None
 
         # Allreduce quantities
         self._all_comm_submap = None
@@ -498,6 +507,8 @@ class PixelData(object):
         if hasattr(self, "data"):
             del self.data
         if hasattr(self, "raw"):
+            if self.accel_present():
+                self.accel_delete()
             self.raw.clear()
             del self.raw
         if hasattr(self, "receive"):
@@ -560,6 +571,20 @@ class PixelData(object):
             self._n_value, self._dtype, self._dist
         )
         return val
+
+    def __eq__(self, other):
+        if self.distribution != other.distribution:
+            return False
+        if self.dtype.char != other.dtype.char:
+            return False
+        if self.n_value != other.n_value:
+            return False
+        if not np.allclose(self.raw, other.raw):
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def duplicate(self):
         """Create a copy of the data with the same distribution.
@@ -935,42 +960,82 @@ class PixelData(object):
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
 
-    def acc_is_present(self):
+    def accel_present(self):
         """Check if the pixel data is present on the accelerator.
 
         Returns:
             (bool):  True if the data is present.
 
         """
-        if not acc_enabled:
-            return
-        return acc_is_present(self.raw)
+        if not accel_enabled():
+            return False
+        if use_accel_omp:
+            return accel_present(self.raw)
+        elif use_accel_jax:
+            return accel_present(self.data_jax)
+        else:
+            return False
 
-    def acc_copyin(self):
-        """Copy the data to the accelerator.
-
-        This creates the device memory if it does not already exist.
+    def accel_create(self):
+        """Create the data on the accelerator.
 
         Returns:
             None
 
         """
-        if not acc_enabled:
+        if not accel_enabled():
             return
-        acc_copyin(self.raw)
+        if use_accel_omp:
+            accel_create(self.raw)
+        elif use_accel_jax:
+            accel_create(self.data_jax)
 
-    def acc_copyout(self):
+    def accel_update_device(self):
+        """Copy the data to the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if use_accel_omp:
+            _ = accel_update_device(self.raw)
+        elif use_accel_jax:
+            self.data_jax = accel_update_device(self.data)
+
+    def accel_update_host(self):
         """Copy the data from the accelerator to the host.
 
         Returns:
             None
 
         """
-        log = Logger.get()
-        if not acc_enabled:
+        if not accel_enabled():
             return
-        if not acc_is_present(self.raw):
-            msg = f"PixelData raw data is not present on device, cannot copy out"
+        if not self.accel_present():
+            log = Logger.get()
+            msg = f"Data is not present on device, cannot update host"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_copyout(self.raw)
+        if use_accel_omp:
+            _ = accel_update_host(self.raw)
+        elif use_accel_jax:
+            self.data[:] = accel_update_host(self.data_jax)
+            self.data_jax = None
+
+    def accel_delete(self):
+        """Delete the data from the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if self.accel_present():
+            if use_accel_omp:
+                accel_delete(self.raw)
+            elif use_accel_jax:
+                del self.data_jax
+                self.data_jax = None

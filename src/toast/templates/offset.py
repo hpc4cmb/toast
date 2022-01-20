@@ -13,7 +13,7 @@ import scipy.signal
 
 from astropy import units as u
 
-from ..utils import Logger, rate_from_times, AlignedF32
+from ..utils import Logger, rate_from_times, AlignedF64
 
 from ..timing import function_timer
 
@@ -23,11 +23,17 @@ from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float, Quantity
 
 from ..data import Data
 
+from ..observation import default_values as defaults
+
 from .template import Template
 
 from .amplitudes import Amplitudes
 
-from .._libtoast import template_offset_add_to_signal, template_offset_project_signal
+from .._libtoast import (
+    template_offset_add_to_signal,
+    template_offset_project_signal,
+    template_offset_apply_diag_precond,
+)
 
 
 @trait_docs
@@ -52,7 +58,7 @@ class Offset(Template):
 
     step_time = Quantity(10000.0 * u.second, help="Time per baseline step")
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     noise_model = Unicode(
         None,
@@ -102,6 +108,7 @@ class Offset(Template):
 
     @function_timer
     def _initialize(self, new_data):
+        log = Logger.get()
         # This function is called whenever a new data trait is assigned to the template.
         # Clear any C-allocated buffers from previous uses.
         self.clear()
@@ -140,7 +147,7 @@ class Offset(Template):
             self._obs_views[iob] = list()
             for view_slice in ob.view[self.view]:
                 view_len = None
-                if view_slice.start is None:
+                if view_slice.start < 0:
                     # This is a view of the whole obs
                     view_len = ob.n_local_samples
                 else:
@@ -208,11 +215,8 @@ class Offset(Template):
         self._amp_flags = np.zeros(self._n_local, dtype=np.bool)
 
         # Here we track the variance of the offsets based on the detector noise weights
-        # and the number of unflagged / good samples per offset.  Since we have one
-        # value per amplitude, this can approach the size of the time ordered data.
-        # Store these in C-allocated memory as 32bit float.  These are used when
-        # building both the diagonal and banded preconditioners.
-        self._offsetvar_raw = AlignedF32.zeros(self._n_local)
+        # and the number of unflagged / good samples per offset.
+        self._offsetvar_raw = AlignedF64.zeros(self._n_local)
         self._offsetvar = self._offsetvar_raw.array()
 
         offset = 0
@@ -235,7 +239,7 @@ class Offset(Template):
                 views = ob.view[self.view]
                 for ivw, vw in enumerate(views):
                     view_samples = None
-                    if vw.start is None:
+                    if vw.start < 0:
                         # This is a view of the whole obs
                         view_samples = ob.n_local_samples
                     else:
@@ -320,7 +324,7 @@ class Offset(Template):
                     views = ob.view[self.view]
                     for ivw, vw in enumerate(views):
                         view_samples = None
-                        if vw.start is None:
+                        if vw.start < 0:
                             # This is a view of the whole obs
                             view_samples = ob.n_local_samples
                         else:
@@ -400,6 +404,7 @@ class Offset(Template):
                             )
                         self._precond[iob][det].append((preconditioner, lower))
                         offset += n_amp_view
+        log.verbose(f"Offset variance = {self._offsetvar}")
         return
 
     def __del__(self):
@@ -484,52 +489,71 @@ class Offset(Template):
 
     @function_timer
     def _add_to_signal(self, detector, amplitudes):
-        offset = self._det_start[detector]
+        log = Logger.get()
+        amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
                 continue
+            det_indx = ob.detdata[self.det_data].indices(
+                [
+                    detector,
+                ]
+            )
             # The step length for this observation
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
             )
-            for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
-                n_amp_view = self._obs_views[iob][ivw]
-                template_offset_add_to_signal(
-                    step_length,
-                    amplitudes.local[offset : offset + n_amp_view],
-                    vw[detector],
-                )
-                offset += n_amp_view
+
+            template_offset_add_to_signal(
+                step_length,
+                amp_offset,
+                amplitudes.local,
+                det_indx,
+                ob.detdata[self.det_data][:],
+                ob.intervals[self.view].data,
+                self.use_accel,
+            )
 
     @function_timer
     def _project_signal(self, detector, amplitudes):
-        offset = self._det_start[detector]
+        log = Logger.get()
+        amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
                 continue
+            det_indx = ob.detdata[self.det_data].indices([detector])
+            if self.det_flags is not None:
+                flag_indx = -1
+                flag_indx = ob.detdata[self.det_flags].indices([detector])
+            else:
+                flag_indx = -1
+                flag_data = np.zeros(0, dtype=np.uint8)
             # The step length for this observation
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
             )
-            for iview, todview in enumerate(ob.view[self.view].detdata[self.det_data]):
-                n_amp_view = self._obs_views[iob][iview]
-                if self.det_flags is not None:
-                    flagview = ob.view[self.view].detdata[self.det_flags][iview]
-                    mask = (flagview[detector] & self.det_flag_mask) == 0
-                else:
-                    mask = 1
-                template_offset_project_signal(
-                    step_length,
-                    todview[detector] * mask,
-                    amplitudes.local[offset : offset + n_amp_view],
-                )
-                offset += n_amp_view
+            template_offset_project_signal(
+                det_indx,
+                ob.detdata[self.det_data][:],
+                flag_indx,
+                flag_data,
+                self.det_flag_mask,
+                step_length,
+                amp_offset,
+                amplitudes.local,
+                ob.intervals[self.view].data,
+                self.use_accel,
+            )
 
     @function_timer
     def _add_prior(self, amplitudes_in, amplitudes_out):
         if not self.use_noise_prior:
             # Not using the noise prior term, nothing to accumulate to output.
             return
+        if self.use_accel:
+            raise NotImplementedError(
+                "offset template add_prior on accelerator not implemented"
+            )
         for det in self._all_dets:
             offset = self._det_start[det]
             for iob, ob in enumerate(self.data.obs):
@@ -548,6 +572,10 @@ class Offset(Template):
     @function_timer
     def _apply_precond(self, amplitudes_in, amplitudes_out):
         if self.use_noise_prior:
+            if self.use_accel:
+                raise NotImplementedError(
+                    "offset template precond on accelerator not implemented"
+                )
             # Our design matrix includes a term with the inverse offset covariance.
             # This means that our preconditioner should include this term as well.
             for det in self._all_dets:
@@ -559,7 +587,7 @@ class Offset(Template):
                     views = ob.view[self.view]
                     for ivw, vw in enumerate(views):
                         view_samples = None
-                        if vw.start is None:
+                        if vw.start < 0:
                             # This is a view of the whole obs
                             view_samples = ob.n_local_samples
                         else:
@@ -591,6 +619,13 @@ class Offset(Template):
         else:
             # Since we do not have a noise filter term in our LHS, our diagonal
             # preconditioner is just the application of offset variance.
-            amplitudes_out.local[:] = amplitudes_in.local
-            amplitudes_out.local *= self._offsetvar
+            template_offset_apply_diag_precond(
+                self._offsetvar,
+                amplitudes_in.local,
+                amplitudes_out.local,
+                self.use_accel,
+            )
         return
+
+    def _supports_accel(self):
+        return True

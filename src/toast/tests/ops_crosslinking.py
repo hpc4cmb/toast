@@ -52,7 +52,6 @@ class CrossLinkingTest(MPITestCase):
         crosslinking = ops.CrossLinking(
             pixel_pointing=pixelpointing,
             pixel_dist="pixel_dist",
-            det_flags=None,
             output_dir=self.outdir,
         )
         crosslinking.apply(data)

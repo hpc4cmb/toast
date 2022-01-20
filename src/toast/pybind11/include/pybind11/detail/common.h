@@ -10,12 +10,12 @@
 #pragma once
 
 #define PYBIND11_VERSION_MAJOR 2
-#define PYBIND11_VERSION_MINOR 8
+#define PYBIND11_VERSION_MINOR 9
 #define PYBIND11_VERSION_PATCH 1
 
 // Similar to Python's convention: https://docs.python.org/3/c-api/apiabiversion.html
 // Additional convention: 0xD = dev
-#define PYBIND11_VERSION_HEX 0x02080100
+#define PYBIND11_VERSION_HEX 0x02090100
 
 #define PYBIND11_NAMESPACE_BEGIN(name) namespace name {
 #define PYBIND11_NAMESPACE_END(name) }
@@ -36,6 +36,9 @@
 #    define PYBIND11_CPP14
 #    if __cplusplus >= 201703L
 #      define PYBIND11_CPP17
+#      if __cplusplus >= 202002L
+#        define PYBIND11_CPP20
+#      endif
 #    endif
 #  endif
 #elif defined(_MSC_VER) && __cplusplus == 199711L
@@ -45,6 +48,9 @@
 #    define PYBIND11_CPP14
 #    if _MSVC_LANG > 201402L && _MSC_VER >= 1910
 #      define PYBIND11_CPP17
+#      if _MSVC_LANG >= 202002L
+#        define PYBIND11_CPP20
+#      endif
 #    endif
 #  endif
 #endif
@@ -154,6 +160,14 @@
 // C4505: 'PySlice_GetIndicesEx': unreferenced local function has been removed (PyPy only)
 #  pragma warning(disable: 4505)
 #  if defined(_DEBUG) && !defined(Py_DEBUG)
+// Workaround for a VS 2022 issue.
+// NOTE: This workaround knowingly violates the Python.h include order requirement:
+// https://docs.python.org/3/c-api/intro.html#include-files
+// See https://github.com/pybind/pybind11/pull/3497 for full context.
+#    include <yvals.h>
+#    if _MSVC_STL_VERSION >= 143
+#      include <crtdefs.h>
+#    endif
 #    define PYBIND11_DEBUG_MARKER
 #    undef _DEBUG
 #  endif
@@ -182,6 +196,21 @@
 #  define PYBIND11_HAS_OPTIONAL 1
 #  define PYBIND11_HAS_VARIANT 1
 #endif
+
+#if defined(PYBIND11_CPP17)
+#  if defined(__has_include)
+#    if __has_include(<string_view>)
+#      define PYBIND11_HAS_STRING_VIEW
+#    endif
+#  elif defined(_MSC_VER)
+#    define PYBIND11_HAS_STRING_VIEW
+#  endif
+#endif
+
+#if defined(__cpp_lib_char8_t) && __cpp_lib_char8_t >= 201811L
+#  define PYBIND11_HAS_U8STRING
+#endif
+
 
 #include <Python.h>
 #include <frameobject.h>
@@ -587,6 +616,18 @@ template <bool B, typename T = void> using enable_if_t = typename std::enable_if
 template <bool B, typename T, typename F> using conditional_t = typename std::conditional<B, T, F>::type;
 template <typename T> using remove_cv_t = typename std::remove_cv<T>::type;
 template <typename T> using remove_reference_t = typename std::remove_reference<T>::type;
+#endif
+
+#if defined(PYBIND11_CPP20)
+using std::remove_cvref;
+using std::remove_cvref_t;
+#else
+template <class T>
+struct remove_cvref {
+    using type = remove_cv_t<remove_reference_t<T>>;
+};
+template <class T>
+using remove_cvref_t = typename remove_cvref<T>::type;
 #endif
 
 /// Index sequences

@@ -10,7 +10,7 @@ from ..utils import Environment, Logger
 
 from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
-from ..healpix import HealpixPixels
+from ..healpix import Pixels
 
 from ..timing import function_timer
 
@@ -20,7 +20,9 @@ from ..pixels import PixelDistribution
 
 from ..observation import default_values as defaults
 
-from .._libtoast import healpix_pixels
+# This is just wrong- will be confusing until cleanup of
+# libtoast / _libtoast...
+from .._libtoast import healpix_pixels, pixels_healpix
 
 from .operator import Operator
 
@@ -33,6 +35,10 @@ class PixelsHealpix(Operator):
 
     If the view trait is not specified, then this operator will use the same data
     view as the detector pointing operator when computing the pointing matrix pixels.
+
+    Any samples with "bad" pointing should have already been set to a "safe" quaternion
+    value by the detector pointing operator.
+
     """
 
     # Class traits
@@ -73,6 +79,8 @@ class PixelsHealpix(Operator):
     )
 
     single_precision = Bool(False, help="If True, use 32bit int in output")
+
+    use_python = Bool(False, help="If True, use python implementation")
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
@@ -143,19 +151,22 @@ class PixelsHealpix(Operator):
         self._set_hpix(nside, nside_submap)
 
     def _set_hpix(self, nside, nside_submap):
-        self.hpix = HealpixPixels(nside)
+        self.hpix = Pixels(nside)
         self._n_pix = 12 * nside**2
         self._n_pix_submap = 12 * nside_submap**2
         self._n_submap = (nside // nside_submap) ** 2
         self._local_submaps = None
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
+
+        if self.use_python and use_accel:
+            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         if self._local_submaps is None and self.create_dist is not None:
             self._local_submaps = np.zeros(self._n_submap, dtype=np.uint8)
@@ -176,11 +187,7 @@ class PixelsHealpix(Operator):
 
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.apply(data, detectors=detectors)
-
-        # We do the calculation over buffers of timestream samples to reduce memory
-        # overhead from temporary arrays.
-        tod_buffer_length = env.tod_buffer_length()
+        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -188,18 +195,6 @@ class PixelsHealpix(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
-
-            # Create (or re-use) output data for the pixels, weights and optionally the
-            # detector quaternions.
-
-            if self.single_precision:
-                exists = ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
-                )
-            else:
-                exists = ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
-                )
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own
@@ -217,6 +212,24 @@ class PixelsHealpix(Operator):
                             "detector pointing"
                         )
                         raise RuntimeError(msg)
+
+            # Create (or re-use) output data for the pixels.
+
+            if self.single_precision:
+                exists = ob.detdata.ensure(
+                    self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
+                )
+            else:
+                exists = ob.detdata.ensure(
+                    self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
+                )
+
+            hit_submaps = self._local_submaps
+            if hit_submaps is None:
+                hit_submaps = np.zeros(self._n_submap, dtype=np.uint8)
+
+            quat_indx = ob.detdata[quats_name].indices(dets)
+            pix_indx = ob.detdata[self.pixels].indices(dets)
 
             # Do we already have pointing for all requested detectors?
             if exists:
@@ -240,75 +253,48 @@ class PixelsHealpix(Operator):
                     log.verbose(msg)
                 continue
 
-            # Focalplane for this observation
-            focalplane = ob.telescope.focalplane
+            if use_accel:
+                if not ob.detdata.accel_present(self.pixels):
+                    ob.detdata.accel_create(self.pixels)
 
-            # Loop over views
-            views = ob.view[view]
-            for vw in range(len(views)):
-                # Get the flags if needed.  Use the same flags as
-                # detector pointing.
-                flags = None
-                if self.detector_pointing.shared_flags is not None:
-                    flags = np.array(
-                        views.shared[self.detector_pointing.shared_flags][vw]
-                    )
-                    flags &= self.detector_pointing.shared_flag_mask
-
-                for det in dets:
-                    # Timestream of detector quaternions
-                    quats = views.detdata[quats_name][vw][det]
-                    view_samples = len(quats)
-
-                    # Buffered pointing calculation
-                    buf_off = 0
-                    buf_n = tod_buffer_length
-                    while buf_off < view_samples:
-                        if buf_off + buf_n > view_samples:
-                            buf_n = view_samples - buf_off
-
-                        bslice = slice(buf_off, buf_off + buf_n)
-
-                        # This buffer of detector quaternions
-                        detp = quats[bslice, :].reshape(-1)
-
-                        # Buffer of flags
-                        fslice = None
-                        if flags is not None:
-                            fslice = flags[bslice].reshape(-1)
-
-                        # Pixel buffer
-                        pxslice = views.detdata[self.pixels][vw][det, bslice].reshape(
-                            -1
-                        )
-
-                        if self.single_precision:
-                            pbuf = np.zeros(len(pxslice), dtype=np.int64)
-                        else:
-                            pbuf = pxslice
-
-                        healpix_pixels(
-                            self.hpix,
-                            self.nest,
-                            detp,
-                            fslice,
-                            pbuf,
-                        )
-
-                        if self.single_precision:
-                            pxslice[:] = pbuf.astype(np.int32)
-
-                        buf_off += buf_n
-
-                    if self.create_dist is not None:
-                        self._local_submaps[
-                            views.detdata[self.pixels][vw][det] // self._n_pix_submap
-                        ] = 1
+            if self.use_python:
+                self._py_pixels_healpix(
+                    quat_indx,
+                    ob.detdata[quats_name].data,
+                    pix_indx,
+                    ob.detdata[self.pixels].data,
+                    ob.intervals[self.view].data,
+                    hit_submaps,
+                )
+            else:
+                pixels_healpix(
+                    quat_indx,
+                    ob.detdata[quats_name].data,
+                    pix_indx,
+                    ob.detdata[self.pixels].data,
+                    ob.intervals[self.view].data,
+                    hit_submaps,
+                    self._n_pix_submap,
+                    self.nside,
+                    self.nest,
+                    use_accel,
+                )
+            if self._local_submaps is not None:
+                self._local_submaps[:] |= hit_submaps
 
         return
 
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_accel=False, **kwargs):
         if self.create_dist is not None:
+            if use_accel:
+                log = Logger.get()
+                log.verbose_rank(
+                    f"Operator {self.name} finalize local submap update self",
+                    comm=data.comm.comm_group,
+                )
+                # Once self._local_submaps is explicitly staged, copy it
+                # back here (current kernel does copy in/out)
+
             submaps = None
             if self.single_precision:
                 submaps = np.arange(self._n_submap, dtype=np.int32)[
@@ -325,6 +311,14 @@ class PixelsHealpix(Operator):
                 local_submaps=submaps,
                 comm=data.comm.comm_world,
             )
+
+            if use_accel:
+                log = Logger.get()
+                log.verbose_rank(
+                    f"Operator {self.name} finalize local submaps update device",
+                    comm=data.comm.comm_group,
+                )
+                # Copy back here once it is being staged
         return
 
     def _requires(self):
@@ -340,5 +334,37 @@ class PixelsHealpix(Operator):
             prov["global"].append(self.create_dist)
         return prov
 
-    def _supports_acc(self):
-        return self.detector_pointing.supports_acc()
+    def _supports_accel(self):
+        return self.detector_pointing.supports_accel()
+
+    def _py_pixels_healpix(
+        self,
+        quat_indx,
+        quat_data,
+        pix_indx,
+        pix_data,
+        intr_data,
+        hit_submaps,
+    ):
+        """Internal python implementation for comparison tests."""
+        zaxis = np.array([0, 0, 1], dtype=np.float64)
+        if self.nest:
+            for idet in range(len(quat_indx)):
+                qidx = quat_indx[idet]
+                pidx = pix_indx[idet]
+                for vw in intr_data:
+                    samples = slice(vw.first, vw.last + 1, 1)
+                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
+                    pix_data[pidx][samples] = self.hpix.vec2nest(dir)
+                    sub_maps = pix_data[pidx][samples] // self._n_pix_submap
+                    hit_submaps[sub_maps] = 1
+        else:
+            for idet in range(len(quat_indx)):
+                qidx = quat_indx[idet]
+                pidx = pix_indx[idet]
+                for vw in intr_data:
+                    samples = slice(vw.first, vw.last + 1, 1)
+                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
+                    pix_data[pidx][samples] = self.hpix.vec2ring(dir)
+                    sub_maps = pix_data[pidx][samples] // self._n_pix_submap
+                    hit_submaps[sub_maps] = 1

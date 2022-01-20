@@ -32,7 +32,7 @@ from ..dist import distribute_uniform, distribute_discrete
 
 from ..timing import function_timer, Timer, GlobalTimers
 
-from ..intervals import Interval, regular_intervals, IntervalList
+from ..intervals import regular_intervals, IntervalList
 
 from ..noise_sim import AnalyticNoise
 

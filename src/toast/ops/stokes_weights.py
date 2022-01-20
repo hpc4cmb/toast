@@ -20,7 +20,7 @@ from ..pixels import PixelDistribution
 
 from ..observation import default_values as defaults
 
-from .._libtoast import stokes_weights
+from .._libtoast import stokes_weights, stokes_weights_I, stokes_weights_IQU
 
 from .operator import Operator
 
@@ -96,6 +96,8 @@ class StokesWeights(Operator):
         "calibration for each det",
     )
 
+    use_python = Bool(False, help="If True, use python implementation")
+
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
         detpointing = proposal["value"]
@@ -130,7 +132,7 @@ class StokesWeights(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
@@ -138,6 +140,9 @@ class StokesWeights(Operator):
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
+
+        if self.use_python and use_accel:
+            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         # Expand detector pointing
         if self.quats is not None:
@@ -155,11 +160,11 @@ class StokesWeights(Operator):
 
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.apply(data, detectors=detectors)
+        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
-        # We do the calculation over buffers of timestream samples to reduce memory
-        # overhead from temporary arrays.
-        tod_buffer_length = env.tod_buffer_length()
+        cal = self.cal
+        if cal is None:
+            cal = 1.0
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -167,23 +172,6 @@ class StokesWeights(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
-
-            # Create (or re-use) output data for the weights
-
-            if self.single_precision:
-                exists = ob.detdata.ensure(
-                    self.weights,
-                    sample_shape=(self._nnz,),
-                    dtype=np.float32,
-                    detectors=dets,
-                )
-            else:
-                exists = ob.detdata.ensure(
-                    self.weights,
-                    sample_shape=(self._nnz,),
-                    dtype=np.float64,
-                    detectors=dets,
-                )
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own
@@ -202,6 +190,25 @@ class StokesWeights(Operator):
                         )
                         raise RuntimeError(msg)
 
+            # Create (or re-use) output data for the weights
+            if self.single_precision:
+                exists = ob.detdata.ensure(
+                    self.weights,
+                    sample_shape=(self._nnz,),
+                    dtype=np.float32,
+                    detectors=dets,
+                )
+            else:
+                exists = ob.detdata.ensure(
+                    self.weights,
+                    sample_shape=(self._nnz,),
+                    dtype=np.float64,
+                    detectors=dets,
+                )
+
+            quat_indx = ob.detdata[quats_name].indices(dets)
+            weight_indx = ob.detdata[self.weights].indices(dets)
+
             # Do we already have pointing for all requested detectors?
             if exists:
                 # Yes
@@ -213,96 +220,59 @@ class StokesWeights(Operator):
                     log.verbose(msg)
                 continue
 
-            # Focalplane for this observation
+            if use_accel:
+                if not ob.detdata.accel_present(self.weights):
+                    ob.detdata.accel_create(self.weights)
+
+            # FIXME:  temporary hack until instrument classes are also pre-staged
+            # to GPU
             focalplane = ob.telescope.focalplane
+            det_epsilon = np.zeros(len(dets), dtype=np.float64)
 
-            # Loop over views
-            views = ob.view[view]
-            for vw in range(len(views)):
-                # Get the flags if needed.  Use the same flags as
-                # detector pointing.
-                flags = None
-                if self.detector_pointing.shared_flags is not None:
-                    flags = np.array(
-                        views.shared[self.detector_pointing.shared_flags][vw]
-                    )
-                    flags &= self.detector_pointing.shared_flag_mask
+            # Get the cross polar response from the focalplane
+            if "pol_leakage" in focalplane.detector_data.colnames:
+                for idet, d in enumerate(dets):
+                    det_epsilon[idet] = focalplane[d]["pol_leakage"]
 
-                # HWP angle if needed
-                hwp_angle = None
+            if self.use_python:
+                hwp_data = None
                 if self.hwp_angle is not None:
-                    hwp_angle = views.shared[self.hwp_angle][vw]
-
-                # Optional calibration
-                cal = None
-                if self.cal is not None:
-                    cal = ob[self.cal]
-
-                for det in dets:
-                    props = focalplane[det]
-
-                    # Get the cross polar response from the focalplane
-                    if "pol_leakage" in props.colnames:
-                        epsilon = props["pol_leakage"]
+                    hwp_data = ob.shared[self.hwp_angle].data
+                self._py_stokes_weights(
+                    quat_indx,
+                    ob.detdata[quats_name].data,
+                    weight_indx,
+                    ob.detdata[self.weights].data,
+                    ob.intervals[self.view].data,
+                    cal,
+                    det_epsilon,
+                    hwp_data,
+                )
+            else:
+                if self.mode == "IQU":
+                    if self.hwp_angle is None:
+                        hwp_data = np.zeros((0,), dtype=np.float64)
                     else:
-                        epsilon = 0.0
-
-                    # Timestream of detector quaternions
-                    quats = views.detdata[quats_name][vw][det]
-                    view_samples = len(quats)
-
-                    # Cal for this detector
-                    if cal is not None:
-                        dcal = cal[det]
-                    else:
-                        dcal = 1.0
-
-                    # Buffered pointing calculation
-                    buf_off = 0
-                    buf_n = tod_buffer_length
-                    while buf_off < view_samples:
-                        if buf_off + buf_n > view_samples:
-                            buf_n = view_samples - buf_off
-
-                        bslice = slice(buf_off, buf_off + buf_n)
-
-                        # This buffer of detector quaternions
-                        detp = quats[bslice, :].reshape(-1)
-
-                        # Buffer of HWP angle
-                        hslice = None
-                        if hwp_angle is not None:
-                            hslice = hwp_angle[bslice].reshape(-1)
-
-                        # Buffer of flags
-                        fslice = None
-                        if flags is not None:
-                            fslice = flags[bslice].reshape(-1)
-
-                        # Weight buffer
-                        wtslice = views.detdata[self.weights][vw][det, bslice].reshape(
-                            -1
-                        )
-
-                        if self.single_precision:
-                            wbuf = np.zeros(len(wtslice), dtype=np.float64)
-                        else:
-                            wbuf = wtslice
-
-                        stokes_weights(
-                            epsilon,
-                            dcal,
-                            self.mode,
-                            detp,
-                            hslice,
-                            fslice,
-                            wbuf,
-                        )
-
-                        if self.single_precision:
-                            wtslice[:] = wbuf.astype(np.float32)
-
-                        buf_off += buf_n
+                        hwp_data = ob.shared[self.hwp_angle].data
+                    stokes_weights_IQU(
+                        quat_indx,
+                        ob.detdata[quats_name].data,
+                        weight_indx,
+                        ob.detdata[self.weights].data,
+                        hwp_data,
+                        ob.intervals[self.view].data,
+                        det_epsilon,
+                        cal,
+                        use_accel,
+                    )
+                else:
+                    stokes_weights_I(
+                        weight_indx,
+                        ob.detdata[self.weights].data,
+                        ob.intervals[self.view].data,
+                        cal,
+                        use_accel,
+                    )
         return
 
     def _finalize(self, data, **kwargs):
@@ -323,5 +293,58 @@ class StokesWeights(Operator):
         prov["detdata"].append(self.weights)
         return prov
 
-    def _supports_acc(self):
-        return self.detector_pointing.supports_acc()
+    def _supports_accel(self):
+        return self.detector_pointing.supports_accel()
+
+    def _py_stokes_weights(
+        self,
+        quat_indx,
+        quat_data,
+        weight_indx,
+        weight_data,
+        intr_data,
+        cal,
+        det_epsilon,
+        hwp_data,
+    ):
+        """Internal python implementation for comparison tests."""
+        zaxis = np.array([0, 0, 1], dtype=np.float64)
+        xaxis = np.array([1, 0, 0], dtype=np.float64)
+        if self.mode == "IQU":
+            for idet in range(len(quat_indx)):
+                qidx = quat_indx[idet]
+                widx = weight_indx[idet]
+                eta = (1.0 - det_epsilon[idet]) / (1.0 + det_epsilon[idet])
+                for vw in intr_data:
+                    samples = slice(vw.first, vw.last + 1, 1)
+                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
+                    orient = qa.rotate(quat_data[qidx][samples], xaxis)
+                    ay = np.multiply(orient[:, 0], dir[:, 1]) - np.multiply(
+                        orient[:, 1], dir[:, 0]
+                    )
+                    ax = (
+                        np.multiply(
+                            orient[:, 0], np.multiply(-1.0 * dir[:, 2], dir[:, 0])
+                        )
+                        + np.multiply(
+                            orient[:, 1], np.multiply(-1.0 * dir[:, 2], dir[:, 1])
+                        )
+                        + np.multiply(
+                            orient[:, 2],
+                            np.multiply(dir[:, 0], dir[:, 0])
+                            + np.multiply(dir[:, 1], dir[:, 1]),
+                        )
+                    )
+                    ang = np.atan2(ay, ax)
+                    if hwp_data is not None:
+                        ang += 2.0 * hwp_data[samples]
+                    ang *= 2.0
+                    weight_data[widx][samples, 0] = cal
+                    weight_data[widx][samples, 1] = cal * eta * np.cos(ang)
+                    weight_data[widx][samples, 2] = cal * eta * np.sin(ang)
+        else:
+            for idet in range(len(quat_indx)):
+                widx = weight_indx[idet]
+                for vw in intr_data:
+                    samples = slice(vw.first, vw.last + 1, 1)
+                    weight_data[widx][samples, 0] = cal

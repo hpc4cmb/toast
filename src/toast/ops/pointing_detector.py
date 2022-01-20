@@ -18,6 +18,8 @@ from .. import qarray as qa
 
 from .operator import Operator
 
+from .._libtoast import pointing_detector
+
 
 @trait_docs
 class PointingDetectorSimple(Operator):
@@ -63,6 +65,8 @@ class PointingDetectorSimple(Operator):
         help="The output coordinate system ('C', 'E', 'G')",
     )
 
+    use_python = Bool(False, help="If True, use python implementation")
+
     @traitlets.validate("coord_in")
     def _check_coord_in(self, proposal):
         check = proposal["value"]
@@ -90,8 +94,11 @@ class PointingDetectorSimple(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        if self.use_python and use_accel:
+            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         coord_rot = None
         if self.coord_in is None:
@@ -132,53 +139,61 @@ class PointingDetectorSimple(Operator):
                 detectors=dets,
             )
 
-            # Create (or re-use) output data for the detector quaternions.
-
-            # Do we already have pointing for all requested detectors?
             if exists:
-                # Yes
                 if data.comm.group_rank == 0:
-                    log.verbose(
-                        f"Group {data.comm.group}, ob {ob.name}, detector pointing "
-                        f"already translated for {dets}"
+                    msg = (
+                        f"Group {data.comm.group}, ob {ob.name}, det quats "
+                        f"already computed for {dets}"
                     )
+                    log.verbose(msg)
                 continue
 
-            # Loop over views
-            views = ob.view[self.view]
-            for vw in range(len(views)):
-                # Get the flags if needed
-                flags = None
-                if self.shared_flags is not None:
-                    flags = np.array(views.shared[self.shared_flags][vw])
-                    flags &= self.shared_flag_mask
+            # FIXME:  temporary hack until instrument classes are also pre-staged
+            # to GPU
+            focalplane = ob.telescope.focalplane
+            fp_quats = np.zeros((len(dets), 4), dtype=np.float64)
+            for idet, d in enumerate(dets):
+                fp_quats[idet, :] = focalplane[d]["quat"]
 
-                # Boresight pointing quaternions
-                in_boresight = views.shared[self.boresight][vw]
+            quat_indx = ob.detdata[self.quats].indices(dets)
 
-                # Coordinate transform if needed
-                boresight = in_boresight
-                if coord_rot is not None:
-                    boresight = qa.mult(coord_rot, in_boresight)
+            if use_accel:
+                if not ob.detdata.accel_present(self.quats):
+                    ob.detdata.accel_create(self.quats)
 
-                # Focalplane for this observation
-                focalplane = ob.telescope.focalplane
+            if self.shared_flags is None:
+                flags = np.zeros(0, dtype=np.uint8)
+            else:
+                flags = ob.shared[self.shared_flags].data
 
-                for det in dets:
-                    # Detector quaternion offset from the boresight.
-                    # Real experiments may require additional information
-                    # such as parameters of a physical pointing model or
-                    # observatory velocity vector (for aberration correction).
-                    # In such cases, the detector quaternion can depend on
-                    # time and the observing direction and a custom detector
-                    # pointing operator needs to be implemented.
-                    detquat = np.array(focalplane[det]["quat"], dtype=np.float64)
+            log.verbose_rank(
+                f"Operator {self.name}, observation {ob.name}, use_accel = {use_accel}",
+                comm=data.comm.comm_group,
+            )
 
-                    # Timestream of detector quaternions
-                    quats = qa.mult(boresight, detquat)
-                    if flags is not None:
-                        quats[flags != 0] = qa.null_quat
-                    views.detdata[self.quats][vw][det] = quats
+            # FIXME: handle coordinate transforms here too...
+
+            if self.use_python:
+                self._py_pointing_detector(
+                    fp_quats,
+                    ob.shared[self.boresight].data,
+                    quat_indx,
+                    ob.detdata[self.quats].data,
+                    ob.intervals[self.view].data,
+                    flags,
+                )
+            else:
+                pointing_detector(
+                    fp_quats,
+                    ob.shared[self.boresight].data,
+                    quat_indx,
+                    ob.detdata[self.quats].data,
+                    ob.intervals[self.view].data,
+                    flags,
+                    self.shared_flag_mask,
+                    use_accel,
+                )
+
         return
 
     def _finalize(self, data, **kwargs):
@@ -205,5 +220,25 @@ class PointingDetectorSimple(Operator):
         }
         return prov
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         return True
+
+    def _py_pointing_detector(
+        self,
+        fp_quats,
+        bore_data,
+        quat_indx,
+        quat_data,
+        intr_data,
+        flag_data,
+    ):
+        """Internal python implementation for comparison tests."""
+        for idet in range(len(quat_indx)):
+            qidx = quat_indx[idet]
+            for vw in intr_data:
+                samples = slice(vw.first, vw.last + 1, 1)
+                bore = np.array(bore_data[samples])
+                if self.shared_flags is not None:
+                    good = flag_data[samples] & self.shared_flag_mask == 0
+                    bore[not good] = np.array([0, 0, 0, 1], dtype=np.float64)
+                quat_data[qidx][samples] = qa.mult(bore, fp_quats[idet])

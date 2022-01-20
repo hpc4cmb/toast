@@ -14,6 +14,8 @@ from .mpi import Comm
 
 from .utils import Logger
 
+from ._libtoast import accel_enabled
+
 
 class Data(MutableMapping):
     """Class which represents distributed data
@@ -71,6 +73,7 @@ class Data(MutableMapping):
     def clear(self):
         """Clear the list of observations."""
         if not self._view:
+            self.accel_clear()
             for ob in self.obs:
                 ob.clear()
         self.obs.clear()
@@ -349,7 +352,46 @@ class Data(MutableMapping):
 
     # Accelerator use
 
-    def acc_copyin(self, names):
+    def accel_create(self, names):
+        """Create a set of data objects on the device.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.  If the data already exists on the
+        device then no action is taken.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        for ob in self.obs:
+            for key in names["detdata"]:
+                if not ob.detdata.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} detdata accel_create for {key}")
+                    ob.detdata.accel_create(key)
+            for key in names["shared"]:
+                if not ob.shared.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} shared accel_create for {key}")
+                    ob.shared.accel_create(key)
+            for key in names["intervals"]:
+                if not ob.intervals.accel_present(key):
+                    log.verbose(
+                        f"Calling ob {ob.name} intervals accel_create for {key}"
+                    )
+                    ob.intervals.accel_create(key)
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "accel_create"):
+                if not val.accel_present():
+                    log.verbose(f"Calling Data accel_create for {key}")
+                    val.accel_create()
+
+    def accel_update_device(self, names):
         """Copy a set of data objects to the device.
 
         This takes a dictionary with the same format as those used by the Operator
@@ -362,15 +404,26 @@ class Data(MutableMapping):
             None
 
         """
+        if not accel_enabled():
+            return
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
-                log.verbose(f"Calling ob {ob.name} detdata copyin for {key}")
-                ob.detdata.acc_copyin(key)
+                log.verbose(f"Calling ob {ob.name} detdata update_device for {key}")
+                ob.detdata.accel_update_device(key)
             for key in names["shared"]:
-                ob.shared.acc_copyin(key)
+                log.verbose(f"Calling ob {ob.name} shared update_device for {key}")
+                ob.shared.accel_update_device(key)
+            for key in names["intervals"]:
+                log.verbose(f"Calling ob {ob.name} intervals update_device for {key}")
+                ob.intervals.accel_update_device(key)
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "accel_update_device"):
+                log.verbose(f"Calling Data update_device for {key}")
+                val.accel_update_device()
 
-    def acc_copyout(self, names):
+    def accel_update_host(self, names):
         """Copy a set of data objects to the host.
 
         This takes a dictionary with the same format as those used by the Operator
@@ -383,22 +436,96 @@ class Data(MutableMapping):
             None
 
         """
+        if not accel_enabled():
+            return
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
-                if ob.detdata.acc_is_present(key):
-                    log.verbose(f"Calling ob {ob.name} detdata copyout for {key}")
-                    ob.detdata.acc_copyout(key)
+                if ob.detdata.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} detdata update_host for {key}")
+                    ob.detdata.accel_update_host(key)
                 else:
                     log.verbose(
-                        f"Skip copyout for ob {ob.name} detdata {key}, data not present"
+                        f"Skip update_self for ob {ob.name} detdata {key}, data not present"
                     )
             for key in names["shared"]:
-                if ob.shared.acc_is_present(key):
-                    log.verbose(f"Calling ob {ob.name} shared copyout for {key}")
-                    ob.shared.acc_copyout(key)
+                if ob.shared.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} shared update_host for {key}")
+                    ob.shared.accel_update_host(key)
                 else:
                     log.verbose(
-                        f"Skip copyout for ob {ob.name} shared {key}, data not present"
+                        f"Skip update_host for ob {ob.name} shared {key}, data not present"
                     )
-            # FIXME:  implement intervals too.
+            for key in names["intervals"]:
+                if ob.intervals.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} intervals update_host for {key}")
+                    ob.intervals.accel_update_host(key)
+                else:
+                    log.verbose(
+                        f"Skip update_host for ob {ob.name} intervals {key}, data not present"
+                    )
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "accel_update_host"):
+                log.verbose(f"Calling Data update_host for {key}")
+                val.accel_update_host()
+
+    def accel_delete(self, names):
+        """Delete a specific set of device objects
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        for ob in self.obs:
+            for key in names["detdata"]:
+                if ob.detdata.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} detdata accel_delete for {key}")
+                    ob.detdata.accel_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} detdata {key}, data not present"
+                    )
+            for key in names["shared"]:
+                if ob.shared.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} shared accel_delete for {key}")
+                    ob.shared.accel_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} shared {key}, data not present"
+                    )
+            for key in names["intervals"]:
+                if ob.intervals.accel_present(key):
+                    log.verbose(
+                        f"Calling ob {ob.name} intervals accel_delete for {key}"
+                    )
+                    ob.intervals.accel_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} intervals {key}, data not present"
+                    )
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "accel_delete"):
+                log.verbose(f"Calling Data accel_delete for {key}")
+                val.accel_delete()
+
+    def accel_clear(self):
+        """Delete all accelerator data."""
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        for ob in self.obs:
+            ob.accel_clear()
+        for key, val in self._internal.items():
+            if hasattr(val, "accel_clear"):
+                val.accel_clear()

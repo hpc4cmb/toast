@@ -71,11 +71,6 @@ target_include_directories(toast BEFORE PUBLIC
 
 target_link_libraries(toast gtest)
 
-if(OpenACC_CXX_FOUND)
-    target_compile_definitions(toast PRIVATE HAVE_OPENACC=1)
-    target_link_libraries(toast OpenACC::OpenACC_CXX)
-endif(OpenACC_CXX_FOUND)
-
 if(OpenMP_CXX_FOUND)
     target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
     set_target_properties(toast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
