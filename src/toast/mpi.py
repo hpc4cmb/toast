@@ -5,7 +5,7 @@
 import os
 import time
 
-from ._libtoast import Environment, Logger, acc_enabled, acc_get_num_devices
+from ._libtoast import Environment, Logger
 
 use_mpi = None
 MPI = None
@@ -41,46 +41,42 @@ if use_mpi is None:
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-    # FIXME:  The code below assumes that OpenACC only has accelerator devices, not
-    # CPUs.  We should eventually get the device properties for each device and
-    # get just the accelerators (or track all devices by type).
+from ._libtoast import accel_assign_device
 
-    env = Environment.get()
+# Assign each process to an accelerator device
+from .accelerator import jax_local_device, use_accel_jax, use_accel_omp
 
-    # This always returns the number of supported devices, trying first OpenACC,
-    # then CUDA, then returning zero.
-    n_acc_devices = acc_get_num_devices()
-
-    # Assign each process to a device
+if use_accel_omp or use_accel_jax:
+    node_procs = 1
+    node_rank = 0
     if use_mpi:
         # We need to compute which process goes to which device
         nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
         node_procs = nodecomm.size
-        if n_acc_devices > 0:
-            # Devices detected
-            procs_per_device = node_procs // n_acc_devices
-            if procs_per_device * n_acc_devices < node_procs:
-                procs_per_device += 1
-            my_device = nodecomm.rank % n_acc_devices
-            msg = f"node rank {nodecomm.rank} found {n_acc_devices} "
-            msg += f"accelerators, {procs_per_device} procs per device, "
-            msg += f"using device {my_device}"
-            log.verbose(msg)
-            env.set_acc(n_acc_devices, procs_per_device, my_device)
-        else:
-            # No devices detected, we point all processes to the 0th device
-            log.verbose(
-                f"node rank {nodecomm.rank} found {n_acc_devices} accelerators",
-            )
-            env.set_acc(n_acc_devices, node_procs, 0)
+        node_rank = nodecomm.rank
+        accel_assign_device(node_procs, node_rank, False)
         nodecomm.Free()
         del nodecomm
+    if use_accel_omp:
+        accel_assign_device(node_procs, node_rank, False)
     else:
-        # One process- just use the first device.
-        log.verbose(f"get_num_devices found {n_acc_devices} accelerators")
-        env.set_acc(n_acc_devices, 1, 0)
+        import jax
 
-# We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
+        n_target = len(jax.devices())
+        if n_target == 0:
+            jax_local_device = 0
+        else:
+            proc_per_dev = node_procs // n_target
+            if n_target * proc_per_dev < node_procs:
+                proc_per_dev += 1
+            target_dev = node_rank // proc_per_dev
+            jax_local_device = jax.devices()[target_dev]
+else:
+    # Disabled == True
+    accel_assign_device(1, 0, True)
+
+# We put other imports *after* the MPI check, since usually the MPI initialization
+# is time sensitive and may timeout the job if it does not happen quickly enough.
 
 import itertools
 import sys

@@ -144,6 +144,8 @@ class MapMaker(Operator):
 
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
 
+    write_solver_products = Bool(True, help="If True, write out equivalent solver products.")
+
     keep_solver_products = Bool(
         False, help="If True, keep the map domain solver products in data"
     )
@@ -238,6 +240,10 @@ class MapMaker(Operator):
             binning=self.binning,
             template_matrix=self.template_matrix,
             keep_solver_products=self.keep_solver_products,
+            write_solver_products=self.write_solver_products,
+            write_hdf5=self.write_hdf5,
+            write_hdf5_serial=self.write_hdf5_serial,
+            output_dir=self.output_dir,
             mc_mode=self.mc_mode,
             mc_index=self.mc_index,
             reset_pix_dist=self.reset_pix_dist,

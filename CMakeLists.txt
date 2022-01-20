@@ -54,29 +54,63 @@ if(NOT TOAST_STATIC_DEPS AND NOT $ENV{TOAST_STATIC_DEPS} STREQUAL "")
 endif()
 
 # OpenMP
-find_package(OpenMP)
-
-# OpenACC.  For now, we only check for this if it is explicitly enabled by the user.
-# The reason is that some compilers will report the correct compile flag even if
-# no suitable device exists (e.g. gcc -fopenacc).  Make this process more robust
-# before enabling by default.
-if(USE_OPENACC)
-    find_package(OpenACC)
+if(NOT DISABLE_OPENMP)
+    find_package(OpenMP)
 endif()
 
-# CUDA.  In some cases, the CUDA toolkit is available (and will be detected) even
-# if we want to build without it.  Force the user to request using CUDA.
-if(USE_CUDA)
-    find_package(CUDAToolkit)
-endif()
-
-# Check consistency
-if(USE_OPENACC_MEMPOOL)
-    if(CUDAToolkit_FOUND AND OpenACC_CXX_FOUND)
-        message(STATUS "Using CUDA memory pool for OpenACC")
-    else()
-        message(ERROR "Both CUDA and OpenACC must be found to use the memory pool with OpenACC")
+if(OpenMP_CXX_FOUND)
+    message(STATUS
+        "Found OpenMP version: \"" ${OpenMP_CXX_VERSION}
+        "\" spec date " ${OpenMP_CXX_SPEC_DATE}
+    )
+    # Allow the user to force enabling of target offload.  Some compilers support all
+    # the features we need in the 5.0 spec, but return a supported version less than
+    # that.
+    if(NOT USE_OPENMP_TARGET)
+        # Check the version reported by the compiler
+        if(OpenMP_CXX_VERSION_MAJOR GREATER_EQUAL 5)
+            set(USE_OPENMP_TARGET TRUE)
+        else()
+            if(OpenMP_CXX_SPEC_DATE GREATER_EQUAL 201811)
+                # This is the spec date for the 5.0 standard
+                set(USE_OPENMP_TARGET TRUE)
+            else()
+                set(USE_OPENMP_TARGET FALSE)
+            endif()
+        endif()
     endif()
+    # Build up the final list of OpenMP flags
+    set(omp_opts "")
+    if(USE_OPENMP_TARGET)
+        message(STATUS "Enabling support for OpenMP target offload")
+        if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "NVHPC")
+            # We are doing target offload with the NVIDIA compiler
+            # and need to override the flags.
+            list(APPEND omp_opts -mp=gpu)
+        else()
+            list(APPEND omp_opts ${OpenMP_CXX_FLAGS})
+        endif()
+        if(OPENMP_TARGET_FLAGS)
+            # Extra user-specified flags
+            string(REPLACE " " ";" TARGET_FLAGS_LIST "${OPENMP_TARGET_FLAGS}")
+            list(APPEND omp_opts ${TARGET_FLAGS_LIST})
+        endif()
+    else()
+        message(STATUS
+            "OpenMP target offload disabled.  Force on with -DUSE_OPENMP_TARGET=TRUE"
+        )
+        list(APPEND omp_opts ${OpenMP_CXX_FLAGS})
+        # Some compilers will forcibly try to offload...
+        if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+            # FIXME:  Only do this for specific gcc versions?  In particular,
+            # older versions don't have this problem.
+            list(APPEND omp_opts -foffload=disable)
+        endif()
+    endif()
+    set(OpenMP_CXX_FLAGS ${omp_opts})
+    string(JOIN " " msg_omp_opts ${omp_opts})
+    message(STATUS "Using OpenMP flags:  ${msg_omp_opts}")
+    message(STATUS "Using OpenMP flags (as a list):  ${OpenMP_CXX_FLAGS}")
 endif()
 
 if(TOAST_STATIC_DEPS)
@@ -87,12 +121,17 @@ if(TOAST_STATIC_DEPS)
 endif()
 
 # First look for MKL and CUDA, since those will provide both
-# FFT support and BLAS/LAPACK
+# FFT support and BLAS/LAPACK.
 
-# FIXME:  We should default this to "OFF" and force the user to request it,
-# just like CUDA and OpenACC.  Not changing this yet, since it breaks existing
-# behavior.
-find_package(MKL)
+# CUDA.  In some cases, the CUDA toolkit is available (and will be detected) even
+# if we want to build without it.  Force the user to request using CUDA.
+if(USE_CUDA)
+    find_package(CUDAToolkit)
+endif()
+
+if(USE_MKL)
+    find_package(MKL)
+endif()
 
 if(MKL_FOUND)
     # Use MKL for BLAS / LAPACK

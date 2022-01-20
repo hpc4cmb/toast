@@ -27,6 +27,7 @@ PYBIND11_MODULE(_libtoast, m) {
     register_aligned <toast::AlignedF64> (m, "AlignedF64");
 
     init_sys(m);
+    init_intervals(m);
     init_math_misc(m);
     init_math_sf(m);
     init_math_rng(m);
@@ -44,6 +45,10 @@ PYBIND11_MODULE(_libtoast, m) {
     init_atm(m);
     init_template_offset(m);
     init_accelerator(m);
+    init_ops_pointing_detector(m);
+    init_ops_stokes_weights(m);
+    init_ops_pixels_healpix(m);
+    init_ops_mapmaker_utils(m);
 
     // Internal unit test runner
     m.def(

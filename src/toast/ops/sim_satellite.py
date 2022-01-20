@@ -12,7 +12,6 @@ from .. import qarray as qa
 from ..dist import distribute_discrete
 from ..healpix import ang2vec
 from ..instrument import Telescope
-from ..intervals import Interval
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
 from ..observation import default_values as defaults

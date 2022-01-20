@@ -400,6 +400,7 @@ void register_aligned(py::module & m, char const * name) {
 
 // Initialize all the pieces of the bindings.
 void init_sys(py::module & m);
+void init_intervals(py::module & m);
 void init_math_misc(py::module & m);
 void init_math_sf(py::module & m);
 void init_math_rng(py::module & m);
@@ -417,5 +418,9 @@ void init_todmap_mapmaker(py::module & m);
 void init_atm(py::module & m);
 void init_template_offset(py::module & m);
 void init_accelerator(py::module & m);
+void init_ops_pointing_detector(py::module & m);
+void init_ops_stokes_weights(py::module & m);
+void init_ops_pixels_healpix(py::module & m);
+void init_ops_mapmaker_utils(py::module & m);
 
 #endif // ifndef LIBTOAST_HPP

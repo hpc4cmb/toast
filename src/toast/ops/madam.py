@@ -320,7 +320,7 @@ class Madam(Operator):
         self.clear()
 
     @function_timer
-    def _exec(self, data, detectors=None):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
         if not available():

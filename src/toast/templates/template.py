@@ -5,11 +5,10 @@
 import numpy as np
 import traitlets
 
-from toast.timing import function_timer_stackskip
-
 from ..data import Data
 from ..observation import default_values as defaults
-from ..traits import Instance, Int, TraitConfig, Unicode
+from ..timing import function_timer_stackskip
+from ..traits import Bool, Instance, Int, TraitConfig, Unicode
 from ..utils import Logger
 
 
@@ -57,6 +56,8 @@ class Template(TraitConfig):
     det_flag_mask = Int(
         defaults.det_mask_invalid, help="Bit mask value for solver flags"
     )
+
+    use_accel = Bool(False, help="If True, use the accelerator")
 
     @traitlets.validate("data")
     def _check_data(self, proposal):
@@ -227,21 +228,17 @@ class Template(TraitConfig):
         if self._check_enabled():
             return self._apply_precond(amplitudes_in, amplitudes_out)
 
-    def _accelerators(self):
-        # Do not force descendent classes to implement this.  If it is not
-        # implemented, then it is clear that the class does not support any
-        # accelerators
-        return list()
+    def _supports_accel(self):
+        return False
 
-    def accelerators(self):
-        """List of accelerators supported by this Template.
+    def supports_accel(self):
+        """Query whether the template supports OpenACC
 
         Returns:
-            (list):  List of pre-defined accelerator names supported by this
-                operator (and by TOAST).
+            (bool):  True if the template can use OpenACC, else False.
 
         """
-        return self._accelerators()
+        return self._supports_accel()
 
     @classmethod
     def get_class_config_path(cls):

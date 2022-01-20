@@ -875,7 +875,9 @@ def redistribute_data(
     )
 
     # Re-create the intervals in the new data distribution.
-    new_intervals_manager = IntervalsManager(new_dist)
+    new_intervals_manager = IntervalsManager(
+        new_dist, new_dist.samps[new_dist.comm.group_rank].n_elem
+    )
 
     # Communicate the field list
     gkeys = None

@@ -13,6 +13,7 @@ from astropy import units as u
 from .. import qarray as qa
 from ..data import Data
 from ..mpi import MPI
+from ..observation import default_values as defaults
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import AlignedF64, Logger
 from .amplitudes import Amplitudes
@@ -38,7 +39,7 @@ class Fourier2D(Template):
     #    det_flag_mask    : Bit mask for detector solver flags
     #
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     correlation_length = Quantity(10.0 * u.second, help="Correlation length in time")
 

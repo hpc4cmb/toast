@@ -112,7 +112,7 @@ class MPITestResult(TestResult):
         # output and then abort.
         if self.comm is not None:
             time.sleep(5)
-            self.comm.Abort()
+            self.comm.Abort(1)
         return
 
     def addSkip(self, test, reason):
@@ -337,8 +337,5 @@ class MPITestRunner(object):
                 self.stream.flush()
             if self.comm is not None:
                 self.comm.barrier()
-
-        # if not result.allSuccessful():
-        #     self.comm.Abort(1)
 
         return result

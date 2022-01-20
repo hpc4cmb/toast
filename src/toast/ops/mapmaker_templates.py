@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from collections import OrderedDict
+import os
 
 import numpy as np
 import traitlets
@@ -10,6 +11,7 @@ import traitlets
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
+from ..pixels_io import write_healpix_fits, write_healpix_hdf5
 from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, trait_docs
@@ -73,6 +75,10 @@ class TemplateMatrix(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._initialized = False
+
+    def reset(self):
+        """Reset templates to allow re-initialization on a new Data object."""
         self._initialized = False
 
     def duplicate(self):
@@ -149,7 +155,7 @@ class TemplateMatrix(Operator):
         return n_enabled_templates
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Check that the detector data is set
@@ -174,6 +180,10 @@ class TemplateMatrix(Operator):
                 tmpl.data = data
             self._initialized = True
 
+        # Set template accelerator use
+        for tmpl in self.templates:
+            tmpl.use_accel = use_accel
+
         # Set the data we are using for this execution
         for tmpl in self.templates:
             tmpl.det_data = self.det_data
@@ -190,8 +200,11 @@ class TemplateMatrix(Operator):
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
+                if use_accel:
+                    data[self.amplitudes].accel_create()
             for d in all_dets:
                 for tmpl in self.templates:
+                    log.verbose(f"TemplateMatrix {d} project_signal {tmpl.name}")
                     tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
         else:
             if self.amplitudes not in data:
@@ -210,17 +223,30 @@ class TemplateMatrix(Operator):
                 exists = ob.detdata.ensure(self.det_data, detectors=dets)
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
+                log.verbose(
+                    f"TemplateMatrix {ob.name}:  input host detdata={ob.detdata[self.det_data][:][0:10]}"
+                )
+                if use_accel:
+                    if not exists and not ob.detdata.accel_present(self.det_data):
+                        ob.detdata.accel_create(self.det_data)
 
             for d in all_dets:
                 for tmpl in self.templates:
+                    log.verbose(f"TemplateMatrix {d} add to signal {tmpl.name}")
                     tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
         return
 
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_accel=False, **kwargs):
         if self.transpose:
             # Synchronize the result
+            if use_accel:
+                data[self.amplitudes].accel_update_host()
             for tmpl in self.templates:
                 data[self.amplitudes][tmpl.name].sync()
+            if use_accel:
+                data[self.amplitudes].accel_update_device()
+        # Set the internal initialization to False, so that we are ready to process
+        # completely new data sets.
         return
 
     def _requires(self):
@@ -327,6 +353,23 @@ class SolveAmplitudes(Operator):
 
     keep_solver_products = Bool(
         False, help="If True, keep the map domain solver products in data"
+    )
+
+    write_solver_products = Bool(
+        False, help="If True, write out solver products"
+    )
+
+    write_hdf5 = Bool(
+        False, help="If True, outputs are in HDF5 rather than FITS format."
+    )
+
+    write_hdf5_serial = Bool(
+        False, help="If True, force serial HDF5 write of output maps."
+    )
+
+    output_dir = Unicode(
+        ".",
+        help="Write output data products to this directory",
     )
 
     mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
@@ -526,7 +569,7 @@ class SolveAmplitudes(Operator):
                 det_flags=self.solver_flags,
                 pixels=scan_pointing.pixels,
                 view=solve_view,
-                mask_bits=1,
+                #mask_bits=1,
             )
 
             scanner.det_flags_value = 2
@@ -596,6 +639,8 @@ class SolveAmplitudes(Operator):
             data[self.solver_rcond_mask_name] = PixelData(
                 data[self.binning.pixel_dist], dtype=np.uint8, n_value=1
             )
+            n_bad = np.count_nonzero(data[self.solver_rcond_name].data < self.solve_rcond_threshold)
+            n_good = data[self.solver_rcond_name].data.size - n_bad
             data[self.solver_rcond_mask_name].data[
                 data[self.solver_rcond_name].data < self.solve_rcond_threshold
             ] = 1
@@ -606,6 +651,7 @@ class SolveAmplitudes(Operator):
             # Re-use our mask scanning pipeline, setting third bit (== 4)
             scanner.det_flags_value = 4
             scanner.mask_key = self.solver_rcond_mask_name
+
             scan_pipe.apply(data, detectors=detectors)
 
             log.info_rank(
@@ -727,24 +773,45 @@ class SolveAmplitudes(Operator):
         memreport.prefix = "After solving for amplitudes"
         memreport.apply(data)
 
-        # Delete our solver products if we are not keeping them
+        write_del = [
+            self.solver_hits_name,
+            self.solver_cov_name,
+            self.solver_rcond_name,
+            self.solver_rcond_mask_name,
+            self.solver_bin,
+        ]
+        for prod_key in write_del:
+            if self.write_solver_products:
+                if self.write_hdf5:
+                    # Non-standard HDF5 output
+                    fname = os.path.join(self.output_dir, "{}.h5".format(prod_key))
+                    write_healpix_hdf5(
+                        data[prod_key],
+                        fname,
+                        nest=self.binning.pixel_pointing.nest,
+                        single_precision=True,
+                        force_serial=self.write_hdf5_serial,
+                    )
+                else:
+                    # Standard FITS output
+                    fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
+                    write_healpix_fits(
+                        data[prod_key],
+                        fname,
+                        nest=self.binning.pixel_pointing.nest,
+                        report_memory=self.report_memory,
+                    )
+            if not self.mc_mode and not self.keep_solver_products:
+                if prod_key in data:
+                    data[prod_key].clear()
+                    del data[prod_key]
+
         if not self.mc_mode and not self.keep_solver_products:
-            for prod in [
-                self.solver_hits_name,
-                self.solver_cov_name,
-                self.solver_rcond_name,
-                self.solver_rcond_mask_name,
-                self.solver_rhs,
-                self.solver_bin,
-            ]:
-                if prod in data:
-                    data[prod].clear()
-                    del data[prod]
+            if self.solver_rhs in data:
+                data[self.solver_rhs].clear()
+                del data[self.solver_rhs]
             for ob in data.obs:
                 del ob.detdata[self.solver_flags]
-
-            memreport.prefix = "After deleting solver products"
-            memreport.apply(data)
 
         # Restore flag names and masks to binning operator, in case it is being used
         # for the final map making or for other external operations.
