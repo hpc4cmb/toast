@@ -24,7 +24,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def exec(self, data, detectors=None, **kwargs):
+    def exec(self, data, detectors=None, use_acc=False, **kwargs):
         """Perform operations on a Data object.
 
         If a list of detectors is specified, only process these detectors.  Any extra
@@ -46,7 +46,17 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            self._exec(data, detectors=detectors, **kwargs)
+            if use_acc and not self.acc_have_requires(data):
+                msg = f"Operator {self.name} exec: required inputs not on device. "
+                msg += "There is likely a problem with a Pipeline or the "
+                msg += "operator dependencies."
+                raise RuntimeError(msg)
+            self._exec(
+                data,
+                detectors=detectors,
+                use_acc=use_acc,
+                **kwargs,
+            )
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to exec()"
@@ -56,7 +66,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def finalize(self, data, **kwargs):
+    def finalize(self, data, use_acc=False, **kwargs):
         """Perform any final operations / communication.
 
         A call to this function indicates that all calls to the 'exec()' method are
@@ -72,14 +82,19 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            return self._finalize(data, **kwargs)
+            if use_acc and not self.acc_have_requires(data):
+                msg = f"Operator {self.name} finalize: required inputs not on device. "
+                msg += "There is likely a problem with a Pipeline or the "
+                msg += "operator dependencies."
+                raise RuntimeError(msg)
+            return self._finalize(data, use_acc=use_acc, **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
                 log.debug(msg)
 
     @function_timer_stackskip
-    def apply(self, data, detectors=None, **kwargs):
+    def apply(self, data, detectors=None, use_acc=False, **kwargs):
         """Run exec() and finalize().
 
         This is a convenience wrapper that calls exec() exactly once with an optional
@@ -99,8 +114,8 @@ class Operator(TraitConfig):
             (value):  None or an Operator-dependent result.
 
         """
-        self.exec(data, detectors, **kwargs)
-        return self.finalize(data, **kwargs)
+        self.exec(data, detectors, use_acc=use_acc, **kwargs)
+        return self.finalize(data, use_acc=use_acc, **kwargs)
 
     def _requires(self):
         raise NotImplementedError("Fell through to Operator base class")
@@ -164,6 +179,39 @@ class Operator(TraitConfig):
 
         """
         return self._supports_acc()
+
+    def acc_have_requires(self, data):
+        # Helper function to determine if all requirements are met to use OpenACC
+        # for a data object.
+        log = Logger.get()
+        if not self.supports_acc():
+            # No support for OpenACC
+            return False
+        all_present = True
+        req = self.requires()
+        for ob in data.obs:
+            for key in req["detdata"]:
+                if not ob.detdata.acc_is_present(key):
+                    msg = f"{self.name}:  obs {ob.name}, detdata {key} not on device"
+                    all_present = False
+                else:
+                    msg = f"{self.name}:  obs {ob.name}, detdata {key} is on device"
+                log.verbose(msg)
+            for key in req["shared"]:
+                if not ob.shared.acc_is_present(key):
+                    msg = f"{self.name}:  obs {ob.name}, shared {key} not on device"
+                    all_present = False
+                else:
+                    msg = f"{self.name}:  obs {ob.name}, shared {key} is on device"
+                log.verbose(msg)
+            # FIXME: check intervals too eventually
+        if all_present:
+            log.verbose(f"{self.name}:  obs {ob.name} all required inputs on device")
+        else:
+            log.verbose(
+                f"{self.name}:  obs {ob.name} some required inputs not on device"
+            )
+        return all_present
 
     @classmethod
     def get_class_config_path(cls):

@@ -700,3 +700,7 @@ class Observation(MutableMapping):
             if self.shared.acc_is_present(key):
                 self.shared.acc_copyout(key)
         # FIXME:  implement intervals too.
+
+    def acc_clear(self):
+        self.detdata.acc_clear()
+        self.shared.acc_clear()

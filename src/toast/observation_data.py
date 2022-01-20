@@ -40,6 +40,9 @@ from ._libtoast import (
     acc_is_present,
     acc_copyin,
     acc_copyout,
+    acc_delete,
+    acc_update_device,
+    acc_update_self,
 )
 
 
@@ -156,6 +159,11 @@ class DetectorData(object):
         self._fullsize = self._flatshape
         self._memsize = self.itemsize * self._fullsize
         if self._raw is not None:
+            if self.acc_is_present():
+                msg = "Reallocation of DetectorData which is staged to accelerator- "
+                msg += "Deleting device copy."
+                log.verbose(msg)
+                self.acc_delete()
             del self._raw
         self._raw = self._storage_class.zeros(self._fullsize)
         self._flatdata = self._raw.array()[: self._flatshape]
@@ -283,6 +291,12 @@ class DetectorData(object):
             if hasattr(self, "_flatdata"):
                 del self._flatdata
             if hasattr(self, "_raw"):
+                if self.acc_is_present():
+                    log = Logger.get()
+                    msg = "clear() of DetectorData which is staged to accelerator- "
+                    msg += "Deleting device copy."
+                    log.verbose(msg)
+                    self.acc_delete()
                 if self._raw is not None:
                     self._raw.clear()
                 del self._raw
@@ -422,6 +436,98 @@ class DetectorData(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def acc_is_present(self):
+        """Check if the data is present on the accelerator.
+
+        Returns:
+            (bool):  True if the data is present.
+
+        """
+        if not acc_enabled():
+            return False
+        elif self._raw is None:
+            return False
+        else:
+            result = acc_is_present(self._raw)
+        return result
+
+    def acc_copyin(self):
+        """Copy the data to the accelerator.
+
+        This creates the device memory if it does not already exist.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        acc_copyin(self._raw)
+
+    def acc_copyout(self):
+        """Copy the data from the accelerator to the host.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        if not acc_is_present(self._raw):
+            log = Logger.get()
+            msg = f"Detector data is not present on device, cannot copy out"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_copyout(self._raw)
+
+    def acc_update_device(self):
+        """Copy the data to the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        if not acc_is_present(self._raw):
+            log = Logger.get()
+            msg = f"Detector data is not present on device, cannot update"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_update_device(self._raw)
+
+    def acc_update_self(self):
+        """Copy the data to the host.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        if not acc_is_present(self._raw):
+            log = Logger.get()
+            msg = f"Detector data is not present on device, cannot update host"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_update_self(self._raw)
+
+    def acc_delete(self):
+        """Delete the data from the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        if not acc_is_present(self._raw):
+            log = Logger.get()
+            msg = f"Detector data is not present on device, cannot delete"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_delete(self._raw)
 
 
 class DetDataManager(MutableMapping):
@@ -641,7 +747,12 @@ class DetDataManager(MutableMapping):
         """
         if not acc_enabled():
             return False
-        return acc_is_present(self._internal[key]._raw)
+        log = Logger.get()
+        result = self._internal[key].acc_is_present()
+        log.verbose(
+            f"DetDataMgr {key} (shape {self._internal[key]._raw.size()}) acc_is_present = {result}"
+        )
+        return result
 
     def acc_copyin(self, key):
         """Copy the named detector data to the accelerator.
@@ -657,7 +768,29 @@ class DetDataManager(MutableMapping):
         """
         if not acc_enabled():
             return
-        acc_copyin(self._internal[key]._raw)
+        log = Logger.get()
+        log.verbose(
+            f"DetDataMgr {key} (buffer size {self._internal[key]._raw.size()}, current shape {self._internal[key]._flatdata.shape}) acc_copyin"
+        )
+        self._internal[key].acc_copyin()
+
+    def acc_update_device(self, key):
+        """Copy the named detector data to the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        log.verbose(
+            f"DetDataMgr {key} (buffer size {self._internal[key]._raw.size()}, current shape {self._internal[key]._flatdata.shape}) acc_update_device"
+        )
+        self._internal[key].acc_update_device()
 
     def acc_copyout(self, key):
         """Copy the named detector data from the accelerator to the host.
@@ -669,9 +802,74 @@ class DetDataManager(MutableMapping):
             None
 
         """
+        log = Logger.get()
         if not acc_enabled():
             return
-        acc_copyout(self._internal[key]._raw)
+        if not self._internal[key].acc_is_present():
+            msg = f"Detector data '{key}' is not present on device, cannot copy out"
+            log.error(msg)
+            raise RuntimeError(msg)
+        log.verbose(
+            f"DetDataMgr {key} (buffer size {self._internal[key]._raw.size()}, current shape {self._internal[key]._flatdata.shape}) acc_copyout"
+        )
+        self._internal[key].acc_copyout()
+
+    def acc_update_self(self, key):
+        """Copy the named detector data from the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        log.verbose(
+            f"DetDataMgr {key} (buffer size {self._internal[key]._raw.size()}, current shape {self._internal[key]._flatdata.shape}) acc_update_self"
+        )
+        self._internal[key].acc_update_self()
+
+    def acc_delete(self, key):
+        """Delete the named detector data from the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not acc_enabled():
+            return
+        if not self._internal[key].acc_is_present():
+            msg = f"Detector data '{key}' is not present on device, cannot delete"
+            log.error(msg)
+            raise RuntimeError(msg)
+        log.verbose(
+            f"DetDataMgr {key} (buffer size {self._internal[key]._raw.size()}, current shape {self._internal[key]._flatdata.shape}) acc_delete"
+        )
+        self._internal[key].acc_delete()
+
+    def acc_clear(self):
+        """Clear all data from accelerators
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        for key in self._internal:
+            if self._internal[key].acc_is_present():
+                log.verbose(
+                    f"DetDataMgr {key} (buffer size {self._internal[key]._raw.size()}, current shape {self._internal[key]._flatdata.shape}) acc_delete"
+                )
+                self._internal[key].acc_delete()
 
     # Mapping methods
 
@@ -1143,7 +1341,21 @@ class SharedDataManager(MutableMapping):
         """
         if not acc_enabled():
             return False
-        return acc_is_present(self._internal[key].shdata.data)
+        log = Logger.get()
+        if key not in self._internal:
+            msg = f"Cannot check accelerator status of non-existent data {key}"
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        # print(
+        #     f"shared acc_is_present {key}: {self._internal[key].shdata._flat} at {self._internal[key].shdata._flat.data}",
+        #     flush=True,
+        # )
+        result = acc_is_present(self._internal[key].shdata._flat)
+        log.verbose(
+            f"SharedDataMgr {key} (shape {self._internal[key].shdata._flat.shape}) acc_is_present = {result}"
+        )
+        return result
 
     def acc_copyin(self, key):
         """Copy the named shared data to the accelerator.
@@ -1159,7 +1371,43 @@ class SharedDataManager(MutableMapping):
         """
         if not acc_enabled():
             return
-        acc_copyin(self._internal[key].shdata.data)
+        log = Logger.get()
+        if key not in self._internal:
+            msg = f"Cannot copy non-existent data {key} to accelerator"
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        log.verbose(
+            f"SharedDataMgr {key} (shape {self._internal[key].shdata._flat.shape}) acc_copyin"
+        )
+        acc_copyin(self._internal[key].shdata._flat)
+
+    def acc_update_device(self, key):
+        """Copy the named shared data to the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        if key not in self._internal:
+            msg = f"Cannot copy non-existent data {key} to accelerator"
+            log.error(msg)
+            raise RuntimeError(msg)
+        if not acc_is_present(self._internal[key].shdata._flat):
+            msg = f"Detector data '{key}' is not present on device, cannot update"
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        log.verbose(
+            f"SharedDataMgr {key} (shape {self._internal[key].shdata._flat.shape}) acc_update_device"
+        )
+        acc_update_device(self._internal[key].shdata._flat)
 
     def acc_copyout(self, key):
         """Copy the named shared data from the accelerator to the host.
@@ -1181,11 +1429,85 @@ class SharedDataManager(MutableMapping):
             log.error(msg)
             raise RuntimeError(msg)
 
-        if not acc_is_present(self._internal[key].shdata.data):
+        if not acc_is_present(self._internal[key].shdata._flat):
             msg = f"Detector data '{key}' is not present on device, cannot copy out"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_copyout(self._internal[key].shdata.data)
+        log.verbose(
+            f"SharedDataMgr {key} (shape {self._internal[key].shdata._flat.shape}) acc_copyout"
+        )
+        acc_copyout(self._internal[key].shdata._flat)
+
+    def acc_update_self(self, key):
+        """Copy the named shared data from the accelerator to the host.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not acc_enabled():
+            return
+        if key not in self._internal:
+            msg = f"Cannot copy non-existent data {key} from accelerator"
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        if not acc_is_present(self._internal[key].shdata._flat):
+            msg = f"Detector data '{key}' is not present on device, cannot copy to host"
+            log.error(msg)
+            raise RuntimeError(msg)
+        log.verbose(
+            f"SharedDataMgr {key} (shape {self._internal[key].shdata._flat.shape}) acc_update_self"
+        )
+        acc_update_self(self._internal[key].shdata._flat)
+
+    def acc_delete(self, key):
+        """Delete the named data object on the device
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not acc_enabled():
+            return
+        if key not in self._internal:
+            msg = f"Cannot copy non-existent data {key} from accelerator"
+            log.error(msg)
+            raise RuntimeError(msg)
+
+        if not acc_is_present(self._internal[key].shdata._flat):
+            msg = f"Detector data '{key}' is not present on device, cannot delete"
+            log.error(msg)
+            raise RuntimeError(msg)
+        log.verbose(
+            f"SharedDataMgr {key} (shape {self._internal[key].shdata._flat.shape}) acc_delete"
+        )
+        acc_delete(self._internal[key].shdata._flat)
+
+    def acc_clear(self):
+        """Clear all data from accelerators
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        for key in self._internal:
+            if acc_is_present(self._internal[key].shdata._flat):
+                log.verbose(
+                    f"SharedDataMgr {key} (shape {self._internal[key].shdata._flat.shape}) acc_delete"
+                )
+                acc_delete(self._internal[key].shdata._flat)
 
     # Mapping methods
 

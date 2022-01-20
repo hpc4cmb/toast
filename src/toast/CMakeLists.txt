@@ -48,6 +48,11 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/atm.cpp
     _libtoast/template_offset.cpp
     _libtoast/accelerator.cpp
+    _libtoast/qarray_core.cpp
+    _libtoast/ops_pointing_detector.cpp
+    _libtoast/ops_stokes_weights.cpp
+    _libtoast/ops_pixels_healpix.cpp
+    _libtoast/ops_mapmaker_utils.cpp
 )
 
 # Handle recursion limit on NVC++ / PGI

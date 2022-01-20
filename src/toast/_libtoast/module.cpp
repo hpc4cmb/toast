@@ -44,6 +44,10 @@ PYBIND11_MODULE(_libtoast, m) {
     init_atm(m);
     init_template_offset(m);
     init_accelerator(m);
+    init_ops_pointing_detector(m);
+    init_ops_stokes_weights(m);
+    init_ops_pixels_healpix(m);
+    init_ops_mapmaker_utils(m);
 
     // Internal unit test runner
     m.def(

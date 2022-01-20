@@ -20,7 +20,9 @@ from ..pixels import PixelDistribution
 
 from ..observation import default_values as defaults
 
-from .._libtoast import healpix_pixels
+# This is just wrong- will be confusing until cleanup of
+# libtoast / _libtoast...
+from .._libtoast import healpix_pixels, pixels_healpix
 
 from .operator import Operator
 
@@ -150,7 +152,7 @@ class PixelsHealpix(Operator):
         self._local_submaps = None
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
@@ -176,7 +178,7 @@ class PixelsHealpix(Operator):
 
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.apply(data, detectors=detectors)
+        self.detector_pointing.apply(data, detectors=detectors, use_acc=use_acc)
 
         # We do the calculation over buffers of timestream samples to reduce memory
         # overhead from temporary arrays.
@@ -201,114 +203,172 @@ class PixelsHealpix(Operator):
                     self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
                 )
 
-            # Check that our view is fully covered by detector pointing.  If the
-            # detector_pointing view is None, then it has all samples.  If our own
-            # view was None, then it would have been set to the detector_pointing
-            # view above.
-            if (view is not None) and (self.detector_pointing.view is not None):
-                if ob.intervals[view] != ob.intervals[self.detector_pointing.view]:
-                    # We need to check intersection
-                    intervals = ob.intervals[self.view]
-                    detector_intervals = ob.intervals[self.detector_pointing.view]
-                    intersection = detector_intervals & intervals
-                    if intersection != intervals:
-                        msg = (
-                            f"view {self.view} is not fully covered by valid "
-                            "detector pointing"
-                        )
-                        raise RuntimeError(msg)
+            if use_acc:
+                # Our data exists on the accelerator
+                log.verbose_rank(
+                    f"Operator {self.name} using accelerator code path for {ob.name}",
+                    comm=data.comm.comm_group,
+                )
 
-            # Do we already have pointing for all requested detectors?
-            if exists:
-                # Yes...
-                if self.create_dist is not None:
-                    # but the caller wants the pixel distribution
-                    for ob in data.obs:
-                        views = ob.view[self.view]
-                        for det in ob.select_local_detectors(detectors):
-                            for view in range(len(views)):
-                                self._local_submaps[
-                                    views.detdata[self.pixels][view][det]
-                                    // self._n_pix_submap
-                                ] = True
+                hit_submaps = self._local_submaps
+                if hit_submaps is None:
+                    hit_submaps = np.zeros(self._n_submap, dtype=np.uint8)
 
-                if data.comm.group_rank == 0:
-                    msg = (
-                        f"Group {data.comm.group}, ob {ob.name}, healpix pixels "
-                        f"already computed for {dets}"
-                    )
-                    log.verbose(msg)
-                continue
+                quat_indx = ob.detdata[quats_name].indices(dets)
+                pix_indx = ob.detdata[self.pixels].indices(dets)
 
-            # Focalplane for this observation
-            focalplane = ob.telescope.focalplane
+                # If the pixels got created above, then create the device data
+                if not exists:
+                    ob.detdata.acc_copyin(self.pixels)
 
-            # Loop over views
-            views = ob.view[view]
-            for vw in range(len(views)):
-                # Get the flags if needed.  Use the same flags as
-                # detector pointing.
-                flags = None
-                if self.detector_pointing.shared_flags is not None:
-                    flags = np.array(
-                        views.shared[self.detector_pointing.shared_flags][vw]
-                    )
-                    flags &= self.detector_pointing.shared_flag_mask
+                temp_flags = None
+                use_flags = self.detector_pointing.shared_flags
 
-                for det in dets:
-                    # Timestream of detector quaternions
-                    quats = views.detdata[quats_name][vw][det]
-                    view_samples = len(quats)
+                if use_flags is None:
+                    temp_flags = "temp_flags"
+                    use_flags = temp_flags
+                    if temp_flags not in ob.shared:
+                        ob.shared.create_column(temp_flags, dtype=np.uint8)
+                        ob.shared.acc_copyin(temp_flags)
 
-                    # Buffered pointing calculation
-                    buf_off = 0
-                    buf_n = tod_buffer_length
-                    while buf_off < view_samples:
-                        if buf_off + buf_n > view_samples:
-                            buf_n = view_samples - buf_off
+                pixels_healpix(
+                    quat_indx,
+                    ob.detdata[quats_name].data,
+                    pix_indx,
+                    ob.detdata[self.pixels].data,
+                    ob.shared[use_flags].data,
+                    hit_submaps,
+                    self._n_pix_submap,
+                    self.detector_pointing.shared_flag_mask,
+                    self.nside,
+                    self.nest,
+                )
+                if self._local_submaps is not None:
+                    self._local_submaps[:] |= hit_submaps
+            else:
+                log.verbose_rank(
+                    f"Operator {self.name} using CPU code path for {ob.name}",
+                    comm=data.comm.comm_group,
+                )
 
-                        bslice = slice(buf_off, buf_off + buf_n)
+                # Check that our view is fully covered by detector pointing.  If the
+                # detector_pointing view is None, then it has all samples.  If our own
+                # view was None, then it would have been set to the detector_pointing
+                # view above.
+                if (view is not None) and (self.detector_pointing.view is not None):
+                    if ob.intervals[view] != ob.intervals[self.detector_pointing.view]:
+                        # We need to check intersection
+                        intervals = ob.intervals[self.view]
+                        detector_intervals = ob.intervals[self.detector_pointing.view]
+                        intersection = detector_intervals & intervals
+                        if intersection != intervals:
+                            msg = (
+                                f"view {self.view} is not fully covered by valid "
+                                "detector pointing"
+                            )
+                            raise RuntimeError(msg)
 
-                        # This buffer of detector quaternions
-                        detp = quats[bslice, :].reshape(-1)
-
-                        # Buffer of flags
-                        fslice = None
-                        if flags is not None:
-                            fslice = flags[bslice].reshape(-1)
-
-                        # Pixel buffer
-                        pxslice = views.detdata[self.pixels][vw][det, bslice].reshape(
-                            -1
-                        )
-
-                        if self.single_precision:
-                            pbuf = np.zeros(len(pxslice), dtype=np.int64)
-                        else:
-                            pbuf = pxslice
-
-                        healpix_pixels(
-                            self.hpix,
-                            self.nest,
-                            detp,
-                            fslice,
-                            pbuf,
-                        )
-
-                        if self.single_precision:
-                            pxslice[:] = pbuf.astype(np.int32)
-
-                        buf_off += buf_n
-
+                # Do we already have pointing for all requested detectors?
+                if exists:
+                    # Yes...
                     if self.create_dist is not None:
-                        self._local_submaps[
-                            views.detdata[self.pixels][vw][det] // self._n_pix_submap
-                        ] = 1
+                        # but the caller wants the pixel distribution
+                        for ob in data.obs:
+                            views = ob.view[self.view]
+                            for det in ob.select_local_detectors(detectors):
+                                for view in range(len(views)):
+                                    self._local_submaps[
+                                        views.detdata[self.pixels][view][det]
+                                        // self._n_pix_submap
+                                    ] = True
+
+                    if data.comm.group_rank == 0:
+                        msg = (
+                            f"Group {data.comm.group}, ob {ob.name}, healpix pixels "
+                            f"already computed for {dets}"
+                        )
+                        log.verbose(msg)
+                    continue
+
+                # Focalplane for this observation
+                focalplane = ob.telescope.focalplane
+
+                # Loop over views
+                views = ob.view[view]
+                for vw in range(len(views)):
+                    # Get the flags if needed.  Use the same flags as
+                    # detector pointing.
+                    flags = None
+                    if self.detector_pointing.shared_flags is not None:
+                        flags = np.array(
+                            views.shared[self.detector_pointing.shared_flags][vw]
+                        )
+                        flags &= self.detector_pointing.shared_flag_mask
+
+                    for det in dets:
+                        # Timestream of detector quaternions
+                        quats = views.detdata[quats_name][vw][det]
+                        view_samples = len(quats)
+
+                        # Buffered pointing calculation
+                        buf_off = 0
+                        buf_n = tod_buffer_length
+                        while buf_off < view_samples:
+                            if buf_off + buf_n > view_samples:
+                                buf_n = view_samples - buf_off
+
+                            bslice = slice(buf_off, buf_off + buf_n)
+
+                            # This buffer of detector quaternions
+                            detp = quats[bslice, :].reshape(-1)
+
+                            # Buffer of flags
+                            fslice = None
+                            if flags is not None:
+                                fslice = flags[bslice].reshape(-1)
+
+                            # Pixel buffer
+                            pxslice = views.detdata[self.pixels][vw][
+                                det, bslice
+                            ].reshape(-1)
+
+                            if self.single_precision:
+                                pbuf = np.zeros(len(pxslice), dtype=np.int64)
+                            else:
+                                pbuf = pxslice
+
+                            healpix_pixels(
+                                self.hpix,
+                                self.nest,
+                                detp,
+                                fslice,
+                                pbuf,
+                            )
+
+                            if self.single_precision:
+                                pxslice[:] = pbuf.astype(np.int32)
+
+                            buf_off += buf_n
+
+                        if self.create_dist is not None:
+                            self._local_submaps[
+                                views.detdata[self.pixels][vw][det]
+                                // self._n_pix_submap
+                            ] = 1
 
         return
 
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_acc=False, **kwargs):
         if self.create_dist is not None:
+            if use_acc:
+                log = Logger.get()
+                log.verbose_rank(
+                    f"Operator {self.name} finalize local submap update self",
+                    comm=data.comm.comm_group,
+                )
+                # Once self._local_submaps is explicitly staged, copy it
+                # back here (current kernel does copy in/out)
+
             submaps = None
             if self.single_precision:
                 submaps = np.arange(self._n_submap, dtype=np.int32)[
@@ -325,6 +385,14 @@ class PixelsHealpix(Operator):
                 local_submaps=submaps,
                 comm=data.comm.comm_world,
             )
+
+            if use_acc:
+                log = Logger.get()
+                log.verbose_rank(
+                    f"Operator {self.name} finalize local submaps update device",
+                    comm=data.comm.comm_group,
+                )
+                # Copy back here once it is being staged
         return
 
     def _requires(self):

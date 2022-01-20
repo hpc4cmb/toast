@@ -18,6 +18,8 @@ from .. import qarray as qa
 
 from .operator import Operator
 
+from .._libtoast import pointing_detector
+
 
 @trait_docs
 class PointingDetectorSimple(Operator):
@@ -90,7 +92,7 @@ class PointingDetectorSimple(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
         log = Logger.get()
 
         coord_rot = None
@@ -132,53 +134,102 @@ class PointingDetectorSimple(Operator):
                 detectors=dets,
             )
 
-            # Create (or re-use) output data for the detector quaternions.
+            if use_acc:
+                # Our data exists on the accelerator
+                log.verbose_rank(
+                    f"Operator {self.name} using accelerator code path for {ob.name}",
+                    comm=data.comm.comm_group,
+                )
 
-            # Do we already have pointing for all requested detectors?
-            if exists:
-                # Yes
-                if data.comm.group_rank == 0:
-                    log.verbose(
-                        f"Group {data.comm.group}, ob {ob.name}, detector pointing "
-                        f"already translated for {dets}"
-                    )
-                continue
-
-            # Loop over views
-            views = ob.view[self.view]
-            for vw in range(len(views)):
-                # Get the flags if needed
-                flags = None
-                if self.shared_flags is not None:
-                    flags = np.array(views.shared[self.shared_flags][vw])
-                    flags &= self.shared_flag_mask
-
-                # Boresight pointing quaternions
-                in_boresight = views.shared[self.boresight][vw]
-
-                # Coordinate transform if needed
-                boresight = in_boresight
-                if coord_rot is not None:
-                    boresight = qa.mult(coord_rot, in_boresight)
-
-                # Focalplane for this observation
+                # FIXME:  temporary hack until instrument classes are also pre-staged
+                # to GPU
                 focalplane = ob.telescope.focalplane
+                fp_quats = np.zeros((len(dets), 4), dtype=np.float64)
+                for idet, d in enumerate(dets):
+                    fp_quats[idet, :] = focalplane[d]["quat"]
 
-                for det in dets:
-                    # Detector quaternion offset from the boresight.
-                    # Real experiments may require additional information
-                    # such as parameters of a physical pointing model or
-                    # observatory velocity vector (for aberration correction).
-                    # In such cases, the detector quaternion can depend on
-                    # time and the observing direction and a custom detector
-                    # pointing operator needs to be implemented.
-                    detquat = np.array(focalplane[det]["quat"], dtype=np.float64)
+                quat_indx = ob.detdata[self.quats].indices(dets)
 
-                    # Timestream of detector quaternions
-                    quats = qa.mult(boresight, detquat)
-                    if flags is not None:
-                        quats[flags != 0] = qa.null_quat
-                    views.detdata[self.quats][vw][det] = quats
+                if not exists or not ob.detdata.acc_is_present(self.quats):
+                    # This was created above, copy to device
+                    ob.detdata.acc_copyin(self.quats)
+
+                temp_flags = None
+                use_flags = self.shared_flags
+                if self.shared_flags is None:
+                    temp_flags = "temp_flags"
+                    use_flags = temp_flags
+                    if temp_flags not in ob.shared:
+                        ob.shared.create_column(temp_flags, dtype=np.uint8)
+                        ob.shared.acc_copyin(temp_flags)
+
+                pointing_detector(
+                    fp_quats,
+                    ob.shared[self.boresight].data,
+                    quat_indx,
+                    ob.detdata[self.quats].data,
+                    ob.shared[use_flags].data,
+                    self.shared_flag_mask,
+                )
+
+                # FIXME:  Should we delete this?
+                # if temp_flags is not None:
+                #     ob.shared.acc_delete(temp_flags)
+                #     del ob.shared[temp_flags]
+
+            else:
+                log.verbose_rank(
+                    f"Operator {self.name} using CPU code path for {ob.name}",
+                    comm=data.comm.comm_group,
+                )
+                # Create (or re-use) output data for the detector quaternions.
+
+                # Do we already have pointing for all requested detectors?
+                if exists:
+                    # Yes
+                    if data.comm.group_rank == 0:
+                        log.verbose(
+                            f"Group {data.comm.group}, ob {ob.name}, detector pointing "
+                            f"already translated for {dets}"
+                        )
+                    continue
+
+                # Loop over views
+                views = ob.view[self.view]
+                for vw in range(len(views)):
+                    # Get the flags if needed
+                    flags = None
+                    if self.shared_flags is not None:
+                        flags = np.array(views.shared[self.shared_flags][vw])
+                        flags &= self.shared_flag_mask
+
+                    # Boresight pointing quaternions
+                    in_boresight = views.shared[self.boresight][vw]
+
+                    # Coordinate transform if needed
+                    boresight = in_boresight
+                    if coord_rot is not None:
+                        boresight = qa.mult(coord_rot, in_boresight)
+
+                    # Focalplane for this observation
+                    focalplane = ob.telescope.focalplane
+
+                    for det in dets:
+                        # Detector quaternion offset from the boresight.
+                        # Real experiments may require additional information
+                        # such as parameters of a physical pointing model or
+                        # observatory velocity vector (for aberration correction).
+                        # In such cases, the detector quaternion can depend on
+                        # time and the observing direction and a custom detector
+                        # pointing operator needs to be implemented.
+                        detquat = np.array(focalplane[det]["quat"], dtype=np.float64)
+
+                        # Timestream of detector quaternions
+                        quats = qa.mult(boresight, detquat)
+                        if flags is not None:
+                            quats[flags != 0] = qa.null_quat
+                        views.detdata[self.quats][vw][det] = quats
+
         return
 
     def _finalize(self, data, **kwargs):

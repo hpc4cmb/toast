@@ -35,6 +35,9 @@ from ._libtoast import (
     acc_is_present,
     acc_copyin,
     acc_copyout,
+    acc_delete,
+    acc_update_device,
+    acc_update_self,
 )
 
 
@@ -498,6 +501,7 @@ class PixelData(object):
         if hasattr(self, "data"):
             del self.data
         if hasattr(self, "raw"):
+            self.acc_clear()
             self.raw.clear()
             del self.raw
         if hasattr(self, "receive"):
@@ -560,6 +564,20 @@ class PixelData(object):
             self._n_value, self._dtype, self._dist
         )
         return val
+
+    def __eq__(self, other):
+        if self.distribution != other.distribution:
+            return False
+        if self.dtype.char != other.dtype.char:
+            return False
+        if self.n_value != other.n_value:
+            return False
+        if not np.allclose(self.raw, other.raw):
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def duplicate(self):
         """Create a copy of the data with the same distribution.
@@ -959,8 +977,60 @@ class PixelData(object):
             return
         acc_copyin(self.raw)
 
+    def acc_update_device(self):
+        """Copy the data to the accelerator.
+
+        This creates the device memory if it does not already exist.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled:
+            return
+        if not acc_is_present(self.raw):
+            log = Logger.get()
+            msg = f"PixelData raw data is not present on device, cannot update"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_update_device(self.raw)
+
+    def acc_update_self(self):
+        """Copy the data from the accelerator to the host.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled:
+            return
+        if not acc_is_present(self.raw):
+            log = Logger.get()
+            msg = f"PixelData raw data is not present on device, cannot copy out"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_update_self(self.raw)
+
     def acc_copyout(self):
         """Copy the data from the accelerator to the host.
+
+        This deletes the device copy.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled:
+            return
+        if not acc_is_present(self.raw):
+            log = Logger.get()
+            msg = f"PixelData raw data is not present on device, cannot copy out"
+            log.error(msg)
+            raise RuntimeError(msg)
+        acc_copyout(self.raw)
+
+    def acc_delete(self):
+        """Delete the data from the accelerator.
 
         Returns:
             None
@@ -970,7 +1040,20 @@ class PixelData(object):
         if not acc_enabled:
             return
         if not acc_is_present(self.raw):
-            msg = f"PixelData raw data is not present on device, cannot copy out"
+            msg = f"PixelData raw data is not present on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_copyout(self.raw)
+        acc_delete(self.raw)
+
+    def acc_clear(self):
+        """Delete accelerator data.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled:
+            return
+        log = Logger.get()
+        if acc_is_present(self.raw):
+            acc_delete(self.raw)

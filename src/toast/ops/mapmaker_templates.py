@@ -129,7 +129,7 @@ class TemplateMatrix(Operator):
             tmpl.add_prior(amps_in[tmpl.name], amps_out[tmpl.name])
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
         log = Logger.get()
 
         # Check that the detector data is set
@@ -154,6 +154,10 @@ class TemplateMatrix(Operator):
                 tmpl.data = data
             self._initialized = True
 
+        # Set template accelerator use
+        for tmpl in self.templates:
+            tmpl.use_acc = use_acc
+
         # Set the data we are using for this execution
         for tmpl in self.templates:
             tmpl.det_data = self.det_data
@@ -170,6 +174,8 @@ class TemplateMatrix(Operator):
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
+                if use_acc:
+                    data[self.amplitudes].acc_copyin()
             for d in all_dets:
                 for tmpl in self.templates:
                     tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
@@ -190,17 +196,27 @@ class TemplateMatrix(Operator):
                 exists = ob.detdata.ensure(self.det_data, detectors=dets)
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
+                log.verbose(
+                    f"TemplateMatrix {ob.name}:  input host detdata={ob.detdata[self.det_data][:][0:10]}"
+                )
+                if use_acc:
+                    ob.detdata[self.det_data].acc_copyin()
 
             for d in all_dets:
                 for tmpl in self.templates:
+                    log.verbose(f"TemplateMatrix {d} add to signal {tmpl.name}")
                     tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
         return
 
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_acc=False, **kwargs):
         if self.transpose:
             # Synchronize the result
+            if use_acc:
+                data[self.amplitudes].acc_update_self()
             for tmpl in self.templates:
                 data[self.amplitudes][tmpl.name].sync()
+            if use_acc:
+                data[self.amplitudes].acc_update_device()
         return
 
     def _requires(self):
@@ -230,3 +246,10 @@ class TemplateMatrix(Operator):
         else:
             prov["detdata"] = [self.det_data]
         return prov
+
+    def _supports_acc(self):
+        # This is a logical AND of our templates
+        for tmpl in self.templates:
+            if not tmpl.supports_acc():
+                return False
+        return True

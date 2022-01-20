@@ -14,6 +14,8 @@ from .mpi import Comm
 
 from .utils import Logger
 
+from ._libtoast import acc_enabled
+
 
 class Data(MutableMapping):
     """Class which represents distributed data
@@ -71,6 +73,7 @@ class Data(MutableMapping):
     def clear(self):
         """Clear the list of observations."""
         if not self._view:
+            self.acc_clear()
             for ob in self.obs:
                 ob.clear()
         self.obs.clear()
@@ -362,13 +365,50 @@ class Data(MutableMapping):
             None
 
         """
+        if not acc_enabled():
+            return
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
                 log.verbose(f"Calling ob {ob.name} detdata copyin for {key}")
                 ob.detdata.acc_copyin(key)
             for key in names["shared"]:
+                log.verbose(f"Calling ob {ob.name} shared copyin for {key}")
                 ob.shared.acc_copyin(key)
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "acc_copyin"):
+                log.verbose(f"Calling Data copyin for {key}")
+                val.acc_copyin()
+
+    def acc_update_device(self, names):
+        """Copy a set of data objects to the device.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        for ob in self.obs:
+            for key in names["detdata"]:
+                log.verbose(f"Calling ob {ob.name} detdata update_device for {key}")
+                ob.detdata.acc_update_device(key)
+            for key in names["shared"]:
+                log.verbose(f"Calling ob {ob.name} shared update_device for {key}")
+                ob.shared.acc_update_device(key)
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "acc_update_device"):
+                log.verbose(f"Calling Data update_device for {key}")
+                val.acc_update_device()
 
     def acc_copyout(self, names):
         """Copy a set of data objects to the host.
@@ -383,6 +423,8 @@ class Data(MutableMapping):
             None
 
         """
+        if not acc_enabled():
+            return
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
@@ -402,3 +444,99 @@ class Data(MutableMapping):
                         f"Skip copyout for ob {ob.name} shared {key}, data not present"
                     )
             # FIXME:  implement intervals too.
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "acc_copyout"):
+                log.verbose(f"Calling Data copyout for {key}")
+                val.acc_copyout()
+
+    def acc_update_self(self, names):
+        """Copy a set of data objects to the host.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        for ob in self.obs:
+            for key in names["detdata"]:
+                if ob.detdata.acc_is_present(key):
+                    log.verbose(f"Calling ob {ob.name} detdata update_self for {key}")
+                    ob.detdata.acc_update_self(key)
+                else:
+                    log.verbose(
+                        f"Skip update_self for ob {ob.name} detdata {key}, data not present"
+                    )
+            for key in names["shared"]:
+                if ob.shared.acc_is_present(key):
+                    log.verbose(f"Calling ob {ob.name} shared update_self for {key}")
+                    ob.shared.acc_update_self(key)
+                else:
+                    log.verbose(
+                        f"Skip update_self for ob {ob.name} shared {key}, data not present"
+                    )
+            # FIXME:  implement intervals too.
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "acc_update_self"):
+                log.verbose(f"Calling Data update_self for {key}")
+                val.acc_update_self()
+
+    def acc_delete(self, names):
+        """Delete a specific set of device objects
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        for ob in self.obs:
+            for key in names["detdata"]:
+                if ob.detdata.acc_is_present(key):
+                    log.verbose(f"Calling ob {ob.name} detdata acc_delete for {key}")
+                    ob.detdata.acc_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} detdata {key}, data not present"
+                    )
+            for key in names["shared"]:
+                if ob.shared.acc_is_present(key):
+                    log.verbose(f"Calling ob {ob.name} shared acc_delete for {key}")
+                    ob.shared.acc_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} shared {key}, data not present"
+                    )
+            # FIXME:  implement intervals too.
+        for key in names["global"]:
+            val = self._internal[key]
+            if hasattr(val, "acc_delete"):
+                log.verbose(f"Calling Data acc_delete for {key}")
+                val.acc_delete()
+
+    def acc_clear(self):
+        """Delete all accelerator data."""
+        if not acc_enabled():
+            return
+        log = Logger.get()
+        for ob in self.obs:
+            ob.acc_clear()
+        for key, val in self._internal.items():
+            if hasattr(val, "acc_clear"):
+                val.acc_clear()

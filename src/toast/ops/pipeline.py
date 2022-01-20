@@ -83,6 +83,53 @@ class Pipeline(Operator):
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
+        # By default, if the calling code passed use_acc=True, then we assume the
+        # data staging is being handled at a higher level.
+        self._staged_acc = False
+
+        if not use_acc:
+            # The calling code determined that we do not have all the data present to
+            # use the accelerator.  HOWEVER, if our operators support it, we can stage
+            # the data to and from the device.
+            if detectors is None:
+                comp_dets = set(data.all_local_detectors(selection=None))
+            else:
+                comp_dets = set(detectors)
+            if acc_enabled() and self.supports_acc():
+                # All our operators support it.
+                msg = "Pipeline operators {}".format(
+                    [f"{x.name}, " for x in self.operators]
+                )
+                msg += " all support accelerators, data to be staged: "
+                msg += f"{self.requires()}"
+                log.verbose_rank(msg, comm=data.comm.comm_world)
+
+                interm = self._get_intermediate()
+                log.verbose(f"intermediate = {interm}")
+                for ob in data.obs:
+                    for obj in interm["detdata"]:
+                        if obj in ob.detdata and not ob.detdata.acc_is_present(obj):
+                            # The data exists on the host from a previous call, but is
+                            # not on the device.  Delete the host copy so that it will
+                            # be re-created consistently.
+                            msg = f"Pipeline intermediate detdata '{obj}' in "
+                            msg += f"observation '{ob.name}' exists on "
+                            msg += f"the host but not the device.  Deleting."
+                            log.verbose_rank(msg, comm=data.comm.comm_group)
+                            del ob.detdata[obj]
+                    for obj in interm["shared"]:
+                        if obj in ob.shared and not ob.shared.acc_is_present(obj):
+                            msg = f"Pipeline intermediate shared data '{obj}' in "
+                            msg += f"observation '{ob.name}' exists on "
+                            msg += f"the host but not the device.  Deleting."
+                            log.verbose_rank(msg, comm=data.comm.comm_group)
+                            del ob.shared[obj]
+
+                data.acc_copyin(self.requires())
+
+                use_acc = True
+                self._staged_acc = True
+
         if len(data.obs) == 0:
             # No observations for this group
             msg = f"Pipeline data, group {data.comm.group} has no observations."
@@ -95,7 +142,7 @@ class Pipeline(Operator):
                     pstr, op.name
                 )
                 log.verbose(msg)
-                op.exec(data, detectors=None)
+                op.exec(data, detectors=None, use_acc=use_acc)
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
             all_local_dets = data.all_local_detectors(selection=detectors)
@@ -108,7 +155,7 @@ class Pipeline(Operator):
                         pstr, op.name
                     )
                     log.verbose(msg)
-                    op.exec(data, detectors=[det])
+                    op.exec(data, detectors=[det], use_acc=use_acc)
         else:
             # We have explicit detector sets
             det_check = set(detectors)
@@ -129,7 +176,7 @@ class Pipeline(Operator):
                         pstr, op.name
                     )
                     log.verbose(msg)
-                    op.exec(data, detectors=selected_set)
+                    op.exec(data, detectors=selected_set, use_acc=use_acc)
 
         return
 
@@ -139,12 +186,27 @@ class Pipeline(Operator):
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
+        # FIXME:  We need to clarify in documentation that if using the
+        # accelerator in _finalize() to produce output products, these
+        # outputs should remain on the device so that they can be copied
+        # out at the end automatically.
+
+        if not use_acc and self._staged_acc:
+            use_acc = True
+
         if self.operators is not None:
             for op in self.operators:
                 msg = f"{pstr} Pipeline calling operator '{op.name}' finalize()"
                 log.verbose(msg)
-                result.append(op.finalize(data))
+                result.append(op.finalize(data, use_acc=use_acc))
 
+        # Copy out from accelerator if we did the copy in.
+        if self._staged_acc:
+            prov = self.provides()
+            msg = f"{pstr} Pipeline copying out acc data products: {prov}"
+            log.verbose(msg)
+            data.acc_copyout(self.provides())
+            # data.acc_update_self(self.provides())
         return result
 
     def _requires(self):

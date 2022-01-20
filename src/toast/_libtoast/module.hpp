@@ -417,5 +417,9 @@ void init_todmap_mapmaker(py::module & m);
 void init_atm(py::module & m);
 void init_template_offset(py::module & m);
 void init_accelerator(py::module & m);
+void init_ops_pointing_detector(py::module & m);
+void init_ops_stokes_weights(py::module & m);
+void init_ops_pixels_healpix(py::module & m);
+void init_ops_mapmaker_utils(py::module & m);
 
 #endif // ifndef LIBTOAST_HPP

@@ -30,7 +30,11 @@ from .._libtoast import (
     test_acc_op_array,
 )
 
+from ..data import Data
+
 from ..observation import default_values as defaults
+
+from ..pixels import PixelDistribution, PixelData
 
 from ._helpers import create_outdir, create_comm, create_satellite_data
 
@@ -151,10 +155,172 @@ class AcceleratorTest(MPITestCase):
         for tname, buffer in data.items():
             self.assertFalse(acc_is_present(buffer))
 
+    def test_data_stage(self):
+        if not acc_enabled():
+            if self.rank == 0:
+                print("Not compiled with OpenACC support- skipping data test")
+            return
+        data = create_satellite_data(self.comm, pixel_per_process=4)
+        data.obs = data.obs[:1]
+        for ob in data.obs:
+            for itp, (tname, tp) in enumerate(self.types.items()):
+                for sname, sshape in zip(["1", "2"], [None, (2,)]):
+                    name = f"{tname}_{sname}"
+                    ob.detdata.create(name, sample_shape=sshape, dtype=tp)
+                    ob.detdata[name][:] = itp + 1
+                    shp = (ob.n_local_samples,)
+                    if sshape is not None:
+                        shp += sshape
+                    ob.shared.create_column(name, shp, dtype=tp)
+                    if ob.comm_col_rank == 0:
+                        ob.shared[name].set((itp + 1) * np.ones(shp, dtype=tp))
+                    else:
+                        ob.shared[name].set(None)
+
+        pix_dist = PixelDistribution(
+            n_pix=100,
+            n_submap=10,
+            local_submaps=[0, 2, 4, 6, 8],
+            comm=data.comm.comm_world,
+        )
+
+        data["test_pix"] = PixelData(pix_dist, dtype=np.float64, n_value=3)
+
+        # Duplicate for future comparison
+        check_data = Data(comm=data.comm)
+        for ob in data.obs:
+            check_data.obs.append(ob.duplicate())
+        check_data["test_pix"] = data["test_pix"].duplicate()
+
+        # print("Start original:")
+        # for ob in check_data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
+        # print("Start current:")
+        # for ob in data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
+
+        # The dictionary of data objects.
+        dnames = {
+            "global": ["test_pix"],
+            "meta": list(),
+            "detdata": list(),
+            "shared": list(),
+            "intervals": list(),
+        }
+        for itp, (tname, tp) in enumerate(self.types.items()):
+            for sname, sshape in zip(["1", "2"], [None, (2,)]):
+                name = f"{tname}_{sname}"
+                dnames["detdata"].append(name)
+                dnames["shared"].append(name)
+
+        # Copy data to device
+        data.acc_copyin(dnames)
+
+        # Clear buffers
+        for ob in data.obs:
+            for itp, (tname, tp) in enumerate(self.types.items()):
+                for sname, sshape in zip(["1", "2"], [None, (2,)]):
+                    name = f"{tname}_{sname}"
+                    ob.detdata[name][:] = 0
+                    shp = (ob.n_local_samples,)
+                    if sshape is not None:
+                        shp += sshape
+                    if ob.comm_col_rank == 0:
+                        ob.shared[name].set(np.zeros(shp, dtype=tp))
+                    else:
+                        ob.shared[name].set(None)
+
+        # print("Purge original:")
+        # for ob in check_data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
+        # print("Purge current:")
+        # for ob in data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
+
+        # Copy back from device
+        data.acc_copyout(dnames)
+
+        # print("Check original:")
+        # for ob in check_data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
+        # print("Check current:")
+        # for ob in data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
+
+        # Compare
+        for check, ob in zip(check_data.obs, data.obs):
+            if ob != check:
+                print(f"Original: {check}")
+                print(f"Roundtrip:  {ob}")
+            self.assertEqual(ob, check)
+        if data["test_pix"] != check_data["test_pix"]:
+            print(
+                f"Original: {check_data['test_pix']} {np.array(check_data['test_pix'].raw)[:]}"
+            )
+            print(f"Roundtrip: {data['test_pix']} {np.array(data['test_pix'].raw)[:]}")
+        self.assertEqual(data["test_pix"], check_data["test_pix"])
+
+        # Now go and shrink the detector buffers
+
+        data.acc_copyin(dnames)
+
+        for check, ob in zip(check_data.obs, data.obs):
+            for itp, (tname, tp) in enumerate(self.types.items()):
+                for sname, sshape in zip(["1", "2"], [None, (2,)]):
+                    name = f"{tname}_{sname}"
+                    # This will set the host copy to zero and invalidate the device copy
+                    ob.detdata[name].change_detectors(ob.local_detectors[0:2])
+                    check.detdata[name].change_detectors(check.local_detectors[0:2])
+                    # Reset host copy
+                    ob.detdata[name][:] = itp + 1
+                    check.detdata[name][:] = itp + 1
+                    # Update device copy
+                    ob.detdata[name].acc_update_device()
+
+        data.acc_copyout(dnames)
+
+        # Compare
+        for check, ob in zip(check_data.obs, data.obs):
+            if ob != check:
+                print(f"Original: {check}")
+                print(f"Roundtrip:  {ob}")
+            self.assertEqual(ob, check)
+        if data["test_pix"] != check_data["test_pix"]:
+            print(f"Original: {check_data['test_pix']} {check_data['test_pix'].raw}")
+            print(f"Roundtrip: {data['test_pix']} {data['test_pix'].raw}")
+        self.assertEqual(data["test_pix"], check_data["test_pix"])
+
+        del check_data
+        del data
+
     def test_operator_stage(self):
         if not acc_enabled():
             if self.rank == 0:
-                print("Not compiled with OpenACC support- skipping memory test")
+                print("Not compiled with OpenACC support- skipping operator test")
             return
         data = create_satellite_data(self.comm)
         acc_op = AccOperator()
