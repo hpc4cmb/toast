@@ -7,7 +7,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from .utils import get_compile_time, select_implementation, ImplementationType
+from .utils import select_implementation, ImplementationType
 from ..._libtoast import scan_map_float64 as scan_map_float64_compiled, scan_map_float32 as scan_map_float32_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -172,10 +172,7 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 scan_map = select_implementation(scan_map_compiled, 
                                  scan_map_numpy, 
                                  scan_map_jax, 
-                                 default_implementationType=ImplementationType.NUMPY)
-
-# TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-#scan_map = get_compile_time(scan_map)
+                                 default_implementationType=ImplementationType.COMPILED)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_scan_map")'

@@ -250,7 +250,7 @@ filter_poly2D = select_implementation(filter_poly2D_compiled,
                                       default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-#filter_poly2D = get_compile_time(filter_poly2D)
+filter_poly2D = get_compile_time(filter_poly2D)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

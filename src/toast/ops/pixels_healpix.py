@@ -21,6 +21,7 @@ from ..pixels import PixelDistribution
 from ..observation import default_values as defaults
 
 from .jax_ops import healpix_pixels
+from .jax_ops.utils.math_healpix import HealpixPixels_JAX
 
 from .operator import Operator
 
@@ -148,6 +149,9 @@ class PixelsHealpix(Operator):
         self._n_pix_submap = 12 * nside_submap ** 2
         self._n_submap = (nside // nside_submap) ** 2
         self._local_submaps = None
+        # NOTE: converts hpix to a format that can be consummed by JAX
+        # this could be dropped if we replace hpix by a Python class
+        self.hpix_jax = HealpixPixels_JAX.from_HealpixPixels(self.hpix)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -294,6 +298,7 @@ class PixelsHealpix(Operator):
 
                         healpix_pixels(
                             self.hpix,
+                            self.hpix_jax,
                             self.nest,
                             detp,
                             fslice,
