@@ -3,20 +3,35 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from typing import NamedTuple
+import jax
 import numpy as np
 import jax.numpy as jnp
+
+# -------------------------------------------------------------------------------------------------
+# COMMON
 
 TWOINVPI = 0.63661977236758134308
 MACHINE_EPSILON = np.finfo(np.float).eps
 
+def xy2pix(hpix, x, y):
+    return hpix.utab[x & 0xff] \
+        | (hpix.utab[(x >> 8) & 0xff] << 16) \
+        | (hpix.utab[(x >> 16) & 0xff] << 32) \
+        | (hpix.utab[(x >> 24) & 0xff] << 48) \
+        | (hpix.utab[y & 0xff] << 1) \
+        | (hpix.utab[(y >> 8) & 0xff] << 17) \
+        | (hpix.utab[(y >> 16) & 0xff] << 33) \
+        | (hpix.utab[(y >> 24) & 0xff] << 49)
+
 # -------------------------------------------------------------------------------------------------
 # JAX
-
 
 class HealpixPixels_JAX(NamedTuple):
     """
     Encapsulate the information found in a HealpixPixels in a JAX compatible way
-    NOTE: if we port all funciton to JAX, it might be better to drop the C++ class and always use a Python one
+    This class can be converted into a pytree
+    and has an efficient hash that lets it be cached
+    NOTE: if we port all functions to JAX, it might be better to drop the C++ class and always use a Python one
     """
     nside: np.int64
     npix: np.int64
@@ -37,19 +52,18 @@ class HealpixPixels_JAX(NamedTuple):
         return cls(hpix.nside, hpix.npix, hpix.ncap, hpix.dnside, hpix.twonside, hpix.fournside,
                    hpix.nsideplusone, hpix.nsideminusone, hpix.halfnside, hpix.tqnside, hpix.factor,
                    # we convert lists into numpy array to be able to index into them with indices unknown at compile time
-                   jnp.asarray(hpix.utab), jnp.asarray(hpix.ctab))
+                   jnp.array(hpix.utab), jnp.array(hpix.ctab))
 
+    def __key(self):
+        return self.nside
 
-def xy2pix_jax(hpix, x, y):
-    return hpix.utab[x & 0xff] \
-        | (hpix.utab[(x >> 8) & 0xff] << 16) \
-        | (hpix.utab[(x >> 16) & 0xff] << 32) \
-        | (hpix.utab[(x >> 24) & 0xff] << 48) \
-        | (hpix.utab[y & 0xff] << 1) \
-        | (hpix.utab[(y >> 8) & 0xff] << 17) \
-        | (hpix.utab[(y >> 16) & 0xff] << 33) \
-        | (hpix.utab[(y >> 24) & 0xff] << 49)
+    def __hash__(self):
+        return hash(self.__key())
 
+    def __eq__(self, other):
+        if isinstance(other, HealpixPixels_JAX):
+            return self.__key() == other.__key()
+        return NotImplemented
 
 def zphi2nest_jax(hpix, phi, region, z, rtz):
     """
@@ -68,49 +82,49 @@ def zphi2nest_jax(hpix, phi, region, z, rtz):
     tt = phi * TWOINVPI
     tt = jnp.where(phi < 0.0, tt+4.0, tt)
 
-    # NOTE: we convert the branch into a jnp.where
-    # if (jnp.abs(region) == 1)
-    # then:
-    temp1 = hpix.halfnside + hpix.dnside * tt
-    temp2 = hpix.tqnside * z
+    # NOTE: this is very slightly faster than a jnp.where here
+    # then branch
+    def then_branch(hpix, tt, rtz, z):
+        temp1 = hpix.halfnside + hpix.dnside * tt
+        temp2 = hpix.tqnside * z
 
-    jp = jnp.int64(temp1 - temp2)
-    jm = jnp.int64(temp1 + temp2)
+        jp = jnp.int64(temp1 - temp2)
+        jm = jnp.int64(temp1 + temp2)
 
-    ifp = jp >> hpix.factor
-    ifm = jm >> hpix.factor
+        ifp = jp >> hpix.factor
+        ifm = jm >> hpix.factor
 
-    face_then = jnp.where(ifp == ifm,
-                          jnp.where(ifp == 4, 4, ifp + 4),
-                          jnp.where(ifp < ifm, ifp, ifm + 8))
+        face = jnp.where(ifp == ifm,
+                         jnp.where(ifp == 4, 4, ifp + 4),
+                         jnp.where(ifp < ifm, ifp, ifm + 8))
 
-    x_then = jm & hpix.nsideminusone
-    y_then = hpix.nsideminusone - (jp & hpix.nsideminusone)
-    # else:
-    ntt = jnp.int64(tt)
+        x = jm & hpix.nsideminusone
+        y = hpix.nsideminusone - (jp & hpix.nsideminusone)
+        return (face, x, y)
+    # else branch
+    def else_branch(hpix, tt, rtz, z):
+        ntt = jnp.int64(tt)
 
-    tp = tt - jnp.double(ntt)
+        tp = tt - jnp.double(ntt)
 
-    temp1 = hpix.dnside * rtz
+        temp1 = hpix.dnside * rtz
 
-    jp = jnp.int64(tp * temp1)
-    jp = jnp.where(jp >= hpix.nside, hpix.nsideminusone, jp)
+        jp = jnp.int64(tp * temp1)
+        jp = jnp.where(jp >= hpix.nside, hpix.nsideminusone, jp)
 
-    jm = jnp.int64((1.0 - tp) * temp1)
-    jm = jnp.where(jm >= hpix.nside, hpix.nsideminusone, jm)
+        jm = jnp.int64((1.0 - tp) * temp1)
+        jm = jnp.where(jm >= hpix.nside, hpix.nsideminusone, jm)
 
-    face_else = jnp.where(z >= 0, ntt, ntt + 8)
-    x_else = jnp.where(z >= 0, hpix.nsideminusone - jm, jp)
-    y_else = jnp.where(z >= 0, hpix.nsideminusone - jp, jm)
-    # where
-    face = jnp.where(jnp.abs(region) == 1, face_then, face_else)
-    x = jnp.where(jnp.abs(region) == 1, x_then, x_else)
-    y = jnp.where(jnp.abs(region) == 1, y_then, y_else)
+        face = jnp.where(z >= 0, ntt, ntt + 8)
+        x = jnp.where(z >= 0, hpix.nsideminusone - jm, jp)
+        y = jnp.where(z >= 0, hpix.nsideminusone - jp, jm)
+        return (face, x, y)
+    # test
+    (face, x, y) = jax.lax.cond(jnp.abs(region) == 1, then_branch, else_branch, hpix, tt, rtz, z)
 
-    sipf = xy2pix_jax(hpix, jnp.int64(x), jnp.int64(y))
+    sipf = xy2pix(hpix, x, y)
     pix = jnp.int64(sipf) + (face << (2 * hpix.factor))
     return pix
-
 
 def zphi2ring_jax(hpix, phi, region, z, rtz, pix):
     """
@@ -129,42 +143,44 @@ def zphi2ring_jax(hpix, phi, region, z, rtz, pix):
     tt = phi * TWOINVPI
     tt = jnp.where(phi < 0.0, tt+4.0, tt)
 
-    # NOTE: we convert the branch into a jnp.where
-    # if (jnp.abs(region) == 1)
-    # then:
-    temp1 = hpix.halfnside + hpix.dnside * tt
-    temp2 = hpix.tqnside * z
+    # NOTE: this is very slightly faster than a jnp.where here
+    # then branch
+    def then_branch(hpix, tt, rtz, z):
+        temp1 = hpix.halfnside + hpix.dnside * tt
+        temp2 = hpix.tqnside * z
 
-    jp = jnp.int64(temp1 - temp2)
-    jm = jnp.int64(temp1 + temp2)
+        jp = jnp.int64(temp1 - temp2)
+        jm = jnp.int64(temp1 + temp2)
 
-    ir = hpix.nsideplusone + jp - jm
-    kshift = 1 - (ir & 1)
+        ir = hpix.nsideplusone + jp - jm
+        kshift = 1 - (ir & 1)
 
-    ip = (jp + jm - hpix.nside + kshift + 1) >> 1
-    ip = ip % hpix.fournside
+        ip = (jp + jm - hpix.nside + kshift + 1) >> 1
+        ip = ip % hpix.fournside
 
-    pix_then = hpix.ncap + ((ir - 1) * hpix.fournside + ip)
-    # else:
-    tp = tt - jnp.floor(tt)
+        pix = hpix.ncap + ((ir - 1) * hpix.fournside + ip)
+        return pix
+    # else branch
+    def else_branch(hpix, tt, rtz, z):
+        tp = tt - jnp.floor(tt)
 
-    temp1 = hpix.dnside * rtz
+        temp1 = hpix.dnside * rtz
 
-    jp = jnp.int64(tp * temp1)
-    jm = jnp.int64((1.0 - tp) * temp1)
-    ir = jp + jm + 1
-    ip = jnp.int64(tt * jnp.double(ir))
-    longpart = jnp.int64(ip / (4 * ir))
-    ip = ip - longpart
+        jp = jnp.int64(tp * temp1)
+        jm = jnp.int64((1.0 - tp) * temp1)
+        ir = jp + jm + 1
+        ip = jnp.int64(tt * jnp.double(ir))
+        longpart = jnp.int64(ip / (4 * ir))
+        ip = ip - longpart
 
-    pix_pos = 2 * ir * (ir - 1) + ip
-    pix_neg = hpix.npix - 2 * ir * (ir + 1) + ip
-    pix_else = jnp.where(region > 0, pix_pos, pix_neg)
-    # where
-    pix = jnp.where(jnp.abs(region) == 1, pix_then, pix_else)
+        pix_pos = 2 * ir * (ir - 1) + ip
+        pix_neg = hpix.npix - 2 * ir * (ir + 1) + ip
+        pix = jnp.where(region > 0, pix_pos, pix_neg)
+        return pix
+    # test
+    pix = jax.lax.cond(jnp.abs(region) == 1, then_branch, else_branch, hpix, tt, rtz, z)
 
     return pix
-
 
 def vec2zphi_jax(vec):
     """
@@ -186,15 +202,12 @@ def vec2zphi_jax(vec):
     itemps = jnp.where(z > 0.0, 1, -1)
     region = jnp.where(za <= 2./3., itemps, 2*itemps)
 
-    work1 = 3.0 * (1.0 - za)
-    rtz = jnp.sqrt(work1)
+    tz = 3.0 * (1.0 - za)
+    rtz = jnp.sqrt(tz)
 
-    work2 = vec[0]
-    work3 = vec[1]
-    phi = jnp.arctan2(work3, work2)
+    phi = jnp.arctan2(vec[1], vec[0])
 
     return (phi, region, z, rtz)
-
 
 def vec2nest_jax(hpix, vec):
     """
@@ -208,7 +221,6 @@ def vec2nest_jax(hpix, vec):
     (phi, region, z, rtz) = vec2zphi_jax(vec)
     pix = zphi2nest_jax(hpix, phi, region, z, rtz)
     return pix
-
 
 def vec2ring_jax(hpix, vec):
     """
@@ -226,18 +238,6 @@ def vec2ring_jax(hpix, vec):
 # -------------------------------------------------------------------------------------------------
 # NUMPY
 
-
-def xy2pix_numpy(hpix, x, y):
-    return hpix.utab[x & 0xff] \
-        | (hpix.utab[(x >> 8) & 0xff] << 16) \
-        | (hpix.utab[(x >> 16) & 0xff] << 32) \
-        | (hpix.utab[(x >> 24) & 0xff] << 48) \
-        | (hpix.utab[y & 0xff] << 1) \
-        | (hpix.utab[(y >> 8) & 0xff] << 17) \
-        | (hpix.utab[(y >> 16) & 0xff] << 33) \
-        | (hpix.utab[(y >> 24) & 0xff] << 49)
-
-
 def zphi2nest_numpy(hpix, phi, region, z, rtz):
     """
     Args:
@@ -250,10 +250,7 @@ def zphi2nest_numpy(hpix, phi, region, z, rtz):
     Returns:
         pix (int)
     """
-    # machine epsilon
-    eps = np.finfo(np.float).eps
-
-    if np.abs(phi) < eps:
+    if np.abs(phi) < MACHINE_EPSILON:
         phi = 0.0
 
     tt = phi * TWOINVPI
@@ -304,10 +301,9 @@ def zphi2nest_numpy(hpix, phi, region, z, rtz):
             x = jp
             y = jm
 
-    sipf = xy2pix_numpy(hpix, np.int64(x), np.int64(y))
+    sipf = xy2pix(hpix, np.int64(x), np.int64(y))
     pix = np.int64(sipf) + (face << (2 * hpix.factor))
     return pix
-
 
 def zphi2ring_numpy(hpix, phi, region, z, rtz, pix):
     """
@@ -321,10 +317,7 @@ def zphi2ring_numpy(hpix, phi, region, z, rtz, pix):
     Returns:
         pix (int)
     """
-    # machine epsilon
-    eps = np.finfo(np.float).eps
-
-    if (np.abs(phi) < eps):
+    if np.abs(phi) < MACHINE_EPSILON:
         phi = 0.0
 
     tt = phi * TWOINVPI
@@ -362,7 +355,6 @@ def zphi2ring_numpy(hpix, phi, region, z, rtz, pix):
 
     return pix
 
-
 def vec2zphi_numpy(vec):
     """
     Args:
@@ -391,7 +383,6 @@ def vec2zphi_numpy(vec):
     phi = np.arctan2(work3, work2)
 
     return (phi, region, z, rtz)
-
 
 def vec2nest_numpy(hpix, vec):
     """

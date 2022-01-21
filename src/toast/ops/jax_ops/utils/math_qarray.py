@@ -8,7 +8,6 @@ import jax.numpy as jnp
 # -------------------------------------------------------------------------------------------------
 # JAX
 
-
 def rotate_one_one_jax(q, v_in):
     """
     Rotate a vector by a quaternion.
@@ -35,18 +34,14 @@ def rotate_one_one_jax(q, v_in):
     z2 = -q_unit[2] * q_unit[2]
 
     # matrix product
-    v_out_0 = 2 * ((y2 + z2) * v_in[0] + (xy - zw) *
-                   v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
-    v_out_1 = 2 * ((zw + xy) * v_in[0] + (x2 + z2) *
-                   v_in[1] + (yz - xw) * v_in[2]) + v_in[1]
-    v_out_2 = 2 * ((xz - yw) * v_in[0] + (xw + yz) *
-                   v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
+    v_out_0 = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
+    v_out_1 = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] + (yz - xw) * v_in[2]) + v_in[1]
+    v_out_2 = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
 
     return jnp.array([v_out_0, v_out_1, v_out_2])
 
 # -------------------------------------------------------------------------------------------------
 # NUMPY
-
 
 def rotate_one_one_numpy(q, v_in):
     """
@@ -75,18 +70,14 @@ def rotate_one_one_numpy(q, v_in):
 
     # matrix product
     v_out = np.empty(3)
-    v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) *
-                    v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
-    v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) *
-                    v_in[1] + (yz - xw) * v_in[2]) + v_in[1]
-    v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) *
-                    v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
+    v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
+    v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] + (yz - xw) * v_in[2]) + v_in[1]
+    v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
 
     return v_out
 
 # -------------------------------------------------------------------------------------------------
 # C++
-
 
 """
 // Rotate an array of vectors by an array of quaternions.
