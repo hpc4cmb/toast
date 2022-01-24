@@ -171,14 +171,14 @@ class StokesWeights(Operator):
             # Create (or re-use) output data for the weights
 
             if self.single_precision:
-                existed = ob.detdata.ensure(
+                exists = ob.detdata.ensure(
                     self.weights,
                     sample_shape=(self._nnz,),
                     dtype=np.float32,
                     detectors=dets,
                 )
             else:
-                existed = ob.detdata.ensure(
+                exists = ob.detdata.ensure(
                     self.weights,
                     sample_shape=(self._nnz,),
                     dtype=np.float64,
@@ -203,7 +203,7 @@ class StokesWeights(Operator):
                         raise RuntimeError(msg)
 
             # Do we already have pointing for all requested detectors?
-            if existed:
+            if exists:
                 # Yes
                 if data.comm.group_rank == 0:
                     msg = (

@@ -125,7 +125,7 @@ class PointingDetectorSimple(Operator):
                 # Nothing to do for this observation
                 continue
 
-            existed = ob.detdata.ensure(
+            exists = ob.detdata.ensure(
                 self.quats,
                 sample_shape=(4,),
                 dtype=np.float64,
@@ -135,7 +135,7 @@ class PointingDetectorSimple(Operator):
             # Create (or re-use) output data for the detector quaternions.
 
             # Do we already have pointing for all requested detectors?
-            if existed:
+            if exists:
                 # Yes
                 if data.comm.group_rank == 0:
                     log.verbose(

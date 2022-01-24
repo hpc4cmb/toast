@@ -120,8 +120,8 @@ def parse_arguments():
     args.psd_fmin = 1.0e-5
 
     # DEBUGGING
-    args.max_detector = 4
-    args.num_obs = 2
+    # args.max_detector = 4
+    # args.num_obs = 2
 
     # Schedule
     args.prec_period = 50.0

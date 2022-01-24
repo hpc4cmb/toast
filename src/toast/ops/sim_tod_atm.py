@@ -308,7 +308,7 @@ class SimAtmosphere(Operator):
             shared_flags = self.detector_pointing.shared_flags
             shared_flag_mask = self.detector_pointing.shared_flag_mask
         else:
-            # Trust that the user has provided a flag that excludes smaples
+            # Trust that the user has provided a flag that excludes samples
             # without pointing
             shared_flags = self.shared_flags
             shared_flag_mask = self.shared_flag_mask

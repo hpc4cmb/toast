@@ -193,11 +193,11 @@ class PixelsHealpix(Operator):
             # detector quaternions.
 
             if self.single_precision:
-                existed = ob.detdata.ensure(
+                exists = ob.detdata.ensure(
                     self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
                 )
             else:
-                existed = ob.detdata.ensure(
+                exists = ob.detdata.ensure(
                     self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
                 )
 
@@ -219,7 +219,7 @@ class PixelsHealpix(Operator):
                         raise RuntimeError(msg)
 
             # Do we already have pointing for all requested detectors?
-            if existed:
+            if exists:
                 # Yes...
                 if self.create_dist is not None:
                     # but the caller wants the pixel distribution
