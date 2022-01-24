@@ -78,7 +78,7 @@ class Pipeline(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
         log = Logger.get()
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
@@ -181,7 +181,7 @@ class Pipeline(Operator):
         return
 
     @function_timer
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_acc=False, **kwargs):
         log = Logger.get()
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
