@@ -36,7 +36,7 @@ class DemodulateTest(MPITestCase):
         # Pointing operator
 
         dist_key = "pixel_dist"
-        detpointing = ops.PointingDetectorSimple()
+        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0)
         pixels = ops.PixelsHealpix(
             nside=nside,
             create_dist=dist_key,

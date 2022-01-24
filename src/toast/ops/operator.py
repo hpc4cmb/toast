@@ -46,7 +46,7 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            self._exec(data, detectors=detectors, use_acc=self._use_acc(data), **kwargs)
+            self._exec(data, detectors=detectors, **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to exec()"
@@ -72,7 +72,7 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            return self._finalize(data, use_acc=self._use_acc(data), **kwargs)
+            return self._finalize(data, **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
@@ -109,8 +109,9 @@ class Operator(TraitConfig):
     def requires(self):
         """Dictionary of Observation keys directly used by this Operator.
 
-        This dictionary should have 4 keys, each containing a list of "metadata",
-        "detdata", "shared", and "intervals" fields.  Metadata keys are those contained
+        This dictionary should have 5 keys, each containing a list of "global",
+        "metadata", "detdata", "shared", and "intervals" fields.  Global keys are
+        contained in the top-level data object.  Metadata keys are those contained
         in the primary observation dictionary.  Detdata, shared, and intervals keys are
         those contained in the "detdata", "shared", and "intervals" observation
         attributes.
@@ -121,7 +122,7 @@ class Operator(TraitConfig):
         """
         # Ensure that all keys exist
         req = self._requires()
-        for key in ["metadata", "detdata", "shared", "intervals"]:
+        for key in ["global", "meta", "detdata", "shared", "intervals"]:
             if key not in req:
                 req[key] = list()
         return req
@@ -133,8 +134,9 @@ class Operator(TraitConfig):
     def provides(self):
         """Dictionary of Observation keys created by this Operator.
 
-        This dictionary should have 4 keys, each containing a list of "metadata",
-        "detdata", "shared", and "intervals" fields.  Metadata keys are those contained
+        This dictionary should have 5 keys, each containing a list of "global",
+        "metadata", "detdata", "shared", and "intervals" fields.  Global keys are
+        contained in the top-level data object.  Metadata keys are those contained
         in the primary observation dictionary.  Detdata, shared, and intervals keys are
         those contained in the "detdata", "shared", and "intervals" observation
         attributes.
@@ -146,7 +148,7 @@ class Operator(TraitConfig):
         """
         # Ensure that all keys exist
         prov = self._provides()
-        for key in ["metadata", "detdata", "shared", "intervals"]:
+        for key in ["global", "meta", "detdata", "shared", "intervals"]:
             if key not in prov:
                 prov[key] = list()
         return prov
@@ -162,30 +164,6 @@ class Operator(TraitConfig):
 
         """
         return self._supports_acc()
-
-    def _use_acc(self, data):
-        # Helper function to determine if all requirements are met to use OpenACC
-        # for a data object.
-        log = Logger.get()
-        if not self.supports_acc():
-            # No support for OpenACC
-            return False
-        req = self.requires()
-        for ob in data.obs:
-            for key in req["detdata"]:
-                if not ob.detdata.acc_is_present(key):
-                    log.verbose(
-                        f"obs {ob.name}, detdata {key} not on device- not using OpenACC"
-                    )
-                    return False
-            for key in req["shared"]:
-                if not ob.shared.acc_is_present(key):
-                    log.verbose(
-                        f"obs {ob.name}, shared {key} not on device- not using OpenACC"
-                    )
-                    return False
-            # FIXME: check intervals too eventually
-        return True
 
     @classmethod
     def get_class_config_path(cls):

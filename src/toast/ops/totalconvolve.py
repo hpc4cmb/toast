@@ -308,7 +308,7 @@ class SimTotalconvolve(Operator):
             for det in obs_dets:
                 my_dets.add(det)
             # Make sure detector data output exists
-            obs.detdata.ensure(self.det_data, detectors=detectors)
+            exists = obs.detdata.ensure(self.det_data, detectors=detectors)
         if use_mpi:
             all_dets = self.comm.gather(my_dets, root=0)
             if self.comm.rank == 0:
@@ -771,7 +771,7 @@ class SimTotalconvolve(Operator):
             focalplane = obs.telescope.focalplane
             epsilon = self._get_epsilon(focalplane, det)
             # Make sure detector data output exists
-            obs.detdata.ensure(self.det_data, detectors=[det])
+            exists = obs.detdata.ensure(self.det_data, detectors=[det])
             # Loop over views
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:
@@ -805,7 +805,8 @@ class SimTotalconvolve(Operator):
 
     def _requires(self):
         req = self.detector_pointing.requires()
-        req["meta"].extend([self.noise_model, self.pixel_dist, self.covariance])
+        req["global"].extend([self.pixel_dist, self.covariance])
+        req["meta"].extend([self.noise_model])
         req["shared"] = [self.boresight]
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)

@@ -82,7 +82,6 @@ class MapmakerBinningTest(MPITestCase):
 
             binner = ops.BinMap(
                 pixel_dist="pixel_dist",
-                det_flags=None,
                 covariance=cov_and_hits.covariance,
                 binned="binned_{}".format(stype),
                 det_data=sim_noise.det_data,

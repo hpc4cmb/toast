@@ -32,7 +32,9 @@ class PointingDetectorSimple(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(
@@ -44,7 +46,7 @@ class PointingDetectorSimple(Operator):
     )
 
     quats = Unicode(
-        None,
+        defaults.quats,
         allow_none=True,
         help="Observation detdata key for output quaternions",
     )
@@ -123,29 +125,24 @@ class PointingDetectorSimple(Operator):
                 # Nothing to do for this observation
                 continue
 
-            # Do we already have pointing for all requested detectors?
-            if self.quats in ob.detdata:
-                quat_dets = ob.detdata[self.quats].detectors
-                for d in dets:
-                    if d not in quat_dets:
-                        break
-                else:  # no break
-                    # We already have pointing for all specified detectors
-                    if data.comm.group_rank == 0:
-                        log.verbose(
-                            f"Group {data.comm.group}, ob {ob.name}, detector pointing "
-                            f"already translated for {dets}"
-                        )
-                    continue
-
-            # Create (or re-use) output data for the detector quaternions.
-
-            ob.detdata.ensure(
+            exists = ob.detdata.ensure(
                 self.quats,
                 sample_shape=(4,),
                 dtype=np.float64,
                 detectors=dets,
             )
+
+            # Create (or re-use) output data for the detector quaternions.
+
+            # Do we already have pointing for all requested detectors?
+            if exists:
+                # Yes
+                if data.comm.group_rank == 0:
+                    log.verbose(
+                        f"Group {data.comm.group}, ob {ob.name}, detector pointing "
+                        f"already translated for {dets}"
+                    )
+                continue
 
             # Loop over views
             views = ob.view[self.view]
@@ -182,7 +179,6 @@ class PointingDetectorSimple(Operator):
                     if flags is not None:
                         quats[flags != 0] = qa.null_quat
                     views.detdata[self.quats][vw][det] = quats
-
         return
 
     def _finalize(self, data, **kwargs):
@@ -208,3 +204,6 @@ class PointingDetectorSimple(Operator):
             "detdata": [self.quats],
         }
         return prov
+
+    def _supports_acc(self):
+        return True

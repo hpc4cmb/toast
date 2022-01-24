@@ -250,6 +250,8 @@ class BinMap(Operator):
             log.verbose("  BinMap running pipeline")
         pipe_out = accum.apply(data, detectors=detectors)
 
+        # print("Binned zmap = ", data[self.binned].data)
+
         # Optionally, store the noise-weighted map
         if self.noiseweighted is not None:
             data[self.noiseweighted] = data[self.binned].duplicate()
@@ -261,7 +263,7 @@ class BinMap(Operator):
         if data.comm.world_rank == 0:
             log.verbose("  BinMap applying covariance")
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
-
+        # print("Binned final = ", data[self.binned].data)
         return
 
     def _finalize(self, data, **kwargs):
@@ -270,7 +272,8 @@ class BinMap(Operator):
     def _requires(self):
         req = self.pixel_pointing.requires()
         req.update(self.stokes_weights.requires())
-        req["meta"].extend([self.noise_model, self.pixel_dist, self.covariance])
+        req["global"].extend([self.pixel_dist, self.covariance])
+        req["meta"].extend([self.noise_model])
         req["detdata"].extend([self.det_data])
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
@@ -279,5 +282,5 @@ class BinMap(Operator):
         return req
 
     def _provides(self):
-        prov = {"meta": [self.binned], "shared": list(), "detdata": list()}
+        prov = {"global": [self.binned]}
         return prov

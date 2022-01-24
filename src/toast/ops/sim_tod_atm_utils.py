@@ -145,7 +145,7 @@ class ObserveAtmosphere(Operator):
             absorption, loading = self._get_absorption_and_loading(ob, dets)
 
             # Make sure detector data output exists
-            ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(self.det_data, detectors=dets)
 
             # Prefix for logging
             log_prefix = f"{group} : {ob.name}"

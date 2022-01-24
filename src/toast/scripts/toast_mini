@@ -74,6 +74,8 @@ def parse_arguments():
         toast.ops.SimSatellite(
             name="sim_satellite",
             detset_key="pixel",
+            hwp_rpm=8.0,
+            hwp_angle="hwp_angle",
         ),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.SimNoise(name="sim_noise"),
@@ -117,6 +119,10 @@ def parse_arguments():
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
 
+    # DEBUGGING
+    # args.max_detector = 4
+    # args.num_obs = 2
+
     # Schedule
     args.prec_period = 50.0
     args.spin_period = 10.0
@@ -132,7 +138,7 @@ def make_schedule(args, world_comm):
     if (world_comm is None) or (world_comm.rank == 0):
         schedule = create_satellite_schedule(
             prefix="",
-            mission_start=datetime.now(),
+            mission_start=datetime(2022, 1, 1),
             observation_time=args.obs_minutes * u.minute,
             num_observations=args.num_obs,
             prec_period=args.prec_period * u.minute,
@@ -231,6 +237,7 @@ def main():
     # Set the pointing matrix operators to use the detector pointing
     job_ops.pixels.detector_pointing = job_ops.det_pointing
     job_ops.weights.detector_pointing = job_ops.det_pointing
+    job_ops.weights.hwp_angle = job_ops.sim_satellite.hwp_angle
 
     # Set up the binning operator
     job_ops.binner.pixel_pointing = job_ops.pixels

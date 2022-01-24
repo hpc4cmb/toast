@@ -125,8 +125,10 @@ class CrossLinking(Operator):
         """Evaluate the special pointing matrix"""
 
         obs = obs_data.obs[0]
-        obs.detdata.ensure(self.signal, detectors=[det])
-        obs.detdata.ensure(self.weights, sample_shape=(3,), detectors=[det])
+        exists_signal = obs.detdata.ensure(self.signal, detectors=[det])
+        exists_weights = obs.detdata.ensure(
+            self.weights, sample_shape=(3,), detectors=[det]
+        )
 
         signal = obs.detdata[self.signal][det]
         signal[:] = 1

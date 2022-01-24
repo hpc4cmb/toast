@@ -192,7 +192,9 @@ class FlagSSO(Operator):
         Flag the SSO for each detector in tod
         """
 
-        obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
+        exists_flags = obs.detdata.ensure(
+            self.det_flags, dtype=np.uint8, detectors=dets
+        )
 
         for det in dets:
             try:

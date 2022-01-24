@@ -229,10 +229,10 @@ class Demodulate(Operator):
                 self.shared_flags, (n_local,), dtype=np.uint8
             )
 
-            demod_obs.detdata.ensure(
+            exists_data = demod_obs.detdata.ensure(
                 self.det_data, detectors=demod_dets, dtype=np.float64
             )
-            demod_obs.detdata.ensure(
+            exists_flags = demod_obs.detdata.ensure(
                 self.det_flags, detectors=demod_dets, dtype=np.uint
             )
 
@@ -637,7 +637,7 @@ class StokesWeightsDemod(Operator):
         for obs in data.obs:
             dets = obs.select_local_detectors(detectors)
 
-            obs.detdata.ensure(
+            exists_weights = obs.detdata.ensure(
                 self.weights,
                 sample_shape=(nnz,),
                 dtype=dtype,

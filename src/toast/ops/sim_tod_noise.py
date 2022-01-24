@@ -287,7 +287,7 @@ class SimNoise(Operator):
             # detectors within the observation...
 
             # Make sure correct output exists
-            ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(self.det_data, detectors=dets)
 
             # Get the sample rate from the data.  We also have nominal sample rates
             # from the noise model and also from the focalplane.  Perhaps we should add

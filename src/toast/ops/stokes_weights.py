@@ -168,6 +168,23 @@ class StokesWeights(Operator):
                 # Nothing to do for this observation
                 continue
 
+            # Create (or re-use) output data for the weights
+
+            if self.single_precision:
+                exists = ob.detdata.ensure(
+                    self.weights,
+                    sample_shape=(self._nnz,),
+                    dtype=np.float32,
+                    detectors=dets,
+                )
+            else:
+                exists = ob.detdata.ensure(
+                    self.weights,
+                    sample_shape=(self._nnz,),
+                    dtype=np.float64,
+                    detectors=dets,
+                )
+
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own
             # view was None, then it would have been set to the detector_pointing
@@ -186,37 +203,15 @@ class StokesWeights(Operator):
                         raise RuntimeError(msg)
 
             # Do we already have pointing for all requested detectors?
-            if self.weights in ob.detdata:
-                wt_dets = ob.detdata[self.weights].detectors
-                for d in dets:
-                    if d not in wt_dets:
-                        break
-                else:  # no break
-                    # We already have pointing for all specified detectors
-                    if data.comm.group_rank == 0:
-                        msg = (
-                            f"Group {data.comm.group}, ob {ob.name}, pointing "
-                            f"already computed for {dets}"
-                        )
-                        log.verbose(msg)
-                    continue
-
-            # Create (or re-use) output data for the weights
-
-            if self.single_precision:
-                ob.detdata.ensure(
-                    self.weights,
-                    sample_shape=(self._nnz,),
-                    dtype=np.float32,
-                    detectors=dets,
-                )
-            else:
-                ob.detdata.ensure(
-                    self.weights,
-                    sample_shape=(self._nnz,),
-                    dtype=np.float64,
-                    detectors=dets,
-                )
+            if exists:
+                # Yes
+                if data.comm.group_rank == 0:
+                    msg = (
+                        f"Group {data.comm.group}, ob {ob.name}, Stokes weights "
+                        f"already computed for {dets}"
+                    )
+                    log.verbose(msg)
+                continue
 
             # Focalplane for this observation
             focalplane = ob.telescope.focalplane
@@ -285,9 +280,9 @@ class StokesWeights(Operator):
                             fslice = flags[bslice].reshape(-1)
 
                         # Weight buffer
-                        wtslice = views.detdata[self.weights][vw][det, bslice].reshape(
-                            -1
-                        )
+                        wtslice = views.detdata[self.weights][vw][
+                            det, bslice
+                        ].reshape(-1)
 
                         if self.single_precision:
                             wbuf = np.zeros(len(wtslice), dtype=np.float64)
@@ -308,7 +303,6 @@ class StokesWeights(Operator):
                             wtslice[:] = wbuf.astype(np.float32)
 
                         buf_off += buf_n
-
         return
 
     def _finalize(self, data, **kwargs):
@@ -325,11 +319,9 @@ class StokesWeights(Operator):
         return req
 
     def _provides(self):
-        prov = {
-            "meta": list(),
-            "shared": list(),
-            "detdata": [self.weights],
-        }
-        if self.quats is not None:
-            prov["detdata"].append(self.quats)
+        prov = self.detector_pointing.provides()
+        prov["detdata"].append(self.weights)
         return prov
+
+    def _supports_acc(self):
+        return self.detector_pointing.supports_acc()

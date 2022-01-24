@@ -198,7 +198,7 @@ class BuildHitMap(Operator):
 
     def _requires(self):
         req = {
-            "meta": [self.pixel_dist],
+            "global": [self.pixel_dist],
             "shared": list(),
             "detdata": [self.pixels, self.weights],
             "intervals": list(),
@@ -212,7 +212,7 @@ class BuildHitMap(Operator):
         return req
 
     def _provides(self):
-        prov = {"meta": [self.hits]}
+        prov = {"global": [self.hits]}
         return prov
 
 
@@ -436,7 +436,7 @@ class BuildInverseCovariance(Operator):
 
     def _requires(self):
         req = {
-            "meta": [self.pixel_dist, self.noise_model],
+            "global": [self.pixel_dist, self.noise_model],
             "shared": list(),
             "detdata": [self.pixels, self.weights],
             "intervals": list(),
@@ -450,7 +450,7 @@ class BuildInverseCovariance(Operator):
         return req
 
     def _provides(self):
-        prov = {"meta": [self.inverse_covariance]}
+        prov = {"global": [self.inverse_covariance]}
         return prov
 
 
@@ -492,17 +492,23 @@ class BuildNoiseWeighted(Operator):
     )
 
     det_data = Unicode(
-        None, allow_none=True, help="Observation detdata key for the timestream data"
+        defaults.det_data,
+        allow_none=True,
+        help="Observation detdata key for the timestream data",
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
@@ -614,6 +620,7 @@ class BuildNoiseWeighted(Operator):
             pix = ob.view[self.view].detdata[self.pixels]
             wts = ob.view[self.view].detdata[self.weights]
             ddat = ob.view[self.view].detdata[self.det_data]
+
             if self.shared_flags is not None:
                 shared_flgs = ob.view[self.view].shared[self.shared_flags]
             else:
@@ -689,9 +696,10 @@ class BuildNoiseWeighted(Operator):
 
     def _requires(self):
         req = {
-            "meta": [self.pixel_dist, self.noise_model, self.det_data],
+            "global": [self.pixel_dist],
+            "meta": [self.noise_model],
             "shared": list(),
-            "detdata": [self.pixels, self.weights],
+            "detdata": [self.pixels, self.weights, self.det_data],
             "intervals": list(),
         }
         if self.shared_flags is not None:
@@ -703,7 +711,9 @@ class BuildNoiseWeighted(Operator):
         return req
 
     def _provides(self):
-        prov = {"meta": [self.zmap]}
+        prov = {
+            "global": [self.zmap],
+        }
         return prov
 
 
@@ -958,10 +968,12 @@ class CovarianceAndHits(Operator):
 
     def _provides(self):
         prov = {
-            "meta": [self.pixel_dist, self.hits, self.covariance, self.rcond],
+            "global": [self.pixel_dist, self.hits, self.covariance, self.rcond],
             "shared": list(),
             "detdata": list(),
         }
         if self.save_pointing:
             prov["detdata"].extend([self.pixels, self.weights])
+        if self.inverse_covariance is not None:
+            prov["global"].append(self.inverse_covariance)
         return prov

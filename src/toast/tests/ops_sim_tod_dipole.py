@@ -122,6 +122,11 @@ class SimDipoleTest(MPITestCase):
         )
         cov_and_hits.apply(data)
 
+        # Clean up temporary objects
+        ops.Delete(detdata=[detpointing.quats, pixels.pixels, weights.weights]).apply(
+            data
+        )
+
         # Set up binned map
 
         binner = ops.BinMap(
@@ -132,7 +137,6 @@ class SimDipoleTest(MPITestCase):
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
-            det_flags=None,
         )
         binner.apply(data)
 
