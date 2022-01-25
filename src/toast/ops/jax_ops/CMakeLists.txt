@@ -7,6 +7,7 @@ install(FILES
     polyfilter2D.py
     scan_map.py
     healpix_pixels.py
+    stokes_weights.py
     DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops
 )
 

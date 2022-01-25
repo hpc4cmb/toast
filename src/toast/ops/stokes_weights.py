@@ -20,7 +20,7 @@ from ..pixels import PixelDistribution
 
 from ..observation import default_values as defaults
 
-from .._libtoast import stokes_weights
+from .jax_ops import stokes_weights
 
 from .operator import Operator
 
