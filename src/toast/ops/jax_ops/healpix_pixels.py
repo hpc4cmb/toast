@@ -87,7 +87,7 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
         hpix (HealpixPixels):  The healpix projection object.
         nest (bool):  If True, then use NESTED ordering, else RING.
         pdata (array, float64):  The flat-packed array of detector quaternions (size 4*n).
-        flags (array, uint8):  The pointing flags (could also be None).
+        flags (array, uint8):  The pointing flags (size n, could also be None).
         pixels (array, int64):  The detector pixel indices to store the result (size n).
 
     Returns:
