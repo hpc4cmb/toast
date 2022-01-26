@@ -37,9 +37,9 @@ def stokes_weights_single_jax(eps, cal, pdata, hwpang, flag):
     
     # applies quaternion rotations
     zaxis = jnp.array([0.0, 0.0, 1.0])
-    dir = qarray.rotate_one_one_numpy(pin, zaxis)
+    dir = qarray.rotate_one_one_jax(pin, zaxis)
     xaxis = jnp.array([1.0, 0.0, 0.0])
-    orient = qarray.rotate_one_one_numpy(pin, xaxis)
+    orient = qarray.rotate_one_one_jax(pin, xaxis)
 
     # computes by and bx
     by = orient[0] * dir[1] - orient[1] * dir[0]
@@ -73,15 +73,15 @@ def stokes_weights_IQU_jax(eps, cal, pdata, hwpang, flags):
         weights (array, float64):  The flat packed detector weights for the specified mode (shape nx3).
     """
     # puts pdata back into shape
-    pdata = np.reshape(pdata, newshape=(-1, 4))
+    pdata = jnp.reshape(pdata, newshape=(-1, 4))
     # problem size
     print(f"DEBUG: jit-compiling 'stokes_weights' eps:{eps} cal:{cal} n:{pdata.shape[0]}")
     # batch stokes_weights on the n dimenssion
     stokes_weights = jax.vmap(stokes_weights_single_jax, in_axes=(None, None, 0, 0, 0), out_axes=0)
     return stokes_weights(eps, cal, pdata, hwpang, flags)
 
-# TODO jit
-# stokes_weights_IQU_jax = jax.jit(stokes_weights_IQU_jax, static_argnames=['eps', 'cal'])
+# jit
+stokes_weights_IQU_jax = jax.jit(stokes_weights_IQU_jax, static_argnames=['eps', 'cal'])
 
 def stokes_weights_jax(eps, cal, mode, pdata, hwpang, flags, weights):
     """
@@ -129,9 +129,9 @@ def stokes_weights_IQU_numpy(eps, cal, pdata, hwpang, flags, weights):
         None (the result is put in weights).
     """
     # puts data back into shape
-    n = flags.size
-    pdata = np.reshape(pdata, newshape=(n, 4))
-    weights = np.reshape(weights, newshape=(n, 3))
+    pdata = np.reshape(pdata, newshape=(-1, 4))
+    weights = np.reshape(weights, newshape=(-1, 3))
+    n = pdata.shape[0]
 
     # constants
     xaxis = np.array([1.0, 0.0, 0.0])
@@ -302,11 +302,10 @@ void toast::stokes_weights(double eps, double cal, std::string const & mode,
 stokes_weights = select_implementation(stokes_weights_compiled, 
                                        stokes_weights_numpy, 
                                        stokes_weights_jax, 
-                                       default_implementationType=ImplementationType.NUMPY)
+                                       default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 stokes_weights = get_compile_time(stokes_weights)
 
 # To test:
-# TODO find test, tod_pointing?
-# python -c 'import toast.tests; toast.tests.run("ops_")'
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
