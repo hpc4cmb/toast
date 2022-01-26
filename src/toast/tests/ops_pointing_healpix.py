@@ -10,6 +10,7 @@ import numpy as np
 from .. import ops as ops
 from .. import qarray as qa
 from ..ops.jax_ops import healpix_pixels, stokes_weights
+from ..ops.jax_ops.utils.math_healpix import HealpixPixels_JAX
 from ..healpix import HealpixPixels
 from ..intervals import Interval, IntervalList
 from ..observation import default_values as defaults
@@ -26,6 +27,7 @@ class PointingHealpixTest(MPITestCase):
         nside = 64
         npix = 12 * nside**2
         hpix = HealpixPixels(64)
+        hpix_jax = HealpixPixels_JAX.from_HealpixPixels(hpix)
         nest = True
         phivec = np.radians(
             [-360, -270, -180, -135, -90, -45, 0, 45, 90, 135, 180, 270, 360]
@@ -49,6 +51,7 @@ class PointingHealpixTest(MPITestCase):
         quats = np.vstack(quats)
         healpix_pixels(
             hpix,
+            hpix_jax,
             nest,
             quats.reshape(-1),
             flags,
@@ -66,14 +69,8 @@ class PointingHealpixTest(MPITestCase):
         failed = False
         bad = np.logical_or(pixels < 0, pixels > npix - 1)
         nbad = np.sum(bad)
-        if nbad > 0:
-            print(
-                "{} pixels are outside of the map. phi = {} deg".format(
-                    nbad, np.degrees(phivec[bad])
-                )
-            )
-            failed = True
-        self.assertFalse(failed)
+        msg = f"{nbad} pixels are outside of the map. phi = {np.degrees(phivec[bad])} deg"
+        self.assertEqual(nbad, 0, msg=msg)
         return
 
     def test_pointing_matrix_healpix(self):
