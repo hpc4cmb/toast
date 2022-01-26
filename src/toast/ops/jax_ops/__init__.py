@@ -11,7 +11,6 @@ https://github.com/hpc4cmb/toast/blob/11306b344d021e6e49a1e65dd82e06b1b69cbe3d/s
 https://github.com/hpc4cmb/toast/blob/11306b344d021e6e49a1e65dd82e06b1b69cbe3d/src/toast/templates/amplitudes.py#L21
 
 TODO:
-- grep calls to operators to make sure they are replaced in all places where they are called (uncliding some tests)
 - does expressing quaternions as integers helps with constant simplification? 
 - and as zero +1 at a position?
 """
