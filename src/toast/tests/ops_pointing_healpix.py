@@ -9,7 +9,7 @@ import numpy as np
 
 from .. import ops as ops
 from .. import qarray as qa
-from .._libtoast import healpix_pixels, stokes_weights
+from ..ops.jax_ops import healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
 from ..intervals import Interval, IntervalList
 from ..observation import default_values as defaults
