@@ -626,7 +626,10 @@ def main():
     # Get optional MPI parameters
     comm, procs, rank = toast.get_world()
 
-    nthread = os.environ["OMP_NUM_THREADS"]
+    if "OMP_NUM_THREADS" in os.environ:
+        nthread = os.environ["OMP_NUM_THREADS"]
+    else:
+        nthread = "unknown number of"
     log.info_rank(
         f"Executing workflow with {procs} MPI tasks, each with "
         f"{nthread} OpenMP threads at {datetime.datetime.now()}",
