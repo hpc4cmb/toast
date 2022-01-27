@@ -66,7 +66,6 @@ class PointingHealpixTest(MPITestCase):
             flags,
             weights.reshape(-1),
         )
-        failed = False
         bad = np.logical_or(pixels < 0, pixels > npix - 1)
         nbad = np.sum(bad)
         msg = f"{nbad} pixels are outside of the map. phi = {np.degrees(phivec[bad])} deg"

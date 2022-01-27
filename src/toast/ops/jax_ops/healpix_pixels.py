@@ -97,28 +97,31 @@ def healpix_pixels_numpy(hpix, nest, pdata, flags, pixels):
     n = pixels.size
     pdata = np.reshape(pdata, newshape=(n, 4))
 
+    # TODO debug
+    # n=13 nest=True nside=64
+    print(f"DEBUG: n:{n} nest:{nest} nside:{hpix.nside}")
+
     # constants
     zaxis = np.array([0.0, 0.0, 1.0])
     nullquat = np.array([0.0, 0.0, 0.0, 1.0])
 
     for i in range(n):
+        # flag
+        unflagged = (flags is None) or (flags[i] == 0)
+
         # initialize pin
-        if (flags is None):
-            pin = np.copy(pdata[i, :])
-        else:
-            pin = np.where(flags == 0, pdata[i, :], nullquat)
+        pin = pdata[i, :] if unflagged else nullquat
 
         # initialize dir
         dir = qarray.rotate_one_one_numpy(pin, zaxis)
 
         # computes pixel
         if (nest):
+            # TODO we are in the nest case
             pixel = healpix.vec2nest_numpy(hpix, dir)
         else:
             pixel = healpix.vec2ring_numpy(hpix, dir)
-
-        if (flags is not None):
-            pixel = pixel if (flags[i] == 0) else -1
+        pixel = pixel if unflagged else -1
 
         # saves result
         pixels[i] = pixel

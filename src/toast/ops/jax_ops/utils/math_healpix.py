@@ -205,7 +205,8 @@ def vec2zphi_jax(vec):
     tz = 3.0 * (1.0 - za)
     rtz = jnp.sqrt(tz)
 
-    phi = jnp.arctan2(vec[1], vec[0])
+    # NOTE that the order of inputs is switched compared to C++
+    phi = jnp.arctan2(vec[0], vec[1])
 
     return (phi, region, z, rtz)
 
@@ -378,9 +379,8 @@ def vec2zphi_numpy(vec):
     work1 = 3.0 * (1.0 - za)
     rtz = np.sqrt(work1)
 
-    work2 = vec[0]
-    work3 = vec[1]
-    phi = np.arctan2(work3, work2)
+    # NOTE that the order of inputs is switched compared to C++
+    phi = np.arctan2(vec[0], vec[1]) 
 
     return (phi, region, z, rtz)
 
@@ -396,7 +396,6 @@ def vec2nest_numpy(hpix, vec):
     (phi, region, z, rtz) = vec2zphi_numpy(vec)
     pix = zphi2nest_numpy(hpix, phi, region, z, rtz)
     return pix
-
 
 def vec2ring_numpy(hpix, vec):
     """
