@@ -144,7 +144,7 @@ def stokes_weights_IQU_numpy(eps, cal, pdata, hwpang, flags, weights):
         if (flags is None):
             pin = np.copy(pdata[i, :])
         else:
-            pin = np.where(flags == 0, pdata[i, :], nullquat)
+            pin = np.where(flags[i] == 0, pdata[i, :], nullquat)
         
         # applies quaternion rotation
         dir = qarray.rotate_one_one_numpy(pin, zaxis)

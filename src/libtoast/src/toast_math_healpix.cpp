@@ -9,17 +9,17 @@
 
 #include <cmath>
 
-
 const int64_t toast::HealpixPixels::jr_[] =
-{2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
+    {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
 
 const int64_t toast::HealpixPixels::jp_[] =
-{1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
+    {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
 
-
-void toast::healpix_ang2vec(int64_t n, double const * theta,
-                            double const * phi, double * vec) {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::healpix_ang2vec(int64_t n, double const *theta,
+                            double const *phi, double *vec)
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -27,17 +27,22 @@ void toast::healpix_ang2vec(int64_t n, double const * theta,
         throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(theta) && toast::is_aligned(phi) &&
-        toast::is_aligned(vec)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+        toast::is_aligned(vec))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t offset = 3 * i;
             double sintheta = ::sin(theta[i]);
             vec[offset] = sintheta * ::cos(phi[i]);
             vec[offset + 1] = sintheta * ::sin(phi[i]);
             vec[offset + 2] = ::cos(theta[i]);
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t offset = 3 * i;
             double sintheta = ::sin(theta[i]);
             vec[offset] = sintheta * ::cos(phi[i]);
@@ -49,24 +54,26 @@ void toast::healpix_ang2vec(int64_t n, double const * theta,
     return;
 }
 
-void toast::healpix_vec2ang(int64_t n, double const * vec, double * theta,
-                            double * phi) {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::healpix_vec2ang(int64_t n, double const *vec, double *theta,
+                            double *phi)
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
-    double eps = std::numeric_limits <double>::epsilon();
+    double eps = std::numeric_limits<double>::epsilon();
     if (toast::is_aligned(theta) && toast::is_aligned(phi) &&
-        toast::is_aligned(vec)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+        toast::is_aligned(vec))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t offset = 3 * i;
-            double norm = 1.0 / ::sqrt(vec[offset] * vec[offset]
-                                       + vec[offset + 1] * vec[offset + 1]
-                                       + vec[offset + 2] * vec[offset + 2]);
+            double norm = 1.0 / ::sqrt(vec[offset] * vec[offset] + vec[offset + 1] * vec[offset + 1] + vec[offset + 2] * vec[offset + 2]);
             theta[i] = ::acos(vec[offset + 2] * norm);
             bool small_theta = (::fabs(theta[i]) <= eps) ? true : false;
             bool big_theta = (::fabs(toast::PI - theta[i]) <= eps) ? true : false;
@@ -74,12 +81,13 @@ void toast::healpix_vec2ang(int64_t n, double const * vec, double * theta,
             phi[i] = (phitemp < 0) ? phitemp + toast::TWOPI : phitemp;
             phi[i] = (small_theta || big_theta) ? 0.0 : phi[i];
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t offset = 3 * i;
-            double norm = 1.0 / ::sqrt(vec[offset] * vec[offset]
-                                       + vec[offset + 1] * vec[offset + 1]
-                                       + vec[offset + 2] * vec[offset + 2]);
+            double norm = 1.0 / ::sqrt(vec[offset] * vec[offset] + vec[offset + 1] * vec[offset + 1] + vec[offset + 2] * vec[offset + 2]);
             theta[i] = ::acos(vec[offset + 2] * norm);
             bool small_theta = (::fabs(theta[i]) <= eps) ? true : false;
             bool big_theta = (::fabs(toast::PI - theta[i]) <= eps) ? true : false;
@@ -92,9 +100,11 @@ void toast::healpix_vec2ang(int64_t n, double const * vec, double * theta,
     return;
 }
 
-void toast::healpix_vecs2angpa(int64_t n, double const * vec, double * theta,
-                               double * phi, double * pa) {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::healpix_vecs2angpa(int64_t n, double const *vec, double *theta,
+                               double *phi, double *pa)
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -102,9 +112,11 @@ void toast::healpix_vecs2angpa(int64_t n, double const * vec, double * theta,
         throw std::runtime_error(msg.c_str());
     }
     if (toast::is_aligned(vec) && toast::is_aligned(theta) &&
-        toast::is_aligned(phi) && toast::is_aligned(pa)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+        toast::is_aligned(phi) && toast::is_aligned(pa))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t offset = 6 * i;
             double dx = vec[offset];
             double dy = vec[offset + 1];
@@ -126,8 +138,11 @@ void toast::healpix_vecs2angpa(int64_t n, double const * vec, double * theta,
 
             phi[i] = (phitemp < 0) ? phitemp + toast::TWOPI : phitemp;
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t offset = 6 * i;
             double dx = vec[offset];
             double dy = vec[offset + 1];
@@ -154,7 +169,8 @@ void toast::healpix_vecs2angpa(int64_t n, double const * vec, double * theta,
     return;
 }
 
-void toast::HealpixPixels::init() {
+void toast::HealpixPixels::init()
+{
     nside_ = 0;
     ncap_ = 0;
     npix_ = 0;
@@ -168,18 +184,22 @@ void toast::HealpixPixels::init() {
     nsideminusone_ = 0;
 }
 
-toast::HealpixPixels::HealpixPixels() {
+toast::HealpixPixels::HealpixPixels()
+{
     init();
     reset(1);
 }
 
-toast::HealpixPixels::HealpixPixels(int64_t nside) {
+toast::HealpixPixels::HealpixPixels(int64_t nside)
+{
     init();
     reset(nside);
 }
 
-void toast::HealpixPixels::reset(int64_t nside) {
-    if (nside <= 0) {
+void toast::HealpixPixels::reset(int64_t nside)
+{
+    if (nside <= 0)
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("cannot reset healpix pixels with NSIDE <= 0");
@@ -189,8 +209,9 @@ void toast::HealpixPixels::reset(int64_t nside) {
 
     // check for valid nside value
 
-    uint64_t temp = static_cast <uint64_t> (nside);
-    if (((~temp) & (temp - 1)) != (temp - 1)) {
+    uint64_t temp = static_cast<uint64_t>(nside);
+    if (((~temp) & (temp - 1)) != (temp - 1))
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("invalid NSIDE value- must be a multiple of 2");
@@ -200,7 +221,8 @@ void toast::HealpixPixels::reset(int64_t nside) {
 
     nside_ = nside;
 
-    for (uint64_t m = 0; m < 0x100; ++m) {
+    for (uint64_t m = 0; m < 0x100; ++m)
+    {
         utab_[m] = (m & 0x1) | ((m & 0x2) << 1) | ((m & 0x4) << 2) |
                    ((m & 0x8) << 3) | ((m & 0x10) << 4) | ((m & 0x20) << 5) |
                    ((m & 0x40) << 6) | ((m & 0x80) << 7);
@@ -214,7 +236,7 @@ void toast::HealpixPixels::reset(int64_t nside) {
 
     npix_ = 12 * nside * nside;
 
-    dnside_ = static_cast <double> (nside);
+    dnside_ = static_cast<double>(nside);
 
     twonside_ = 2 * nside;
 
@@ -230,17 +252,20 @@ void toast::HealpixPixels::reset(int64_t nside) {
 
     nsideminusone_ = nside - 1;
 
-    while (nside != (1ll << factor_)) {
+    while (nside != (1ll << factor_))
+    {
         ++factor_;
     }
 
     return;
 }
 
-void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
-                                    double * phi, int * region, double * z,
-                                    double * rtz) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::vec2zphi(int64_t n, double const *vec,
+                                    double *phi, int *region, double *z,
+                                    double *rtz) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -248,15 +273,16 @@ void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
         throw std::runtime_error(msg.c_str());
     }
 
-    toast::AlignedVector <double> work1(n);
-    toast::AlignedVector <double> work2(n);
-    toast::AlignedVector <double> work3(n);
+    toast::AlignedVector<double> work1(n);
+    toast::AlignedVector<double> work2(n);
+    toast::AlignedVector<double> work3(n);
 
     if (toast::is_aligned(vec) && toast::is_aligned(phi) &&
-        toast::is_aligned(region) && toast::is_aligned(z)
-        && toast::is_aligned(rtz)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+        toast::is_aligned(region) && toast::is_aligned(z) && toast::is_aligned(rtz))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t offset = 3 * i;
 
             // region encodes BOTH the sign of Z and whether its
@@ -274,8 +300,11 @@ void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
             work3[i] = vec[offset + 1];
             work2[i] = vec[offset];
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t offset = 3 * i;
 
             // region encodes BOTH the sign of Z and whether its
@@ -304,10 +333,12 @@ void toast::HealpixPixels::vec2zphi(int64_t n, double const * vec,
     return;
 }
 
-void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
-                                   int * region, double * z,
-                                   double * rtz) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::theta2z(int64_t n, double const *theta,
+                                   int *region, double *z,
+                                   double *rtz) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -315,16 +346,17 @@ void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
         throw std::runtime_error(msg.c_str());
     }
 
-    toast::AlignedVector <double> work1(n);
+    toast::AlignedVector<double> work1(n);
 
     // FIXME:  revert to fast version once unit tests pass
     // toast::vfast_cos(static_cast <int> (n), theta, z);
-    toast::vcos(static_cast <int> (n), theta, z);
+    toast::vcos(static_cast<int>(n), theta, z);
 
-    if (toast::is_aligned(theta) && toast::is_aligned(region)
-        && toast::is_aligned(z) && toast::is_aligned(rtz)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+    if (toast::is_aligned(theta) && toast::is_aligned(region) && toast::is_aligned(z) && toast::is_aligned(rtz))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             // region encodes BOTH the sign of Z and whether its
             // absolute value is greater than 2/3.
 
@@ -336,8 +368,11 @@ void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
 
             work1[i] = 3.0 * (1.0 - za);
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             // region encodes BOTH the sign of Z and whether its
             // absolute value is greater than 2/3.
 
@@ -356,24 +391,28 @@ void toast::HealpixPixels::theta2z(int64_t n, double const * theta,
     return;
 }
 
-void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
-                                     int const * region, double const * z,
-                                     double const * rtz, int64_t * pix) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::zphi2nest(int64_t n, double const *phi,
+                                     int const *region, double const *z,
+                                     double const *rtz, int64_t *pix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
-    double eps = std::numeric_limits <float>::epsilon();
+    double eps = std::numeric_limits<float>::epsilon();
     if (toast::is_aligned(phi) && toast::is_aligned(pix) &&
-        toast::is_aligned(region) && toast::is_aligned(z)
-        && toast::is_aligned(rtz)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+        toast::is_aligned(region) && toast::is_aligned(z) && toast::is_aligned(rtz))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             double ph = phi[i];
-            if (fabs(ph) < eps) {
+            if (fabs(ph) < eps)
+            {
                 ph = 0.0;
             }
             double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
@@ -390,64 +429,81 @@ void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
             int64_t ntt;
             double tp;
 
-            if (::abs(region[i]) == 1) {
+            if (::abs(region[i]) == 1)
+            {
                 temp1 = halfnside_ + dnside_ * tt;
                 temp2 = tqnside_ * z[i];
 
-                jp = static_cast <int64_t> (temp1 - temp2);
-                jm = static_cast <int64_t> (temp1 + temp2);
+                jp = static_cast<int64_t>(temp1 - temp2);
+                jm = static_cast<int64_t>(temp1 + temp2);
 
                 ifp = jp >> factor_;
                 ifm = jm >> factor_;
 
                 face;
-                if (ifp == ifm) {
-                    face = (ifp == 4) ? static_cast <int64_t> (4) : ifp + 4;
-                } else if (ifp < ifm) {
+                if (ifp == ifm)
+                {
+                    face = (ifp == 4) ? static_cast<int64_t>(4) : ifp + 4;
+                }
+                else if (ifp < ifm)
+                {
                     face = ifp;
-                } else {
+                }
+                else
+                {
                     face = ifm + 8;
                 }
 
                 x = jm & nsideminusone_;
                 y = nsideminusone_ - (jp & nsideminusone_);
-            } else {
-                ntt = static_cast <int64_t> (tt);
+            }
+            else
+            {
+                ntt = static_cast<int64_t>(tt);
 
-                tp = tt - static_cast <double> (ntt);
+                tp = tt - static_cast<double>(ntt);
 
                 temp1 = dnside_ * rtz[i];
 
-                jp = static_cast <int64_t> (tp * temp1);
-                jm = static_cast <int64_t> ((1.0 - tp) * temp1);
+                jp = static_cast<int64_t>(tp * temp1);
+                jm = static_cast<int64_t>((1.0 - tp) * temp1);
 
-                if (jp >= nside_) {
+                if (jp >= nside_)
+                {
                     jp = nsideminusone_;
                 }
-                if (jm >= nside_) {
+                if (jm >= nside_)
+                {
                     jm = nsideminusone_;
                 }
 
-                if (z[i] >= 0) {
+                if (z[i] >= 0)
+                {
                     face = ntt;
                     x = nsideminusone_ - jm;
                     y = nsideminusone_ - jp;
-                } else {
+                }
+                else
+                {
                     face = ntt + 8;
                     x = jp;
                     y = jm;
                 }
             }
 
-            uint64_t sipf = xy2pix_(static_cast <uint64_t> (x),
-                                    static_cast <uint64_t> (y));
+            uint64_t sipf = xy2pix_(static_cast<uint64_t>(x),
+                                    static_cast<uint64_t>(y));
 
-            pix[i] = static_cast <int64_t> (sipf) + (face << (2 * factor_));
+            pix[i] = static_cast<int64_t>(sipf) + (face << (2 * factor_));
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             double ph = phi[i];
-            if (fabs(ph) < eps) {
+            if (fabs(ph) < eps)
+            {
                 ph = 0.0;
             }
             double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
@@ -464,83 +520,100 @@ void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
             int64_t ntt;
             double tp;
 
-            if (::abs(region[i]) == 1) {
+            if (::abs(region[i]) == 1)
+            {
                 temp1 = halfnside_ + dnside_ * tt;
                 temp2 = tqnside_ * z[i];
 
-                jp = static_cast <int64_t> (temp1 - temp2);
-                jm = static_cast <int64_t> (temp1 + temp2);
+                jp = static_cast<int64_t>(temp1 - temp2);
+                jm = static_cast<int64_t>(temp1 + temp2);
 
                 ifp = jp >> factor_;
                 ifm = jm >> factor_;
 
                 face;
-                if (ifp == ifm) {
-                    face = (ifp == 4) ? static_cast <int64_t> (4) : ifp + 4;
-                } else if (ifp < ifm) {
+                if (ifp == ifm)
+                {
+                    face = (ifp == 4) ? static_cast<int64_t>(4) : ifp + 4;
+                }
+                else if (ifp < ifm)
+                {
                     face = ifp;
-                } else {
+                }
+                else
+                {
                     face = ifm + 8;
                 }
 
                 x = jm & nsideminusone_;
                 y = nsideminusone_ - (jp & nsideminusone_);
-            } else {
-                ntt = static_cast <int64_t> (tt);
+            }
+            else
+            {
+                ntt = static_cast<int64_t>(tt);
 
-                tp = tt - static_cast <double> (ntt);
+                tp = tt - static_cast<double>(ntt);
 
                 temp1 = dnside_ * rtz[i];
 
-                jp = static_cast <int64_t> (tp * temp1);
-                jm = static_cast <int64_t> ((1.0 - tp) * temp1);
+                jp = static_cast<int64_t>(tp * temp1);
+                jm = static_cast<int64_t>((1.0 - tp) * temp1);
 
-                if (jp >= nside_) {
+                if (jp >= nside_)
+                {
                     jp = nsideminusone_;
                 }
-                if (jm >= nside_) {
+                if (jm >= nside_)
+                {
                     jm = nsideminusone_;
                 }
 
-                if (z[i] >= 0) {
+                if (z[i] >= 0)
+                {
                     face = ntt;
                     x = nsideminusone_ - jm;
                     y = nsideminusone_ - jp;
-                } else {
+                }
+                else
+                {
                     face = ntt + 8;
                     x = jp;
                     y = jm;
                 }
             }
 
-            uint64_t sipf = xy2pix_(static_cast <uint64_t> (x),
-                                    static_cast <uint64_t> (y));
+            uint64_t sipf = xy2pix_(static_cast<uint64_t>(x),
+                                    static_cast<uint64_t>(y));
 
-            pix[i] = static_cast <int64_t> (sipf) + (face << (2 * factor_));
+            pix[i] = static_cast<int64_t>(sipf) + (face << (2 * factor_));
         }
     }
 
     return;
 }
 
-void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
-                                     int const * region, double const * z,
-                                     double const * rtz, int64_t * pix) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::zphi2ring(int64_t n, double const *phi,
+                                     int const *region, double const *z,
+                                     double const *rtz, int64_t *pix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
-    double eps = std::numeric_limits <float>::epsilon();
+    double eps = std::numeric_limits<float>::epsilon();
     if (toast::is_aligned(phi) && toast::is_aligned(pix) &&
-        toast::is_aligned(region) && toast::is_aligned(z)
-        && toast::is_aligned(rtz)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+        toast::is_aligned(region) && toast::is_aligned(z) && toast::is_aligned(rtz))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             double ph = phi[i];
-            if (fabs(ph) < eps) {
+            if (fabs(ph) < eps)
+            {
                 ph = 0.0;
             }
             double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
@@ -555,12 +628,13 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
             int64_t ir;
             int64_t kshift;
 
-            if (::abs(region[i]) == 1) {
+            if (::abs(region[i]) == 1)
+            {
                 temp1 = halfnside_ + dnside_ * tt;
                 temp2 = tqnside_ * z[i];
 
-                jp = static_cast <int64_t> (temp1 - temp2);
-                jm = static_cast <int64_t> (temp1 + temp2);
+                jp = static_cast<int64_t>(temp1 - temp2);
+                jm = static_cast<int64_t>(temp1 + temp2);
 
                 ir = nsideplusone_ + jp - jm;
                 kshift = 1 - (ir & 1);
@@ -569,26 +643,32 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
                 ip = ip % fournside_;
 
                 pix[i] = ncap_ + ((ir - 1) * fournside_ + ip);
-            } else {
+            }
+            else
+            {
                 tp = tt - floor(tt);
 
                 temp1 = dnside_ * rtz[i];
 
-                jp = static_cast <int64_t> (tp * temp1);
-                jm = static_cast <int64_t> ((1.0 - tp) * temp1);
+                jp = static_cast<int64_t>(tp * temp1);
+                jm = static_cast<int64_t>((1.0 - tp) * temp1);
                 ir = jp + jm + 1;
-                ip = static_cast <int64_t> (tt * (double)ir);
-                longpart = static_cast <int64_t> (ip / (4 * ir));
+                ip = static_cast<int64_t>(tt * (double)ir);
+                longpart = static_cast<int64_t>(ip / (4 * ir));
                 ip -= longpart;
 
                 pix[i] = (region[i] > 0) ? (2 * ir * (ir - 1) + ip)
-                         : (npix_ - 2 * ir * (ir + 1) + ip);
+                                         : (npix_ - 2 * ir * (ir + 1) + ip);
             }
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             double ph = phi[i];
-            if (fabs(ph) < eps) {
+            if (fabs(ph) < eps)
+            {
                 ph = 0.0;
             }
             double tt = (ph >= 0.0) ? ph * TWOINVPI : ph * TWOINVPI + 4.0;
@@ -603,12 +683,13 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
             int64_t ir;
             int64_t kshift;
 
-            if (::abs(region[i]) == 1) {
+            if (::abs(region[i]) == 1)
+            {
                 temp1 = halfnside_ + dnside_ * tt;
                 temp2 = tqnside_ * z[i];
 
-                jp = static_cast <int64_t> (temp1 - temp2);
-                jm = static_cast <int64_t> (temp1 + temp2);
+                jp = static_cast<int64_t>(temp1 - temp2);
+                jm = static_cast<int64_t>(temp1 + temp2);
 
                 ir = nsideplusone_ + jp - jm;
                 kshift = 1 - (ir & 1);
@@ -617,20 +698,22 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
                 ip = ip % fournside_;
 
                 pix[i] = ncap_ + ((ir - 1) * fournside_ + ip);
-            } else {
+            }
+            else
+            {
                 tp = tt - floor(tt);
 
                 temp1 = dnside_ * rtz[i];
 
-                jp = static_cast <int64_t> (tp * temp1);
-                jm = static_cast <int64_t> ((1.0 - tp) * temp1);
+                jp = static_cast<int64_t>(tp * temp1);
+                jm = static_cast<int64_t>((1.0 - tp) * temp1);
                 ir = jp + jm + 1;
-                ip = static_cast <int64_t> (tt * (double)ir);
-                longpart = static_cast <int64_t> (ip / (4 * ir));
+                ip = static_cast<int64_t>(tt * (double)ir);
+                longpart = static_cast<int64_t>(ip / (4 * ir));
                 ip -= longpart;
 
                 pix[i] = (region[i] > 0) ? (2 * ir * (ir - 1) + ip)
-                         : (npix_ - 2 * ir * (ir + 1) + ip);
+                                         : (npix_ - 2 * ir * (ir + 1) + ip);
             }
         }
     }
@@ -638,9 +721,11 @@ void toast::HealpixPixels::zphi2ring(int64_t n, double const * phi,
     return;
 }
 
-void toast::HealpixPixels::ang2nest(int64_t n, double const * theta,
-                                    double const * phi, int64_t * pix) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::ang2nest(int64_t n, double const *theta,
+                                    double const *phi, int64_t *pix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -648,9 +733,9 @@ void toast::HealpixPixels::ang2nest(int64_t n, double const * theta,
         throw std::runtime_error(msg.c_str());
     }
 
-    toast::AlignedVector <double> z(n);
-    toast::AlignedVector <double> rtz(n);
-    toast::AlignedVector <int> region(n);
+    toast::AlignedVector<double> z(n);
+    toast::AlignedVector<double> rtz(n);
+    toast::AlignedVector<int> region(n);
 
     theta2z(n, theta, region.data(), z.data(), rtz.data());
 
@@ -659,9 +744,11 @@ void toast::HealpixPixels::ang2nest(int64_t n, double const * theta,
     return;
 }
 
-void toast::HealpixPixels::ang2ring(int64_t n, double const * theta,
-                                    double const * phi, int64_t * pix) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::ang2ring(int64_t n, double const *theta,
+                                    double const *phi, int64_t *pix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -669,9 +756,9 @@ void toast::HealpixPixels::ang2ring(int64_t n, double const * theta,
         throw std::runtime_error(msg.c_str());
     }
 
-    toast::AlignedVector <double> z(n);
-    toast::AlignedVector <double> rtz(n);
-    toast::AlignedVector <int> region(n);
+    toast::AlignedVector<double> z(n);
+    toast::AlignedVector<double> rtz(n);
+    toast::AlignedVector<int> region(n);
 
     theta2z(n, theta, region.data(), z.data(), rtz.data());
 
@@ -680,9 +767,11 @@ void toast::HealpixPixels::ang2ring(int64_t n, double const * theta,
     return;
 }
 
-void toast::HealpixPixels::vec2nest(int64_t n, double const * vec,
-                                    int64_t * pix) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::vec2nest(int64_t n, double const *vec,
+                                    int64_t *pix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -690,10 +779,10 @@ void toast::HealpixPixels::vec2nest(int64_t n, double const * vec,
         throw std::runtime_error(msg.c_str());
     }
 
-    toast::AlignedVector <double> z(n);
-    toast::AlignedVector <double> rtz(n);
-    toast::AlignedVector <double> phi(n);
-    toast::AlignedVector <int> region(n);
+    toast::AlignedVector<double> z(n);
+    toast::AlignedVector<double> rtz(n);
+    toast::AlignedVector<double> phi(n);
+    toast::AlignedVector<int> region(n);
 
     vec2zphi(n, vec, phi.data(), region.data(), z.data(), rtz.data());
 
@@ -702,9 +791,11 @@ void toast::HealpixPixels::vec2nest(int64_t n, double const * vec,
     return;
 }
 
-void toast::HealpixPixels::vec2ring(int64_t n, double const * vec,
-                                    int64_t * pix) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::vec2ring(int64_t n, double const *vec,
+                                    int64_t *pix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -712,10 +803,10 @@ void toast::HealpixPixels::vec2ring(int64_t n, double const * vec,
         throw std::runtime_error(msg.c_str());
     }
 
-    toast::AlignedVector <double> z(n);
-    toast::AlignedVector <double> rtz(n);
-    toast::AlignedVector <double> phi(n);
-    toast::AlignedVector <int> region(n);
+    toast::AlignedVector<double> z(n);
+    toast::AlignedVector<double> rtz(n);
+    toast::AlignedVector<double> phi(n);
+    toast::AlignedVector<int> region(n);
 
     vec2zphi(n, vec, phi.data(), region.data(), z.data(), rtz.data());
 
@@ -724,18 +815,22 @@ void toast::HealpixPixels::vec2ring(int64_t n, double const * vec,
     return;
 }
 
-void toast::HealpixPixels::ring2nest(int64_t n, int64_t const * ringpix,
-                                     int64_t * nestpix) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::ring2nest(int64_t n, int64_t const *ringpix,
+                                     int64_t *nestpix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
-    if (toast::is_aligned(ringpix) && toast::is_aligned(nestpix)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+    if (toast::is_aligned(ringpix) && toast::is_aligned(nestpix))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t fc;
             uint64_t x, y;
             int64_t ix, iy;
@@ -748,23 +843,28 @@ void toast::HealpixPixels::ring2nest(int64_t n, int64_t const * ringpix,
             int64_t ire, irm;
             int64_t ifm, ifp;
             int64_t irt, ipt;
-            if (ringpix[i] < ncap_) {
-                iring = static_cast <int64_t> (
+            if (ringpix[i] < ncap_)
+            {
+                iring = static_cast<int64_t>(
                     0.5 * (1.0 +
-                           ::sqrt(static_cast <double> (1 + 2 * ringpix[i]))));
-                iphi  = (ringpix[i] + 1) - 2 * iring * (iring - 1);
+                           ::sqrt(static_cast<double>(1 + 2 * ringpix[i]))));
+                iphi = (ringpix[i] + 1) - 2 * iring * (iring - 1);
                 kshift = 0;
                 nr = iring;
                 fc = 0;
                 tmp = iphi - 1;
-                if (tmp >= (2 * iring)) {
+                if (tmp >= (2 * iring))
+                {
                     fc = 2;
                     tmp -= 2 * iring;
                 }
-                if (tmp >= iring) {
+                if (tmp >= iring)
+                {
                     ++fc;
                 }
-            } else if (ringpix[i] < (npix_ - ncap_)) {
+            }
+            else if (ringpix[i] < (npix_ - ncap_))
+            {
                 ip = ringpix[i] - ncap_;
                 iring = (ip >> (factor_ + 2)) + nside_;
                 iphi = (ip & (fournside_ - 1)) + 1;
@@ -774,51 +874,64 @@ void toast::HealpixPixels::ring2nest(int64_t n, int64_t const * ringpix,
                 irm = twonside_ + 2 - ire;
                 ifm = (iphi - (ire / 2) + nside_ - 1) >> factor_;
                 ifp = (iphi - (irm / 2) + nside_ - 1) >> factor_;
-                if (ifp == ifm) {
+                if (ifp == ifm)
+                {
                     // faces 4 to 7
                     fc = (ifp == 4) ? 4 : ifp + 4;
-                } else if (ifp < ifm) {
+                }
+                else if (ifp < ifm)
+                {
                     // (half-)faces 0 to 3
                     fc = ifp;
-                } else {
+                }
+                else
+                {
                     // (half-)faces 8 to 11
                     fc = ifm + 8;
                 }
-            } else {
+            }
+            else
+            {
                 ip = npix_ - ringpix[i];
-                iring = static_cast <int64_t> (
-                    0.5 * (1.0 + ::sqrt(static_cast <double> (2 * ip - 1))));
+                iring = static_cast<int64_t>(
+                    0.5 * (1.0 + ::sqrt(static_cast<double>(2 * ip - 1))));
                 iphi = 4 * iring + 1 - (ip - 2 * iring * (iring - 1));
                 kshift = 0;
                 nr = iring;
                 iring = fournside_ - iring;
                 fc = 8;
                 tmp = iphi - 1;
-                if (tmp >= (2 * nr)) {
+                if (tmp >= (2 * nr))
+                {
                     fc = 10;
                     tmp -= 2 * nr;
                 }
-                if (tmp >= nr) {
+                if (tmp >= nr)
+                {
                     ++fc;
                 }
             }
 
             irt = iring - jr_[fc] * nside_ + 1;
             ipt = 2 * iphi - jp_[fc] * nr - kshift - 1;
-            if (ipt >= twonside_) {
+            if (ipt >= twonside_)
+            {
                 ipt -= 8 * nside_;
             }
 
             ix = (ipt - irt) >> 1;
             iy = (-(ipt + irt)) >> 1;
-            x = static_cast <uint64_t> (ix);
-            y = static_cast <uint64_t> (iy);
+            x = static_cast<uint64_t>(ix);
+            y = static_cast<uint64_t>(iy);
 
             nestpix[i] = xy2pix_(x, y);
             nestpix[i] += (fc << (2 * factor_));
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t fc;
             uint64_t x, y;
             int64_t ix, iy;
@@ -831,23 +944,28 @@ void toast::HealpixPixels::ring2nest(int64_t n, int64_t const * ringpix,
             int64_t ire, irm;
             int64_t ifm, ifp;
             int64_t irt, ipt;
-            if (ringpix[i] < ncap_) {
-                iring = static_cast <int64_t> (
+            if (ringpix[i] < ncap_)
+            {
+                iring = static_cast<int64_t>(
                     0.5 * (1.0 +
-                           ::sqrt(static_cast <double> (1 + 2 * ringpix[i]))));
-                iphi  = (ringpix[i] + 1) - 2 * iring * (iring - 1);
+                           ::sqrt(static_cast<double>(1 + 2 * ringpix[i]))));
+                iphi = (ringpix[i] + 1) - 2 * iring * (iring - 1);
                 kshift = 0;
                 nr = iring;
                 fc = 0;
                 tmp = iphi - 1;
-                if (tmp >= (2 * iring)) {
+                if (tmp >= (2 * iring))
+                {
                     fc = 2;
                     tmp -= 2 * iring;
                 }
-                if (tmp >= iring) {
+                if (tmp >= iring)
+                {
                     ++fc;
                 }
-            } else if (ringpix[i] < (npix_ - ncap_)) {
+            }
+            else if (ringpix[i] < (npix_ - ncap_))
+            {
                 ip = ringpix[i] - ncap_;
                 iring = (ip >> (factor_ + 2)) + nside_;
                 iphi = (ip & (fournside_ - 1)) + 1;
@@ -857,45 +975,55 @@ void toast::HealpixPixels::ring2nest(int64_t n, int64_t const * ringpix,
                 irm = twonside_ + 2 - ire;
                 ifm = (iphi - (ire / 2) + nside_ - 1) >> factor_;
                 ifp = (iphi - (irm / 2) + nside_ - 1) >> factor_;
-                if (ifp == ifm) {
+                if (ifp == ifm)
+                {
                     // faces 4 to 7
                     fc = (ifp == 4) ? 4 : ifp + 4;
-                } else if (ifp < ifm) {
+                }
+                else if (ifp < ifm)
+                {
                     // (half-)faces 0 to 3
                     fc = ifp;
-                } else {
+                }
+                else
+                {
                     // (half-)faces 8 to 11
                     fc = ifm + 8;
                 }
-            } else {
+            }
+            else
+            {
                 ip = npix_ - ringpix[i];
-                iring = static_cast <int64_t> (
-                    0.5 * (1.0 + ::sqrt(static_cast <double> (2 * ip - 1))));
+                iring = static_cast<int64_t>(
+                    0.5 * (1.0 + ::sqrt(static_cast<double>(2 * ip - 1))));
                 iphi = 4 * iring + 1 - (ip - 2 * iring * (iring - 1));
                 kshift = 0;
                 nr = iring;
                 iring = fournside_ - iring;
                 fc = 8;
                 tmp = iphi - 1;
-                if (tmp >= (2 * nr)) {
+                if (tmp >= (2 * nr))
+                {
                     fc = 10;
                     tmp -= 2 * nr;
                 }
-                if (tmp >= nr) {
+                if (tmp >= nr)
+                {
                     ++fc;
                 }
             }
 
             irt = iring - jr_[fc] * nside_ + 1;
             ipt = 2 * iphi - jp_[fc] * nr - kshift - 1;
-            if (ipt >= twonside_) {
+            if (ipt >= twonside_)
+            {
                 ipt -= 8 * nside_;
             }
 
             ix = (ipt - irt) >> 1;
             iy = (-(ipt + irt)) >> 1;
-            x = static_cast <uint64_t> (ix);
-            y = static_cast <uint64_t> (iy);
+            x = static_cast<uint64_t>(ix);
+            y = static_cast<uint64_t>(iy);
 
             nestpix[i] = xy2pix_(x, y);
             nestpix[i] += (fc << (2 * factor_));
@@ -905,18 +1033,22 @@ void toast::HealpixPixels::ring2nest(int64_t n, int64_t const * ringpix,
     return;
 }
 
-void toast::HealpixPixels::nest2ring(int64_t n, int64_t const * nestpix,
-                                     int64_t * ringpix) const {
-    if (n > std::numeric_limits <int>::max()) {
+void toast::HealpixPixels::nest2ring(int64_t n, int64_t const *nestpix,
+                                     int64_t *ringpix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
         log.error(msg.c_str(), here);
         throw std::runtime_error(msg.c_str());
     }
-    if (toast::is_aligned(ringpix) && toast::is_aligned(nestpix)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+    if (toast::is_aligned(ringpix) && toast::is_aligned(nestpix))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t fc;
             uint64_t x, y;
             int64_t ix, iy;
@@ -927,20 +1059,25 @@ void toast::HealpixPixels::nest2ring(int64_t n, int64_t const * nestpix,
             int64_t n_before;
             fc = nestpix[i] >> (2 * factor_);
             pix2xy_(nestpix[i] & (nside_ * nside_ - 1), x, y);
-            ix = static_cast <int64_t> (x);
-            iy = static_cast <int64_t> (y);
+            ix = static_cast<int64_t>(x);
+            iy = static_cast<int64_t>(y);
 
             jr = (jr_[fc] * nside_) - ix - iy - 1;
 
-            if (jr < nside_) {
+            if (jr < nside_)
+            {
                 nr = jr;
                 n_before = 2 * nr * (nr - 1);
                 kshift = 0;
-            } else if (jr > (3 * nside_)) {
+            }
+            else if (jr > (3 * nside_))
+            {
                 nr = fournside_ - jr;
                 n_before = npix_ - 2 * (nr + 1) * nr;
                 kshift = 0;
-            } else {
+            }
+            else
+            {
                 nr = nside_;
                 n_before = ncap_ + (jr - nside_) * fournside_;
                 kshift = (jr - nside_) & 1;
@@ -948,18 +1085,25 @@ void toast::HealpixPixels::nest2ring(int64_t n, int64_t const * nestpix,
 
             jp = (jp_[fc] * nr + ix - iy + 1 + kshift) / 2;
 
-            if (jp > fournside_) {
+            if (jp > fournside_)
+            {
                 jp -= fournside_;
-            } else {
-                if (jp < 1) {
+            }
+            else
+            {
+                if (jp < 1)
+                {
                     jp += fournside_;
                 }
             }
 
             ringpix[i] = n_before + jp - 1;
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             int64_t fc;
             uint64_t x, y;
             int64_t ix, iy;
@@ -970,20 +1114,25 @@ void toast::HealpixPixels::nest2ring(int64_t n, int64_t const * nestpix,
             int64_t n_before;
             fc = nestpix[i] >> (2 * factor_);
             pix2xy_(nestpix[i] & (nside_ * nside_ - 1), x, y);
-            ix = static_cast <int64_t> (x);
-            iy = static_cast <int64_t> (y);
+            ix = static_cast<int64_t>(x);
+            iy = static_cast<int64_t>(y);
 
             jr = (jr_[fc] * nside_) - ix - iy - 1;
 
-            if (jr < nside_) {
+            if (jr < nside_)
+            {
                 nr = jr;
                 n_before = 2 * nr * (nr - 1);
                 kshift = 0;
-            } else if (jr > (3 * nside_)) {
+            }
+            else if (jr > (3 * nside_))
+            {
                 nr = fournside_ - jr;
                 n_before = npix_ - 2 * (nr + 1) * nr;
                 kshift = 0;
-            } else {
+            }
+            else
+            {
                 nr = nside_;
                 n_before = ncap_ + (jr - nside_) * fournside_;
                 kshift = (jr - nside_) & 1;
@@ -991,10 +1140,14 @@ void toast::HealpixPixels::nest2ring(int64_t n, int64_t const * nestpix,
 
             jp = (jp_[fc] * nr + ix - iy + 1 + kshift) / 2;
 
-            if (jp > fournside_) {
+            if (jp > fournside_)
+            {
                 jp -= fournside_;
-            } else {
-                if (jp < 1) {
+            }
+            else
+            {
+                if (jp < 1)
+                {
                     jp += fournside_;
                 }
             }
@@ -1007,9 +1160,11 @@ void toast::HealpixPixels::nest2ring(int64_t n, int64_t const * nestpix,
 }
 
 void toast::HealpixPixels::degrade_ring(int factor, int64_t n,
-                                        int64_t const * inpix,
-                                        int64_t * outpix) const {
-    if (n > std::numeric_limits <int>::max()) {
+                                        int64_t const *inpix,
+                                        int64_t *outpix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -1017,8 +1172,8 @@ void toast::HealpixPixels::degrade_ring(int factor, int64_t n,
         throw std::runtime_error(msg.c_str());
     }
 
-    toast::AlignedVector <int64_t> temp_nest(n);
-    toast::AlignedVector <int64_t> temp(n);
+    toast::AlignedVector<int64_t> temp_nest(n);
+    toast::AlignedVector<int64_t> temp(n);
 
     ring2nest(n, inpix, temp_nest.data());
 
@@ -1030,9 +1185,11 @@ void toast::HealpixPixels::degrade_ring(int factor, int64_t n,
 }
 
 void toast::HealpixPixels::degrade_nest(int factor, int64_t n,
-                                        int64_t const * inpix,
-                                        int64_t * outpix) const {
-    if (n > std::numeric_limits <int>::max()) {
+                                        int64_t const *inpix,
+                                        int64_t *outpix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -1042,13 +1199,18 @@ void toast::HealpixPixels::degrade_nest(int factor, int64_t n,
 
     int64_t shift = 2 * factor;
 
-    if (toast::is_aligned(inpix) && toast::is_aligned(outpix)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+    if (toast::is_aligned(inpix) && toast::is_aligned(outpix))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             outpix[i] = inpix[i] >> shift;
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             outpix[i] = inpix[i] >> shift;
         }
     }
@@ -1057,9 +1219,11 @@ void toast::HealpixPixels::degrade_nest(int factor, int64_t n,
 }
 
 void toast::HealpixPixels::upgrade_ring(int factor, int64_t n,
-                                        int64_t const * inpix,
-                                        int64_t * outpix) const {
-    if (n > std::numeric_limits <int>::max()) {
+                                        int64_t const *inpix,
+                                        int64_t *outpix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -1067,8 +1231,8 @@ void toast::HealpixPixels::upgrade_ring(int factor, int64_t n,
         throw std::runtime_error(msg.c_str());
     }
 
-    toast::AlignedVector <int64_t> temp_nest(n);
-    toast::AlignedVector <int64_t> temp(n);
+    toast::AlignedVector<int64_t> temp_nest(n);
+    toast::AlignedVector<int64_t> temp(n);
 
     ring2nest(n, inpix, temp_nest.data());
 
@@ -1080,9 +1244,11 @@ void toast::HealpixPixels::upgrade_ring(int factor, int64_t n,
 }
 
 void toast::HealpixPixels::upgrade_nest(int factor, int64_t n,
-                                        int64_t const * inpix,
-                                        int64_t * outpix) const {
-    if (n > std::numeric_limits <int>::max()) {
+                                        int64_t const *inpix,
+                                        int64_t *outpix) const
+{
+    if (n > std::numeric_limits<int>::max())
+    {
         auto here = TOAST_HERE();
         auto log = toast::Logger::get();
         std::string msg("healpix vector conversion must be in chunks of < 2^31");
@@ -1092,13 +1258,18 @@ void toast::HealpixPixels::upgrade_nest(int factor, int64_t n,
 
     int64_t shift = 2 * factor;
 
-    if (toast::is_aligned(inpix) && toast::is_aligned(outpix)) {
-        #pragma omp simd
-        for (int64_t i = 0; i < n; ++i) {
+    if (toast::is_aligned(inpix) && toast::is_aligned(outpix))
+    {
+#pragma omp simd
+        for (int64_t i = 0; i < n; ++i)
+        {
             outpix[i] = inpix[i] << shift;
         }
-    } else {
-        for (int64_t i = 0; i < n; ++i) {
+    }
+    else
+    {
+        for (int64_t i = 0; i < n; ++i)
+        {
             outpix[i] = inpix[i] << shift;
         }
     }
