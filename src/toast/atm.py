@@ -377,6 +377,12 @@ class AtmSim(object):
 
             slice += 1
 
+        if self._rank == 0 and slice + 1 < self._ntask:
+            log.warning(
+                f"Not enough work for all MPI processes: there were {slice + 1} "
+                f"slices and {self._ntask} MPI tasks."
+            )
+
         slice_starts = np.array(slice_starts, dtype=np.int32)
         slice_stops = np.array(slice_stops, dtype=np.int32)
 

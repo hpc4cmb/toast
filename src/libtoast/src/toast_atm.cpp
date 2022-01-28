@@ -225,7 +225,7 @@ void toast::atm_sim_compress_flag_hits_rank(
         }
         double x = xstart + ix * xstep;
 
-        # pragma omp parallel for schedule(static, 10)
+        # pragma omp parallel for schedule(static, 4)
         for (int64_t iy = 0; iy < ny; ++iy) {
             double y = ystart + iy * ystep;
 
@@ -259,7 +259,7 @@ void toast::atm_sim_compress_flag_extend_rank(
             continue;
         }
 
-        # pragma omp parallel for schedule(static, 10)
+        # pragma omp parallel for schedule(static, 4)
         for (int64_t iy = 1; iy < ny; ++iy) {
             for (int64_t iz = 1; iz < nz; ++iz) {
                 int64_t offset = ix * xstride + iy * ystride + iz * zstride;

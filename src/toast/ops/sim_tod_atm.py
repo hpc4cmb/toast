@@ -243,6 +243,7 @@ class SimAtmosphere(Operator):
                 "view",
                 "quats",
                 "weights",
+                "mode",
             ]:
                 if not detweights.has_trait(trt):
                     msg = f"detector_weights operator should have a '{trt}' trait"

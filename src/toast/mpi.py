@@ -482,8 +482,9 @@ def exception_guard(comm=None):
         msg = "".join(lines)
         log.error(msg)
         # kills the job
-        if comm is None:
-            os._exit(1)
+        if comm is None or comm.size == 1:
+            # Raising the exception allows for debugging
+            raise
         else:
             if comm.size > 1:
                 # gives other processes a bit of time to see whether

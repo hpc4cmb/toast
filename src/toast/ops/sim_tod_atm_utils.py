@@ -260,7 +260,12 @@ class ObserveAtmosphere(Operator):
                             (tmax_det - tmin_det) * self.sample_rate.to_value(u.Hz)
                         )
                         t_interp = np.linspace(tmin_det, tmax_det, n_interp)
-                        az_interp = np.interp(t_interp, times[good], az)
+                        # Az is discontinuous if we scan across az=0.  To interpolate,
+                        # we must unwrap it first ...
+                        az_interp = np.interp(t_interp, times[good], np.unwrap(az))
+                        # ... however, the checks later assume 0 < az < 2pi
+                        az_interp[az_interp < 0] += 2 * np.pi
+                        az_interp[az_interp > 2 * np.pi] -= 2 * np.pi
                         el_interp = np.interp(t_interp, times[good], el)
 
                     # Integrate detector signal across all slabs at different altitudes
@@ -304,6 +309,9 @@ class ObserveAtmosphere(Operator):
                         )
 
                         if err != 0:
+                            #import pdb
+                            #import matplotlib.pyplot as plt
+                            #pdb.set_trace()
                             # Observing failed
                             if self.sample_rate is None:
                                 full_data = atmdata
@@ -330,7 +338,6 @@ class ObserveAtmosphere(Operator):
                             )
                             # If any samples failed the simulation, flag them as bad
                             if nbad > 0:
-                                atmdata[bad] = 0
                                 if self.det_flags is None:
                                     log.warning(
                                         "Some samples failed atmosphere simulation, "

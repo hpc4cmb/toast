@@ -413,6 +413,8 @@ class Focalplane(object):
         "elevation_noise_a" and "elevation_noise_c":  Parameters of elevation scaling
             noise model: PSD_{out} = PSD_{ref} * (a / sin(el) + c)^2.  Only applicable
             to ground data.
+        "pwv_a0", "pwv_a1" and "pwv_a2":  quadratic fit of the NET modulation by
+            PWV.  Only applicable to ground data.
 
     Args:
         detector_data (QTable):  Table of detector properties.
@@ -423,6 +425,7 @@ class Focalplane(object):
         file (str):  Load the focalplane from this file.
         comm (MPI.Comm):  If loading from a file, optional communicator to broadcast
             across.
+        thinfp (int):  Only sample the detectors in the file.
 
     """
 
@@ -436,6 +439,7 @@ class Focalplane(object):
         sample_rate=None,
         file=None,
         comm=None,
+        thinfp=None,
     ):
         log = Logger.get()
         self.detector_data = detector_data
@@ -445,6 +449,13 @@ class Focalplane(object):
         if file is not None:
             log.debug_rank(f"Loading focalplane from {file}", comm=comm)
             self.load_hdf5(file, comm=comm)
+
+        if thinfp is not None:
+            # Pick only every `thinfp` pixel on the focal plane
+            ndet = len(self.detector_data)
+            for idet in range(ndet - 1, -1, -1):
+                if int(idet // 2) % thinfp != 0:
+                    del self.detector_data[idet]
 
         # Add UID if not given
         if "uid" not in self.detector_data.colnames:
