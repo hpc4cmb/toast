@@ -104,6 +104,11 @@ class Noise(object):
         """(list): list of strings containing the PSD names."""
         return self._keys
 
+    @property
+    def mixing_matrix(self):
+        """(dict): the full mixing matrix."""
+        return self._mixmatrix
+
     def multiply_ntt(self, key, data):
         """Filter the data with noise covariance."""
         raise NotImplementedError("multiply_ntt not yet implemented")
