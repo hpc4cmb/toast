@@ -14,6 +14,8 @@ from ..utils import Environment, Logger
 
 from ..timing import function_timer, Timer
 
+from ..noise import Noise
+
 from ..noise_sim import AnalyticNoise
 
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
@@ -72,7 +74,9 @@ class ElevationNoise(Operator):
     )
 
     view = Unicode(
-        None, allow_none=True, help="Use this view of the data in all observations.  "
+        None,
+        allow_none=True,
+        help="Use this view of the data in all observations.  "
         "Use 'middle' if the middle 10 seconds of each observation is enough to "
         "determine the effective observing elevation",
     )
@@ -161,7 +165,7 @@ class ElevationNoise(Operator):
 
             if self.view == "middle" and self.view not in obs.intervals:
                 # Create a view that is just one minute in the middle
-                length = 10.  # in seconds
+                length = 10.0  # in seconds
                 times = obs.shared[self.times]
                 t_start = times[0]
                 t_stop = times[-1]
@@ -180,8 +184,10 @@ class ElevationNoise(Operator):
 
             # Check that the noise model exists
             if self.noise_model not in obs:
-                msg = "Noise model {self.noise_model} does not exist in " \
+                msg = (
+                    "Noise model {self.noise_model} does not exist in "
                     "observation {obs.name}"
+                )
                 raise RuntimeError(msg)
 
             # Check that the view in the detector pointing operator covers
@@ -198,19 +204,32 @@ class ElevationNoise(Operator):
                 detector_intervals = obs.intervals[self.detector_pointing.view]
                 intersection = detector_intervals & intervals
                 if intersection != intervals:
-                    msg = f"view {self.view} is not fully covered by valid " \
+                    msg = (
+                        f"view {self.view} is not fully covered by valid "
                         "detector pointing"
+                    )
                     raise RuntimeError(msg)
             self.detector_pointing.view = view
 
             noise = obs[self.noise_model]
 
-            out_noise = None
-            if self.out_model is None or self.noise_model == self.out_model:
-                out_noise = noise
-            else:
-                obs[self.out_model] = copy.deepcopy(noise)
-                out_noise = obs[self.out_model]
+            # Create a new base-class noise object with the same PSDs and
+            # mixing matrix as the input.  Then modify those values.  If the
+            # output name is the same as the input, then delete the input
+            # and replace it with the new model.
+
+            nse_keys = noise.keys
+            nse_dets = noise.detectors
+            nse_freqs = {x: noise.freq(x) for x in nse_keys}
+            nse_psds = {x: noise.psd(x) for x in nse_keys}
+            nse_indx = {x: noise.index(x) for x in nse_keys}
+            out_noise = Noise(
+                detectors=nse_dets,
+                freqs=nse_freqs,
+                psds=nse_psds,
+                indices=nse_indx,
+                mixmatrix=noise.mixing_matrix,
+            )
 
             # We are building up a data product (a noise model) which has values for
             # all detectors.  For each detector we need to expand the detector pointing.
@@ -280,15 +299,24 @@ class ElevationNoise(Operator):
 
                 if modulate_pwv:
                     pwv = obs.telescope.site.weather.pwv.to_value(u.mm)
-                    net_factor *= pwv_a0 + pwv_a1 * pwv + pwv_a2 * pwv ** 2
+                    net_factor *= pwv_a0 + pwv_a1 * pwv + pwv_a2 * pwv**2
 
                 if self.extra_factor is not None:
                     net_factor *= self.extra_factor
 
-                out_noise.psd(det)[:] *= net_factor ** 2
+                out_noise.psd(det)[:] *= net_factor**2
 
             self.detector_pointing.view = detector_pointing_view
 
+            # Store the new noise model in the observation.
+
+            if self.out_model is None or self.noise_model == self.out_model:
+                # We are replacing the input
+                del obs[self.noise_model]
+                obs[self.noise_model] = out_noise
+            else:
+                # We are storing this in a new key
+                obs[self.out_model] = out_noise
         return
 
     def _finalize(self, data, **kwargs):
