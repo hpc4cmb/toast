@@ -1076,7 +1076,7 @@ class TODGround(TOD):
         """
         d = np.abs(coord_in - coord_out)
         t_accel = scanrate / scan_accel
-        d_accel = 0.5 * scan_accel * t_accel ** 2
+        d_accel = 0.5 * scan_accel * t_accel**2
         if 2 * d_accel > d:
             # No time to reach scan speed
             d_accel = d / 2
@@ -1099,7 +1099,7 @@ class TODGround(TOD):
 
         d = np.abs(coord_in - coord_out)
         t_accel = scanrate / scan_accel
-        d_accel = 0.5 * scan_accel * t_accel ** 2
+        d_accel = 0.5 * scan_accel * t_accel**2
         if 2 * d_accel > d:
             # No time to reach scan speed
             d_accel = d / 2
@@ -1293,7 +1293,7 @@ class TODGround(TOD):
             a = self._scan_accel_el
             b = -0.5 * self._scan_accel_el * t_mod
             c = 2 * self._el_mod_amplitude
-            if b ** 2 - 4 * a * c < 0:
+            if b**2 - 4 * a * c < 0:
                 raise RuntimeError(
                     "Cannot perform {:.2f} deg elevation oscillation in {:.2f} s "
                     "with {:.2f} deg/s^2 acceleration".format(
@@ -1301,8 +1301,8 @@ class TODGround(TOD):
                         np.degrees(self._scan_accel_el),
                     )
                 )
-            root1 = (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
-            root2 = (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+            root1 = (-b - np.sqrt(b**2 - 4 * a * c)) / (2 * a)
+            root2 = (-b + np.sqrt(b**2 - 4 * a * c)) / (2 * a)
             if root1 > 0:
                 t_accel = root1
             else:
@@ -1326,7 +1326,7 @@ class TODGround(TOD):
             # accelerate
             t = np.linspace(0, t_accel, n)
             t_interp.append(t)
-            el_interp.append(0.5 * self._scan_accel_el * t ** 2)
+            el_interp.append(0.5 * self._scan_accel_el * t**2)
             # scan
             t_last = t_interp[-1][-1]
             el_last = el_interp[-1][-1]
@@ -1339,7 +1339,7 @@ class TODGround(TOD):
             t = np.linspace(0, 2 * t_accel, n)
             t_interp.append(t_last + t)
             el_interp.append(
-                el_last + scanrate * t - 0.5 * self._scan_accel_el * t ** 2
+                el_last + scanrate * t - 0.5 * self._scan_accel_el * t**2
             )
             # scan
             t_last = t_interp[-1][-1]
@@ -1353,7 +1353,7 @@ class TODGround(TOD):
             t = np.linspace(0, t_accel, n)
             t_interp.append(t_last + t)
             el_interp.append(
-                el_last - scanrate * t + 0.5 * self._scan_accel_el * t ** 2
+                el_last - scanrate * t + 0.5 * self._scan_accel_el * t**2
             )
 
             t_interp = np.hstack(t_interp)
@@ -1377,7 +1377,7 @@ class TODGround(TOD):
         # simulate a single elevation step at high resolution
 
         t_accel = self._scanrate_el / self._scan_accel_el
-        el_accel = 0.5 * self._scan_accel_el * t_accel ** 2
+        el_accel = 0.5 * self._scan_accel_el * t_accel**2
         if el_step > 2 * el_accel:
             # Step is large enough to reach elevation scan rate
             t_scan = (el_step - 2 * el_accel) / self._scanrate_el
@@ -1393,7 +1393,7 @@ class TODGround(TOD):
         # accelerate
         t = np.linspace(0, t_accel, n)
         t_interp.append(t)
-        el_interp.append(0.5 * self._scan_accel_el * t ** 2)
+        el_interp.append(0.5 * self._scan_accel_el * t**2)
         # scan
         if t_scan > 0:
             t_last = t_interp[-1][-1]
@@ -1408,7 +1408,7 @@ class TODGround(TOD):
         t = np.linspace(0, t_accel, n)
         t_interp.append(t_last + t)
         el_interp.append(
-            el_last + el_rate_last * t - 0.5 * self._scan_accel_el * t ** 2
+            el_last + el_rate_last * t - 0.5 * self._scan_accel_el * t**2
         )
 
         t_interp = np.hstack(t_interp)

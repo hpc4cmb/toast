@@ -498,8 +498,8 @@ class OpSimAtmosphere(Operator):
         telescope = self._get_from_obs("telescope_id", obs)
         site = self._get_from_obs("site_id", obs)
         obsindx = self._get_from_obs("id", obs)
-        key1 = self._realization * 2 ** 32 + telescope * 2 ** 16 + self._component
-        key2 = site * 2 ** 16 + obsindx
+        key1 = self._realization * 2**32 + telescope * 2**16 + self._component
+        key2 = site * 2**16 + obsindx
         counter1 = 0
         counter2 = 0
         return key1, key2, counter1, counter2
@@ -615,7 +615,7 @@ class OpSimAtmosphere(Operator):
         # Translate the wind speed to time span of a correlated interval
         wx = weather.west_wind
         wy = weather.south_wind
-        w = np.sqrt(wx ** 2 + wy ** 2)
+        w = np.sqrt(wx**2 + wy**2)
         self._wind_time = self._wind_dist / w
 
         tmax = tmin + self._wind_time
@@ -668,7 +668,7 @@ class OpSimAtmosphere(Operator):
         T0_center = weather.air_temperature
         wx = weather.west_wind
         wy = weather.south_wind
-        w_center = np.sqrt(wx ** 2 + wy ** 2)
+        w_center = np.sqrt(wx**2 + wy**2)
         wdir_center = np.arctan2(wy, wx)
 
         azmin, azmax, elmin, elmax = scan_range

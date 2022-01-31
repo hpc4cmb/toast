@@ -372,7 +372,7 @@ class Cache(object):
             del ref
             tot += sz
             if not silent:
-                log.info(" - {:25} {:5.2f} MB".format(key, sz / 2 ** 20))
+                log.info(" - {:25} {:5.2f} MB".format(key, sz / 2**20))
         if not silent:
-            log.info(" {:27} {:5.2f} MB".format("TOTAL", tot / 2 ** 20))
+            log.info(" {:27} {:5.2f} MB".format("TOTAL", tot / 2**20))
         return tot

@@ -93,7 +93,12 @@ def load_instrument_and_schedule(args, comm):
     # Load a generic focalplane file.  NOTE:  again, this is just using the
     # built-in Focalplane class.  In a workflow for a specific experiment we would
     # have a custom class.
-    focalplane = toast.instrument.Focalplane(file=args.focalplane, comm=comm)
+    focalplane = toast.instrument.Focalplane()
+    hf = toast.io.hdf5_open(args.focalplane, "r", comm=comm, force_serial=True)
+    focalplane.load_hdf5(hf, comm=comm)
+    if hf is not None:
+        hf.close()
+    del hf
 
     # Load the schedule file
     schedule = toast.schedule.SatelliteSchedule()

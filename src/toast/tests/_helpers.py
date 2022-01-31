@@ -322,7 +322,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         toast.Data: the distributed data with named observations.
 
     """
-    nsamp = 12 * nside ** 2
+    nsamp = 12 * nside**2
     rate = 10.0
 
     toastcomm = create_comm(mpicomm)
@@ -485,7 +485,7 @@ def create_fake_sky_alm(lmax=128, fwhm=10 * u.degree, pol=True, pointsources=Fal
         nside = 512
         while nside < lmax:
             nside *= 2
-        npix = 12 * nside ** 2
+        npix = 12 * nside**2
         m = np.zeros(npix)
         for lon in np.linspace(-180, 180, 6):
             for lat in np.linspace(-80, 80, 6):
@@ -530,7 +530,7 @@ def create_fake_beam_alm(
     while nside < lmax:
 
         nside *= 2
-    npix = 12 * nside ** 2
+    npix = 12 * nside**2
     pix = np.arange(npix)
     vec = hp.pix2vec(nside, pix, nest=False)
     theta, phi = hp.vec2dir(vec)
@@ -538,7 +538,7 @@ def create_fake_beam_alm(
     y = theta * np.sin(phi)
     sigma_x = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    beam_map = np.exp(-0.5 * (x ** 2 / sigma_x ** 2 + y ** 2 / sigma_y ** 2))
+    beam_map = np.exp(-0.5 * (x**2 / sigma_x**2 + y**2 / sigma_y**2))
     empty = np.zeros_like(beam_map)
     if pol and separate_IQU:
         beam_map_I = np.vstack([beam_map, empty, empty])
@@ -687,7 +687,7 @@ def create_ground_data(
         det_flags="flags",
         det_data="signal",
         shared_flags="flags",
-        scan_accel_az=3 * u.degree / u.second ** 2,
+        scan_accel_az=3 * u.degree / u.second**2,
     )
     sim_ground.apply(data)
 

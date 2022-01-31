@@ -318,7 +318,7 @@ class SimGainTest(MPITestCase):
         sim_dipole.apply(data)
 
         # inject gain drift
-        responsivity = lambda x: -2 * x ** 3 + 5 * x ** 2 - 4 * x + 3
+        responsivity = lambda x: -2 * x**3 + 5 * x**2 - 4 * x + 3
         drifter = ops.GainDrifter(
             det_data=key,
             drift_mode="thermal_drift",

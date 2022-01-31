@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+
 import numpy as np
 
 from astropy import units as u
@@ -10,9 +12,9 @@ import h5py
 
 from .noise import Noise
 
-from .timing import function_timer
+from .utils import hdf5_use_serial
 
-from .utils import have_hdf5_parallel
+from .timing import function_timer
 
 
 class AnalyticNoise(Noise):
@@ -137,65 +139,59 @@ class AnalyticNoise(Noise):
         return self._NET[det]
 
     def _detector_weight(self, det):
-        return 1.0 / (self._NET[det] ** 2).to_value(u.K ** 2 * u.second)
+        return 1.0 / (self._NET[det] ** 2).to_value(u.K**2 * u.second)
 
-    def _save_hdf5(self, handle, comm=None, force_serial=False, **kwargs):
+    def _save_hdf5(self, handle, comm, **kwargs):
         """Internal method which can be overridden by derived classes."""
-        parallel = have_hdf5_parallel()
-        if force_serial:
-            parallel = False
-        participating = parallel or comm is None or comm.rank == 0
+        # First save the base class info
+        self._save_base_hdf5(handle, comm)
 
-        def _dump_analytic(grp):
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+
+        if handle is not None:
             # Write the noise model parameters as a dataset
-            if participating:
-                maxstr = 1 + max([len(x) for x in self._dets])
-                adtype = np.dtype(f"a{maxstr}, f8, f8, f8, f8, f8")
-                ds = grp.create_dataset("analytic", (len(self._dets),), dtype=adtype)
-                if comm is None or comm.rank == 0:
-                    ds[:] = np.array(
-                        [
-                            (
-                                d,
-                                self._rate[d].to_value(u.Hz),
-                                self._fmin[d].to_value(u.Hz),
-                                self._fknee[d].to_value(u.Hz),
-                                self._alpha[d],
-                                self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second)),
-                            )
-                            for d in self._dets
-                        ],
-                        dtype=adtype,
-                    )
-                del ds
+            maxstr = 1 + max([len(x) for x in self._dets])
+            adtype = np.dtype(f"a{maxstr}, f8, f8, f8, f8, f8")
+            ds = handle.create_dataset("analytic", len(self._dets), dtype=adtype)
+            if rank == 0:
+                packed = np.array(
+                    [
+                        (
+                            d,
+                            self._rate[d].to_value(u.Hz),
+                            self._fmin[d].to_value(u.Hz),
+                            self._fknee[d].to_value(u.Hz),
+                            self._alpha[d],
+                            self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second)),
+                        )
+                        for d in self._dets
+                    ],
+                    dtype=adtype,
+                )
+                ds.write_direct(packed)
+            del ds
 
-        if isinstance(handle, h5py.Group):
-            self._save_base_hdf5(handle, comm=comm, force_serial=force_serial)
-            _dump_analytic(handle)
-        else:
-            hf = None
-            if parallel:
-                hf = h5py.File(handle, "w", driver="mpio", comm=comm)
-            elif comm is None or comm.rank == 0:
-                hf = h5py.File(handle, "w")
-            self._save_base_hdf5(hf, comm=comm, force_serial=force_serial)
-            _dump_analytic(hf)
-            if hf is not None:
-                hf.flush()
-                hf.close()
-            del hf
-
-    def _load_hdf5(self, handle, comm=None, **kwargs):
+    def _load_hdf5(self, handle, comm, **kwargs):
         """Internal method which can be overridden by derived classes."""
+        # First load the base class information
+        self._load_base_hdf5(handle, comm)
 
-        def _get_analytic(grp):
+        # Now load the dataset of analytic parameters.
+
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm)
+
+        if handle is not None:
             # get noise model paramters
             self._rate = dict()
             self._fmin = dict()
             self._fknee = dict()
             self._alpha = dict()
             self._NET = dict()
-            ds = grp["analytic"]
+            ds = handle["analytic"]
             for row in ds[:]:
                 dname = row[0].decode()
                 self._rate[dname] = row[1] * u.Hz
@@ -205,13 +201,12 @@ class AnalyticNoise(Noise):
                 self._NET[dname] = row[5] * u.K * np.sqrt(1.0 * u.second)
             del ds
 
-        if isinstance(handle, h5py.Group):
-            self._load_base_hdf5(handle, comm=comm)
-            _get_analytic(handle)
-        else:
-            with h5py.File(handle, "r") as hf:
-                self._load_base_hdf5(hf, comm=comm)
-                _get_analytic(hf)
+        if need_bcast and comm is not None:
+            self._rate = comm.bcast(self._rate, root=0)
+            self._fmin = comm.bcast(self._fmin, root=0)
+            self._fknee = comm.bcast(self._fknee, root=0)
+            self._alpha = comm.bcast(self._alpha, root=0)
+            self._NET = comm.bcast(self._NET, root=0)
 
     def __repr__(self):
         value = f"<AnalyticNoise model with {len(self._dets)} detectors"

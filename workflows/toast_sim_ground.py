@@ -154,13 +154,22 @@ def load_instrument_and_schedule(args, comm):
     )
     if os.path.isfile(fname_pickle):
         log.info_rank(f"Loading focalplane from {fname_pickle}", comm=comm)
-        focalplane = pickle.load(open(fname_pickle, "rb"))
+        if comm is None or comm.rank == 0:
+            focalplane = pickle.load(open(fname_pickle, "rb"))
+        if comm is not None:
+            focalplane = comm.bcast(focalplane, root=0)
     else:
         focalplane = toast.instrument.Focalplane(
-            file=args.focalplane, comm=comm, sample_rate=sample_rate, thinfp=args.thinfp
+            sample_rate=sample_rate, thinfp=args.thinfp
         )
+        hf = toast.io.hdf5_open(args.focalplane, "r", comm=comm, force_serial=True)
+        focalplane.load_hdf5(hf, comm=comm)
+        if hf is not None:
+            hf.close()
+        del hf
         log.info_rank(f"Saving focalplane to {fname_pickle}", comm=comm)
-        pickle.dump(focalplane, open(fname_pickle, "wb"))
+        if comm is None or comm.rank == 0:
+            pickle.dump(focalplane, open(fname_pickle, "wb"))
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
     log.info_rank(f"After loading focalplane:  {mem}", comm)

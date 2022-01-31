@@ -51,10 +51,10 @@ def dipole(det_pointing, vel=None, solar=None, cmb=2.72548 * u.Kelvin, freq=0 * 
 
         solar_speed = np.sqrt(np.sum(solar * solar, axis=0))
 
-        vpar = (array_dot(vel, solar) / solar_speed ** 2) * solar
+        vpar = (array_dot(vel, solar) / solar_speed**2) * solar
         vperp = vel - vpar
 
-        vdot = 1.0 / (1.0 + array_dot(solar, vel) * inv_light ** 2)
+        vdot = 1.0 / (1.0 + array_dot(solar, vel) * inv_light**2)
         invgamma = np.sqrt(1.0 - (solar_speed * inv_light) ** 2)
 
         vpar += solar
@@ -79,7 +79,7 @@ def dipole(det_pointing, vel=None, solar=None, cmb=2.72548 * u.Kelvin, freq=0 * 
     freq_hz = freq.to_value(u.Hz)
 
     if freq_hz == 0:
-        inv_gamma = np.sqrt(1.0 - beta ** 2)
+        inv_gamma = np.sqrt(1.0 - beta**2)
         num = 1.0 - beta * np.sum(v * direct, axis=1)
         dipoletod = cmb_kelvin * (inv_gamma / num - 1.0)
     else:
@@ -87,6 +87,6 @@ def dipole(det_pointing, vel=None, solar=None, cmb=2.72548 * u.Kelvin, freq=0 * 
         fx = constants.h * freq_hz / (constants.k * cmb_kelvin)
         fcor = (fx / 2) * (np.exp(fx) + 1) / (np.exp(fx) - 1)
         bt = beta * np.sum(v * direct, axis=1)
-        dipoletod = cmb_kelvin * (bt + fcor * bt ** 2)
+        dipoletod = cmb_kelvin * (bt + fcor * bt**2)
 
     return dipoletod

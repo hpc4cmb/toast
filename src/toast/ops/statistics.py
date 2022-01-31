@@ -173,11 +173,11 @@ class Statistics(Operator):
                     signal = views.detdata[self.det_data][iview][det]
                     good_signal = signal[mask].copy() - means[idet]
                     # Variance
-                    stats[0, idet] += np.sum(good_signal ** 2)
+                    stats[0, idet] += np.sum(good_signal**2)
                     # Skewness
-                    stats[1, idet] += np.sum(good_signal ** 3)
+                    stats[1, idet] += np.sum(good_signal**3)
                     # Kurtosis
-                    stats[2, idet] += np.sum(good_signal ** 4)
+                    stats[2, idet] += np.sum(good_signal**4)
 
             if obs.comm.comm_group is not None:
                 stats = obs.comm.comm_group.reduce(stats, op=MPI.SUM)

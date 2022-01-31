@@ -19,7 +19,6 @@ from ..utils import (
     Logger,
     import_from_name,
     dtype_to_aligned,
-    have_hdf5_parallel,
 )
 
 from ..mpi import MPI
@@ -32,7 +31,7 @@ from ..weather import SimWeather
 
 from ..observation import Observation
 
-from .observation_hdf_utils import check_dataset_buffer_size
+from .observation_hdf_utils import check_dataset_buffer_size, hdf5_open, hdf5_config
 
 
 @function_timer
@@ -48,13 +47,35 @@ def load_hdf5_shared(obs, hgrp, fields, log_prefix, parallel):
     dist_samps = obs.dist.samps
     dist_dets = obs.dist.det_indices
 
-    for field in list(hgrp.keys()):
+    serial_load = False
+    if obs.comm.group_size > 1 and not parallel:
+        # We are doing a serial load, but we have multiple processes
+        # in the group.
+        serial_load = True
+
+    field_list = None
+    if hgrp is not None:
+        field_list = list(hgrp.keys())
+    if serial_load and obs.comm.comm_group is not None:
+        # Broadcast the field list
+        field_list = obs.comm.comm_group.bcast(field_list, root=0)
+
+    for field in field_list:
         if fields is not None and field not in fields:
             continue
-        ds = hgrp[field]
-        comm_type = ds.attrs["comm_type"]
-        full_shape = ds.shape
-        dtype = ds.dtype
+        ds = None
+        comm_type = None
+        full_shape = None
+        dtype = None
+        if hgrp is not None:
+            ds = hgrp[field]
+            comm_type = ds.attrs["comm_type"]
+            full_shape = ds.shape
+            dtype = ds.dtype
+        if serial_load:
+            comm_type = obs.comm.comm_group.bcast(comm_type, root=0)
+            full_shape = obs.comm.comm_group.bcast(full_shape, root=0)
+            dtype = obs.comm.comm_group.bcast(dtype, root=0)
 
         slc = list()
         shape = list()
@@ -81,16 +102,46 @@ def load_hdf5_shared(obs, hgrp, fields, log_prefix, parallel):
         obs.shared.create_type(comm_type, field, shape, dtype)
         shcomm = obs.shared[field].comm
 
-        # Load the data on one process of the communicator
-        data = None
-        if shcomm is None or shcomm.rank == 0:
-            msg = f"Shared field {field} ({comm_type})"
-            check_dataset_buffer_size(msg, slc, dtype, parallel)
-            data = np.array(ds[slc], copy=False).astype(obs.shared[field].dtype)
+        # Load the data on one process of the communicator if loading in parallel.
+        # If doing a serial load, the single reading process must communicate the
+        # data to the rank zero process on each object comm.
+        if (comm_type == "group") or (not serial_load):
+            # Load data on the rank zero process and set
+            data = None
+            if shcomm is None or shcomm.rank == 0:
+                msg = f"Shared field {field} ({comm_type})"
+                check_dataset_buffer_size(msg, slc, dtype, parallel)
+                data = np.array(ds[slc], copy=False).astype(obs.shared[field].dtype)
+            obs.shared[field].set(data, fromrank=0)
+            del data
+        else:
+            # More compilicated, since we have data distributed on along a process
+            # row or column, but are loading data on one process.  First load full
+            # data on the reader.
+            full_data = None
+            if obs.comm.group_rank == 0:
+                full_data = np.array(ds[:], copy=False)
 
-        obs.shared[field].set(data, fromrank=0)
+            # Note:  we could use a scatterv here instead of broadcasting the whole
+            # thing, if this ever becomes worth the additional book-keeping.
+            data = None
+            if comm_type == "row" and obs.comm.comm_row_rank == 0:
+                # Distribute to the other rank zeros of the process rows
+                full_data = obs.comm.comm_col.bcast(full_data, root=0)
+                data = np.array(full_data[slc], dtype=obs.shared[field].dtype)
+            elif comm_type == "column" and obs.comm.comm_col_rank == 0:
+                # Distribute to the other rank zeros of the process columns
+                full_data = obs.comm.comm_row.bcast(full_data, root=0)
+                data = np.array(full_data[slc], dtype=obs.shared[field].dtype)
+            del full_data
+
+            # Now set the data within each row / column
+            obs.shared[field].set(data, fromrank=0)
+            del data
         del ds
 
+        if obs.comm.comm_group is not None:
+            obs.comm.comm_group.barrier()
         log.verbose_rank(
             f"{log_prefix}  Shared finished {field} read in",
             comm=obs.comm.comm_group,
@@ -117,13 +168,32 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
     det_off = dist_dets[obs.comm.group_rank].offset
     det_nelem = dist_dets[obs.comm.group_rank].n_elem
 
-    for field in list(hgrp.keys()):
+    serial_load = False
+    if obs.comm.group_size > 1 and not parallel:
+        # We are doing a serial load, but we have multiple processes
+        # in the group.
+        serial_load = True
+
+    field_list = None
+    if hgrp is not None:
+        field_list = list(hgrp.keys())
+    if serial_load and obs.comm.comm_group is not None:
+        # Broadcast the field list
+        field_list = obs.comm.comm_group.bcast(field_list, root=0)
+
+    for field in field_list:
         if fields is not None and field not in fields:
             continue
-        ds = hgrp[field]
-        full_shape = ds.shape
-        dtype = ds.dtype
-        units = u.Unit(str(ds.attrs["units"]))
+        ds = None
+        if hgrp is not None:
+            ds = hgrp[field]
+            full_shape = ds.shape
+            dtype = ds.dtype
+            units = u.Unit(str(ds.attrs["units"]))
+        if serial_load:
+            units = obs.comm.comm_group.bcast(units, root=0)
+            full_shape = obs.comm.comm_group.bcast(full_shape, root=0)
+            dtype = obs.comm.comm_group.bcast(dtype, root=0)
 
         detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
         hf_slice = [
@@ -148,10 +218,28 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
             units=units,
         )
 
-        # All processes independently load their data
-        msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
-        check_dataset_buffer_size(msg, hf_slice, dtype, parallel)
-        ds.read_direct(obs.detdata[field].data, hf_slice, detdata_slice)
+        # All processes independently load their data if running in
+        # parallel.  If loading serially, one process reads ands broadcasts.
+        # We implement it this way instead of using a scatter, since the
+        # data for each process is not contiguous in the dataset.
+
+        if serial_load:
+            full_slice = tuple([slice(0, x) for x in full_shape])
+            buffer = None
+            if ds is not None:
+                buffer = np.zeros(full_shape, dtype=dtype)
+                ds.read_direct(buffer, full_slice, full_slice)
+            if obs.comm.comm_group is not None:
+                buffer = obs.comm.comm_group.bcast(buffer, root=0)
+            obs.detdata[field].data[detdata_slice] = buffer[hf_slice]
+            del buffer
+        else:
+            msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
+            check_dataset_buffer_size(msg, hf_slice, dtype, parallel)
+            ds.read_direct(obs.detdata[field].data, hf_slice, detdata_slice)
+
+        if obs.comm.comm_group is not None:
+            obs.comm.comm_group.barrier()
         log.verbose_rank(
             f"{log_prefix}  Detdata finished {field} read in",
             comm=obs.comm.comm_group,
@@ -167,18 +255,37 @@ def load_hdf5_intervals(obs, hgrp, times, fields, log_prefix, parallel):
     timer = Timer()
     timer.start()
 
-    for field in list(hgrp.keys()):
+    serial_load = False
+    if obs.comm.group_size > 1 and not parallel:
+        # We are doing a serial load, but we have multiple processes
+        # in the group.
+        serial_load = True
+
+    field_list = None
+    if hgrp is not None:
+        field_list = list(hgrp.keys())
+    if serial_load:
+        # Broadcast the field list
+        field_list = obs.comm.comm_group.bcast(field_list, root=0)
+
+    if obs.comm.comm_group is not None:
+        obs.comm.comm_group.barrier()
+
+    for field in field_list:
         if fields is not None and field not in fields:
             continue
         # The dataset
-        ds = hgrp[field]
-        # Only the root process reads
+        ds = None
         global_times = None
         if obs.comm.group_rank == 0:
+            ds = hgrp[field]
             global_times = np.transpose(ds[:])
 
         obs.intervals.create(field, global_times, times, fromrank=0)
         del ds
+
+        if obs.comm.comm_group is not None:
+            obs.comm.comm_group.barrier()
         log.verbose_rank(
             f"{log_prefix}  Intervals finished {field} read in",
             comm=obs.comm.comm_group,
@@ -225,110 +332,111 @@ def load_hdf5(
     """
     log = Logger.get()
     env = Environment.get()
-    parallel = have_hdf5_parallel()
-    if force_serial:
-        parallel = False
+
+    rank = comm.group_rank
+    nproc = comm.group_size
+    if nproc == 1:
+        # Force serial usage in this case, to avoid any MPI overhead
+        force_serial = True
 
     timer = Timer()
     timer.start()
     log_prefix = f"HDF5 load {os.path.basename(path)}: "
 
-    # Open the file and get the root group.  In both serial and parallel HDF5,
-    # multiple readers are supported.  We open the file with all processes to
-    # enable reading detector and shared data in parallel.
+    # Open the file and get the root group.
     hf = None
     hfgroup = None
 
-    if parallel:
-        hf = h5py.File(path, "r", driver="mpio", comm=comm.comm_group)
-        hgroup = hf
-    else:
-        hf = h5py.File(path, "r")
-        hgroup = hf
+    parallel, _, _ = hdf5_config(comm=comm.comm_group, force_serial=force_serial)
+    hf = hdf5_open(path, "r", comm=comm.comm_group, force_serial=force_serial)
+    hgroup = hf
+
     log.debug_rank(
         f"{log_prefix}  Opened file {path} in",
         comm=comm.comm_group,
         timer=timer,
     )
 
-    # Data format version check
-    file_version = int(hgroup.attrs["toast_format_version"])
-    if file_version != 0:
-        msg = f"HDF5 file '{path}' using unsupported data format {file_version}"
-        log.error(msg)
-        raise RuntimeError(msg)
+    if hgroup is not None:
+        # Data format version check
+        file_version = int(hgroup.attrs["toast_format_version"])
+        if file_version != 0:
+            msg = f"HDF5 file '{path}' using unsupported data format {file_version}"
+            log.error(msg)
+            raise RuntimeError(msg)
 
-    # Observation properties
-    obs_name = str(hgroup.attrs["observation_name"])
-    obs_uid = int(hgroup.attrs["observation_uid"])
-    obs_dets = json.loads(hgroup.attrs["observation_detectors"])
-    obs_det_sets = None
-    if hgroup.attrs["observation_detector_sets"] != "NONE":
-        obs_det_sets = json.loads(hgroup.attrs["observation_detector_sets"])
-    obs_samples = int(hgroup.attrs["observation_samples"])
-    obs_sample_sets = None
-    if hgroup.attrs["observation_sample_sets"] != "NONE":
-        obs_sample_sets = [
-            [int(x) for x in y]
-            for y in json.loads(hgroup.attrs["observation_sample_sets"])
-        ]
+        # Observation properties
+        obs_name = str(hgroup.attrs["observation_name"])
+        obs_uid = int(hgroup.attrs["observation_uid"])
+        obs_dets = json.loads(hgroup.attrs["observation_detectors"])
+        obs_det_sets = None
+        if hgroup.attrs["observation_detector_sets"] != "NONE":
+            obs_det_sets = json.loads(hgroup.attrs["observation_detector_sets"])
+        obs_samples = int(hgroup.attrs["observation_samples"])
+        obs_sample_sets = None
+        if hgroup.attrs["observation_sample_sets"] != "NONE":
+            obs_sample_sets = [
+                [int(x) for x in y]
+                for y in json.loads(hgroup.attrs["observation_sample_sets"])
+            ]
 
-    # Instrument properties
+        # Instrument properties
 
-    # FIXME:  We should add save / load methods to these classes to
-    # generalize this and allow use of other classes.
+        # FIXME:  We should add save / load methods to these classes to
+        # generalize this and allow use of other classes.
 
-    inst_group = hgroup["instrument"]
-    telescope_name = str(inst_group.attrs["telescope_name"])
-    telescope_class_name = str(inst_group.attrs["telescope_class"])
-    telescope_uid = int(inst_group.attrs["telescope_uid"])
+        inst_group = hgroup["instrument"]
+        telescope_name = str(inst_group.attrs["telescope_name"])
+        telescope_class_name = str(inst_group.attrs["telescope_class"])
+        telescope_uid = int(inst_group.attrs["telescope_uid"])
 
-    site_name = str(inst_group.attrs["site_name"])
-    site_class_name = str(inst_group.attrs["site_class"])
-    site_uid = int(inst_group.attrs["site_uid"])
+        site_name = str(inst_group.attrs["site_name"])
+        site_class_name = str(inst_group.attrs["site_class"])
+        site_uid = int(inst_group.attrs["site_uid"])
 
-    site = None
-    if "site_alt_m" in inst_group.attrs:
-        # This is a ground based site
-        site_alt_m = float(inst_group.attrs["site_alt_m"])
-        site_lat_deg = float(inst_group.attrs["site_lat_deg"])
-        site_lon_deg = float(inst_group.attrs["site_lon_deg"])
+        site = None
+        if "site_alt_m" in inst_group.attrs:
+            # This is a ground based site
+            site_alt_m = float(inst_group.attrs["site_alt_m"])
+            site_lat_deg = float(inst_group.attrs["site_lat_deg"])
+            site_lon_deg = float(inst_group.attrs["site_lon_deg"])
 
-        weather = None
-        if "site_weather_name" in inst_group.attrs:
-            weather_name = str(inst_group.attrs["site_weather_name"])
-            weather_realization = int(inst_group.attrs["site_weather_realization"])
-            weather_max_pwv = None
-            if inst_group.attrs["site_weather_max_pwv"] != "NONE":
-                weather_max_pwv = float(inst_group.attrs["site_weather_max_pwv"])
-            weather_time = datetime.datetime.fromtimestamp(
-                float(inst_group.attrs["site_weather_time"])
+            weather = None
+            if "site_weather_name" in inst_group.attrs:
+                weather_name = str(inst_group.attrs["site_weather_name"])
+                weather_realization = int(inst_group.attrs["site_weather_realization"])
+                weather_max_pwv = None
+                if inst_group.attrs["site_weather_max_pwv"] != "NONE":
+                    weather_max_pwv = float(inst_group.attrs["site_weather_max_pwv"])
+                weather_time = datetime.datetime.fromtimestamp(
+                    float(inst_group.attrs["site_weather_time"])
+                )
+                weather = SimWeather(
+                    time=weather_time,
+                    name=weather_name,
+                    site_uid=site_uid,
+                    realization=weather_realization,
+                    max_pwv=weather_max_pwv,
+                    median_weather=False,
+                )
+            site = GroundSite(
+                site_name,
+                site_lat_deg * u.degree,
+                site_lon_deg * u.degree,
+                site_alt_m * u.meter,
+                uid=site_uid,
+                weather=weather,
             )
-            weather = SimWeather(
-                time=weather_time,
-                name=weather_name,
-                site_uid=site_uid,
-                realization=weather_realization,
-                max_pwv=weather_max_pwv,
-                median_weather=False,
-            )
-        site = GroundSite(
-            site_name,
-            site_lat_deg * u.degree,
-            site_lon_deg * u.degree,
-            site_alt_m * u.meter,
-            uid=site_uid,
-            weather=weather,
+        else:
+            site = SpaceSite(site_name, uid=site_uid)
+
+        focalplane = Focalplane()
+        focalplane.load_hdf5(inst_group, comm=None)
+
+        telescope = Telescope(
+            telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
         )
-    else:
-        site = SpaceSite(site_name, uid=site_uid)
-
-    focalplane = Focalplane(file=inst_group, comm=comm.comm_group)
-
-    telescope = Telescope(
-        telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
-    )
-    del inst_group
+        del inst_group
 
     log.debug_rank(
         f"{log_prefix} Loaded instrument properties in",
@@ -336,67 +444,65 @@ def load_hdf5(
         timer=timer,
     )
 
-    # Create the observation
+    obs = None
+    if hgroup is not None:
+        # Create the observation
+        obs = Observation(
+            comm,
+            telescope,
+            obs_samples,
+            name=obs_name,
+            uid=obs_uid,
+            detector_sets=obs_det_sets,
+            sample_sets=obs_sample_sets,
+            process_rows=process_rows,
+        )
 
-    obs = Observation(
-        comm,
-        telescope,
-        obs_samples,
-        name=obs_name,
-        uid=obs_uid,
-        detector_sets=obs_det_sets,
-        sample_sets=obs_sample_sets,
-        process_rows=process_rows,
-    )
-
-    # Load other metadata
-
-    meta_group = hgroup["metadata"]
-    for obj_name in meta_group.keys():
-        obj = meta_group[obj_name]
-        if meta is not None and obj_name not in meta:
-            continue
-        if isinstance(obj, h5py.Group):
-            # This is an object to restore
-            if "class" in obj.attrs:
-                objclass = import_from_name(obj.attrs["class"])
-                obs[obj_name] = objclass()
-                if hasattr(obs[obj_name], "load_hdf5"):
-                    obs[obj_name].load_hdf5(obj, comm=obs.comm.comm_group)
-                else:
-                    msg = f"metadata object group '{obj_name}' has class "
-                    msg += f"{obj.attrs['class']}, but instantiated "
-                    msg += f"object does not have a load_hdf5() method"
-                    log.error_rank(msg, comm=obs.comm.comm_group)
-        else:
-            # Array-like dataset that we can load
-            if "units" in obj.attrs:
-                # This array is a quantity
-                obs[obj_name] = u.Quantity(
-                    np.array(obj), unit=u.Unit(obj.attrs["units"])
-                )
+        # Load other metadata
+        meta_group = hgroup["metadata"]
+        for obj_name in meta_group.keys():
+            obj = meta_group[obj_name]
+            if meta is not None and obj_name not in meta:
+                continue
+            if isinstance(obj, h5py.Group):
+                # This is an object to restore
+                if "class" in obj.attrs:
+                    objclass = import_from_name(obj.attrs["class"])
+                    obs[obj_name] = objclass()
+                    if hasattr(obs[obj_name], "load_hdf5"):
+                        obs[obj_name].load_hdf5(obj, comm=None)
+                    else:
+                        msg = f"metadata object group '{obj_name}' has class "
+                        msg += f"{obj.attrs['class']}, but instantiated "
+                        msg += f"object does not have a load_hdf5() method"
+                        log.error(msg)
             else:
-                obs[obj_name] = np.array(obj)
-        del obj
-        if parallel and obs.comm.comm_group is not None:
-            obs.comm.comm_group.barrier()
+                # Array-like dataset that we can load
+                if "units" in obj.attrs:
+                    # This array is a quantity
+                    obs[obj_name] = u.Quantity(
+                        np.array(obj), unit=u.Unit(obj.attrs["units"])
+                    )
+                else:
+                    obs[obj_name] = np.array(obj)
+            del obj
 
-    # Now extract attributes
-    units_pat = re.compile(r"(.*)_units")
-    for k, v in meta_group.attrs.items():
-        if meta is not None and k not in meta:
-            continue
-        if units_pat.match(k) is not None:
-            # unit field, skip
-            continue
-        # Check for quantity
-        unit_name = f"{k}_units"
-        if unit_name in meta_group.attrs:
-            obs[k] = u.Quantity(v, unit=u.Unit(meta_group.attrs[unit_name]))
-        else:
-            obs[k] = v
+        # Now extract attributes
+        units_pat = re.compile(r"(.*)_units")
+        for k, v in meta_group.attrs.items():
+            if meta is not None and k not in meta:
+                continue
+            if units_pat.match(k) is not None:
+                # unit field, skip
+                continue
+            # Check for quantity
+            unit_name = f"{k}_units"
+            if unit_name in meta_group.attrs:
+                obs[k] = u.Quantity(v, unit=u.Unit(meta_group.attrs[unit_name]))
+            else:
+                obs[k] = v
 
-    del meta_group
+        del meta_group
 
     log.debug_rank(
         f"{log_prefix} Finished other metadata in",
@@ -404,10 +510,17 @@ def load_hdf5(
         timer=timer,
     )
 
+    # Broadcast the observation if needed
+    if not parallel and nproc > 1:
+        obs = comm.comm_group.bcast(obs, root=0)
+
     # Load shared data
 
-    shared_group = hgroup["shared"]
+    shared_group = None
+    if hgroup is not None:
+        shared_group = hgroup["shared"]
     load_hdf5_shared(obs, shared_group, shared, log_prefix, parallel)
+    del shared_group
     log.debug_rank(
         f"{log_prefix} Finished shared data in",
         comm=comm.comm_group,
@@ -416,8 +529,13 @@ def load_hdf5(
 
     # Load intervals
 
-    intervals_group = hgroup["intervals"]
-    intervals_times = intervals_group.attrs["times"]
+    intervals_group = None
+    intervals_times = None
+    if hgroup is not None:
+        intervals_group = hgroup["intervals"]
+        intervals_times = intervals_group.attrs["times"]
+    if not parallel and nproc > 1:
+        intervals_times = comm.comm_group.bcast(intervals_times, root=0)
     load_hdf5_intervals(
         obs,
         intervals_group,
@@ -426,6 +544,7 @@ def load_hdf5(
         log_prefix,
         parallel,
     )
+    del intervals_group
     log.debug_rank(
         f"{log_prefix} Finished intervals in",
         comm=comm.comm_group,
@@ -434,16 +553,15 @@ def load_hdf5(
 
     # Load detector data
 
-    detdata_group = hgroup["detdata"]
+    detdata_group = None
+    if hgroup is not None:
+        detdata_group = hgroup["detdata"]
     load_hdf5_detdata(obs, detdata_group, detdata, log_prefix, parallel)
+    del detdata_group
     log.debug_rank(
         f"{log_prefix} Finished detector data in",
         comm=comm.comm_group,
         timer=timer,
     )
-
-    del shared_group
-    del intervals_group
-    del detdata_group
 
     return obs

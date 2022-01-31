@@ -89,7 +89,7 @@ def main():
     bytes_wttot = 3 * nsamptot * 4
 
     bytes_tot = bytes_sigtot + bytes_flagtot + bytes_pixtot + bytes_wttot
-    bytes_tot_mb = bytes_tot / 2 ** 20
+    bytes_tot_mb = bytes_tot / 2**20
     log.info(
         "{} total bytes ({:0.2f}MB) of data expected".format(bytes_tot, bytes_tot_mb)
     )
@@ -98,7 +98,7 @@ def main():
         log.info("Allocation loop {:02d}".format(lp))
         vmem = psutil.virtual_memory()._asdict()
         avstart = vmem["available"]
-        avstart_mb = avstart / 2 ** 20
+        avstart_mb = avstart / 2**20
         log.info("  Starting with {:0.2f}MB of available memory".format(avstart_mb))
 
         # The list of Caches, one per "observation"
@@ -126,7 +126,7 @@ def main():
 
         vmem = psutil.virtual_memory()._asdict()
         avpost = vmem["available"]
-        avpost_mb = avpost / 2 ** 20
+        avpost_mb = avpost / 2**20
         log.info("  After allocation, {:0.2f}MB of available memory".format(avpost_mb))
 
         diff = avstart_mb - avpost_mb
@@ -145,7 +145,7 @@ def main():
 
         vmem = psutil.virtual_memory()._asdict()
         avfinal = vmem["available"]
-        avfinal_mb = avfinal / 2 ** 20
+        avfinal_mb = avfinal / 2**20
         log.info(
             "  After destruction, {:0.2f}MB of available memory".format(avfinal_mb)
         )

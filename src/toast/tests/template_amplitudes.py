@@ -74,7 +74,7 @@ class TemplateTest(MPITestCase):
 
             dup = amps.duplicate()
             cdot = dup.dot(amps, comm_bytes=cbytes)
-            np.testing.assert_equal(cdot, (comm.world_size ** 2) * n_global)
+            np.testing.assert_equal(cdot, (comm.world_size**2) * n_global)
 
     def test_amplitudes_range(self):
         # Create a toast communicator with groups if possible
@@ -129,7 +129,7 @@ class TemplateTest(MPITestCase):
             cdot = dup.dot(amps, comm_bytes=cbytes)
             np.testing.assert_equal(
                 cdot,
-                (check_even ** 2 + check_odd ** 2) * n_global / 2,
+                (check_even**2 + check_odd**2) * n_global / 2,
             )
 
     def test_amplitudes_indexed(self):
@@ -171,7 +171,7 @@ class TemplateTest(MPITestCase):
             dup = amps.duplicate()
             cdot = dup.dot(amps, comm_bytes=cbytes)
             np.testing.assert_equal(
-                cdot, (check_even ** 2 + check_odd ** 2) * n_global / 2
+                cdot, (check_even**2 + check_odd**2) * n_global / 2
             )
 
     def test_amplitudes_group(self):
@@ -228,5 +228,5 @@ class TemplateTest(MPITestCase):
             cdot = dup.dot(amps, comm_bytes=cbytes)
             np.testing.assert_equal(
                 cdot,
-                (check_even ** 2 + check_odd ** 2) * n_global / 2,
+                (check_even**2 + check_odd**2) * n_global / 2,
             )

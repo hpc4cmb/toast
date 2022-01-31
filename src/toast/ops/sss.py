@@ -141,8 +141,8 @@ class SimScanSynchronousSignal(Operator):
         telescope = obs.telescope.uid
         site = obs.telescope.site.uid
         obsindx = obs.uid
-        key1 = self.realization * 2 ** 32 + telescope * 2 ** 16 + self.component
-        key2 = site * 2 ** 16 + obsindx
+        key1 = self.realization * 2**32 + telescope * 2**16 + self.component
+        key2 = site * 2**16 + obsindx
         counter1 = 0
         counter2 = 0
         return key1, key2, counter1, counter2
@@ -167,7 +167,7 @@ class SimScanSynchronousSignal(Operator):
                 sss_map = hp.read_map(self.path, verbose=False, dtype=dtype)
                 npix = len(sss_map)
             else:
-                npix = 12 * self.nside ** 2
+                npix = 12 * self.nside**2
                 sss_map = rng.random(
                     npix,
                     key=(key1, key2),

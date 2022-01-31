@@ -15,9 +15,9 @@ import json
 from ..utils import (
     Environment,
     Logger,
-    have_hdf5_parallel,
     object_fullname,
     dtype_to_aligned,
+    hdf5_use_serial,
 )
 
 from ..mpi import MPI
@@ -30,11 +30,11 @@ from ..observation import default_values as defaults
 
 from ..observation_dist import global_interval_times
 
-from .observation_hdf_utils import check_dataset_buffer_size
+from .observation_hdf_utils import check_dataset_buffer_size, hdf5_open
 
 
 @function_timer
-def save_hdf5_shared_parallel(obs, hgrp, fields, log_prefix):
+def save_hdf5_shared(obs, hgrp, fields, log_prefix):
     log = Logger.get()
 
     timer = Timer()
@@ -46,97 +46,11 @@ def save_hdf5_shared_parallel(obs, hgrp, fields, log_prefix):
     dist_samps = obs.dist.samps
     dist_dets = obs.dist.det_indices
 
-    for field in fields:
-        if field not in obs.shared:
-            msg = f"Shared data '{field}' does not exist in observation "
-            msg += f"{obs.name}.  Skipping."
-            log.warning_rank(msg, comm=obs.comm.comm_group)
-            continue
-
-        # Compute properties of the full set of data across the observation
-
-        scomm = obs.shared.comm_type(field)
-        sdata = obs.shared[field]
-        sdtype = sdata.dtype
-
-        if scomm == "group":
-            sshape = sdata.shape
-        elif scomm == "column":
-            sshape = (obs.n_all_samples,) + sdata.shape[1:]
-        else:
-            sshape = (len(obs.all_detectors),) + sdata.shape[1:]
-
-        # The buffer class to use for allocating receive buffers
-        bufclass, _ = dtype_to_aligned(sdtype)
-
-        # All processes create the dataset
-        hdata = hgrp.create_dataset(field, sshape, dtype=sdtype)
-        hdata.attrs["comm_type"] = scomm
-
-        # If we have parallel support, the rank zero of each comm can write
-        # independently.
-
-        if scomm == "group":
-            # Easy...
-            if obs.comm.group_rank == 0:
-                msg = f"Shared field {field} ({scomm})"
-                slices = tuple([slice(0, x) for x in sshape])
-                check_dataset_buffer_size(msg, slices, sdtype, True)
-                hdata.write_direct(sdata.data, slices, slices)
-        elif scomm == "column":
-            # Rank zero of each column writes
-            if sdata.comm is None or sdata.comm.rank == 0:
-                sh_slices = tuple([slice(0, x) for x in sshape])
-                offset = dist_samps[obs.comm.group_rank].offset
-                nelem = dist_samps[obs.comm.group_rank].n_elem
-                hf_slices = [
-                    slice(offset, offset + nelem),
-                ]
-                hf_slices.extend([slice(0, x) for x in sdata.shape[1:]])
-                hf_slices = tuple(hf_slices)
-                msg = f"Shared field {field} ({scomm})"
-                check_dataset_buffer_size(msg, hf_slices, sdtype, True)
-                hdata.write_direct(sdata.data, sh_slices, hf_slices)
-        else:
-            # Rank zero of each row writes
-            if sdata.comm is None or sdata.comm.rank == 0:
-                sh_slices = tuple([slice(0, x) for x in sshape])
-                offset = dist_dets[obs.comm.group_rank].offset
-                nelem = dist_dets[obs.comm.group_rank].n_elem
-                hf_slices = [
-                    slice(offset, offset + nelem),
-                ]
-                hf_slices.extend([slice(0, x) for x in sdata.shape[1:]])
-                hf_slices = tuple(hf_slices)
-                msg = f"Shared field {field} ({scomm})"
-                check_dataset_buffer_size(msg, hf_slices, sdtype, True)
-                hdata.write_direct(sdata.data, sh_slices, hf_slices)
-
-        log.verbose_rank(
-            f"{log_prefix}  Shared finished {field} parallel write in",
-            comm=obs.comm.comm_group,
-            timer=timer,
-        )
-        del hdata
-
-
-@function_timer
-def save_hdf5_shared_serial(obs, hgrp, fields, log_prefix):
-    log = Logger.get()
-
-    timer = Timer()
-    timer.start()
-
-    # Get references to the distribution of detectors and samples
-    proc_rows = obs.dist.process_rows
-    proc_cols = obs.dist.comm.group_size // proc_rows
-    dist_samps = obs.dist.samps
-    dist_dets = obs.dist.det_indices
-
-    n_fields = len(fields)
+    # Are we doing serial I/O?
+    use_serial = hdf5_use_serial(hgrp, obs.comm.comm_group)
 
     for ifield, field in enumerate(fields):
-        tag_offset = ifield * obs.comm.group_size
+        tag_offset = (obs.comm.group * 1000 + ifield) * obs.comm.group_size
 
         if field not in obs.shared:
             msg = f"Shared data '{field}' does not exist in observation "
@@ -160,80 +74,118 @@ def save_hdf5_shared_serial(obs, hgrp, fields, log_prefix):
         # The buffer class to use for allocating receive buffers
         bufclass, _ = dtype_to_aligned(sdtype)
 
-        # Rank zero of the group creates the dataset
         hdata = None
-        if obs.comm.group_rank == 0:
+        if hgrp is not None:
+            # This process is participating
             hdata = hgrp.create_dataset(field, sshape, dtype=sdtype)
             hdata.attrs["comm_type"] = scomm
 
-        # Send data to rank zero of the group for writing.
+        if use_serial:
+            # Send data to rank zero of the group for writing.
+            if scomm == "group":
+                # Easy...
+                if obs.comm.group_rank == 0:
+                    hdata[:] = sdata.data
+            elif scomm == "column":
+                # Send data to root process
+                for proc in range(proc_cols):
+                    # Process grid is indexed row-major, so the rank-zero process
+                    # of each column is just the first row of the grid.
+                    send_rank = proc
 
-        if scomm == "group":
-            # Easy...
-            if obs.comm.group_rank == 0:
-                hdata[:] = sdata.data
-        elif scomm == "column":
-            # Send data to root process
-            for proc in range(proc_cols):
-                # Process grid is indexed row-major, so the rank-zero process
-                # of each column is just the first row of the grid.
-                send_rank = proc
-
-                # Leading data range for this process
-                off = dist_samps[send_rank].offset
-                nelem = dist_samps[send_rank].n_elem
-                nflat = nelem * np.prod(sshape[1:])
-                shp = (nelem,) + sshape[1:]
-                if send_rank == 0:
-                    # Root process writes local data
-                    if obs.comm.group_rank == 0:
-                        hdata[off : off + nelem] = sdata.data
-                elif send_rank == obs.comm.group_rank:
-                    # We are sending
-                    obs.comm.comm_group.Send(
-                        sdata.data.flatten(), dest=0, tag=tag_offset + send_rank
-                    )
-                elif obs.comm.group_rank == 0:
-                    # We are receiving and writing
-                    recv = bufclass(nflat)
-                    obs.comm.comm_group.Recv(
-                        recv, source=send_rank, tag=tag_offset + send_rank
-                    )
-                    hdata[off : off + nelem] = recv.array().reshape(shp)
-                    recv.clear()
-                    del recv
+                    # Leading data range for this process
+                    off = dist_samps[send_rank].offset
+                    nelem = dist_samps[send_rank].n_elem
+                    nflat = nelem * np.prod(sshape[1:])
+                    shp = (nelem,) + sshape[1:]
+                    if send_rank == 0:
+                        # Root process writes local data
+                        if obs.comm.group_rank == 0:
+                            hdata[off : off + nelem] = sdata.data
+                    elif send_rank == obs.comm.group_rank:
+                        # We are sending
+                        obs.comm.comm_group.Send(
+                            sdata.data.flatten(), dest=0, tag=tag_offset + send_rank
+                        )
+                    elif obs.comm.group_rank == 0:
+                        # We are receiving and writing
+                        recv = bufclass(nflat)
+                        obs.comm.comm_group.Recv(
+                            recv, source=send_rank, tag=tag_offset + send_rank
+                        )
+                        hdata[off : off + nelem] = recv.array().reshape(shp)
+                        recv.clear()
+                        del recv
+            else:
+                # Send data to root process
+                for proc in range(proc_rows):
+                    # Process grid is indexed row-major, so the rank-zero process
+                    # of each row is strided by the number of columns.
+                    send_rank = proc * proc_cols
+                    # Leading data range for this process
+                    off = dist_dets[send_rank].offset
+                    nelem = dist_dets[send_rank].n_elem
+                    nflat = nelem * np.prod(sshape[1:])
+                    shp = (nelem,) + sshape[1:]
+                    if send_rank == 0:
+                        # Root process writes local data
+                        if obs.comm.group_rank == 0:
+                            hdata[off : off + nelem] = sdata.data
+                    elif send_rank == obs.comm.group_rank:
+                        # We are sending
+                        obs.comm.comm_group.Send(
+                            sdata.data.flatten(), dest=0, tag=tag_offset + send_rank
+                        )
+                    elif obs.comm.group_rank == 0:
+                        # We are receiving and writing
+                        recv = bufclass(nflat)
+                        obs.comm.comm_group.Recv(
+                            recv, source=send_rank, tag=tag_offset + send_rank
+                        )
+                        hdata[off : off + nelem] = recv.array().reshape(shp)
+                        recv.clear()
+                        del recv
         else:
-            # Send data to root process
-            for proc in range(proc_rows):
-                # Process grid is indexed row-major, so the rank-zero process
-                # of each row is strided by the number of columns.
-                send_rank = proc * proc_cols
-                # Leading data range for this process
-                off = dist_dets[send_rank].offset
-                nelem = dist_dets[send_rank].n_elem
-                nflat = nelem * np.prod(sshape[1:])
-                shp = (nelem,) + sshape[1:]
-                if send_rank == 0:
-                    # Root process writes local data
-                    if obs.comm.group_rank == 0:
-                        hdata[off : off + nelem] = sdata.data
-                elif send_rank == obs.comm.group_rank:
-                    # We are sending
-                    obs.comm.comm_group.Send(
-                        sdata.data.flatten(), dest=0, tag=tag_offset + send_rank
-                    )
-                elif obs.comm.group_rank == 0:
-                    # We are receiving and writing
-                    recv = bufclass(nflat)
-                    obs.comm.comm_group.Recv(
-                        recv, source=send_rank, tag=tag_offset + send_rank
-                    )
-                    hdata[off : off + nelem] = recv.array().reshape(shp)
-                    recv.clear()
-                    del recv
+            # If we have parallel support, the rank zero of each comm can write
+            # independently.
+            if scomm == "group":
+                # Easy...
+                if obs.comm.group_rank == 0:
+                    msg = f"Shared field {field} ({scomm})"
+                    slices = tuple([slice(0, x) for x in sshape])
+                    check_dataset_buffer_size(msg, slices, sdtype, True)
+                    hdata.write_direct(sdata.data, slices, slices)
+            elif scomm == "column":
+                # Rank zero of each column writes
+                if sdata.comm is None or sdata.comm.rank == 0:
+                    sh_slices = tuple([slice(0, x) for x in sshape])
+                    offset = dist_samps[obs.comm.group_rank].offset
+                    nelem = dist_samps[obs.comm.group_rank].n_elem
+                    hf_slices = [
+                        slice(offset, offset + nelem),
+                    ]
+                    hf_slices.extend([slice(0, x) for x in sdata.shape[1:]])
+                    hf_slices = tuple(hf_slices)
+                    msg = f"Shared field {field} ({scomm})"
+                    check_dataset_buffer_size(msg, hf_slices, sdtype, True)
+                    hdata.write_direct(sdata.data, sh_slices, hf_slices)
+            else:
+                # Rank zero of each row writes
+                if sdata.comm is None or sdata.comm.rank == 0:
+                    sh_slices = tuple([slice(0, x) for x in sshape])
+                    offset = dist_dets[obs.comm.group_rank].offset
+                    nelem = dist_dets[obs.comm.group_rank].n_elem
+                    hf_slices = [
+                        slice(offset, offset + nelem),
+                    ]
+                    hf_slices.extend([slice(0, x) for x in sdata.shape[1:]])
+                    hf_slices = tuple(hf_slices)
+                    msg = f"Shared field {field} ({scomm})"
+                    check_dataset_buffer_size(msg, hf_slices, sdtype, True)
+                    hdata.write_direct(sdata.data, sh_slices, hf_slices)
 
         log.verbose_rank(
-            f"{log_prefix}  Shared finished {field} serial write in",
+            f"{log_prefix}  Shared finished {field} write in",
             comm=obs.comm.comm_group,
             timer=timer,
         )
@@ -241,79 +193,7 @@ def save_hdf5_shared_serial(obs, hgrp, fields, log_prefix):
 
 
 @function_timer
-def save_hdf5_detdata_parallel(obs, hgrp, fields, log_prefix):
-    log = Logger.get()
-
-    timer = Timer()
-    timer.start()
-
-    # Get references to the distribution of detectors and samples
-    proc_rows = obs.dist.process_rows
-    proc_cols = obs.dist.comm.group_size // proc_rows
-    dist_samps = obs.dist.samps
-    dist_dets = obs.dist.det_indices
-
-    for field in fields:
-        if field not in obs.detdata:
-            msg = f"Detdata data '{field}' does not exist in observation "
-            msg += f"{obs.name}.  Skipping."
-            log.warning_rank(msg, comm=obs.comm.comm_group)
-            continue
-
-        local_data = obs.detdata[field]
-        if local_data.detectors != obs.local_detectors:
-            msg = f"Data data '{field}' does not contain all local detectors."
-            log.error(msg)
-            raise RuntimeError(msg)
-
-        # Compute properties of the full set of data across the observation
-
-        ddtype = local_data.dtype
-        dshape = (len(obs.all_detectors), obs.n_all_samples)
-        dvalshape = None
-        if len(local_data.detector_shape) > 1:
-            dvalshape = local_data.detector_shape[1:]
-            dshape += dvalshape
-
-        # The buffer class to use for allocating receive buffers
-        bufclass, _ = dtype_to_aligned(ddtype)
-
-        # All processes create the dataset
-        hdata = hgrp.create_dataset(field, dshape, dtype=ddtype)
-        hdata.attrs["units"] = local_data.units.to_string()
-
-        # If we have parallel support, every process can write independently.
-        samp_off = dist_samps[obs.comm.group_rank].offset
-        samp_nelem = dist_samps[obs.comm.group_rank].n_elem
-        det_off = dist_dets[obs.comm.group_rank].offset
-        det_nelem = dist_dets[obs.comm.group_rank].n_elem
-
-        detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
-        hf_slice = [
-            slice(det_off, det_off + det_nelem, 1),
-            slice(samp_off, samp_off + samp_nelem, 1),
-        ]
-        if dvalshape is not None:
-            detdata_slice.extend([slice(0, x) for x in dvalshape])
-            hf_slice.extend([slice(0, x) for x in dvalshape])
-        detdata_slice = tuple(detdata_slice)
-        hf_slice = tuple(hf_slice)
-        msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
-        check_dataset_buffer_size(msg, hf_slice, ddtype, True)
-
-        with hdata.collective:
-            hdata.write_direct(local_data.data, detdata_slice, hf_slice)
-
-        del hdata
-        log.verbose_rank(
-            f"{log_prefix}  Detdata finished {field} parallel write in",
-            comm=obs.comm.comm_group,
-            timer=timer,
-        )
-
-
-@function_timer
-def save_hdf5_detdata_serial(obs, hgrp, fields, log_prefix):
+def save_hdf5_detdata(obs, hgrp, fields, log_prefix, use_float32=False):
     log = Logger.get()
 
     timer = Timer()
@@ -330,10 +210,11 @@ def save_hdf5_detdata_serial(obs, hgrp, fields, log_prefix):
     nproc = obs.comm.group_size
     rank = obs.comm.group_rank
 
-    n_fields = len(fields)
+    # Are we doing serial I/O?
+    use_serial = hdf5_use_serial(hgrp, comm)
 
     for ifield, field in enumerate(fields):
-        tag_offset = ifield * obs.comm.group_size
+        tag_offset = (obs.comm.group * 1000 + ifield) * obs.comm.group_size
         if field not in obs.detdata:
             msg = f"Detdata data '{field}' does not exist in observation "
             msg += f"{obs.name}.  Skipping."
@@ -358,58 +239,93 @@ def save_hdf5_detdata_serial(obs, hgrp, fields, log_prefix):
         # The buffer class to use for allocating receive buffers
         bufclass, _ = dtype_to_aligned(ddtype)
 
-        # Only the root process creates the dataset
+        fdtype = ddtype
+        if ddtype.char == "d" and use_float32:
+            # We are truncating to single precision
+            fdtype = np.dtype(np.float32)
+
         hdata = None
-        if rank == 0:
-            hdata = hgrp.create_dataset(field, dshape, dtype=ddtype)
+        if hgrp is not None:
+            # This process is participating
+            hdata = hgrp.create_dataset(field, dshape, dtype=fdtype)
             hdata.attrs["units"] = local_data.units.to_string()
 
-        # Send data to rank zero of the group for writing.
+        if use_serial:
+            # Send data to rank zero of the group for writing.
+            for proc in range(nproc):
+                # Data ranges for this process
+                samp_off = dist_samps[proc].offset
+                samp_nelem = dist_samps[proc].n_elem
+                det_off = dist_dets[proc].offset
+                det_nelem = dist_dets[proc].n_elem
+                nflat = det_nelem * samp_nelem
+                shp = (det_nelem, samp_nelem)
+                detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
+                hf_slice = [
+                    slice(det_off, det_off + det_nelem, 1),
+                    slice(samp_off, samp_off + samp_nelem, 1),
+                ]
+                if dvalshape is not None:
+                    nflat *= np.prod(dvalshape)
+                    shp += dvalshape
+                    detdata_slice.extend([slice(0, x) for x in dvalshape])
+                    hf_slice.extend([slice(0, x) for x in dvalshape])
+                detdata_slice = tuple(detdata_slice)
+                hf_slice = tuple(hf_slice)
+                if proc == 0:
+                    # Root process writes local data
+                    if rank == 0:
+                        hdata.write_direct(
+                            local_data.data.astype(fdtype), detdata_slice, hf_slice
+                        )
+                elif proc == rank:
+                    # We are sending
+                    comm.Send(local_data.flatdata, dest=0, tag=tag_offset + proc)
+                elif rank == 0:
+                    # We are receiving and writing
+                    recv = bufclass(nflat)
+                    comm.Recv(recv, source=proc, tag=tag_offset + proc)
+                    hdata.write_direct(
+                        recv.array().astype(fdtype).reshape(shp),
+                        detdata_slice,
+                        hf_slice,
+                    )
+                    recv.clear()
+                    del recv
+        else:
+            # If we have parallel support, every process can write independently.
+            samp_off = dist_samps[obs.comm.group_rank].offset
+            samp_nelem = dist_samps[obs.comm.group_rank].n_elem
+            det_off = dist_dets[obs.comm.group_rank].offset
+            det_nelem = dist_dets[obs.comm.group_rank].n_elem
 
-        for proc in range(nproc):
-            # Data ranges for this process
-            samp_off = dist_samps[proc].offset
-            samp_nelem = dist_samps[proc].n_elem
-            det_off = dist_dets[proc].offset
-            det_nelem = dist_dets[proc].n_elem
-            nflat = det_nelem * samp_nelem
-            shp = (det_nelem, samp_nelem)
             detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
             hf_slice = [
                 slice(det_off, det_off + det_nelem, 1),
                 slice(samp_off, samp_off + samp_nelem, 1),
             ]
             if dvalshape is not None:
-                nflat *= np.prod(dvalshape)
-                shp += dvalshape
                 detdata_slice.extend([slice(0, x) for x in dvalshape])
                 hf_slice.extend([slice(0, x) for x in dvalshape])
             detdata_slice = tuple(detdata_slice)
             hf_slice = tuple(hf_slice)
-            if proc == 0:
-                # Root process writes local data
-                if rank == 0:
-                    hdata.write_direct(local_data.data, detdata_slice, hf_slice)
-            elif proc == rank:
-                # We are sending
-                comm.Send(local_data.flatdata, dest=0, tag=tag_offset + proc)
-            elif rank == 0:
-                # We are receiving and writing
-                recv = bufclass(nflat)
-                comm.Recv(recv, source=proc, tag=tag_offset + proc)
-                hdata.write_direct(recv.array().reshape(shp), detdata_slice, hf_slice)
-                recv.clear()
-                del recv
+            msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
+            check_dataset_buffer_size(msg, hf_slice, ddtype, True)
+
+            with hdata.collective:
+                hdata.write_direct(
+                    local_data.data.astype(fdtype), detdata_slice, hf_slice
+                )
+        del hdata
         log.verbose_rank(
             f"{log_prefix}  Detdata finished {field} serial write in",
             comm=comm,
             timer=timer,
         )
-        del hdata
 
 
 @function_timer
-def save_hdf5_intervals_parallel(obs, hgrp, fields, log_prefix):
+def save_hdf5_intervals(obs, hgrp, fields, log_prefix):
     log = Logger.get()
 
     timer = Timer()
@@ -436,53 +352,17 @@ def save_hdf5_intervals_parallel(obs, hgrp, fields, log_prefix):
         if comm is not None:
             n_list = comm.bcast(n_list, root=0)
 
-        # All processes create the dataset
-        hdata = hgrp.create_dataset(field, (2, n_list), dtype=np.float64)
-
-        # Only the root process writes
-        if rank == 0:
-            hdata[:, :] = np.transpose(np.array(ilist))
-
-        # Free object
+        # Participating processes create the dataset
+        hdata = None
+        if hgrp is not None:
+            hdata = hgrp.create_dataset(field, (2, n_list), dtype=np.float64)
+            # Only the root process writes
+            if rank == 0:
+                hdata[:, :] = np.transpose(np.array(ilist))
         del hdata
 
         log.verbose_rank(
-            f"{log_prefix}  Intervals finished {field} parallel write in",
-            comm=comm,
-            timer=timer,
-        )
-
-
-@function_timer
-def save_hdf5_intervals_serial(obs, hgrp, fields, log_prefix):
-    log = Logger.get()
-
-    timer = Timer()
-    timer.start()
-
-    # We are using the group communicator
-    comm = obs.comm.comm_group
-    nproc = obs.comm.group_size
-    rank = obs.comm.group_rank
-
-    for field in fields:
-        if field not in obs.intervals:
-            msg = f"Intervals '{field}' does not exist in observation "
-            msg += f"{obs.name}.  Skipping."
-            log.warning_rank(msg, comm=comm)
-            continue
-
-        # Get the list of start / stop tuples on the rank zero process
-        ilist = global_interval_times(obs.dist, obs.intervals, field, join=False)
-
-        # Root process creates the dataset and writes
-        if rank == 0:
-            hdata = hgrp.create_dataset(field, (2, len(ilist)), dtype=np.float64)
-            hdata[:, :] = np.transpose(np.array(ilist))
-            del hdata
-
-        log.verbose_rank(
-            f"{log_prefix}  Intervals finished {field} serial write in",
+            f"{log_prefix}  Intervals finished {field} write in",
             comm=comm,
             timer=timer,
         )
@@ -499,6 +379,7 @@ def save_hdf5(
     config=None,
     times=defaults.times,
     force_serial=False,
+    detdata_float32=False,
 ):
     """Save an observation to HDF5.
 
@@ -528,6 +409,8 @@ def save_hdf5(
         times (str):  The name of the shared timestamp field.
         force_serial (bool):  If True, do not use HDF5 parallel support,
             even if it is available.
+        detdata_float32 (bool):  If True, cast any float64 detector fields
+            to float32 on write.  Integer detdata is not affected.
 
     Returns:
         (str):  The full path of the file that was written.
@@ -535,9 +418,9 @@ def save_hdf5(
     """
     log = Logger.get()
     env = Environment.get()
-    parallel = have_hdf5_parallel()
-    if force_serial:
-        parallel = False
+    if obs.comm.group_size == 1:
+        # Force serial usage in this case, to avoid any MPI overhead
+        force_serial = True
 
     if obs.name is None:
         raise RuntimeError("Cannot save observations that have no name")
@@ -545,6 +428,9 @@ def save_hdf5(
     timer = Timer()
     timer.start()
     log_prefix = f"HDF5 save {obs.name}: "
+
+    comm = obs.comm.comm_group
+    rank = obs.comm.group_rank
 
     namestr = f"{obs.name}_{obs.uid}"
     hfpath = os.path.join(dir, f"{namestr}.h5")
@@ -555,31 +441,15 @@ def save_hdf5(
     hgroup = None
     vtimer = Timer()
     vtimer.start()
-    if parallel:
-        hf = h5py.File(hfpath_temp, "w", driver="mpio", comm=obs.comm.comm_group)
-        hgroup = hf
-        log.verbose_rank(
-            f"{log_prefix}  Opened temp file {hfpath_temp} in parallel in",
-            comm=obs.comm.comm_group,
-            timer=vtimer,
-        )
-    elif obs.comm.group_rank == 0:
-        hf = h5py.File(hfpath_temp, "w")
-        hgroup = hf
-        log.verbose_rank(
-            f"{log_prefix}  Opened temp file {hfpath_temp} on rank zero in",
-            comm=None,
-            timer=vtimer,
-        )
 
-    save_comm = None
-    if parallel:
-        save_comm = obs.comm.comm_group
+    hf = hdf5_open(hfpath_temp, "w", comm=comm, force_serial=force_serial)
+    hgroup = hf
 
     shared_group = None
     detdata_group = None
     intervals_group = None
-    if parallel or obs.comm.group_rank == 0:
+    if hgroup is not None:
+        # This process is participating
         # Record the software versions and config
         hgroup.attrs["toast_version"] = env.version()
         if config is not None:
@@ -604,12 +474,14 @@ def save_hdf5(
         hgroup.attrs["observation_samples"] = obs.n_all_samples
         hgroup.attrs["observation_sample_sets"] = obs_all_samp_sets
 
-        log.verbose_rank(
-            f"{log_prefix}  Wrote observation attributes (parallel={parallel}) in",
-            comm=save_comm,
-            timer=vtimer,
-        )
+    log.verbose_rank(
+        f"{log_prefix}  Wrote observation attributes in",
+        comm=comm,
+        timer=vtimer,
+    )
 
+    inst_group = None
+    if hgroup is not None:
         # Instrument properties
         inst_group = hgroup.create_group("instrument")
         inst_group.attrs["telescope_name"] = obs.telescope.name
@@ -637,82 +509,82 @@ def save_hdf5(
                     inst_group.attrs[
                         "site_weather_time"
                     ] = site.weather.time.timestamp()
-        log.verbose_rank(
-            f"{log_prefix}  Wrote instrument attributes (parallel={parallel}) in",
-            comm=save_comm,
-            timer=vtimer,
-        )
-        obs.telescope.focalplane.save_hdf5(
-            inst_group, comm=obs.comm.comm_group, force_serial=force_serial
-        )
-        log.verbose_rank(
-            f"{log_prefix}  Wrote focalplane (parallel={parallel}) in",
-            comm=save_comm,
-            timer=vtimer,
-        )
-        del inst_group
+    log.verbose_rank(
+        f"{log_prefix}  Wrote instrument attributes in",
+        comm=comm,
+        timer=vtimer,
+    )
 
-        log.debug_rank(
-            f"{log_prefix} Finished instrument model",
-            comm=save_comm,
-            timer=timer,
-        )
+    obs.telescope.focalplane.save_hdf5(inst_group, comm=comm)
+    del inst_group
 
+    log.verbose_rank(
+        f"{log_prefix}  Wrote focalplane in",
+        comm=comm,
+        timer=vtimer,
+    )
+
+    log.debug_rank(
+        f"{log_prefix} Finished instrument model",
+        comm=comm,
+        timer=timer,
+    )
+
+    meta_group = None
+    if hgroup is not None:
         meta_group = hgroup.create_group("metadata")
 
-        for k, v in obs.items():
-            if meta is not None and k not in meta:
-                continue
-            if hasattr(v, "save_hdf5"):
+    for k, v in obs.items():
+        if meta is not None and k not in meta:
+            continue
+        if hasattr(v, "save_hdf5"):
+            kgroup = None
+            if meta_group is not None:
                 kgroup = meta_group.create_group(k)
                 kgroup.attrs["class"] = object_fullname(v.__class__)
-                v.save_hdf5(kgroup, comm=save_comm, force_serial=force_serial)
-                del kgroup
-            elif isinstance(v, u.Quantity):
-                if isinstance(v.value, np.ndarray):
-                    # Array quantity
+            v.save_hdf5(kgroup, comm=comm)
+            del kgroup
+        elif isinstance(v, u.Quantity):
+            if isinstance(v.value, np.ndarray):
+                # Array quantity
+                if meta_group is not None:
                     qdata = meta_group.create_dataset(k, data=v.value)
                     qdata.attrs["units"] = v.unit.to_string()
                     del qdata
-                else:
-                    # Must be a scalar
+            else:
+                # Must be a scalar
+                if meta_group is not None:
                     meta_group.attrs[f"{k}"] = v.value
                     meta_group.attrs[f"{k}_units"] = v.unit.to_string()
-            elif isinstance(v, np.ndarray):
+        elif isinstance(v, np.ndarray):
+            if meta_group is not None:
                 marr = meta_group.create_dataset(k, data=v)
                 del marr
-            else:
-                try:
-                    if isinstance(v, u.Quantity):
-                        meta_group.attrs[k] = v.value
-                    else:
-                        meta_group.attrs[k] = v
-                except ValueError as e:
-                    msg = (
-                        f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})."
-                    )
-                    msg += f" Try casting it to a supported type when storing in the "
-                    msg += f"observation dictionary or implement save_hdf5() and "
-                    msg += f"load_hdf5() methods."
-                    log.verbose_rank(msg, comm=save_comm)
-        log.verbose_rank(
-            f"{log_prefix}  Wrote other metadata (parallel={parallel}) in",
-            comm=save_comm,
-            timer=vtimer,
-        )
+        elif meta_group is not None:
+            try:
+                if isinstance(v, u.Quantity):
+                    meta_group.attrs[k] = v.value
+                else:
+                    meta_group.attrs[k] = v
+            except ValueError as e:
+                msg = f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})."
+                msg += f" Try casting it to a supported type when storing in the "
+                msg += f"observation dictionary or implement save_hdf5() and "
+                msg += f"load_hdf5() methods."
+                log.verbose(msg)
+    del meta_group
 
-        del meta_group
+    log.verbose_rank(
+        f"{log_prefix}  Wrote other metadata in",
+        comm=comm,
+        timer=vtimer,
+    )
 
-        log.debug_rank(
-            f"{log_prefix} Finished metadata",
-            comm=save_comm,
-            timer=timer,
-        )
-
-        shared_group = hgroup.create_group("shared")
-        detdata_group = hgroup.create_group("detdata")
-        intervals_group = hgroup.create_group("intervals")
-        intervals_group.attrs["times"] = times
+    log.debug_rank(
+        f"{log_prefix} Finished metadata",
+        comm=comm,
+        timer=timer,
+    )
 
     # Dump data
 
@@ -724,19 +596,21 @@ def save_hdf5(
     dump_intervals = True
     if times not in obs.shared:
         msg = f"Timestamp field '{times}' does not exist.  Not saving intervals."
-        log.warning_rank(msg, comm=obs.comm.comm_group)
+        log.warning_rank(msg, comm=comm)
         dump_intervals = False
     else:
         if times not in fields:
             fields.append(times)
-    if parallel:
-        save_hdf5_shared_parallel(obs, shared_group, fields, log_prefix)
-    else:
-        save_hdf5_shared_serial(obs, shared_group, fields, log_prefix)
+
+    shared_group = None
+    if hgroup is not None:
+        shared_group = hgroup.create_group("shared")
+    save_hdf5_shared(obs, shared_group, fields, log_prefix)
+    del shared_group
 
     log.debug_rank(
         f"{log_prefix} Finished shared data",
-        comm=obs.comm.comm_group,
+        comm=comm,
         timer=timer,
     )
 
@@ -744,14 +618,16 @@ def save_hdf5(
         fields = list(obs.detdata.keys())
     else:
         fields = list(detdata)
-    if parallel:
-        save_hdf5_detdata_parallel(obs, detdata_group, fields, log_prefix)
-    else:
-        save_hdf5_detdata_serial(obs, detdata_group, fields, log_prefix)
-
+    detdata_group = None
+    if hgroup is not None:
+        detdata_group = hgroup.create_group("detdata")
+    save_hdf5_detdata(
+        obs, detdata_group, fields, log_prefix, use_float32=detdata_float32
+    )
+    del detdata_group
     log.debug_rank(
         f"{log_prefix} Finished detector data",
-        comm=obs.comm.comm_group,
+        comm=comm,
         timer=timer,
     )
 
@@ -760,35 +636,29 @@ def save_hdf5(
     else:
         fields = list(intervals)
     if dump_intervals:
-        if parallel:
-            save_hdf5_intervals_parallel(obs, intervals_group, fields, log_prefix)
-        else:
-            save_hdf5_intervals_serial(obs, intervals_group, fields, log_prefix)
-
+        intervals_group = None
+        if hgroup is not None:
+            intervals_group = hgroup.create_group("intervals")
+            intervals_group.attrs["times"] = times
+        save_hdf5_intervals(obs, intervals_group, fields, log_prefix)
+        del intervals_group
     log.debug_rank(
         f"{log_prefix} Finished intervals data",
-        comm=obs.comm.comm_group,
+        comm=comm,
         timer=timer,
     )
 
     # Close file if we opened it
-
-    del shared_group
-    del detdata_group
-    del intervals_group
     del hgroup
-
     if hf is not None:
-        hf.flush()
         hf.close()
     del hf
 
-    if obs.comm.comm_group is not None:
-        obs.comm.comm_group.barrier()
+    if comm is not None:
+        comm.barrier()
 
     # Move file into place
-    if obs.comm.group_rank == 0:
-        if hfpath is not None:
-            os.rename(hfpath_temp, hfpath)
+    if rank == 0:
+        os.rename(hfpath_temp, hfpath)
 
     return hfpath
