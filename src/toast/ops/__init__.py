@@ -61,7 +61,7 @@ from .mapmaker import MapMaker
 
 from .madam import Madam, madam_params_from_mapmaker
 
-from .conviqt import SimConviqt, SimWeightedConviqt
+from .conviqt import SimConviqt, SimWeightedConviqt, SimTEBConviqt
 
 from .sim_gaindrifts import GainDrifter
 from .sim_crosstalk import CrossTalk, MitigateCrossTalk

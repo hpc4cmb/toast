@@ -282,6 +282,89 @@ class SimConviqtTest(MPITestCase):
 
         return
 
+    def test_sim_TEB(self):
+        if not ops.conviqt.available():
+            print("libconviqt not available, skipping tests")
+            return
+
+        # Create a fake scan strategy that hits every pixel once.
+        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
+
+        # Generate timestreams
+
+        detpointing = ops.PointingDetectorSimple()
+
+        key = defaults.det_data
+
+        sim_conviqt = ops.SimTEBConviqt(
+            comm=self.comm,
+            detector_pointing=detpointing,
+            sky_file=self.fname_sky,
+            beam_file=self.fname_beam,
+            dxx=False,
+            det_data=key,
+            normalize_beam=True,
+            fwhm=self.fwhm_sky,
+        )
+        sim_conviqt.apply(data)
+
+        # Bin a map to study
+
+        pixels = ops.PixelsHealpix(
+            nside=self.nside,
+            nest=False,
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="I",
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        default_model = ops.DefaultNoiseModel()
+        default_model.apply(data)
+
+        cov_and_hits = ops.CovarianceAndHits(
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            rcond_threshold=1.0e-6,
+            sync_type="alltoallv",
+        )
+        cov_and_hits.apply(data)
+
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance=cov_and_hits.covariance,
+            det_data=key,
+            det_flags=None,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            sync_type="alltoallv",
+        )
+        binner.apply(data)
+
+        # Study the map on the root process
+
+        toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
+        write_healpix_fits(data[binner.binned], toast_bin_path, nest=pixels.nest)
+
+        toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
+        write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
+
+        fail = False
+
+        if self.comm is not None:
+            fail = self.comm.bcast(fail, root=0)
+
+        self.assertFalse(fail)
+
+        return
+
+
     """
 
     def test_sim_hwp(self):
