@@ -709,45 +709,43 @@ class SimTEBConviqt(SimConviqt):
             sky = self.get_sky(sky_file, det, verbose)
 
             beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            beam_file = beam_file.replace(".fits","_TEB.fits")
-            # the input  beam is made of 3 arrays [beamT, beamP, 0 ]
-
-            beam = self.get_beam(beam_file, det, verbose)
-
+            beam_T = self.get_beam(beam_file.replace(".fits","_T.fits"), det, verbose)
+            beam_E = self.get_beam(beam_file.replace(".fits","_E.fits"), det, verbose)
+            beam_B = self.get_beam(beam_file.replace(".fits","_B.fits"), det, verbose)
+            
             detector = self.get_detector(det)
 
             theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
 
             # I-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data = self.convolve(sky[0,:], beam[0,: ], detector, pnt, det, verbose)
+            
+            convolved_data = self.convolve(sky, beam_T, detector, pnt, det, verbose)
 
-            del pnt
-
+            del pnt,
             # Q-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.cos(2 * psi_pol) * self.convolve(
-                        sky[1,:], beam[1,:], detector, pnt, det, verbose
+                        sky, beam_E, detector, pnt, det, verbose
                             )
-            del pnt
-
+            del pnt, 
             # U-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.sin(2 * psi_pol) * self.convolve(
-                sky[2,:], beam[1,:], detector, pnt, det, verbose
+                sky , beam_B , detector, pnt, det, verbose
             )
             del theta, phi, psi
 
             self.calibrate_signal(
                 data,
                 det,
-                beamT,
+                beam_T,
                 convolved_data,
                 verbose,
             )
             self.save(data, det, convolved_data, verbose)
 
-            del pnt, detector, beamT, beamP, skyT, skyE, skyB
+            del pnt, detector, beam_T, beam_E,beam_B, sky
 
             if verbose:
                 timer.report_clear(f"conviqt process detector {det}")
