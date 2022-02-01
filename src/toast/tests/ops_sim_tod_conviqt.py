@@ -96,9 +96,9 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            
-            blm_T= np.zeros_like(self.blm)
-            blm_T [0 ] =  self.blm[0].copy() 
+
+            blm_T = np.zeros_like(self.blm)
+            blm_T[0] = self.blm[0].copy()
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_T.fits"),
                 blm_T,
@@ -106,8 +106,8 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            blm_E= np.zeros_like(self.blm)
-            blm_E [1 ] =   self.blm[1]+  self.blm[2]*1j
+            blm_E = np.zeros_like(self.blm)
+            blm_E[1] = self.blm[1] + self.blm[2] * 1j
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_E.fits"),
                 blm_E,
@@ -115,8 +115,8 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            blm_B= np.zeros_like(self.blm)
-            blm_B [2 ] =   self.blm[1]+  self.blm[2]*1j
+            blm_B = np.zeros_like(self.blm)
+            blm_B[2] = self.blm[1] + self.blm[2] * 1j
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_B.fits"),
                 blm_B,
@@ -310,7 +310,6 @@ class SimConviqtTest(MPITestCase):
 
         return
 
-
     def test_sim_TEB(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -393,9 +392,6 @@ class SimConviqtTest(MPITestCase):
 
         return
 
-
-    
-
     def test_sim_hwp(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -410,7 +406,6 @@ class SimConviqtTest(MPITestCase):
 
         # Generate timestreams
         key = defaults.det_data
-
 
         sim_conviqt = ops.SimWeightedConviqt(
             comm=self.comm,
@@ -475,5 +470,3 @@ class SimConviqtTest(MPITestCase):
         self.assertFalse(fail)
 
         return
-
-    

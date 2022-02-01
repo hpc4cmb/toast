@@ -658,8 +658,6 @@ class SimWeightedConviqt(SimConviqt):
         return
 
 
-
-
 class SimTEBConviqt(SimConviqt):
     """
     Operator that uses libconviqt to generate beam-convolved timestreams.
@@ -672,8 +670,7 @@ class SimTEBConviqt(SimConviqt):
     :math:`skyT_lm * beamT_lm, skyE_lm * Re{P}, skyB_lm * Im{P}`.
 
     For extra details please refer to [this note ](https://giuspugl.github.io/reports/Notes_TEB_convolution.html)
-
-"""
+    """
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -709,30 +706,30 @@ class SimTEBConviqt(SimConviqt):
             sky = self.get_sky(sky_file, det, verbose)
 
             beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            beam_T = self.get_beam(beam_file.replace(".fits","_T.fits"), det, verbose)
-            beam_E = self.get_beam(beam_file.replace(".fits","_E.fits"), det, verbose)
-            beam_B = self.get_beam(beam_file.replace(".fits","_B.fits"), det, verbose)
-            
+            beam_T = self.get_beam(beam_file.replace(".fits", "_T.fits"), det, verbose)
+            beam_E = self.get_beam(beam_file.replace(".fits", "_E.fits"), det, verbose)
+            beam_B = self.get_beam(beam_file.replace(".fits", "_B.fits"), det, verbose)
+
             detector = self.get_detector(det)
 
             theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
 
             # I-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            
+
             convolved_data = self.convolve(sky, beam_T, detector, pnt, det, verbose)
 
-            del pnt,
+            del (pnt,)
             # Q-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.cos(2 * psi_pol) * self.convolve(
-                        sky, beam_E, detector, pnt, det, verbose
-                            )
-            del pnt, 
+                sky, beam_E, detector, pnt, det, verbose
+            )
+            del (pnt,)
             # U-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.sin(2 * psi_pol) * self.convolve(
-                sky , beam_B , detector, pnt, det, verbose
+                sky, beam_B, detector, pnt, det, verbose
             )
             del theta, phi, psi
 
@@ -745,7 +742,7 @@ class SimTEBConviqt(SimConviqt):
             )
             self.save(data, det, convolved_data, verbose)
 
-            del pnt, detector, beam_T, beam_E,beam_B, sky
+            del pnt, detector, beam_T, beam_E, beam_B, sky
 
             if verbose:
                 timer.report_clear(f"conviqt process detector {det}")
