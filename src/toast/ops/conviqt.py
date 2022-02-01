@@ -709,11 +709,10 @@ class SimTEBConviqt(SimConviqt):
             sky = self.get_sky(sky_file, det, verbose)
 
             beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            beam_file_T = beam_file.replace(".fits","_T.fits")
-            beam_file_P = beam_file.replace(".fits","_P.fits")
+            beam_file = beam_file.replace(".fits","_TEB.fits")
+            # the input  beam is made of 3 arrays [beamT, beamP, 0 ]
 
-            beamT = self.get_beam(beam_file_T, det, verbose)
-            beamP = self.get_beam(beam_file_P, det, verbose)
+            beam = self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
 
@@ -721,21 +720,21 @@ class SimTEBConviqt(SimConviqt):
 
             # I-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data = self.convolve(sky[0,:], beamT, detector, pnt, det, verbose)
+            convolved_data = self.convolve(sky[0,:], beam[0,: ], detector, pnt, det, verbose)
 
             del pnt
 
             # Q-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.cos(2 * psi_pol) * self.convolve(
-                        sky[1,:], beamP, detector, pnt, det, verbose
+                        sky[1,:], beam[1,:], detector, pnt, det, verbose
                             )
             del pnt
 
             # U-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.sin(2 * psi_pol) * self.convolve(
-                sky[2,:], beamP, detector, pnt, det, verbose
+                sky[2,:], beam[1,:], detector, pnt, det, verbose
             )
             del theta, phi, psi
 

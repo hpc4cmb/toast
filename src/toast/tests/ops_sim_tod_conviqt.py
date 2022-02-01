@@ -96,24 +96,19 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
+            beam_file = beam_file.replace(".fits","_TEB.fits")
 
-            blm_T= self.blm[0]
+            blm_TEB= self.blm.copy()
+            blm_TEB[1] =  self.blm[1]+  self.blm[2]*1j
+            blm_TEB[2] = np.zeros_like(self.blm[2] )
             hp.write_alm(
-                self.fname_beam.replace(".fits", "_T.fits"),
-                blm_T,
+                self.fname_beam.replace(".fits", "_TEB.fits"),
+                blm_TEB,
                 lmax=self.lmax,
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            blm_P = self.blm[1]+self.blm[2]
 
-            hp.write_alm(
-                self.fname_beam.replace(".fits", "_P.fits"),
-                blm_P,
-                lmax=self.lmax,
-                mmax_in=self.mmax,
-                overwrite=True,
-            )
 
         if self.comm is not None:
             self.comm.barrier()
