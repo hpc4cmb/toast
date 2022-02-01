@@ -96,7 +96,6 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            beam_file = beam_file.replace(".fits","_TEB.fits")
 
             blm_TEB= self.blm.copy()
             blm_TEB[1] =  self.blm[1]+  self.blm[2]*1j
