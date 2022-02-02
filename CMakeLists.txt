@@ -54,28 +54,25 @@ if(NOT TOAST_STATIC_DEPS AND NOT $ENV{TOAST_STATIC_DEPS} STREQUAL "")
 endif()
 
 # OpenMP
+set(OPENMP_TARGET FALSE)
 find_package(OpenMP)
-
-# OpenACC.  For now, we only check for this if it is explicitly enabled by the user.
-# The reason is that some compilers will report the correct compile flag even if
-# no suitable device exists (e.g. gcc -fopenacc).  Make this process more robust
-# before enabling by default.
-if(USE_OPENACC)
-    find_package(OpenACC)
-endif()
-
-# CUDA.  In some cases, the CUDA toolkit is available (and will be detected) even
-# if we want to build without it.  Force the user to request using CUDA.
-if(USE_CUDA)
-    find_package(CUDAToolkit)
-endif()
-
-# Check consistency
-if(USE_OPENACC_MEMPOOL)
-    if(CUDAToolkit_FOUND AND OpenACC_CXX_FOUND)
-        message(STATUS "Using CUDA memory pool for OpenACC")
+if(OpenMP_CXX_FOUND)
+    message(STATUS
+        "Found OpenMP version: " ${OpenMP_CXX_VERSION_MAJOR}
+        "." ${OpenMP_CXX_VERSION_MINOR}
+        " spec date " ${OpenMP_CXX_SPEC_DATE}
+    )
+    if(OpenMP_CXX_VERSION_MAJOR LESS 5)
+        if(OpenMP_CXX_VERSION_MAJOR EQUAL 4)
+            if(OpenMP_CXX_VERSION_MINOR GREATER_EQUAL 5)
+                set(OPENMP_TARGET TRUE)
+            endif()
+        endif()
     else()
-        message(ERROR "Both CUDA and OpenACC must be found to use the memory pool with OpenACC")
+        set(OPENMP_TARGET TRUE)
+    endif()
+    if(OPENMP_TARGET)
+        message(STATUS "Enabling support for OpenMP target offload")
     endif()
 endif()
 
@@ -87,12 +84,17 @@ if(TOAST_STATIC_DEPS)
 endif()
 
 # First look for MKL and CUDA, since those will provide both
-# FFT support and BLAS/LAPACK
+# FFT support and BLAS/LAPACK.
 
-# FIXME:  We should default this to "OFF" and force the user to request it,
-# just like CUDA and OpenACC.  Not changing this yet, since it breaks existing
-# behavior.
-find_package(MKL)
+# CUDA.  In some cases, the CUDA toolkit is available (and will be detected) even
+# if we want to build without it.  Force the user to request using CUDA.
+if(USE_CUDA)
+    find_package(CUDAToolkit)
+endif()
+
+if(USE_MKL)
+    find_package(MKL)
+endif()
 
 if(MKL_FOUND)
     # Use MKL for BLAS / LAPACK

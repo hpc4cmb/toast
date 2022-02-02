@@ -128,33 +128,4 @@ std::unique_ptr <C> aligned_uptr(size_t n) {
     return std::unique_ptr <C> (new C(n));
 }
 
-class FakeMemPool {
-    public:
-
-        static FakeMemPool & get();
-        void * create(void * buffer, size_t nbytes);
-        void remove(void * buffer, size_t nbytes);
-        void * copyin(void * buffer, size_t nbytes);
-        void copyout(void * buffer, size_t nbytes);
-        void update_device(void * buffer, size_t nbytes);
-        void update_self(void * buffer, size_t nbytes);
-
-        // Use int instead of bool to match the acc_is_present API
-        int present(void * buffer, size_t nbytes);
-
-        void * device_ptr(void * buffer);
-
-        void dump();
-
-        ~FakeMemPool();
-
-    private:
-
-        FakeMemPool();
-        std::unordered_map <void *, size_t> mem_size;
-        std::unordered_map <void *, void *> mem;
-};
-
-bool fake_openacc();
-
 #endif // ifndef LIBTOAST_COMMON_HPP

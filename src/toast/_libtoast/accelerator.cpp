@@ -4,19 +4,242 @@
 
 #include <module.hpp>
 
-#include <toast/gpu_helpers.hpp>
-
 #include <cstring>
 #include <cstdlib>
 #include <utility>
 
-#ifdef HAVE_OPENACC
-# include <openacc.h>
-#endif // ifdef HAVE_OPENACC
+#ifdef _OPENMP
+# include <omp.h>
+#endif // ifdef _OPENMP
 
-#ifdef HAVE_CUDALIBS
-# include <cuda_runtime_api.h>
-#endif // ifdef HAVE_CUDALIBS
+
+
+OmpMemMap & OmpMemMap::get() {
+    static OmpMemMap instance;
+    return instance;
+}
+
+void * OmpMemMap::create(void * buffer, size_t nbytes) {
+    size_t n = mem_size.count(buffer);
+    std::ostringstream o;
+    auto log = toast::Logger::get();
+    if (n != 0) {
+        o << "OmpMemMap:  on create, host ptr " << buffer
+        << " with " << nbytes << " bytes is already present "
+        << "with " << mem_size.at(buffer) << " bytes";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    // Add to the map
+    o.str("");
+    o << "OmpMemMap:  creating entry for host ptr "
+    << buffer << " with " << nbytes << " bytes";
+    log.verbose(o.str().c_str());
+    mem_size[buffer] = nbytes;
+    mem[buffer] = malloc(nbytes);
+    if (mem.at(buffer) == NULL) {
+        o.str("");
+        o << "OmpMemMap:  on create, host ptr " << buffer
+        << " with " << nbytes << " bytes, device allocation failed";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    return mem.at(buffer);
+}
+
+void OmpMemMap::remove(void * buffer, size_t nbytes) {
+    size_t n = mem_size.count(buffer);
+    auto log = toast::Logger::get();
+    std::ostringstream o;
+    if (n == 0) {
+        o.str("");
+        o << "OmpMemMap:  host ptr " << buffer
+        << " is not present- cannot delete";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    } else {
+        size_t nb = mem_size.at(buffer);
+        if (nb != nbytes) {
+            o.str("");
+            o << "OmpMemMap:  on delete, host ptr " << buffer << " has "
+            << nb << " bytes instead of " << nbytes;
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+    }
+    o.str("");
+    o << "OmpMemMap:  removing entry for host ptr "
+    << buffer << " with " << nbytes << " bytes";
+    log.verbose(o.str().c_str());
+    mem_size.erase(buffer);
+    free(mem.at(buffer));
+    mem.erase(buffer);
+}
+
+void * OmpMemMap::copyin(void * buffer, size_t nbytes) {
+    size_t n = mem_size.count(buffer);
+    std::ostringstream o;
+    auto log = toast::Logger::get();
+    void * ptr;
+    if (n == 0) {
+        ptr = create(buffer, nbytes);
+    } else {
+        size_t nb = mem_size.at(buffer);
+        if (nb < nbytes) {
+            o.str("");
+            o << "OmpMemMap:  on copyin, host ptr " << buffer << " has "
+            << nb << " bytes instead of " << nbytes;
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+    }
+    ptr = mem.at(buffer);
+    o.str("");
+    o << "OmpMemMap:  copy in host ptr "
+    << buffer << " with " << nbytes << " bytes to device "
+    << ptr;
+    log.verbose(o.str().c_str());
+    void * temp = memcpy(ptr, buffer, nbytes);
+    return mem.at(buffer);
+}
+
+void OmpMemMap::copyout(void * buffer, size_t nbytes) {
+    size_t n = mem_size.count(buffer);
+    auto log = toast::Logger::get();
+    std::ostringstream o;
+    size_t nb;
+    if (n == 0) {
+        o.str("");
+        o << "OmpMemMap:  host ptr " << buffer
+        << " is not present- cannot copy out";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    } else {
+        nb = mem_size.at(buffer);
+        if (nb < nbytes) {
+            o.str("");
+            o << "OmpMemMap:  on copyout, host ptr " << buffer << " has "
+            << nb << " bytes instead of " << nbytes;
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+    }
+    void * ptr = mem.at(buffer);
+    o.str("");
+    o << "OmpMemMap:  copy out host ptr "
+    << buffer << " with " << nbytes << " bytes from device "
+    << ptr;
+    void * temp = memcpy(buffer, ptr, nbytes);
+    // Even if we copyout a portion of the buffer, remove the full thing.
+    remove(buffer, nb);
+}
+
+void OmpMemMap::update_device(void * buffer, size_t nbytes) {
+    size_t n = mem_size.count(buffer);
+    auto log = toast::Logger::get();
+    std::ostringstream o;
+    if (n == 0) {
+        o.str("");
+        o << "OmpMemMap:  host ptr " << buffer
+        << " is not present- cannot update device";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    } else {
+        size_t nb = mem_size.at(buffer);
+        if (nb < nbytes) {
+            o.str("");
+            o << "OmpMemMap:  on update device, host ptr " << buffer << " has "
+            << nb << " bytes instead of " << nbytes;
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+    }
+    void * dev = mem.at(buffer);
+    o.str("");
+    o << "OmpMemMap:  update device from host ptr "
+    << buffer << " with " << nbytes << " to " << dev;
+    void * temp = memcpy(dev, buffer, nbytes);
+}
+
+void OmpMemMap::update_self(void * buffer, size_t nbytes) {
+    size_t n = mem_size.count(buffer);
+    auto log = toast::Logger::get();
+    std::ostringstream o;
+    if (n == 0) {
+        o.str("");
+        o << "OmpMemMap:  host ptr " << buffer
+        << " is not present- cannot update host";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    } else {
+        size_t nb = mem_size.at(buffer);
+        if (nb < nbytes) {
+            o.str("");
+            o << "OmpMemMap:  on update self, host ptr " << buffer << " has "
+            << nb << " bytes instead of " << nbytes;
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+    }
+    void * dev = mem.at(buffer);
+    o.str("");
+    o << "OmpMemMap:  update host ptr "
+    << buffer << " with " << nbytes << " from " << dev;
+    void * temp = memcpy(buffer, dev, nbytes);
+}
+
+// Use int instead of bool to match the acc_is_present API
+int OmpMemMap::present(void * buffer, size_t nbytes) {
+    size_t n = mem_size.count(buffer);
+    if (n == 0) {
+        return 0;
+    } else {
+        size_t nb = mem_size.at(buffer);
+        if (nb != nbytes) {
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "OmpMemMap:  host ptr " << buffer << " is present"
+            << ", but has " << nb << " bytes instead of " << nbytes;
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+        return 1;
+    }
+}
+
+void * OmpMemMap::device_ptr(void * buffer) {
+    auto log = toast::Logger::get();
+    std::ostringstream o;
+    size_t n = mem.count(buffer);
+    if (n == 0) {
+        o.str("");
+        o << "OmpMemMap:  host ptr " << buffer
+        << " is not present- cannot get device pointer";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    return mem.at(buffer);
+}
+
+void OmpMemMap::dump() {
+    for(auto & p : mem_size) {
+        void * dev = mem.at(p.first);
+        std::cout << "OmpMemMap table:  " << p.first << ": "
+        << p.second << " bytes on dev at " << dev << std::endl;
+    }
+    return;
+}
+
+OmpMemMap::OmpMemMap() : mem_size(), mem() {
+}
+
+OmpMemMap::~OmpMemMap() {
+    for(auto & p : mem) {
+        free(p.second);
+    }
+    mem_size.clear();
+    mem.clear();
+}
 
 
 void extract_buffer_info(py::buffer_info const & info, void ** host_ptr,
@@ -41,84 +264,39 @@ void extract_buffer_info(py::buffer_info const & info, void ** host_ptr,
 }
 
 
-bool fake_openacc() {
-    // See if we should use the OpenACC code path, even when disabled
-    // (Useful for debugging).
-    bool ret = false;
-    char * envval = ::getenv("TOAST_FAKE_OPENACC");
-    if (envval != NULL) {
-        ret = true;
-    }
-    return ret;
-}
-
-
 void init_accelerator(py::module & m) {
     m.def(
-        "acc_enabled", []()
+        "accel_enabled", []()
         {
-            #ifdef HAVE_OPENACC
+            #ifdef HAVE_OPENMP_TARGET
             return true;
-            #else // ifdef HAVE_OPENACC
-            return fake_openacc();
-            #endif // ifdef HAVE_OPENACC
-        },
-        R"(
-            Return True if TOAST was compiled with OpenACC support.
-        )");
-
-    m.def(
-        "acc_is_fake", []()
-        {
-            #ifdef HAVE_OPENACC
+            #else
             return false;
-            #else // ifdef HAVE_OPENACC
-            return fake_openacc();
-            #endif // ifdef HAVE_OPENACC
+            #endif
         },
         R"(
-            Return True if TOAST is using fake OpenACC.
+            Return True if TOAST was compiled with OpenMP target offload support.
         )");
 
     m.def(
-        "acc_get_num_devices", []()
+        "accel_get_num_devices", []()
         {
             auto & log = toast::Logger::get();
             std::ostringstream o;
-            #ifdef HAVE_OPENACC
-            int nacc = acc_get_num_devices(acc_device_not_host);
-            o << "OpenACC has " << nacc << " accelerators";
+            int naccel = 0;
+            #ifdef HAVE_OPENMP_TARGET
+            naccel = omp_get_num_devices();
+            #endif
+            o << "OpenMP has " << naccel << " accelerator devices";
             log.verbose(o.str().c_str());
-            return nacc;
-
-            #else // ifdef HAVE_OPENACC
-            # ifdef HAVE_CUDALIBS
-            int ncuda;
-            auto ret = cudaGetDeviceCount(&ncuda);
-            o << "CUDA has " << ncuda << " accelerators";
-            log.verbose(o.str().c_str());
-            return ncuda;
-
-            # else // ifdef HAVE_CUDALIBS
-            if (fake_openacc()) {
-                o << "Using one fake OpenACC device";
-                log.verbose(o.str().c_str());
-                return 1;
-            } else {
-                o << "No OpenACC or CUDA devices found";
-                log.verbose(o.str().c_str());
-                return 0;
-            }
-
-            # endif // ifdef HAVE_CUDALIBS
-            #endif  // ifdef HAVE_OPENACC
+            return naccel;
         },
         R"(
-            Return the total number of OpenACC devices.
+            Return the total number of OpenMP target devices.
         )");
 
     m.def(
-        "acc_is_present", [](py::buffer data)
+        "accel_is_present", [](py::buffer data, int device)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -127,21 +305,10 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-            int result;
+            int result = 0;
 
-            #ifdef HAVE_OPENACC
-
-            # ifdef USE_OPENACC_MEMPOOL
-            auto & pool = GPU_memory_pool::get();
-            bool test = pool.is_present(p_host);
-            result = test ? 1 : 0;
-            # else // ifdef USE_OPENACC_MEMPOOL
-            result = acc_is_present(p_host, n_bytes);
-            # endif// ifdef USE_OPENACC_MEMPOOL
-
-            #else
-            auto & fake = FakeMemPool::get();
-            result = fake.present(p_host, n_bytes);
+            #ifdef HAVE_OPENMP_TARGET
+            result = omp_target_is_present(p_host, device);
             #endif
 
             std::ostringstream o;
@@ -154,10 +321,13 @@ void init_accelerator(py::module & m) {
                 return true;
             }
         },
-        py::arg(
-            "data"),
+        py::arg("data"), py::arg("device"),
         R"(
         Check if the specified array is present on the accelerator device.
+
+        Args:
+            data (array):  The data array
+            device (int):  The accelerator device index
 
         Returns:
             (bool):  True if the data is present, else False.
@@ -186,7 +356,7 @@ void init_accelerator(py::module & m) {
             # endif// ifdef USE_OPENACC_MEMPOOL
 
             #else
-            auto & fake = FakeMemPool::get();
+            auto & fake = OmpMemMap::get();
             auto p_device = fake.copyin(p_host, n_bytes);
             #endif
 
@@ -222,7 +392,7 @@ void init_accelerator(py::module & m) {
             #ifdef HAVE_OPENACC
             int present = acc_is_present(p_host, n_bytes);
             #else
-            auto & fake = FakeMemPool::get();
+            auto & fake = OmpMemMap::get();
             int present = fake.present(p_host, n_bytes);
             if (present == 0) {
                 fake.dump();
@@ -280,7 +450,7 @@ void init_accelerator(py::module & m) {
             #ifdef HAVE_OPENACC
             int present = acc_is_present(p_host, n_bytes);
             #else
-            auto & fake = FakeMemPool::get();
+            auto & fake = OmpMemMap::get();
             int present = fake.present(p_host, n_bytes);
             if (present == 0) {
                 fake.dump();
@@ -337,7 +507,7 @@ void init_accelerator(py::module & m) {
             #ifdef HAVE_OPENACC
             int present = acc_is_present(p_host, n_bytes);
             #else
-            auto & fake = FakeMemPool::get();
+            auto & fake = OmpMemMap::get();
             int present = fake.present(p_host, n_bytes);
             if (present == 0) {
                 fake.dump();
@@ -394,7 +564,7 @@ void init_accelerator(py::module & m) {
             #ifdef HAVE_OPENACC
             int present = acc_is_present(p_host, n_bytes);
             #else
-            auto & fake = FakeMemPool::get();
+            auto & fake = OmpMemMap::get();
             int present = fake.present(p_host, n_bytes);
             if (present == 0) {
                 fake.dump();
