@@ -627,7 +627,7 @@ def patch_is_rising(patch):
 
 
 @function_timer
-def prioritize(args, visible):
+def prioritize(args, visible, last_el):
     """Order visible targets by priority and number of scans."""
     log = Logger.get()
     for i in range(len(visible)):
@@ -676,12 +676,21 @@ def prioritize(args, visible):
                         weight1 *= (lim / el1) ** args.elevation_penalty_power
                     if el2 < lim:
                         weight2 *= (lim / el2) ** args.elevation_penalty_power
+                # Optional elevation change penalty
+                if last_el is not None \
+                   and args.elevation_change_limit_deg > 0 \
+                   and args.elevation_change_penalty != 1:
+                    lim = args.elevation_change_limit_deg
+                    if np.abs(np.degrees(last_el) - el1) < lim:
+                        weight1 *= args.elevation_change_penalty
+                    if np.abs(np.degrees(last_el) - el2) < lim:
+                        weight2 *= args.elevation_change_penalty
             if weight1 > weight2:
                 visible[j], visible[j + 1] = visible[j + 1], visible[j]
     names = []
     for patch in visible:
         names.append(patch.name)
-    log.debug("Prioritized list of viewable patches: {}".format(names))
+    log.debug(f"Prioritized list of viewable patches: {names}")
     return
 
 
@@ -702,6 +711,8 @@ def attempt_scan(
     fout_fmt,
     ods,
     boresight_angle,
+    last_t,
+    last_el,
 ):
     """Attempt scanning the visible patches in order until success."""
     log = Logger.get()
@@ -730,7 +741,18 @@ def attempt_scan(
                 break
             # All on-sky targets
             for rising in [True, False]:
-                observer.date = to_DJD(t)
+                if last_el is not None and args.elevation_change_limit_deg != 0:
+                    if rising:
+                        delta_el = np.degrees(np.abs(last_el - patch.current_el_max))
+                    else:
+                        delta_el = np.degrees(np.abs(last_el - patch.current_el_min))
+                    if delta_el > args.elevation_change_limit_deg:
+                        t_try = last_t + args.elevation_change_time_s
+                    else:
+                        t_try = t
+                else:
+                    t_try = t
+                observer.date = to_DJD(t_try)
                 el = get_constant_elevation(
                     args,
                     observer,
@@ -746,7 +768,7 @@ def attempt_scan(
                     args,
                     el,
                     patch,
-                    t,
+                    t_try,
                     fp_radius,
                     observer,
                     sun,
@@ -759,7 +781,7 @@ def attempt_scan(
                     try:
                         t, _ = add_scan(
                             args,
-                            t,
+                            t_try,
                             tstop,
                             aztimes,
                             azmins,
@@ -786,7 +808,7 @@ def attempt_scan(
                 break
         if success:
             break
-    return success, t
+    return success, t, el
 
 
 def from_angles(az, el):
@@ -940,13 +962,14 @@ def attempt_scan_pole(
                     success = False
                     pole_success = False
         if success:
+            el -= np.radians(args.pole_el_step_deg)
             break
     tstop = t
     if args.one_scan_per_day:
         day1 = int(to_MJD(tstart))
         while int(to_MJD(tstop)) == day1:
             tstop += 60.0
-    return success, tstop
+    return success, tstop, el
 
 
 @function_timer
@@ -972,6 +995,8 @@ def get_constant_elevation(
             not_visible.append((patch.name, "No setting corners"))
         else:
             el = np.amin(els[ind_setting]) - fp_radius
+
+    # Check that the elevation is valid
 
     if el is not None and patch.elevations is not None:
         # Fixed elevation mode.  Find the first allowed observing elevation.
@@ -1037,7 +1062,7 @@ def get_constant_elevation(
                 )
                 el = None
     if el is None:
-        log.debug("NO ELEVATION: {}".format(not_visible[-1]))
+        log.debug("NO ELEVATION: {not_visible[-1]}")
     else:
         log.debug(
             "{} : ELEVATION = {}, rising = {}, partial = {}".format(
@@ -2006,6 +2031,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
     t = start_timestamp
     last_successful = t
+    last_el = None
     while True:
         t, blocked = apply_blockouts(args, t)
         boresight_angle = get_boresight_angle(args, t)
@@ -2025,9 +2051,10 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 # this branch again without scheduling a succesful scan
                 log.debug(
                     "Resetting patches and returning to the last successful "
-                    "scan: {}".format(to_UTC(last_successful))
+                    "scan: {to_UTC(last_successful)}"
                 )
                 t, last_successful = last_successful, t
+            last_el = None
 
         # Determine which patches are observable at time t.
 
@@ -2048,7 +2075,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         visible, not_visible = get_visible(args, observer, sun, moon, patches, el_min)
 
         if len(visible) == 0:
-            log.debug("No patches visible at {}: {}".format(to_UTC(t), not_visible))
+            log.debug(f"No patches visible at {to_UTC(t)}: {not_visible}")
             t = advance_time(t, args.time_step_s)
             continue
 
@@ -2066,10 +2093,10 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         # If the criteria are not met, advance the time by a step
         # and try again
 
-        prioritize(args, visible)
+        prioritize(args, visible, last_el)
 
         if args.pole_mode:
-            success, t = attempt_scan_pole(
+            success, t, el = attempt_scan_pole(
                 args,
                 observer,
                 visible,
@@ -2087,9 +2114,11 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
+                last_successful,
+                last_el,
             )
         else:
-            success, t = attempt_scan(
+            success, t, el = attempt_scan(
                 args,
                 observer,
                 visible,
@@ -2105,18 +2134,19 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
+                last_successful,
+                last_el,
             )
 
         if args.operational_days and len(ods) > args.operational_days:
             break
 
         if not success:
-            log.debug(
-                "No patches could be scanned at {}: {}".format(to_UTC(t), not_visible)
-            )
+            log.debug("No patches could be scanned at {to_UTC(t)}: {to_UTC(t)}")
             t = advance_time(t, args.time_step_s)
         else:
             last_successful = t
+            last_el = el
 
     fout.close()
     return
@@ -2203,7 +2233,31 @@ def parse_args(opts=None):
         required=False,
         default=2,
         type=np.float,
-        help="Power in the elevation penalty function [> 0] ",
+        help="Power in the elevation penalty function [> 0]",
+    )
+    parser.add_argument(
+        "--elevation-change-limit-deg",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Assign a penalty to changes in elevation larger than this limit [degrees].  "
+        "See --elevation-change-penalty and --elevation-change-time-s",
+    )
+    parser.add_argument(
+        "--elevation-change-penalty",
+        required=False,
+        default=1,
+        type=np.float,
+        help="Multiplicative elevation change penalty triggered by "
+        "--elevation-change-limit-deg",
+    )
+    parser.add_argument(
+        "--elevation-change-time-s",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Time it takes for the telescope to stabilize after a change in observing "
+        "elevation [seconds].  Triggered by --elevation-change-limit-deg",
     )
     parser.add_argument(
         "--equalize-area",
