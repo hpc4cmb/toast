@@ -19,10 +19,11 @@ from ..covariance import covariance_invert
 from ..observation import default_values as defaults
 
 from .._libtoast import (
-    cov_accum_zmap,
     cov_accum_diag_hits,
     cov_accum_diag_invnpp,
 )
+
+from .jax_ops import cov_accum_zmap
 
 from .operator import Operator
 

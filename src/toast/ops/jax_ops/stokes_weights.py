@@ -304,8 +304,8 @@ stokes_weights = select_implementation(stokes_weights_compiled,
                                        stokes_weights_jax, 
                                        default_implementationType=ImplementationType.JAX)
 
-# TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-stokes_weights = get_compile_time(stokes_weights)
-
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
+
+# to bench:
+# use scanmap config and check StokesWeights._exec field in timing.csv

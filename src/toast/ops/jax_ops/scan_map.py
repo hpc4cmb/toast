@@ -172,7 +172,12 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 scan_map = select_implementation(scan_map_compiled, 
                                  scan_map_numpy, 
                                  scan_map_jax, 
-                                 default_implementationType=ImplementationType.COMPILED)
+                                 default_implementationType=ImplementationType.JAX)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_scan_map")'
+
+# to bench:
+# use scanmap config and check ScanHealpixMap._exec field in timing.csv
+# (or the full sky computation field in the shell output)
+# one problem: this includes call to other operators
