@@ -213,3 +213,6 @@ healpix_pixels = select_implementation_and_pick_hpix(healpix_pixels_compiled,
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
+
+# to bench:
+# use scanmap config and check PixelsHealpix._exec field in timing.csv

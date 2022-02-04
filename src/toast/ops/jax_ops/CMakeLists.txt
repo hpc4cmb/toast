@@ -8,6 +8,7 @@ install(FILES
     scan_map.py
     healpix_pixels.py
     stokes_weights.py
+    cov_accum.py
     DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops
 )
 
