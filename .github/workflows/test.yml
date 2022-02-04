@@ -12,63 +12,163 @@ on:
       - toast3
 
 jobs:
-  py37:
-    name: Python 3.7
+  linux:
+    name: Linux with Python-${{ matrix.python }}
     runs-on: ubuntu-latest
+    strategy:
+      # Ensure that a test continues even if another fails.  Useful for
+      # debugging multiple problems in parallel.
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.7"
+            pyshort: "37"
+          - python: "3.9"
+            pyshort: "39"
+          # - python: "3.10"
+          #   pyshort: "310"
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.4.0
+        uses: styfle/cancel-workflow-action@0.9.1
         with:
           access_token: ${{ github.token }}
+
       - name: Checkout
         uses: actions/checkout@v2
+
       - name: Pull Dependency Image
-        run: docker pull hpc4cmb/toast-deps-py37:latest
+        run: docker pull hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest
+
       - name: Compile
-        run: docker run -v "$(pwd)":/home/toast --name="test_py37" hpc4cmb/toast-deps-py37:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py37 test_runner:py37
+        run: |
+          docker run -v "$(pwd)":/home/toast --name="test_py${{ matrix.pyshort }}" \
+            hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest \
+            /home/toast/platforms/install_test_runner.sh
+          docker commit -m "test runner" test_py${{ matrix.pyshort }} \
+            test_runner:py${{ matrix.pyshort }}
+
       # - name: Test Documentation Build
-      #   run: docker run -v "$(pwd)":/home/toast test_runner:py37 /home/toast/docs/build_docs.sh
+      #   run: docker run -v "$(pwd)":/home/toast test_runner:py${{ matrix.pyshort }} /home/toast/docs/build_docs.sh
+
       - name: Run Serial Tests
-        run: docker run -e MPI_DISABLE=1 test_runner:py37 python -c 'import toast.tests; toast.tests.run()'
+        run: |
+          docker run -e MPI_DISABLE=1 test_runner:py${{ matrix.pyshort }} \
+            python -c 'import toast.tests; toast.tests.run()'
+
       - name: Run MPI Tests
-        run: docker run test_runner:py37 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
-  py38:
-    name: Python 3.8
-    runs-on: ubuntu-latest
+        run: |
+          docker run test_runner:py${{ matrix.pyshort }} \
+            mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+
+  macos-clang:
+    name: MacOS (clang) with Python-${{ matrix.python }}
+    runs-on: macos-latest
+    strategy:
+      # Ensure that a test continues even if another fails.  Useful for
+      # debugging multiple problems in parallel.
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.7"
+            pyshort: "37"
+          - python: "3.9"
+            pyshort: "39"
+          # - python: "3.10"
+          #   pyshort: "310"
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.4.0
+        uses: styfle/cancel-workflow-action@0.9.1
         with:
           access_token: ${{ github.token }}
+
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Pull Dependency Image
-        run: docker pull hpc4cmb/toast-deps-py38:latest
-      - name: Compile
-        run: docker run -v "$(pwd)":/home/toast --name="test_py38" hpc4cmb/toast-deps-py38:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py38 test_runner:py38
-      # - name: Test Documentation Build
-      #   run: docker run -v "$(pwd)":/home/toast test_runner:py38 /home/toast/docs/build_docs.sh
-      - name: Run Serial Tests
-        run: docker run -e MPI_DISABLE=1 test_runner:py38 python -c 'import toast.tests; toast.tests.run()'
-      - name: Run MPI Tests
-        run: docker run test_runner:py38 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
-  py39:
-    name: Python 3.9
-    runs-on: ubuntu-latest
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.4.0
+
+      - uses: actions/setup-python@v2
+        name: Install Python
         with:
-          access_token: ${{ github.token }}
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Pull Dependency Image
-        run: docker pull hpc4cmb/toast-deps-py39:latest
-      - name: Compile
-        run: docker run -v "$(pwd)":/home/toast --name="test_py39" hpc4cmb/toast-deps-py39:latest /home/toast/platforms/install_test_runner.sh && docker commit -m "test runner" test_py39 test_runner:py39
-      # - name: Test Documentation Build
-      #   run: docker run -v "$(pwd)":/home/toast test_runner:py39 /home/toast/docs/build_docs.sh
+          python-version: ${{ matrix.python }}
+
+      - name: Install OS Dependencies
+        run: |
+          brew update
+          brew install fftw
+
+      - name: Install Python Dependencies
+        run: |
+          python3 -m pip install -r wheels/build_requirements.txt
+          python3 -m pip install ducc0
+
+      - name: Install TOAST
+        run: |
+          export TOAST_BUILD_CMAKE_C_COMPILER=clang
+          export TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
+          export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
+          python3 -m pip install .
+
       - name: Run Serial Tests
-        run: docker run -e MPI_DISABLE=1 test_runner:py39 python -c 'import toast.tests; toast.tests.run()'
-      - name: Run MPI Tests
-        run: docker run test_runner:py39 mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+        run: |
+          export OMP_NUM_THREADS=2
+          python3 -c 'import toast.tests; toast.tests.run()'
+
+  # macos-gcc:
+  #   name: MacOS (macports gcc) with Python-${{ matrix.python }}
+  #   runs-on: macos-latest
+  #   strategy:
+  #     # Ensure that a test continues even if another fails.  Useful for
+  #     # debugging multiple problems in parallel.
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - python: "3.7"
+  #           pyshort: "37"
+  #         # - python: "3.8"
+  #         #   pyshort: "38"
+  #         # - python: "3.9"
+  #         #   pyshort: "39"
+  #         # - python: "3.10"
+  #         #   pyshort: "310"
+  #   steps:
+  #     - name: Cancel Previous Runs
+  #       uses: styfle/cancel-workflow-action@0.9.1
+  #       with:
+  #         access_token: ${{ github.token }}
+
+  #     - name: Checkout
+  #       uses: actions/checkout@v2
+
+  #     - uses: actions/setup-python@v2
+  #       name: Install Python
+  #       with:
+  #         python-version: ${{ matrix.python }}
+
+  #     - name: Install OS Dependencies
+  #       run: |
+  #         brew update
+  #         brew install fftw suite-sparse gcc
+
+  #     - name: Install Python Dependencies
+  #       run: |
+  #         CC="gcc-11" CFLAGS="-O2 -fPIC" \
+  #         python3 -m pip install -r wheels/build_requirements.txt
+  #         python3 -m pip install ducc0
+
+  #     - name: Install TOAST
+  #       run: |
+  #         export TOAST_BUILD_CMAKE_C_COMPILER=gcc-11
+  #         export TOAST_BUILD_CMAKE_CXX_COMPILER=g++-11
+  #         export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC"
+  #         export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11"
+  #         python3 -m pip install .
+
+  #     - name: Run Serial Tests
+  #       run: |
+  #         export OMP_NUM_THREADS=2
+  #         which python3
+  #         python3 -m pip list
+  #         python3 -c 'import numpy; print(numpy.__file__)'
+  #         python3 -c 'import toast; print(toast.__file__)'
+  #         otool -L /Users/runner/hostedtoolcache/Python/3.7.12/x64/lib/python3.7/site-packages/toast/_libtoast.cpython*
+  #         python3 -c 'import toast'
+  #         python3 -c 'import toast; print(toast.__file__)'
+  #         python3 -c 'import toast.tests; toast.tests.run()'

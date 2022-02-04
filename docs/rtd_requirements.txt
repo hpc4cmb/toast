@@ -1,11 +1,7 @@
-cmake>=3.12.0
-tomlkit
-numpy
-scipy
-healpy>=1.14.0
-astropy
-h5py
-psutil
-ephem
-traitlets>=5.0
-pshmem
+# These packages are needed for building the documentation, in addition
+# to the packages needed to install toast, and prior to running
+# setup.py to parse to full set of requirements.
+cmake
+jupyter-book
+wurlitzer
+sphinx-autoapi

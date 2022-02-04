@@ -12,123 +12,90 @@ env:
   TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
 
 jobs:
-  sdist:
-    name: Python source dist
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Set up Python 3.7
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.7
-      - name: Install Dependencies
-        run: pip install twine
-      - name: Pull Dependency Image
-        run: docker pull hpc4cmb/toast-deps-py37:latest
-      - name: Create dist directory
-        run: mkdir -p dist && rm -f dist/*
-      - name: Build source package
-        run: docker run -v "$(pwd)":/home/toast hpc4cmb/toast-deps-py37:latest /home/toast/wheels/build_sdist.sh
-      - name: Upload to PyPI
-        run: |
-          python -m twine upload dist/toast*.tar.gz
-  wheels-37:
-    name: Python 3.7 wheels for ${{ matrix.os }}
+  build_wheels:
+    name: Build wheel for cp${{ matrix.python }}-${{ matrix.platform_id }}-${{ matrix.manylinux_image }}
     runs-on: ${{ matrix.os }}
     strategy:
+      # Ensure that a wheel builder finishes even if another fails.  Useful for
+      # debugging multiple problems in parallel.
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          # Linux 64 bit manylinux2014
+          - os: ubuntu-latest
+            python: 37
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux2014
+          # - os: ubuntu-latest
+          #   python: 38
+          #   platform_id: manylinux_x86_64
+          #   manylinux_image: manylinux2014
+          # - os: ubuntu-latest
+          #   python: 39
+          #   platform_id: manylinux_x86_64
+          #   manylinux_image: manylinux2014
+          # - os: ubuntu-latest
+          #   python: 310
+          #   platform_id: manylinux_x86_64
+          #   manylinux_image: manylinux2014
+
+          # MacOS x86_64
+          - os: macos-latest
+            python: 37
+            platform_id: macosx_x86_64
+          # - os: macos-latest
+          #   python: 38
+          #   platform_id: macosx_x86_64
+          # - os: macos-latest
+          #   bitness: 64
+          #   python: 39
+          #   platform_id: macosx_x86_64
+          # - os: macos-latest
+          #   python: 310
+          #   platform_id: macosx_x86_64
+
+          # MacOS arm64 - Re-enable after github CI supports M1 runners:
+          #   https://github.com/actions/virtual-environments/issues/2187
+          #
+          # - os: macos-11
+          #   python: 39
+          #   platform_id: macosx_arm64
+          # - os: macos-11
+          #   python: 310
+          #   platform_id: macosx_arm64
     env:
-      CIBW_BUILD: cp37-macosx_x86_64 cp37-manylinux_x86_64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2010
-      CIBW_MANYLINUX_I686_IMAGE: manylinux2010
+      CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
+      CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux_image }}
+      CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.manylinux_image }}
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
+      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON TOAST_BUILD_TOAST_STATIC_DEPS=ON"
       CIBW_ENVIRONMENT_MACOS:
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
-      CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
-      CIBW_TEST_COMMAND: export OMP_NUM_THREADS=2; python -c 'import toast.tests; toast.tests.run()'
+      CIBW_BEFORE_TEST: export OMP_NUM_THREADS=2
+      CIBW_TEST_COMMAND: python -c 'import toast.tests; toast.tests.run()'
     steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token: ${{ github.token }}
+
       - name: Checkout
         uses: actions/checkout@v2
+
       - uses: actions/setup-python@v2
         name: Install Python
         with:
-          python-version: '3.7'
+          python-version: '3.9'
+
       - name: Install cibuildwheel
         run: |
-          python -m pip install twine cibuildwheel==2.1.2
+          python -m pip install twine cibuildwheel==2.3.1
+
       - name: Build wheel
         run: |
           python -m cibuildwheel --output-dir wheelhouse
-      - name: Upload to PyPI
-        run: |
-          python -m twine upload wheelhouse/toast*.whl
-  wheels-38:
-    name: Python 3.8 wheels for ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    env:
-      CIBW_BUILD: cp38-macosx_x86_64 cp38-manylinux_x86_64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2010
-      CIBW_MANYLINUX_I686_IMAGE: manylinux2010
-      CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
-      CIBW_ENVIRONMENT_MACOS:
-      CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
-      CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
-      CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
-      CIBW_TEST_COMMAND: export OMP_NUM_THREADS=2; python -c 'import toast.tests; toast.tests.run()'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        name: Install Python
-        with:
-          python-version: '3.7'
-      - name: Install cibuildwheel
-        run: |
-          python -m pip install twine cibuildwheel==2.1.2
-      - name: Build wheel
-        run: |
-          python -m cibuildwheel --output-dir wheelhouse
-      - name: Upload to PyPI
-        run: |
-          python -m twine upload wheelhouse/toast*.whl
-  wheels-39:
-    name: Python 3.9 wheels for ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    env:
-      CIBW_BUILD: cp39-macosx_x86_64 cp39-manylinux_x86_64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2010
-      CIBW_MANYLINUX_I686_IMAGE: manylinux2010
-      CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH} TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
-      CIBW_ENVIRONMENT_MACOS:
-      CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
-      CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh
-      CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
-      CIBW_TEST_COMMAND: export OMP_NUM_THREADS=2; python -c 'import toast.tests; toast.tests.run()'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        name: Install Python
-        with:
-          python-version: '3.7'
-      - name: Install cibuildwheel
-        run: |
-          python -m pip install twine cibuildwheel==2.1.2
-      - name: Build wheel
-        run: |
-          python -m cibuildwheel --output-dir wheelhouse
+
       - name: Upload to PyPI
         run: |
           python -m twine upload wheelhouse/toast*.whl

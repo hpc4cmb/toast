@@ -3,7 +3,6 @@ include AUTHORS
 include LICENSE
 include CMakeLists.txt
 recursive-include src *
-recursive-include pipelines *
 recursive-include tutorial *
 recursive-include examples *
 prune examples/job*

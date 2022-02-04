@@ -1,0 +1,5 @@
+--index-url https://pypi.python.org/simple/
+
+# By default, use our abstract dependencies in setup.py for the
+# concrete dependencies from PyPI.
+.

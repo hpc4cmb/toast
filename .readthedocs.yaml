@@ -1,0 +1,26 @@
+# Required
+version: 2
+
+# Formats
+formats: []
+
+# Set the version of Python and other tools you might need
+build:
+  os: ubuntu-20.04
+  apt_packages:
+    - libfftw3-dev
+    - libopenblas-dev
+  tools:
+    python: "3.9"
+
+# Build documentation in the docs/ directory with Sphinx
+sphinx:
+  configuration: docs/conf.py
+
+# Optionally declare the Python requirements required to build your docs
+python:
+  install:
+  - requirements: docs/rtd_requirements.txt
+  - requirements: wheels/build_requirements.txt
+  - method: pip
+    path: .

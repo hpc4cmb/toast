@@ -7,8 +7,12 @@ popd > /dev/null
 
 pushd ${docdir} > /dev/null
 
-./setup_docs.sh
+rm -rf _build conf.py
 
-jupyter-book build .
+jupyter-book config sphinx .
+
+echo "" >> conf.py
+echo "import toast" >> conf.py
+echo "import toast.ops" >> conf.py
 
 popd > /dev/null
