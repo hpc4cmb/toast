@@ -827,6 +827,11 @@ class CommonModeFilter(Operator):
             )
 
             self._re_redistribute(data, obs, timer, log, temp_ob)
+            if self.redistribute:
+                # In this case our temp_ob holds a copied subset of the
+                # observation.  Clear it.
+                temp_ob.clear()
+                del temp_ob
 
         return
 
