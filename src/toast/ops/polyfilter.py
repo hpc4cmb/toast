@@ -401,6 +401,10 @@ class PolyFilter2D(Operator):
             obs.detdata[self.det_data][:] = temp_ob.detdata[self.det_data][:]
             gt.stop("Poly2D:  Copy output")
 
+            # Free data copy
+            temp_ob.clear()
+            del temp_ob
+
     def _finalize(self, data, **kwargs):
         return
 

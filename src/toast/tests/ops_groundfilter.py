@@ -84,9 +84,8 @@ class GroundFilterTest(MPITestCase):
                 check_rms = np.std(ob.detdata[defaults.det_data][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
-
+        data.clear()
         del data
-        return
 
     def test_groundfilter_split(self):
 
@@ -144,6 +143,5 @@ class GroundFilterTest(MPITestCase):
                 check_rms = np.std(ob.detdata[defaults.det_data][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
-
+        data.clear()
         del data
-        return
