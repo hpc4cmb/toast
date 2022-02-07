@@ -396,7 +396,7 @@ class Noise(object):
                 del ids
 
                 pds = hf[dsname]
-                freq = u.Quantity(pds[0], u.Hz)
+                freq = pds[0]
                 rate = 2.0 * freq[-1]
                 for key, indx, psdrow in zip(psd_keys, psd_indices, pds[1:]):
                     self._rates[key] = rate * u.Hz
@@ -455,10 +455,13 @@ class Noise(object):
         if self._mixmatrix != other._mixmatrix:
             return False
         for k, v in self._freqs.items():
-            if not np.allclose(v, other._freqs[k]):
+            if not np.allclose(v.to_value(u.Hz), other._freqs[k].to_value(u.Hz)):
                 return False
         for k, v in self._psds.items():
-            if not np.allclose(v, other._psds[k]):
+            if not np.allclose(
+                v.to_value(u.K**2 * u.second),
+                other._psds[k].to_value(u.K**2 * u.second),
+            ):
                 return False
         return True
 
