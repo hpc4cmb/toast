@@ -334,7 +334,8 @@ class import_obs_meta(object):
                 # Extract the focalplane and noise models
                 byte_reader = io.BytesIO(np.array(frm["focalplane"], dtype=np.uint8))
                 with h5py.File(byte_reader, "r") as f:
-                    focalplane = Focalplane(file=f)
+                    focalplane = Focalplane()
+                    focalplane.load_hdf5(f)
                 del byte_reader
 
                 noise = dict()
@@ -347,7 +348,8 @@ class import_obs_meta(object):
                     )
                     byte_reader = io.BytesIO(np.array(frm[frm_model], dtype=np.uint8))
                     noise[obs_model] = noise_class()
-                    noise[obs_model].load_hdf5(byte_reader)
+                    with h5py.File(byte_reader, "r") as f:
+                        noise[obs_model].load_hdf5(f)
                     del byte_reader
 
         telescope = telescope_class(
