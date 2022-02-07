@@ -396,7 +396,7 @@ class Noise(object):
                 del ids
 
                 pds = hf[dsname]
-                freq = pds[0]
+                freq = u.Quantity(pds[0], u.Hz)
                 rate = 2.0 * freq[-1]
                 for key, indx, psdrow in zip(psd_keys, psd_indices, pds[1:]):
                     self._rates[key] = rate * u.Hz
