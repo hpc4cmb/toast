@@ -401,6 +401,10 @@ class PolyFilter2D(Operator):
             obs.detdata[self.det_data][:] = temp_ob.detdata[self.det_data][:]
             gt.stop("Poly2D:  Copy output")
 
+            # Free data copy
+            temp_ob.clear()
+            del temp_ob
+
     def _finalize(self, data, **kwargs):
         return
 
@@ -823,6 +827,11 @@ class CommonModeFilter(Operator):
             )
 
             self._re_redistribute(data, obs, timer, log, temp_ob)
+            if self.redistribute:
+                # In this case our temp_ob holds a copied subset of the
+                # observation.  Clear it.
+                temp_ob.clear()
+                del temp_ob
 
         return
 

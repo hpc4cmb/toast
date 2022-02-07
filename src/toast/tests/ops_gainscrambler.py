@@ -55,4 +55,5 @@ class OpGainScramblerTest(MPITestCase):
                 if np.abs(rms / old) - 2 > 1e-3:
                     raise RuntimeError(f"det {det} old rms = {old}, new rms = {rms}")
 
-        return
+        data.clear()
+        del data

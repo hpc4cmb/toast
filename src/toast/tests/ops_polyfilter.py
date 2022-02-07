@@ -134,9 +134,8 @@ class PolyFilterTest(MPITestCase):
                 #     f"new_rms = {new_rms}, old_rms = {old_rms}, new/old = {new_rms / old_rms}"
                 # )
                 self.assertLess(new_rms / old_rms, 1e-6)
-
+        data.clear()
         del data
-        return
 
     def test_polyfilter2D(self):
 
@@ -298,8 +297,8 @@ class PolyFilterTest(MPITestCase):
             check_rms = np.std(ob.detdata["signal"].data[good])
             self.assertLess(check_rms, 1e-3 * rms[ob.name])
 
+        data.clear()
         del data
-        return
 
     def test_common_mode_filter(self):
 
@@ -368,6 +367,5 @@ class PolyFilterTest(MPITestCase):
                 check_rms = np.std(ob.detdata["signal"][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertLess(check_rms, 1e-3 * rms[ob.name][det])
-
+        data.clear()
         del data
-        return

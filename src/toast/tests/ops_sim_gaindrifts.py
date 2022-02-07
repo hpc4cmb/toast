@@ -46,17 +46,13 @@ class SimGainTest(MPITestCase):
         key = "my_signal"
         sim_noise = ops.SimNoise(det_data=key)
         sim_noise.apply(data)
-        old_data = []
-        for obs in data.obs:
-            old = {}
-            for det in obs.local_detectors:
-                ref = obs.detdata[key][det]
-                old[det] = (ref).copy()
-            old_data.append(old)
+
+        # Make a copy of the data for later comparison
+        ops.Copy(detdata=[(key, "original")]).apply(data)
 
         drifter = ops.GainDrifter(det_data=key, drift_mode="linear_drift")
         drifter.apply(data)
-        for obs, old in zip(data.obs, old_data):
+        for obs in data.obs:
             telescope = obs.telescope.uid
             focalplane = obs.telescope.focalplane
             obsindx = obs.uid
@@ -76,12 +72,14 @@ class SimGainTest(MPITestCase):
                     counter=(counter1, counter2),
                 )
                 gf2 = 1 + rngdata[0] * drifter.sigma_drift
-                gf1 = (obs.detdata[key][det] / old[det])[-1]
+                gf1 = (obs.detdata[key][det] / obs.detdata["original"][det])[-1]
                 # assert whether the two values gf2 and gf1  are the same
                 # within 1sigma of the distribution
                 np.testing.assert_almost_equal(
                     gf1, gf2, decimal=np.log10(drifter.sigma_drift) - 1
                 )
+        data.clear()
+        del data
 
     def test_thermal_drift(self):
         # Create a fake satellite data set for testing
@@ -161,6 +159,8 @@ class SimGainTest(MPITestCase):
             ) / drifter.focalplane_Tbath
 
             assert np.log10(rel_res.std()) <= np.log10(dT)
+        data.clear()
+        del data
 
     def test_slow_drift(self):
         # Create a fake satellite data set for testing
@@ -231,6 +231,8 @@ class SimGainTest(MPITestCase):
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
+        data.clear()
+        del data
 
     def test_slow_drift_commonmode(self):
         # Create a fake satellite data set for testing
@@ -301,6 +303,8 @@ class SimGainTest(MPITestCase):
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
+        data.clear()
+        del data
 
     def test_responsivity_function(self):
         # Create a fake satellite data set for testing
@@ -323,3 +327,5 @@ class SimGainTest(MPITestCase):
             responsivity_function=responsivity,
         )
         drifter.apply(data)
+        data.clear()
+        del data

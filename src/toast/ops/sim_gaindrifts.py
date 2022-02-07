@@ -164,10 +164,12 @@ class GainDrifter(Operator):
                 freq = np.logspace(np.log10(fmin), np.log10(fsampl / 2.0), 1000)
                 psd = self.get_psd(freq)
                 det_group = np.unique(focalplane.detector_data[self.focalplane_group])
-                thermal_fluct = []
+                thermal_fluct = np.zeros(
+                    (len(det_group), ob.n_local_samples), dtype=np.float64
+                )
                 for iw, w in enumerate(det_group):
                     # simulate a noise-like timestream
-                    gain = sim_noise_timestream(
+                    thermal_fluct[iw][:] = sim_noise_timestream(
                         realization=self.realization,
                         telescope=ob.telescope.uid,
                         component=self.component,
@@ -182,10 +184,6 @@ class GainDrifter(Operator):
                         psd=psd,
                         py=False,
                     )
-                    thermal_fluct.append(np.array(gain))
-                    gain.clear()
-                    del gain
-                thermal_fluct = np.array(thermal_fluct)
 
                 for det in dets:
                     detindx = focalplane[det]["uid"]
@@ -213,6 +211,7 @@ class GainDrifter(Operator):
 
                     # identify to which group the detector belongs
                     mask = focalplane[det][self.focalplane_group] == det_group
+
                     # assign the thermal fluct. simulated for that det. group
                     # making sure that  Tdrift is in the same units as Tbath
                     Tdrift = (thermal_factor * thermal_fluct[mask][0]).to(
