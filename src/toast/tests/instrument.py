@@ -18,7 +18,7 @@ from ..instrument import Focalplane
 
 from ..instrument_sim import fake_hexagon_focalplane
 
-from ..io import hdf5_open
+from ..io import H5File
 
 from ._helpers import create_outdir
 
@@ -37,22 +37,16 @@ class InstrumentTest(MPITestCase):
         fp_file = os.path.join(self.outdir, "focalplane.h5")
         check_file = os.path.join(self.outdir, "check.h5")
 
-        hf = hdf5_open(fp_file, "w", comm=self.comm)
-        fp.save_hdf5(hf, comm=self.comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with H5File(fp_file, "w", comm=self.comm) as f:
+            fp.save_hdf5(f.handle, comm=self.comm)
 
         if self.comm is not None:
             self.comm.barrier()
 
         newfp = Focalplane()
 
-        hf = hdf5_open(fp_file, "r", comm=self.comm)
-        newfp.load_hdf5(hf, comm=self.comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with H5File(fp_file, "r", comm=self.comm) as f:
+            newfp.load_hdf5(f.handle, comm=self.comm)
 
         self.assertTrue(newfp == fp)
 
@@ -96,22 +90,16 @@ class InstrumentTest(MPITestCase):
         fp_file = os.path.join(self.outdir, "focalplane_full.h5")
         check_file = os.path.join(self.outdir, "check_full.h5")
 
-        hf = hdf5_open(fp_file, "w", comm=self.comm)
-        fp.save_hdf5(hf, comm=self.comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with H5File(fp_file, "w", comm=self.comm) as f:
+            fp.save_hdf5(f.handle, comm=self.comm)
 
         if self.comm is not None:
             self.comm.barrier()
 
         newfp = Focalplane()
 
-        hf = hdf5_open(fp_file, "r", comm=self.comm)
-        newfp.load_hdf5(hf, comm=self.comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with H5File(fp_file, "r", comm=self.comm) as f:
+            newfp.load_hdf5(f.handle, comm=self.comm)
 
         # Test getting noise PSD
         psd = newfp.noise.psd(names[-1])
@@ -122,11 +110,8 @@ class InstrumentTest(MPITestCase):
         result1 = newfp.bandpass.convolve(names[-1], freqs, values, rj=False)
         result2 = newfp.bandpass.convolve(names[-1], freqs, values, rj=True)
 
-        hf = hdf5_open(check_file, "w", comm=self.comm)
-        newfp.save_hdf5(hf, comm=self.comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with H5File(check_file, "w", comm=self.comm) as f:
+            newfp.save_hdf5(f.handle, comm=self.comm)
 
         if self.comm is not None:
             self.comm.barrier()
@@ -147,11 +132,8 @@ class InstrumentTest(MPITestCase):
         )
         fake_file = os.path.join(self.outdir, "fake_hex.h5")
 
-        hf = hdf5_open(fake_file, "w", comm=self.comm)
-        fp.save_hdf5(hf, comm=self.comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with H5File(fake_file, "w", comm=self.comm) as f:
+            fp.save_hdf5(f.handle, comm=self.comm)
 
         if self.comm is not None:
             self.comm.barrier()

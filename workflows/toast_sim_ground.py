@@ -162,11 +162,8 @@ def load_instrument_and_schedule(args, comm):
         focalplane = toast.instrument.Focalplane(
             sample_rate=sample_rate, thinfp=args.thinfp
         )
-        hf = toast.io.hdf5_open(args.focalplane, "r", comm=comm, force_serial=True)
-        focalplane.load_hdf5(hf, comm=comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
+            focalplane.load_hdf5(f.handle, comm=comm)
         log.info_rank(f"Saving focalplane to {fname_pickle}", comm=comm)
         if comm is None or comm.rank == 0:
             pickle.dump(focalplane, open(fname_pickle, "wb"))

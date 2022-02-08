@@ -56,11 +56,8 @@ def main():
 
     # Load a generic focalplane file.
     focalplane = toast.instrument.Focalplane()
-    hf = toast.io.hdf5_open(args.focalplane, "r", comm=comm, force_serial=True)
-    focalplane.load_hdf5(hf, comm=comm)
-    if hf is not None:
-        hf.close()
-    del hf
+    with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
+        focalplane.load_hdf5(f.handle, comm=comm)
 
     # Load the schedule file
     schedule = toast.schedule.SatelliteSchedule()

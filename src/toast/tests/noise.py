@@ -19,7 +19,7 @@ from ..noise import Noise
 
 from ..noise_sim import AnalyticNoise
 
-from ..io import hdf5_open
+from ..io import H5File
 
 from ._helpers import create_outdir
 
@@ -49,21 +49,15 @@ class InstrumentTest(MPITestCase):
 
         nse_file = os.path.join(self.outdir, "noise.h5")
 
-        hf = hdf5_open(nse_file, "w", comm=self.comm)
-        nse.save_hdf5(hf, comm=self.comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with H5File(nse_file, "w", comm=self.comm) as f:
+            nse.save_hdf5(f.handle, comm=self.comm)
 
         if self.comm is not None:
             self.comm.barrier()
 
         new_nse = Noise()
-        hf = hdf5_open(nse_file, "r", comm=self.comm)
-        new_nse.load_hdf5(hf, comm=self.comm)
-        if hf is not None:
-            hf.close()
-        del hf
+        with H5File(nse_file, "r", comm=self.comm) as f:
+            new_nse.load_hdf5(f.handle, comm=self.comm)
         self.assertTrue(nse == new_nse)
 
     def test_analytic_hdf5(self):
@@ -85,13 +79,10 @@ class InstrumentTest(MPITestCase):
 
         for droot in ["default", "serial"]:
             nse_file = os.path.join(self.outdir, f"sim_noise_{droot}.h5")
-            hf = hdf5_open(
+            with H5File(
                 nse_file, "w", comm=self.comm, force_serial=(droot == "serial")
-            )
-            nse.save_hdf5(hf, comm=self.comm, force_serial=(droot == "serial"))
-            if hf is not None:
-                hf.close()
-            del hf
+            ) as f:
+                nse.save_hdf5(f.handle, comm=self.comm, force_serial=(droot == "serial"))
 
         if self.comm is not None:
             self.comm.barrier()
@@ -99,9 +90,6 @@ class InstrumentTest(MPITestCase):
         for droot in ["default", "serial"]:
             nse_file = os.path.join(self.outdir, f"sim_noise_{droot}.h5")
             new_nse = AnalyticNoise()
-            hf = hdf5_open(nse_file, "r", comm=self.comm)
-            new_nse.load_hdf5(hf, comm=self.comm, force_serial=(droot == "serial"))
-            if hf is not None:
-                hf.close()
-            del hf
+            with H5File(nse_file, "r", comm=self.comm) as f:
+                new_nse.load_hdf5(f.handle, comm=self.comm, force_serial=(droot == "serial"))
             self.assertTrue(nse == new_nse)

@@ -121,3 +121,29 @@ def hdf5_open(path, mode, comm=None, force_serial=False):
             hf = h5py.File(path, mode)
             log.verbose(f"Opened file {path} serially")
     return hf
+
+
+class H5File(object):
+    """Wrapper class containing an open HDF5 file.
+
+    If the file is opened in serial mode with an MPI communicator, then
+    The open file handle will be None on processes other than rank 0.
+
+    """
+    def __init__(self, name, mode, comm=None, force_serial=False):
+        self.handle = hdf5_open(name, mode, comm=comm, force_serial=force_serial)
+
+    def close(self):
+        if self.handle is not None:
+            self.handle.flush()
+            self.handle.close()
+        self.handle = None
+
+    def __del__(self):
+        self.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()

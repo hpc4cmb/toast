@@ -12,4 +12,5 @@ from .observation_hdf_utils import (
     have_hdf5_parallel,
     hdf5_config,
     hdf5_open,
+    H5File,
 )
