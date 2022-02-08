@@ -99,7 +99,7 @@ def fake_hexagon_focalplane(
 
 
 def get_node_mem(mpicomm, node_rank):
-    avail = 2 ** 62
+    avail = 2**62
     if node_rank == 0:
         vmem = psutil.virtual_memory()._asdict()
         avail = vmem["available"]
@@ -414,16 +414,16 @@ def job_config(mpicomm, cases):
     if rank == 0:
         log.info(
             "Minimum detected per-node memory available is {:0.2f} GB".format(
-                avail_node_bytes / (1024 ** 3)
+                avail_node_bytes / (1024**3)
             )
         )
 
     if args.node_mem_gb is not None:
-        avail_node_bytes = int((1024 ** 3) * args.node_mem_gb)
+        avail_node_bytes = int((1024**3) * args.node_mem_gb)
         if rank == 0:
             log.info(
                 "Setting per-node available memory to {:0.2f} GB as requested".format(
-                    avail_node_bytes / (1024 ** 3)
+                    avail_node_bytes / (1024**3)
                 )
             )
 
@@ -466,7 +466,7 @@ def job_config(mpicomm, cases):
                     case_name,
                     case_min_nodes,
                     procs_per_node,
-                    avail_node_bytes / (1024 ** 3),
+                    avail_node_bytes / (1024**3),
                 )
             )
 
@@ -550,7 +550,7 @@ def job_config(mpicomm, cases):
             f.write("MPI Processes = {}\n".format(procs))
             f.write("MPI Processes per node = {}\n".format(procs_per_node))
             f.write(
-                "Memory per node = {:0.2f} GB\n".format(avail_node_bytes / (1024 ** 3))
+                "Memory per node = {:0.2f} GB\n".format(avail_node_bytes / (1024**3))
             )
             f.write("Number of groups = {}\n".format(n_group))
             f.write("Group nodes = {}\n".format(group_nodes))
@@ -637,14 +637,14 @@ def create_input_maps(args):
         sig = 50.0
         numer = ell - 30.0
         tspec = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(
-            -0.5 * numer ** 2 / sig ** 2
+            -0.5 * numer**2 / sig**2
         )
         tspec *= 2000.0
 
         sig = 100.0
         numer = ell - 500.0
         espec = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(
-            -0.5 * numer ** 2 / sig ** 2
+            -0.5 * numer**2 / sig**2
         )
         espec *= 1.0
 
@@ -1166,8 +1166,8 @@ def main():
     det_factor = 2.0
     metric = (
         prefactor
-        * n_detector ** det_factor
-        * kilo_samples ** sample_factor
+        * n_detector**det_factor
+        * kilo_samples**sample_factor
         / (n_nodes * runtime)
     )
     if rank == 0:

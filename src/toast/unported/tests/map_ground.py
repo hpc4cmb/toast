@@ -352,7 +352,7 @@ class MapGroundTest(MPITestCase):
                 # print("bmap = ", bins[mask])
                 weighted = bins[mask] * rthits
                 # print("weighted = ", weighted)
-                pixrms = np.sqrt(np.mean(weighted ** 2))
+                pixrms = np.sqrt(np.mean(weighted**2))
                 todrms = self.NET * np.sqrt(self.rate)
                 relerr = np.absolute(pixrms - todrms) / todrms
                 # print("pixrms = ", pixrms)

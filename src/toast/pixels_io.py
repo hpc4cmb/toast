@@ -14,7 +14,9 @@ from .mpi import MPI, use_mpi
 
 import healpy as hp
 
-from .utils import Logger, memreport, have_hdf5_parallel
+from .utils import Logger, memreport
+
+from .io import have_hdf5_parallel
 
 
 @function_timer
@@ -638,7 +640,7 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
         nside = hp.npix2nside(n_pix)
 
         nside_submap = min(nside_submap, nside)
-        n_pix_submap = 12 * nside_submap ** 2
+        n_pix_submap = 12 * nside_submap**2
 
         mode = "w-"
         if "overwrite" in kwargs and kwargs["overwrite"] == True:

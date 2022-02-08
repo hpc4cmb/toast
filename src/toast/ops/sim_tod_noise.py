@@ -303,7 +303,7 @@ class SimNoise(Operator):
                     sim_units = None
                     psd_units = nse.psd(key).unit
                     if self.det_data_units is not None:
-                        sim_units = self.det_data_units ** 2 * u.second
+                        sim_units = self.det_data_units**2 * u.second
                     else:
                         sim_units = psd_units
 
@@ -371,7 +371,7 @@ class SimNoise(Operator):
                     sim_units = None
                     psd_units = nse.psd(key).unit
                     if self.det_data_units is not None:
-                        sim_units = self.det_data_units ** 2 * u.second
+                        sim_units = self.det_data_units**2 * u.second
                     else:
                         sim_units = psd_units
                     psds[ikey][:] = nse.psd(key).to_value(sim_units)

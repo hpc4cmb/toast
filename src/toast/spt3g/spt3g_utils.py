@@ -195,7 +195,7 @@ def from_g3_unit(gunit):
         return u.dimensionless_unscaled
 
 
-def compress_timestream(ts, params, rmstarget=2 ** 10, rmsmode="white"):
+def compress_timestream(ts, params, rmstarget=2**10, rmsmode="white"):
     """Use FLAC compression to compress a timestream.
 
     `ts` is a G3Timestream.  Returns a new G3Timestream for same samples as ts, but
@@ -261,9 +261,9 @@ def compress_timestream(ts, params, rmstarget=2 ** 10, rmsmode="white"):
             gain = rmstarget / rms
         # If the data have extreme outliers, we have to reduce the gain
         # to fit the 24-bit signed integer range
-        while amp * gain >= 2 ** 23:
+        while amp * gain >= 2**23:
             gain *= 0.5
-    elif amp * gain >= 2 ** 23:
+    elif amp * gain >= 2**23:
         raise RuntimeError("The specified gain and offset saturate the band.")
     v = np.round((v - offset) * gain)
     new_ts = c3g.G3Timestream(v)

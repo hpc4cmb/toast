@@ -128,9 +128,7 @@ std::unique_ptr <C> aligned_uptr(size_t n) {
     return std::unique_ptr <C> (new C(n));
 }
 
-
 class FakeMemPool {
-
     public:
 
         static FakeMemPool & get();
@@ -151,10 +149,10 @@ class FakeMemPool {
         ~FakeMemPool();
 
     private:
+
         FakeMemPool();
         std::unordered_map <void *, size_t> mem_size;
         std::unordered_map <void *, void *> mem;
-
 };
 
 bool fake_openacc();

@@ -18,6 +18,8 @@ from ..instrument import Focalplane
 
 from ..instrument_sim import fake_hexagon_focalplane
 
+from ..io import H5File
+
 from ._helpers import create_outdir
 
 
@@ -35,17 +37,18 @@ class InstrumentTest(MPITestCase):
         fp_file = os.path.join(self.outdir, "focalplane.h5")
         check_file = os.path.join(self.outdir, "check.h5")
 
-        if self.comm is None or self.comm.rank == 0:
-            fp.save_hdf5(fp_file)
+        with H5File(fp_file, "w", comm=self.comm) as f:
+            fp.save_hdf5(f.handle, comm=self.comm)
+
         if self.comm is not None:
             self.comm.barrier()
 
-        newfp = Focalplane(file=fp_file, comm=self.comm)
+        newfp = Focalplane()
 
-        if self.comm is None or self.comm.rank == 0:
-            newfp.save_hdf5(check_file)
-        if self.comm is not None:
-            self.comm.barrier()
+        with H5File(fp_file, "r", comm=self.comm) as f:
+            newfp.load_hdf5(f.handle, comm=self.comm)
+
+        self.assertTrue(newfp == fp)
 
     def test_focalplane_full(self):
         names = ["det_01a", "det_01b", "det_02a", "det_02b"]
@@ -55,7 +58,7 @@ class InstrumentTest(MPITestCase):
         psd_fmin = np.ones(ndet) * 1e-5 * u.Hz
         psd_fknee = np.ones(ndet) * 1e-2 * u.Hz
         psd_alpha = np.ones(ndet) * 1.0
-        psd_NET = np.ones(ndet) * 1e-3 * u.K * u.s ** 0.5
+        psd_NET = np.ones(ndet) * 1e-3 * u.K * u.s**0.5
         # Bandpass parameters (optional)
         bandcenter = np.ones(ndet) * 1e2 * u.GHz
         bandwidth = bandcenter * 0.1
@@ -87,12 +90,16 @@ class InstrumentTest(MPITestCase):
         fp_file = os.path.join(self.outdir, "focalplane_full.h5")
         check_file = os.path.join(self.outdir, "check_full.h5")
 
-        if self.comm is None or self.comm.rank == 0:
-            fp.save_hdf5(fp_file)
+        with H5File(fp_file, "w", comm=self.comm) as f:
+            fp.save_hdf5(f.handle, comm=self.comm)
+
         if self.comm is not None:
             self.comm.barrier()
 
-        newfp = Focalplane(file=fp_file, comm=self.comm)
+        newfp = Focalplane()
+
+        with H5File(fp_file, "r", comm=self.comm) as f:
+            newfp.load_hdf5(f.handle, comm=self.comm)
 
         # Test getting noise PSD
         psd = newfp.noise.psd(names[-1])
@@ -103,8 +110,9 @@ class InstrumentTest(MPITestCase):
         result1 = newfp.bandpass.convolve(names[-1], freqs, values, rj=False)
         result2 = newfp.bandpass.convolve(names[-1], freqs, values, rj=True)
 
-        if self.comm is None or self.comm.rank == 0:
-            newfp.save_hdf5(check_file)
+        with H5File(check_file, "w", comm=self.comm) as f:
+            newfp.save_hdf5(f.handle, comm=self.comm)
+
         if self.comm is not None:
             self.comm.barrier()
 
@@ -124,7 +132,8 @@ class InstrumentTest(MPITestCase):
         )
         fake_file = os.path.join(self.outdir, "fake_hex.h5")
 
-        if self.comm is None or self.comm.rank == 0:
-            fp.save_hdf5(fake_file)
+        with H5File(fake_file, "w", comm=self.comm) as f:
+            fp.save_hdf5(f.handle, comm=self.comm)
+
         if self.comm is not None:
             self.comm.barrier()

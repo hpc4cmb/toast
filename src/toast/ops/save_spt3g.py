@@ -115,7 +115,7 @@ class SaveSpt3g(Operator):
                 save_pipe.Add(
                     c3g.G3MultiFileWriter,
                     filename=os.path.join(ob_dir, "frames-%05u.g3"),
-                    size_limit=int(self.framefile_mb * 1024 ** 2),
+                    size_limit=int(self.framefile_mb * 1024**2),
                 )
                 save_pipe.Run()
 

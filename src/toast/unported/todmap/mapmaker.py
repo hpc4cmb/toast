@@ -1345,9 +1345,9 @@ class PCGSolver:
 class OpMapMaker(Operator):
 
     # Choose one bit in the common flags for storing gap information
-    gap_bit = 2 ** 7
+    gap_bit = 2**7
     # Choose one bit in the quality flags for storing processing mask
-    mask_bit = 2 ** 7
+    mask_bit = 2**7
 
     def __init__(
         self,
@@ -1380,7 +1380,7 @@ class OpMapMaker(Operator):
         pixels="pixels",
     ):
         self.nside = nside
-        self.npix = 12 * self.nside ** 2
+        self.npix = 12 * self.nside**2
         self.name = name
         self.nnz = nnz
         self.ncov = self.nnz * (self.nnz + 1) // 2

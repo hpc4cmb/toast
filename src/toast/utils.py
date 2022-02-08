@@ -11,7 +11,7 @@ import importlib
 
 import datetime
 
-from tempfile import gettempdir
+from tempfile import TemporaryDirectory
 
 import numpy as np
 
@@ -80,9 +80,9 @@ def _create_log_rank(level):
 
         if timer is not None:
             if not timer.is_running():
-                msg = f"Called {level}_rank with a timer that is not running.  "
-                msg += f"Did you forget to start it?"
-                raise RuntimeError(msg)
+                err = f"Called {level}_rank with a timer that is not running.  "
+                err += f"Did you forget to start it?"
+                raise RuntimeError(err)
             if comm is not None:
                 comm.barrier()
             timer.stop()
@@ -335,17 +335,17 @@ try:
                 vlist2 = np.array(vlist2, dtype=np.float64)
                 if key != "percent":
                     # From bytes to better units
-                    if np.amax(vlist) < 2 ** 20:
-                        vlist /= 2 ** 10
-                        vlist2 /= 2 ** 10
+                    if np.amax(vlist) < 2**20:
+                        vlist /= 2**10
+                        vlist2 /= 2**10
                         unit = "kB"
-                    elif np.amax(vlist) < 2 ** 30:
-                        vlist /= 2 ** 20
-                        vlist2 /= 2 ** 20
+                    elif np.amax(vlist) < 2**30:
+                        vlist /= 2**20
+                        vlist2 /= 2**20
                         unit = "MB"
                     else:
-                        vlist /= 2 ** 30
-                        vlist2 /= 2 ** 30
+                        vlist /= 2**30
+                        vlist2 /= 2**30
                         unit = "GB"
                 else:
                     unit = "% "
@@ -391,7 +391,6 @@ try:
         if comm is not None:
             comm.Barrier()
         return memstr
-
 
 except ImportError:
 
@@ -638,6 +637,17 @@ def import_from_name(name):
     return cls
 
 
+def system_state(comm=None):
+    """Print a snapshot of the current system state across the job."""
+    log = Logger.get()
+    max, curmax = threading_state()
+    msg = f"Threading snapshot:  Overall max = {max}, Current max = {curmax}\n"
+    memstr = memreport(msg="system snapshot", comm=comm, silent=True)
+    if comm is None or comm.rank == 0:
+        msg += memstr
+        log.info(msg)
+
+
 # Test whether h5py supports parallel I/O
 
 hdf5_is_parallel = None
@@ -658,19 +668,32 @@ def have_hdf5_parallel():
     # COMM_SELF.  This lets us test the presence of the driver without actually
     # doing any communication
     try:
-        tempdir = gettempdir()
-        tempfile = os.path.join(tempdir, f"test_hdf5_mpio_{MPI.COMM_WORLD.rank}.h5")
-        f = h5py.File(tempfile, "w", driver="mpio", comm=MPI.COMM_SELF)
-        # Yay!
-        hdf5_is_parallel = True
-        f.close()
+        with TemporaryDirectory() as tempdir:
+            tempfile = os.path.join(tempdir, f"test_hdf5_mpio_{MPI.COMM_WORLD.rank}.h5")
+            with h5py.File(tempfile, "w", driver="mpio", comm=MPI.COMM_SELF) as f:
+                # Yay!
+                hdf5_is_parallel = True
     except (ValueError, AssertionError) as e:
         # Nope...
         hdf5_is_parallel = False
     return hdf5_is_parallel
 
 
-def table_write_parallel_hdf5(table, root, name, comm=None, force_serial=False):
+def hdf5_use_serial(handle, comm):
+    """Check if all processes in a communicator have access to the file"""
+    if comm is None:
+        return True
+    if comm.size == 1:
+        return True
+    # Have to check...
+    total = comm.allreduce((1 if handle is not None else 0), op=MPI.SUM)
+    if total != comm.size:
+        return True
+    else:
+        return False
+
+
+def table_write_parallel_hdf5(table, root, name, comm=None):
     """Write astropy table to HDF5 with parallel support.
 
     The astropy.io.misc.hdf5.write_table_hdf5() does not support situations
@@ -684,17 +707,14 @@ def table_write_parallel_hdf5(table, root, name, comm=None, force_serial=False):
         name (str):  The data set name
         comm (MPI.Comm):  The communicator of processes containing duplicates
             of the table.
-        force_serial (bool):  If True, use serial HDF5 even if parallel is
-            available.
 
     Returns:
         None
 
     """
-    parallel = have_hdf5_parallel()
-    if force_serial:
-        parallel = False
-    participating = parallel or comm is None or comm.rank == 0
+    rank = 0
+    if comm is not None:
+        rank = comm.rank
 
     # Encode any mixin columns as plain columns + appropriate metadata
     table = aspy5._encode_mixins(table)
@@ -711,10 +731,12 @@ def table_write_parallel_hdf5(table, root, name, comm=None, force_serial=False):
     dset_shape = tarray.shape
     dset_type = tarray.dtype
     dset = None
-    if participating:
+    if root is not None:
+        # This process is participating
         dset = root.create_dataset(name, dset_shape, dtype=dset_type)
-    if comm is None or comm.rank == 0:
-        dset[:] = tarray
+        if rank == 0:
+            # Only one process writes the data
+            dset[:] = tarray
     del dset
 
     # Serialize metadata
@@ -723,21 +745,10 @@ def table_write_parallel_hdf5(table, root, name, comm=None, force_serial=False):
     mdset_shape = header_encoded.shape
     mdset_type = header_encoded.dtype
     mdset = None
-    if participating:
+    if root is not None:
         mdset = root.create_dataset(
             aspy5.meta_path(name), mdset_shape, dtype=mdset_type
         )
-    if comm is None or comm.rank == 0:
-        mdset[:] = header_encoded
+        if rank == 0:
+            mdset[:] = header_encoded
     del mdset
-
-
-def system_state(comm=None):
-    """Print a snapshot of the current system state across the job."""
-    log = Logger.get()
-    max, curmax = threading_state()
-    msg = f"Threading snapshot:  Overall max = {max}, Current max = {curmax}\n"
-    memstr = memreport(msg="system snapshot", comm=comm, silent=True)
-    if comm is None or comm.rank == 0:
-        msg += memstr
-        log.info(msg)

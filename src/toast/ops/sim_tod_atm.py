@@ -576,10 +576,10 @@ class SimAtmosphere(Operator):
         obsid = obs.uid
 
         # site UID in higher bits, telescope UID in lower bits
-        key1 = site * 2 ** 32 + telescope
+        key1 = site * 2**32 + telescope
 
         # Observation UID in higher bits, realization and component in lower bits
-        key2 = obsid * 2 ** 32 + self.realization * 2 ** 16 + self.component
+        key2 = obsid * 2**32 + self.realization * 2**16 + self.component
 
         # This tracks the number of cones simulated due to the wind speed.
         counter1 = 0
@@ -746,7 +746,7 @@ class SimAtmosphere(Operator):
         # Translate the wind speed to time span of a correlated interval
         wx = weather.west_wind.to_value(u.meter / u.second)
         wy = weather.south_wind.to_value(u.meter / u.second)
-        w = np.sqrt(wx ** 2 + wy ** 2)
+        w = np.sqrt(wx**2 + wy**2)
         wind_time = self.wind_dist.to_value(u.meter) / w
 
         tmax = tmin + wind_time
@@ -816,7 +816,7 @@ class SimAtmosphere(Operator):
         T0_center = weather.air_temperature
         wx = weather.west_wind
         wy = weather.south_wind
-        w_center = np.sqrt(wx ** 2 + wy ** 2)
+        w_center = np.sqrt(wx**2 + wy**2)
         wdir_center = np.arctan2(wy, wx)
 
         azmin, azmax, elmin, elmax = scan_range

@@ -184,7 +184,7 @@ class PolyFilterTest(MPITestCase):
         # Add 2D polynomial modes.  The number of modes is larger than the
         # number of detectors to test handling of singular template matrices.
         norder = 5
-        coeff = np.arange(norder ** 2)
+        coeff = np.arange(norder**2)
         for obs in data.obs:
             for det in obs.local_detectors:
                 det_quat = obs.telescope.focalplane[det]["quat"]
@@ -195,7 +195,7 @@ class PolyFilterTest(MPITestCase):
                 icoeff = 0
                 for xorder in range(norder):
                     for yorder in range(norder):
-                        signal += coeff[icoeff] * theta ** xorder * phi ** yorder
+                        signal += coeff[icoeff] * theta**xorder * phi**yorder
                         icoeff += 1
                 # Add a different offset depending on the wafer
                 wafer = obs.telescope.focalplane[det]["wafer"]

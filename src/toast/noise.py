@@ -2,6 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+
 from typing import Type
 import re
 import numpy as np
@@ -10,9 +12,9 @@ from astropy import units as u
 
 import h5py
 
-from .timing import function_timer
+from .utils import hdf5_use_serial
 
-from .utils import have_hdf5_parallel
+from .timing import function_timer
 
 
 class Noise(object):
@@ -84,7 +86,7 @@ class Noise(object):
                 raise TypeError("Each PSD array must be a Quantity")
             # Ensure that the PSDs are convertible to expected units
             try:
-                test_convert = psds[key].to_value(u.K ** 2 * u.second)
+                test_convert = psds[key].to_value(u.K**2 * u.second)
             except Exception:
                 raise ValueError("Each PSD must be convertible to K**2 * s")
             self._freqs[key] = np.copy(freqs[key])
@@ -200,7 +202,7 @@ class Noise(object):
                 psd = self.psd(k)
                 rate = self.rate(k)
                 ind = np.logical_and(freq > rate * 0.2, freq < rate * 0.4)
-                noisevar = np.median(psd[ind].to_value(u.K ** 2 * u.second))
+                noisevar = np.median(psd[ind].to_value(u.K**2 * u.second))
                 for det in self.detectors:
                     wt = self.weight(det, k)
                     if wt != 0.0:
@@ -220,15 +222,14 @@ class Noise(object):
         return self._detector_weight(det)
 
     @function_timer
-    def _save_base_hdf5(self, hf, comm=None, force_serial=False):
+    def _save_base_hdf5(self, hf, comm):
         """Write internal data to an open HDF5 group."""
-        parallel = have_hdf5_parallel()
-        if force_serial:
-            parallel = False
-        participating = parallel or comm is None or comm.rank == 0
-
         # First store the mixing matrix as a separate dataset, and find the maximum
         # string length used for the keys.
+
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
 
         mixdata = list()
         maxstr = 0
@@ -238,13 +239,16 @@ class Noise(object):
                 maxstr = max(maxstr, len(strm))
                 mixdata.append((det, strm, weight))
         maxstr += 1
-        mixdtype = np.dtype(f"a{maxstr}, a{maxstr}, f8")
+        mixdtype = np.dtype(f"a{maxstr}, a{maxstr}, f4")
 
-        if participating:
-            ds = hf.create_dataset("mixing_matrix", (len(mixdata),), dtype=mixdtype)
-            if comm is None or comm.rank == 0:
-                ds[:] = np.array(mixdata, dtype=mixdtype)
-            del ds
+        if hf is not None:
+            # This process is participating
+            mds = hf.create_dataset("mixing_matrix", len(mixdata), dtype=mixdtype)
+            if rank == 0:
+                # Only one process needs to write
+                packed = np.array(mixdata, dtype=mixdtype)
+                mds.write_direct(packed)
+            del mds
 
         # Each stream psd can potentially have a unique set of frequencies, but in
         # practice we usually have a just one or a few.  To reduce the number of
@@ -252,15 +256,29 @@ class Noise(object):
         #
         # NOTE:  We assume here that any frequency array whose first and last several
         # elements are equal are themselves equal.  This should cover all cases.
+        # Also note that small bit differences in floating point frequency values can
+        # result in different hash values used in the dataset names.  Because of this,
+        # we compute the grouping of PSDs on one process and broadcast.
 
+        psd_group = dict()
+        if rank == 0:
+            # Compute the frequency hash on one process
+            for k in self.keys:
+                freq = self.freq(k)
+                fhash = (
+                    hash(freq[2] * 1000 + freq[-2] + freq[-1])
+                    .to_bytes(8, "big", signed=True)
+                    .hex()
+                )
+                psd_group[k] = fhash
+        if comm is not None:
+            psd_group = comm.bcast(psd_group)
+
+        # Organize the PSD information in groups according to the frequency arrays
         psd_sets = dict()
         for k in self.keys:
             freq = self.freq(k)
-            fhash = (
-                hash(freq[2] * 1000 + freq[-2] + freq[-1])
-                .to_bytes(8, "big", signed=True)
-                .hex()
-            )
+            fhash = psd_group[k]
             if fhash not in psd_sets:
                 psd_sets[fhash] = {
                     "freq": freq,
@@ -274,63 +292,56 @@ class Noise(object):
 
         # Create a dataset for each set of PSDs.  Also create separate datasets
         # for the name and index of each PSD.
-        if participating:
-            for fhash, props in psd_sets.items():
-                freq = props["freq"]
-                psds = props["psds"]
-                indx = props["indices"]
-                keys = props["keys"]
-                nrows = 1 + len(psds)
-                ncols = len(freq)
-                ds = hf.create_dataset(fhash, (nrows, ncols), dtype=np.float64)
-                if comm is None or comm.rank == 0:
-                    ds[0] = freq
-                    ds[1:] = np.array(psds, dtype=np.float64)
-                del ds
-                ds = hf.create_dataset(f"{fhash}_indices", len(psds), dtype=np.int32)
-                if comm is None or comm.rank == 0:
-                    ds[:] = indx
-                del ds
-                keytype = np.dtype(f"a{maxstr}")
-                ds = hf.create_dataset(f"{fhash}_keys", len(psds), dtype=keytype)
-                if comm is None or comm.rank == 0:
-                    ds[:] = np.array(keys, dtype=keytype)
-                del ds
-
-    def _save_hdf5(self, handle, comm=None, force_serial=False, **kwargs):
-        """Internal method which can be overridden by derived classes."""
-        parallel = have_hdf5_parallel()
-        if force_serial:
-            parallel = False
-        if isinstance(handle, h5py.Group):
-            self._save_base_hdf5(handle, comm=comm, force_serial=force_serial)
-        else:
-            hf = None
-            if parallel:
-                hf = h5py.File(handle, "w", driver="mpio", comm=comm)
-            elif comm is None or comm.rank == 0:
-                hf = h5py.File(handle, "w")
-            self._save_base_hdf5(hf, comm=comm, force_serial=force_serial)
+        for fhash, props in psd_sets.items():
+            freq = props["freq"]
+            psds = props["psds"]
+            indx = props["indices"]
+            keys = props["keys"]
+            nrows = 1 + len(psds)
+            ncols = len(freq)
             if hf is not None:
-                hf.flush()
-                hf.close()
-            del hf
+                # This process is participating
+                pds = hf.create_dataset(fhash, (nrows, ncols), dtype=np.float32)
+                if rank == 0:
+                    packed = np.zeros((nrows, ncols), dtype=np.float32)
+                    packed[0] = freq
+                    packed[1:] = np.array(psds, dtype=np.float32)
+                    pds.write_direct(packed)
+                del pds
+                ids = hf.create_dataset(f"{fhash}_indices", len(psds), dtype=np.int32)
+                if rank == 0:
+                    packed = np.array(indx, dtype=np.int32)
+                    ids.write_direct(packed)
+                del ids
+                keytype = np.dtype(f"a{maxstr}")
+                kds = hf.create_dataset(f"{fhash}_keys", len(psds), dtype=keytype)
+                if rank == 0:
+                    packed = np.array(keys, dtype=keytype)
+                    kds.write_direct(packed)
+                del kds
 
-    def save_hdf5(self, handle, comm=None, force_serial=False, **kwargs):
+    def _save_hdf5(self, handle, comm, **kwargs):
+        """Internal method which can be overridden by derived classes."""
+        self._save_base_hdf5(handle, comm)
+
+    def save_hdf5(self, handle, comm=None, **kwargs):
         """Save the noise object to an HDF5 file.
 
         Args:
-            handle (str, file object, group):  Any object accepted by the h5py
-                package.
+            handle (h5py.Group):  The group to populate.
 
         Returns:
             None
 
         """
-        self._save_hdf5(handle, comm=comm, force_serial=force_serial, **kwargs)
+        if (comm is None) or (comm.rank == 0):
+            # The rank zero process should always be writing
+            if handle is None:
+                raise RuntimeError("HDF5 group is not open on the root process")
+        self._save_hdf5(handle, comm, **kwargs)
 
     @function_timer
-    def _load_base_hdf5(self, hf, comm=None):
+    def _load_base_hdf5(self, hf, comm):
         """Read internal data from an open HDF5 group"""
         self._freqs = dict()
         self._psds = dict()
@@ -340,74 +351,89 @@ class Noise(object):
         indx_pat = re.compile(r"(.*)_indices")
         key_pat = re.compile(r"(.*)_keys")
 
-        # First load the mixing matrix, which provides all the key and detector names
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(hf, comm)
 
-        dets = set()
-        keys = set()
-        for det, key, val in hf["mixing_matrix"]:
-            det = det.decode("utf-8")
-            key = key.decode("utf-8")
-            dets.add(det)
-            keys.add(key)
-            if det not in self._mixmatrix:
-                self._mixmatrix[det] = dict()
-            self._mixmatrix[det][key] = val
-        self._keys = list(sorted(keys))
-        self._dets = list(sorted(dets))
+        if hf is not None:
+            # This process is participating.
+            # First load the mixing matrix, which provides all the key and
+            # detector names
+            dets = set()
+            keys = set()
+            for det, key, val in hf["mixing_matrix"]:
+                det = det.decode("utf-8")
+                key = key.decode("utf-8")
+                dets.add(det)
+                keys.add(key)
+                if det not in self._mixmatrix:
+                    self._mixmatrix[det] = dict()
+                self._mixmatrix[det][key] = val
+            self._keys = list(sorted(keys))
+            self._dets = list(sorted(dets))
 
-        for dsname in hf.keys():
-            if indx_pat.match(dsname) is not None:
-                # Will be processed as part of the associated dataset below
-                continue
-            if key_pat.match(dsname) is not None:
-                # Will be processed as part of the associated dataset below
-                continue
-            if dsname == "mixing_matrix":
-                # Already processed above
-                continue
-            indx_name = f"{dsname}_indices"
-            keys_name = f"{dsname}_keys"
-            if indx_name not in hf.keys() and keys_name not in hf.keys():
-                # This is not a PSD set
-                continue
-            # Before loading the PSD data, load the stream names and indices
-            ds = hf[keys_name]
-            psd_keys = [x.decode() for x in ds]
-            del ds
-            ds = hf[indx_name]
-            psd_indices = list(ds)
-            del ds
+            for dsname in hf.keys():
+                if indx_pat.match(dsname) is not None:
+                    # Will be processed as part of the associated dataset below
+                    continue
+                if key_pat.match(dsname) is not None:
+                    # Will be processed as part of the associated dataset below
+                    continue
+                if dsname == "mixing_matrix":
+                    # Already processed above
+                    continue
+                indx_name = f"{dsname}_indices"
+                keys_name = f"{dsname}_keys"
+                if indx_name not in hf.keys() and keys_name not in hf.keys():
+                    # This is not a PSD set
+                    continue
+                # Before loading the PSD data, load the stream names and indices
+                kds = hf[keys_name]
+                psd_keys = [x.decode() for x in kds]
+                del kds
+                ids = hf[indx_name]
+                psd_indices = list(ids)
+                del ids
 
-            ds = hf[dsname]
-            freq = ds[0]
-            rate = 2.0 * freq[-1]
-            for key, indx, psdrow in zip(psd_keys, psd_indices, ds[1:]):
-                self._rates[key] = rate * u.Hz
-                self._indices[key] = indx
-                self._freqs[key] = u.Quantity(freq, u.Hz)
-                self._psds[key] = u.Quantity(psdrow, u.K ** 2 * u.second)
-            del ds
+                pds = hf[dsname]
+                freq = pds[0]
+                rate = 2.0 * freq[-1]
+                for key, indx, psdrow in zip(psd_keys, psd_indices, pds[1:]):
+                    self._rates[key] = rate * u.Hz
+                    self._indices[key] = indx
+                    self._freqs[key] = u.Quantity(freq, u.Hz)
+                    self._psds[key] = u.Quantity(psdrow, u.K**2 * u.second)
+                del pds
 
-    def _load_hdf5(self, handle, comm=None, **kwargs):
+        # Broadcast the results
+        if need_bcast and comm is not None:
+            self._keys = comm.bcast(self._keys, root=0)
+            self._dets = comm.bcast(self._dets, root=0)
+            self._rates = comm.bcast(self._rates, root=0)
+            self._freqs = comm.bcast(self._freqs, root=0)
+            self._psds = comm.bcast(self._psds, root=0)
+            self._indices = comm.bcast(self._indices, root=0)
+            self._mixmatrix = comm.bcast(self._mixmatrix, root=0)
+
+    def _load_hdf5(self, handle, comm, **kwargs):
         """Internal method which can be overridden by derived classes."""
-        if isinstance(handle, h5py.Group):
-            self._load_base_hdf5(handle, comm=comm)
-        else:
-            with h5py.File(handle, "r") as hf:
-                self._load_base_hdf5(hf, comm=comm)
+        self._load_base_hdf5(handle, comm)
 
     def load_hdf5(self, handle, comm=None, **kwargs):
         """Load the noise object from an HDF5 file.
 
         Args:
-            handle (str, file object, group):  Any object accepted by the h5py
-                package.
+            handle (h5py.Group):  The group containing noise model.
 
         Returns:
             None
 
         """
-        self._load_hdf5(handle, comm=comm, **kwargs)
+        if (comm is None) or (comm.rank == 0):
+            # The rank zero process should always be writing
+            if handle is None:
+                raise RuntimeError("HDF5 group is not open on the root process")
+        self._load_hdf5(handle, comm, **kwargs)
 
     def __repr__(self):
         mix_min = np.min([len(y) for x, y in self._mixmatrix.items()])
@@ -429,10 +455,13 @@ class Noise(object):
         if self._mixmatrix != other._mixmatrix:
             return False
         for k, v in self._freqs.items():
-            if not np.allclose(v, other._freqs[k]):
+            if not np.allclose(v.to_value(u.Hz), other._freqs[k].to_value(u.Hz)):
                 return False
         for k, v in self._psds.items():
-            if not np.allclose(v, other._psds[k]):
+            if not np.allclose(
+                v.to_value(u.K**2 * u.second),
+                other._psds[k].to_value(u.K**2 * u.second),
+            ):
                 return False
         return True
 

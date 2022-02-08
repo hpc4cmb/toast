@@ -33,7 +33,13 @@ from .timing import function_timer, Timer
 from . import qarray as qa
 
 from .noise_sim import AnalyticNoise
-from .utils import Logger, Environment, name_UID, table_write_parallel_hdf5
+from .utils import (
+    Logger,
+    Environment,
+    name_UID,
+    table_write_parallel_hdf5,
+    hdf5_use_serial,
+)
 
 from . import qarray
 
@@ -437,24 +443,25 @@ class Focalplane(object):
         detector_data=None,
         field_of_view=None,
         sample_rate=None,
-        file=None,
-        comm=None,
         thinfp=None,
     ):
-        log = Logger.get()
         self.detector_data = detector_data
         self.field_of_view = field_of_view
         self.sample_rate = sample_rate
+        self.thinfp = thinfp
+        if detector_data is not None and len(detector_data) > 0:
+            # We have some dets
+            self._initialize()
 
-        if file is not None:
-            log.debug_rank(f"Loading focalplane from {file}", comm=comm)
-            self.load_hdf5(file, comm=comm)
+    @function_timer
+    def _initialize(self):
+        log = Logger.get()
 
-        if thinfp is not None:
+        if self.thinfp is not None:
             # Pick only every `thinfp` pixel on the focal plane
             ndet = len(self.detector_data)
             for idet in range(ndet - 1, -1, -1):
-                if int(idet // 2) % thinfp != 0:
+                if int(idet // 2) % self.thinfp != 0:
                     del self.detector_data[idet]
 
         # Add UID if not given
@@ -474,13 +481,6 @@ class Focalplane(object):
         self._get_pol_efficiency()
         self._get_noise()
         self._get_bandpass()
-
-        log.info_rank(
-            f"Focalplane has {len(self.detector_data)} detectors that span "
-            f"{self.field_of_view.to_value(u.deg):.3f} degrees and are sampled at "
-            f"{self.sample_rate.to_value(u.Hz)} Hz.",
-            comm=comm,
-        )
 
     @function_timer
     def _get_noise(self):
@@ -563,7 +563,7 @@ class Focalplane(object):
                 quat = row["quat"]
                 a = quat[3]
                 d = quat[2]
-                pol_angle = np.arctan2(2 * a * d, a ** 2 - d ** 2) % np.pi
+                pol_angle = np.arctan2(2 * a * d, a**2 - d**2) % np.pi
                 row["pol_angle"] = pol_angle * u.radian
 
     @function_timer
@@ -721,47 +721,52 @@ class Focalplane(object):
         return not self.__eq__(other)
 
     def load_hdf5(self, handle, comm=None, **kwargs):
-        """Load the focalplane from an HDF5 file.
+        """Load the focalplane from an HDF5 group.
 
         Args:
-            handle (str, file object, group):  Any object accepted by the h5py
-                package.
+            handle (h5py.Group):  The group containing the "focalplane" dataset.
 
         Returns:
             None
 
         """
-        if comm is None or comm.rank == 0:
-            if self.detector_data is not None:
-                raise RuntimeError("Reading detector data over existing table")
-            if isinstance(handle, h5py.Group):
-                self.detector_data = read_table_hdf5(handle, path="focalplane")
-            else:
-                self.detector_data = QTable.read(
-                    handle, format="hdf5", path="focalplane"
-                )
-            # Only use the sampling rate recorded in the file if it was not
-            # overridden in the constructor
-            if self.sample_rate is None:
-                self.sample_rate = self.detector_data.meta["sample_rate"]
-            if (
-                self.field_of_view is None
-                and "field_of_view" in self.detector_data.meta
-            ):
-                self.field_of_view = self.detector_data.meta["field_of_view"]
-            else:
-                self._compute_fov()
-        if comm is not None:
+        log = Logger.get()
+
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm)
+
+        if self.detector_data is not None:
+            raise RuntimeError("Reading detector data over existing table")
+
+        if handle is not None:
+            self.detector_data = read_table_hdf5(handle, path="focalplane")
+
+        if need_bcast and comm is not None:
             self.detector_data = comm.bcast(self.detector_data, root=0)
-            self.sample_rate = comm.bcast(self.sample_rate, root=0)
-            self.field_of_view = comm.bcast(self.field_of_view, root=0)
+
+        # Only use the sampling rate recorded in the file if it was not
+        # overridden in the constructor
+        if self.sample_rate is None:
+            self.sample_rate = self.detector_data.meta["sample_rate"]
+        if self.field_of_view is None and "field_of_view" in self.detector_data.meta:
+            self.field_of_view = self.detector_data.meta["field_of_view"]
+
+        # Initialize other properties
+        self._initialize()
+
+        log.debug_rank(
+            f"Focalplane has {len(self.detector_data)} detectors that span "
+            f"{self.field_of_view.to_value(u.deg):.3f} degrees and are sampled at "
+            f"{self.sample_rate.to_value(u.Hz)} Hz.",
+            comm=comm,
+        )
 
     def save_hdf5(self, handle, comm=None, **kwargs):
-        """Save the focalplane to an HDF5 file.
+        """Save the focalplane to an HDF5 group.
 
         Args:
-            handle (str, file object, group):  Any object accepted by the h5py
-                package.
+            handle (h5py.Group):  The parent group of the focalplane dataset.
 
         Returns:
             None
@@ -769,26 +774,7 @@ class Focalplane(object):
         """
         self.detector_data.meta["sample_rate"] = self.sample_rate
         self.detector_data.meta["field_of_view"] = self.field_of_view
-        if isinstance(handle, h5py.Group):
-            table_write_parallel_hdf5(
-                self.detector_data, handle, "focalplane", comm=comm
-            )
-            # write_table_hdf5(
-            #     self.detector_data,
-            #     handle,
-            #     path="focalplane",
-            #     serialize_meta=True,
-            #     overwrite=True,
-            # )
-        else:
-            if comm is None or comm.rank == 0:
-                self.detector_data.write(
-                    handle,
-                    format="hdf5",
-                    path="focalplane",
-                    serialize_meta=True,
-                    overwrite=True,
-                )
+        table_write_parallel_hdf5(self.detector_data, handle, "focalplane", comm=comm)
 
 
 class Telescope(object):

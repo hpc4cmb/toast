@@ -230,8 +230,8 @@ class FlagSSO(Operator):
                     # This is the planar approximation for squared angular distance
                     x = (az - sso_az) * cosel
                     y = el - sso_el
-                    rsquared = x ** 2 + y ** 2
-                    inside = rsquared < radius ** 2
+                    rsquared = x**2 + y**2
+                    inside = rsquared < radius**2
                 flags[inside] |= self.det_flag_mask
 
         return

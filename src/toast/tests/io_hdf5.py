@@ -21,6 +21,8 @@ from ..io import save_hdf5, load_hdf5
 
 from ..config import build_config
 
+from ..observation_data import DetectorData
+
 from ._helpers import create_outdir, create_ground_data
 
 
@@ -112,6 +114,50 @@ class IoHdf5Test(MPITestCase):
                         f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}"
                     )
                 self.assertTrue(ob == orig)
+
+    def test_save_load_float32(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        datadir = os.path.join(self.outdir, "save_load_float32")
+        if rank == 0:
+            os.makedirs(datadir)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        data, config = self.create_data()
+
+        # Make a copy for later comparison.  Convert float64 detdata to
+        # float32.
+        original = dict()
+        for ob in data.obs:
+            original[ob.name] = ob.duplicate(times="times")
+            for field, ddata in original[ob.name].detdata.items():
+                if ddata.dtype.char == "d":
+                    # Hack in a replacement
+                    new_dd = DetectorData(
+                        ddata.detectors, ddata.shape, np.float32, units=ddata.units
+                    )
+                    new_dd[:] = original[ob.name].detdata[field][:]
+                    original[ob.name].detdata._internal[field] = new_dd
+
+        saver = ops.SaveHDF5(volume=datadir, config=config, detdata_float32=True)
+        saver.apply(data)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
+
+        check_data = Data(data.comm)
+        loader = ops.LoadHDF5(volume=datadir)
+        loader.apply(check_data)
+
+        # Verify
+        for ob in check_data.obs:
+            orig = original[ob.name]
+            if ob != orig:
+                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
+            self.assertTrue(ob == orig)
 
     def test_save_load_ops(self):
         rank = 0

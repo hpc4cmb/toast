@@ -1460,7 +1460,14 @@ class IntervalsManager(MutableMapping):
         """
         if self.comm_col is not None:
             # Broadcast to all processes in this column
-            global_timespans = self.comm_col.bcast(global_timespans, root=fromrank)
+            n_global = 0
+            if global_timespans is not None:
+                n_global = len(global_timespans)
+            n_global = self.comm_col.bcast(n_global, root=fromrank)
+            if n_global == 0:
+                global_timespans = list()
+            else:
+                global_timespans = self.comm_col.bcast(global_timespans, root=fromrank)
         # Every process creates local intervals
         lt = local_times
         if isinstance(lt, MPIShared):
@@ -1502,9 +1509,16 @@ class IntervalsManager(MutableMapping):
             # Broadcast data along the row
             if col_rank == send_col_rank:
                 if self.comm_row is not None:
-                    global_timespans = self.comm_row.bcast(
-                        global_timespans, root=send_row_rank
-                    )
+                    n_global = 0
+                    if global_timespans is not None:
+                        n_global = len(global_timespans)
+                    n_global = self.comm_row.bcast(n_global, root=send_row_rank)
+                    if n_global == 0:
+                        global_timespans = list()
+                    else:
+                        global_timespans = self.comm_row.bcast(
+                            global_timespans, root=send_row_rank
+                        )
         # Every process column creates their local intervals
         self.create_col(name, global_timespans, local_times, fromrank=send_col_rank)
 

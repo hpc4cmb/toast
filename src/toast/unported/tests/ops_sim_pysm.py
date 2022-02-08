@@ -33,7 +33,7 @@ def setup_toast_observations(self, nside):
 
     # Use one TOD sample per healpix pixel with the "spiral" pointing.
     self.nside = nside
-    self.totsamp = 12 * self.nside ** 2
+    self.totsamp = 12 * self.nside**2
     self.rate = 1.0
 
     # Chunks - one per process.

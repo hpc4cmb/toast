@@ -1133,8 +1133,8 @@ class AtmSim(object):
         self._nr = 1000
 
         self._rmin_kolmo = 0.0
-        diag = np.sqrt(self._delta_x ** 2 + self._delta_y ** 2)
-        self._rmax_kolmo = np.sqrt(diag ** 2 + self._delta_z ** 2) * 1.01
+        diag = np.sqrt(self._delta_x**2 + self._delta_y**2)
+        self._rmax_kolmo = np.sqrt(diag**2 + self._delta_z**2) * 1.01
 
         self._rstep = (self._rmax_kolmo - self._rmin_kolmo) / (self._nr - 1)
 

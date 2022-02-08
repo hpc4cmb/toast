@@ -56,6 +56,10 @@ class SaveHDF5(Operator):
         False, help="Use serial HDF5 operations, even if parallel support available"
     )
 
+    detdata_float32 = Bool(
+        False, help="If True, convert any float64 detector data to float32 on write."
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -109,6 +113,7 @@ class SaveHDF5(Operator):
                 config=self.config,
                 times=str(self.times),
                 force_serial=self.force_serial,
+                detdata_float32=self.detdata_float32,
             )
 
         return

@@ -88,7 +88,7 @@ def get_mpi_settings(args, log, env):
         comm=world_comm,
     )
     if args.node_mem_gb is not None:
-        avail_node_bytes = int((1024 ** 3) * args.node_mem_gb)
+        avail_node_bytes = int((1024**3) * args.node_mem_gb)
         log.info_rank(
             f"Setting per-node available memory to {avail_node_bytes / (1024 ** 3) :0.2f} GB as requested",
             comm=world_comm,
@@ -356,7 +356,7 @@ def select_case(
     avail_node_bytes,
     full_pointing,
     world_comm,
-    per_process_overhead_bytes=1024 ** 3,
+    per_process_overhead_bytes=1024**3,
     target_proc_dets=200,
 ):
     """
@@ -527,7 +527,7 @@ def estimate_memory_overhead(
     """
     log = toast.utils.Logger.get()
     # Start with 1GB for everything else
-    base = 1024 ** 3
+    base = 1024**3
     # base = 0
 
     # Compute the bytes per pixel.  We have:
@@ -538,8 +538,8 @@ def estimate_memory_overhead(
     #   solved map (3 x float64):  24 bytes
     bytes_per_pixel = 8 + 24 + 8 + 48 + 24
 
-    n_pixel_solve = sky_fraction * 12 * nside_solve ** 2
-    n_pixel_final = 0 if nside_final is None else sky_fraction * 12 * nside_final ** 2
+    n_pixel_solve = sky_fraction * 12 * nside_solve**2
+    n_pixel_final = 0 if nside_final is None else sky_fraction * 12 * nside_final**2
 
     overhead = base + (n_pixel_solve + n_pixel_final) * bytes_per_pixel
 
@@ -566,7 +566,7 @@ def estimate_memory_overhead(
         # Scale factor between simulations
         scale = 10
         # Jump straight to the third (largest) iteration
-        rmax *= scale ** 2
+        rmax *= scale**2
         xstep *= scale
         ystep *= scale
         zstep *= scale
@@ -638,12 +638,12 @@ def create_input_maps(
 
     sig = 50.0
     numer = ell - 30.0
-    tspec = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(-0.5 * numer ** 2 / sig ** 2)
+    tspec = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(-0.5 * numer**2 / sig**2)
     tspec *= 2000.0
 
     sig = 100.0
     numer = ell - 500.0
-    espec = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(-0.5 * numer ** 2 / sig ** 2)
+    espec = (1.0 / (sig * np.sqrt(2.0 * np.pi))) * np.exp(-0.5 * numer**2 / sig**2)
     espec *= 1.0
 
     cls = (
@@ -769,8 +769,8 @@ def compute_science_metric(args, runtime, n_nodes, rank, log):
     det_factor = 2.0
     metric = (
         prefactor
-        * args.n_detector ** det_factor
-        * kilo_samples ** sample_factor
+        * args.n_detector**det_factor
+        * kilo_samples**sample_factor
         / (n_nodes * runtime)
     )
     if rank == 0:

@@ -96,7 +96,7 @@ class GainDrifter(Operator):
 
     def get_psd(self, f):
         return (
-            self.sigma_drift ** 2
+            self.sigma_drift**2
             * (self.fknee_drift.to_value(u.Hz) / f) ** self.alpha_drift
         )
 
