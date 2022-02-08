@@ -18,7 +18,7 @@ def scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights):
     takes mapdata as a jax array and npix_submap as an integer
     """
     # display size information for debugging purposes
-    print(f"DEBUG: jit compiling scan_map! npix_submap:{npix_submap} nsamp:{submap.size} nmap:{nmap} mapdata:{mapdata.shape} weights:{weights.shape}")
+    print(f"DEBUG: jit compiling 'scan_map' npix_submap:{npix_submap} nsamp:{submap.size} nmap:{nmap} mapdata:{mapdata.shape} weights:{weights.shape}")
 
     # turns mapdata into an array of shape nsamp*nmap
     mapdata = jnp.reshape(mapdata, newshape=(-1,npix_submap,nmap))

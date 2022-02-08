@@ -673,7 +673,7 @@ class BuildNoiseWeighted(Operator):
                         local_pix[shared_fview & self.shared_flag_mask != 0] = -1
 
                     # Accumulate
-                    cov_accum_zmap(
+                    zmap_jax = cov_accum_zmap(
                         dist.n_local_submap,
                         dist.n_pix_submap,
                         zmap.n_value,
@@ -684,6 +684,7 @@ class BuildNoiseWeighted(Operator):
                         ddata,
                         zmap.raw,
                     )
+
         return
 
     def _finalize(self, data, **kwargs):
