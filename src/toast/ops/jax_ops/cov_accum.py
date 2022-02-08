@@ -13,31 +13,19 @@ from ..._libtoast import cov_accum_zmap as cov_accum_zmap_compiled
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def cov_accum_zmap_jitted(nsub, subsize, nnz, submap, subpix, weights, scale, tod, zmap):
+def cov_accum_zmap_jitted(nsub, subsize, nnz, weights, scale, tod, zmap):
     # unflatten arrays
-    zmap = jnp.reshape(zmap, newshape=(nsub,subsize,nnz))
-    weights = jnp.reshape(weights, newshape=(-1,nnz))
-    print(f"DEBUG: jit-compiling 'cov_accum_zmap' for nsub:{nsub} subsize:{subsize} nnz:{nnz} submap:{submap.shape} subpix:{subpix.shape} weights:{weights.shape} scale:{scale} tod:{tod.shape} zmap:{zmap.shape}")
+    print(f"DEBUG: jit-compiling 'cov_accum_zmap' for nsub:{nsub} subsize:{subsize} nnz:{nnz} nsamp:{weights.shape[0]} scale:{scale}")
     
     # values to be added to zmap
     scaled_signal = scale * tod
     shift = weights * scaled_signal[:,jnp.newaxis]
 
-    # keep only valid indices
-    valid_indices = (submap >= 0) & (subpix >= 0)
-    shift = jnp.where(valid_indices[:,jnp.newaxis], shift, 0.0)
-
-    # TODO is it faster to take zmap as input than to do a += at the numpy level?
-    #zmap = jnp.zeros(shape=(nsub,subsize,nnz))
-
-    # NOTE: JAX seem to deal properly with duplicates indices
-    #zmap[submap,subpix,:] += shift
-    zmap = zmap.at[submap,subpix,:].add(shift)
-    return zmap
+    # NOTE: JAX deals properly with duplicates indices according to our tests
+    return zmap + shift
 
 # jit
-# TODO is it faster to cache scale than to pass it normally?
-cov_accum_zmap_jitted = jax.jit(cov_accum_zmap_jitted, static_argnames=['nsub', 'subsize','nnz','scale'])
+cov_accum_zmap_jitted = jax.jit(cov_accum_zmap_jitted, static_argnames=['nsub','subsize','nnz','scale'])
 
 def cov_accum_zmap_jax(nsub, subsize, nnz, submap, subpix, weights, scale, tod, zmap):
     """
@@ -57,15 +45,28 @@ def cov_accum_zmap_jax(nsub, subsize, nnz, submap, subpix, weights, scale, tod, 
         weights (array, float64): The pointing matrix weights for each time sample and map (shape nsamp*nnz).
         scale (float):  Optional scaling factor.
         tod (array, float64): The timestream to accumulate in the noise weighted map (size nsamp).
-        zmap (array, float64): The local noise weighted map buffer (size nnz*???).
+        zmap (array, float64): The local noise weighted map buffer (size nsub*subsize*nnz).
 
     Returns:
         None. (results are pur into zmap)
     """
-    # converts zmap into a numpy array
-    zmap = zmap.array()
-    # updates zmap with (flattened) result
-    zmap[:] = cov_accum_zmap_jitted(nsub, subsize, nnz, submap, subpix, weights, scale, tod, zmap).ravel()
+    # converts into properly shaped numpy arrays
+    zmap = np.reshape(zmap.array(), newshape=(nsub,subsize,nnz))
+    weights = np.reshape(weights, newshape=(-1,nnz))
+
+    # keeps only valid data
+    # invalid indices are *very* uncommon
+    # NOTE: in benchmarks this takes about one in 62 seconds
+    valid_indices = (submap >= 0) & (subpix >= 0)
+    if not np.all(valid_indices):
+        submap = submap[valid_indices]
+        subpix = subpix[valid_indices]
+        tod = tod[valid_indices]
+        weights = weights[valid_indices,:]
+    
+    # updates the slice of zmap with the result
+    subzmap = zmap[submap,subpix,:]
+    subzmap[:] = cov_accum_zmap_jitted(nsub, subsize, nnz, weights, scale, tod, subzmap)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -95,22 +96,23 @@ def cov_accum_zmap_numpy(nsub, subsize, nnz, submap, subpix, weights, scale, tod
         None. (results are pur into zmap)
     """
     # converts arrays into properly shaped numpy arrays
-    zmap = zmap.array()
-    zmap = np.reshape(zmap, newshape=(nsub,subsize,nnz))
+    zmap = np.reshape(zmap.array(), newshape=(nsub,subsize,nnz))
     weights = np.reshape(weights, newshape=(-1,nnz))
 
     # TODO debug
-    #print(f"DEBUG: running cov_accum_zmap_numpy for nsub:{nsub} subsize:{subsize} nnz:{nnz} submap:{submap.shape} subpix:{subpix.shape} weights:{weights.shape} scale:{scale} tod:{tod.shape} zmap:{zmap.shape}")
-    
+    #print(f"DEBUG: running 'cov_accum_zmap_numpy' for nsub:{nsub} subsize:{subsize} nnz:{nnz} nsamp:{submap.size} scale:{scale}")
+
     # values to be added to zmap
     scaled_signal = scale * tod
     shift = weights * scaled_signal[:,np.newaxis]
 
     # keep only valid indices
+    # invalid indices are *very* uncommon
     valid_indices = (submap >= 0) & (subpix >= 0)
-    shift = shift[valid_indices,:]
-    submap = submap[valid_indices]
-    subpix = subpix[valid_indices]
+    if not np.all(valid_indices):
+        shift = shift[valid_indices,:]
+        submap = submap[valid_indices]
+        subpix = subpix[valid_indices]
 
     # NOTE: we use `np.add.at` as it deals properly with duplicates in the zmap indices
     #zmap[submap,subpix,:] += shift
@@ -167,10 +169,14 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
 cov_accum_zmap = select_implementation(cov_accum_zmap_compiled, 
                                        cov_accum_zmap_numpy, 
                                        cov_accum_zmap_jax, 
-                                       default_implementationType=ImplementationType.JAX)
+                                       default_implementationType=ImplementationType.NUMPY)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 #cov_accum_zmap = get_compile_time(cov_accum_zmap)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning")'
+
+# to bench:
+# use scanmap config and check BuildNoiseWeighted field in timing.csv
+# one problem: this includes call to other operators
