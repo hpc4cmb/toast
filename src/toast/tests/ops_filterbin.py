@@ -56,12 +56,11 @@ class FilterBinTest(MPITestCase):
         sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
 
-        # Add a strong gradient that should be filtered out completely
+        # Add a strong gradient
         for obs in data.obs:
             times = obs.shared[defaults.times]
             for det in obs.local_detectors:
-                obs.detdata[defaults.det_data] += times.data
-                obs.detdata[defaults.det_data][:] = times.data
+                obs.detdata[defaults.det_data][det][:] = times.data
 
         # Make fake flags
         fake_flags(data)
@@ -104,7 +103,130 @@ class FilterBinTest(MPITestCase):
             rot = [43, -42]
             reso = 4
             fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+            cmap = "bwr"
+
+            fname_binned = os.path.join(
+                self.outdir, f"{filterbin.name}_unfiltered_map.h5"
+            )
+            fname_filtered = os.path.join(
+                self.outdir, f"{filterbin.name}_filtered_map.h5"
+            )
+
+            binned = np.atleast_2d(read_healpix(fname_binned, None))
+            filtered = np.atleast_2d(read_healpix(fname_filtered, None))
+
+            good = binned != 0
+            rms1 = np.std(binned[good])
+            rms2 = np.std(filtered[good])
+
+            nrow, ncol = 2, 2
+            for m in binned, filtered:
+                m[m == 0] = hp.UNSEEN
+            args = {"rot": rot, "reso": reso, "cmap": cmap}
+            hp.gnomview(
+                binned[0],
+                sub=[nrow, ncol, 1],
+                title=f"Binned map : {rms1}",
+                **args,
+            )
+            hp.gnomview(
+                filtered[0],
+                sub=[nrow, ncol, 2],
+                title=f"Filtered map : {rms2}",
+                **args,
+            )
+
+            fname = os.path.join(self.outdir, "filter_test.png")
+            fig.savefig(fname)
+
+            assert rms2 < 1e-6 * rms1
+
+        return
+
+    def test_filterbin_2d(self):
+
+        # Create a fake ground data set for testing
+        data = create_ground_data(self.comm)
+
+        nside = 256
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+            # view="scanning",
+        )
+        weights = ops.StokesWeights(
+            mode="I",  # "IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model but make the noise 100% correlated
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
+        sim_noise.apply(data)
+        for obs in data.obs:
+            noise = obs.detdata[defaults.det_data][0].copy()
+            for det in obs.local_detectors:
+                obs.detdata[defaults.det_data][det][:] = noise
+
+        # Add a strong gradient that should be filtered out completely
+        for obs in data.obs:
+            times = obs.shared[defaults.times]
+            for det in obs.local_detectors:
+                obs.detdata[defaults.det_data] += times.data
+                obs.detdata[defaults.det_data][:] = times.data
+
+        # Make fake flags
+        fake_flags(data)
+
+        binning = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance="covariance",
+            det_data=sim_noise.det_data,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            sync_type="allreduce",
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=1,
+            det_flags=defaults.det_flags,
+            det_flag_mask=255,
+        )
+
+        filterbin = ops.FilterBin(
+            name="filterbin",
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
+            det_flag_mask=255,
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=1,
+            binning=binning,
+            ground_filter_order=5,
+            split_ground_template=True,
+            poly_filter_order=0,
+            output_dir=self.outdir,
+            write_hdf5=True,
+            focalplane_key="telescope",
+            poly2d_filter_order=0,
+        )
+        filterbin.apply(data)
+
+        # Confirm that the filtered map has less noise than the unfiltered map
+
+        if data.comm.world_rank == 0:
+            import matplotlib.pyplot as plt
+
+            rot = [43, -42]
+            reso = 4
+            fig = plt.figure(figsize=[18, 12])
+            cmap = "bwr"
 
             fname_binned = os.path.join(
                 self.outdir, f"{filterbin.name}_unfiltered_map.h5"
@@ -229,7 +351,7 @@ class FilterBinTest(MPITestCase):
             rot = [42, -42]
             reso = 4
             fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+            cmap = "bwr"
             nest = pixels.nest
 
             rootname = os.path.join(self.outdir, f"{filterbin.name}_obs_matrix")
@@ -356,7 +478,7 @@ class FilterBinTest(MPITestCase):
             rot = [42, -42]
             reso = 4
             fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+            cmap = "bwr"
             nest = pixels.nest
 
             rootname = os.path.join(self.outdir, f"{filterbin.name}_obs_matrix")
@@ -515,7 +637,7 @@ class FilterBinTest(MPITestCase):
             rot = [42, -42]
             reso = 4
             fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+            cmap = "bwr"
             nest = pixels.nest
 
             rootname = os.path.join(self.outdir, f"cached_run_1_obs_matrix")
