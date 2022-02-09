@@ -115,8 +115,7 @@ class SimConviqtTest(MPITestCase):
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
             )
-            #self.blm[1] = self.blm[0] 
-            #self.blm[2] = np.zeros_like(self.blm[0] ) 
+            
             
             hp.write_alm(
                 self.fname_beam,
@@ -193,7 +192,27 @@ class SimConviqtTest(MPITestCase):
             self.comm.barrier()
 
         return
-
+    def make_beam_file_dict(self,data) : 
+        
+        beam_map  = hp.alm2map(self.blm, lmax=self.lmax, mmax=self.mmax , nside=self.nside) 
+        beam_map [1:] = (-1) *beam_map [1:]  
+        blm2 = hp.map2alm(beam_map, lmax=self.lmax, mmax=self.mmax ) 
+        fname2= self.fname_beam.replace('.fits', '_bottom.fits')
+        hp.write_alm(
+                fname2 ,
+                 blm2,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
+        self.beam_file_dict={} 
+        for det in data.obs[0].local_detectors:
+            if det[-1]=="A" : 
+                self.beam_file_dict[det] = self.fname_beam 
+            else: 
+                self.beam_file_dict[det] = fname2 
+        return 
+            
     def test_sim(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -202,18 +221,19 @@ class SimConviqtTest(MPITestCase):
         # Create a fake scan strategy that hits every pixel once.
         #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(self.comm , obs_time=120*u.min, pixel_per_process=2 )
-
+        self. make_beam_file_dict(data)
+            
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
 
         key = defaults.det_data
-         
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
             beam_file=self.fname_beam,
+            beam_file_dict= self.beam_file_dict,
             dxx=False,
             det_data=key,
             pol=True ,
