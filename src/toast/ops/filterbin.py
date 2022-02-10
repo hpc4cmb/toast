@@ -13,23 +13,15 @@ import scipy.io
 import scipy.sparse
 import traitlets
 
-from .._libtoast import (
-    accumulate_observation_matrix,
-    build_template_covariance,
-    expand_matrix,
-    legendre,
-)
+from .. import qarray as qa
+from .._libtoast import (accumulate_observation_matrix,
+                         build_template_covariance, expand_matrix, legendre)
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io import (
-    filename_is_fits,
-    filename_is_hdf5,
-    read_healpix_fits,
-    read_healpix_hdf5,
-    write_healpix_fits,
-    write_healpix_hdf5,
-)
+from ..pixels_io import (filename_is_fits, filename_is_hdf5, read_healpix_fits,
+                         read_healpix_hdf5, write_healpix_fits,
+                         write_healpix_hdf5)
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -44,13 +36,46 @@ from .pointing import BuildPixelDistribution
 from .scan_map import ScanMap, ScanMask
 
 
+XAXIS, YAXIS, ZAXIS = np.eye(3)
+
+
 class SpatialTemplates:
-    def __init__(self, dets, focaplane, order=0):
-        self.ndet = len(dets)
+    def __init__(self, detectors, focalplane, order=0):
+        self.detectors = detectors
+        self.ndet = len(detectors)
         self.ntemplate = (order + 1) ** 2
         self.templates = np.ones([self.ntemplate, self.ndet])
-        if order != 0:
-            raise RuntimeError("Polynomial templates not implemented yet")
+
+        # Scale and translate detector positions on the focalplane to
+        # fit [-1, 1] x [-1, 1]
+
+        detector_position = {}
+        theta_offset = 0
+        phi_offset = 0
+        thetas = np.zeros(self.ndet)
+        phis = np.zeros(self.ndet)
+        for idet, det in enumerate(detectors):
+            det_quat = focalplane[det]["quat"]
+            x, y, z = qa.rotate(det_quat, ZAXIS)
+            theta, phi = np.arcsin([x, y])
+            thetas[idet] = theta
+            phis[idet] = phi
+        theta_scale = 0.999 / np.ptp(thetas)
+        phi_scale = 0.999 / np.ptp(phis)
+        theta_offset = 0.5 * (np.amin(thetas) + np.amax(thetas))
+        phi_offset = 0.5 * (np.amin(phis) + np.amax(phis))
+        thetas = (thetas - theta_offset) * theta_scale
+        phis = (phis - phi_offset) * phi_scale
+
+        # Evaluate the templates
+
+        itemplate = 0
+        for xorder in range(order + 1):
+            for yorder in range(order + 1):
+                self.templates[itemplate] = thetas**xorder * phis**yorder
+                itemplate += 1
+
+        return
 
     def fit(self, signal, good):
         ndet = len(signal)
@@ -68,8 +93,9 @@ class SpatialTemplates:
                 proj[row] += self.templates[row, det] * good[det] * signal[det]
             for col in range(ntemplate):
                 for det in range(ndet):
-                    invcov[row, col] += self.templates[row, det] \
-                        * self.templates[col, det] * good[det]
+                    invcov[row, col] += (
+                        self.templates[row, det] * self.templates[col, det] * good[det]
+                    )
         invcov = np.transpose(invcov, (2, 1, 0))
         proj = np.transpose(proj)
         for isample in range(nsample):
@@ -549,9 +575,12 @@ class FilterBin(Operator):
             focalplane = obs.telescope.focalplane
             detectors_by_value = {}
             if self.focalplane_key is None:
+                # Each detector will be filtered independently
                 for det in local_dets:
                     detectors_by_value[det] = [det]
             else:
+                # Spatial filters will be applied to detectors that share
+                # the focalplane key
                 for det in all_dets:
                     if self.focalplane_key == "telescope":
                         value = obs.telescope.name
@@ -595,6 +624,8 @@ class FilterBin(Operator):
                 full_signal = []
                 full_good_fit = []
                 full_good_bin = []
+                full_pixels = []
+                full_weights = []
 
                 for idet, det in enumerate(detectors_by_value[value]):
                     if self.grank == 0:
@@ -642,6 +673,9 @@ class FilterBin(Operator):
                         # and weights
                         self.binning.stokes_weights.apply(obs_data, detectors=[det])
                         weights = obs.detdata[self.binning.stokes_weights.weights][det]
+                        if ndet > 1:
+                            full_pixels.append(pixels)
+                            full_weights.append(weights)
                     else:
                         pixels = None
                         weights = None
@@ -652,7 +686,9 @@ class FilterBin(Operator):
                         self.deproject_map is not None
                         and self._deproject_pattern.match(det) is not None
                     ):
-                        self._add_deprojection_templates(data, obs, pixels, det_templates)
+                        self._add_deprojection_templates(
+                            data, obs, pixels, det_templates
+                        )
                         # Must re-evaluate the template covariance
                         template_covariance = None
 
@@ -702,7 +738,25 @@ class FilterBin(Operator):
                     )
 
                 if spatial_templates is not None:
-                    self._regress_spatial_templates(spatial_templates, full_signal, full_good_fit)
+                    t1 = time()
+                    self._regress_spatial_templates(
+                        spatial_templates, full_signal, full_good_fit
+                    )
+                    if self.grank == 0:
+                        log.debug(
+                            f"{self.group:4} : FilterBin:   Regressed templates in "
+                            f"{time() - t1:.2f} s",
+                        )
+                        t1 = time()
+                    self._accumulate_spatial_observation_matrix(
+                        obs,
+                        value,
+                        full_pixels,
+                        full_weights,
+                        full_good_fit,
+                        full_good_bin,
+                        spatial_templates,
+                    )
 
         log.debug_rank(
             f"{self.group:4} : FilterBin:   Filtered group data in",
@@ -1008,6 +1062,120 @@ class FilterBin(Operator):
             cache_dir = os.path.join(self.cache_dir, obs.name)
             os.makedirs(cache_dir, exist_ok=True)
             fname_cache = os.path.join(cache_dir, det)
+            try:
+                mm_data = np.load(fname_cache + ".data.npy")
+                mm_indices = np.load(fname_cache + ".indices.npy")
+                mm_indptr = np.load(fname_cache + ".indptr.npy")
+                local_obs_matrix = scipy.sparse.csr_matrix(
+                    (mm_data, mm_indices, mm_indptr),
+                    self.obs_matrix.shape,
+                )
+                if self.grank == 0:
+                    log.debug(
+                        f"{self.group:4} : FilterBin:     loaded cached matrix from "
+                        f"{fname_cache}* in {time() - t1:.2f} s",
+                    )
+                    t1 = time()
+            except:
+                local_obs_matrix = None
+
+        if local_obs_matrix is None:
+            templates = templates.T.copy()
+            good_any = np.logical_or(good_fit, good_bin)
+
+            # Temporarily compress pixels
+            if self.grank == 0:
+                log.debug(f"{self.group:4} : FilterBin:     Compressing pixels")
+            c_pixels, c_npix, local_to_global = self._compress_pixels(
+                pixels[good_any].copy()
+            )
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin: Compressed in {time() - t1:.2f} s",
+                )
+                t1 = time()
+            c_npixtot = c_npix * self.nnz
+            c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
+            if self.grank == 0:
+                log.debug(f"{self.group:4} : FilterBin:     Accumulating")
+            accumulate_observation_matrix(
+                c_obs_matrix,
+                c_pixels,
+                weights[good_any].copy(),
+                templates[good_any].copy(),
+                template_covariance,
+                good_fit[good_any].astype(np.uint8),
+                good_bin[good_any].astype(np.uint8),
+            )
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin:     Accumulated in {time() - t1:.2f} s"
+                )
+                log.debug(
+                    f"{self.group:4} : FilterBin:     Expanding local to global",
+                )
+                t1 = time()
+            # expand to global pixel numbers
+            local_obs_matrix = self._expand_matrix(c_obs_matrix, local_to_global)
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin:     Expanded in {time() - t1:.2f} s"
+                )
+                t1 = time()
+
+            if fname_cache is not None:
+                if self.grank == 0:
+                    log.debug(
+                        f"{self.group:4} : FilterBin:     Caching to {fname_cache}*",
+                    )
+                np.save(fname_cache + ".data", local_obs_matrix)
+                np.save(fname_cache + ".indices", local_obs_matrix)
+                np.save(fname_cache + ".indptr", local_obs_matrix)
+                if self.grank == 0:
+                    log.debug(
+                        f"{self.group:4} : FilterBin:     cached in {time() - t1:.2f} s",
+                    )
+                    t1 = time()
+
+        if self.grank == 0:
+            log.debug(f"{self.group:4} : FilterBin:     Adding to global")
+        detweight = obs[self.binning.noise_model].detector_weight(det)
+        self.obs_matrix += local_obs_matrix * detweight
+        if self.grank == 0:
+            log.debug(
+                f"{self.group:4} : FilterBin:     Added in {time() - t1:.2f} s",
+            )
+        return
+
+    @function_timer
+    def _accumulate_spatial_observation_matrix(
+        self,
+        obs,
+        value,
+        pixels,
+        weights,
+        good_fit,
+        good_bin,
+        templates,
+    ):
+        """Calculate P^T N^-1 Z P
+        This part of the covariance calculation is cumulative: each observation
+        and detector set is computed independently and can be cached.
+
+        Observe that `N` in this equation need not be the same used in
+        template covariance in `Z`.
+        """
+        if not self.write_obs_matrix:
+            return
+        log = Logger.get()
+        #templates = det_templates.to_dense(good_fit.size)
+        fname_cache = None
+        local_obs_matrix = None
+        t1 = time()
+        if self.cache_dir is not None:
+            cache_dir = os.path.join(self.cache_dir, obs.name)
+            os.makedirs(cache_dir, exist_ok=True)
+            fname_cache = os.path.join(cache_dir, value)
             try:
                 mm_data = np.load(fname_cache + ".data.npy")
                 mm_indices = np.load(fname_cache + ".indices.npy")
