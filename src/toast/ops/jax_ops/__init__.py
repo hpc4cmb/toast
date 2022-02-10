@@ -5,7 +5,6 @@ Operators:
 https://github.com/hpc4cmb/toast/blob/11306b344d021e6e49a1e65dd82e06b1b69cbe3d/src/toast/ops/mapmaker_templates.py#L21
 
 Last one (TemplateMatrix) uses the "Offset" template:
-https://github.com/hpc4cmb/toast/blob/11306b344d021e6e49a1e65dd82e06b1b69cbe3d/src/toast/templates/offset.py#L34
 https://github.com/hpc4cmb/toast/blob/11306b344d021e6e49a1e65dd82e06b1b69cbe3d/src/toast/templates/amplitudes.py#L21
 """
 
@@ -20,6 +19,7 @@ from .scan_map import scan_map
 from .healpix_pixels import healpix_pixels
 from .stokes_weights import stokes_weights
 from .cov_accum import cov_accum_zmap
+from .template_offset import template_offset_add_to_signal, template_offset_project_signal
 
 # dummy call to warm-up the jit for further JAX compilations
 # NOTE: we could remove this, it makes a 1 or 2s difference to the full runtime
