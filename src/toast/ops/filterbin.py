@@ -1005,9 +1005,10 @@ class FilterBin(Operator):
 
     @function_timer
     def _compress_pixels(self, pixels):
-        local_to_global = np.sort(list(set(pixels)))
-        compressed_pixels = np.searchsorted(local_to_global, pixels)
-        return compressed_pixels, local_to_global.size, local_to_global
+        shape = pixels.shape
+        local_to_global = np.sort(list(set(pixels.ravel())))
+        compressed_pixels = np.searchsorted(local_to_global, pixels.ravel())
+        return compressed_pixels.reshape(shape), local_to_global.size, local_to_global
 
     @function_timer
     def _expand_matrix(self, compressed_matrix, local_to_global):
@@ -1194,15 +1195,17 @@ class FilterBin(Operator):
                 local_obs_matrix = None
 
         if local_obs_matrix is None:
-            templates = templates.T.copy()
+            #templates = templates.T.copy()
+            good_fit = np.vstack(good_fit)
+            good_bin = np.vstack(good_bin)
             good_any = np.logical_or(good_fit, good_bin)
 
             # Temporarily compress pixels
             if self.grank == 0:
                 log.debug(f"{self.group:4} : FilterBin:     Compressing pixels")
-            c_pixels, c_npix, local_to_global = self._compress_pixels(
-                pixels[good_any].copy()
-            )
+            pixels = np.vstack(pixels)
+            pixels[np.logical_not(good_any)] = -1
+            c_pixels, c_npix, local_to_global = self._compress_pixels(pixels)
             if self.grank == 0:
                 log.debug(
                     f"{self.group:4} : FilterBin: Compressed in {time() - t1:.2f} s",
@@ -1212,15 +1215,42 @@ class FilterBin(Operator):
             c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
             if self.grank == 0:
                 log.debug(f"{self.group:4} : FilterBin:     Accumulating")
-            accumulate_observation_matrix(
-                c_obs_matrix,
-                c_pixels,
-                weights[good_any].copy(),
-                templates[good_any].copy(),
-                template_covariance,
-                good_fit[good_any].astype(np.uint8),
-                good_bin[good_any].astype(np.uint8),
-            )
+                
+            ############ accumulate spatial observation matrix begin
+            
+            ndet, nsample = c_pixels.shape
+            ntemplate = len(templates)
+            nnz = self.nnz
+            npix = c_npix
+            npixtot = c_npixtot
+            for isample in range(nsample):
+                for idet in range(ndet):
+                    ipix = c_pixels[idet, isample]
+                    jsample = isample  # Template covariance vanishes for isample != jsample
+                    for jdet in range(ndet):
+                        jpix = c_pixels[jdet, jsample]
+                        mvalue = 
+                                        templates[idet, iorder] \
+                                        * templates[jdet, jorder] \
+                                        * cov[iorder, jorder]
+                        for inz in range(nnz):
+                            for jnz in range(nnz):
+                                if isample == jsample and idet == jdet:
+                                    c_obs_matrix[ipix + inz * npix, jpix + jnz * npix] += 1
+                                for itemplate in range(ntemplate):
+                                    c_obs_matrix[ipix + inz * npix, jpix + jnz * npiz] -= \
+
+            ############ accumulate spatial observation matrix end
+            
+            #accumulate_observation_matrix(
+            #    c_obs_matrix,
+            #    c_pixels,
+            #    weights[good_any].copy(),
+            #    templates[good_any].copy(),
+            #    template_covariance,
+            #    good_fit[good_any].astype(np.uint8),
+            #    good_bin[good_any].astype(np.uint8),
+            #)
             if self.grank == 0:
                 log.debug(
                     f"{self.group:4} : FilterBin:     Accumulated in {time() - t1:.2f} s"
