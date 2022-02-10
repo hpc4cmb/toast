@@ -9,6 +9,7 @@ install(FILES
     healpix_pixels.py
     stokes_weights.py
     cov_accum.py
+    template_offset.py
     DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops
 )
 

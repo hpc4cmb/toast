@@ -169,7 +169,7 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
 cov_accum_zmap = select_implementation(cov_accum_zmap_compiled, 
                                        cov_accum_zmap_numpy, 
                                        cov_accum_zmap_jax, 
-                                       default_implementationType=ImplementationType.NUMPY)
+                                       default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 #cov_accum_zmap = get_compile_time(cov_accum_zmap)

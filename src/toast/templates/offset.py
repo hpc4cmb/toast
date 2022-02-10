@@ -27,7 +27,7 @@ from .template import Template
 
 from .amplitudes import Amplitudes
 
-from .._libtoast import template_offset_add_to_signal, template_offset_project_signal
+from ..ops.jax_ops import template_offset_add_to_signal, template_offset_project_signal
 
 
 @trait_docs
