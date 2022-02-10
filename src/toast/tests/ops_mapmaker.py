@@ -27,7 +27,7 @@ from ..pixels import PixelDistribution, PixelData
 
 from ..pixels_io import write_healpix_fits
 
-from .._libtoast import acc_enabled
+from .._libtoast import accel_enabled
 
 from ._helpers import create_outdir, create_satellite_data, create_fake_sky
 
@@ -138,9 +138,11 @@ class MapmakerTest(MPITestCase):
         mapper.apply(data)
 
         # Check that we can also run in full-memory mode
-        if acc_enabled():
-            data.acc_copyin(pixels.requires())
-            data.acc_copyin(weights.requires())
+        if accel_enabled():
+            data.accel_create(pixels.requires())
+            data.accel_create(weights.requires())
+            data.accel_update_device(pixels.requires())
+            data.accel_update_device(weights.requires())
 
         pixels.apply(data)
         weights.apply(data)

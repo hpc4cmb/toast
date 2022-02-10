@@ -24,7 +24,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def exec(self, data, detectors=None, use_acc=False, **kwargs):
+    def exec(self, data, detectors=None, use_accel=False, **kwargs):
         """Perform operations on a Data object.
 
         If a list of detectors is specified, only process these detectors.  Any extra
@@ -32,8 +32,8 @@ class Operator(TraitConfig):
 
         Accelerator use:  If the derived class supports OpenACC and all the required
         data objects exist on the device, then the `_exec()` method will be called
-        with the "use_acc=True" option.  Any operator that returns "True" from its
-        _supports_acc() method should also accept the "use_acc" keyword argument.
+        with the "use_accel=True" option.  Any operator that returns "True" from its
+        _supports_accel() method should also accept the "use_accel" keyword argument.
 
         Args:
             data (toast.Data):  The distributed data.
@@ -46,7 +46,7 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if use_acc and not self.acc_have_requires(data):
+            if use_accel and not self.accel_have_requires(data):
                 msg = f"Operator {self.name} exec: required inputs not on device. "
                 msg += "There is likely a problem with a Pipeline or the "
                 msg += "operator dependencies."
@@ -54,7 +54,7 @@ class Operator(TraitConfig):
             self._exec(
                 data,
                 detectors=detectors,
-                use_acc=use_acc,
+                use_accel=use_accel,
                 **kwargs,
             )
         else:
@@ -82,19 +82,19 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if use_acc and not self.acc_have_requires(data):
+            if use_accel and not self.accel_have_requires(data):
                 msg = f"Operator {self.name} finalize: required inputs not on device. "
                 msg += "There is likely a problem with a Pipeline or the "
                 msg += "operator dependencies."
                 raise RuntimeError(msg)
-            return self._finalize(data, use_acc=use_acc, **kwargs)
+            return self._finalize(data, use_accel=use_accel, **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
                 log.debug(msg)
 
     @function_timer_stackskip
-    def apply(self, data, detectors=None, use_acc=False, **kwargs):
+    def apply(self, data, detectors=None, use_accel=False, **kwargs):
         """Run exec() and finalize().
 
         This is a convenience wrapper that calls exec() exactly once with an optional
@@ -114,8 +114,8 @@ class Operator(TraitConfig):
             (value):  None or an Operator-dependent result.
 
         """
-        self.exec(data, detectors, use_acc=use_acc, **kwargs)
-        return self.finalize(data, use_acc=use_acc, **kwargs)
+        self.exec(data, detectors, use_accel=use_accel, **kwargs)
+        return self.finalize(data, use_accel=use_accel, **kwargs)
 
     def _requires(self):
         raise NotImplementedError("Fell through to Operator base class")
@@ -168,10 +168,10 @@ class Operator(TraitConfig):
                 prov[key] = list()
         return prov
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         return False
 
-    def supports_acc(self):
+    def supports_accel(self):
         """Query whether the operator supports OpenACC
 
         Returns:
@@ -180,7 +180,7 @@ class Operator(TraitConfig):
         """
         return self._supports_acc()
 
-    def acc_have_requires(self, data):
+    def accel_have_requires(self, data):
         # Helper function to determine if all requirements are met to use OpenACC
         # for a data object.
         log = Logger.get()
@@ -191,14 +191,14 @@ class Operator(TraitConfig):
         req = self.requires()
         for ob in data.obs:
             for key in req["detdata"]:
-                if not ob.detdata.acc_is_present(key):
+                if not ob.detdata.accel_present(key):
                     msg = f"{self.name}:  obs {ob.name}, detdata {key} not on device"
                     all_present = False
                 else:
                     msg = f"{self.name}:  obs {ob.name}, detdata {key} is on device"
                 log.verbose(msg)
             for key in req["shared"]:
-                if not ob.shared.acc_is_present(key):
+                if not ob.shared.accel_present(key):
                     msg = f"{self.name}:  obs {ob.name}, shared {key} not on device"
                     all_present = False
                 else:

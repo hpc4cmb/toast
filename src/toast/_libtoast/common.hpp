@@ -3,8 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef LIBTOAST_COMMON_HPP
-#define LIBTOAST_COMMON_HPP
+#ifndef _LIBTOAST_COMMON_HPP
+#define _LIBTOAST_COMMON_HPP
 
 #include <pybind11/pybind11.h>
 #include <pybind11/operators.h>

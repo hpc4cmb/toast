@@ -4,9 +4,7 @@
 
 #include <module.hpp>
 
-#ifdef HAVE_OPENACC
-# include <openacc.h>
-#endif // ifdef HAVE_OPENACC
+#include <accelerator.hpp>
 
 
 void init_ops_mapmaker_utils(py::module & m) {
@@ -171,82 +169,91 @@ void init_ops_mapmaker_utils(py::module & m) {
             size_t len_data = info_detdata.shape[0] * n_samp;
             size_t len_zmap = n_local_submap * n_pix_submap * n_value_pix;
 
-            // std::cout << "zmap pointer " << raw_zmap << " with dims " << n_local_submap << " x " << n_pix_submap << " x " << n_value_pix << std::endl;
+            // auto & omgr = OmpManager::get();
+            // int dev = omgr.get_device();
+            // bool offload = ! omgr.device_is_host();
+            // void * dev_raw = omgr.device_ptr(raw);
 
-            #pragma \
-            acc data copyin(det_flag_mask, n_det, n_samp, n_weight, n_local_submap, n_pix_submap, n_value_pix, raw_scale[:n_det], raw_pixindx[:n_det], raw_weightindx[:n_det], raw_flagindx[:n_det], raw_dataindx[:n_det], raw_glob2loc[:n_global_submap]) present(raw_pixels[:len_pixels], raw_weights[:len_weights], raw_flags[:len_flags], raw_data[:len_data], raw_zmap[:len_zmap])
-            {
-                if (fake_openacc()) {
-                    // Set all "present" data to point at the fake device pointers
-                    auto & fake = FakeMemPool::get();
-                    raw_pixels = (int64_t *)fake.device_ptr(raw_pixels);
-                    raw_weights = (double *)fake.device_ptr(raw_weights);
-                    raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
-                    raw_data = (double *)fake.device_ptr(raw_data);
-                    raw_zmap = (double *)fake.device_ptr(raw_zmap);
-                }
-                #pragma acc parallel
-                #pragma acc loop independent
-                for (size_t idet = 0; idet < n_det; idet++) {
-                    int32_t p_indx = raw_pixindx[idet];
-                    int32_t w_indx = raw_weightindx[idet];
-                    int32_t d_indx = raw_dataindx[idet];
-                    int32_t f_indx = raw_flagindx[idet];
-                    double npix_submap_inv = 1.0 / (double)(n_pix_submap);
+            // // std::cout << "zmap pointer " << raw_zmap << " with dims " << n_local_submap << " x " << n_pix_submap << " x " << n_value_pix << std::endl;
 
-                    //#pragma acc loop independent
-                    for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                        size_t off_p = p_indx * n_samp + isamp;
-                        size_t off_w = w_indx * n_samp + isamp;
-                        size_t off_d = d_indx * n_samp + isamp;
-                        size_t off_f = f_indx * n_samp + isamp;
-                        int64_t isubpix;
-                        int64_t zoff;
-                        int64_t off_wt;
-                        double scaled_data;
-                        int64_t local_submap;
-                        int64_t global_submap;
+            // #pragma omp target data device(dev) use_device_ptr(dev_raw) if(offload)
+            // {
+            //     #pragma omp teams distribute collapse(2)
 
-                        // std::cout << "DBG samp " << isamp << ": indx " << p_indx << ", " << w_indx << ", " << d_indx << ", " << f_indx << ":  off " << off_p << ", " << off_w << ", " << off_d << ", " << off_f << std::endl;
+            // #pragma \
+            // acc data copyin(det_flag_mask, n_det, n_samp, n_weight, n_local_submap, n_pix_submap, n_value_pix, raw_scale[:n_det], raw_pixindx[:n_det], raw_weightindx[:n_det], raw_flagindx[:n_det], raw_dataindx[:n_det], raw_glob2loc[:n_global_submap]) present(raw_pixels[:len_pixels], raw_weights[:len_weights], raw_flags[:len_flags], raw_data[:len_data], raw_zmap[:len_zmap])
+            // {
+            //     if (fake_openacc()) {
+            //         // Set all "present" data to point at the fake device pointers
+            //         auto & fake = FakeMemPool::get();
+            //         raw_pixels = (int64_t *)fake.device_ptr(raw_pixels);
+            //         raw_weights = (double *)fake.device_ptr(raw_weights);
+            //         raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
+            //         raw_data = (double *)fake.device_ptr(raw_data);
+            //         raw_zmap = (double *)fake.device_ptr(raw_zmap);
+            //     }
+            //     #pragma acc parallel
+            //     #pragma acc loop independent
+            //     for (size_t idet = 0; idet < n_det; idet++) {
+            //         int32_t p_indx = raw_pixindx[idet];
+            //         int32_t w_indx = raw_weightindx[idet];
+            //         int32_t d_indx = raw_dataindx[idet];
+            //         int32_t f_indx = raw_flagindx[idet];
+            //         double npix_submap_inv = 1.0 / (double)(n_pix_submap);
 
-                        // off_wt = n_weight * off_w;
-                        // std::cout << "         pix " << raw_pixels[off_p] << std::endl;
+            //         //#pragma acc loop independent
+            //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //             size_t off_p = p_indx * n_samp + isamp;
+            //             size_t off_w = w_indx * n_samp + isamp;
+            //             size_t off_d = d_indx * n_samp + isamp;
+            //             size_t off_f = f_indx * n_samp + isamp;
+            //             int64_t isubpix;
+            //             int64_t zoff;
+            //             int64_t off_wt;
+            //             double scaled_data;
+            //             int64_t local_submap;
+            //             int64_t global_submap;
 
-                        // std::cout << "         weight (" << raw_weights[off_wt + 0] << " " << raw_weights[off_wt + 1] << " " << raw_weights[off_wt + 2] << ")" << std::endl;
+            //             // std::cout << "DBG samp " << isamp << ": indx " << p_indx << ", " << w_indx << ", " << d_indx << ", " << f_indx << ":  off " << off_p << ", " << off_w << ", " << off_d << ", " << off_f << std::endl;
 
-                        // std::cout << "         data " << raw_data[off_d] << std::endl;
+            //             // off_wt = n_weight * off_w;
+            //             // std::cout << "         pix " << raw_pixels[off_p] << std::endl;
 
-                        // std::cout << "         flags " << (int)raw_flags[off_f] << std::endl;
+            //             // std::cout << "         weight (" << raw_weights[off_wt + 0] << " " << raw_weights[off_wt + 1] << " " << raw_weights[off_wt + 2] << ")" << std::endl;
 
-                        if (
-                            (raw_pixels[off_p] >= 0) &&
-                            ((raw_flags[off_f] & det_flag_mask) == 0)
-                            ) {
-                            // Good data, accumulate
-                            global_submap = (int64_t)(raw_pixels[off_p] * npix_submap_inv);
+            //             // std::cout << "         data " << raw_data[off_d] << std::endl;
 
-                            // std::cout << "         global submap " << global_submap << std::endl;
+            //             // std::cout << "         flags " << (int)raw_flags[off_f] << std::endl;
 
-                            local_submap = raw_glob2loc[global_submap];
-                            // std::cout << "         local submap " << local_submap << std::endl;
+            //             if (
+            //                 (raw_pixels[off_p] >= 0) &&
+            //                 ((raw_flags[off_f] & det_flag_mask) == 0)
+            //                 ) {
+            //                 // Good data, accumulate
+            //                 global_submap = (int64_t)(raw_pixels[off_p] * npix_submap_inv);
 
-                            isubpix = raw_pixels[off_p] - global_submap * n_pix_submap;
-                            zoff = n_value_pix * (local_submap * n_pix_submap + isubpix);
-                            // std::cout << "         isubpix " << isubpix << std::endl;
-                            // std::cout << "         zoff " << zoff << std::endl;
+            //                 // std::cout << "         global submap " << global_submap << std::endl;
 
-                            off_wt = n_weight * off_w;
+            //                 local_submap = raw_glob2loc[global_submap];
+            //                 // std::cout << "         local submap " << local_submap << std::endl;
 
-                            scaled_data = raw_data[off_d] * raw_scale[idet];
-                            for (int64_t iweight = 0; iweight < n_weight; iweight++) {
-                                raw_zmap[zoff + iweight] += scaled_data *
-                                                            raw_weights[off_wt + iweight];
-                                // std::cout << "         z[" << zoff << "+" << iweight << "] = " << raw_zmap[zoff + iweight] << std::endl;
-                            }
-                        }
-                    }
-                }
-            }
+            //                 isubpix = raw_pixels[off_p] - global_submap * n_pix_submap;
+            //                 zoff = n_value_pix * (local_submap * n_pix_submap + isubpix);
+            //                 // std::cout << "         isubpix " << isubpix << std::endl;
+            //                 // std::cout << "         zoff " << zoff << std::endl;
+
+            //                 off_wt = n_weight * off_w;
+
+            //                 scaled_data = raw_data[off_d] * raw_scale[idet];
+            //                 for (int64_t iweight = 0; iweight < n_weight; iweight++) {
+            //                     raw_zmap[zoff + iweight] += scaled_data *
+            //                                                 raw_weights[off_wt + iweight];
+            //                     // std::cout << "         z[" << zoff << "+" << iweight << "] = " << raw_zmap[zoff + iweight] << std::endl;
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
             return;
         });
 

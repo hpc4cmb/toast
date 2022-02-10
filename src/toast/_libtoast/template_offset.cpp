@@ -35,54 +35,54 @@ void init_template_offset(py::module & m) {
             size_t n_det = info_detdata.shape[0];
             size_t n_all_samp = info_detdata.shape[1];
 
-            if (use_acc) {
-                #pragma \
-                acc data copyin(step_length, amp_offset, n_amp, samp_offset, n_det_samp, det_indx, n_det, n_all_samp) present(raw_amps[amp_offset:n_amp], raw_data[samp_offset:n_det_samp])
-                {
-                    if (fake_openacc()) {
-                        // Set all "present" data to point at the fake device pointers
-                        auto & fake = FakeMemPool::get();
-                        raw_data = (double *)fake.device_ptr(raw_data);
-                        raw_amps = (double *)fake.device_ptr(raw_amps);
-                    }
-                    #pragma acc parallel
-                    {
-                        // All but the last amplitude have the same number of samples.
-                        #pragma acc loop independent
-                        for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                            //std::cout << "DBG add_to_signal " << amp_offset + iamp << ": " << raw_amps[amp_offset + iamp] << std::endl;
-                            int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
-                            int64_t nd;
-                            if (iamp == n_amp - 1) {
-                                nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
-                            } else {
-                                nd = step_length;
-                            }
-                            for (int64_t j = 0; j < nd; ++j) {
-                                //std::cout << "DBG add_to_signal   " << doff + j << ":   " << raw_data[doff + j];
-                                raw_data[doff + j] += raw_amps[amp_offset + iamp];
-                                //std::cout << " -> " << raw_data[doff + j] << std::endl;
-                            }
-                        }
-                    }
-                }
-            } else {
-                for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                    //std::cout << "DBG add_to_signal " << amp_offset + iamp << ": " << raw_amps[amp_offset + iamp] << std::endl;
-                    int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
-                    int64_t nd;
-                    if (iamp == n_amp - 1) {
-                        nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
-                    } else {
-                        nd = step_length;
-                    }
-                    for (int64_t j = 0; j < nd; ++j) {
-                        //std::cout << "DBG add_to_signal   " << doff + j << ":   " << raw_data[doff + j];
-                        raw_data[doff + j] += raw_amps[amp_offset + iamp];
-                        //std::cout << " -> " << raw_data[doff + j] << std::endl;
-                    }
-                }
-            }
+            // if (use_acc) {
+            //     #pragma \
+            //     acc data copyin(step_length, amp_offset, n_amp, samp_offset, n_det_samp, det_indx, n_det, n_all_samp) present(raw_amps[amp_offset:n_amp], raw_data[samp_offset:n_det_samp])
+            //     {
+            //         if (fake_openacc()) {
+            //             // Set all "present" data to point at the fake device pointers
+            //             auto & fake = FakeMemPool::get();
+            //             raw_data = (double *)fake.device_ptr(raw_data);
+            //             raw_amps = (double *)fake.device_ptr(raw_amps);
+            //         }
+            //         #pragma acc parallel
+            //         {
+            //             // All but the last amplitude have the same number of samples.
+            //             #pragma acc loop independent
+            //             for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+            //                 //std::cout << "DBG add_to_signal " << amp_offset + iamp << ": " << raw_amps[amp_offset + iamp] << std::endl;
+            //                 int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
+            //                 int64_t nd;
+            //                 if (iamp == n_amp - 1) {
+            //                     nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
+            //                 } else {
+            //                     nd = step_length;
+            //                 }
+            //                 for (int64_t j = 0; j < nd; ++j) {
+            //                     //std::cout << "DBG add_to_signal   " << doff + j << ":   " << raw_data[doff + j];
+            //                     raw_data[doff + j] += raw_amps[amp_offset + iamp];
+            //                     //std::cout << " -> " << raw_data[doff + j] << std::endl;
+            //                 }
+            //             }
+            //         }
+            //     }
+            // } else {
+            //     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+            //         //std::cout << "DBG add_to_signal " << amp_offset + iamp << ": " << raw_amps[amp_offset + iamp] << std::endl;
+            //         int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
+            //         int64_t nd;
+            //         if (iamp == n_amp - 1) {
+            //             nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
+            //         } else {
+            //             nd = step_length;
+            //         }
+            //         for (int64_t j = 0; j < nd; ++j) {
+            //             //std::cout << "DBG add_to_signal   " << doff + j << ":   " << raw_data[doff + j];
+            //             raw_data[doff + j] += raw_amps[amp_offset + iamp];
+            //             //std::cout << " -> " << raw_data[doff + j] << std::endl;
+            //         }
+            //     }
+            // }
             return;
         });
 
@@ -107,54 +107,54 @@ void init_template_offset(py::module & m) {
             size_t n_det = info_detdata.shape[0];
             size_t n_all_samp = info_detdata.shape[1];
 
-            if (use_acc) {
-                #pragma \
-                acc data copyin(step_length, amp_offset, n_amp, samp_offset, n_det_samp, det_indx, n_det, n_all_samp) present(raw_amps[amp_offset:n_amp], raw_data[samp_offset:n_det_samp])
-                {
-                    if (fake_openacc()) {
-                        // Set all "present" data to point at the fake device pointers
-                        auto & fake = FakeMemPool::get();
-                        raw_data = (double *)fake.device_ptr(raw_data);
-                        raw_amps = (double *)fake.device_ptr(raw_amps);
-                    }
-                    #pragma acc parallel
-                    {
-                        // All but the last amplitude have the same number of samples.
-                        #pragma acc loop independent
-                        for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                            //std::cout << "DBG project_signal " << amp_offset + iamp << ": start = " << raw_amps[amp_offset + iamp] << std::endl;
-                            int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
-                            int64_t nd;
-                            if (iamp == n_amp - 1) {
-                                nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
-                            } else {
-                                nd = step_length;
-                            }
-                            for (int64_t j = 0; j < nd; ++j) {
-                                //std::cout << "DBG project_signal   " << doff + j << ": += " << raw_data[doff + j];
-                                raw_amps[amp_offset + iamp] += raw_data[doff + j];
-                                //std::cout << " -> " << raw_amps[amp_offset + iamp] << std::endl;
-                            }
-                        }
-                    }
-                }
-            } else {
-                for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                    //std::cout << "DBG project_signal " << amp_offset + iamp << ": start = " << raw_amps[amp_offset + iamp] << std::endl;
-                    int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
-                    int64_t nd;
-                    if (iamp == n_amp - 1) {
-                        nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
-                    } else {
-                        nd = step_length;
-                    }
-                    for (int64_t j = 0; j < nd; ++j) {
-                        //std::cout << "DBG project_signal   " << doff + j << ": += " << raw_data[doff + j];
-                        raw_amps[amp_offset + iamp] += raw_data[doff + j];
-                        //std::cout << " -> " << raw_amps[amp_offset + iamp] << std::endl;
-                    }
-                }
-            }
+            // if (use_acc) {
+            //     #pragma \
+            //     acc data copyin(step_length, amp_offset, n_amp, samp_offset, n_det_samp, det_indx, n_det, n_all_samp) present(raw_amps[amp_offset:n_amp], raw_data[samp_offset:n_det_samp])
+            //     {
+            //         if (fake_openacc()) {
+            //             // Set all "present" data to point at the fake device pointers
+            //             auto & fake = FakeMemPool::get();
+            //             raw_data = (double *)fake.device_ptr(raw_data);
+            //             raw_amps = (double *)fake.device_ptr(raw_amps);
+            //         }
+            //         #pragma acc parallel
+            //         {
+            //             // All but the last amplitude have the same number of samples.
+            //             #pragma acc loop independent
+            //             for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+            //                 //std::cout << "DBG project_signal " << amp_offset + iamp << ": start = " << raw_amps[amp_offset + iamp] << std::endl;
+            //                 int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
+            //                 int64_t nd;
+            //                 if (iamp == n_amp - 1) {
+            //                     nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
+            //                 } else {
+            //                     nd = step_length;
+            //                 }
+            //                 for (int64_t j = 0; j < nd; ++j) {
+            //                     //std::cout << "DBG project_signal   " << doff + j << ": += " << raw_data[doff + j];
+            //                     raw_amps[amp_offset + iamp] += raw_data[doff + j];
+            //                     //std::cout << " -> " << raw_amps[amp_offset + iamp] << std::endl;
+            //                 }
+            //             }
+            //         }
+            //     }
+            // } else {
+            //     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+            //         //std::cout << "DBG project_signal " << amp_offset + iamp << ": start = " << raw_amps[amp_offset + iamp] << std::endl;
+            //         int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
+            //         int64_t nd;
+            //         if (iamp == n_amp - 1) {
+            //             nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
+            //         } else {
+            //             nd = step_length;
+            //         }
+            //         for (int64_t j = 0; j < nd; ++j) {
+            //             //std::cout << "DBG project_signal   " << doff + j << ": += " << raw_data[doff + j];
+            //             raw_amps[amp_offset + iamp] += raw_data[doff + j];
+            //             //std::cout << " -> " << raw_amps[amp_offset + iamp] << std::endl;
+            //         }
+            //     }
+            // }
             return;
 
         });
@@ -184,35 +184,35 @@ void init_template_offset(py::module & m) {
             // }
             // std::cout << std::endl;
 
-            if (use_acc) {
-                #pragma \
-                acc data copyin(n_amp, raw_var[0:n_amp]) present(raw_amps_in[0:n_amp], raw_amps_out[0:n_amp])
-                {
-                    if (fake_openacc()) {
-                        // Set all "present" data to point at the fake device pointers
-                        auto & fake = FakeMemPool::get();
-                        raw_amps_in = (double *)fake.device_ptr(raw_amps_in);
-                        raw_amps_out = (double *)fake.device_ptr(raw_amps_out);
-                    }
-                    #pragma acc parallel
-                    {
-                        #pragma acc loop independent
-                        for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                            //std::cout << "DBG apply_precond " << iamp << ": " << raw_amps_in[iamp] << " * " << raw_var[iamp] << " = ";
-                            raw_amps_out[iamp] = raw_amps_in[iamp];
-                            raw_amps_out[iamp] *= raw_var[iamp];
-                            //std::cout << raw_amps_out[iamp] << std::endl;
-                        }
-                    }
-                }
-            } else {
-                for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                    //std::cout << "DBG apply_precond " << iamp << ": " << raw_amps_in[iamp] << " * " << raw_var[iamp] << " = ";
-                    raw_amps_out[iamp] = raw_amps_in[iamp];
-                    raw_amps_out[iamp] *= raw_var[iamp];
-                    //std::cout << raw_amps_out[iamp] << std::endl;
-                }
-            }
+            // if (use_acc) {
+            //     #pragma \
+            //     acc data copyin(n_amp, raw_var[0:n_amp]) present(raw_amps_in[0:n_amp], raw_amps_out[0:n_amp])
+            //     {
+            //         if (fake_openacc()) {
+            //             // Set all "present" data to point at the fake device pointers
+            //             auto & fake = FakeMemPool::get();
+            //             raw_amps_in = (double *)fake.device_ptr(raw_amps_in);
+            //             raw_amps_out = (double *)fake.device_ptr(raw_amps_out);
+            //         }
+            //         #pragma acc parallel
+            //         {
+            //             #pragma acc loop independent
+            //             for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+            //                 //std::cout << "DBG apply_precond " << iamp << ": " << raw_amps_in[iamp] << " * " << raw_var[iamp] << " = ";
+            //                 raw_amps_out[iamp] = raw_amps_in[iamp];
+            //                 raw_amps_out[iamp] *= raw_var[iamp];
+            //                 //std::cout << raw_amps_out[iamp] << std::endl;
+            //             }
+            //         }
+            //     }
+            // } else {
+            //     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+            //         //std::cout << "DBG apply_precond " << iamp << ": " << raw_amps_in[iamp] << " * " << raw_var[iamp] << " = ";
+            //         raw_amps_out[iamp] = raw_amps_in[iamp];
+            //         raw_amps_out[iamp] *= raw_var[iamp];
+            //         //std::cout << raw_amps_out[iamp] << std::endl;
+            //     }
+            // }
             return;
 
         });

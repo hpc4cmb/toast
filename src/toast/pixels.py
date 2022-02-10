@@ -31,13 +31,12 @@ from .utils import (
 from ._libtoast import global_to_local as libtoast_global_to_local
 
 from ._libtoast import (
-    acc_enabled,
-    acc_is_present,
-    acc_copyin,
-    acc_copyout,
-    acc_delete,
-    acc_update_device,
-    acc_update_self,
+    accel_enabled,
+    accel_present,
+    accel_create,
+    accel_delete,
+    accel_update_device,
+    accel_update_host,
 )
 
 
@@ -501,7 +500,7 @@ class PixelData(object):
         if hasattr(self, "data"):
             del self.data
         if hasattr(self, "raw"):
-            self.acc_clear()
+            self.accel_clear()
             self.raw.clear()
             del self.raw
         if hasattr(self, "receive"):
@@ -953,83 +952,61 @@ class PixelData(object):
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
 
-    def acc_is_present(self):
+    def accel_present(self):
         """Check if the pixel data is present on the accelerator.
 
         Returns:
             (bool):  True if the data is present.
 
         """
-        if not acc_enabled:
+        if not accel_enabled:
             return
-        return acc_is_present(self.raw)
+        return accel_present(self.raw)
 
-    def acc_copyin(self):
-        """Copy the data to the accelerator.
-
-        This creates the device memory if it does not already exist.
+    def accel_create(self):
+        """Create the data on the accelerator.
 
         Returns:
             None
 
         """
-        if not acc_enabled:
+        if not accel_enabled:
             return
-        acc_copyin(self.raw)
+        accel_create(self.raw)
 
-    def acc_update_device(self):
+    def accel_update_device(self):
         """Copy the data to the accelerator.
-
-        This creates the device memory if it does not already exist.
 
         Returns:
             None
 
         """
-        if not acc_enabled:
+        if not accel_enabled:
             return
-        if not acc_is_present(self.raw):
+        if not accel_present(self.raw):
             log = Logger.get()
             msg = f"PixelData raw data is not present on device, cannot update"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_update_device(self.raw)
+        accel_update_device(self.raw)
 
-    def acc_update_self(self):
+    def accel_update_host(self):
         """Copy the data from the accelerator to the host.
 
         Returns:
             None
 
         """
-        if not acc_enabled:
+        if not accel_enabled:
             return
-        if not acc_is_present(self.raw):
+        if not accel_present(self.raw):
             log = Logger.get()
-            msg = f"PixelData raw data is not present on device, cannot copy out"
+            msg = f"PixelData raw data is not present on device, cannot update host"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_update_self(self.raw)
+        accel_update_host(self.raw)
 
-    def acc_copyout(self):
-        """Copy the data from the accelerator to the host.
-
-        This deletes the device copy.
-
-        Returns:
-            None
-
-        """
-        if not acc_enabled:
-            return
-        if not acc_is_present(self.raw):
-            log = Logger.get()
-            msg = f"PixelData raw data is not present on device, cannot copy out"
-            log.error(msg)
-            raise RuntimeError(msg)
-        acc_copyout(self.raw)
-
-    def acc_delete(self):
+    def accel_delete(self):
         """Delete the data from the accelerator.
 
         Returns:
@@ -1037,23 +1014,23 @@ class PixelData(object):
 
         """
         log = Logger.get()
-        if not acc_enabled:
+        if not accel_enabled:
             return
-        if not acc_is_present(self.raw):
+        if not accel_present(self.raw):
             msg = f"PixelData raw data is not present on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_delete(self.raw)
+        accel_delete(self.raw)
 
-    def acc_clear(self):
+    def accel_clear(self):
         """Delete accelerator data.
 
         Returns:
             None
 
         """
-        if not acc_enabled:
+        if not accel_enabled:
             return
         log = Logger.get()
-        if acc_is_present(self.raw):
-            acc_delete(self.raw)
+        if accel_present(self.raw):
+            accel_delete(self.raw)

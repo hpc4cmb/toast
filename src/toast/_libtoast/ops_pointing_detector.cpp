@@ -6,9 +6,7 @@
 
 #include <qarray.hpp>
 
-#ifdef HAVE_OPENACC
-# include <openacc.h>
-#endif // ifdef HAVE_OPENACC
+#include <accelerator.hpp>
 
 
 void init_ops_pointing_detector(py::module & m) {
@@ -96,58 +94,58 @@ void init_ops_pointing_detector(py::module & m) {
             size_t len_flags = n_samp;
             size_t len_quats = info_quats.shape[0] * n_samp * 4;
 
-            #pragma \
-            acc data copyin(shared_flag_mask, n_det, n_samp, raw_fp[:len_fp], raw_qindx[:n_det]) present(raw_bore[:len_bore], raw_flags[:len_flags], raw_quats[:len_quats])
-            {
-                if (fake_openacc()) {
-                    // Set all "present" data to point at the fake device pointers
-                    auto & fake = FakeMemPool::get();
-                    raw_bore = (double *)fake.device_ptr(raw_bore);
-                    raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
-                    raw_quats = (double *)fake.device_ptr(raw_quats);
-                    // for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                    //     std::cout << "bore: " << isamp << ": " << raw_bore[4*isamp] << ", " << raw_bore[4*isamp+1] << ", " << raw_bore[4*isamp+2] << ", " << raw_bore[4*isamp+3] << " flag = " << (int)raw_flags[isamp] << " mask = " << (int)shared_flag_mask << std::endl;
-                    // }
-                }
-                #pragma acc parallel
-                #pragma acc loop independent
-                for (size_t idet = 0; idet < n_det; idet++) {
-                    int32_t q_indx = raw_qindx[idet];
-                    #pragma acc loop independent
-                    for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                        double temp_bore[4];
-                        if ((raw_flags[isamp] & shared_flag_mask) == 0) {
-                            temp_bore[0] = raw_bore[4 * isamp];
-                            temp_bore[1] = raw_bore[4 * isamp + 1];
-                            temp_bore[2] = raw_bore[4 * isamp + 2];
-                            temp_bore[3] = raw_bore[4 * isamp + 3];
-                        } else {
-                            temp_bore[0] = 0.0;
-                            temp_bore[1] = 0.0;
-                            temp_bore[2] = 0.0;
-                            temp_bore[3] = 1.0;
-                        }
-                        qa_mult(
-                            temp_bore,
-                            &(raw_fp[4 * idet]),
-                            &(raw_quats[(q_indx * 4 * n_samp) + 4 * isamp])
-                        );
-                        // std::cout << "detpt " << isamp << ": "
-                        // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp] << " "
-                        // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 1] << " "
-                        // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 2] << " "
-                        // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 3] << " "
-                        // << std::endl;
-                    }
-                }
-                // if (fake_openacc()) {
-                //     for (size_t idet = 0; idet < n_det; idet++) {
-                //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                //             std::cout << "quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
-                //         }
-                //     }
-                // }
-            }
+            // #pragma \
+            // acc data copyin(shared_flag_mask, n_det, n_samp, raw_fp[:len_fp], raw_qindx[:n_det]) present(raw_bore[:len_bore], raw_flags[:len_flags], raw_quats[:len_quats])
+            // {
+            //     if (fake_openacc()) {
+            //         // Set all "present" data to point at the fake device pointers
+            //         auto & fake = FakeMemPool::get();
+            //         raw_bore = (double *)fake.device_ptr(raw_bore);
+            //         raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
+            //         raw_quats = (double *)fake.device_ptr(raw_quats);
+            //         // for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //         //     std::cout << "bore: " << isamp << ": " << raw_bore[4*isamp] << ", " << raw_bore[4*isamp+1] << ", " << raw_bore[4*isamp+2] << ", " << raw_bore[4*isamp+3] << " flag = " << (int)raw_flags[isamp] << " mask = " << (int)shared_flag_mask << std::endl;
+            //         // }
+            //     }
+            //     #pragma acc parallel
+            //     #pragma acc loop independent
+            //     for (size_t idet = 0; idet < n_det; idet++) {
+            //         int32_t q_indx = raw_qindx[idet];
+            //         #pragma acc loop independent
+            //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //             double temp_bore[4];
+            //             if ((raw_flags[isamp] & shared_flag_mask) == 0) {
+            //                 temp_bore[0] = raw_bore[4 * isamp];
+            //                 temp_bore[1] = raw_bore[4 * isamp + 1];
+            //                 temp_bore[2] = raw_bore[4 * isamp + 2];
+            //                 temp_bore[3] = raw_bore[4 * isamp + 3];
+            //             } else {
+            //                 temp_bore[0] = 0.0;
+            //                 temp_bore[1] = 0.0;
+            //                 temp_bore[2] = 0.0;
+            //                 temp_bore[3] = 1.0;
+            //             }
+            //             qa_mult(
+            //                 temp_bore,
+            //                 &(raw_fp[4 * idet]),
+            //                 &(raw_quats[(q_indx * 4 * n_samp) + 4 * isamp])
+            //             );
+            //             // std::cout << "detpt " << isamp << ": "
+            //             // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp] << " "
+            //             // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 1] << " "
+            //             // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 2] << " "
+            //             // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 3] << " "
+            //             // << std::endl;
+            //         }
+            //     }
+            //     // if (fake_openacc()) {
+            //     //     for (size_t idet = 0; idet < n_det; idet++) {
+            //     //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //     //             std::cout << "quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
+            //     //         }
+            //     //     }
+            //     // }
+            // }
             return;
         });
 

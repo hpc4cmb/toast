@@ -6,9 +6,7 @@
 
 #include <qarray.hpp>
 
-#ifdef HAVE_OPENACC
-# include <openacc.h>
-#endif // ifdef HAVE_OPENACC
+#include <accelerator.hpp>
 
 
 // 2/PI
@@ -294,120 +292,120 @@ void init_ops_pixels_healpix(py::module & m) {
             hpix hp;
             hpix_init(&hp, nside);
 
-            if (nest) {
-                #pragma \
-                acc data copy(raw_hsub[:n_submap]) copyin(n_det, n_samp, shared_flag_mask, hp, n_pix_submap, raw_pixindx[:n_det], raw_quatindx[:n_det]) present(raw_pixels[:len_pixels], raw_flags[:len_flags], raw_quats[:len_quats])
-                {
-                    if (fake_openacc()) {
-                        // Set all "present" data to point at the fake device pointers
-                        auto & fake = FakeMemPool::get();
-                        raw_pixels = (int64_t *)fake.device_ptr(raw_pixels);
-                        raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
-                        raw_quats = (double *)fake.device_ptr(raw_quats);
-                        // for (size_t idet = 0; idet < n_det; idet++) {
-                        //     for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                        //         std::cout << "NEST input quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
-                        //     }
-                        // }
-                    }
-                    #pragma acc parallel
-                    #pragma acc loop independent
-                    for (size_t idet = 0; idet < n_det; idet++) {
-                        int32_t q_indx = raw_quatindx[idet];
-                        int32_t p_indx = raw_pixindx[idet];
-                        #pragma acc loop independent
-                        for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                            const double zaxis[3] = {0.0, 0.0, 1.0};
-                            double dir[3];
-                            double z;
-                            double rtz;
-                            double phi;
-                            int region;
-                            size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
-                            size_t poff = p_indx * n_samp + isamp;
-                            int64_t sub_map;
+            // if (nest) {
+            //     #pragma \
+            //     acc data copy(raw_hsub[:n_submap]) copyin(n_det, n_samp, shared_flag_mask, hp, n_pix_submap, raw_pixindx[:n_det], raw_quatindx[:n_det]) present(raw_pixels[:len_pixels], raw_flags[:len_flags], raw_quats[:len_quats])
+            //     {
+            //         if (fake_openacc()) {
+            //             // Set all "present" data to point at the fake device pointers
+            //             auto & fake = FakeMemPool::get();
+            //             raw_pixels = (int64_t *)fake.device_ptr(raw_pixels);
+            //             raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
+            //             raw_quats = (double *)fake.device_ptr(raw_quats);
+            //             // for (size_t idet = 0; idet < n_det; idet++) {
+            //             //     for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //             //         std::cout << "NEST input quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
+            //             //     }
+            //             // }
+            //         }
+            //         #pragma acc parallel
+            //         #pragma acc loop independent
+            //         for (size_t idet = 0; idet < n_det; idet++) {
+            //             int32_t q_indx = raw_quatindx[idet];
+            //             int32_t p_indx = raw_pixindx[idet];
+            //             #pragma acc loop independent
+            //             for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //                 const double zaxis[3] = {0.0, 0.0, 1.0};
+            //                 double dir[3];
+            //                 double z;
+            //                 double rtz;
+            //                 double phi;
+            //                 int region;
+            //                 size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
+            //                 size_t poff = p_indx * n_samp + isamp;
+            //                 int64_t sub_map;
 
-                            if ((raw_flags[isamp] & shared_flag_mask) == 0) {
-                                // Good data
-                                qa_rotate(&(raw_quats[qoff]), zaxis, dir);
-                                hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
-                                hpix_zphi2nest(&hp, phi, region, z, rtz,
-                                               &(raw_pixels[poff]));
-                                sub_map = (int64_t)(raw_pixels[poff] / n_pix_submap);
-                                raw_hsub[sub_map] = 1;
-                            } else {
-                                // Bad data
-                                raw_pixels[poff] = -1;
-                            }
-                        }
-                    }
-                    // if (fake_openacc()) {
-                    //     for (size_t idet = 0; idet < n_det; idet++) {
-                    //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                    //             std::cout << "NEST output " << idet << ": " << isamp << ": " << raw_pixels[idet * n_samp + isamp] << std::endl;
-                    //         }
-                    //     }
-                    // }
-                }
-            } else {
-                #pragma \
-                acc data copy(raw_hsub[:n_submap]) copyin(n_det, n_samp, shared_flag_mask, hp, n_pix_submap, raw_pixindx[:n_det], raw_quatindx[:n_det]) present(raw_pixels[:len_pixels], raw_flags[:len_flags], raw_quats[:len_quats])
-                {
-                    if (fake_openacc()) {
-                        // Set all "present" data to point at the fake device pointers
-                        auto & fake = FakeMemPool::get();
-                        raw_pixels = (int64_t *)fake.device_ptr(raw_pixels);
-                        raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
-                        raw_quats = (double *)fake.device_ptr(raw_quats);
-                        // for (size_t idet = 0; idet < n_det; idet++) {
-                        //     for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                        //         std::cout << "RING input quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
-                        //     }
-                        // }
-                    }
-                    #pragma acc parallel
-                    #pragma acc loop independent
-                    for (size_t idet = 0; idet < n_det; idet++) {
-                        int32_t q_indx = raw_quatindx[idet];
-                        int32_t p_indx = raw_pixindx[idet];
-                        #pragma acc loop independent
-                        for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                            const double zaxis[3] = {0.0, 0.0, 1.0};
-                            double dir[3];
-                            double z;
-                            double rtz;
-                            double phi;
-                            int region;
-                            size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
-                            size_t poff = p_indx * n_samp + isamp;
-                            int64_t sub_map;
+            //                 if ((raw_flags[isamp] & shared_flag_mask) == 0) {
+            //                     // Good data
+            //                     qa_rotate(&(raw_quats[qoff]), zaxis, dir);
+            //                     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
+            //                     hpix_zphi2nest(&hp, phi, region, z, rtz,
+            //                                    &(raw_pixels[poff]));
+            //                     sub_map = (int64_t)(raw_pixels[poff] / n_pix_submap);
+            //                     raw_hsub[sub_map] = 1;
+            //                 } else {
+            //                     // Bad data
+            //                     raw_pixels[poff] = -1;
+            //                 }
+            //             }
+            //         }
+            //         // if (fake_openacc()) {
+            //         //     for (size_t idet = 0; idet < n_det; idet++) {
+            //         //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //         //             std::cout << "NEST output " << idet << ": " << isamp << ": " << raw_pixels[idet * n_samp + isamp] << std::endl;
+            //         //         }
+            //         //     }
+            //         // }
+            //     }
+            // } else {
+            //     #pragma \
+            //     acc data copy(raw_hsub[:n_submap]) copyin(n_det, n_samp, shared_flag_mask, hp, n_pix_submap, raw_pixindx[:n_det], raw_quatindx[:n_det]) present(raw_pixels[:len_pixels], raw_flags[:len_flags], raw_quats[:len_quats])
+            //     {
+            //         if (fake_openacc()) {
+            //             // Set all "present" data to point at the fake device pointers
+            //             auto & fake = FakeMemPool::get();
+            //             raw_pixels = (int64_t *)fake.device_ptr(raw_pixels);
+            //             raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
+            //             raw_quats = (double *)fake.device_ptr(raw_quats);
+            //             // for (size_t idet = 0; idet < n_det; idet++) {
+            //             //     for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //             //         std::cout << "RING input quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
+            //             //     }
+            //             // }
+            //         }
+            //         #pragma acc parallel
+            //         #pragma acc loop independent
+            //         for (size_t idet = 0; idet < n_det; idet++) {
+            //             int32_t q_indx = raw_quatindx[idet];
+            //             int32_t p_indx = raw_pixindx[idet];
+            //             #pragma acc loop independent
+            //             for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //                 const double zaxis[3] = {0.0, 0.0, 1.0};
+            //                 double dir[3];
+            //                 double z;
+            //                 double rtz;
+            //                 double phi;
+            //                 int region;
+            //                 size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
+            //                 size_t poff = p_indx * n_samp + isamp;
+            //                 int64_t sub_map;
 
-                            if ((raw_flags[isamp] & shared_flag_mask) == 0) {
-                                // Good data
-                                qa_rotate(&(raw_quats[qoff]), zaxis, dir);
-                                hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
-                                hpix_zphi2ring(&hp, phi, region, z, rtz,
-                                               &(raw_pixels[poff]));
-                                sub_map = (int64_t)(raw_pixels[poff] / n_pix_submap);
-                                raw_hsub[sub_map] = 1;
-                            } else {
-                                // Bad data
-                                raw_pixels[poff] = -1;
-                            }
-                            // std::cout << "hpixels " << isamp << ": "
-                            // << raw_pixels[poff] << " sm = " << sub_map
-                            // << std::endl;
-                        }
-                    }
-                    // if (fake_openacc()) {
-                    //     for (size_t idet = 0; idet < n_det; idet++) {
-                    //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
-                    //             std::cout << "RING output " << idet << ": " << isamp << ": " << raw_pixels[idet * n_samp + isamp] << std::endl;
-                    //         }
-                    //     }
-                    // }
-                }
-            }
+            //                 if ((raw_flags[isamp] & shared_flag_mask) == 0) {
+            //                     // Good data
+            //                     qa_rotate(&(raw_quats[qoff]), zaxis, dir);
+            //                     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
+            //                     hpix_zphi2ring(&hp, phi, region, z, rtz,
+            //                                    &(raw_pixels[poff]));
+            //                     sub_map = (int64_t)(raw_pixels[poff] / n_pix_submap);
+            //                     raw_hsub[sub_map] = 1;
+            //                 } else {
+            //                     // Bad data
+            //                     raw_pixels[poff] = -1;
+            //                 }
+            //                 // std::cout << "hpixels " << isamp << ": "
+            //                 // << raw_pixels[poff] << " sm = " << sub_map
+            //                 // << std::endl;
+            //             }
+            //         }
+            //         // if (fake_openacc()) {
+            //         //     for (size_t idet = 0; idet < n_det; idet++) {
+            //         //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
+            //         //             std::cout << "RING output " << idet << ": " << isamp << ": " << raw_pixels[idet * n_samp + isamp] << std::endl;
+            //         //         }
+            //         //     }
+            //         // }
+            //     }
+            // }
             return;
         });
 }

@@ -18,13 +18,12 @@ from ..utils import (
 )
 
 from .._libtoast import (
-    acc_enabled,
-    acc_is_present,
-    acc_copyin,
-    acc_copyout,
-    acc_delete,
-    acc_update_device,
-    acc_update_self,
+    accel_enabled,
+    accel_present,
+    accel_create,
+    accel_delete,
+    accel_update_device,
+    accel_update_host,
 )
 
 
@@ -262,8 +261,9 @@ class Amplitudes(object):
         )
         ret.local[:] = self.local
         ret.local_flags[:] = self.local_flags
-        if self.acc_is_present():
-            ret.acc_copyin()
+        if self.accel_present():
+            ret.accel_create()
+            ret.accel_update_device()
         return ret
 
     @property
@@ -646,102 +646,83 @@ class Amplitudes(object):
 
         return result
 
-    def acc_is_present(self):
+    def accel_present(self):
         """Check if the amplitudes are present on the accelerator.
 
         Returns:
             (bool):  True if the data is present.
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return False
-        if not acc_is_present(self.local):
+        if not accel_present(self.local):
             return False
-        if not acc_is_present(self.local_flags):
+        if not accel_present(self.local_flags):
             return False
         return True
 
-    def acc_copyin(self):
-        """Copy the amplitude data to the accelerator.
-
-        This creates the device memory if it does not already exist.
+    def accel_create(self):
+        """Create the amplitude data on the accelerator.
 
         Returns:
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
-        acc_copyin(self.local)
-        acc_copyin(self.local_flags)
+        accel_create(self.local)
+        accel_create(self.local_flags)
 
-    def acc_update_device(self):
+    def accel_update_device(self):
         """Copy the amplitude data to the accelerator.
 
         Returns:
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
         log = Logger.get()
-        if not self.acc_is_present():
+        if not self.accel_present():
             msg = "Amplitude data not on device, cannot update"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_update_device(self.local)
-        acc_update_device(self.local_flags)
+        accel_update_device(self.local)
+        accel_update_device(self.local_flags)
 
-    def acc_copyout(self):
-        """Copy the amplitude data from the accelerator to the host.
-
-        Returns:
-            None
-
-        """
-        if not acc_enabled():
-            return
-        log = Logger.get()
-        if not self.acc_is_present():
-            msg = "Amplitude data not on device, cannot copy out"
-            log.error(msg)
-            raise RuntimeError(msg)
-        acc_copyout(self.local)
-        acc_copyout(self.local_flags)
-
-    def acc_update_self(self):
+    def accel_update_host(self):
         """Copy the amplitude data from the accelerator.
 
         Returns:
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
         log = Logger.get()
-        if not self.acc_is_present():
+        if not self.accel_present():
             msg = "Amplitude data not on device, cannot update host"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_update_self(self.local)
-        acc_update_self(self.local_flags)
+        accel_update_host(self.local)
+        accel_update_host(self.local_flags)
 
-    def acc_delete(self):
+    def accel_delete(self):
         """Delete the amplitude data from the accelerator.
 
         Returns:
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
         log = Logger.get()
-        if not self.acc_is_present():
+        if not self.accel_present():
             msg = "Amplitude data not on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
-        acc_delete(self.local)
-        acc_delete(self.local_flags)
+        accel_delete(self.local)
+        accel_delete(self.local_flags)
 
 
 class AmplitudesMap(MutableMapping):
@@ -912,92 +893,76 @@ class AmplitudesMap(MutableMapping):
             result += v.dot(other[k])
         return result
 
-    def acc_is_present(self):
+    def accel_present(self):
         """Check if the amplitude data is present on the accelerator.
 
         Returns:
             (bool):  True if the data is present.
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return False
         log = Logger.get()
         for k, v in self._internal.items():
-            if not v.acc_is_present():
+            if not v.accel_present():
                 log.verbose(f"Amplitude {k} not on device")
                 return False
             else:
                 log.verbose(f"Amplitude {k} present on device")
         return True
 
-    def acc_copyin(self):
+    def accel_create(self):
+        """Create the amplitude data on the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        log = Logger.get()
+        for k, v in self._internal.items():
+            log.verbose(f"Amplitude {k} accel_create")
+            v.accel_create()
+
+    def accel_update_device(self):
         """Copy the amplitude data to the accelerator.
 
-        This creates the device memory if it does not already exist.
-
         Returns:
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
         log = Logger.get()
         for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} acc_copyin")
-            v.acc_copyin()
+            log.verbose(f"Amplitude {k} accel_update_device")
+            v.accel_update_device()
 
-    def acc_update_device(self):
-        """Copy the amplitude data to the accelerator.
-
-        Returns:
-            None
-
-        """
-        if not acc_enabled():
-            return
-        log = Logger.get()
-        for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} acc_update_device")
-            v.acc_update_device()
-
-    def acc_copyout(self):
-        """Copy the amplitude data from the accelerator to the host.
-
-        Returns:
-            None
-
-        """
-        if not acc_enabled():
-            return
-        log = Logger.get()
-        for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} acc_copyout")
-            v.acc_copyout()
-
-    def acc_update_self(self):
+    def accel_update_host(self):
         """Copy the amplitude data from the accelerator.
 
         Returns:
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
         log = Logger.get()
         for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} acc_update_self")
-            v.acc_update_self()
+            log.verbose(f"Amplitude {k} accel_update_host")
+            v.accel_update_host()
 
-    def acc_delete(self, key):
+    def accel_delete(self, key):
         """Delete the amplitude data from the accelerator.
 
         Returns:
             None
 
         """
-        if not acc_enabled():
+        if not accel_enabled():
             return
         log = Logger.get()
         for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} acc_delete")
-            v.acc_delete()
+            log.verbose(f"Amplitude {k} accel_delete")
+            v.accel_delete()

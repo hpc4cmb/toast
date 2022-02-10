@@ -3,6 +3,7 @@
 // a BSD-style license that can be found in the LICENSE file.
 
 #include <module.hpp>
+#include <accelerator.hpp>
 
 #include <cstring>
 #include <cstdlib>
@@ -13,192 +14,238 @@
 #endif // ifdef _OPENMP
 
 
+#ifdef _OPENMP
 
-OmpMemMap & OmpMemMap::get() {
-    static OmpMemMap instance;
+OmpManager & OmpManager::get() {
+    static OmpManager instance;
     return instance;
 }
 
-void * OmpMemMap::create(void * buffer, size_t nbytes) {
-    size_t n = mem_size.count(buffer);
+void OmpManager::assign_device(int node_procs, int node_rank) {
+    std::ostringstream o;
+    auto log = toast::Logger::get();
+    if ((node_procs < 1) || (node_rank < 0)) {
+        o << "OmpManager:  must have at least one process per node with a rank >= 0";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    if (node_rank >= node_procs) {
+        o.str("");
+        o << "OmpManager:  node rank must be < number of node procs";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    // Clear any existing memory buffers
+    clear();
+
+    node_procs_ = node_procs;
+    node_rank_ = node_rank;
+
+    // Number of targets
+    int n_target = omp_get_num_devices();
+
+    // If we have no accelerator (target) devices, assign all processes to
+    // the host device.
+    if (n_target == 0) {
+        target_dev_ = host_dev_;
+        o.str("");
+        o << "OmpManager:  rank " << node_rank << " with " << node_procs
+        << " processes per node, no target devices available, assigning to host device";
+        log.verbose(o.str().c_str());
+    } else {
+        int proc_per_dev = (int)(node_procs / n_target);
+        if (n_target * proc_per_dev < node_procs) {
+            proc_per_dev += 1;
+        }
+        target_dev_ = (int)(node_rank / proc_per_dev);
+        o.str("");
+        o << "OmpManager:  rank " << node_rank << " with " << node_procs
+        << " processes per node, using device " << target_dev_ << "("
+        << n_target << " total)";
+        log.verbose(o.str().c_str());
+    }
+    return;
+}
+
+int OmpManager::get_device() {
+    std::ostringstream o;
+    auto log = toast::Logger::get();
+    if (target_dev_ < 0) {
+        o << "OmpManager:  device not yet assigned, call assign_device() first";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    return target_dev_;
+}
+
+bool OmpManager::device_is_host() {
+    if (target_dev_ == host_dev_) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void * OmpManager::create(void * buffer, size_t nbytes) {
+    size_t n = mem_size_.count(buffer);
     std::ostringstream o;
     auto log = toast::Logger::get();
     if (n != 0) {
-        o << "OmpMemMap:  on create, host ptr " << buffer
+        o << "OmpManager:  on create, host ptr " << buffer
         << " with " << nbytes << " bytes is already present "
-        << "with " << mem_size.at(buffer) << " bytes";
+        << "with " << mem_size_.at(buffer) << " bytes on device "
+        << target_dev_;
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
     // Add to the map
     o.str("");
-    o << "OmpMemMap:  creating entry for host ptr "
-    << buffer << " with " << nbytes << " bytes";
+    o << "OmpManager:  creating entry for host ptr "
+    << buffer << " with " << nbytes << " bytes on device "
+    << target_dev_;
     log.verbose(o.str().c_str());
-    mem_size[buffer] = nbytes;
-    mem[buffer] = malloc(nbytes);
-    if (mem.at(buffer) == NULL) {
+    mem_size_[buffer] = nbytes;
+    mem_[buffer] = omp_target_alloc(nbytes, target_dev_);
+    if (mem_.at(buffer) == NULL) {
         o.str("");
-        o << "OmpMemMap:  on create, host ptr " << buffer
-        << " with " << nbytes << " bytes, device allocation failed";
+        o << "OmpManager:  on create, host ptr " << buffer
+        << " with " << nbytes << " bytes on device "
+        << target_dev_ << ", allocation failed";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
-    return mem.at(buffer);
+    int failed = omp_target_associate_ptr(buffer, mem_.at(buffer), mem_size_.at(buffer), 0, target_dev_);
+    if (failed != 0) {
+        o.str("");
+        o << "OmpManager:  on create, host ptr " << buffer
+        << " with " << nbytes << " bytes on device "
+        << target_dev_ << ", failed to associate device ptr";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    return mem_.at(buffer);
 }
 
-void OmpMemMap::remove(void * buffer, size_t nbytes) {
-    size_t n = mem_size.count(buffer);
+void OmpManager::remove(void * buffer, size_t nbytes) {
+    size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
     if (n == 0) {
         o.str("");
-        o << "OmpMemMap:  host ptr " << buffer
+        o << "OmpManager:  host ptr " << buffer
         << " is not present- cannot delete";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     } else {
-        size_t nb = mem_size.at(buffer);
+        size_t nb = mem_size_.at(buffer);
         if (nb != nbytes) {
             o.str("");
-            o << "OmpMemMap:  on delete, host ptr " << buffer << " has "
+            o << "OmpManager:  on delete, host ptr " << buffer << " has "
             << nb << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
     }
     o.str("");
-    o << "OmpMemMap:  removing entry for host ptr "
-    << buffer << " with " << nbytes << " bytes";
+    o << "OmpManager:  removing entry for host ptr "
+    << buffer << " with " << nbytes << " bytes on device "
+    << target_dev_;
     log.verbose(o.str().c_str());
-    mem_size.erase(buffer);
-    free(mem.at(buffer));
-    mem.erase(buffer);
-}
-
-void * OmpMemMap::copyin(void * buffer, size_t nbytes) {
-    size_t n = mem_size.count(buffer);
-    std::ostringstream o;
-    auto log = toast::Logger::get();
-    void * ptr;
-    if (n == 0) {
-        ptr = create(buffer, nbytes);
-    } else {
-        size_t nb = mem_size.at(buffer);
-        if (nb < nbytes) {
-            o.str("");
-            o << "OmpMemMap:  on copyin, host ptr " << buffer << " has "
-            << nb << " bytes instead of " << nbytes;
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
-    }
-    ptr = mem.at(buffer);
-    o.str("");
-    o << "OmpMemMap:  copy in host ptr "
-    << buffer << " with " << nbytes << " bytes to device "
-    << ptr;
-    log.verbose(o.str().c_str());
-    void * temp = memcpy(ptr, buffer, nbytes);
-    return mem.at(buffer);
-}
-
-void OmpMemMap::copyout(void * buffer, size_t nbytes) {
-    size_t n = mem_size.count(buffer);
-    auto log = toast::Logger::get();
-    std::ostringstream o;
-    size_t nb;
-    if (n == 0) {
+    // First disassociate pointer
+    int failed = omp_target_disassociate_ptr(buffer, target_dev_);
+    if (failed != 0) {
         o.str("");
-        o << "OmpMemMap:  host ptr " << buffer
-        << " is not present- cannot copy out";
+        o << "OmpManager:  on removal of host ptr " << buffer
+        << " with " << nbytes << " bytes on device "
+        << target_dev_ << ", failed to disassociate device ptr";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
-    } else {
-        nb = mem_size.at(buffer);
-        if (nb < nbytes) {
-            o.str("");
-            o << "OmpMemMap:  on copyout, host ptr " << buffer << " has "
-            << nb << " bytes instead of " << nbytes;
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
     }
-    void * ptr = mem.at(buffer);
-    o.str("");
-    o << "OmpMemMap:  copy out host ptr "
-    << buffer << " with " << nbytes << " bytes from device "
-    << ptr;
-    void * temp = memcpy(buffer, ptr, nbytes);
-    // Even if we copyout a portion of the buffer, remove the full thing.
-    remove(buffer, nb);
+    mem_size_.erase(buffer);
+    omp_target_free(mem_.at(buffer), target_dev_);
+    mem_.erase(buffer);
 }
 
-void OmpMemMap::update_device(void * buffer, size_t nbytes) {
-    size_t n = mem_size.count(buffer);
+void OmpManager::update_device(void * buffer, size_t nbytes) {
+    size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
     if (n == 0) {
         o.str("");
-        o << "OmpMemMap:  host ptr " << buffer
+        o << "OmpManager:  host ptr " << buffer
         << " is not present- cannot update device";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     } else {
-        size_t nb = mem_size.at(buffer);
+        size_t nb = mem_size_.at(buffer);
         if (nb < nbytes) {
             o.str("");
-            o << "OmpMemMap:  on update device, host ptr " << buffer << " has "
+            o << "OmpManager:  on update device, host ptr " << buffer << " has "
             << nb << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
     }
-    void * dev = mem.at(buffer);
+    void * dev_buffer = mem_.at(buffer);
     o.str("");
-    o << "OmpMemMap:  update device from host ptr "
-    << buffer << " with " << nbytes << " to " << dev;
-    void * temp = memcpy(dev, buffer, nbytes);
+    o << "OmpManager:  update device ptr " << dev_buffer << " from host ptr "
+    << buffer << " with " << nbytes;
+    int failed = omp_target_memcpy(dev_buffer, buffer, nbytes, 0, 0, target_dev_, host_dev_);
+    if (failed != 0) {
+        o.str("");
+        o << "OmpManager:  copy of host ptr " << buffer
+        << " with " << nbytes << " bytes to device "
+        << target_dev_ << ", failed target memcpy";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
 }
 
-void OmpMemMap::update_self(void * buffer, size_t nbytes) {
-    size_t n = mem_size.count(buffer);
+void OmpManager::update_host(void * buffer, size_t nbytes) {
+    size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
     if (n == 0) {
         o.str("");
-        o << "OmpMemMap:  host ptr " << buffer
+        o << "OmpManager:  host ptr " << buffer
         << " is not present- cannot update host";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     } else {
-        size_t nb = mem_size.at(buffer);
+        size_t nb = mem_size_.at(buffer);
         if (nb < nbytes) {
             o.str("");
-            o << "OmpMemMap:  on update self, host ptr " << buffer << " has "
+            o << "OmpManager:  on update host, host ptr " << buffer << " has "
             << nb << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
     }
-    void * dev = mem.at(buffer);
+    void * dev_buffer = mem_.at(buffer);
     o.str("");
-    o << "OmpMemMap:  update host ptr "
-    << buffer << " with " << nbytes << " from " << dev;
-    void * temp = memcpy(buffer, dev, nbytes);
+    o << "OmpManager:  update host ptr " << buffer << " from device ptr "
+    << dev_buffer << " with " << nbytes;
+    int failed = omp_target_memcpy(buffer, dev_buffer, nbytes, 0, 0, host_dev_, target_dev_);
+    if (failed != 0) {
+        o.str("");
+        o << "OmpManager:  copy of dev ptr " << dev_buffer
+        << " with " << nbytes << " bytes from device "
+        << target_dev_ << ", failed target memcpy";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
 }
 
-// Use int instead of bool to match the acc_is_present API
-int OmpMemMap::present(void * buffer, size_t nbytes) {
-    size_t n = mem_size.count(buffer);
+int OmpManager::present(void * buffer, size_t nbytes) {
+    size_t n = mem_.count(buffer);
     if (n == 0) {
         return 0;
     } else {
-        size_t nb = mem_size.at(buffer);
+        size_t nb = mem_size_.at(buffer);
         if (nb != nbytes) {
             auto log = toast::Logger::get();
             std::ostringstream o;
-            o << "OmpMemMap:  host ptr " << buffer << " is present"
+            o << "OmpManager:  host ptr " << buffer << " is present"
             << ", but has " << nb << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
@@ -207,39 +254,50 @@ int OmpMemMap::present(void * buffer, size_t nbytes) {
     }
 }
 
-void * OmpMemMap::device_ptr(void * buffer) {
+void * OmpManager::device_ptr(void * buffer) {
     auto log = toast::Logger::get();
     std::ostringstream o;
-    size_t n = mem.count(buffer);
+    size_t n = mem_.count(buffer);
     if (n == 0) {
         o.str("");
-        o << "OmpMemMap:  host ptr " << buffer
+        o << "OmpManager:  host ptr " << buffer
         << " is not present- cannot get device pointer";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
-    return mem.at(buffer);
+    return mem_.at(buffer);
 }
 
-void OmpMemMap::dump() {
-    for(auto & p : mem_size) {
-        void * dev = mem.at(p.first);
-        std::cout << "OmpMemMap table:  " << p.first << ": "
-        << p.second << " bytes on dev at " << dev << std::endl;
+void OmpManager::dump() {
+    for(auto & p : mem_size_) {
+        void * dev = mem_.at(p.first);
+        std::cout << "OmpManager table:  " << p.first << ": "
+        << p.second << " bytes on device " << target_dev_
+        << " at " << dev << std::endl;
     }
     return;
 }
 
-OmpMemMap::OmpMemMap() : mem_size(), mem() {
+OmpManager::OmpManager() : mem_size_(), mem_() {
+    host_dev_ = omp_get_initial_device();
+    target_dev_ = -1;
+    node_procs_ = -1;
+    node_rank_ = -1;
 }
 
-OmpMemMap::~OmpMemMap() {
-    for(auto & p : mem) {
-        free(p.second);
-    }
-    mem_size.clear();
-    mem.clear();
+OmpManager::~OmpManager() {
+    clear();
 }
+
+void OmpManager::clear() {
+    for(auto & p : mem_) {
+        omp_target_free(p.second, target_dev_);
+    }
+    mem_size_.clear();
+    mem_.clear();
+}
+
+#endif
 
 
 void extract_buffer_info(py::buffer_info const & info, void ** host_ptr,
@@ -279,24 +337,49 @@ void init_accelerator(py::module & m) {
         )");
 
     m.def(
-        "accel_get_num_devices", []()
+        "accel_assign_device", [](int node_procs, int node_rank)
         {
             auto & log = toast::Logger::get();
+
             std::ostringstream o;
-            int naccel = 0;
-            #ifdef HAVE_OPENMP_TARGET
-            naccel = omp_get_num_devices();
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
             #endif
-            o << "OpenMP has " << naccel << " accelerator devices";
-            log.verbose(o.str().c_str());
-            return naccel;
+
+            auto & omgr = OmpManager::get();
+            omgr.assign_device(node_procs, node_rank);
+
+            return;
         },
         R"(
-            Return the total number of OpenMP target devices.
+            Assign processes to OpenMP target devices.
         )");
 
     m.def(
-        "accel_is_present", [](py::buffer data, int device)
+        "accel_get_device", []()
+        {
+            auto & log = toast::Logger::get();
+
+            std::ostringstream o;
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+            #endif
+
+            auto & omgr = OmpManager::get();
+            return omgr.get_device();
+        },
+        R"(
+            Return the OpenMP target device assigned to this process.
+        )");
+
+    m.def(
+        "accel_present", [](py::buffer data)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -305,13 +388,18 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-            int result = 0;
-
-            #ifdef HAVE_OPENMP_TARGET
-            result = omp_target_is_present(p_host, device);
+            std::ostringstream o;
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
             #endif
 
-            std::ostringstream o;
+            auto & omgr = OmpManager::get();
+            int result = omgr.present(p_host, n_bytes);
+
+            o.str("");
             o << "host pointer " << p_host << " is_present = " << result;
             log.verbose(o.str().c_str());
 
@@ -321,13 +409,12 @@ void init_accelerator(py::module & m) {
                 return true;
             }
         },
-        py::arg("data"), py::arg("device"),
+        py::arg("data"),
         R"(
         Check if the specified array is present on the accelerator device.
 
         Args:
             data (array):  The data array
-            device (int):  The accelerator device index
 
         Returns:
             (bool):  True if the data is present, else False.
@@ -335,7 +422,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "acc_copyin", [](py::buffer data)
+        "accel_create", [](py::buffer data)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -343,91 +430,34 @@ void init_accelerator(py::module & m) {
             size_t n_elem;
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
-
-            #ifdef HAVE_OPENACC
-
-            # ifdef USE_OPENACC_MEMPOOL
-            auto & pool = GPU_memory_pool::get();
-            auto p_device = pool.toDevice(static_cast <char *> (p_host), n_bytes);
-            # else // ifdef USE_OPENACC_MEMPOOL
-            auto p_device = acc_copyin(p_host,
-                                       n_bytes);
-            acc_update_device(p_host, n_bytes);
-            # endif// ifdef USE_OPENACC_MEMPOOL
-
-            #else
-            auto & fake = OmpMemMap::get();
-            auto p_device = fake.copyin(p_host, n_bytes);
-            #endif
 
             std::ostringstream o;
-            o << "copyin host pointer " << p_host << " (" << n_bytes << " bytes) on device at " << p_device;
-            log.verbose(o.str().c_str());
-
-            return;
-        },
-        py::arg(
-            "data"),
-        R"(
-        Copy the input data to the device, creating it if necessary.
-
-        Args:
-            data (array):  The host data.
-
-        Returns:
-            None
-
-    )");
-
-    m.def(
-        "acc_copyout", [](py::buffer data)
-        {
-            auto & log = toast::Logger::get();
-            py::buffer_info info = data.request();
-            void * p_host;
-            size_t n_elem;
-            size_t n_bytes;
-            extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
-
-            #ifdef HAVE_OPENACC
-            int present = acc_is_present(p_host, n_bytes);
-            #else
-            auto & fake = OmpMemMap::get();
-            int present = fake.present(p_host, n_bytes);
-            if (present == 0) {
-                fake.dump();
-            }
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
             #endif
 
-            if (present == 0) {
-                std::ostringstream o;
-                o << "Data is not present on device, cannot copy out.";
+            auto & omgr = OmpManager::get();
+            int present = omgr.present(p_host, n_bytes);
+            if (present == 1) {
+                o.str("");
+                o << "Data is already present on device, cannot create.";
                 log.error(o.str().c_str());
-                throw std::runtime_error(
-                          o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
             }
 
-            std::ostringstream o;
-            o << "copyout host pointer " << p_host << " (" << n_bytes << " bytes) from device";
+            o.str("");
+            o << "create device data with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-            #ifdef HAVE_OPENACC
-            # ifdef USE_OPENACC_MEMPOOL
-            auto & pool = GPU_memory_pool::get();
-            pool.fromDevice(p_host);
-            # else // ifdef USE_OPENACC_MEMPOOL
-            acc_copyout(p_host, n_bytes);
-            # endif// ifdef USE_OPENACC_MEMPOOL
-            #else
-            fake.copyout(p_host, n_bytes);
-            #endif
-
+            void * dev_mem = omgr.create(p_host, n_bytes);
             return;
         },
-        py::arg(
-            "data"),
+        py::arg("data"),
         R"(
-        Copy device data into the host array.
+        Create device copy of the data.
 
         Args:
             data (array):  The host data.
@@ -438,7 +468,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "acc_update_device", [](py::buffer data)
+        "accel_update_device", [](py::buffer data)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -447,42 +477,31 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-            #ifdef HAVE_OPENACC
-            int present = acc_is_present(p_host, n_bytes);
-            #else
-            auto & fake = OmpMemMap::get();
-            int present = fake.present(p_host, n_bytes);
-            if (present == 0) {
-                fake.dump();
-            }
+            std::ostringstream o;
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
             #endif
 
+            auto & omgr = OmpManager::get();
+            int present = omgr.present(p_host, n_bytes);
             if (present == 0) {
-                std::ostringstream o;
+                o.str("");
                 o << "Data is not present on device, cannot update.";
                 log.error(o.str().c_str());
-                throw std::runtime_error(
-                          o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
             }
 
-            std::ostringstream o;
+            o.str("");
             o << "update device with host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-            #ifdef HAVE_OPENACC
-            # ifdef USE_OPENACC_MEMPOOL
-            auto & pool = GPU_memory_pool::get();
-            pool.update_gpu_memory(p_host);
-            # else // ifdef USE_OPENACC_MEMPOOL
-            acc_update_device(p_host, n_bytes);
-            # endif// ifdef USE_OPENACC_MEMPOOL
-            #else
-            fake.update_device(p_host, n_bytes);
-            #endif
+            omgr.update_device(p_host, n_bytes);
             return;
         },
-        py::arg(
-            "data"),
+        py::arg("data"),
         R"(
         Update device copy of the data from the host.
 
@@ -495,7 +514,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "acc_update_self", [](py::buffer data)
+        "accel_update_host", [](py::buffer data)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -504,42 +523,32 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-            #ifdef HAVE_OPENACC
-            int present = acc_is_present(p_host, n_bytes);
-            #else
-            auto & fake = OmpMemMap::get();
-            int present = fake.present(p_host, n_bytes);
-            if (present == 0) {
-                fake.dump();
-            }
+            std::ostringstream o;
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
             #endif
 
+            auto & omgr = OmpManager::get();
+            int present = omgr.present(p_host, n_bytes);
             if (present == 0) {
-                std::ostringstream o;
+                o.str("");
                 o << "Data is not present on device, cannot update host.";
                 log.error(o.str().c_str());
-                throw std::runtime_error(
-                          o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
             }
 
-            std::ostringstream o;
-            o << "update host/self with host pointer " << p_host << " (" << n_bytes << " bytes)";
+            o.str("");
+            o << "update host pointer " << p_host << " ("
+            << n_bytes << " bytes) from device";
             log.verbose(o.str().c_str());
 
-            #ifdef HAVE_OPENACC
-            # ifdef USE_OPENACC_MEMPOOL
-            auto & pool = GPU_memory_pool::get();
-            pool.update_cpu_memory(p_host);
-            # else // ifdef USE_OPENACC_MEMPOOL
-            acc_update_self(p_host, n_bytes);
-            # endif// ifdef USE_OPENACC_MEMPOOL
-            #else
-            fake.update_self(p_host, n_bytes);
-            #endif
+            omgr.update_host(p_host, n_bytes);
             return;
         },
-        py::arg(
-            "data"),
+        py::arg("data"),
         R"(
         Update host copy of the data from the device.
 
@@ -552,7 +561,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "acc_delete", [](py::buffer data)
+        "accel_delete", [](py::buffer data)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -561,44 +570,31 @@ void init_accelerator(py::module & m) {
             size_t n_bytes;
             extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
 
-            #ifdef HAVE_OPENACC
-            int present = acc_is_present(p_host, n_bytes);
-            #else
-            auto & fake = OmpMemMap::get();
-            int present = fake.present(p_host, n_bytes);
-            if (present == 0) {
-                fake.dump();
-            }
+            std::ostringstream o;
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
             #endif
 
+            auto & omgr = OmpManager::get();
+            int present = omgr.present(p_host, n_bytes);
             if (present == 0) {
-                std::ostringstream o;
+                o.str("");
                 o << "Data is not present on device, cannot delete.";
                 log.error(o.str().c_str());
-                throw std::runtime_error(
-                          o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
             }
 
-            std::ostringstream o;
-            o << "delete device mem for host pointer " << p_host << " (" << n_bytes << " bytes)";
+            o.str("");
+            o << "Delete device memory for host pointer " << p_host << " (" << n_bytes << " bytes)";
             log.verbose(o.str().c_str());
 
-            #ifdef HAVE_OPENACC
-
-            # ifdef USE_OPENACC_MEMPOOL
-            auto & pool = GPU_memory_pool::get();
-            pool.free_associated_memory(p_host);
-            # else // ifdef USE_OPENACC_MEMPOOL
-            acc_delete(p_host, n_bytes);
-            # endif// ifdef USE_OPENACC_MEMPOOL
-
-            #else
-            fake.remove(p_host, n_bytes);
-            #endif
+            omgr.remove(p_host, n_bytes);
             return;
         },
-        py::arg(
-            "data"),
+        py::arg("data"),
         R"(
         Delete the device copy of the data.
 
@@ -610,7 +606,9 @@ void init_accelerator(py::module & m) {
 
     )");
 
-    // Small test code used by the unit tests.
+    // FIXME: Small accelerator test code used by the unit tests.  Once the rest of
+    // the compiled unit tests are consolidated within the bindings, we could put these
+    // in there.
 
     m.def(
         "test_acc_op_buffer", [](py::buffer data, size_t n_det)
@@ -634,13 +632,16 @@ void init_accelerator(py::module & m) {
             size_t n_total = (size_t)(info.size / sizeof(double));
             size_t n_samp = (size_t)(n_total / n_det);
 
-            #pragma acc data present(raw)
-            {
-                #pragma acc parallel loop
-                for (size_t i = 0; i < n_det; i++) {
-                    for (size_t j = 0; j < n_samp; j++) {
-                        raw[i * n_samp + j] *= 2.0;
-                    }
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = ! omgr.device_is_host();
+            void * dev_raw = omgr.device_ptr(raw);
+
+            #pragma omp target data device(dev) use_device_ptr(dev_raw) if(offload)
+            #pragma omp target teams distribute parallel for collapse(2)
+            for (size_t i = 0; i < n_det; i++) {
+                for (size_t j = 0; j < n_samp; j++) {
+                    raw[i * n_samp + j] *= 2.0;
                 }
             }
             return;
@@ -660,13 +661,16 @@ void init_accelerator(py::module & m) {
             size_t n_det = fast_data.shape(0);
             size_t n_samp = fast_data.shape(1);
 
-            #pragma acc data present(raw)
-            {
-                #pragma acc parallel loop
-                for (size_t i = 0; i < n_det; i++) {
-                    for (size_t j = 0; j < n_samp; j++) {
-                        raw[i * n_samp + j] *= 2.0;
-                    }
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = ! omgr.device_is_host();
+            void * dev_raw = omgr.device_ptr(raw);
+
+            #pragma omp target data device(dev) use_device_ptr(dev_raw) if(offload)
+            #pragma omp target teams distribute parallel for collapse(2)
+            for (size_t i = 0; i < n_det; i++) {
+                for (size_t j = 0; j < n_samp; j++) {
+                    raw[i * n_samp + j] *= 2.0;
                 }
             }
             return;

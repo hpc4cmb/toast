@@ -8,8 +8,8 @@ import time
 from ._libtoast import (
     Logger,
     Environment,
-    acc_enabled,
-    acc_get_num_devices,
+    accel_enabled,
+    accel_assign_device,
 )
 
 use_mpi = None
@@ -46,44 +46,17 @@ if use_mpi is None:
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-    # FIXME:  The code below assumes that OpenACC only has accelerator devices, not
-    # CPUs.  We should eventually get the device properties for each device and
-    # get just the accelerators (or track all devices by type).
-
-    env = Environment.get()
-
-    # This always returns the number of supported devices, trying first OpenACC,
-    # then CUDA, then returning zero.
-    n_acc_devices = acc_get_num_devices()
-
     # Assign each process to a device
     if use_mpi:
         # We need to compute which process goes to which device
         nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
         node_procs = nodecomm.size
-        if n_acc_devices > 0:
-            # Devices detected
-            procs_per_device = node_procs // n_acc_devices
-            if procs_per_device * n_acc_devices < node_procs:
-                procs_per_device += 1
-            my_device = nodecomm.rank % n_acc_devices
-            msg = f"node rank {nodecomm.rank} found {n_acc_devices} "
-            msg += f"accelerators, {procs_per_device} procs per device, "
-            msg += f"using device {my_device}"
-            log.verbose(msg)
-            env.set_acc(n_acc_devices, procs_per_device, my_device)
-        else:
-            # No devices detected, we point all processes to the 0th device
-            log.verbose(
-                f"node rank {nodecomm.rank} found {n_acc_devices} accelerators",
-            )
-            env.set_acc(n_acc_devices, node_procs, 0)
+        node_rank = nodecomm.rank
+        accel_assign_device(node_procs, node_rank)
         nodecomm.Free()
         del nodecomm
     else:
-        # One process- just use the first device.
-        log.verbose(f"get_num_devices found {n_acc_devices} accelerators")
-        env.set_acc(n_acc_devices, 1, 0)
+        accel_assign_device(1, 1)
 
 # We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
 
