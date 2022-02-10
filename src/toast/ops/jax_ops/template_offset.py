@@ -36,18 +36,17 @@ def template_offset_add_to_signal_numpy(step_length, amplitudes, data):
     """
     # problem size
     n_amp = amplitudes.size
-    n_data = data.size
-    print(f"DEBUG: template_offset_add_to_signal_numpy step_length:{step_length} n_amp:{n_amp} n_data:{n_data}")
+    #print(f"DEBUG: template_offset_add_to_signal_numpy step_length:{step_length} n_amp:{n_amp} n_data:{data.size}")
     
     # All but the last amplitude have the same number of samples.
-    for i in range(n_amp-1): 
-        doff = i * step_length
-        for j in range(step_length): 
-            data[doff + j] += amplitudes[i]
+    data_firsts = data[:(n_amp - 1) * step_length]
+    data_firsts = np.reshape(data_firsts, newshape=(-1,step_length))
+    data_firsts[:] += amplitudes[:(n_amp-1), np.newaxis]
 
     # Now handle the final amplitude.
-    for j in range((n_amp - 1) * step_length, n_data):
-        data[j] += amplitudes[n_amp - 1]
+    # needed as data's size is not a multiple of step_length
+    final_data = data[(n_amp - 1) * step_length:]
+    final_data[:] += amplitudes[n_amp - 1]
 
 def template_offset_project_signal_numpy(step_length, data, amplitudes):
     """
@@ -67,18 +66,17 @@ def template_offset_project_signal_numpy(step_length, data, amplitudes):
     """
     # problem size
     n_amp = amplitudes.size
-    n_data = data.size
-    print(f"DEBUG: template_offset_project_signal_numpy step_length:{step_length} n_amp:{n_amp} n_data:{n_data}")
+    #print(f"DEBUG: template_offset_project_signal_numpy step_length:{step_length} n_amp:{n_amp} n_data:{data.size}")
     
     # All but the last amplitude have the same number of samples.
-    for i in range(n_amp-1): 
-        doff = i * step_length
-        for j in range(step_length): 
-            amplitudes[i] += data[doff + j]
+    data_firsts = data[:(n_amp - 1) * step_length]
+    data_firsts = np.reshape(data_firsts, newshape=(-1,step_length))
+    amplitudes[:(n_amp-1)] += np.sum(data_firsts, axis=1)
 
     # Now handle the final amplitude.
-    for j in range((n_amp - 1) * step_length, n_data):
-        amplitudes[n_amp - 1] += data[j]
+    # needed as data's size is not a multiple of step_length
+    final_data = data[(n_amp - 1) * step_length:]
+    amplitudes[n_amp - 1] += np.sum(final_data)
 
 # -------------------------------------------------------------------------------------------------
 # C++
@@ -132,21 +130,20 @@ void toast::template_offset_project_signal(int64_t step_length, int64_t n_data,
 
 # lets us play with the various implementations
 template_offset_add_to_signal = select_implementation(template_offset_add_to_signal_compiled, 
-                                                      template_offset_add_to_signal_compiled, 
+                                                      template_offset_add_to_signal_numpy, 
                                                       template_offset_add_to_signal_compiled, 
                                                       default_implementationType=ImplementationType.NUMPY)
 template_offset_project_signal = select_implementation(template_offset_project_signal_compiled, 
-                                                       template_offset_project_signal_compiled, 
+                                                       template_offset_project_signal_numpy, 
                                                        template_offset_project_signal_compiled, 
                                                        default_implementationType=ImplementationType.NUMPY)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-template_offset_add_to_signal = get_compile_time(template_offset_add_to_signal)
-template_offset_project_signal = get_compile_time(template_offset_project_signal)
+#template_offset_add_to_signal = get_compile_time(template_offset_add_to_signal)
+#template_offset_project_signal = get_compile_time(template_offset_project_signal)
 
 # To test:
-# TODO find test (mapmaker template?)
-# python -c 'import toast.tests; toast.tests.run("ops_")'
+# python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker")'
 
 # to bench:
 # TODO check bench
