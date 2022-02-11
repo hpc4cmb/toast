@@ -156,6 +156,8 @@ def load_instrument_and_schedule(args, comm):
         log.info_rank(f"Loading focalplane from {fname_pickle}", comm=comm)
         if comm is None or comm.rank == 0:
             focalplane = pickle.load(open(fname_pickle, "rb"))
+        else:
+            focalplane = None
         if comm is not None:
             focalplane = comm.bcast(focalplane, root=0)
     else:
