@@ -160,9 +160,10 @@ class DetectorData(object):
         if self._raw is not None:
             if self.accel_present():
                 msg = "Reallocation of DetectorData which is staged to accelerator- "
-                msg += "Deleting device copy."
+                msg += "Deleting device copy and re-allocating."
                 log.verbose(msg)
                 self.accel_delete()
+                self.accel_create()
             del self._raw
         self._raw = self._storage_class.zeros(self._fullsize)
         self._flatdata = self._raw.array()[: self._flatshape]

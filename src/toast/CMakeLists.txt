@@ -31,6 +31,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/common.cpp
     _libtoast/module.cpp
     _libtoast/sys.cpp
+    _libtoast/intervals.cpp
     _libtoast/math_misc.cpp
     _libtoast/math_sf.cpp
     _libtoast/math_rng.cpp
@@ -68,7 +69,7 @@ if(OpenMP_CXX_FOUND)
     target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")
     set_target_properties(_libtoast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
     set(OMP_LIBS "${OpenMP_CXX_LIBRARIES}")
-    if(OPENMP_TARGET)
+    if(USE_OPENMP_TARGET)
         target_compile_definitions(_libtoast PRIVATE HAVE_OPENMP_TARGET=1)
     endif()
 endif(OpenMP_CXX_FOUND)

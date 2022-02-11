@@ -54,25 +54,31 @@ if(NOT TOAST_STATIC_DEPS AND NOT $ENV{TOAST_STATIC_DEPS} STREQUAL "")
 endif()
 
 # OpenMP
-set(OPENMP_TARGET FALSE)
 find_package(OpenMP)
+
 if(OpenMP_CXX_FOUND)
     message(STATUS
         "Found OpenMP version: " ${OpenMP_CXX_VERSION_MAJOR}
         "." ${OpenMP_CXX_VERSION_MINOR}
         " spec date " ${OpenMP_CXX_SPEC_DATE}
     )
-    if(OpenMP_CXX_VERSION_MAJOR LESS 5)
-        if(OpenMP_CXX_VERSION_MAJOR EQUAL 4)
-            if(OpenMP_CXX_VERSION_MINOR GREATER_EQUAL 5)
-                set(OPENMP_TARGET TRUE)
-            endif()
+    # Allow the user to force enabling of target offload.  Some compilers support all
+    # the features we need in the 5.0 spec, but return a supported version less than
+    # that.
+    if(NOT USE_OPENMP_TARGET)
+        # Check the version reported by the compiler
+        if(OpenMP_CXX_VERSION_MAJOR GREATER_EQUAL 5)
+            set(USE_OPENMP_TARGET TRUE)
+        else()
+            set(USE_OPENMP_TARGET FALSE)
         endif()
-    else()
-        set(OPENMP_TARGET TRUE)
     endif()
-    if(OPENMP_TARGET)
+    if(USE_OPENMP_TARGET)
         message(STATUS "Enabling support for OpenMP target offload")
+    else()
+        message(STATUS
+            "OpenMP target offload disabled.  Force on with -DUSE_OPENMP_TARGET=TRUE"
+        )
     endif()
 endif()
 

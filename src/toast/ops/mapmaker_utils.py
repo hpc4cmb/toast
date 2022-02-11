@@ -544,7 +544,7 @@ class BuildNoiseWeighted(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         if self.pixel_dist is None:
@@ -601,13 +601,14 @@ class BuildNoiseWeighted(Operator):
             data[self.zmap] = PixelData(dist, np.float64, n_value=weight_nnz)
             zmap = data[self.zmap]
 
-        if use_acc:
-            if not zmap.acc_is_present():
+        if use_accel:
+            if not zmap.accel_present():
                 log.verbose_rank(
-                    f"Operator {self.name} zmap not yet on device, calling copyin",
+                    f"Operator {self.name} zmap not yet on device, copying in",
                     comm=data.comm.comm_group,
                 )
-                zmap.acc_copyin()
+                zmap.accel_create()
+                zmap.accel_update_device()
 
         for ob in data.obs:
             # Get the detectors we are using for this observation

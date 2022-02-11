@@ -8,6 +8,9 @@ import numpy as np
 
 from .timing import function_timer
 
+from ._libtoast import Interval as CInterval
+from ._libtoast import IntervalVector
+
 
 class Interval(object):
     """Class storing a single time and sample range.

@@ -611,7 +611,7 @@ void init_accelerator(py::module & m) {
     // in there.
 
     m.def(
-        "test_acc_op_buffer", [](py::buffer data, size_t n_det)
+        "test_accel_op_buffer", [](py::buffer data, size_t n_det)
         {
             pybuffer_check_1D <double> (data);
             py::buffer_info info = data.request();
@@ -625,7 +625,7 @@ void init_accelerator(py::module & m) {
 
             auto log = toast::Logger::get();
             std::ostringstream o;
-            o << "test_acc_op p_host = " << p_host << " (" << n_bytes << " bytes)";
+            o << "test_accel_op p_host = " << p_host << " (" << n_bytes << " bytes)";
             o << " cast to double * = " << raw;
             log.verbose(o.str().c_str());
 
@@ -648,14 +648,14 @@ void init_accelerator(py::module & m) {
         });
 
     m.def(
-        "test_acc_op_array", [](py::array_t <double, py::array::c_style> data)
+        "test_accel_op_array", [](py::array_t <double, py::array::c_style> data)
         {
             auto fast_data = data.mutable_unchecked <2>();
             double * raw = fast_data.mutable_data(0, 0);
 
             auto log = toast::Logger::get();
             std::ostringstream o;
-            o << "test_acc_op_array p_host = " << raw;
+            o << "test_accel_op_array p_host = " << raw;
             log.verbose(o.str().c_str());
 
             size_t n_det = fast_data.shape(0);

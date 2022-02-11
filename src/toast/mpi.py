@@ -46,17 +46,18 @@ if use_mpi is None:
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-    # Assign each process to a device
-    if use_mpi:
-        # We need to compute which process goes to which device
-        nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
-        node_procs = nodecomm.size
-        node_rank = nodecomm.rank
-        accel_assign_device(node_procs, node_rank)
-        nodecomm.Free()
-        del nodecomm
-    else:
-        accel_assign_device(1, 1)
+    # Assign each process to an accelerator device
+    if accel_enabled():
+        if use_mpi:
+            # We need to compute which process goes to which device
+            nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
+            node_procs = nodecomm.size
+            node_rank = nodecomm.rank
+            accel_assign_device(node_procs, node_rank)
+            nodecomm.Free()
+            del nodecomm
+        else:
+            accel_assign_device(1, 0)
 
 # We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
 

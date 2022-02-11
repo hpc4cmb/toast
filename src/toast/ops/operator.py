@@ -66,7 +66,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def finalize(self, data, use_acc=False, **kwargs):
+    def finalize(self, data, use_accel=False, **kwargs):
         """Perform any final operations / communication.
 
         A call to this function indicates that all calls to the 'exec()' method are

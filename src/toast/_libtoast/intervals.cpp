@@ -1,89 +1,97 @@
-
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef LIBTOAST_HPP
-#define LIBTOAST_HPP
+#include <module.hpp>
 
-#include <common.hpp>
-
-PYBIND11_MAKE_OPAQUE(toast::AlignedI8);
-PYBIND11_MAKE_OPAQUE(toast::AlignedU8);
-PYBIND11_MAKE_OPAQUE(toast::AlignedI16);
-PYBIND11_MAKE_OPAQUE(toast::AlignedU16);
-PYBIND11_MAKE_OPAQUE(toast::AlignedI32);
-PYBIND11_MAKE_OPAQUE(toast::AlignedU32);
-PYBIND11_MAKE_OPAQUE(toast::AlignedI64);
-PYBIND11_MAKE_OPAQUE(toast::AlignedU64);
-PYBIND11_MAKE_OPAQUE(toast::AlignedF32);
-PYBIND11_MAKE_OPAQUE(toast::AlignedF64);
+#include <intervals.hpp>
 
 
-template <typename C>
-void register_aligned(py::module & m, char const * name) {
-    py::class_ <C> (m, name, py::buffer_protocol())
+Interval::Interval() {
+    start = 0.0;
+    stop = 0.0;
+    first = -1;
+    last = -1;
+}
+
+Interval::Interval(
+    double start_time,
+    double stop_time,
+    int64_t first_samp,
+    int64_t last_samp
+) {
+    start = start_time;
+    stop = stop_time;
+    first = first_samp;
+    last = last_samp;
+}
+
+void init_intervals(py::module & m) {
+    py::class_ <Interval> (
+        m, "Interval",
+        R"(
+        Simple container representing a single interval.
+
+        Args:
+            start (float):  The start time.
+            stop (float):  The stop time.
+            first (int):  The first sample.
+            last (int):  The last sample.
+
+        )")
+    .def(py::init <> ())
+    .def(py::init <double, double, int64_t, int64_t> (), py::arg("start"), py::arg("stop"), py::arg("first"), py::arg("last"))
+    .def_readwrite("start", &Interval::start)
+    .def_readwrite("stop", &Interval::stop)
+    .def_readwrite("first", &Interval::first)
+    .def_readwrite("last", &Interval::last);
+
+    py::class_ <IntervalList> (m, "IntervalList", py::buffer_protocol())
     .def(py::init <>())
-    .def(py::init <typename C::size_type>())
-    .def_static("zeros", [](typename C::size_type nelem) {
-                    std::unique_ptr <C> ret(new C(nelem));
-                    std::fill(ret->begin(), ret->end(), 0);
-                    return ret;
-                })
-    .def_static("ones", [](typename C::size_type nelem) {
-                    std::unique_ptr <C> ret(new C(nelem));
-                    std::fill(ret->begin(), ret->end(), 1);
-                    return ret;
-                })
-    .def("pop_back", &C::pop_back)
-    .def("push_back", (void (C::*)(
-                           const typename C::value_type &)) & C::push_back)
-    .def("resize", (void (C::*)(typename C::size_type count)) & C::resize)
-    .def("size", &C::size)
-    .def("clear", [](C & self) {
-             C().swap(self);
+    .def(py::init <typename IntervalList::size_type>())
+    .def("pop_back", &IntervalList::pop_back)
+    .def("push_back", (void (IntervalList::*)(
+                           const typename IntervalList::value_type &)) & IntervalList::push_back)
+    .def("resize", (void (IntervalList::*)(typename IntervalList::size_type count)) &IntervalList::resize)
+    .def("size", &IntervalList::size)
+    .def("clear", [](IntervalList & self) {
+             IntervalList().swap(self);
              return;
          })
-    .def("address", [](C & self) {
+    .def("address", [](IntervalList & self) {
              return (int64_t)((void *)self.data());
          })
-    .def("array", [](C & self) -> py::array_t <typename C::value_type> {
-             py::array_t <typename C::value_type> ret({self.size()},
-                                                      {sizeof(typename C::value_type)},
-                                                      self.data(), py::cast(self));
-             return ret;
-         })
     .def_buffer(
-        [](C & self) -> py::buffer_info {
+        [](IntervalList & self) -> py::buffer_info {
             std::string format =
-                py::format_descriptor <typename C::value_type>::format();
+                py::format_descriptor <typename IntervalList::value_type>::format();
             return py::buffer_info(
                 static_cast <void *> (self.data()),
-                sizeof(typename C::value_type),
+                sizeof(typename IntervalList::value_type),
                 format,
                 1,
                 {self.size()},
-                {sizeof(typename C::value_type)}
+                {sizeof(typename IntervalList::value_type)}
                 );
         })
-    .def("__len__", [](const C & self) {
+    .def("__len__", [](const IntervalList & self) {
              return self.size();
          })
-    .def("__iter__", [](C & self) {
+    .def("__iter__", [](IntervalList & self) {
              return py::make_iterator(self.begin(), self.end());
          }, py::keep_alive <0, 1>())
 
     // Set and get individual elements
     .def("__setitem__",
-         [](C & self, typename C::size_type i,
-            const typename C::value_type & t) {
+         [](IntervalList & self, typename IntervalList::size_type i,
+            const typename IntervalList::value_type & t) {
              if (i >= self.size()) {
                  throw py::index_error();
              }
              self[i] = t;
          })
     .def("__getitem__",
-         [](C & self, typename C::size_type i) -> typename C::value_type & {
+         [](IntervalList & self, typename IntervalList::size_type i) -> typename IntervalList::value_type & {
              if (i >= self.size()) {
                  throw py::index_error();
              }
@@ -92,16 +100,16 @@ void register_aligned(py::module & m, char const * name) {
 
     // Set and get a slice
     .def("__setitem__",
-         [](C & self, py::slice slice, py::buffer other) {
+         [](IntervalList & self, py::slice slice, py::buffer other) {
              size_t start, stop, step, slicelength;
              if (!slice.compute(self.size(), &start, &stop, &step,
                                 &slicelength)) {
                  throw py::error_already_set();
              }
-             pybuffer_check_1D <typename C::value_type> (other);
+             pybuffer_check_1D <typename IntervalList::value_type> (other);
              py::buffer_info info = other.request();
-             typename C::value_type * raw =
-                 reinterpret_cast <typename C::value_type *> (info.ptr);
+             typename IntervalList::value_type * raw =
+                 reinterpret_cast <typename IntervalList::value_type *> (info.ptr);
 
              if (slicelength != info.size) {
                  throw std::runtime_error(
@@ -114,7 +122,7 @@ void register_aligned(py::module & m, char const * name) {
              }
          })
     .def("__setitem__",
-         [](C & self, py::slice slice, const typename C::value_type & t) {
+         [](C & self, py::slice slice, const typename IntervalList::value_type & t) {
              size_t start, stop, step, slicelength;
              if (!slice.compute(self.size(), &start, &stop, &step,
                                 &slicelength)) {
@@ -126,13 +134,13 @@ void register_aligned(py::module & m, char const * name) {
              }
          })
     .def("__getitem__",
-         [](C & self, py::slice slice) {
+         [](IntervalList & self, py::slice slice) {
              size_t start, stop, step, slicelength;
              if (!slice.compute(self.size(), &start, &stop, &step,
                                 &slicelength)) {
                  throw py::error_already_set();
              }
-             std::unique_ptr <C> ret(new C(slicelength));
+             std::unique_ptr <IntervalList> ret(new IntervalList(slicelength));
              for (size_t i = 0; i < slicelength; ++i) {
                  (*ret)[i] = self[start];
                  start += step;
@@ -142,11 +150,11 @@ void register_aligned(py::module & m, char const * name) {
 
     // Set and get explicit indices
     .def("__setitem__",
-         [](C & self, py::array_t <int64_t> indices, py::buffer other) {
-             pybuffer_check_1D <typename C::value_type> (other);
+         [](IntervalList & self, py::array_t <int64_t> indices, py::buffer other) {
+             pybuffer_check_1D <typename IntervalList::value_type> (other);
              py::buffer_info info = other.request();
-             typename C::value_type * raw =
-                 reinterpret_cast <typename C::value_type *> (info.ptr);
+             typename IntervalList::value_type * raw =
+                 reinterpret_cast <typename IntervalList::value_type *> (info.ptr);
 
              if (indices.size() != info.size) {
                  throw std::runtime_error(
@@ -160,22 +168,22 @@ void register_aligned(py::module & m, char const * name) {
              }
          })
     .def("__setitem__",
-         [](C & self, py::array_t <int64_t> indices, const typename C::value_type & t) {
+         [](IntervalList & self, py::array_t <int64_t> indices, const typename IntervalList::value_type & t) {
              auto * dat = indices.data();
              for (size_t i = 0; i < indices.size(); ++i) {
                  self[dat[i]] = t;
              }
          })
     .def("__getitem__",
-         [](C & self, py::array_t <int64_t> indices) {
+         [](IntervalList & self, py::array_t <int64_t> indices) {
              auto * dat = indices.data();
-             std::unique_ptr <C> ret(new C(indices.size()));
+             std::unique_ptr <IntervalList> ret(new IntervalList(indices.size()));
              for (size_t i = 0; i < indices.size(); ++i) {
                  (*ret)[i] = self[dat[i]];
              }
              return ret;
          })
-    .def("__lt__", [](const C & self, typename C::value_type val) {
+    .def("__lt__", [](const IntervalList & self, typename IntervalList::value_type val) {
              py::array_t <bool> ret(self.size());
              auto result = ret.mutable_data();
              for (size_t i = 0; i < self.size(); ++i) {
@@ -183,7 +191,7 @@ void register_aligned(py::module & m, char const * name) {
              }
              return ret;
          })
-    .def("__le__", [](const C & self, typename C::value_type val) {
+    .def("__le__", [](const IntervalList & self, typename IntervalList::value_type val) {
              py::array_t <bool> ret(self.size());
              auto result = ret.mutable_data();
              for (size_t i = 0; i < self.size(); ++i) {
@@ -395,32 +403,5 @@ void register_aligned(py::module & m, char const * name) {
              return o.str();
          });
 
-    return;
+
 }
-
-// Initialize all the pieces of the bindings.
-void init_sys(py::module & m);
-void init_intervals(py::module & m);
-void init_math_misc(py::module & m);
-void init_math_sf(py::module & m);
-void init_math_rng(py::module & m);
-void init_math_qarray(py::module & m);
-void init_math_healpix(py::module & m);
-void init_math_fft(py::module & m);
-void init_fod_psd(py::module & m);
-void init_tod_filter(py::module & m);
-void init_tod_pointing(py::module & m);
-void init_tod_simnoise(py::module & m);
-void init_todmap_scanning(py::module & m);
-void init_map_cov(py::module & m);
-void init_pixels(py::module & m);
-void init_todmap_mapmaker(py::module & m);
-void init_atm(py::module & m);
-void init_template_offset(py::module & m);
-void init_accelerator(py::module & m);
-void init_ops_pointing_detector(py::module & m);
-void init_ops_stokes_weights(py::module & m);
-void init_ops_pixels_healpix(py::module & m);
-void init_ops_mapmaker_utils(py::module & m);
-
-#endif // ifndef LIBTOAST_HPP

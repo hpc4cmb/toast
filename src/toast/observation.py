@@ -662,8 +662,8 @@ class Observation(MutableMapping):
 
     # Accelerator use
 
-    def acc_copyin(self, names):
-        """Copy a set of data objects to the device.
+    def accel_create(self, names):
+        """Create a set of data objects on the device.
 
         This takes a dictionary with the same format as those used by the Operator
         provides() and requires() methods.
@@ -676,12 +676,12 @@ class Observation(MutableMapping):
 
         """
         for key in names["detdata"]:
-            self.detdata.acc_copyin(key)
+            self.detdata.accel_create(key)
         for key in names["shared"]:
-            self.shared.acc_copyin(key)
+            self.shared.accel_create(key)
 
-    def acc_copyout(self, names):
-        """Copy a set of data objects to the host.
+    def accel_update_device(self, names):
+        """Copy data objects to the device.
 
         This takes a dictionary with the same format as those used by the Operator
         provides() and requires() methods.
@@ -694,13 +694,28 @@ class Observation(MutableMapping):
 
         """
         for key in names["detdata"]:
-            if self.detdata.acc_is_present(key):
-                self.detdata.acc_copyout(key)
+            self.detdata.accel_update_device(key)
         for key in names["shared"]:
-            if self.shared.acc_is_present(key):
-                self.shared.acc_copyout(key)
-        # FIXME:  implement intervals too.
+            self.shared.accel_update_device(key)
 
-    def acc_clear(self):
-        self.detdata.acc_clear()
-        self.shared.acc_clear()
+    def accel_update_host(self, names):
+        """Copy data objects from the device.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        for key in names["detdata"]:
+            self.detdata.accel_update_host(key)
+        for key in names["shared"]:
+            self.shared.accel_update_host(key)
+
+    def accel_clear(self):
+        self.detdata.accel_clear()
+        self.shared.accel_clear()

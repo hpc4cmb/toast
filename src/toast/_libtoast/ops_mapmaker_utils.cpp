@@ -22,7 +22,8 @@ void init_ops_mapmaker_utils(py::module & m) {
             py::buffer flag_indx,
             py::buffer det_flags,
             py::buffer det_scale,
-            uint8_t det_flag_mask
+            uint8_t det_flag_mask,
+            bool use_accel
         ) {
             // NOTE:  shared flags should already be applied to pointing, and any
             // bad samples will have pixels < 0.
