@@ -130,6 +130,7 @@ class H5File(object):
     The open file handle will be None on processes other than rank 0.
 
     """
+
     def __init__(self, name, mode, comm=None, force_serial=False):
         self.handle = hdf5_open(name, mode, comm=comm, force_serial=force_serial)
 

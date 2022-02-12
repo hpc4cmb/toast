@@ -45,7 +45,7 @@ class InstrumentTest(MPITestCase):
         nse = Noise(
             detnames,
             {x: u.Quantity(freqs, u.Hz) for x in streams},
-            {x: u.Quantity(np.ones(len(freqs)), u.K ** 2 * u.second) for x in streams},
+            {x: u.Quantity(np.ones(len(freqs)), u.K**2 * u.second) for x in streams},
             mixmatrix=mix,
         )
 

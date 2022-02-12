@@ -86,7 +86,7 @@ class Noise(object):
                 raise TypeError("Each PSD array must be a Quantity")
             # Ensure that the PSDs are convertible to expected units
             try:
-                test_convert = psds[key].to_value(u.K ** 2 * u.second)
+                test_convert = psds[key].to_value(u.K**2 * u.second)
             except Exception:
                 raise ValueError("Each PSD must be convertible to K**2 * s")
             self._freqs[key] = np.copy(freqs[key])
@@ -204,7 +204,7 @@ class Noise(object):
                 rate = self.rate(k)
                 first = np.searchsorted(freq, rate * 0.2, side="left")
                 last = np.searchsorted(freq, rate * 0.4, side="right")
-                noisevar = np.median(psd[first:last].to_value(u.K ** 2 * u.second))
+                noisevar = np.median(psd[first:last].to_value(u.K**2 * u.second))
                 invvar = 1.0 / noisevar
                 for det in self.detectors:
                     if k in mix[det] and mix[det][k] != 0:
@@ -404,7 +404,7 @@ class Noise(object):
                     self._rates[key] = rate * u.Hz
                     self._indices[key] = indx
                     self._freqs[key] = u.Quantity(freq, u.Hz)
-                    self._psds[key] = u.Quantity(psdrow, u.K ** 2 * u.second)
+                    self._psds[key] = u.Quantity(psdrow, u.K**2 * u.second)
                 del pds
 
         # Broadcast the results
@@ -461,8 +461,8 @@ class Noise(object):
                 return False
         for k, v in self._psds.items():
             if not np.allclose(
-                v.to_value(u.K ** 2 * u.second),
-                other._psds[k].to_value(u.K ** 2 * u.second),
+                v.to_value(u.K**2 * u.second),
+                other._psds[k].to_value(u.K**2 * u.second),
             ):
                 return False
         return True
