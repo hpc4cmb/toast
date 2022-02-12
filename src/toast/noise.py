@@ -86,7 +86,7 @@ class Noise(object):
                 raise TypeError("Each PSD array must be a Quantity")
             # Ensure that the PSDs are convertible to expected units
             try:
-                test_convert = psds[key].to_value(u.K**2 * u.second)
+                test_convert = psds[key].to_value(u.K ** 2 * u.second)
             except Exception:
                 raise ValueError("Each PSD must be convertible to K**2 * s")
             self._freqs[key] = np.copy(freqs[key])
@@ -197,16 +197,18 @@ class Noise(object):
             # white noise level, accounting for the fact that the PSD may have a
             # transfer function roll-off near Nyquist
             self._detweights = {d: 0.0 for d in self.detectors}
+            mix = self.mixing_matrix
             for k in self.keys:
                 freq = self.freq(k)
                 psd = self.psd(k)
                 rate = self.rate(k)
-                ind = np.logical_and(freq > rate * 0.2, freq < rate * 0.4)
-                noisevar = np.median(psd[ind].to_value(u.K**2 * u.second))
+                first = np.searchsorted(freq, rate * 0.2, side="left")
+                last = np.searchsorted(freq, rate * 0.4, side="right")
+                noisevar = np.median(psd[first:last].to_value(u.K ** 2 * u.second))
+                invvar = 1.0 / noisevar
                 for det in self.detectors:
-                    wt = self.weight(det, k)
-                    if wt != 0.0:
-                        self._detweights[det] += wt * (1.0 / noisevar)
+                    if k in mix[det] and mix[det][k] != 0:
+                        self._detweights[det] += mix[det][k] * invvar
         return self._detweights[det]
 
     def detector_weight(self, det):
@@ -402,7 +404,7 @@ class Noise(object):
                     self._rates[key] = rate * u.Hz
                     self._indices[key] = indx
                     self._freqs[key] = u.Quantity(freq, u.Hz)
-                    self._psds[key] = u.Quantity(psdrow, u.K**2 * u.second)
+                    self._psds[key] = u.Quantity(psdrow, u.K ** 2 * u.second)
                 del pds
 
         # Broadcast the results
@@ -459,8 +461,8 @@ class Noise(object):
                 return False
         for k, v in self._psds.items():
             if not np.allclose(
-                v.to_value(u.K**2 * u.second),
-                other._psds[k].to_value(u.K**2 * u.second),
+                v.to_value(u.K ** 2 * u.second),
+                other._psds[k].to_value(u.K ** 2 * u.second),
             ):
                 return False
         return True
