@@ -94,6 +94,11 @@ def export_detdata(
         (tuple):  The resulting G3 object, and compression parameters if enabled.
 
     """
+    do_compression = False
+    if isinstance(compress, bool) and compress:
+        do_compression = True
+    if isinstance(compress, dict):
+        do_compression = True
     if name not in obs.detdata:
         raise KeyError(f"DetectorData object '{name}' does not exist in observation")
     if g3t == c3g.G3TimestreamMap and times is None:
@@ -132,7 +137,7 @@ def export_detdata(
         else:
             tstart = to_g3_time(obs.view[view_name].shared[times][view_index][0])
             tstop = to_g3_time(obs.view[view_name].shared[times][view_index][-1])
-        if compress is not None:
+        if do_compression:
             compression = dict()
 
     dview = obs.detdata[name]
@@ -144,7 +149,7 @@ def export_detdata(
             out[d] = c3g.G3Timestream(scale * dview[d], gunit)
             out[d].start = tstart
             out[d].stop = tstop
-            if compress is not None:
+            if do_compression:
                 out[d], comp_gain, comp_offset = compress_timestream(out[d], compress)
                 compression[d] = dict()
                 compression[d]["gain"] = comp_gain
@@ -254,7 +259,8 @@ class export_obs_meta(object):
                     ob["site_weather_time"] = to_g3_time(site.weather.time.timestamp())
         m_export = set()
         for m_in, m_out in self._meta_arrays:
-            ob[m_out] = to_g3_array_type(obs[m_in])
+            out_type = to_g3_array_type(obs[m_in].dtype)
+            ob[m_out] = out_type(obs[m_in])
             m_export.add(m_in)
         for m_key, m_val in obs.items():
             if m_key in m_export:
