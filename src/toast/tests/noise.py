@@ -105,7 +105,36 @@ class InstrumentTest(MPITestCase):
         npix = 1
         ring = 1
         # NOTE: increase the number here to test performance of huge focalplanes.
-        while 2 * npix <= 5000:
+        while 2 * npix <= 2000:
+            npix += 6 * ring
+            ring += 1
+        fp = fake_hexagon_focalplane(
+            n_pix=npix,
+            sample_rate=rate,
+            psd_fmin=1.0e-5 * u.Hz,
+            psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+            psd_fknee=(rate / 2000.0),
+        )
+        nse = fp.noise
+        freqs = {x: nse.freq(x) for i, x in enumerate(nse.keys)}
+        psds = {x: nse.psd(x) for i, x in enumerate(nse.keys)}
+        indices = {x: 100 + i for i, x in enumerate(nse.keys)}
+        model = Noise(
+            detectors=fp.detectors,
+            freqs=freqs,
+            psds=psds,
+            indices=indices,
+            mixmatrix=nse.mixing_matrix,
+        )
+        for d in fp.detectors:
+            wt = model.detector_weight(d)
+
+    def test_noise_corr_weights(self):
+        rate = 200.0 * u.Hz
+        npix = 1
+        ring = 1
+        # NOTE: increase the number here to test performance of huge focalplanes.
+        while 2 * npix <= 2000:
             npix += 6 * ring
             ring += 1
         fp = fake_hexagon_focalplane(

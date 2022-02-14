@@ -14,7 +14,7 @@ import h5py
 
 from .utils import hdf5_use_serial
 
-from .timing import function_timer
+from .timing import function_timer, Timer
 
 
 class Noise(object):
@@ -56,23 +56,30 @@ class Noise(object):
         if mixmatrix is None:
             # Default diagonal mixing matrix
             self._keys = self._dets
-            self._mixmatrix = dict()
-            for d in self._dets:
-                self._mixmatrix[d] = {d: 1.0}
+            self._keys_for_dets = {x: [x,] for x in self._dets}
+            self._dets_for_keys = {x: [x,] for x in self._dets}
+            self._mixmatrix = {d: {d: 1.0} for d in self._dets}
         else:
             # Assemble the list of keys needed for the specified detectors
             keys = set()
-            self._mixmatrix = {}
+            self._mixmatrix = dict()
+            self._keys_for_dets = dict()
+            self._dets_for_keys = dict()
             for det in self._dets:
-                self._mixmatrix[det] = {}
+                self._keys_for_dets[det] = list()
+                self._mixmatrix[det] = dict()
                 for key, weight in mixmatrix[det].items():
                     keys.add(key)
+                    if key not in self._dets_for_keys:
+                        self._dets_for_keys[key] = list()
                     self._mixmatrix[det][key] = weight
+                    if weight != 0:
+                        self._keys_for_dets[det].append(key)
+                        self._dets_for_keys[key].append(det)
             self._keys = list(sorted(keys))
+
         if indices is None:
-            self._indices = {}
-            for i, key in enumerate(self._keys):
-                self._indices[key] = i
+            self._indices = {x: i for i, x in enumerate(self._keys)}
         else:
             self._indices = dict(indices)
         self._freqs = {}
@@ -139,12 +146,10 @@ class Noise(object):
         """Return a complete list of noise keys that have nonzero
         weights for given detectors:
         """
-        keys = []
+        keys = set()
         for det in dets:
-            for key, value in self._mixmatrix[det].items():
-                if value != 0:
-                    keys.append(key)
-        return keys
+            keys.update(self._keys_for_dets[det])
+        return list(sorted(keys))
 
     def index(self, key):
         """Return the PSD index for `key`
@@ -206,9 +211,8 @@ class Noise(object):
                 last = np.searchsorted(freq, rate * 0.4, side="right")
                 noisevar = np.median(psd[first:last].to_value(u.K**2 * u.second))
                 invvar = 1.0 / noisevar
-                for det in self.detectors:
-                    if k in mix[det] and mix[det][k] != 0:
-                        self._detweights[det] += mix[det][k] * invvar
+                for det in self._dets_for_keys[k]:
+                    self._detweights[det] += mix[det][k] * invvar
         return self._detweights[det]
 
     def detector_weight(self, det):
