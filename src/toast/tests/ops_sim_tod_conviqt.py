@@ -39,7 +39,8 @@ def create_fake_beam_alm(
     fwhm_y=10 * u.degree,
     pol=True,
     separate_IQU=False,
-    detB_beam=False 
+    detB_beam=False ,
+    normalize_beam=False 
 ):
 
     # pick an nside >= lmax to be sure that the a_lm will be fairly accurate
@@ -63,10 +64,21 @@ def create_fake_beam_alm(
     bl, blm = hp.anafast(tmp_beam_map, lmax=lmax, iter=0, alm=True,pol=True)
     hp.rotate_alm(blm, psi=0, theta=-np.pi/2, phi=0)
     if   detB_beam : 
-        # we make sure that the two detectors within the same pair encode two beams with the  flipped sign in Q   U beams  
+        # we make sure that the two detectors within the same pair encode 
+        # two beams with the  flipped sign in Q   U beams  
         beam_map = hp.alm2map(blm, nside=nside, lmax=lmax , mmax=mmax)
         beam_map[1:] *= (-1) 
         blm=hp.map2alm (beam_map, lmax=lmax , mmax=mmax)
+        
+    if normalize_beam: 
+            # We make sure that the simulated beams are normalized in the test 
+            #for the normalization we follow the convention adopted in Conviqt, 
+            #i.e. the monopole term in the map is left unchanged 
+            
+            idx = hp.Alm.getidx (lmax=lmax, l=0, m=0) 
+            norm  =  ( 2*np.pi * blm[0, idx].real ) 
+             
+            blm /= norm 
     if   separate_IQU:
 
         empty = np.zeros_like(tmp_beam_map[0])
@@ -75,7 +87,7 @@ def create_fake_beam_alm(
         if   detB_beam : 
 
             beam_map_Q = np.vstack([empty, -tmp_beam_map[0], empty])
-            beam_map_U = np.vstack([empty, empty, -tmp_beam_map[0]])
+            beam_map_U = np.vstack([empty, empty, tmp_beam_map[0]])
         else: 
             beam_map_Q = np.vstack([empty, tmp_beam_map[0], empty])
             beam_map_U = np.vstack([empty, empty, tmp_beam_map[0]])
@@ -95,12 +107,22 @@ def create_fake_beam_alm(
         hp.rotate_alm(almI, psi=0, theta=-np.pi/2, phi=0)
         hp.rotate_alm(almQ, psi=0, theta=-np.pi/2, phi=0)
         hp.rotate_alm(almU, psi=0, theta=-np.pi/2, phi=0)
+        if normalize_beam: 
+            idx = hp.Alm.getidx (lmax=lmax, l=0, m=0) 
+            norm  =  ( 2*np.pi * almI[0, idx].real ) 
+            almI/= norm 
+            almQ/= norm 
+            almU/= norm 
+            
         a_lm= [ almI, almQ, almU     ]
         return a_lm 
     else:
+        
         return blm
 
 class SimConviqtTest(MPITestCase):
+        
+        
     def setUp(self):
         
         
@@ -124,6 +146,7 @@ class SimConviqtTest(MPITestCase):
             # Synthetic sky and beam (a_lm expansions)
             self.slm = create_fake_sky_alm(self.lmax, self.fwhm_sky)
             #self.slm[1:] = 0  # No polarization
+            
             hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
 
             self.blm = create_fake_beam_alm(
@@ -131,12 +154,17 @@ class SimConviqtTest(MPITestCase):
                 self.mmax,
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
+                normalize_beam=True 
             )
+ 
+            
+            
             self.blm_bottom= create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
+                normalize_beam=True ,
                 detB_beam=True 
             )
             
@@ -160,13 +188,14 @@ class SimConviqtTest(MPITestCase):
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
                 separate_IQU=True,
+                normalize_beam=True 
             )
             blm_Ibot, blm_Qbot, blm_Ubot = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
-                separate_IQU=True, detB_beam=True 
+                separate_IQU=True, detB_beam=True ,normalize_beam=True 
             )
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_I000.fits"),
@@ -253,6 +282,11 @@ class SimConviqtTest(MPITestCase):
     
     
     def make_beam_file_dict(self,data) : 
+        """
+        We make sure that data observed  in each A/B detector within a 
+        detector pair will have the right beam associated to it. In particular, 
+        Q and U beams of B detector must have a flipped sign wrt  the A one. 
+        """
         
         
         fname2= self.fname_beam.replace('.fits', '_bottom.fits')
@@ -290,7 +324,7 @@ class SimConviqtTest(MPITestCase):
             dxx=False,
             det_data=key,
             pol=True ,
-            normalize_beam=True  ,
+            normalize_beam=False   ,#beams are already produced normalized
             fwhm=self.fwhm_sky,
         )
          
@@ -405,7 +439,7 @@ class SimConviqtTest(MPITestCase):
             dxx=False,
             det_data=key1,
             pol=True ,
-            normalize_beam= True    , 
+            normalize_beam= False    , 
             fwhm=self.fwhm_sky,
         )
          
@@ -421,7 +455,7 @@ class SimConviqtTest(MPITestCase):
             dxx=False,
             det_data=key2,
             pol=True ,
-            normalize_beam=False   , #TODO:understand why if we set it to True we get both binned maps with nans 
+            normalize_beam=False    , 
             fwhm=self.fwhm_sky,
         )
          
