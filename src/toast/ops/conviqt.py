@@ -260,7 +260,7 @@ class SimConviqt(Operator):
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
-
+            
             beam = self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
@@ -572,7 +572,7 @@ class SimWeightedConviqt(SimConviqt):
     the beam time-dependent, constantly mapping the co- and cross polar
     responses on to each other.  In OpSimConviqt we assume the beam to be static.
     """
-
+    
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         if not self.available:
@@ -610,13 +610,8 @@ class SimWeightedConviqt(SimConviqt):
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            beam_file_i00 = beam_file.replace(".fits", "_I000.fits")
-            beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
-            beam_file_00i = beam_file.replace(".fits", "_00I0.fits")
-
-            beamI00 = self.get_beam(beam_file_i00, det, verbose)
-            beam0I0 = self.get_beam(beam_file_0i0, det, verbose)
-            beam00I = self.get_beam(beam_file_00i, det, verbose)
+             
+            beamI00 ,beam0I0,beam00I= self.get_beam(beam_file , det, verbose)
 
             detector = self.get_detector(det)
 
@@ -656,7 +651,20 @@ class SimWeightedConviqt(SimConviqt):
                 timer.report_clear(f"conviqt process detector {det}")
 
         return
-
+    
+    def get_beam(self, beamfile, det, verbose):
+        timer = Timer()
+        timer.start()
+        beam_file_i00 = beamfile.replace(".fits", "_I000.fits")
+        beam_file_0i0 = beamfile.replace(".fits", "_0I00.fits")
+        beam_file_00i = beamfile.replace(".fits", "_00I0.fits")
+        beami00 = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_i00, self.comm)
+        beam0i0 = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_0i0, self.comm)
+        beam00i = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_00i, self.comm)
+            
+        if verbose:
+            timer.report_clear(f"initialize beam for detector {det}")
+        return beami00,beam0i0,beam00i 
 
 
 class SimTEBConviqt(SimConviqt):
