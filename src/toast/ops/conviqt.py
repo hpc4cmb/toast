@@ -714,11 +714,13 @@ class SimTEBConviqt(SimConviqt):
             else:
                 sky_file = self.sky_file.format(detector=det, mc=self.mc)
             sky = self.get_sky(sky_file, det, verbose)
+            
+            if det in self.beam_file_dict:
+                beam_file = self.beam_file_dict[det]
+            else:
+                beam_file = self.beam_file.format(detector=det, mc=self.mc)
 
-            beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            beam_T = self.get_beam(beam_file.replace(".fits","_T.fits"), det, verbose)
-            beam_E = self.get_beam(beam_file.replace(".fits","_E.fits"), det, verbose)
-            beam_B = self.get_beam(beam_file.replace(".fits","_B.fits"), det, verbose)
+            beam_T, beam_E, beam_B  = self.get_beam(beam_file, det,verbose)
 
             detector = self.get_detector(det)
 
@@ -758,3 +760,17 @@ class SimTEBConviqt(SimConviqt):
                 timer.report_clear(f"conviqt process detector {det}")
 
         return
+    
+    def get_beam(self, beamfile, det, verbose):
+        timer = Timer()
+        timer.start()
+        beam_file_T = beamfile.replace(".fits", "_T.fits")
+        beam_file_E = beamfile.replace(".fits", "_E.fits")
+        beam_file_B = beamfile.replace(".fits", "_B.fits")
+        beamT = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_T, self.comm)
+        beamE = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_E, self.comm)
+        beamB = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_B, self.comm)
+            
+        if verbose:
+            timer.report_clear(f"initialize beam for detector {det}")
+        return beamT,beamE,beamB 

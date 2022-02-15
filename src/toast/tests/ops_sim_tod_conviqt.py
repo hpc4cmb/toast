@@ -275,6 +275,40 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
+            
+            blm_T[0] = self.blm_bottom[0].copy()
+            hp.write_alm(
+                self.fname_beam.replace(".fits", "_bottom_T.fits"),
+                blm_T,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
+            # in order to evaluate  
+            # Q + iU ~  Sum[(b^E + ib^B)(a^E + ia^B)] , this implies
+            # beamE = [0, blmE, -blmB] 
+            
+            blm_E = np.zeros_like(self.blm)
+            blm_E[1] = self.blm_bottom[1] 
+            blm_E[2] = -self.blm_bottom[2]  
+            hp.write_alm(
+                self.fname_beam.replace(".fits", "_bottom_E.fits"),
+                blm_E,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
+            #beamB = [0, blmB, blmE] 
+            blm_B = np.zeros_like(self.blm)
+            blm_B[1] =  self.blm_bottom[2] 
+            blm_B[2] =  self.blm_bottom[1]  
+            hp.write_alm(
+                self.fname_beam.replace(".fits", "_bottom_B.fits"),
+                blm_B,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
         if self.comm is not None:
             self.comm.barrier()
 
@@ -539,47 +573,51 @@ class SimConviqtTest(MPITestCase):
         return
    
     
-"""   
-    def test_TEBconvolution(self):
+    def test_sim_TEB_conviqt(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
             return
 
         # Create a fake scan strategy that hits every pixel once.
-        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
-
+        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
+        data = create_satellite_data(self.comm , obs_time=120*u.min, pixel_per_process=2 )
+        self. make_beam_file_dict(data)
+            
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
 
-       
-
-        conviqt_key = "conviqt_tod"
+        key1 =  "conviqt0"
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file=self.fname_beam ,
+            beam_file_dict= self.beam_file_dict,
             dxx=False,
-            det_data=conviqt_key,
-            #normalize_beam=True,
+            det_data=key1,
+            pol=True ,
+            normalize_beam= False    , 
             fwhm=self.fwhm_sky,
         )
-        sim_conviqt.exec(data)
+         
+        sim_conviqt.apply(data)
+
+        key2 =  "tebconviqt"
         
-        teb_conviqt_key  = "tebconviqt_tod"
-        sim_teb = ops.SimTEBConviqt(
+        sim_wconviqt = ops.SimTEBConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file=self.fname_beam ,
+            beam_file_dict = self.beam_file_dict,
             dxx=False,
-            det_data=teb_conviqt_key,
-            #normalize_beam=True,
+            det_data=key2,
+            pol=True ,
+            normalize_beam=False    , 
             fwhm=self.fwhm_sky,
         )
-        sim_teb.exec(data)
-        # Bin both signals into maps
+         
+        sim_wconviqt.apply(data)
+        # Bin a map to study
 
         pixels = ops.PixelsHealpix(
             nside=self.nside,
@@ -589,6 +627,7 @@ class SimConviqtTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
+            hwp_angle= None ,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -606,27 +645,21 @@ class SimConviqtTest(MPITestCase):
         )
         cov_and_hits.apply(data)
 
-        
-        
-        binner = ops.BinMap(
+        binner1 = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
-            det_data=teb_conviqt_key,
+            det_data=key1,
             det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        binner.apply(data)
-        path_teb = os.path.join(self.outdir, "toast_bin.tebconviqt.fits")
-        
-        write_healpix_fits(data[binner.binned], path_teb , nest=False)
-        
+        binner1.apply(data)
         binner2 = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
-            det_data=conviqt_key,
+            det_data=key2,
             det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
@@ -634,84 +667,34 @@ class SimConviqtTest(MPITestCase):
             sync_type="alltoallv",
         )
         binner2.apply(data)
-        path_conviqt = os.path.join(self.outdir, "toast_bin.conviqt.fits")
-        write_healpix_fits(data[binner2.binned], path_conviqt, nest=False)
+        # Study the map on the root process
+
+        toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
+        write_healpix_fits(data[binner1.binned], toast_bin_path, nest=pixels.nest)
+        toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
+        write_healpix_fits(data[binner2.binned], toast_bin_path, nest=pixels.nest)
         
-        print(data[binner2.binned].data.shape) 
-        np.testing.assert_almost_equal(data[binner2.binned].data ,    data[binner.binned].data, decimal=6)
-        
-####################         
-        rank = 0
-        if self.comm is not None:
-            rank = self.comm.rank
+        toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
+        write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
 
         fail = False
+        if self.rank == 0:
+            mapfile = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
+            mdata = hp.read_map(mapfile, field=range(3) )
+            mapfile = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
+            mdataw = hp.read_map(mapfile, field=range(3) )
 
-        if rank == 0:
-            import matplotlib.pyplot as plt
-
-            sky = hp.alm2map(self.slm , self.nside, lmax=self.lmax, verbose=False)
-            beam = hp.alm2map(
-                self.blm  ,
-                self.nside,
-                lmax=self.lmax,
-                mmax=self.mmax,
-                verbose=False,
-            )
-
-            #map_teb = hp.read_map(path_teb , field=range(3) )
-            map_conviqt = hp.read_map(path_conviqt   )
-
-            # For some reason, matplotlib hangs with multiple tasks,
-            # even if only one writes.
-            if self.comm is None or self.comm.size == 1:
-                for i, pol in enumerate( 'I'):
-                    fig = plt.figure(figsize=[12, 8])
-                    nrow, ncol = 2, 2
-                    hp.mollview(sky[i], title="input sky", sub=[nrow, ncol, 1])
-                    hp.mollview(beam[i], title="beam", sub=[nrow, ncol, 2], rot=[0, 90])
-                    #amp = np.amax(map_conviqt[i])/4
-                    hp.mollview(
-                        map_teb[i],
-                        min=-amp,
-                        max=amp,
-                        title="TEB conviqt",
-                        sub=[nrow, ncol, 3],
-                    ) 
-                    hp.mollview(
-                        map_conviqt,
-                        #min=-amp,
-                        #max=amp,
-                        title="conviqt",
-                        sub=[nrow, ncol, 4],
-                    )
-                    outfile = os.path.join(self.outdir, f"map_comparison{pol}.png")
-                    fig.savefig(outfile)
-            for obs in data.obs:
-                for det in obs.local_detectors:
-                    tod_teb = obs.detdata[teb_conviqt_key][det]
-                    tod_conviqt = obs.detdata[conviqt_key][det]
-                    if not np.allclose(
-                        tod_teb,
-                        tod_conviqt,
-                        rtol=1e-3,
-                        atol=1e-3,
-                    ):
-                        import matplotlib.pyplot as plt
-                        import pdb
-
-                        pdb.set_trace()
-                        fail = True
-                        break
-                if fail:
-                    break
-        if data.comm.comm_world is not None:
-            fail = data.comm.comm_world.bcast(fail, root=0)
-
-        self.assertFalse(fail)
-
+            
+            cl_out = hp.anafast(mdata, lmax=self.lmax)
+            cl_outw = hp.anafast(mdataw, lmax=self.lmax)
+            
+            np.testing.assert_almost_equal(
+              cl_out[0],
+                cl_outw[0], decimal=2
+        )
+             
         return
-    
+    """
     def test_sim_hwp(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
