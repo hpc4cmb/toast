@@ -31,101 +31,9 @@ from ._helpers import (
 )
 
 
-
-def create_fake_beam_alm(
-    lmax=128,
-    mmax=10,
-    fwhm_x=10 * u.degree,
-    fwhm_y=10 * u.degree,
-    pol=True,
-    separate_IQU=False,
-    detB_beam=False ,
-    normalize_beam=False 
-):
-
-    # pick an nside >= lmax to be sure that the a_lm will be fairly accurate
-    nside = 2
-    while nside < lmax:
-
-        nside *= 2
-    npix = 12 * nside ** 2
-    pix = np.arange(npix)
-    x,y,z  = hp.pix2vec(nside, pix, nest=False)  
-    sigma_z = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    beam = np.exp(-((z ** 2 /2/sigma_z**2 + y ** 2 /2/ sigma_y**2)))
-    beam[x < 0] = 0
-    tmp_beam_map = np.zeros([3, npix ])
-    tmp_beam_map[0] = beam
-    tmp_beam_map[1] = beam
-     
-    
-        
-    bl, blm = hp.anafast(tmp_beam_map, lmax=lmax, iter=0, alm=True,pol=True)
-    hp.rotate_alm(blm, psi=0, theta=-np.pi/2, phi=0)
-    if   detB_beam : 
-        # we make sure that the two detectors within the same pair encode 
-        # two beams with the  flipped sign in Q   U beams  
-        beam_map = hp.alm2map(blm, nside=nside, lmax=lmax , mmax=mmax)
-        beam_map[1:] *= (-1) 
-        blm=hp.map2alm (beam_map, lmax=lmax , mmax=mmax)
-        
-    if normalize_beam: 
-            # We make sure that the simulated beams are normalized in the test 
-            #for the normalization we follow the convention adopted in Conviqt, 
-            #i.e. the monopole term in the map is left unchanged 
-            
-            idx = hp.Alm.getidx (lmax=lmax, l=0, m=0) 
-            norm  =  ( 2*np.pi * blm[0, idx].real ) 
-             
-            blm /= norm 
-    if   separate_IQU:
-
-        empty = np.zeros_like(tmp_beam_map[0])
-        
-        beam_map_I = np.vstack([tmp_beam_map[0], empty, empty])
-        if   detB_beam : 
-
-            beam_map_Q = np.vstack([empty, -tmp_beam_map[0], empty])
-            beam_map_U = np.vstack([empty, empty, tmp_beam_map[0]])
-        else: 
-            beam_map_Q = np.vstack([empty, tmp_beam_map[0], empty])
-            beam_map_U = np.vstack([empty, empty, tmp_beam_map[0]])
-
-        try:
-            almI = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False)
-            almQ = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False)
-            almU = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False)
-             
-            
-        except TypeError:
-            # older healpy which does not have verbose keyword
-            almI = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax )
-            almQ = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax )
-            almU = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax )
-             
-        hp.rotate_alm(almI, psi=0, theta=-np.pi/2, phi=0)
-        hp.rotate_alm(almQ, psi=0, theta=-np.pi/2, phi=0)
-        hp.rotate_alm(almU, psi=0, theta=-np.pi/2, phi=0)
-        if normalize_beam: 
-            idx = hp.Alm.getidx (lmax=lmax, l=0, m=0) 
-            norm  =  ( 2*np.pi * almI[0, idx].real ) 
-            almI/= norm 
-            almQ/= norm 
-            almU/= norm 
-            
-        a_lm= [ almI, almQ, almU     ]
-        return a_lm 
-    else:
-        
-        return blm
-
 class SimConviqtTest(MPITestCase):
-        
-        
     def setUp(self):
-        
-        
+
         np.random.seed(777)
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
@@ -145,8 +53,7 @@ class SimConviqtTest(MPITestCase):
         if self.rank == 0:
             # Synthetic sky and beam (a_lm expansions)
             self.slm = create_fake_sky_alm(self.lmax, self.fwhm_sky)
-            #self.slm[1:] = 0  # No polarization
-            
+
             hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
 
             self.blm = create_fake_beam_alm(
@@ -154,20 +61,18 @@ class SimConviqtTest(MPITestCase):
                 self.mmax,
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
-                normalize_beam=True 
+                normalize_beam=True,
             )
- 
-            
-            
-            self.blm_bottom= create_fake_beam_alm(
+
+            self.blm_bottom = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
-                normalize_beam=True ,
-                detB_beam=True 
+                normalize_beam=True,
+                detB_beam=True,
             )
-            
+
             hp.write_alm(
                 self.fname_beam,
                 self.blm,
@@ -188,14 +93,16 @@ class SimConviqtTest(MPITestCase):
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
                 separate_IQU=True,
-                normalize_beam=True 
+                normalize_beam=True,
             )
             blm_Ibot, blm_Qbot, blm_Ubot = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
                 fwhm_x=self.fwhm_beam,
                 fwhm_y=self.fwhm_beam,
-                separate_IQU=True, detB_beam=True ,normalize_beam=True 
+                separate_IQU=True,
+                detB_beam=True,
+                normalize_beam=True,
             )
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_I000.fits"),
@@ -240,7 +147,7 @@ class SimConviqtTest(MPITestCase):
                 overwrite=True,
             )
 
-            # we explicitly store 3 separate beams for the T, E and B sky alm. 
+            # we explicitly store 3 separate beams for the T, E and B sky alm.
             blm_T = np.zeros_like(self.blm)
             blm_T[0] = self.blm[0].copy()
             hp.write_alm(
@@ -250,13 +157,13 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            # in order to evaluate  
+            # in order to evaluate
             # Q + iU ~  Sum[(b^E + ib^B)(a^E + ia^B)] , this implies
-            # beamE = [0, blmE, -blmB] 
-            
+            # beamE = [0, blmE, -blmB]
+
             blm_E = np.zeros_like(self.blm)
-            blm_E[1] = self.blm[1] 
-            blm_E[2] = -self.blm[2]  
+            blm_E[1] = self.blm[1]
+            blm_E[2] = -self.blm[2]
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_E.fits"),
                 blm_E,
@@ -264,10 +171,10 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            #beamB = [0, blmB, blmE] 
+            # beamB = [0, blmB, blmE]
             blm_B = np.zeros_like(self.blm)
-            blm_B[1] =  self.blm[2] 
-            blm_B[2] =  self.blm[1]  
+            blm_B[1] = self.blm[2]
+            blm_B[2] = self.blm[1]
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_B.fits"),
                 blm_B,
@@ -275,66 +182,30 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            
-            blm_T[0] = self.blm_bottom[0].copy()
-            hp.write_alm(
-                self.fname_beam.replace(".fits", "_bottom_T.fits"),
-                blm_T,
-                lmax=self.lmax,
-                mmax_in=self.mmax,
-                overwrite=True,
-            )
-            # in order to evaluate  
-            # Q + iU ~  Sum[(b^E + ib^B)(a^E + ia^B)] , this implies
-            # beamE = [0, blmE, -blmB] 
-            
-            blm_E = np.zeros_like(self.blm)
-            blm_E[1] = self.blm_bottom[1] 
-            blm_E[2] = -self.blm_bottom[2]  
-            hp.write_alm(
-                self.fname_beam.replace(".fits", "_bottom_E.fits"),
-                blm_E,
-                lmax=self.lmax,
-                mmax_in=self.mmax,
-                overwrite=True,
-            )
-            #beamB = [0, blmB, blmE] 
-            blm_B = np.zeros_like(self.blm)
-            blm_B[1] =  self.blm_bottom[2] 
-            blm_B[2] =  self.blm_bottom[1]  
-            hp.write_alm(
-                self.fname_beam.replace(".fits", "_bottom_B.fits"),
-                blm_B,
-                lmax=self.lmax,
-                mmax_in=self.mmax,
-                overwrite=True,
-            )
+
         if self.comm is not None:
             self.comm.barrier()
 
         return
-    
-    
-    def make_beam_file_dict(self,data) : 
+
+    def make_beam_file_dict(self, data):
         """
-        We make sure that data observed  in each A/B detector within a 
-        detector pair will have the right beam associated to it. In particular, 
-        Q and U beams of B detector must have a flipped sign wrt  the A one. 
+        We make sure that data observed  in each A/B detector within a
+        detector pair will have the right beam associated to it. In particular,
+        Q and U beams of B detector must have a flipped sign wrt  the A one.
         """
-        
-        
-        fname2= self.fname_beam.replace('.fits', '_bottom.fits')
-        
-        self.beam_file_dict={} 
+
+        fname2 = self.fname_beam.replace(".fits", "_bottom.fits")
+
+        self.beam_file_dict = {}
         for det in data.obs[0].local_detectors:
-            if det[-1]=="A" : 
-                self.beam_file_dict[det] = self.fname_beam 
-            else: 
+            if det[-1] == "A":
+                self.beam_file_dict[det] = self.fname_beam
+            else:
                 self.beam_file_dict[det] = fname2
-                
-                
-        return 
-            
+
+        return
+
     def test_sim_conviqt(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -342,9 +213,11 @@ class SimConviqtTest(MPITestCase):
 
         # Create a fake scan strategy that hits every pixel once.
         #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
-        data = create_satellite_data(self.comm , obs_time=120*u.min, pixel_per_process=2 )
-        self. make_beam_file_dict(data)
-            
+        data = create_satellite_data(
+            self.comm, obs_time=120 * u.min, pixel_per_process=2
+        )
+        self.make_beam_file_dict(data)
+
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
@@ -354,14 +227,14 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict= self.beam_file_dict,
+            beam_file_dict=self.beam_file_dict,
             dxx=False,
             det_data=key,
-            pol=True ,
-            normalize_beam=False   ,#beams are already produced normalized
+            pol=True,
+            normalize_beam=False,  # beams are already produced normalized
             fwhm=self.fwhm_sky,
         )
-         
+
         sim_conviqt.apply(data)
 
         # Bin a map to study
@@ -374,7 +247,7 @@ class SimConviqtTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle= None ,
+            hwp_angle=None,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -416,40 +289,36 @@ class SimConviqtTest(MPITestCase):
 
         if self.rank == 0:
             hitsfile = os.path.join(self.outdir, "toast_hits.fits")
-            
-            hdata = hp.read_map(hitsfile)
-            
-            footprint = np.ma.masked_not_equal(hdata, 0. ).mask
-            
-            mapfile = os.path.join(self.outdir, "toast_bin.fits")
-            mdata = hp.read_map(mapfile, field=range(3) )
 
-            
+            hdata = hp.read_map(hitsfile)
+
+            footprint = np.ma.masked_not_equal(hdata, 0.0).mask
+
+            mapfile = os.path.join(self.outdir, "toast_bin.fits")
+            mdata = hp.read_map(mapfile, field=range(3))
+
             deconv = 1 / hp.gauss_beam(
                 self.fwhm_sky.to_value(u.radian),
                 lmax=self.lmax,
-                pol=False ,
+                pol=False,
             )
 
             smoothed = hp.alm2map(
-                [ hp.almxfl(self.slm[ii] , deconv)  for ii in range(3)] ,
+                [hp.almxfl(self.slm[ii], deconv) for ii in range(3)],
                 self.nside,
                 lmax=self.lmax,
                 fwhm=self.fwhm_beam.to_value(u.radian),
                 verbose=False,
                 pixwin=False,
             )
-            smoothed[:, ~footprint] =0 
+            smoothed[:, ~footprint] = 0
             cl_out = hp.anafast(mdata, lmax=self.lmax)
             cl_smoothed = hp.anafast(smoothed, lmax=self.lmax)
-            
-            np.testing.assert_almost_equal(
-            cl_smoothed[0] ,
-                cl_out[0], decimal=2
-        )
-             
+
+            np.testing.assert_almost_equal(cl_smoothed[0], cl_out[0], decimal=2)
+
         return
-    
+
     def test_sim_weighted_conviqt(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -457,42 +326,44 @@ class SimConviqtTest(MPITestCase):
 
         # Create a fake scan strategy that hits every pixel once.
         #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
-        data = create_satellite_data(self.comm , obs_time=120*u.min, pixel_per_process=2 )
-        self. make_beam_file_dict(data)
-            
+        data = create_satellite_data(
+            self.comm, obs_time=120 * u.min, pixel_per_process=2
+        )
+        self.make_beam_file_dict(data)
+
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
 
-        key1 =  "conviqt"
+        key1 = "conviqt"
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict= self.beam_file_dict,
+            beam_file_dict=self.beam_file_dict,
             dxx=False,
             det_data=key1,
-            pol=True ,
-            normalize_beam= False    , 
+            pol=True,
+            normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-         
+
         sim_conviqt.apply(data)
 
-        key2 =  "wconviqt"
-        
+        key2 = "wconviqt"
+
         sim_wconviqt = ops.SimWeightedConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict = self.beam_file_dict,
+            beam_file_dict=self.beam_file_dict,
             dxx=False,
             det_data=key2,
-            pol=True ,
-            normalize_beam=False    , 
+            pol=True,
+            normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-         
+
         sim_wconviqt.apply(data)
         # Bin a map to study
 
@@ -504,7 +375,7 @@ class SimConviqtTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle= None ,
+            hwp_angle=None,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -550,29 +421,24 @@ class SimConviqtTest(MPITestCase):
         write_healpix_fits(data[binner1.binned], toast_bin_path, nest=pixels.nest)
         toast_bin_path = os.path.join(self.outdir, "toast_bin.wconviqt.fits")
         write_healpix_fits(data[binner2.binned], toast_bin_path, nest=pixels.nest)
-        
+
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
         write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
 
         fail = False
         if self.rank == 0:
             mapfile = os.path.join(self.outdir, "toast_bin.conviqt.fits")
-            mdata = hp.read_map(mapfile, field=range(3) )
+            mdata = hp.read_map(mapfile, field=range(3))
             mapfile = os.path.join(self.outdir, "toast_bin.wconviqt.fits")
-            mdataw = hp.read_map(mapfile, field=range(3) )
+            mdataw = hp.read_map(mapfile, field=range(3))
 
-            
             cl_out = hp.anafast(mdata, lmax=self.lmax)
             cl_outw = hp.anafast(mdataw, lmax=self.lmax)
-            
-            np.testing.assert_almost_equal(
-              cl_out[0],
-                cl_outw[0], decimal=2
-        )
-             
+
+            np.testing.assert_almost_equal(cl_out, cl_outw, decimal=2)
+
         return
-   
-    
+
     def test_sim_TEB_conviqt(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -580,42 +446,48 @@ class SimConviqtTest(MPITestCase):
 
         # Create a fake scan strategy that hits every pixel once.
         #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
-        data = create_satellite_data(self.comm , obs_time=120*u.min, pixel_per_process=2 )
-        self. make_beam_file_dict(data)
-            
+        data = create_satellite_data(
+            self.comm, obs_time=120 * u.min, pixel_per_process=2
+        )
+        self.make_beam_file_dict(data)
+
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
 
-        key1 =  "conviqt0"
+        key1 = "conviqt0"
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict= self.beam_file_dict,
+            beam_file_dict=self.beam_file_dict,
             dxx=False,
             det_data=key1,
-            pol=True ,
-            normalize_beam= False    , 
+            pol=True,
+            normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-         
-        sim_conviqt.apply(data)
 
-        key2 =  "tebconviqt"
-        
+        sim_conviqt.apply(data)
+        ## For TEB convolution there's no need to differentiate between beams for detA and detB
+        beam_file_dict_teb = {}
+        for det in data.obs[0].local_detectors:
+            beam_file_dict_teb[det] = self.fname_beam
+
+        key2 = "tebconviqt"
+
         sim_wconviqt = ops.SimTEBConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict = self.beam_file_dict,
+            beam_file_dict=beam_file_dict_teb,
             dxx=False,
             det_data=key2,
-            pol=True ,
-            normalize_beam=False    , 
+            pol=True,
+            normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-         
+
         sim_wconviqt.apply(data)
         # Bin a map to study
 
@@ -627,7 +499,7 @@ class SimConviqtTest(MPITestCase):
         pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
-            hwp_angle= None ,
+            hwp_angle=None,
             detector_pointing=detpointing,
         )
         weights.apply(data)
@@ -673,27 +545,24 @@ class SimConviqtTest(MPITestCase):
         write_healpix_fits(data[binner1.binned], toast_bin_path, nest=pixels.nest)
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
         write_healpix_fits(data[binner2.binned], toast_bin_path, nest=pixels.nest)
-        
+
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
         write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
 
         fail = False
         if self.rank == 0:
             mapfile = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
-            mdata = hp.read_map(mapfile, field=range(3) )
+            mdata = hp.read_map(mapfile, field=range(3))
             mapfile = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
-            mdataw = hp.read_map(mapfile, field=range(3) )
+            mdataw = hp.read_map(mapfile, field=range(3))
 
-            
             cl_out = hp.anafast(mdata, lmax=self.lmax)
             cl_outw = hp.anafast(mdataw, lmax=self.lmax)
-            
-            np.testing.assert_almost_equal(
-              cl_out[0],
-                cl_outw[0], decimal=2
-        )
-             
+
+            np.testing.assert_almost_equal(cl_out, cl_outw, decimal=2)
+
         return
+
     """
     def test_sim_hwp(self):
         if not ops.conviqt.available():

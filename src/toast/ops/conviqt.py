@@ -260,7 +260,7 @@ class SimConviqt(Operator):
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            
+
             beam = self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
@@ -572,7 +572,7 @@ class SimWeightedConviqt(SimConviqt):
     the beam time-dependent, constantly mapping the co- and cross polar
     responses on to each other.  In OpSimConviqt we assume the beam to be static.
     """
-    
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         if not self.available:
@@ -610,8 +610,8 @@ class SimWeightedConviqt(SimConviqt):
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
-             
-            beamI00 ,beam0I0,beam00I= self.get_beam(beam_file , det, verbose)
+
+            beamI00, beam0I0, beam00I = self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
 
@@ -651,20 +651,26 @@ class SimWeightedConviqt(SimConviqt):
                 timer.report_clear(f"conviqt process detector {det}")
 
         return
-    
+
     def get_beam(self, beamfile, det, verbose):
         timer = Timer()
         timer.start()
         beam_file_i00 = beamfile.replace(".fits", "_I000.fits")
         beam_file_0i0 = beamfile.replace(".fits", "_0I00.fits")
         beam_file_00i = beamfile.replace(".fits", "_00I0.fits")
-        beami00 = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_i00, self.comm)
-        beam0i0 = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_0i0, self.comm)
-        beam00i = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_00i, self.comm)
-            
+        beami00 = conviqt.Beam(
+            self.lmax, self.beammmax, self.pol, beam_file_i00, self.comm
+        )
+        beam0i0 = conviqt.Beam(
+            self.lmax, self.beammmax, self.pol, beam_file_0i0, self.comm
+        )
+        beam00i = conviqt.Beam(
+            self.lmax, self.beammmax, self.pol, beam_file_00i, self.comm
+        )
+
         if verbose:
             timer.report_clear(f"initialize beam for detector {det}")
-        return beami00,beam0i0,beam00i 
+        return beami00, beam0i0, beam00i
 
 
 class SimTEBConviqt(SimConviqt):
@@ -679,8 +685,7 @@ class SimTEBConviqt(SimConviqt):
     :math:`skyT_lm * beamT_lm, skyE_lm * Re{P}, skyB_lm * Im{P}`.
 
     For extra details please refer to [this note ](https://giuspugl.github.io/reports/Notes_TEB_convolution.html)
-
-"""
+    """
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -714,13 +719,13 @@ class SimTEBConviqt(SimConviqt):
             else:
                 sky_file = self.sky_file.format(detector=det, mc=self.mc)
             sky = self.get_sky(sky_file, det, verbose)
-            
+
             if det in self.beam_file_dict:
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
 
-            beam_T, beam_E, beam_B  = self.get_beam(beam_file, det,verbose)
+            beam_T, beam_E, beam_B = self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
 
@@ -731,17 +736,17 @@ class SimTEBConviqt(SimConviqt):
 
             convolved_data = self.convolve(sky, beam_T, detector, pnt, det, verbose)
 
-            del pnt,
-            # Q-beam convolution
+            del (pnt,)
+            # E-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.cos(2 * psi_pol) * self.convolve(
-                        sky, beam_E, detector, pnt, det, verbose
-                            )
-            del pnt,
-            # U-beam convolution
+                sky, beam_E, detector, pnt, det, verbose
+            )
+            del (pnt,)
+            # B-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             convolved_data += np.sin(2 * psi_pol) * self.convolve(
-                sky , beam_B , detector, pnt, det, verbose
+                sky, beam_B, detector, pnt, det, verbose
             )
             del theta, phi, psi
 
@@ -754,13 +759,13 @@ class SimTEBConviqt(SimConviqt):
             )
             self.save(data, det, convolved_data, verbose)
 
-            del pnt, detector, beam_T, beam_E,beam_B, sky
+            del pnt, detector, beam_T, beam_E, beam_B, sky
 
             if verbose:
                 timer.report_clear(f"conviqt process detector {det}")
 
         return
-    
+
     def get_beam(self, beamfile, det, verbose):
         timer = Timer()
         timer.start()
@@ -770,7 +775,7 @@ class SimTEBConviqt(SimConviqt):
         beamT = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_T, self.comm)
         beamE = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_E, self.comm)
         beamB = conviqt.Beam(self.lmax, self.beammmax, self.pol, beam_file_B, self.comm)
-            
+
         if verbose:
             timer.report_clear(f"initialize beam for detector {det}")
-        return beamT,beamE,beamB 
+        return beamT, beamE, beamB

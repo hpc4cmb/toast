@@ -523,50 +523,79 @@ def create_fake_beam_alm(
     fwhm_y=10 * u.degree,
     pol=True,
     separate_IQU=False,
+    detB_beam=False,
+    normalize_beam=False,
 ):
 
     # pick an nside >= lmax to be sure that the a_lm will be fairly accurate
     nside = 2
     while nside < lmax:
-
         nside *= 2
     npix = 12 * nside ** 2
     pix = np.arange(npix)
-    vec = hp.pix2vec(nside, pix, nest=False)
-    theta, phi = hp.vec2dir(vec)
-    x = theta * np.cos(phi)
-    y = theta * np.sin(phi)
-    sigma_x = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
+    x, y, z = hp.pix2vec(nside, pix, nest=False)
+    sigma_z = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    beam_map = np.exp(-0.5 * (x ** 2 / sigma_x ** 2 + y ** 2 / sigma_y ** 2))
-    empty = np.zeros_like(beam_map)
-    if pol and separate_IQU:
-        beam_map_I = np.vstack([beam_map, empty, empty])
-        beam_map_Q = np.vstack([empty, beam_map, empty])
-        beam_map_U = np.vstack([empty, empty, beam_map])
+    beam = np.exp(-((z ** 2 / 2 / sigma_z ** 2 + y ** 2 / 2 / sigma_y ** 2)))
+    beam[x < 0] = 0
+    tmp_beam_map = np.zeros([3, npix])
+    tmp_beam_map[0] = beam
+    tmp_beam_map[1] = beam
+    bl, blm = hp.anafast(tmp_beam_map, lmax=lmax, iter=0, alm=True, pol=True)
+    hp.rotate_alm(blm, psi=0, theta=-np.pi / 2, phi=0)
+    if detB_beam:
+        # we make sure that the two detectors within the same pair encode
+        # two beams with the  flipped sign in Q   U beams
+        beam_map = hp.alm2map(blm, nside=nside, lmax=lmax, mmax=mmax)
+        beam_map[1:] *= -1
+        blm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
+
+    if normalize_beam:
+        # We make sure that the simulated beams are normalized in the test
+        # for the normalization we follow the convention adopted in Conviqt,
+        # i.e. the monopole term in the map is left unchanged
+        idx = hp.Alm.getidx(lmax=lmax, l=0, m=0)
+        norm = 2 * np.pi * blm[0, idx].real
+        blm /= norm
+    if separate_IQU:
+
+        empty = np.zeros_like(tmp_beam_map[0])
+
+        beam_map_I = np.vstack([tmp_beam_map[0], empty, empty])
+        if detB_beam:
+
+            beam_map_Q = np.vstack([empty, -tmp_beam_map[0], empty])
+            beam_map_U = np.vstack([empty, empty, tmp_beam_map[0]])
+        else:
+            beam_map_Q = np.vstack([empty, tmp_beam_map[0], empty])
+            beam_map_U = np.vstack([empty, empty, tmp_beam_map[0]])
 
         try:
-            a_lm = [
-                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False),
-                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False),
-                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False),
-            ]
+            almI = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False)
+            almQ = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False)
+            almU = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False)
+
         except TypeError:
             # older healpy which does not have verbose keyword
-            a_lm = [
-                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax),
-                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax),
-                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax),
-            ]
-    else:
-        if pol:
-            beam_map = np.vstack([beam_map, beam_map, empty])
-        try:
-            a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax, verbose=False)
-        except TypeError:
-            a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
+            almI = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax)
+            almQ = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax)
+            almU = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax)
 
-    return a_lm
+        hp.rotate_alm(almI, psi=0, theta=-np.pi / 2, phi=0)
+        hp.rotate_alm(almQ, psi=0, theta=-np.pi / 2, phi=0)
+        hp.rotate_alm(almU, psi=0, theta=-np.pi / 2, phi=0)
+        if normalize_beam:
+            idx = hp.Alm.getidx(lmax=lmax, l=0, m=0)
+            norm = 2 * np.pi * almI[0, idx].real
+            almI /= norm
+            almQ /= norm
+            almU /= norm
+
+        a_lm = [almI, almQ, almU]
+        return a_lm
+    else:
+
+        return blm
 
 
 def fake_flags(
