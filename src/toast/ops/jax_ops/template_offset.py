@@ -25,10 +25,9 @@ def template_offset_add_to_signal_jitted(step_length, amplitudes, data):
     # All but the last amplitude have step_length samples.
     data_first = data[:(nb_amplitudes - 1) * step_length]
     data_first = jnp.reshape(data_first, newshape=(-1,step_length))
-    data_first = data_first + amplitudes[:-1, jnp.newaxis]
+    new_data_first = data_first + amplitudes[:-1, jnp.newaxis]
     #data_first[:] += amplitudes[:-1, jnp.newaxis]
-    # TODO could we express this to be more likely to have an inplace modification?
-    data = data.at[:(nb_amplitudes - 1) * step_length].set(data_first.ravel())
+    data = data.at[:(nb_amplitudes - 1) * step_length].set(new_data_first.ravel())
 
     # Now handle the final amplitude.
     #data_last = data[(nb_amplitudes - 1) * step_length:]
@@ -232,5 +231,6 @@ template_offset_project_signal = select_implementation(template_offset_project_s
 # python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker")'
 
 # to bench:
-# TODO check bench
-# use scanmap config and check PixelsHealpix._exec field in timing.csv
+# use template_offset config with template not disabled in slurm and check 
+# (function) run_mapmaker|MapMaker._exec|solve|SolverLHS._exec|Pipeline._exec|TemplateMatrix._exec
+# field (line 174 for add and project, line 150 for just add) in timing.csv
