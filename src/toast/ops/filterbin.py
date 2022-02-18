@@ -273,7 +273,7 @@ def combine_observation_matrix(rootname):
 
 @trait_docs
 class FilterBin(Operator):
-    """FilterBin buids a template matrix and projects out
+    """FilterBin builds a template matrix and projects out
     compromised modes.  It then bins the signal and optionally
     writes out the sparse observation matrix that matches the
     filtering operations.
@@ -673,6 +673,8 @@ class FilterBin(Operator):
                         # and weights
                         self.binning.stokes_weights.apply(obs_data, detectors=[det])
                         weights = obs.detdata[self.binning.stokes_weights.weights][det]
+                        if weights.ndim == 1:
+                            weights = weights.reshape(-1, 1)
                         if ndet > 1:
                             full_pixels.append(pixels)
                             full_weights.append(weights)
@@ -751,6 +753,7 @@ class FilterBin(Operator):
                     self._accumulate_spatial_observation_matrix(
                         obs,
                         value,
+                        detectors_by_value[value],
                         full_pixels,
                         full_weights,
                         full_good_fit,
@@ -1015,6 +1018,11 @@ class FilterBin(Operator):
         """Expands a dense, compressed matrix into a sparse matrix with
         global indexing
         """
+        if local_to_global[0] < 0:
+            # Includes the bad pixel from masking
+            compressed_matrix = compressed_matrix[1:, 1:].copy()
+            local_to_global = local_to_global[1:].copy()
+
         n = compressed_matrix.size
         indices = np.zeros(n, dtype=np.int64)
         indptr = np.zeros(self.npixtot + 1, dtype=np.int64)
@@ -1031,6 +1039,7 @@ class FilterBin(Operator):
             (compressed_matrix.ravel(), indices, indptr),
             shape=(self.npixtot, self.npixtot),
         )
+
         return sparse_matrix
 
     @function_timer
@@ -1153,6 +1162,7 @@ class FilterBin(Operator):
         self,
         obs,
         value,
+        detectors,
         pixels,
         weights,
         good_fit,
@@ -1183,7 +1193,7 @@ class FilterBin(Operator):
                 mm_indptr = np.load(fname_cache + ".indptr.npy")
                 local_obs_matrix = scipy.sparse.csr_matrix(
                     (mm_data, mm_indices, mm_indptr),
-                    self.obs_matrix.shape,
+                    self.spatial_obs_matrix.shape,
                 )
                 if self.grank == 0:
                     log.debug(
@@ -1215,42 +1225,58 @@ class FilterBin(Operator):
             c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
             if self.grank == 0:
                 log.debug(f"{self.group:4} : FilterBin:     Accumulating")
-                
+
             ############ accumulate spatial observation matrix begin
-            
+
+            weights = np.array(weights)
             ndet, nsample = c_pixels.shape
-            ntemplate = len(templates)
+            ntemplate = templates.ntemplate
             nnz = self.nnz
             npix = c_npix
             npixtot = c_npixtot
+
             for isample in range(nsample):
+                jsample = isample  # Template covariance vanishes for isample != jsample
+                good = good_any[:, isample]
+                if not np.any(good):
+                    continue
+                invcov = np.dot(
+                    templates.templates,
+                    np.dot(np.diag(good), templates.templates.T),
+                )
+                # FIXME: handle (rare) singular matrices
+                cov = np.linalg.inv(invcov)
                 for idet in range(ndet):
+                    idetweight = obs[self.binning.noise_model].detector_weight(
+                        detectors[idet]
+                    )
                     ipix = c_pixels[idet, isample]
-                    jsample = isample  # Template covariance vanishes for isample != jsample
                     for jdet in range(ndet):
+                        jdetweight = obs[self.binning.noise_model].detector_weight(
+                            detectors[jdet]
+                        )
                         jpix = c_pixels[jdet, jsample]
-                        mvalue = 
-                                        templates[idet, iorder] \
-                                        * templates[jdet, jorder] \
-                                        * cov[iorder, jorder]
-                        for inz in range(nnz):
-                            for jnz in range(nnz):
-                                if isample == jsample and idet == jdet:
-                                    c_obs_matrix[ipix + inz * npix, jpix + jnz * npix] += 1
-                                for itemplate in range(ntemplate):
-                                    c_obs_matrix[ipix + inz * npix, jpix + jnz * npiz] -= \
+                        for itemplate in range(ntemplate):
+                            for jtemplate in range(ntemplate):
+                                mvalue = templates.templates[itemplate, idet] \
+                                    * templates.templates[jtemplate, jdet] \
+                                    * cov[itemplate, jtemplate]
+                                for inz in range(nnz):
+                                    for jnz in range(nnz):
+                                        if isample == jsample and idet == jdet:
+                                            c_obs_matrix[
+                                                ipix + inz * npix, jpix + jnz * npix
+                                            ] += jdetweight
+                                        for itemplate in range(ntemplate):
+                                            c_obs_matrix[
+                                                ipix + inz * npix, jpix + jnz * npix
+                                            ] -= mvalue \
+                                                * weights[idet][isample][inz] \
+                                                * weights[jdet][jsample][jnz] \
+                                                * jdetweight
 
             ############ accumulate spatial observation matrix end
-            
-            #accumulate_observation_matrix(
-            #    c_obs_matrix,
-            #    c_pixels,
-            #    weights[good_any].copy(),
-            #    templates[good_any].copy(),
-            #    template_covariance,
-            #    good_fit[good_any].astype(np.uint8),
-            #    good_bin[good_any].astype(np.uint8),
-            #)
+
             if self.grank == 0:
                 log.debug(
                     f"{self.group:4} : FilterBin:     Accumulated in {time() - t1:.2f} s"
@@ -1259,6 +1285,7 @@ class FilterBin(Operator):
                     f"{self.group:4} : FilterBin:     Expanding local to global",
                 )
                 t1 = time()
+
             # expand to global pixel numbers
             local_obs_matrix = self._expand_matrix(c_obs_matrix, local_to_global)
             if self.grank == 0:
@@ -1283,8 +1310,8 @@ class FilterBin(Operator):
 
         if self.grank == 0:
             log.debug(f"{self.group:4} : FilterBin:     Adding to global")
-        detweight = obs[self.binning.noise_model].detector_weight(det)
-        self.obs_matrix += local_obs_matrix * detweight
+
+        self.spatial_obs_matrix += local_obs_matrix
         if self.grank == 0:
             log.debug(
                 f"{self.group:4} : FilterBin:     Added in {time() - t1:.2f} s",
@@ -1327,12 +1354,17 @@ class FilterBin(Operator):
 
     @function_timer
     def _initialize_obs_matrix(self):
+        self.spatial_obs_matrix = None
         if self.write_obs_matrix:
             self.obs_matrix = scipy.sparse.csr_matrix(
                 (self.npixtot, self.npixtot), dtype=np.float64
             )
             if self.rank == 0 and self.cache_dir is not None:
                 os.makedirs(self.cache_dir, exist_ok=True)
+            if self.focalplane_key is not None:
+                self.spatial_obs_matrix = scipy.sparse.csr_matrix(
+                    (self.npixtot, self.npixtot), dtype=np.float64
+                )
         else:
             self.obs_matrix = None
         return
@@ -1371,6 +1403,8 @@ class FilterBin(Operator):
                         icov += 1
         cc = cc.tocsr()
         self.obs_matrix = cc.dot(self.obs_matrix)
+        if self.spatial_obs_matrix is not None:
+            self.spatial_obs_matrix = cc.dot(self.spatial_obs_matrix)
         return
 
     @function_timer
@@ -1387,106 +1421,136 @@ class FilterBin(Operator):
         nrow_tot = self.npixtot
         nslice = 128
         nrow_write = nrow_tot // nslice
-        for islice, row_start in enumerate(range(0, nrow_tot, nrow_write)):
-            row_stop = row_start + nrow_write
-            obs_matrix_slice = self.obs_matrix[row_start:row_stop]
-            nnz = obs_matrix_slice.nnz
-            if self.comm is not None:
-                nnz = self.comm.allreduce(nnz)
-            if nnz == 0:
-                log.debug_rank(
-                    f"Slice {islice+1:5} / {nslice}: {row_start:12} - {row_stop:12} "
-                    f"is empty.  Skipping.",
-                    comm=self.comm,
-                )
+        for obs_matrix in [self.obs_matrix, self.spatial_obs_matrix]:
+            if obs_matrix is None:
                 continue
-            log.debug_rank(
-                f"Collecting slice {islice+1:5} / {nslice} : {row_start:12} - "
-                f"{row_stop:12}",
-                comm=self.comm,
-            )
-
-            factor = 1
-            while factor < self.ntask:
+            nslice_empty = 0
+            nslice_hit = 0
+            for islice, row_start in enumerate(range(0, nrow_tot, nrow_write)):
+                row_stop = row_start + nrow_write
+                obs_matrix_slice = obs_matrix[row_start:row_stop]
+                nnz = obs_matrix_slice.nnz
+                if self.comm is not None:
+                    nnz = self.comm.allreduce(nnz)
+                if nnz == 0:
+                    nslice_empty += 1
+                    log.debug_rank(
+                        f"Slice {islice+1:5} / {nslice}: {row_start:12} - {row_stop:12} "
+                        f"is empty.  Skipping.",
+                        comm=self.comm,
+                    )
+                    continue
+                else:
+                    nslice_hit += 1
                 log.debug_rank(
-                    f"FilterBin: Collecting {2 * factor} / {self.ntask}",
+                    f"Collecting slice {islice+1:5} / {nslice} : {row_start:12} - "
+                    f"{row_stop:12}",
                     comm=self.comm,
                 )
-                if self.rank % (factor * 2) == 0:
-                    # this task receives
-                    receive_from = self.rank + factor
-                    if receive_from < self.ntask:
-                        size_recv = self.comm.recv(source=receive_from, tag=factor)
-                        data_recv = np.zeros(size_recv, dtype=np.float64)
-                        self.comm.Recv(
-                            data_recv, source=receive_from, tag=factor + self.ntask
+
+                factor = 1
+                while factor < self.ntask:
+                    log.debug_rank(
+                        f"FilterBin: Collecting {2 * factor} / {self.ntask}",
+                        comm=self.comm,
+                    )
+                    if self.rank % (factor * 2) == 0:
+                        # this task receives
+                        receive_from = self.rank + factor
+                        if receive_from < self.ntask:
+                            size_recv = self.comm.recv(source=receive_from, tag=factor)
+                            data_recv = np.zeros(size_recv, dtype=np.float64)
+                            self.comm.Recv(
+                                data_recv, source=receive_from, tag=factor + self.ntask
+                            )
+                            indices_recv = np.zeros(size_recv, dtype=np.int32)
+                            self.comm.Recv(
+                                indices_recv,
+                                source=receive_from,
+                                tag=factor + 2 * self.ntask,
+                            )
+                            indptr_recv = np.zeros(
+                                obs_matrix_slice.indptr.size, dtype=np.int32
+                            )
+                            self.comm.Recv(
+                                indptr_recv,
+                                source=receive_from,
+                                tag=factor + 3 * self.ntask,
+                            )
+                            obs_matrix_slice += scipy.sparse.csr_matrix(
+                                (data_recv, indices_recv, indptr_recv),
+                                obs_matrix_slice.shape,
+                            )
+                            del data_recv, indices_recv, indptr_recv
+                    elif self.rank % (factor * 2) == factor:
+                        # this task sends
+                        send_to = self.rank - factor
+                        self.comm.send(obs_matrix_slice.data.size, dest=send_to, tag=factor)
+                        self.comm.Send(
+                            obs_matrix_slice.data, dest=send_to, tag=factor + self.ntask
                         )
-                        indices_recv = np.zeros(size_recv, dtype=np.int32)
-                        self.comm.Recv(
-                            indices_recv,
-                            source=receive_from,
+                        self.comm.Send(
+                            obs_matrix_slice.indices,
+                            dest=send_to,
                             tag=factor + 2 * self.ntask,
                         )
-                        indptr_recv = np.zeros(
-                            obs_matrix_slice.indptr.size, dtype=np.int32
-                        )
-                        self.comm.Recv(
-                            indptr_recv,
-                            source=receive_from,
+                        self.comm.Send(
+                            obs_matrix_slice.indptr,
+                            dest=send_to,
                             tag=factor + 3 * self.ntask,
                         )
-                        obs_matrix_slice += scipy.sparse.csr_matrix(
-                            (data_recv, indices_recv, indptr_recv),
-                            obs_matrix_slice.shape,
-                        )
-                        del data_recv, indices_recv, indptr_recv
-                elif self.rank % (factor * 2) == factor:
-                    # this task sends
-                    send_to = self.rank - factor
-                    self.comm.send(obs_matrix_slice.data.size, dest=send_to, tag=factor)
-                    self.comm.Send(
-                        obs_matrix_slice.data, dest=send_to, tag=factor + self.ntask
-                    )
-                    self.comm.Send(
-                        obs_matrix_slice.indices,
-                        dest=send_to,
-                        tag=factor + 2 * self.ntask,
-                    )
-                    self.comm.Send(
-                        obs_matrix_slice.indptr,
-                        dest=send_to,
-                        tag=factor + 3 * self.ntask,
-                    )
 
-                if self.comm is not None:
-                    self.comm.Barrier()
-                log.debug_rank("FilterBin: Collected in", comm=self.comm, timer=timer)
-                factor *= 2
+                    if self.comm is not None:
+                        self.comm.Barrier()
+                    log.debug_rank("FilterBin: Collected in", comm=self.comm, timer=timer)
+                    factor *= 2
 
-            # Write out the observation matrix
-            fname = os.path.join(self.output_dir, f"{self.name}_obs_matrix")
-            fname += f".{row_start:012}.{row_stop:012}.{nrow_tot:012}"
-            log.debug_rank(
-                f"FilterBin: Writing observation matrix to {fname}.npz",
-                comm=self.comm,
-            )
-            if self.rank == 0:
-                if True:
-                    # Write out the members of the CSR matrix separately because
-                    # scipy.sparse.save_npz is so inefficient
-                    np.save(f"{fname}.data", obs_matrix_slice.data)
-                    np.save(f"{fname}.indices", obs_matrix_slice.indices)
-                    np.save(f"{fname}.indptr", obs_matrix_slice.indptr)
+                # Write out the observation matrix
+                if obs_matrix is self.obs_matrix:
+                    fname = os.path.join(self.output_dir, f"{self.name}_obs_matrix")
+                elif obs_matrix is self.spatial_obs_matrix:
+                    fname = os.path.join(self.output_dir, f"{self.name}_spatial_obs_matrix")
                 else:
-                    scipy.sparse.save_npz(fname, obs_matrix_slice)
-            log.info_rank(
-                f"FilterBin: Wrote observation matrix to {fname} in",
-                comm=self.comm,
-                timer=timer,
-            )
+                    raise RuntimeError("Cannot determine output file name")
+                fname += f".{row_start:012}.{row_stop:012}.{nrow_tot:012}"
+                log.debug_rank(
+                    f"FilterBin: Writing observation matrix to {fname}.npz",
+                    comm=self.comm,
+                )
+                if self.rank == 0:
+                    if True:
+                        # Write out the members of the CSR matrix separately because
+                        # scipy.sparse.save_npz is so inefficient
+                        np.save(f"{fname}.data", obs_matrix_slice.data)
+                        np.save(f"{fname}.indices", obs_matrix_slice.indices)
+                        np.save(f"{fname}.indptr", obs_matrix_slice.indptr)
+                    else:
+                        scipy.sparse.save_npz(fname, obs_matrix_slice)
+                log.info_rank(
+                    f"FilterBin: Wrote observation matrix to {fname} in",
+                    comm=self.comm,
+                    timer=timer,
+                )
+            if nslice_hit == 0:
+                if obs_matrix is self.obs_matrix:
+                    log.warning_rank(
+                        f"FilterBin: Temporal observation matrix is completely empty! "
+                        "Nothing written to file.",
+                        comm=self.comm,
+                    )
+                if obs_matrix is self.spatial_obs_matrix:
+                    log.warning_rank(
+                        f"FilterBin: Spatial observation matrix is completely empty! "
+                        "Nothing written to file.",
+                        comm=self.comm,
+                    )
+                
         # After writing we are done
         del self.obs_matrix
         self.obs_matrix = None
+        if self.spatial_obs_matrix is not None:
+            del self.spatial_obs_matrix
+            self.spatial_obs_matrix = None
         return
 
     @function_timer
