@@ -11,7 +11,7 @@ from .. import ops as ops
 from .. import qarray as qa
 from .._libtoast import healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
-from ..intervals import Interval, IntervalList
+from ..intervals import interval_dtype, IntervalList
 from ..observation import default_values as defaults
 from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
@@ -24,7 +24,7 @@ class PointingHealpixTest(MPITestCase):
 
     def test_pointing_matrix_healpix2(self):
         nside = 64
-        npix = 12 * nside**2
+        npix = 12 * nside ** 2
         hpix = HealpixPixels(64)
         nest = True
         phivec = np.radians(
@@ -262,22 +262,12 @@ class PointingHealpixTest(MPITestCase):
         for obs in data.obs:
             times = obs.shared[defaults.times]
             nsample = len(times)
-            intervals1 = [
-                Interval(
-                    start=times[0],
-                    stop=times[-1],
-                    first=0,
-                    last=nsample - 1,
-                )
-            ]
-            intervals2 = [
-                Interval(
-                    start=times[0],
-                    stop=times[nsample // 2],
-                    first=0,
-                    last=nsample // 2,
-                )
-            ]
+            intervals1 = np.array(
+                [(times[0], times[-1], 0, nsample - 1)], dtype=interval_dtype
+            )
+            intervals2 = np.array(
+                [(times[0], times[nsample // 2], 0, nsample // 2)], dtype=interval_dtype
+            )
             obs.intervals[full_intervals] = IntervalList(times, intervals=intervals1)
             obs.intervals[half_intervals] = IntervalList(times, intervals=intervals2)
 

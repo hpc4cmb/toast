@@ -20,7 +20,7 @@ from ..dist import distribute_discrete
 
 from ..timing import function_timer, Timer
 
-from ..intervals import Interval
+from ..intervals import interval_dtype
 
 from ..schedule import SatelliteSchedule
 

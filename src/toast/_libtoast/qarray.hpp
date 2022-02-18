@@ -9,14 +9,15 @@
 
 // This header defines low-level quaternion functions.
 
-#pragma acc_routine vector
+#pragma omp declare target
+
 void qa_normalize_inplace(size_t n, double * q);
 
-#pragma acc routine seq
 void qa_rotate(double const * q_in, double const * v_in, double * v_out);
 
-#pragma acc routine seq
 void qa_mult(double const * p, double const * q, double * r);
+
+#pragma omp end declare target
 
 // FIXME:  move remaining functions from libtoast here and in qarray_core.cpp
 

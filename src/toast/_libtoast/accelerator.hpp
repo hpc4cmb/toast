@@ -7,13 +7,18 @@
 
 #include <common.hpp>
 
+#ifdef _OPENMP
+# include <omp.h>
+#endif // ifdef _OPENMP
+
+
 // Declarations for OpenMP target offload helpers
 
 // This helper class stores a mapping between host and device pointers.
 // Once the OpenMP 5.1 standard is widely implemented across compilers,
 // We can use the omp_get_mapped_ptr() method.
 
-#ifdef _OPENMP
+#ifdef HAVE_OPENMP_TARGET
 
 class OmpManager {
     public:

@@ -1679,12 +1679,16 @@ class IntervalsManager(MutableMapping):
 
     """
 
-    def __init__(self, dist):
+    # This could be anything, just has to be unique
+    all_name = "ALL_OBSERVATION_SAMPLES"
+
+    def __init__(self, dist, local_samples):
         self.comm = dist.comm
         self.comm_col = dist.comm_col
         self.comm_row = dist.comm_row
         self._internal = dict()
         self._del_callbacks = dict()
+        self._local_samples = local_samples
 
     def create_col(self, name, global_timespans, local_times, fromrank=0):
         """Create local interval lists on the same process column.
@@ -1773,6 +1777,14 @@ class IntervalsManager(MutableMapping):
     # Mapping methods
 
     def __getitem__(self, key):
+        if key is None:
+            if self.all_name not in self._internal:
+                # Create fake intervals
+                faketimes = -1.0 * np.ones(self._local_samples, dtype=np.float64)
+                self._internal[self.all_name] = IntervalList(
+                    faketimes, samplespans=[(0, self._local_samples - 1)]
+                )
+            key = self.all_name
         return self._internal[key]
 
     def __delitem__(self, key):

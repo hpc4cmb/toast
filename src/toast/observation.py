@@ -212,7 +212,7 @@ class Observation(MutableMapping):
         # Set up the data managers
         self.detdata = DetDataManager(self.dist)
         self.shared = SharedDataManager(self.dist)
-        self.intervals = IntervalsManager(self.dist)
+        self.intervals = IntervalsManager(self.dist, n_samples)
 
     # Fully clear the observation
 

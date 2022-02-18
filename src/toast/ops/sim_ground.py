@@ -32,7 +32,7 @@ from ..dist import distribute_uniform, distribute_discrete
 
 from ..timing import function_timer, Timer, GlobalTimers
 
-from ..intervals import Interval, regular_intervals, IntervalList
+from ..intervals import regular_intervals, IntervalList
 
 from ..noise_sim import AnalyticNoise
 
@@ -113,12 +113,12 @@ class SimGround(Operator):
     )
 
     scan_accel_az = Quantity(
-        1.0 * u.degree / u.second**2,
+        1.0 * u.degree / u.second ** 2,
         help="Mount scanning rate acceleration for turnarounds",
     )
 
     scan_accel_el = Quantity(
-        1.0 * u.degree / u.second**2,
+        1.0 * u.degree / u.second ** 2,
         allow_none=True,
         help="Mount elevation rate acceleration.",
     )
@@ -550,9 +550,9 @@ class SimGround(Operator):
                     scan.az_min.to_value(u.radian),
                     scan.el.to_value(u.radian),
                     self.scan_rate_az.to_value(u.radian / u.second),
-                    self.scan_accel_az.to_value(u.radian / u.second**2),
+                    self.scan_accel_az.to_value(u.radian / u.second ** 2),
                     self.scan_rate_el.to_value(u.radian / u.second),
-                    self.scan_accel_el.to_value(u.radian / u.second**2),
+                    self.scan_accel_el.to_value(u.radian / u.second ** 2),
                     elnod_el,
                     elnod_az,
                     scan_min_az,
@@ -593,7 +593,7 @@ class SimGround(Operator):
                 scan.az_max.to_value(u.radian),
                 scan.az_min.to_value(u.radian),
                 self.scan_rate_az.to_value(u.radian / u.second),
-                self.scan_accel_az.to_value(u.radian / u.second**2),
+                self.scan_accel_az.to_value(u.radian / u.second ** 2),
                 scan_min_az,
                 scan_max_az,
                 cosecant_modulation=self.scan_cosecant_modulation,
@@ -605,7 +605,7 @@ class SimGround(Operator):
                     scan_times,
                     scan_el_data,
                     self.scan_rate_el.to_value(u.radian / u.second),
-                    self.scan_accel_el.to_value(u.radian / u.second**2),
+                    self.scan_accel_el.to_value(u.radian / u.second ** 2),
                     scan_min_el,
                     scan_max_el,
                     self.el_mod_amplitude.to_value(u.radian),
@@ -618,7 +618,7 @@ class SimGround(Operator):
                     scan_az_data,
                     scan_el_data,
                     self.scan_rate_el.to_value(u.radian / u.second),
-                    self.scan_accel_el.to_value(u.radian / u.second**2),
+                    self.scan_accel_el.to_value(u.radian / u.second ** 2),
                     scan_min_el,
                     scan_max_el,
                     self.el_mod_step.to_value(u.radian),
@@ -657,9 +657,9 @@ class SimGround(Operator):
                     scan_az_data[-1],
                     scan_el_data[-1],
                     self.scan_rate_az.to_value(u.radian / u.second),
-                    self.scan_accel_az.to_value(u.radian / u.second**2),
+                    self.scan_accel_az.to_value(u.radian / u.second ** 2),
                     self.scan_rate_el.to_value(u.radian / u.second),
-                    self.scan_accel_el.to_value(u.radian / u.second**2),
+                    self.scan_accel_el.to_value(u.radian / u.second ** 2),
                     elnod_el,
                     elnod_az,
                     scan_min_az,
@@ -913,7 +913,7 @@ class SimGround(Operator):
             )
 
             obmem = ob.memory_use()
-            obmem_gb = obmem / 1024**3
+            obmem_gb = obmem / 1024 ** 3
             msg = f"Observation {ob.name} using {obmem_gb:0.2f} GB of total memory"
             log.debug_rank(msg, comm=ob.comm.comm_group)
 

@@ -7,23 +7,34 @@
 
 #include <common.hpp>
 
-class Interval {
-    public:
-        Interval();
-        Interval(
-            double start_time,
-            double stop_time,
-            int64_t first_samp,
-            int64_t last_samp
-        );
-        double start;
-        double stop;
-        int64_t first;
-        int64_t last;
+struct Interval {
+    double start;
+    double stop;
+    int64_t first;
+    int64_t last;
 };
 
-using IntervalList = std::vector <Interval>;
+// class Interval {
+//     public:
+//         Interval();
+//         Interval(
+//             double start_time,
+//             double stop_time,
+//             int64_t first_samp,
+//             int64_t last_samp
+//         );
 
-PYBIND11_MAKE_OPAQUE(IntervalList);
+//         bool Interval::operator==(Interval const & other) const;
+//         bool Interval::operator!=(Interval const & other) const;
+
+//         double start;
+//         double stop;
+//         int64_t first;
+//         int64_t last;
+// };
+
+// using IntervalList = std::vector <Interval>;
+
+// PYBIND11_MAKE_OPAQUE(IntervalList);
 
 #endif

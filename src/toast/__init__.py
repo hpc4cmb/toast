@@ -76,7 +76,7 @@ from .mpi import Comm, get_world
 
 from .timing import Timer, GlobalTimers
 
-from .intervals import Interval
+from .intervals import interval_dtype, IntervalList
 
 from .observation import Observation
 

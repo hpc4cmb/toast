@@ -9,12 +9,9 @@
 #include <cstdlib>
 #include <utility>
 
-#ifdef _OPENMP
-# include <omp.h>
-#endif // ifdef _OPENMP
 
 
-#ifdef _OPENMP
+#ifdef HAVE_OPENMP_TARGET
 
 OmpManager & OmpManager::get() {
     static OmpManager instance;
@@ -64,6 +61,7 @@ void OmpManager::assign_device(int node_procs, int node_rank) {
         << n_target << " total)";
         log.verbose(o.str().c_str());
     }
+
     return;
 }
 

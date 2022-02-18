@@ -6,12 +6,7 @@
 
 #include <qarray.hpp>
 
-#ifdef HAVE_OPENACC
-# include <openacc.h>
-#endif // ifdef HAVE_OPENACC
 
-
-#pragma acc routine vector
 void qa_normalize_inplace(size_t n, double * q) {
     for (size_t i = 0; i < n; ++i) {
         size_t off = 4 * i;
@@ -27,7 +22,6 @@ void qa_normalize_inplace(size_t n, double * q) {
     return;
 }
 
-#pragma acc routine seq
 void qa_rotate(double const * q_in, double const * v_in,
                double * v_out) {
     // The input quaternion has already been normalized on the host.
@@ -54,7 +48,6 @@ void qa_rotate(double const * q_in, double const * v_in,
     return;
 }
 
-#pragma acc routine seq
 void qa_mult(double const * p, double const * q, double * r) {
     r[0] =  p[0] * q[3] + p[1] * q[2] -
            p[2] * q[1] + p[3] * q[0];

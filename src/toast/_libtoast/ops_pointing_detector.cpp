@@ -4,6 +4,8 @@
 
 #include <module.hpp>
 
+#include <intervals.hpp>
+
 #include <qarray.hpp>
 
 #include <accelerator.hpp>
@@ -15,137 +17,105 @@ void init_ops_pointing_detector(py::module & m) {
 
     m.def(
         "pointing_detector", [](
-            py::buffer focalplane,
-            py::buffer boresight,
-            py::buffer quat_indx,
-            py::buffer quats,
-            py::buffer shared_flags,
-            uint8_t shared_flag_mask
+            py::array_t <double> const & focalplane,
+            py::array_t <double> const & boresight,
+            py::array_t <int32_t> const & quat_index,
+            py::array_t <double> & quats,
+            py::array_t <Interval> const & intervals,
+            py::array_t <uint8_t> const & shared_flags,
+            uint8_t shared_flag_mask,
+            bool use_accel
         ) {
-            auto info_fp = focalplane.request();
-            double * raw_fp = reinterpret_cast <double *> (info_fp.ptr);
+            size_t n_det = quat_index.shape(0);
+            assert_shape <2> (focalplane, "focalplane", {n_det, 4});
 
-            auto info_qindx = quat_indx.request();
-            int32_t * raw_qindx = reinterpret_cast <int32_t *> (info_qindx.ptr);
+            size_t n_samp = boresight.shape(0);
+            assert_shape <2> (boresight, "boresight", {n_samp, 4});
 
-            auto info_bore = boresight.request();
-            double * raw_bore = reinterpret_cast <double *> (info_bore.ptr);
+            size_t n_view = intervals.shape(0);
 
-            auto info_quats = quats.request();
-            double * raw_quats = reinterpret_cast <double *> (info_quats.ptr);
+            bool use_flags = false;
+            if (shared_flags.shape(0) == n_samp) {
+                use_flags = true;
+            }
 
-            auto info_flags = shared_flags.request();
-            uint8_t * raw_flags = reinterpret_cast <uint8_t *> (info_flags.ptr);
+            assert_shape <3> (quats, "quats", {n_det, n_samp, 4});
 
-            size_t n_det = info_qindx.shape[0];
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = ! omgr.device_is_host() && use_accel;
 
-            if (info_fp.shape[0] != n_det) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "focalplane quats have different num dets than quat index";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            if (info_fp.shape[1] != 4) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "focalplane quats do not have 4 elements";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            size_t n_samp = info_bore.shape[0];
-            if (info_bore.shape[1] != 4) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "boresight quats do not have 4 elements";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            if (info_flags.shape[0] != n_samp) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "shared flags do not have same number of samples as boresight";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            if (info_quats.shape[0] < n_det) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "det quats have fewer detectors than index";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            if (info_quats.shape[1] != n_samp) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "det quats do not have same number of samples as boresight";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            if (info_quats.shape[2] != 4) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "det quats do not have 4 elements per sample";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            size_t len_fp = n_det * 4;
-            size_t len_bore = n_samp * 4;
-            size_t len_flags = n_samp;
-            size_t len_quats = info_quats.shape[0] * n_samp * 4;
+            double * dev_boresight = (double*)omgr.device_ptr((void*)boresight.data());
+            double * dev_quats = (double*)omgr.device_ptr((void*)quats.data());
+            Interval * dev_intervals = (Interval*)omgr.device_ptr(
+                (void*)intervals.data()
+            );
+            double * fp = focalplane.data();
+            int32_t * qindx = quat_index.data();
 
-            // #pragma \
-            // acc data copyin(shared_flag_mask, n_det, n_samp, raw_fp[:len_fp], raw_qindx[:n_det]) present(raw_bore[:len_bore], raw_flags[:len_flags], raw_quats[:len_quats])
-            // {
-            //     if (fake_openacc()) {
-            //         // Set all "present" data to point at the fake device pointers
-            //         auto & fake = FakeMemPool::get();
-            //         raw_bore = (double *)fake.device_ptr(raw_bore);
-            //         raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
-            //         raw_quats = (double *)fake.device_ptr(raw_quats);
-            //         // for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //         //     std::cout << "bore: " << isamp << ": " << raw_bore[4*isamp] << ", " << raw_bore[4*isamp+1] << ", " << raw_bore[4*isamp+2] << ", " << raw_bore[4*isamp+3] << " flag = " << (int)raw_flags[isamp] << " mask = " << (int)shared_flag_mask << std::endl;
-            //         // }
-            //     }
-            //     #pragma acc parallel
-            //     #pragma acc loop independent
-            //     for (size_t idet = 0; idet < n_det; idet++) {
-            //         int32_t q_indx = raw_qindx[idet];
-            //         #pragma acc loop independent
-            //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //             double temp_bore[4];
-            //             if ((raw_flags[isamp] & shared_flag_mask) == 0) {
-            //                 temp_bore[0] = raw_bore[4 * isamp];
-            //                 temp_bore[1] = raw_bore[4 * isamp + 1];
-            //                 temp_bore[2] = raw_bore[4 * isamp + 2];
-            //                 temp_bore[3] = raw_bore[4 * isamp + 3];
-            //             } else {
-            //                 temp_bore[0] = 0.0;
-            //                 temp_bore[1] = 0.0;
-            //                 temp_bore[2] = 0.0;
-            //                 temp_bore[3] = 1.0;
-            //             }
-            //             qa_mult(
-            //                 temp_bore,
-            //                 &(raw_fp[4 * idet]),
-            //                 &(raw_quats[(q_indx * 4 * n_samp) + 4 * isamp])
-            //             );
-            //             // std::cout << "detpt " << isamp << ": "
-            //             // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp] << " "
-            //             // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 1] << " "
-            //             // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 2] << " "
-            //             // << raw_quats[(q_indx * 4 * n_samp) + 4 * isamp + 3] << " "
-            //             // << std::endl;
-            //         }
-            //     }
-            //     // if (fake_openacc()) {
-            //     //     for (size_t idet = 0; idet < n_det; idet++) {
-            //     //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //     //             std::cout << "quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
-            //     //         }
-            //     //     }
-            //     // }
-            // }
+            if (use_flags) {
+                uint8_t * dev_flags = (uint8_t*)omgr.device_ptr(
+                    (void*)shared_flags.data()
+                );
+                #pragma omp target data \
+                    device(dev) \
+                    map(to: fp[0:n_det], qindx[0:n_det]) \
+                    use_device_ptr(dev_boresight, dev_quats, dev_intervals, dev_flags) \
+                    if(offload)
+                #pragma omp target teams distribute \
+                    parallel for collapse(3) \
+                    if(offload)
+                for (size_t iview = 0; iview < n_view; iview++) {
+                    for (size_t idet = 0; idet < n_det; idet++) {
+                        int32_t qidx = qindx[idet];
+                        for (size_t isamp = dev_intervals[iview].first; isamp <= dev_intervals[iview].last; isamp++) {
+                            double temp_bore[4];
+                            if ((dev_flags[isamp] & shared_flag_mask) == 0) {
+                                temp_bore[0] = dev_boresight[4 * isamp];
+                                temp_bore[1] = dev_boresight[4 * isamp + 1];
+                                temp_bore[2] = dev_boresight[4 * isamp + 2];
+                                temp_bore[3] = dev_boresight[4 * isamp + 3];
+                            } else {
+                                temp_bore[0] = 0.0;
+                                temp_bore[1] = 0.0;
+                                temp_bore[2] = 0.0;
+                                temp_bore[3] = 1.0;
+                            }
+                            qa_mult(
+                                temp_bore,
+                                &(fp[4 * idet]),
+                                &(dev_quats[(qidx * 4 * n_samp) + 4 * isamp])
+                            );
+                        }
+                    }
+                }
+            } else {
+                #pragma omp target data \
+                    device(dev) \
+                    map(to: fp[0:n_det], qindx[0:n_det]) \
+                    use_device_ptr(dev_boresight, dev_quats, dev_intervals) \
+                    if(offload)
+                #pragma omp target teams distribute \
+                    parallel for collapse(3) \
+                    if(offload)
+                for (size_t iview = 0; iview < n_view; iview++) {
+                    for (size_t idet = 0; idet < n_det; idet++) {
+                        int32_t qidx = qindx[idet];
+                        for (size_t isamp = dev_intervals[iview].first; isamp <= dev_intervals[iview].last; isamp++) {
+                            double temp_bore[4];
+                            temp_bore[0] = dev_boresight[4 * isamp];
+                            temp_bore[1] = dev_boresight[4 * isamp + 1];
+                            temp_bore[2] = dev_boresight[4 * isamp + 2];
+                            temp_bore[3] = dev_boresight[4 * isamp + 3];
+                            qa_mult(
+                                temp_bore,
+                                &(fp[4 * idet]),
+                                &(dev_quats[(qidx * 4 * n_samp) + 4 * isamp])
+                            );
+                        }
+                    }
+                }
+            }
             return;
         });
 
