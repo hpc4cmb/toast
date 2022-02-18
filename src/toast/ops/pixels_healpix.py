@@ -129,6 +129,7 @@ class PixelsHealpix(Operator):
         # default, then the 'observe' function will not have baen called yet.
         if not hasattr(self, "_local_submaps"):
             self._set_hpix(self.nside, self.nside_submap)
+        self._use_jax = False
 
     @traitlets.observe("nside", "nside_submap")
     def _reset_hpix(self, change):
@@ -204,6 +205,12 @@ class PixelsHealpix(Operator):
                 exists = ob.detdata.ensure(
                     self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
                 )
+
+            # FIXME:  Temporary hack.  This will be handled by the use_accel option and
+            # runtime checks for jax support.
+            if self._use_jax and not exists:
+                # The data was just created
+                ob.detdata[self.pixels].to_jax()
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own

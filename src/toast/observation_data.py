@@ -42,6 +42,9 @@ from ._libtoast import (
     acc_copyout,
 )
 
+import jax
+import jax.numpy as jnp
+
 
 class DetectorData(object):
     """Class representing a logical collection of co-sampled detector data.
@@ -158,6 +161,27 @@ class DetectorData(object):
         if self._raw is not None:
             del self._raw
         self._raw = self._storage_class.zeros(self._fullsize)
+        self._flatdata = self._raw.array()[: self._flatshape]
+        self._data = self._flatdata.reshape(self._shape)
+
+    def to_jax(self):
+        """Temporary hack.  This will be built into accel staging."""
+        if self._raw is None:
+            # This is a view
+            return
+        jdata = jnp.array(self._raw.array())
+        self._host_raw = self._raw
+        self._raw = jdata
+        self._flatdata = self._raw[: self._flatshape]
+        self._data = self._flatdata.reshape(self._shape)
+
+    def from_jax(self):
+        """Temporary hack.  This will be built into accel staging."""
+        if self._raw is None:
+            # This is a view
+            return
+        del self._raw
+        self._raw = self._host_raw
         self._flatdata = self._raw.array()[: self._flatshape]
         self._data = self._flatdata.reshape(self._shape)
 
@@ -1186,6 +1210,19 @@ class SharedDataManager(MutableMapping):
             log.error(msg)
             raise RuntimeError(msg)
         acc_copyout(self._internal[key].shdata.data)
+
+    def to_jax(self, key):
+        """Temporary hack.  This will be handled by accel methods and
+        runtime checks for jax"""
+        jdata = jnp.array(self._internal[key].shdata.data)
+        self._internal[key].shdata.host_data = self._internal[key].shdata.data
+        self._internal[key].shdata.data = jdata
+
+    def from_jax(self, key):
+        """Temporary hack.  This will be handled by accel methods and
+        runtime checks for jax"""
+        del self._internal[key].shdata.data
+        self._internal[key].shdata.data = self._internal[key].shdata.host_data
 
     # Mapping methods
 

@@ -60,15 +60,15 @@ find_package(OpenMP)
 # The reason is that some compilers will report the correct compile flag even if
 # no suitable device exists (e.g. gcc -fopenacc).  Make this process more robust
 # before enabling by default.
-if(USE_OPENACC)
-    find_package(OpenACC)
-endif()
+# if(USE_OPENACC)
+#     find_package(OpenACC)
+# endif()
 
 # CUDA.  In some cases, the CUDA toolkit is available (and will be detected) even
 # if we want to build without it.  Force the user to request using CUDA.
-if(USE_CUDA)
-    find_package(CUDAToolkit)
-endif()
+# if(USE_CUDA)
+#     find_package(CUDAToolkit)
+# endif()
 
 # Check consistency
 if(USE_OPENACC_MEMPOOL)

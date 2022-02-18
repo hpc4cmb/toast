@@ -88,6 +88,7 @@ class PointingDetectorSimple(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._use_jax = False
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -131,6 +132,12 @@ class PointingDetectorSimple(Operator):
                 dtype=np.float64,
                 detectors=dets,
             )
+
+            # FIXME:  Temporary hack.  This will be handled by the use_accel option and
+            # runtime checks for jax support.
+            if self._use_jax and not exists:
+                # The data was just created
+                ob.detdata[self.quats].to_jax()
 
             # Create (or re-use) output data for the detector quaternions.
 

@@ -26,6 +26,9 @@ from .delete import Delete
 
 from .mapmaker_utils import BuildHitMap, BuildNoiseWeighted, BuildInverseCovariance
 
+import jax
+import jax.numpy as jnp
+
 
 @trait_docs
 class BinMap(Operator):
@@ -246,9 +249,42 @@ class BinMap(Operator):
 
         accum.operators = accum_ops
 
+        # Temporary hack.  Once this is merged with the OMP work, operators will
+        # offload to jax arrays if use_accel is true and jax is enabled at
+        # runtime.  For now, set a boolean member variable to true to communicate
+        # this.
+        for aops in accum.operators:
+            aops._use_jax = True
+
+        # Manually copy all required data products of the accumulation pipeline
+        # into JAX arrays.  Eventually this can be done automatically inside the
+        # Pipeline operator in the same way as OpenMP target offload.
+        required = accum.requires()
+        for ob in data.obs:
+            for name in required["shared"]:
+                # Move the underlying MPI shared memory buffer out of the way and
+                # replace it with a jax array on each process.
+                ob.shared.to_jax(name)
+            for name in required["detdata"]:
+                ob.detdata[name].to_jax()
+
+        # Outputs and restored inputs.  The output noise weighted map is already
+        # updated on the host internally in the jax code, so no need to copy it
+        # back to host here.  For the inputs (which are used in a read-only way),
+        # we move the original host copy back into place.
+        for ob in data.obs:
+            for name in required["shared"]:
+                ob.shared.from_jax(name)
+            for name in required["detdata"]:
+                ob.detdata[name].from_jax()
+
         if data.comm.world_rank == 0:
             log.verbose("  BinMap running pipeline")
         pipe_out = accum.apply(data, detectors=detectors)
+
+        # Temporary hack.  Reset this flag to false for other uses of the same operators
+        for aops in accum.operators:
+            aops._use_jax = False
 
         # print("Binned zmap = ", data[self.binned].data)
 

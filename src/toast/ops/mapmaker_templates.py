@@ -62,6 +62,7 @@ class TemplateMatrix(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._initialized = False
+        self._use_jax = False
 
     def duplicate(self):
         """Make a shallow copy which contains the same list of templates.
@@ -170,6 +171,8 @@ class TemplateMatrix(Operator):
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
+                    if self._use_jax:
+                        data[self.amplitudes][tmpl.name].to_jax()
             for d in all_dets:
                 for tmpl in self.templates:
                     tmpl.project_signal(d, data[self.amplitudes][tmpl.name])

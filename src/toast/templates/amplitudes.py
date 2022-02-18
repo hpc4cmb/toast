@@ -145,6 +145,28 @@ class Amplitudes(object):
         self._raw_flags = AlignedU8.zeros(self._n_local)
         self.local_flags = self._raw_flags.array()
 
+    def to_jax(self):
+        """Temporary hack.  This will be handled by accel methods and
+        runtime checks for jax"""
+        jdata = jnp.array(self.local)
+        self._host_raw = self._raw
+        self._raw = jdata
+        self.local = jdata
+        jflags = jnp.array(self.local_flags)
+        self._host_flags = self._raw_flags
+        self._raw_flags = jflags
+        self.local_flags = jflags
+
+    def from_jax(self):
+        """Temporary hack.  This will be handled by accel methods and
+        runtime checks for jax"""
+        del self._raw
+        self._raw = self._host_raw
+        self.local = self._raw.array()
+        del self._raw_flags
+        self._raw_flags = self._host_flags
+        self.local_flags = self._raw_flags.array()
+
     def clear(self):
         """Delete the underlying memory.
 
