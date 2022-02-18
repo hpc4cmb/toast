@@ -1,11 +1,9 @@
 """
 Operators left to translate:
 
-Operators:
-https://github.com/hpc4cmb/toast/blob/11306b344d021e6e49a1e65dd82e06b1b69cbe3d/src/toast/ops/mapmaker_templates.py#L21
-
-Last one (TemplateMatrix) uses the "Offset" template:
-https://github.com/hpc4cmb/toast/blob/11306b344d021e6e49a1e65dd82e06b1b69cbe3d/src/toast/templates/amplitudes.py#L21
+rebench operators in which I found some leftover numpy:
+- healpix_pixels
+- template_offset
 """
 
 # enable 64bits precision

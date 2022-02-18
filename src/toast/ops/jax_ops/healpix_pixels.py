@@ -50,7 +50,7 @@ def healpix_pixels_single_jax(hpix, nest, pdata, flag):
 
 def healpix_pixels_several_jax(hpix, nest, pdata, flags):
     # puts pdata back into shape
-    pdata = np.reshape(pdata, newshape=(-1, 4))
+    pdata = jnp.reshape(pdata, newshape=(-1, 4))
     # problem size
     print(f"DEBUG: jit-compiling 'healpix_pixels' nest:{nest} n:{pdata.shape[0]} nside:{hpix.nside}")
     # batch healpix_pixels on the n dimenssion

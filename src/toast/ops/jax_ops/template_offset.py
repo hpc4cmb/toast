@@ -69,11 +69,11 @@ def template_offset_project_signal_jitted(step_length, data, amplitudes):
         
     # All but the last amplitude have step_length samples.
     #amplitudes[:-1] += np.sum(data_first, axis=1)
-    amplitudes = amplitudes.at[:-1].add(np.sum(data_first, axis=1))
+    amplitudes = amplitudes.at[:-1].add(jnp.sum(data_first, axis=1))
 
     # Now handle the final amplitude.
     #amplitudes[-1] += np.sum(data_last)
-    amplitudes = amplitudes.at[-1].add(np.sum(data_last))
+    amplitudes = amplitudes.at[-1].add(jnp.sum(data_last))
 
     return amplitudes
 
