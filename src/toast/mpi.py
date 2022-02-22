@@ -8,9 +8,8 @@ import time
 from ._libtoast import (
     Logger,
     Environment,
-    accel_enabled,
-    accel_assign_device,
 )
+
 
 use_mpi = None
 MPI = None
@@ -47,7 +46,11 @@ if use_mpi is None:
                 use_mpi = False
 
     # Assign each process to an accelerator device
-    if accel_enabled():
+    from .accelerator import use_accel_jax, use_accel_omp
+
+    if use_accel_omp:
+        from ._libtoast import accel_assign_device
+
         if use_mpi:
             # We need to compute which process goes to which device
             nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
@@ -58,6 +61,9 @@ if use_mpi is None:
             del nodecomm
         else:
             accel_assign_device(1, 0)
+    elif use_accel_jax:
+        # FIXME:  do the same with jax somehow...
+        pass
 
 # We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
 
