@@ -18,6 +18,7 @@ from astropy import units as u
 from toast.weather import SimWeather
 
 from .. import qarray as qa
+from .jax_ops.qarray import mult as qa_mult
 
 from ..utils import (
     Environment,
@@ -835,7 +836,7 @@ class SimGround(Operator):
                 if scan.boresight_angle.to_value(u.radian) != 0:
                     zaxis = np.array([0, 0, 1.0])
                     rot = qa.rotation(zaxis, scan.boresight_angle.to_value(u.radian))
-                    bore_azel = qa.mult(bore_azel, rot)
+                    bore_azel = qa_mult(bore_azel, rot)
                 # Convert to RA / DEC.  Use pyephem for now.
                 bore_radec = azel_to_radec(site, stamps, bore_azel, use_ephem=True)
 

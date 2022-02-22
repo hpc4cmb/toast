@@ -13,6 +13,7 @@ import healpy as hp
 from astropy import units as u
 
 from .. import qarray as qa
+from .jax_ops.qarray import mult as qa_mult
 
 from ..utils import Environment, name_UID, Logger, rate_from_times
 
@@ -191,8 +192,8 @@ def satellite_scanning(
 
             # compose final rotation
 
-            boresight[bslice, :] = qa.mult(
-                satrot, qa.mult(precrot, qa.mult(precopen, qa.mult(spinrot, spinopen)))
+            boresight[bslice, :] = qa_mult(
+                satrot, qa_mult(precrot, qa_mult(precopen, qa_mult(spinrot, spinopen)))
             )
             buf_off += buf_n
 

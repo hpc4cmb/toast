@@ -13,6 +13,7 @@ import healpy as hp
 from ..timing import function_timer
 
 from .. import qarray as qa
+from .jax_ops.qarray import mult as qa_mult
 
 from ..traits import trait_docs, Int, Unicode, Bool, Quantity
 
@@ -189,7 +190,7 @@ class SimDipole(Operator):
                     detquat = props["quat"]
 
                     # Timestream of detector quaternions
-                    quats = qa.mult(boresight, detquat)
+                    quats = qa_mult(boresight, detquat)
 
                     # Compute the dipole timestream for this view and detector
                     dipole_tod = dipole(

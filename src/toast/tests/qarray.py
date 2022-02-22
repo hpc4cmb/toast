@@ -7,6 +7,7 @@ import numpy as np
 from .mpi import MPITestCase
 
 from .. import qarray as qa
+from ..ops.jax_ops.qarray import mult as qa_mult
 
 
 class QarrayTest(MPITestCase):
@@ -49,7 +50,7 @@ class QarrayTest(MPITestCase):
         return
 
     def test_mult_onequaternion(self):
-        my_mult_result = qa.mult(self.q1, self.q2)
+        my_mult_result = qa_mult(self.q1, self.q2)
         np.testing.assert_array_almost_equal(my_mult_result, self.mult_result)
         return
 
@@ -57,18 +58,18 @@ class QarrayTest(MPITestCase):
         dim = (3, 1)
         qarray1 = np.tile(self.q1, dim)
         qarray2 = np.tile(self.q2, dim)
-        my_mult_result = qa.mult(qarray1, qarray2)
+        my_mult_result = qa_mult(qarray1, qarray2)
         np.testing.assert_array_almost_equal(
             my_mult_result, np.tile(self.mult_result, dim)
         )
 
-        check = qa.mult(self.q1, self.q2)
-        res = qa.mult(np.tile(self.q1, 10).reshape((-1, 4)), self.q2)
+        check = qa_mult(self.q1, self.q2)
+        res = qa_mult(np.tile(self.q1, 10).reshape((-1, 4)), self.q2)
         np.testing.assert_array_almost_equal(res, np.tile(check, 10).reshape((-1, 4)))
 
         nulquat = np.array([0.0, 0.0, 0.0, 1.0])
-        check = qa.mult(self.q1, nulquat)
-        res = qa.mult(np.tile(self.q1, 10).reshape((-1, 4)), nulquat)
+        check = qa_mult(self.q1, nulquat)
+        res = qa_mult(np.tile(self.q1, 10).reshape((-1, 4)), nulquat)
         np.testing.assert_array_almost_equal(res, np.tile(check, 10).reshape((-1, 4)))
         return
 
@@ -233,7 +234,7 @@ class QarrayTest(MPITestCase):
             posang = np.deg2rad(pos * 60.0)
             posrot = qa.rotation(zaxis, posang + np.pi / 2.0)
             radrot = qa.rotation(xaxis, radius)
-            detrot = qa.mult(posrot, radrot)
+            detrot = qa_mult(posrot, radrot)
 
             detdir = qa.rotate(detrot, zaxis)
 

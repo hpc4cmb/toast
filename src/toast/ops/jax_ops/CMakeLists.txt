@@ -10,6 +10,7 @@ install(FILES
     stokes_weights.py
     cov_accum.py
     template_offset.py
+    qarray.py
     DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops
 )
 

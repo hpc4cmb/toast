@@ -3,11 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-import jax
 import jax.numpy as jnp
-
-from . import ImplementationType, select_implementation
-from ....qarray import mult as rotate_one_many_compiled
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -43,19 +39,6 @@ def rotate_one_one_jax(q, v_in):
     v_out_2 = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
 
     return jnp.array([v_out_0, v_out_1, v_out_2])
-
-rotate_one_many_jax = jax.vmap(rotate_one_one_jax, in_axes=(None,0), out_axes=0)
-rotate_one_many_jax = jax.jit(rotate_one_many_jax)
-"""
-Rotate an array of vectors by a quaternion.
-
-Args:
-    q(array, double): quaternion of shape (4)
-    v_in(array, double): array of vetors of size (n,3)
-
-Returns:
-    v_out(array, double): vector of size 3
-"""
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -93,26 +76,6 @@ def rotate_one_one_numpy(q, v_in):
 
     return v_out
 
-def rotate_one_many_numpy(q, v_in):
-    """
-    Rotate an array of vectors by a quaternion.
-
-    Args:
-        q(array, double): quaternion of shape (4)
-        v_in(array, double): array of vetors of size (n,3)
-
-    Returns:
-        v_out(array, double): vector of size (n,3)
-    """
-    # TODO make sure the shape is correct
-    nb_vectors = v_in.shape[0]
-    v_out = np.empty_like(v_in)
-
-    for i in range(nb_vectors):
-        v_out[i,:] = rotate_one_one_numpy(q, v_in[i,:])
-
-    return v_out
-
 #-------------------------------------------------------------------------------------------------
 # C++
 
@@ -144,20 +107,3 @@ void toast::qa_rotate_many_one(size_t nq, double const * q,
     }
 }
 """
-
-#-------------------------------------------------------------------------------------------------
-# IMPLEMENTATION SWITCH
-
-# lets us play with the various implementations
-rotate_one_many = select_implementation(rotate_one_many_compiled, 
-                                        rotate_one_many_numpy, 
-                                        rotate_one_many_jax, 
-                                        default_implementationType=ImplementationType.NUMPY)
-
-# TODO To test:
-# python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker")'
-
-# TODO to bench:
-# use template_offset config with template not disabled in slurm and check 
-# (function) run_mapmaker|MapMaker._exec|solve|SolverLHS._exec|Pipeline._exec|TemplateMatrix._exec
-# field (line 174 for add and project, line 150 for just add) in timing.csv

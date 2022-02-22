@@ -21,6 +21,7 @@ from .timing import function_timer
 from .healpix import ang2vec
 
 from . import qarray as qa
+from .ops.jax_ops.qarray import mult as qa_mult
 
 
 def to_UTC(t):
@@ -233,7 +234,7 @@ def azel_to_radec(site, times, azel, use_ephem=False):
 
     # Rotate the input quaternions
 
-    # return qa.mult(azel, transform)
-    # return qa.mult(azel, qa.inv(transform))
-    return qa.mult(transform, azel)
-    # return qa.mult(qa.inv(transform), azel)
+    # return qa_mult(azel, transform)
+    # return qa_mult(azel, qa.inv(transform))
+    return qa_mult(transform, azel)
+    # return qa_mult(qa.inv(transform), azel)

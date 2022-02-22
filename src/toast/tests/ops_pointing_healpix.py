@@ -11,6 +11,7 @@ from .. import ops as ops
 from .. import qarray as qa
 from ..ops.jax_ops import healpix_pixels, stokes_weights
 from ..ops.jax_ops.utils.math_healpix import HealpixPixels_JAX
+from ..ops.jax_ops.qarray import mult as qa_mult
 from ..healpix import HealpixPixels
 from ..intervals import Interval, IntervalList
 from ..observation import default_values as defaults
@@ -91,11 +92,11 @@ class PointingHealpixTest(MPITestCase):
         xaxis, yaxis, zaxis = np.eye(3)
         thetarot = qa.rotation(yaxis, theta)
         phirot = qa.rotation(zaxis, phi)
-        pixrot = qa.mult(phirot, thetarot)
+        pixrot = qa_mult(phirot, thetarot)
         quats = []
         for psi in psivec:
             psirot = qa.rotation(zaxis, psi)
-            quats.append(qa.mult(pixrot, psirot))
+            quats.append(qa_mult(pixrot, psirot))
         quats = np.vstack(quats)
         stokes_weights(
             eps,
@@ -141,11 +142,11 @@ class PointingHealpixTest(MPITestCase):
         xaxis, yaxis, zaxis = np.eye(3)
         thetarot = qa.rotation(yaxis, theta)
         phirot = qa.rotation(zaxis, phi)
-        pixrot = qa.mult(phirot, thetarot)
+        pixrot = qa_mult(phirot, thetarot)
         quats = []
         for psi in psivec:
             psirot = qa.rotation(zaxis, psi)
-            quats.append(qa.mult(pixrot, psirot))
+            quats.append(qa_mult(pixrot, psirot))
         quats = np.vstack(quats)
 
         # First with HWP angle == 0.0

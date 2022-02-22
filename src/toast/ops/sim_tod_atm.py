@@ -17,6 +17,7 @@ import healpy as hp
 from ..timing import function_timer
 
 from .. import qarray as qa
+from .jax_ops.qarray import mult as qa_mult
 
 from ..data import Data
 
@@ -692,7 +693,7 @@ class SimAtmosphere(Operator):
         thetarot = qa.rotation(yaxis, fp_radius)
         for phi in phidet:
             phirot = qa.rotation(zaxis, phi)
-            detquat = qa.mult(phirot, thetarot)
+            detquat = qa_mult(phirot, thetarot)
             detquats.append(detquat)
 
         # Get fake detector pointing
@@ -701,7 +702,7 @@ class SimAtmosphere(Operator):
         el = []
         quats = obs.shared[self.detector_pointing.boresight][rank::ntask].copy()
         for detquat in detquats:
-            vecs = qa.rotate(qa.mult(quats, detquat), zaxis)
+            vecs = qa.rotate(qa_mult(quats, detquat), zaxis)
             theta, phi = hp.vec2ang(vecs)
             az.append(2 * np.pi - phi)
             el.append(np.pi / 2 - theta)

@@ -15,7 +15,7 @@ from ..timing import function_timer
 from ..observation import default_values as defaults
 
 from .. import qarray as qa
-from .jax_ops.utils.math_qarray import rotate_one_many as qa_mult
+from .jax_ops.qarray import mult as qa_mult
 
 from .operator import Operator
 
