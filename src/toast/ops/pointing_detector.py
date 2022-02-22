@@ -15,6 +15,7 @@ from ..timing import function_timer
 from ..observation import default_values as defaults
 
 from .. import qarray as qa
+from .jax_ops.utils.math_qarray import rotate_one_many as qa_mult
 
 from .operator import Operator
 
@@ -159,7 +160,7 @@ class PointingDetectorSimple(Operator):
                 # Coordinate transform if needed
                 boresight = in_boresight
                 if coord_rot is not None:
-                    boresight = qa.mult(coord_rot, in_boresight)
+                    boresight = qa_mult(coord_rot, in_boresight)
 
                 # Focalplane for this observation
                 focalplane = ob.telescope.focalplane
@@ -175,7 +176,7 @@ class PointingDetectorSimple(Operator):
                     detquat = np.array(focalplane[det]["quat"], dtype=np.float64)
 
                     # Timestream of detector quaternions
-                    quats = qa.mult(boresight, detquat)
+                    quats = qa_mult(boresight, detquat)
                     if flags is not None:
                         quats[flags != 0] = qa.null_quat
                     views.detdata[self.quats][vw][det] = quats

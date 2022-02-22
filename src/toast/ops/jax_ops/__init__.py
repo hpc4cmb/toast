@@ -1,10 +1,3 @@
-"""
-Operators left to translate:
-
-rebench operators in which I found some leftover numpy:
-- healpix_pixels
-- template_offset
-"""
 
 # enable 64bits precision
 from jax.config import config as jax_config
