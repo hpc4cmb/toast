@@ -29,7 +29,7 @@ mult_many_many_jax = jax.vmap(mult_one_one_jax, in_axes=(0,0), out_axes=0)
 
 def mult_pure_jax(p_in, q_in):
     # picks the correct impelmentation depending on which input is an array (if any)
-    print(f"DEBUG: jit-compiling mult for p:{p_in.size} and q:{q_in.size}")
+    print(f"DEBUG: jit-compiling 'qarray.mult' for p:{p_in.size} and q:{q_in.size}")
     p_is_array = (p_in.size > 4)
     q_is_array = (q_in.size > 4)
     if p_is_array and q_is_array:
@@ -116,8 +116,8 @@ def mult_numpy(p_in, q_in):
     Returns:
         out (array_like):  flattened 1D array of float64 values.
     """
-    # picks the correct impelmentation depending on which input is an array (if any)
-    print(f"DEBUG: running mult_numpy for p:{p_in.size} and q:{q_in.size}")
+    # picks the correct implementation depending on which input is an array (if any)
+    #print(f"DEBUG: running 'mult_numpy' for p:{p_in.size} and q:{q_in.size}")
     p_is_array = (p_in.size > 4)
     q_is_array = (q_in.size > 4)
     if p_is_array and q_is_array:
@@ -156,4 +156,7 @@ mult = select_implementation(mult_compiled,
 # To test:
 # python -c 'import toast.tests; toast.tests.run("qarray");'
 
-# TODO to bench: bench pointing_detector.py
+# TODO to bench:
+# use scanmap_config.toml
+# run_mapmaker|MapMaker._exec|BinMap._exec|Pipeline._exec|PixelsHealpix._exec|PointingDetectorSimple._exec
+# line 48 in timing.csv
