@@ -1337,8 +1337,8 @@ class SharedDataManager(MutableMapping):
 
     def clear(self):
         for k in self._internal.keys():
-            if self.acc_is_present(k):
-                self.acc_delete(k)
+            # if self.acc_is_present(k):
+            #     self.acc_delete(k)
             self._internal[k].shdata.close()
 
     def __del__(self):
