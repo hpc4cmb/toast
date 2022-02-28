@@ -360,6 +360,10 @@ class export_obs_data(object):
         self._interval_names = interval_names
         self._compress = compress
 
+    @property
+    def frame_intervals(self):
+        return self._frame_intervals
+
     @function_timer
     def __call__(self, obs):
         log = Logger.get()
@@ -516,8 +520,38 @@ class export_obs(object):
             (list):  List of local frames.
 
         """
-        # Ensure data is distributed by time
-        obs.redistribute(1, times=self._timestamps)
+        # Ensure data is distributed by time.  If the observation
+        # exporter defines existing frames to use, override the sample
+        # sets to match those.
+        redist_sampsets = False
+        if self._data_export.frame_intervals is not None:
+            # Create sample sets that match these frame boundaries
+            if obs.comm_col_rank == 0:
+                # First row of process grid gets local chunks
+                local_sets = list()
+                offset = 0
+                for intr in obs.intervals[self._data_export.frame_intervals]:
+                    chunk = intr.last - offset + 1
+                    local_sets.append([chunk,])
+                    offset += chunk
+                if offset != obs.n_local_samples:
+                    local_sets.append([obs.n_local_samples - offset])
+                # Gather across the row
+                all_sets = [local_sets,]
+                if obs.comm_row is not None:
+                    all_sets = obs.comm_row.gather(local_sets, root=0)
+                if obs.comm_row_rank == 0:
+                    redist_sampsets = list()
+                    for pset in all_sets:
+                        redist_sampsets.extend(pset)
+            if obs.comm.comm_group is not None:
+                redist_sampsets = obs.comm.comm_group.bcast(redist_sampsets, root=0)
+
+        obs.redistribute(
+            1,
+            times=self._timestamps,
+            override_sample_sets=redist_sampsets,
+        )
 
         # Rank within the observation (group) communicator
         obs_rank = obs.comm.group_rank
