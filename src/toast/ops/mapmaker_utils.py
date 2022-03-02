@@ -673,7 +673,7 @@ class BuildNoiseWeighted(Operator):
                         local_pix[shared_fview & self.shared_flag_mask != 0] = -1
 
                     # Accumulate
-                    zmap_jax = cov_accum_zmap(
+                    cov_accum_zmap(
                         dist.n_local_submap,
                         dist.n_pix_submap,
                         zmap.n_value,

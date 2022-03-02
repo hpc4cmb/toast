@@ -51,7 +51,7 @@ class HealpixPixels_JAX(NamedTuple):
     def from_HealpixPixels(cls, hpix):
         return cls(hpix.nside, hpix.npix, hpix.ncap, hpix.dnside, hpix.twonside, hpix.fournside,
                    hpix.nsideplusone, hpix.nsideminusone, hpix.halfnside, hpix.tqnside, hpix.factor,
-                   # we convert lists into numpy array to be able to index into them with indices unknown at compile time
+                   # we convert lists into jax array to be able to index into them with indices unknown at compile time
                    jnp.array(hpix.utab), jnp.array(hpix.ctab))
 
     def __key(self):
