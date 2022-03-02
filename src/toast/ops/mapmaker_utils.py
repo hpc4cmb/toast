@@ -564,7 +564,7 @@ class BuildNoiseWeighted(Operator):
 
         dist = data[self.pixel_dist]
         if data.comm.world_rank == 0:
-            log.debug(
+            log.verbose(
                 "Building noise weighted map with pixel_distribution {}".format(
                     self.pixel_dist
                 )
