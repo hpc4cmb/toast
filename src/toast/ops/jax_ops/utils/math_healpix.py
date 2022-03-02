@@ -126,7 +126,7 @@ def zphi2nest_jax(hpix, phi, region, z, rtz):
     pix = jnp.int64(sipf) + (face << (2 * hpix.factor))
     return pix
 
-def zphi2ring_jax(hpix, phi, region, z, rtz, pix):
+def zphi2ring_jax(hpix, phi, region, z, rtz):
     """
     Args:
         hpix (HealpixPixels):  The healpix projection object.
