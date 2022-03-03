@@ -13,7 +13,7 @@ from ..._libtoast import cov_accum_zmap as cov_accum_zmap_compiled
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def cov_accum_zmap_jitted(nsub, subsize, nnz, weights, scale, tod, zmap):
+def cov_accum_zmap_jitted(nsub, subsize, nnz, weights, scale, tod, zmap, submap, subpix):
     # unflatten arrays
     print(f"DEBUG: jit-compiling 'cov_accum_zmap' for nsub:{nsub} subsize:{subsize} nnz:{nnz} nsamp:{weights.shape[0]} scale:{scale}")
     
@@ -21,8 +21,10 @@ def cov_accum_zmap_jitted(nsub, subsize, nnz, weights, scale, tod, zmap):
     scaled_signal = scale * tod
     shift = weights * scaled_signal[:,jnp.newaxis]
 
-    # NOTE: JAX deals properly with duplicates indices in our tests
-    return zmap + shift
+    # NOTE: JAX deals properly with duplicates indices in [submap,subpix]
+    # see: https://github.com/google/jax/issues/9344
+    zmap = zmap.at[submap,subpix,:].add(shift)
+    return zmap
 
 # jit
 cov_accum_zmap_jitted = jax.jit(cov_accum_zmap_jitted, static_argnames=['nsub','subsize','nnz','scale'])
@@ -64,9 +66,8 @@ def cov_accum_zmap_jax(nsub, subsize, nnz, submap, subpix, weights, scale, tod, 
         tod = tod[valid_indices]
         weights = weights[valid_indices,:]
     
-    # updates the slice of zmap with the result
-    subzmap = zmap[submap,subpix,:]
-    subzmap[:] = cov_accum_zmap_jitted(nsub, subsize, nnz, weights, scale, tod, subzmap)
+    # updates zmap with the result
+    zmap[:] = cov_accum_zmap_jitted(nsub, subsize, nnz, weights, scale, tod, zmap, submap, subpix)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -169,7 +170,7 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
 cov_accum_zmap = select_implementation(cov_accum_zmap_compiled, 
                                        cov_accum_zmap_numpy, 
                                        cov_accum_zmap_jax, 
-                                       default_implementationType=ImplementationType.NUMPY)
+                                       default_implementationType=ImplementationType.JAX)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 #cov_accum_zmap = get_compile_time(cov_accum_zmap)
