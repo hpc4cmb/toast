@@ -41,6 +41,7 @@ from .mapmaker_solve import solve, SolverRHS, SolverLHS
 from .memory_counter import MemoryCounter
 
 
+
 @trait_docs
 class MapMaker(Operator):
     """Operator for making maps.
@@ -719,7 +720,7 @@ class MapMaker(Operator):
         map_binning.binned = self.map_name
 
         if n_enabled_templates != 0:
-            # We have some templates to subtract
+            # We have some templates
             temp_project = "{}_temp_project".format(self.name)
 
             # Projecting amplitudes to a temp space
