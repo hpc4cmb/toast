@@ -13,7 +13,8 @@ from .timing import function_timer
 from .utils import Logger
 
 from ._libtoast import (
-    # interval_dtype,
+    use_accel_jax,
+    use_accel_omp,
     accel_enabled,
     accel_present,
     accel_create,
@@ -22,18 +23,20 @@ from ._libtoast import (
     accel_update_host,
 )
 
-interval_dtype = None
+if use_accel_jax:
+    import jax
+    import jax.numpy as jnp
 
-if interval_dtype is None:
-    e = "<" if sys.byteorder == "little" else ">"
-    interval_dtype = np.dtype(
-        [
-            ("start", e + "f8"),
-            ("stop", e + "f8"),
-            ("first", e + "i8"),
-            ("last", e + "i8"),
-        ]
-    )
+
+interval_dtype_order = "<" if sys.byteorder == "little" else ">"
+interval_dtype = np.dtype(
+    [
+        ("start", interval_dtype_order + "f8"),
+        ("stop", interval_dtype_order + "f8"),
+        ("first", interval_dtype_order + "i8"),
+        ("last", interval_dtype_order + "i8"),
+    ]
+)
 
 # class Interval(object):
 #     """Class storing a single time and sample range.
@@ -571,6 +574,7 @@ class IntervalList(Sequence):
         else:
             # No data yet
             self.data = np.zeros(0, dtype=interval_dtype)
+        self.jax = None
 
     def _find_indices(self, timespans):
         start_indx = np.searchsorted(
@@ -814,8 +818,12 @@ class IntervalList(Sequence):
         elif len(self.data) == 0:
             return False
         else:
-            result = accel_present(self.data)
-        return result
+            if use_accel_omp:
+                return accel_present(self.data)
+            elif use_accel_jax:
+                return accel_present(self.jax)
+            else:
+                return False
 
     def accel_create(self):
         """Create a copy of the data on the accelerator.
@@ -837,12 +845,10 @@ class IntervalList(Sequence):
         """
         if not accel_enabled():
             return
-        if not accel_present(self.data):
-            log = Logger.get()
-            msg = f"Detector data is not present on device, cannot update"
-            log.error(msg)
-            raise RuntimeError(msg)
-        accel_update_device(self.data)
+        if use_accel_omp and self.accel_present():
+            _ = accel_update_device(self.data)
+        elif use_accel_jax:
+            self.jax = accel_update_device(self.data)
 
     def accel_update_host(self):
         """Copy the data to the host.
@@ -853,12 +859,15 @@ class IntervalList(Sequence):
         """
         if not accel_enabled():
             return
-        if not accel_present(self.data):
+        if not self.accel_present():
             log = Logger.get()
-            msg = f"Detector data is not present on device, cannot update host"
+            msg = f"Interval list is not present on device, cannot update host"
             log.error(msg)
             raise RuntimeError(msg)
-        accel_update_host(self.data)
+        if use_accel_omp:
+            _ = accel_update_host(self.data)
+        elif use_accel_jax:
+            self.data = accel_update_host(self.jax)
 
     def accel_delete(self):
         """Delete the data from the accelerator.
@@ -869,12 +878,16 @@ class IntervalList(Sequence):
         """
         if not accel_enabled():
             return
-        if not accel_present(self.data):
+        if not self.accel_present():
             log = Logger.get()
-            msg = f"Detector data is not present on device, cannot delete"
+            msg = f"Interval list is not present on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
-        accel_delete(self.data)
+        if use_accel_omp:
+            accel_delete(self.data)
+        elif use_accel_jax:
+            del self.jax
+            self.jax = None
 
 
 @function_timer

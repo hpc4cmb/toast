@@ -18,7 +18,6 @@
 // Once the OpenMP 5.1 standard is widely implemented across compilers,
 // We can use the omp_get_mapped_ptr() method.
 
-#ifdef HAVE_OPENMP_TARGET
 
 class OmpManager {
     public:
@@ -54,8 +53,6 @@ class OmpManager {
         int node_procs_;
         int node_rank_;
 };
-
-#endif
 
 
 #endif // ifndef LIBTOAST_ACCELERATOR_HPP

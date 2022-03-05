@@ -60,10 +60,7 @@ class AccelOperator(ops.Operator):
                 # Base class has checked that data listed in our requirements
                 # is present.  Call compiled code that uses OpenACC to work
                 # with this data.
-                test_accel_op_buffer(
-                    ob.detdata[self.det_data].flatdata,
-                    len(ob.detdata[self.det_data].detectors),
-                )
+                test_accel_op_buffer(ob.detdata[self.det_data].data)
                 test_accel_op_array(ob.detdata[self.det_data].data)
             else:
                 # Just use python
@@ -350,6 +347,5 @@ class AcceleratorTest(MPITestCase):
             for det in ob.local_detectors:
                 np.testing.assert_allclose(
                     ob.detdata[accel_op.det_data][det],
-                    16.0 * ob.detdata["original"][det]
+                    16.0 * ob.detdata["original"][det],
                 )
-

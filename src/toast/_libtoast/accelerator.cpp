@@ -10,9 +10,6 @@
 #include <utility>
 
 
-
-#ifdef HAVE_OPENMP_TARGET
-
 OmpManager & OmpManager::get() {
     static OmpManager instance;
     return instance;
@@ -39,7 +36,10 @@ void OmpManager::assign_device(int node_procs, int node_rank) {
     node_rank_ = node_rank;
 
     // Number of targets
-    int n_target = omp_get_num_devices();
+    int n_target = 0;
+    #ifdef HAVE_OPENMP_TARGET
+    n_target = omp_get_num_devices();
+    #endif
 
     // If we have no accelerator (target) devices, assign all processes to
     // the host device.
@@ -88,6 +88,9 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
     size_t n = mem_size_.count(buffer);
     std::ostringstream o;
     auto log = toast::Logger::get();
+
+    #ifdef HAVE_OPENMP_TARGET
+
     if (n != 0) {
         o << "OmpManager:  on create, host ptr " << buffer
         << " with " << nbytes << " bytes is already present "
@@ -122,12 +125,23 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
         throw std::runtime_error(o.str().c_str());
     }
     return mem_.at(buffer);
+
+    #else
+
+    o << "OmpManager:  OpenMP target support disabled";
+    log.error(o.str().c_str());
+    throw std::runtime_error(o.str().c_str());
+
+    #endif
 }
 
 void OmpManager::remove(void * buffer, size_t nbytes) {
     size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
+
+    #ifdef HAVE_OPENMP_TARGET
+
     if (n == 0) {
         o.str("");
         o << "OmpManager:  host ptr " << buffer
@@ -162,12 +176,23 @@ void OmpManager::remove(void * buffer, size_t nbytes) {
     mem_size_.erase(buffer);
     omp_target_free(mem_.at(buffer), target_dev_);
     mem_.erase(buffer);
+
+    #else
+
+    o << "OmpManager:  OpenMP target support disabled";
+    log.error(o.str().c_str());
+    throw std::runtime_error(o.str().c_str());
+
+    #endif
 }
 
 void OmpManager::update_device(void * buffer, size_t nbytes) {
     size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
+
+    #ifdef HAVE_OPENMP_TARGET
+
     if (n == 0) {
         o.str("");
         o << "OmpManager:  host ptr " << buffer
@@ -197,12 +222,23 @@ void OmpManager::update_device(void * buffer, size_t nbytes) {
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
+
+    #else
+
+    o << "OmpManager:  OpenMP target support disabled";
+    log.error(o.str().c_str());
+    throw std::runtime_error(o.str().c_str());
+
+    #endif
 }
 
 void OmpManager::update_host(void * buffer, size_t nbytes) {
     size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
+
+    #ifdef HAVE_OPENMP_TARGET
+
     if (n == 0) {
         o.str("");
         o << "OmpManager:  host ptr " << buffer
@@ -232,9 +268,19 @@ void OmpManager::update_host(void * buffer, size_t nbytes) {
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
+
+    #else
+
+    o << "OmpManager:  OpenMP target support disabled";
+    log.error(o.str().c_str());
+    throw std::runtime_error(o.str().c_str());
+
+    #endif
 }
 
 int OmpManager::present(void * buffer, size_t nbytes) {
+    #ifdef HAVE_OPENMP_TARGET
+
     size_t n = mem_.count(buffer);
     if (n == 0) {
         return 0;
@@ -250,11 +296,22 @@ int OmpManager::present(void * buffer, size_t nbytes) {
         }
         return 1;
     }
+
+    #else
+
+    o << "OmpManager:  OpenMP target support disabled";
+    log.error(o.str().c_str());
+    throw std::runtime_error(o.str().c_str());
+
+    #endif
 }
 
 void * OmpManager::device_ptr(void * buffer) {
     auto log = toast::Logger::get();
     std::ostringstream o;
+
+    #ifdef HAVE_OPENMP_TARGET
+
     size_t n = mem_.count(buffer);
     if (n == 0) {
         o.str("");
@@ -264,20 +321,33 @@ void * OmpManager::device_ptr(void * buffer) {
         throw std::runtime_error(o.str().c_str());
     }
     return mem_.at(buffer);
+
+    #else
+
+    o << "OmpManager:  OpenMP target support disabled";
+    log.error(o.str().c_str());
+    throw std::runtime_error(o.str().c_str());
+
+    #endif
 }
 
 void OmpManager::dump() {
+    #ifdef HAVE_OPENMP_TARGET
     for(auto & p : mem_size_) {
         void * dev = mem_.at(p.first);
         std::cout << "OmpManager table:  " << p.first << ": "
         << p.second << " bytes on device " << target_dev_
         << " at " << dev << std::endl;
     }
+    #endif
     return;
 }
 
 OmpManager::OmpManager() : mem_size_(), mem_() {
+    host_dev_ = -1;
+    #ifdef HAVE_OPENMP_TARGET
     host_dev_ = omp_get_initial_device();
+    #endif
     target_dev_ = -1;
     node_procs_ = -1;
     node_rank_ = -1;
@@ -288,18 +358,18 @@ OmpManager::~OmpManager() {
 }
 
 void OmpManager::clear() {
+    #ifdef HAVE_OPENMP_TARGET
     for(auto & p : mem_) {
         omp_target_free(p.second, target_dev_);
     }
+    #endif
     mem_size_.clear();
     mem_.clear();
 }
 
-#endif
 
-
-void extract_buffer_info(py::buffer_info const & info, void ** host_ptr,
-                         size_t * n_elem, size_t * n_bytes) {
+void extract_accel_buffer(py::buffer_info const & info, void ** host_ptr,
+                          size_t * n_elem, size_t * n_bytes) {
     (*host_ptr) = info.ptr; // reinterpret_cast <void *> (info.ptr);
     (*n_elem) = 1;
     for (py::ssize_t d = 0; d < info.ndim; d++) {
@@ -384,7 +454,7 @@ void init_accelerator(py::module & m) {
             void * p_host;
             size_t n_elem;
             size_t n_bytes;
-            extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
+            extract_accel_buffer(info, &p_host, &n_elem, &n_bytes);
 
             std::ostringstream o;
             #ifndef HAVE_OPENMP_TARGET
@@ -427,7 +497,7 @@ void init_accelerator(py::module & m) {
             void * p_host;
             size_t n_elem;
             size_t n_bytes;
-            extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
+            extract_accel_buffer(info, &p_host, &n_elem, &n_bytes);
 
             std::ostringstream o;
             #ifndef HAVE_OPENMP_TARGET
@@ -473,7 +543,7 @@ void init_accelerator(py::module & m) {
             void * p_host;
             size_t n_elem;
             size_t n_bytes;
-            extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
+            extract_accel_buffer(info, &p_host, &n_elem, &n_bytes);
 
             std::ostringstream o;
             #ifndef HAVE_OPENMP_TARGET
@@ -519,7 +589,7 @@ void init_accelerator(py::module & m) {
             void * p_host;
             size_t n_elem;
             size_t n_bytes;
-            extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
+            extract_accel_buffer(info, &p_host, &n_elem, &n_bytes);
 
             std::ostringstream o;
             #ifndef HAVE_OPENMP_TARGET
@@ -566,7 +636,7 @@ void init_accelerator(py::module & m) {
             void * p_host;
             size_t n_elem;
             size_t n_bytes;
-            extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
+            extract_accel_buffer(info, &p_host, &n_elem, &n_bytes);
 
             std::ostringstream o;
             #ifndef HAVE_OPENMP_TARGET
@@ -609,26 +679,16 @@ void init_accelerator(py::module & m) {
     // in there.
 
     m.def(
-        "test_accel_op_buffer", [](py::buffer data, size_t n_det)
+        "test_accel_op_buffer", [](py::buffer data)
         {
-            pybuffer_check_1D <double> (data);
-            py::buffer_info info = data.request();
+            // This is used to return the actual shape of each buffer
+            std::vector <size_t> temp_shape(2);
 
-            void * p_host;
-            size_t n_elem;
-            size_t n_bytes;
-            extract_buffer_info(info, &p_host, &n_elem, &n_bytes);
-
-            double * raw = reinterpret_cast <double *> (info.ptr);
-
-            auto log = toast::Logger::get();
-            std::ostringstream o;
-            o << "test_accel_op p_host = " << p_host << " (" << n_bytes << " bytes)";
-            o << " cast to double * = " << raw;
-            log.verbose(o.str().c_str());
-
-            size_t n_total = (size_t)(info.size / sizeof(double));
-            size_t n_samp = (size_t)(n_total / n_det);
+            double * raw = extract_buffer <double> (
+                data, "data", 2, temp_shape, {-1, -1}
+            );
+            size_t n_det = temp_shape[0];
+            size_t n_samp = temp_shape[1];
 
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
@@ -636,10 +696,12 @@ void init_accelerator(py::module & m) {
             void * dev_raw = omgr.device_ptr(raw);
 
             #pragma omp target data device(dev) use_device_ptr(dev_raw) if(offload)
-            #pragma omp target teams distribute parallel for collapse(2)
-            for (size_t i = 0; i < n_det; i++) {
-                for (size_t j = 0; j < n_samp; j++) {
-                    raw[i * n_samp + j] *= 2.0;
+            {
+                #pragma omp target teams distribute parallel for collapse(2)
+                for (size_t i = 0; i < n_det; i++) {
+                    for (size_t j = 0; j < n_samp; j++) {
+                        raw[i * n_samp + j] *= 2.0;
+                    }
                 }
             }
             return;
@@ -651,11 +713,6 @@ void init_accelerator(py::module & m) {
             auto fast_data = data.mutable_unchecked <2>();
             double * raw = fast_data.mutable_data(0, 0);
 
-            auto log = toast::Logger::get();
-            std::ostringstream o;
-            o << "test_accel_op_array p_host = " << raw;
-            log.verbose(o.str().c_str());
-
             size_t n_det = fast_data.shape(0);
             size_t n_samp = fast_data.shape(1);
 
@@ -665,10 +722,12 @@ void init_accelerator(py::module & m) {
             void * dev_raw = omgr.device_ptr(raw);
 
             #pragma omp target data device(dev) use_device_ptr(dev_raw) if(offload)
-            #pragma omp target teams distribute parallel for collapse(2)
-            for (size_t i = 0; i < n_det; i++) {
-                for (size_t j = 0; j < n_samp; j++) {
-                    raw[i * n_samp + j] *= 2.0;
+            {
+                #pragma omp target teams distribute parallel for collapse(2)
+                for (size_t i = 0; i < n_det; i++) {
+                    for (size_t j = 0; j < n_samp; j++) {
+                        raw[i * n_samp + j] *= 2.0;
+                    }
                 }
             }
             return;

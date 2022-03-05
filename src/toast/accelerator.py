@@ -66,7 +66,9 @@ def accel_get_device():
         # FIXME: what to return for jax?
         return 0
     else:
-        raise RuntimeError("Accelerator support is not enabled")
+        log = Logger.get()
+        log.warning("Accelerator support not enabled, returning device -1")
+        return -1
 
 
 def accel_present(data):
@@ -83,6 +85,8 @@ def accel_present(data):
         (bool):  True if the data is present on the device.
 
     """
+    if data is None:
+        return False
     if use_accel_omp:
         return omp_accel_present(data)
     elif use_accel_jax:
@@ -91,7 +95,9 @@ def accel_present(data):
         else:
             return False
     else:
-        raise RuntimeError("Accelerator support is not enabled")
+        log = Logger.get()
+        log.warning("Accelerator support not enabled, data not present")
+        return False
 
 
 def accel_create(data):
@@ -114,7 +120,8 @@ def accel_create(data):
     elif use_accel_jax:
         pass
     else:
-        raise RuntimeError("Accelerator support is not enabled")
+        log = Logger.get()
+        log.warning("Accelerator support not enabled, cannot create")
 
 
 def accel_update_device(data):
@@ -137,7 +144,9 @@ def accel_update_device(data):
     elif use_accel_jax:
         return jnp.DeviceArray(data)
     else:
-        raise RuntimeError("Accelerator support is not enabled")
+        log = Logger.get()
+        log.warning("Accelerator support not enabled, not updating device")
+        return None
 
 
 def accel_update_host(data):
@@ -166,7 +175,8 @@ def accel_update_host(data):
             # Already on the host
             return data
     else:
-        raise RuntimeError("Accelerator support is not enabled")
+        log = Logger.get()
+        log.warning("Accelerator support not enabled, not updating host")
 
 
 def accel_delete(data):
@@ -187,4 +197,5 @@ def accel_delete(data):
     elif use_accel_jax:
         pass
     else:
-        raise RuntimeError("Accelerator support is not enabled")
+        log = Logger.get()
+        log.warning("Accelerator support not enabled, cannot delete device data")

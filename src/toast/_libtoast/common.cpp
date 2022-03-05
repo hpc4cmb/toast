@@ -57,3 +57,34 @@ template <>
 std::vector <char> align_format <double> () {
     return std::vector <char> ({'d'});
 }
+
+
+
+std::string get_format(std::string const & format) {
+    // Machine endianness
+    int32_t test = 1;
+    bool little_endian = (*(int8_t*)&test == 1);
+
+    std::string fmt = format;
+    if (format.length() > 1) {
+        // The format string includes endianness information
+        std::string endianness = format.substr(0, 1);
+        if (
+            (endianness == ">"  &&  !little_endian)  ||
+            (endianness == "<"  &&  little_endian)  ||
+            (endianness == "=")
+        ) {
+            fmt = format.substr(1, format.length() - 1);
+        } else if (
+            (endianness == ">"  &&  little_endian)  ||
+            (endianness == "<"  &&  !little_endian)
+        ) {
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "Object has different endianness than system- cannot use";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+    }
+    return fmt;
+}
