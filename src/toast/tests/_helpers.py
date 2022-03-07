@@ -521,8 +521,9 @@ def create_fake_beam_alm(
     mmax=10,
     fwhm_x=10 * u.degree,
     fwhm_y=10 * u.degree,
-    pol=True,
+    pol = True, 
     separate_IQU=False,
+    separate_TP=False ,
     detB_beam=False,
     normalize_beam=False,
 ):
@@ -538,11 +539,12 @@ def create_fake_beam_alm(
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
     beam = np.exp(-((z ** 2 / 2 / sigma_z ** 2 + y ** 2 / 2 / sigma_y ** 2)))
     beam[x < 0] = 0
-    tmp_beam_map = np.zeros([3, npix])
-    tmp_beam_map[0] = beam
-    tmp_beam_map[1] = beam
-    bl, blm = hp.anafast(tmp_beam_map, lmax=lmax, iter=0, alm=True, pol=True)
+    beam_map = np.zeros([3, npix])
+    beam_map[0] = beam
+    beam_map[1] = beam
+    bl, blm = hp.anafast(beam_map, lmax=lmax, iter=0, alm=True, pol=pol)
     hp.rotate_alm(blm, psi=0, theta=-np.pi / 2, phi=0)
+    
     if detB_beam:
         # we make sure that the two detectors within the same pair encode
         # two beams with the  flipped sign in Q   U beams
@@ -556,45 +558,39 @@ def create_fake_beam_alm(
         # i.e. the monopole term in the map is left unchanged
         idx = hp.Alm.getidx(lmax=lmax, l=0, m=0)
         norm = 2 * np.pi * blm[0, idx].real
-        blm /= norm
+        
+    else: 
+        norm=1. 
+    
+    blm /= norm
     if separate_IQU:
-
-        empty = np.zeros_like(tmp_beam_map[0])
-
-        beam_map_I = np.vstack([tmp_beam_map[0], empty, empty])
-        if detB_beam:
-
-            beam_map_Q = np.vstack([empty, -tmp_beam_map[0], empty])
-            beam_map_U = np.vstack([empty, empty, tmp_beam_map[0]])
-        else:
-            beam_map_Q = np.vstack([empty, tmp_beam_map[0], empty])
-            beam_map_U = np.vstack([empty, empty, tmp_beam_map[0]])
-
+        empty = np.zeros_like(beam_map[0])
+        beam_map_I = np.vstack([beam_map[0], empty, empty])
+        beam_map_Q = np.vstack([empty, beam_map[1], empty])
+        beam_map_U = np.vstack([empty, empty, beam_map[1]])
         try:
-            almI = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False)
-            almQ = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False)
-            almU = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False)
-
+            blmi00 = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False, pol=True)/norm
+            blm0i0 = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False, pol=True )/norm
+            blm00i= hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False, pol=True)/norm
         except TypeError:
             # older healpy which does not have verbose keyword
-            almI = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax)
-            almQ = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax)
-            almU = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax)
-
-        hp.rotate_alm(almI, psi=0, theta=-np.pi / 2, phi=0)
-        hp.rotate_alm(almQ, psi=0, theta=-np.pi / 2, phi=0)
-        hp.rotate_alm(almU, psi=0, theta=-np.pi / 2, phi=0)
-        if normalize_beam:
-            idx = hp.Alm.getidx(lmax=lmax, l=0, m=0)
-            norm = 2 * np.pi * almI[0, idx].real
-            almI /= norm
-            almQ /= norm
-            almU /= norm
-
-        a_lm = [almI, almQ, almU]
-        return a_lm
+            blmi00 = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax,pol=True)/norm
+            blm0i0 = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax,pol=True)/norm
+            blm00i = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax,pol=True)/norm
+        return [blmi00,blm0i0,blm00i]
+    
+    elif separate_TP : 
+        #blmT=np.zeros_like(blm  ) 
+        #blmP=np.zeros_like(blm  ) 
+        
+        #blmT[0] =blm[0].copy() 
+        #blmP[0] =blm[1 ] + blm[2]  
+        
+        blmT =blm[0].copy() 
+        blmP =blm[1 ] + blm[2]  
+        
+        return [blmT, blmP ]  
     else:
-
         return blm
 
 
