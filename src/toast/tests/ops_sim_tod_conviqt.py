@@ -38,7 +38,7 @@ class SimConviqtTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
 
-        self.nside = 64
+        self.nside = 32
         self.lmax = 128
         self.fwhm_sky = 10 * u.degree
         self.fwhm_beam = 15 * u.degree
@@ -55,7 +55,10 @@ class SimConviqtTest(MPITestCase):
             self.slm = create_fake_sky_alm(self.lmax, self.fwhm_sky)
 
             hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
-
+            hp.write_alm(self.fname_sky.replace(".fits","_T.fits"), self.slm[0] , lmax=self.lmax, overwrite=True)
+            hp.write_alm(self.fname_sky.replace(".fits","_E.fits"), self.slm[1] , lmax=self.lmax, overwrite=True)
+            hp.write_alm(self.fname_sky.replace(".fits","_B.fits"), self.slm[2] , lmax=self.lmax, overwrite=True)
+            
             self.blm = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
@@ -148,8 +151,24 @@ class SimConviqtTest(MPITestCase):
             )
 
             # we explicitly store 3 separate beams for the T, E and B sky alm.
-            blm_T = np.zeros_like(self.blm)
-            blm_T[0] = self.blm[0].copy()
+            blm_T, blm_P  = create_fake_beam_alm(
+                self.lmax,
+                self.mmax,
+                fwhm_x=self.fwhm_beam,
+                fwhm_y=self.fwhm_beam,
+                separate_TP=True,
+                detB_beam=False,
+                normalize_beam=True,
+            )
+            blm_Tbot, blm_Pbot  = create_fake_beam_alm(
+                self.lmax,
+                self.mmax,
+                fwhm_x=self.fwhm_beam,
+                fwhm_y=self.fwhm_beam,
+                separate_TP=True,
+                detB_beam=True,
+                normalize_beam=True,
+            )
             hp.write_alm(
                 self.fname_beam.replace(".fits", "_T.fits"),
                 blm_T,
@@ -157,31 +176,28 @@ class SimConviqtTest(MPITestCase):
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            # in order to evaluate
-            # Q + iU ~  Sum[(b^E + ib^B)(a^E + ia^B)] , this implies
-            # beamE = [0, blmE, -blmB]
-
-            blm_E = np.zeros_like(self.blm)
-            blm_E[1] = self.blm[1]
-            blm_E[2] = -self.blm[2]
             hp.write_alm(
-                self.fname_beam.replace(".fits", "_E.fits"),
-                blm_E,
+                self.fname_beam.replace(".fits", "_bottom_T.fits"),
+                blm_Tbot,
                 lmax=self.lmax,
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            # beamB = [0, blmB, blmE]
-            blm_B = np.zeros_like(self.blm)
-            blm_B[1] = self.blm[2]
-            blm_B[2] = self.blm[1]
             hp.write_alm(
-                self.fname_beam.replace(".fits", "_B.fits"),
-                blm_B,
+                self.fname_beam.replace(".fits", "_P.fits"),
+                blm_P,
                 lmax=self.lmax,
                 mmax_in=self.mmax,
                 overwrite=True,
             )
+            hp.write_alm(
+                self.fname_beam.replace(".fits", "_bottom_P.fits"),
+                blm_Pbot,
+                lmax=self.lmax,
+                mmax_in=self.mmax,
+                overwrite=True,
+            )
+            # in
 
         if self.comm is not None:
             self.comm.barrier()
@@ -393,43 +409,38 @@ class SimConviqtTest(MPITestCase):
         )
         cov_and_hits.apply(data)
 
-        binner1 = ops.BinMap(
+        binner  = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
-            det_data=key1,
             det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        binner1.apply(data)
-        binner2 = ops.BinMap(
-            pixel_dist="pixel_dist",
-            covariance=cov_and_hits.covariance,
-            det_data=key2,
-            det_flags=None,
-            pixel_pointing=pixels,
-            stokes_weights=weights,
-            noise_model=default_model.noise_model,
-            sync_type="alltoallv",
-        )
-        binner2.apply(data)
+        
+        binner.det_data = key1
+        binner.binned = "binned1"
+        binner.apply(data)
+        binner.det_data = key2
+        binner.binned = "binned2"
+        binner.apply(data)
+        
         # Study the map on the root process
 
-        toast_bin_path = os.path.join(self.outdir, "toast_bin.conviqt.fits")
-        write_healpix_fits(data[binner1.binned], toast_bin_path, nest=pixels.nest)
-        toast_bin_path = os.path.join(self.outdir, "toast_bin.wconviqt.fits")
-        write_healpix_fits(data[binner2.binned], toast_bin_path, nest=pixels.nest)
+        toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
+        write_healpix_fits(data["binned1"], toast_bin_path, nest=pixels.nest)
+        toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
+        write_healpix_fits(data["binned2"], toast_bin_path, nest=pixels.nest)
 
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
         write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
 
         fail = False
         if self.rank == 0:
-            mapfile = os.path.join(self.outdir, "toast_bin.conviqt.fits")
+            mapfile = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
             mdata = hp.read_map(mapfile, field=range(3))
-            mapfile = os.path.join(self.outdir, "toast_bin.wconviqt.fits")
+            mapfile = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
             mdataw = hp.read_map(mapfile, field=range(3))
 
             cl_out = hp.anafast(mdata, lmax=self.lmax)
@@ -450,11 +461,13 @@ class SimConviqtTest(MPITestCase):
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
         self.make_beam_file_dict(data)
-
+        
+        
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
-
+        
+        
         key1 = "conviqt0"
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
@@ -467,27 +480,24 @@ class SimConviqtTest(MPITestCase):
             normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-
+    
         sim_conviqt.apply(data)
-        ## For TEB convolution there's no need to differentiate between beams for detA and detB
-        beam_file_dict_teb = {}
-        for det in data.obs[0].local_detectors:
-            beam_file_dict_teb[det] = self.fname_beam
-
+        
         key2 = "tebconviqt"
-
+        
         sim_wconviqt = ops.SimTEBConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict=beam_file_dict_teb,
-            dxx=False,
+            beam_file_dict=self.beam_file_dict,
+            dxx=False  ,
             det_data=key2,
-            pol=True,
+            pol=False ,
             normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-
+        
+            
         sim_wconviqt.apply(data)
         # Bin a map to study
 
@@ -517,34 +527,29 @@ class SimConviqtTest(MPITestCase):
         )
         cov_and_hits.apply(data)
 
-        binner1 = ops.BinMap(
+        binner  = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
-            det_data=key1,
             det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        binner1.apply(data)
-        binner2 = ops.BinMap(
-            pixel_dist="pixel_dist",
-            covariance=cov_and_hits.covariance,
-            det_data=key2,
-            det_flags=None,
-            pixel_pointing=pixels,
-            stokes_weights=weights,
-            noise_model=default_model.noise_model,
-            sync_type="alltoallv",
-        )
-        binner2.apply(data)
+        
+        binner.det_data = key1
+        binner.binned = "binned1"
+        binner.apply(data)
+        binner.det_data = key2
+        binner.binned = "binned2"
+        binner.apply(data)
+        
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
-        write_healpix_fits(data[binner1.binned], toast_bin_path, nest=pixels.nest)
+        write_healpix_fits(data["binned1"], toast_bin_path, nest=pixels.nest)
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
-        write_healpix_fits(data[binner2.binned], toast_bin_path, nest=pixels.nest)
+        write_healpix_fits(data["binned2"], toast_bin_path, nest=pixels.nest)
 
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
         write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
