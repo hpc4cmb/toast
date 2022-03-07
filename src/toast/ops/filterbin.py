@@ -15,7 +15,7 @@ import traitlets
 
 from .. import qarray as qa
 from .._libtoast import (accumulate_observation_matrix,
-                         build_template_covariance, expand_matrix, legendre)
+                         expand_matrix, legendre)
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
@@ -37,159 +37,6 @@ from .scan_map import ScanMap, ScanMask
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
-
-
-class SpatialTemplates:
-    def __init__(self, detectors, focalplane, order=0):
-        self.detectors = detectors
-        self.ndet = len(detectors)
-        self.ntemplate = (order + 1) ** 2
-        self.templates = np.ones([self.ntemplate, self.ndet])
-
-        # Scale and translate detector positions on the focalplane to
-        # fit [-1, 1] x [-1, 1]
-
-        detector_position = {}
-        theta_offset = 0
-        phi_offset = 0
-        thetas = np.zeros(self.ndet)
-        phis = np.zeros(self.ndet)
-        for idet, det in enumerate(detectors):
-            det_quat = focalplane[det]["quat"]
-            x, y, z = qa.rotate(det_quat, ZAXIS)
-            theta, phi = np.arcsin([x, y])
-            thetas[idet] = theta
-            phis[idet] = phi
-        theta_scale = 0.999 / np.ptp(thetas)
-        phi_scale = 0.999 / np.ptp(phis)
-        theta_offset = 0.5 * (np.amin(thetas) + np.amax(thetas))
-        phi_offset = 0.5 * (np.amin(phis) + np.amax(phis))
-        thetas = (thetas - theta_offset) * theta_scale
-        phis = (phis - phi_offset) * phi_scale
-
-        # Evaluate the templates
-
-        itemplate = 0
-        for xorder in range(order + 1):
-            for yorder in range(order + 1):
-                self.templates[itemplate] = thetas**xorder * phis**yorder
-                itemplate += 1
-
-        return
-
-    def fit(self, signal, good):
-        ndet = len(signal)
-        nsample = len(signal[0])
-        if ndet != self.ndet:
-            raise RuntimeError(
-                f"Spatial templates constructed for {self.ndet} detectors, not {ndet}."
-            )
-        ntemplate = self.ntemplate
-        amplitudes = np.zeros([nsample, ntemplate])
-        invcov = np.zeros([ntemplate, ntemplate, nsample])
-        proj = np.zeros([ntemplate, nsample])
-        for row in range(ntemplate):
-            for det in range(ndet):
-                proj[row] += self.templates[row, det] * good[det] * signal[det]
-            for col in range(ntemplate):
-                for det in range(ndet):
-                    invcov[row, col] += (
-                        self.templates[row, det] * self.templates[col, det] * good[det]
-                    )
-        invcov = np.transpose(invcov, (2, 1, 0))
-        proj = np.transpose(proj)
-        for isample in range(nsample):
-            try:
-                cov = np.linalg.inv(invcov[isample])
-                amplitudes[isample] = np.dot(cov, proj[isample])
-            except:
-                pass
-        return amplitudes
-
-    def subtract(self, signal, amplitudes):
-        ndet = len(signal)
-        nsample = len(signal[0])
-        amps = amplitudes.reshape([self.ntemplate, nsample])
-        for det in range(ndet):
-            for template in range(self.ntemplate):
-                signal[det] -= amplitudes[:, template] * self.templates[template, det]
-        return
-
-
-class SparseTemplates:
-    def __init__(self):
-        self.starts = []
-        self.stops = []
-        self.templates = []
-
-    @property
-    def ntemplate(self):
-        return len(self.templates)
-
-    def to_dense(self, nsample):
-        dense = np.zeros([self.ntemplate, nsample])
-        for itemplate, (start, stop, template) in enumerate(
-            zip(self.starts, self.stops, self.templates)
-        ):
-            dense[itemplate, start:stop] = template
-        return dense
-
-    def dot(self, signal):
-        proj = np.zeros(self.ntemplate)
-        for itemplate, (start, stop, template) in enumerate(
-            zip(self.starts, self.stops, self.templates)
-        ):
-            proj[itemplate] = np.dot(template, signal[start:stop])
-        return proj
-
-    def subtract(self, signal, amplitudes):
-        for itemplate, (start, stop, template) in enumerate(
-            zip(self.starts, self.stops, self.templates)
-        ):
-            signal[start:stop] -= amplitudes[itemplate] * template
-        return
-
-    def trim(self, template):
-        first = 0
-        last = len(template) - 1
-        while first < last and template[first] == 0:
-            first += 1
-        while last > first and template[last] == 0:
-            last -= 1
-        return first, last
-
-    def append(self, templates, start=0, stop=None):
-        """Append new sparse template"""
-        for template in templates:
-            first, last = self.trim(template)
-            if first == last:
-                continue
-            self.starts.append(start + first)
-            self.stops.append(start + last + 1)
-            self.templates.append(template[first : last + 1])
-        return
-
-    def mask(self, good):
-        """Return a new SparseTemplates instance that complies with the
-        provided mask"""
-        masked = SparseTemplates()
-        for start, stop, template in zip(self.starts, self.stops, self.templates):
-            if np.any(good[start:stop]):
-                masked.starts.append(start)
-                masked.stops.append(stop)
-                masked.templates.append(template)
-        masked.normalize(good)
-        return masked
-
-    def normalize(self, good=None):
-        """Normalize templates"""
-        for start, stop, template in zip(self.starts, self.stops, self.templates):
-            if good is None:
-                norm = np.sum(template**2) ** 0.5
-            else:
-                norm = np.sum((template * good[start:stop]) ** 2) ** 0.5
-            template /= norm
-        return
 
 
 def combine_observation_matrix(rootname):
@@ -736,11 +583,26 @@ class FilterBin(Operator):
 
                 full_noise_weights = scipy.sparse.diags(full_good_fit, dtype=float)
 
+                if self.grank == 0:
+                    log.debug(
+                        f"{self.group:4} : FilterBin:   Built detector templates for "
+                        f"key={value} in {time() - t1:.2f} s",
+                    )
+                    t1 = time()
+
                 # Filter all detectors in the current detector set
 
                 if not self.filter_in_sequence:
                     all_templates = [scipy.sparse.vstack(all_templates, format="csr")]
 
+                    if self.grank == 0:
+                        log.debug(
+                            f"{self.group:4} : FilterBin:   Stacked templates for "
+                            f"key={value} in {time() - t1:.2f} s",
+                        )
+                        t1 = time()
+
+                t2 = time()
                 all_covs = []
                 for itemplates in range(len(all_templates)):
                     templates = all_templates[itemplates]
@@ -768,14 +630,24 @@ class FilterBin(Operator):
                     invcov = templates.dot(full_noise_weights.dot(templates.T))
                     invcov = invcov.toarray()
 
+                    if self.grank == 0:
+                        log.debug(
+                            f"{self.group:4} : FilterBin:   Stacked templates for "
+                            f"key={value} : {itemplates + 1}/{len(all_templates)} "
+                            f"in {time() - t1:.2f} s",
+                        )
+                        t1 = time()
+
                     # Invert the sub-matrix that has non-zero diagonal
 
                     rcond = 1 / np.linalg.cond(invcov)
                     if self.grank == 0:
                         log.debug(
-                            f"{self.group:4} : FilterBin: Template covariance matrix "
-                            f"rcond = {rcond}",
+                            f"{self.group:4} : FilterBin:   Template covariance matrix "
+                            f"rcond = {rcond} in {time() - t1:.2f} s",
                         )
+                        t1 = time()
+
                     if rcond > 1e-6:
                         cov = np.linalg.inv(invcov)
                     else:
@@ -789,10 +661,21 @@ class FilterBin(Operator):
                     all_templates[itemplates] = templates
                     all_covs.append(cov)
 
+                    if self.grank == 0:
+                        log.debug(
+                            f"{self.group:4} : FilterBin:   Inverted covariance for "
+                            f"key={value} : {itemplates + 1}/{len(all_templates)} "
+                            f"in {time() - t1:.2f} s",
+                        )
+                        t1 = time()
+
+                    import pdb
+                    pdb.set_trace()
+
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:   Built template covariance "
-                        f"{time() - t1:.2f} s",
+                        f"{time() - t2:.2f} s",
                     )
                     t1 = time()
 
@@ -1110,66 +993,6 @@ class FilterBin(Operator):
         return templates
 
     @function_timer
-    def _build_template_covariance(self, templates, good):
-        """Calculate (F^T N^-1_F F)^-1
-
-        Observe that the sample noise weights in N^-1_F need not be the
-        same as in binning the filtered signal.  For instance, samples
-        falling on point sources may be masked here but included in the
-        final map.
-        """
-        log = Logger.get()
-        ntemplate = templates.ntemplate
-        invcov = np.zeros([ntemplate, ntemplate])
-        build_template_covariance(
-            templates.starts,
-            templates.stops,
-            templates.templates,
-            good.astype(np.float64),
-            invcov,
-        )
-        rcond = 1 / np.linalg.cond(invcov)
-        if self.grank == 0:
-            log.debug(
-                f"{self.group:4} : FilterBin: Template covariance matrix "
-                f"rcond = {rcond}",
-            )
-        if rcond > 1e-6:
-            cov = np.linalg.inv(invcov)
-        else:
-            log.warning(
-                f"{self.group:4} : FilterBin: WARNING: template covariance matrix "
-                f"is poorly conditioned: "
-                f"rcond = {rcond}.  Using matrix pseudoinverse.",
-            )
-            cov = np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
-
-        return cov
-
-    @function_timer
-    def _regress_templates(self, templates, template_covariance, signal, good):
-        """Calculate Zd = (I - F(F^T N^-1_F F)^-1 F^T N^-1_F)d
-
-        All samples that are not flagged (zero weight in N^-1_F) have
-        equal weight.
-        """
-        proj = templates.dot(signal * good)
-        amplitudes = np.dot(template_covariance, proj)
-        templates.subtract(signal, amplitudes)
-        return
-
-    @function_timer
-    def _regress_spatial_templates(self, templates, signal, good):
-        """Calculate Zd = (I - F(F^T N^-1_F F)^-1 F^T N^-1_F)d
-
-        All samples that are not flagged (zero weight in N^-1_F) have
-        equal weight.
-        """
-        amplitudes = templates.fit(signal, good)
-        templates.subtract(signal, amplitudes)
-        return
-
-    @function_timer
     def _compress_pixels(self, pixels):
         shape = pixels.shape
         local_to_global = np.sort(list(set(pixels.ravel())))
@@ -1207,121 +1030,6 @@ class FilterBin(Operator):
         )
 
         return sparse_matrix
-
-    @function_timer
-    def _accumulate_observation_matrix(
-        self,
-        obs,
-        det,
-        pixels,
-        weights,
-        good_fit,
-        good_bin,
-        det_templates,
-        template_covariance,
-    ):
-        """Calculate P^T N^-1 Z P
-        This part of the covariance calculation is cumulative: each observation
-        and detector is computed independently and can be cached.
-
-        Observe that `N` in this equation need not be the same used in
-        template covariance in `Z`.
-        """
-        if not self.write_obs_matrix:
-            return
-        log = Logger.get()
-        templates = det_templates.to_dense(good_fit.size)
-        fname_cache = None
-        local_obs_matrix = None
-        t1 = time()
-        if self.cache_dir is not None:
-            cache_dir = os.path.join(self.cache_dir, obs.name)
-            os.makedirs(cache_dir, exist_ok=True)
-            fname_cache = os.path.join(cache_dir, det)
-            try:
-                mm_data = np.load(fname_cache + ".data.npy")
-                mm_indices = np.load(fname_cache + ".indices.npy")
-                mm_indptr = np.load(fname_cache + ".indptr.npy")
-                local_obs_matrix = scipy.sparse.csr_matrix(
-                    (mm_data, mm_indices, mm_indptr),
-                    self.obs_matrix.shape,
-                )
-                if self.grank == 0:
-                    log.debug(
-                        f"{self.group:4} : FilterBin:     loaded cached matrix from "
-                        f"{fname_cache}* in {time() - t1:.2f} s",
-                    )
-                    t1 = time()
-            except:
-                local_obs_matrix = None
-
-        if local_obs_matrix is None:
-            templates = templates.T.copy()
-            good_any = np.logical_or(good_fit, good_bin)
-
-            # Temporarily compress pixels
-            if self.grank == 0:
-                log.debug(f"{self.group:4} : FilterBin:     Compressing pixels")
-            c_pixels, c_npix, local_to_global = self._compress_pixels(
-                pixels[good_any].copy()
-            )
-            if self.grank == 0:
-                log.debug(
-                    f"{self.group:4} : FilterBin: Compressed in {time() - t1:.2f} s",
-                )
-                t1 = time()
-            c_npixtot = c_npix * self.nnz
-            c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
-            if self.grank == 0:
-                log.debug(f"{self.group:4} : FilterBin:     Accumulating")
-            accumulate_observation_matrix(
-                c_obs_matrix,
-                c_pixels,
-                weights[good_any].copy(),
-                templates[good_any].copy(),
-                template_covariance,
-                good_fit[good_any].astype(np.uint8),
-                good_bin[good_any].astype(np.uint8),
-            )
-            if self.grank == 0:
-                log.debug(
-                    f"{self.group:4} : FilterBin:     Accumulated in {time() - t1:.2f} s"
-                )
-                log.debug(
-                    f"{self.group:4} : FilterBin:     Expanding local to global",
-                )
-                t1 = time()
-            # expand to global pixel numbers
-            local_obs_matrix = self._expand_matrix(c_obs_matrix, local_to_global)
-            if self.grank == 0:
-                log.debug(
-                    f"{self.group:4} : FilterBin:     Expanded in {time() - t1:.2f} s"
-                )
-                t1 = time()
-
-            if fname_cache is not None:
-                if self.grank == 0:
-                    log.debug(
-                        f"{self.group:4} : FilterBin:     Caching to {fname_cache}*",
-                    )
-                np.save(fname_cache + ".data", local_obs_matrix)
-                np.save(fname_cache + ".indices", local_obs_matrix)
-                np.save(fname_cache + ".indptr", local_obs_matrix)
-                if self.grank == 0:
-                    log.debug(
-                        f"{self.group:4} : FilterBin:     cached in {time() - t1:.2f} s",
-                    )
-                    t1 = time()
-
-        if self.grank == 0:
-            log.debug(f"{self.group:4} : FilterBin:     Adding to global")
-        detweight = obs[self.binning.noise_model].detector_weight(det)
-        self.obs_matrix += local_obs_matrix * detweight
-        if self.grank == 0:
-            log.debug(
-                f"{self.group:4} : FilterBin:     Added in {time() - t1:.2f} s",
-            )
-        return
 
     @function_timer
     def _accumulate_full_observation_matrix(
