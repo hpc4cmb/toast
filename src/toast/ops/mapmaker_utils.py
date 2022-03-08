@@ -626,148 +626,37 @@ class BuildNoiseWeighted(Operator):
 
             noise = ob[self.noise_model]
 
-            if use_acc:
-                # Our data exists on the accelerator
-                log.verbose_rank(
-                    f"Operator {self.name} using accelerator code path for {ob.name}",
-                    comm=data.comm.comm_group,
-                )
+            detweights = np.array(
+                [noise.detector_weight(x) for x in dets], dtype=np.float64
+            )
 
-                detweights = np.array(
-                    [noise.detector_weight(x) for x in dets], dtype=np.float64
-                )
+            pix_indx = ob.detdata[self.pixels].indices(dets)
+            weight_indx = ob.detdata[self.weights].indices(dets)
+            data_indx = ob.detdata[self.det_data].indices(dets)
+            flag_indx = ob.detdata[self.det_flags].indices(dets)
 
-                pix_indx = ob.detdata[self.pixels].indices(dets)
-                weight_indx = ob.detdata[self.weights].indices(dets)
-                data_indx = ob.detdata[self.det_data].indices(dets)
+            build_noise_weighted(
+                np.array(
+                    zmap.distribution.global_submap_to_local,
+                    dtype=np.int64,
+                ),
+                zmap.data,
+                pix_indx,
+                ob.detdata[self.pixels].data,
+                weight_indx,
+                ob.detdata[self.weights].data,
+                data_indx,
+                ob.detdata[self.det_data].data,
+                flag_indx,
+                ob.detdata[use_flags].data,
+                detweights,
+                self.det_flag_mask,
+                ob.intervals[self.view].data,
+                ob.shared[self.shared_flags].data,
+                self.shared_flag_mask,
+                use_accel,
+            )
 
-                # ob.detdata.acc_copyout(self.pixels)
-                # ob.detdata.acc_copyout(self.weights)
-                # print("Build calling:")
-                # print("  pix = {}".format(ob.detdata[self.pixels].data[0:3]))
-                # print("  wts = {}".format(ob.detdata[self.weights].data[0:3]))
-                # ob.detdata.acc_copyin(self.pixels)
-                # ob.detdata.acc_copyin(self.weights)
-
-                temp_flags = None
-                use_flags = self.det_flags
-                if self.det_flags is None:
-                    temp_flags = "temp_flags"
-                    use_flags = temp_flags
-                    exists = ob.detdata.ensure(
-                        temp_flags, dtype=np.uint8, detectors=dets
-                    )
-                    if not ob.detdata.acc_is_present(temp_flags):
-                        ob.detdata.acc_copyin(temp_flags)
-
-                flag_indx = ob.detdata[use_flags].indices(dets)
-
-                build_noise_weighted(
-                    np.array(
-                        data[self.zmap].distribution.global_submap_to_local,
-                        dtype=np.int64,
-                    ),
-                    data[self.zmap].data,
-                    data[self.zmap].distribution.n_submap,
-                    pix_indx,
-                    ob.detdata[self.pixels].data,
-                    weight_indx,
-                    ob.detdata[self.weights].data,
-                    data_indx,
-                    ob.detdata[self.det_data].data,
-                    flag_indx,
-                    ob.detdata[use_flags].data,
-                    detweights,
-                    self.det_flag_mask,
-                )
-
-                # FIXME: Should we delete this?
-                # if temp_flags is not None:
-                #     ob.detdata.acc_delete(temp_flags)
-                #     del ob.detdata[temp_flags]
-
-                # data[self.zmap].acc_copyout()
-                # nnz = (data[self.zmap].data != 0).sum()
-                # print(
-                #     f"ob {ob.name} zmap {nnz} nonzeros = {data[self.zmap].data}",
-                #     flush=True,
-                # )
-                # data[self.zmap].acc_copyin()
-
-            else:
-                # CPU implementation
-                log.verbose_rank(
-                    f"Operator {self.name} using CPU code path for {ob.name}",
-                    comm=data.comm.comm_group,
-                )
-
-                # The pixels and weights view for this observation
-                pix = ob.view[self.view].detdata[self.pixels]
-                wts = ob.view[self.view].detdata[self.weights]
-                ddat = ob.view[self.view].detdata[self.det_data]
-
-                if self.shared_flags is not None:
-                    shared_flgs = ob.view[self.view].shared[self.shared_flags]
-                else:
-                    shared_flgs = [None for x in wts]
-                if self.det_flags is not None:
-                    flgs = ob.view[self.view].detdata[self.det_flags]
-                else:
-                    flgs = [None for x in wts]
-
-                # Process every data view
-                for pview, wview, dview, fview, shared_fview in zip(
-                    pix, wts, ddat, flgs, shared_flgs
-                ):
-                    for det in dets:
-                        # Data for this detector
-                        ddata = dview[det]
-
-                        # We require that the pointing matrix has the same number of
-                        # non-zero elements for every detector and every observation.
-                        # We check that here.
-
-                        check_nnz = None
-                        if len(wview.detector_shape) == 1:
-                            check_nnz = 1
-                        else:
-                            check_nnz = wview.detector_shape[1]
-                        if check_nnz != weight_nnz:
-                            msg = (
-                                f"observation {ob.name}, detector {det}, pointing "
-                                f"weights {self.weights} has inconsistent number of values"
-                            )
-                            raise RuntimeError(msg)
-
-                        # Get local submap and pixels
-                        local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
-
-                        # Get the detector weight from the noise model.
-                        detweight = noise.detector_weight(det)
-
-                        # Samples with telescope pointing problems are already flagged in
-                        # the pointing operators by setting the pixel numbers to a negative
-                        # value.  Here we optionally apply detector flags to the local
-                        # pixel numbers to flag more samples.
-
-                        # Apply the flags if needed
-                        if self.det_flags is not None:
-                            local_pix[fview[det] & self.det_flag_mask != 0] = -1
-                        if self.shared_flags is not None:
-                            local_pix[shared_fview & self.shared_flag_mask != 0] = -1
-
-                        # Accumulate
-                        cov_accum_zmap(
-                            dist.n_local_submap,
-                            dist.n_pix_submap,
-                            zmap.n_value,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            wview[det].reshape(-1),
-                            detweight,
-                            ddata,
-                            zmap.raw,
-                        )
         return
 
     def _finalize(self, data, use_acc=False, **kwargs):

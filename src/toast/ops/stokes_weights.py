@@ -130,7 +130,7 @@ class StokesWeights(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
@@ -161,6 +161,10 @@ class StokesWeights(Operator):
         # overhead from temporary arrays.
         tod_buffer_length = env.tod_buffer_length()
 
+        cal = self.cal
+        if cal is None:
+            cal = 1.0
+
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
@@ -168,8 +172,24 @@ class StokesWeights(Operator):
                 # Nothing to do for this observation
                 continue
 
-            # Create (or re-use) output data for the weights
+            # Check that our view is fully covered by detector pointing.  If the
+            # detector_pointing view is None, then it has all samples.  If our own
+            # view was None, then it would have been set to the detector_pointing
+            # view above.
+            if (view is not None) and (self.detector_pointing.view is not None):
+                if ob.intervals[view] != ob.intervals[self.detector_pointing.view]:
+                    # We need to check intersection
+                    intervals = ob.intervals[self.view]
+                    detector_intervals = ob.intervals[self.detector_pointing.view]
+                    intersection = detector_intervals & intervals
+                    if intersection != intervals:
+                        msg = (
+                            f"view {self.view} is not fully covered by valid "
+                            "detector pointing"
+                        )
+                        raise RuntimeError(msg)
 
+            # Create (or re-use) output data for the weights
             if self.single_precision:
                 exists = ob.detdata.ensure(
                     self.weights,
@@ -185,179 +205,56 @@ class StokesWeights(Operator):
                     detectors=dets,
                 )
 
-            if use_acc:
-                # Our data exists on the accelerator
-                log.verbose_rank(
-                    f"Operator {self.name} using accelerator code path for {ob.name}",
-                    comm=data.comm.comm_group,
+            quat_indx = ob.detdata[quats_name].indices(dets)
+            weight_indx = ob.detdata[self.weights].indices(dets)
+
+            # Do we already have pointing for all requested detectors?
+            if exists:
+                # Yes
+                if data.comm.group_rank == 0:
+                    msg = (
+                        f"Group {data.comm.group}, ob {ob.name}, Stokes weights "
+                        f"already computed for {dets}"
+                    )
+                    log.verbose(msg)
+                continue
+            elif use_accel:
+                ob.detdata.accel_create(self.weights)
+
+            # FIXME:  temporary hack until instrument classes are also pre-staged
+            # to GPU
+            focalplane = ob.telescope.focalplane
+            det_epsilon = np.zeros(len(dets), dtype=np.float64)
+
+            # Get the cross polar response from the focalplane
+            if "pol_leakage" in focalplane.detector_data.colnames:
+                for idet, d in enumerate(dets):
+                    det_epsilon[idet] = focalplane[d]["pol_leakage"]
+
+            if self.mode == "IQU":
+                stokes_weights_IQU(
+                    quat_indx,
+                    ob.detdata[quats_name].data,
+                    weight_indx,
+                    ob.detdata[self.weights].data,
+                    ob.shared[self.hwp_angle].data,
+                    ob.intervals[self.view].data,
+                    det_epsilon,
+                    cal,
+                    use_accel,
                 )
-
-                # FIXME:  temporary hack until instrument classes are also pre-staged
-                # to GPU
-                focalplane = ob.telescope.focalplane
-                det_epsilon = np.zeros(len(dets), dtype=np.float64)
-
-                # Get the cross polar response from the focalplane
-                if "pol_leakage" in focalplane.detector_data.colnames:
-                    for idet, d in enumerate(dets):
-                        det_epsilon[idet] = focalplane[d]["pol_leakage"]
-
-                cal = self.cal
-                if cal is None:
-                    cal = 1.0
-
-                if not exists:
-                    # The data was created above, copy in
-                    ob.detdata.acc_copyin(self.weights)
-
-                quat_indx = ob.detdata[quats_name].indices(dets)
-                weight_indx = ob.detdata[self.weights].indices(dets)
-
-                if self.mode == "IQU":
-                    stokes_weights_IQU(
-                        quat_indx,
-                        ob.detdata[quats_name].data,
-                        ob.shared[self.hwp_angle].data,
-                        weight_indx,
-                        ob.detdata[self.weights].data,
-                        det_epsilon,
-                        cal,
-                    )
-                elif self.mode == "I":
-                    stokes_weights_I(
-                        weight_indx,
-                        ob.detdata[self.weights].data,
-                        cal,
-                    )
-                else:
-                    msg = f"unsupported stokes weights mode {self.mode}"
-                    log.error(msg)
-                    raise RuntimeError(msg)
-
+            elif self.mode == "I":
+                stokes_weights_I(
+                    weight_indx,
+                    ob.detdata[self.weights].data,
+                    ob.intervals[self.view].data,
+                    cal,
+                    use_accel,
+                )
             else:
-                log.verbose_rank(
-                    f"Operator {self.name} using CPU code path for {ob.name}",
-                    comm=data.comm.comm_group,
-                )
-
-                # Check that our view is fully covered by detector pointing.  If the
-                # detector_pointing view is None, then it has all samples.  If our own
-                # view was None, then it would have been set to the detector_pointing
-                # view above.
-                if (view is not None) and (self.detector_pointing.view is not None):
-                    if ob.intervals[view] != ob.intervals[self.detector_pointing.view]:
-                        # We need to check intersection
-                        intervals = ob.intervals[self.view]
-                        detector_intervals = ob.intervals[self.detector_pointing.view]
-                        intersection = detector_intervals & intervals
-                        if intersection != intervals:
-                            msg = (
-                                f"view {self.view} is not fully covered by valid "
-                                "detector pointing"
-                            )
-                            raise RuntimeError(msg)
-
-                # Do we already have pointing for all requested detectors?
-                if exists:
-                    # Yes
-                    if data.comm.group_rank == 0:
-                        msg = (
-                            f"Group {data.comm.group}, ob {ob.name}, Stokes weights "
-                            f"already computed for {dets}"
-                        )
-                        log.verbose(msg)
-                    continue
-
-                # Focalplane for this observation
-                focalplane = ob.telescope.focalplane
-
-                # Loop over views
-                views = ob.view[view]
-                for vw in range(len(views)):
-                    # Get the flags if needed.  Use the same flags as
-                    # detector pointing.
-                    flags = None
-                    if self.detector_pointing.shared_flags is not None:
-                        flags = np.array(
-                            views.shared[self.detector_pointing.shared_flags][vw]
-                        )
-                        flags &= self.detector_pointing.shared_flag_mask
-
-                    # HWP angle if needed
-                    hwp_angle = None
-                    if self.hwp_angle is not None:
-                        hwp_angle = views.shared[self.hwp_angle][vw]
-
-                    # Optional calibration
-                    cal = None
-                    if self.cal is not None:
-                        cal = ob[self.cal]
-
-                    for det in dets:
-                        props = focalplane[det]
-
-                        # Get the cross polar response from the focalplane
-                        if "pol_leakage" in props.colnames:
-                            epsilon = props["pol_leakage"]
-                        else:
-                            epsilon = 0.0
-
-                        # Timestream of detector quaternions
-                        quats = views.detdata[quats_name][vw][det]
-                        view_samples = len(quats)
-
-                        # Cal for this detector
-                        if cal is not None:
-                            dcal = cal[det]
-                        else:
-                            dcal = 1.0
-
-                        # Buffered pointing calculation
-                        buf_off = 0
-                        buf_n = tod_buffer_length
-                        while buf_off < view_samples:
-                            if buf_off + buf_n > view_samples:
-                                buf_n = view_samples - buf_off
-
-                            bslice = slice(buf_off, buf_off + buf_n)
-
-                            # This buffer of detector quaternions
-                            detp = quats[bslice, :].reshape(-1)
-
-                            # Buffer of HWP angle
-                            hslice = None
-                            if hwp_angle is not None:
-                                hslice = hwp_angle[bslice].reshape(-1)
-
-                            # Buffer of flags
-                            fslice = None
-                            if flags is not None:
-                                fslice = flags[bslice].reshape(-1)
-
-                            # Weight buffer
-                            wtslice = views.detdata[self.weights][vw][
-                                det, bslice
-                            ].reshape(-1)
-
-                            if self.single_precision:
-                                wbuf = np.zeros(len(wtslice), dtype=np.float64)
-                            else:
-                                wbuf = wtslice
-
-                            stokes_weights(
-                                epsilon,
-                                dcal,
-                                self.mode,
-                                detp,
-                                hslice,
-                                fslice,
-                                wbuf,
-                            )
-
-                            if self.single_precision:
-                                wtslice[:] = wbuf.astype(np.float32)
-
-                            buf_off += buf_n
+                msg = f"unsupported stokes weights mode {self.mode}"
+                log.error(msg)
+                raise RuntimeError(msg)
 
         return
 

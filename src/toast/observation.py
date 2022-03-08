@@ -323,8 +323,9 @@ class Observation(MutableMapping):
             return self.local_detectors
         else:
             dets = list()
+            sel_set = set(selection)
             for det in self.local_detectors:
-                if det in selection:
+                if det in sel_set:
                     dets.append(det)
             return dets
 

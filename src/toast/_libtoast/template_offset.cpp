@@ -5,216 +5,226 @@
 
 #include <module.hpp>
 
-#ifdef HAVE_OPENACC
-# include <openacc.h>
-#endif // ifdef HAVE_OPENACC
+#include <accelerator.hpp>
+
+#include <intervals.hpp>
 
 
-// FIXME:  docstrings need to be updated if we keep these accelerator versions of the
-// code.
+// FIXME:  docstrings need to be updated if we keep these versions of the code.
 
 void init_template_offset(py::module & m) {
     m.def(
         "template_offset_add_to_signal", [](
-            bool use_acc,
             int64_t step_length,
             int64_t amp_offset,
-            int64_t n_amp,
-            int64_t samp_offset,
-            int64_t n_det_samp,
-            int64_t det_indx,
             py::buffer amplitudes,
-            py::buffer det_data
+            int32_t data_index,
+            py::buffer det_data,
+            py::buffer intervals,
+            bool use_accel
         ) {
-            auto info_amps = amplitudes.request();
-            double * raw_amps = reinterpret_cast <double *> (info_amps.ptr);
+            // This is used to return the actual shape of each buffer
+            std::vector <int64_t> temp_shape(3);
 
-            auto info_detdata = det_data.request();
-            double * raw_data = reinterpret_cast <double *> (info_detdata.ptr);
+            double * raw_amplitudes = extract_buffer <double> (
+                amplitudes, "amplitudes", 1, temp_shape, {-1}
+            );
+            int64_t n_amp = temp_shape[0];
 
-            size_t n_det = info_detdata.shape[0];
-            size_t n_all_samp = info_detdata.shape[1];
+            double * raw_det_data = extract_buffer <double> (
+                det_data, "det_data", 2, temp_shape, {-1, -1}
+            );
+            int64_t n_all_det = temp_shape[0];
+            int64_t n_samp = temp_shape[1];
 
-            // if (use_acc) {
-            //     #pragma \
-            //     acc data copyin(step_length, amp_offset, n_amp, samp_offset, n_det_samp, det_indx, n_det, n_all_samp) present(raw_amps[amp_offset:n_amp], raw_data[samp_offset:n_det_samp])
-            //     {
-            //         if (fake_openacc()) {
-            //             // Set all "present" data to point at the fake device pointers
-            //             auto & fake = FakeMemPool::get();
-            //             raw_data = (double *)fake.device_ptr(raw_data);
-            //             raw_amps = (double *)fake.device_ptr(raw_amps);
-            //         }
-            //         #pragma acc parallel
-            //         {
-            //             // All but the last amplitude have the same number of samples.
-            //             #pragma acc loop independent
-            //             for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-            //                 //std::cout << "DBG add_to_signal " << amp_offset + iamp << ": " << raw_amps[amp_offset + iamp] << std::endl;
-            //                 int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
-            //                 int64_t nd;
-            //                 if (iamp == n_amp - 1) {
-            //                     nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
-            //                 } else {
-            //                     nd = step_length;
-            //                 }
-            //                 for (int64_t j = 0; j < nd; ++j) {
-            //                     //std::cout << "DBG add_to_signal   " << doff + j << ":   " << raw_data[doff + j];
-            //                     raw_data[doff + j] += raw_amps[amp_offset + iamp];
-            //                     //std::cout << " -> " << raw_data[doff + j] << std::endl;
-            //                 }
-            //             }
-            //         }
-            //     }
-            // } else {
-            //     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-            //         //std::cout << "DBG add_to_signal " << amp_offset + iamp << ": " << raw_amps[amp_offset + iamp] << std::endl;
-            //         int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
-            //         int64_t nd;
-            //         if (iamp == n_amp - 1) {
-            //             nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
-            //         } else {
-            //             nd = step_length;
-            //         }
-            //         for (int64_t j = 0; j < nd; ++j) {
-            //             //std::cout << "DBG add_to_signal   " << doff + j << ":   " << raw_data[doff + j];
-            //             raw_data[doff + j] += raw_amps[amp_offset + iamp];
-            //             //std::cout << " -> " << raw_data[doff + j] << std::endl;
-            //         }
-            //     }
-            // }
+            Interval * raw_intervals = extract_buffer <Interval> (
+                intervals, "intervals", 1, temp_shape, {-1}
+            );
+            int64_t n_view = temp_shape[0];
+
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (! omgr.device_is_host()) && use_accel;
+
+            double * dev_amplitudes = raw_amplitudes;
+            double * dev_det_data = raw_det_data;
+            Interval * dev_intervals = raw_intervals;
+
+            if (offload) {
+                dev_amplitudes = (double*)omgr.device_ptr((void*)raw_amplitudes);
+                dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
+                dev_intervals = (Interval*)omgr.device_ptr(
+                    (void*)raw_intervals
+                );
+            }
+
+            #pragma omp target data \
+                device(dev) \
+                map(to: \
+                    n_view, \
+                    n_samp, \
+                    data_index, \
+                    step_length, \
+                    amp_offset \
+                ) \
+                use_device_ptr( \
+                    dev_amplitudes, \
+                    dev_det_data, \
+                    dev_intervals \
+                ) \
+                if(offload)
+            {
+                #pragma omp target teams distribute if(offload)
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    #pragma omp parallel for
+                    for (
+                        int64_t isamp = dev_intervals[iview].first;
+                        isamp <= dev_intervals[iview].last;
+                        isamp++
+                    ) {
+                        int64_t d = data_index * n_samp * isamp;
+                        int64_t amp = amp_offset + (int64_t)(isamp / step_length);
+                        dev_det_data[d] += dev_amplitudes[amp];
+                    }
+                }
+            }
             return;
         });
 
     m.def(
         "template_offset_project_signal", [](
-            bool use_acc,
             int64_t step_length,
             int64_t amp_offset,
-            int64_t n_amp,
-            int64_t samp_offset,
-            int64_t n_det_samp,
-            int64_t det_indx,
+            py::buffer amplitudes,
+            int32_t data_index,
             py::buffer det_data,
-            py::buffer amplitudes
+            py::buffer intervals,
+            bool use_accel
         ) {
-            auto info_amps = amplitudes.request();
-            double * raw_amps = reinterpret_cast <double *> (info_amps.ptr);
+            // This is used to return the actual shape of each buffer
+            std::vector <int64_t> temp_shape(3);
 
-            auto info_detdata = det_data.request();
-            double * raw_data = reinterpret_cast <double *> (info_detdata.ptr);
+            double * raw_amplitudes = extract_buffer <double> (
+                amplitudes, "amplitudes", 1, temp_shape, {-1}
+            );
+            int64_t n_amp = temp_shape[0];
 
-            size_t n_det = info_detdata.shape[0];
-            size_t n_all_samp = info_detdata.shape[1];
+            double * raw_det_data = extract_buffer <double> (
+                det_data, "det_data", 2, temp_shape, {-1, -1}
+            );
+            int64_t n_all_det = temp_shape[0];
+            int64_t n_samp = temp_shape[1];
 
-            // if (use_acc) {
-            //     #pragma \
-            //     acc data copyin(step_length, amp_offset, n_amp, samp_offset, n_det_samp, det_indx, n_det, n_all_samp) present(raw_amps[amp_offset:n_amp], raw_data[samp_offset:n_det_samp])
-            //     {
-            //         if (fake_openacc()) {
-            //             // Set all "present" data to point at the fake device pointers
-            //             auto & fake = FakeMemPool::get();
-            //             raw_data = (double *)fake.device_ptr(raw_data);
-            //             raw_amps = (double *)fake.device_ptr(raw_amps);
-            //         }
-            //         #pragma acc parallel
-            //         {
-            //             // All but the last amplitude have the same number of samples.
-            //             #pragma acc loop independent
-            //             for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-            //                 //std::cout << "DBG project_signal " << amp_offset + iamp << ": start = " << raw_amps[amp_offset + iamp] << std::endl;
-            //                 int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
-            //                 int64_t nd;
-            //                 if (iamp == n_amp - 1) {
-            //                     nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
-            //                 } else {
-            //                     nd = step_length;
-            //                 }
-            //                 for (int64_t j = 0; j < nd; ++j) {
-            //                     //std::cout << "DBG project_signal   " << doff + j << ": += " << raw_data[doff + j];
-            //                     raw_amps[amp_offset + iamp] += raw_data[doff + j];
-            //                     //std::cout << " -> " << raw_amps[amp_offset + iamp] << std::endl;
-            //                 }
-            //             }
-            //         }
-            //     }
-            // } else {
-            //     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-            //         //std::cout << "DBG project_signal " << amp_offset + iamp << ": start = " << raw_amps[amp_offset + iamp] << std::endl;
-            //         int64_t doff = det_indx * n_all_samp + samp_offset + iamp * step_length;
-            //         int64_t nd;
-            //         if (iamp == n_amp - 1) {
-            //             nd = n_det_samp - (samp_offset + (n_amp - 1) * step_length);
-            //         } else {
-            //             nd = step_length;
-            //         }
-            //         for (int64_t j = 0; j < nd; ++j) {
-            //             //std::cout << "DBG project_signal   " << doff + j << ": += " << raw_data[doff + j];
-            //             raw_amps[amp_offset + iamp] += raw_data[doff + j];
-            //             //std::cout << " -> " << raw_amps[amp_offset + iamp] << std::endl;
-            //         }
-            //     }
-            // }
+            Interval * raw_intervals = extract_buffer <Interval> (
+                intervals, "intervals", 1, temp_shape, {-1}
+            );
+            int64_t n_view = temp_shape[0];
+
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (! omgr.device_is_host()) && use_accel;
+
+            double * dev_amplitudes = raw_amplitudes;
+            double * dev_det_data = raw_det_data;
+            Interval * dev_intervals = raw_intervals;
+
+            if (offload) {
+                dev_amplitudes = (double*)omgr.device_ptr((void*)raw_amplitudes);
+                dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
+                dev_intervals = (Interval*)omgr.device_ptr(
+                    (void*)raw_intervals
+                );
+            }
+
+            #pragma omp target data \
+                device(dev) \
+                map(to: \
+                    n_view, \
+                    n_samp, \
+                    data_index, \
+                    step_length, \
+                    amp_offset \
+                ) \
+                use_device_ptr( \
+                    dev_amplitudes, \
+                    dev_det_data, \
+                    dev_intervals \
+                ) \
+                if(offload)
+            {
+                #pragma omp target teams distribute if(offload)
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    #pragma omp parallel for
+                    for (
+                        int64_t isamp = dev_intervals[iview].first;
+                        isamp <= dev_intervals[iview].last;
+                        isamp++
+                    ) {
+                        int64_t d = data_index * n_samp * isamp;
+                        int64_t amp = amp_offset + (int64_t)(isamp / step_length);
+                        dev_amplitudes[amp] += dev_det_data[d];
+                    }
+                }
+            }
             return;
 
         });
 
     m.def(
         "template_offset_apply_diag_precond", [](
-            bool use_acc,
             py::buffer offset_var,
             py::buffer amplitudes_in,
-            py::buffer amplitudes_out
+            py::buffer amplitudes_out,
+            bool use_accel
         ) {
-            auto info_var = offset_var.request();
-            // std::cout << "DBG offsetvar = " << info_var.shape[0] << " at " << info_var.ptr << std::endl;
-            double * raw_var = reinterpret_cast <double *> (info_var.ptr);
+            // This is used to return the actual shape of each buffer
+            std::vector <int64_t> temp_shape(3);
 
-            auto info_amps_in = amplitudes_in.request();
-            double * raw_amps_in = reinterpret_cast <double *> (info_amps_in.ptr);
+            double * raw_amp_in = extract_buffer <double> (
+                amplitudes_in, "amplitudes_in", 1, temp_shape, {-1}
+            );
+            int64_t n_amp = temp_shape[0];
 
-            auto info_amps_out = amplitudes_out.request();
-            double * raw_amps_out = reinterpret_cast <double *> (info_amps_out.ptr);
+            double * raw_amp_out = extract_buffer <double> (
+                amplitudes_out, "amplitudes_out", 1, temp_shape, {n_amp}
+            );
 
-            size_t n_amp = info_amps_in.shape[0];
+            double * raw_offset_var = extract_buffer <double> (
+                offset_var, "offset_var", 1, temp_shape, {n_amp}
+            );
 
-            // std::cout << "DBG offset var = ";
-            // for (size_t i = 0; i < n_amp; i++) {
-            //     std::cout << raw_var[i] << ", ";
-            // }
-            // std::cout << std::endl;
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // if (use_acc) {
-            //     #pragma \
-            //     acc data copyin(n_amp, raw_var[0:n_amp]) present(raw_amps_in[0:n_amp], raw_amps_out[0:n_amp])
-            //     {
-            //         if (fake_openacc()) {
-            //             // Set all "present" data to point at the fake device pointers
-            //             auto & fake = FakeMemPool::get();
-            //             raw_amps_in = (double *)fake.device_ptr(raw_amps_in);
-            //             raw_amps_out = (double *)fake.device_ptr(raw_amps_out);
-            //         }
-            //         #pragma acc parallel
-            //         {
-            //             #pragma acc loop independent
-            //             for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-            //                 //std::cout << "DBG apply_precond " << iamp << ": " << raw_amps_in[iamp] << " * " << raw_var[iamp] << " = ";
-            //                 raw_amps_out[iamp] = raw_amps_in[iamp];
-            //                 raw_amps_out[iamp] *= raw_var[iamp];
-            //                 //std::cout << raw_amps_out[iamp] << std::endl;
-            //             }
-            //         }
-            //     }
-            // } else {
-            //     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-            //         //std::cout << "DBG apply_precond " << iamp << ": " << raw_amps_in[iamp] << " * " << raw_var[iamp] << " = ";
-            //         raw_amps_out[iamp] = raw_amps_in[iamp];
-            //         raw_amps_out[iamp] *= raw_var[iamp];
-            //         //std::cout << raw_amps_out[iamp] << std::endl;
-            //     }
-            // }
+            double * dev_amp_in = raw_amp_in;
+            double * dev_amp_out = raw_amp_out;
+            double * dev_offset_var = raw_offset_var;
+            if (offload) {
+                dev_amp_in = (double*)omgr.device_ptr((void*)raw_amp_in);
+                dev_amp_out = (double*)omgr.device_ptr((void*)raw_amp_out);
+                dev_offset_var = (double*)omgr.device_ptr((void*)raw_offset_var);
+            }
+
+            #pragma omp target data \
+                device(dev) \
+                map(to: \
+                    n_amp \
+                ) \
+                use_device_ptr( \
+                    dev_amp_in, \
+                    dev_amp_out, \
+                    dev_offset_var \
+                ) \
+                if(offload)
+            {
+                #pragma omp parallel for
+                for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+                    dev_amp_out[iamp] = dev_amp_in[iamp];
+                    dev_amp_out[iamp] *= dev_offset_var[iamp];
+                }
+            }
             return;
-
         });
 
     // m.def(

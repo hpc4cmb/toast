@@ -435,7 +435,7 @@ class Offset(Template):
     def _get_offset_psd(self, noise, freq, step_time, det):
         """Compute the PSD of the baseline offsets."""
         psdfreq = noise.freq(det).to_value(u.Hz)
-        psd = noise.psd(det).to_value(u.K**2 * u.second)
+        psd = noise.psd(det).to_value(u.K ** 2 * u.second)
         rate = noise.rate(det).to_value(u.Hz)
 
         # Remove the white noise component from the PSD
@@ -501,30 +501,16 @@ class Offset(Template):
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
             )
-            for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
-                n_amp_view = self._obs_views[iob][ivw]
-                if self.view is None:
-                    det_offset = 0
-                    n_det_samp = ob.n_local_samples
-                else:
-                    det_offset = ob.intervals[self.view].first
-                    n_det_samp = ob.intervals[self.view].last - det_offset + 1
-                log.verbose(
-                    f"Offset add to signal:  acc={self.use_acc}, amp_offset={amp_offset}, n_amp_view={n_amp_view}, amps={amplitudes.local}, det_offset={det_offset}, n_det_samp={n_det_samp}, det_indx={det_indx[0]}, detdata shape={ob.detdata[self.det_data][:].shape}, input host detdata={ob.detdata[self.det_data][0][0:10]}"
-                )
-                template_offset_add_to_signal(
-                    self.use_acc,
-                    step_length,
-                    amp_offset,
-                    n_amp_view,
-                    det_offset,
-                    n_det_samp,
-                    det_indx[0],
-                    amplitudes.local,
-                    ob.detdata[self.det_data][:],
-                )
 
-                amp_offset += n_amp_view
+            template_offset_add_to_signal(
+                step_length,
+                amp_offset,
+                amplitudes.local,
+                det_indx,
+                ob.detdata[self.det_data][:],
+                ob.intervals[self.view].data,
+                self.use_accel,
+            )
 
     @function_timer
     def _project_signal(self, detector, amplitudes):
@@ -542,30 +528,16 @@ class Offset(Template):
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
             )
-            for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
-                n_amp_view = self._obs_views[iob][ivw]
-                if self.view is None:
-                    det_offset = 0
-                    n_det_samp = ob.n_local_samples
-                else:
-                    det_offset = ob.intervals[self.view].first
-                    n_det_samp = ob.intervals[self.view].last - det_offset + 1
-                log.verbose(
-                    f"Offset project signal:  acc={self.use_acc}, amp_offset={amp_offset}, n_amp_view={n_amp_view}, det_offset={det_offset}, n_det_samp={n_det_samp}, det_indx={det_indx[0]}, detdata shape={ob.detdata[self.det_data][:].shape}, detdata={ob.detdata[self.det_data][0][0:10]}"
-                )
-                template_offset_project_signal(
-                    self.use_acc,
-                    step_length,
-                    amp_offset,
-                    n_amp_view,
-                    det_offset,
-                    n_det_samp,
-                    det_indx[0],
-                    ob.detdata[self.det_data][:],
-                    amplitudes.local,
-                )
-                log.verbose(f"  amplitudes = {amplitudes.local}")
-                amp_offset += n_amp_view
+
+            template_offset_project_signal(
+                step_length,
+                amp_offset,
+                amplitudes.local,
+                det_indx,
+                ob.detdata[self.det_data][:],
+                ob.intervals[self.view].data,
+                self.use_accel,
+            )
 
     @function_timer
     def _add_prior(self, amplitudes_in, amplitudes_out):
@@ -642,10 +614,10 @@ class Offset(Template):
             # Since we do not have a noise filter term in our LHS, our diagonal
             # preconditioner is just the application of offset variance.
             template_offset_apply_diag_precond(
-                self.use_acc,
                 self._offsetvar,
                 amplitudes_in.local,
                 amplitudes_out.local,
+                self.use_accel,
             )
         return
 

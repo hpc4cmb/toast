@@ -279,6 +279,9 @@ void OmpManager::update_host(void * buffer, size_t nbytes) {
 }
 
 int OmpManager::present(void * buffer, size_t nbytes) {
+    auto log = toast::Logger::get();
+    std::ostringstream o;
+
     #ifdef HAVE_OPENMP_TARGET
 
     size_t n = mem_.count(buffer);
@@ -287,8 +290,6 @@ int OmpManager::present(void * buffer, size_t nbytes) {
     } else {
         size_t nb = mem_size_.at(buffer);
         if (nb != nbytes) {
-            auto log = toast::Logger::get();
-            std::ostringstream o;
             o << "OmpManager:  host ptr " << buffer << " is present"
             << ", but has " << nb << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
@@ -682,13 +683,13 @@ void init_accelerator(py::module & m) {
         "test_accel_op_buffer", [](py::buffer data)
         {
             // This is used to return the actual shape of each buffer
-            std::vector <size_t> temp_shape(2);
+            std::vector <int64_t> temp_shape(2);
 
             double * raw = extract_buffer <double> (
                 data, "data", 2, temp_shape, {-1, -1}
             );
-            size_t n_det = temp_shape[0];
-            size_t n_samp = temp_shape[1];
+            int64_t n_det = temp_shape[0];
+            int64_t n_samp = temp_shape[1];
 
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
@@ -698,8 +699,8 @@ void init_accelerator(py::module & m) {
             #pragma omp target data device(dev) use_device_ptr(dev_raw) if(offload)
             {
                 #pragma omp target teams distribute parallel for collapse(2)
-                for (size_t i = 0; i < n_det; i++) {
-                    for (size_t j = 0; j < n_samp; j++) {
+                for (int64_t i = 0; i < n_det; i++) {
+                    for (int64_t j = 0; j < n_samp; j++) {
                         raw[i * n_samp + j] *= 2.0;
                     }
                 }

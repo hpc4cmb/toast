@@ -35,7 +35,7 @@ T * extract_buffer(
     py::buffer data,
     char const * name,
     size_t assert_dims,
-    std::vector <size_t> & shape,
+    std::vector <int64_t> & shape,
     std::vector <int64_t> assert_shape
 ) {
     // Get buffer info structure
@@ -215,27 +215,5 @@ std::unique_ptr <C> aligned_uptr(size_t n) {
     return std::unique_ptr <C> (new C(n));
 }
 
-template <size_t N>
-void assert_shape(py::array::ShapeContainer const & objshape, char const * name, size_t shape[N]) {
-    if (objshape.size() != N) {
-        auto log = toast::Logger::get();
-        std::ostringstream o;
-        o << "Object " << name << " has " << objshape.size()
-        << " dimensions instead of " << N;
-        log.error(o.str().c_str());
-        throw std::runtime_error(o.str().c_str());
-    }
-    for (size_t i = 0; i < N; ++i) {
-        if (objshape[i] != shape[i]) {
-            auto log = toast::Logger::get();
-            std::ostringstream o;
-            o << "Object " << name << " dimension " << i << ": " << objshape[i]
-            << " != " << shape[i];
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
-    }
-    return;
-}
 
 #endif // ifndef LIBTOAST_COMMON_HPP

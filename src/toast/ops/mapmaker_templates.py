@@ -129,7 +129,7 @@ class TemplateMatrix(Operator):
             tmpl.add_prior(amps_in[tmpl.name], amps_out[tmpl.name])
 
     @function_timer
-    def _exec(self, data, detectors=None, use_acc=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Check that the detector data is set
@@ -156,7 +156,7 @@ class TemplateMatrix(Operator):
 
         # Set template accelerator use
         for tmpl in self.templates:
-            tmpl.use_acc = use_acc
+            tmpl.use_accel = use_accel
 
         # Set the data we are using for this execution
         for tmpl in self.templates:
@@ -174,8 +174,8 @@ class TemplateMatrix(Operator):
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
-                if use_acc:
-                    data[self.amplitudes].acc_copyin()
+                if use_accel:
+                    data[self.amplitudes].accel_create()
             for d in all_dets:
                 for tmpl in self.templates:
                     tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
@@ -199,8 +199,10 @@ class TemplateMatrix(Operator):
                 log.verbose(
                     f"TemplateMatrix {ob.name}:  input host detdata={ob.detdata[self.det_data][:][0:10]}"
                 )
-                if use_acc:
-                    ob.detdata[self.det_data].acc_copyin()
+                if use_accel:
+                    if not ob.detdata.accel_present(self.det_data):
+                        ob.detdata.accel_create(self.det_data)
+                    ob.detdata.accel_update_device(self.det_data)
 
             for d in all_dets:
                 for tmpl in self.templates:
@@ -208,15 +210,15 @@ class TemplateMatrix(Operator):
                     tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
         return
 
-    def _finalize(self, data, use_acc=False, **kwargs):
+    def _finalize(self, data, use_accel=False, **kwargs):
         if self.transpose:
             # Synchronize the result
-            if use_acc:
-                data[self.amplitudes].acc_update_self()
+            if use_accel:
+                data[self.amplitudes].accel_update_host()
             for tmpl in self.templates:
                 data[self.amplitudes][tmpl.name].sync()
-            if use_acc:
-                data[self.amplitudes].acc_update_device()
+            if use_accel:
+                data[self.amplitudes].accel_update_device()
         return
 
     def _requires(self):

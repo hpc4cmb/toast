@@ -172,59 +172,6 @@ class PointingDetectorSimple(Operator):
                 use_accel,
             )
 
-            # else:
-            #     log.verbose_rank(
-            #         f"Operator {self.name} using CPU code path for {ob.name}",
-            #         comm=data.comm.comm_group,
-            #     )
-            #     # Create (or re-use) output data for the detector quaternions.
-
-            #     # Do we already have pointing for all requested detectors?
-            #     if exists:
-            #         # Yes
-            #         if data.comm.group_rank == 0:
-            #             log.verbose(
-            #                 f"Group {data.comm.group}, ob {ob.name}, detector pointing "
-            #                 f"already translated for {dets}"
-            #             )
-            #         continue
-
-            #     # Loop over views
-            #     views = ob.view[self.view]
-            #     for vw in range(len(views)):
-            #         # Get the flags if needed
-            #         flags = None
-            #         if self.shared_flags is not None:
-            #             flags = np.array(views.shared[self.shared_flags][vw])
-            #             flags &= self.shared_flag_mask
-
-            #         # Boresight pointing quaternions
-            #         in_boresight = views.shared[self.boresight][vw]
-
-            #         # Coordinate transform if needed
-            #         boresight = in_boresight
-            #         if coord_rot is not None:
-            #             boresight = qa.mult(coord_rot, in_boresight)
-
-            #         # Focalplane for this observation
-            #         focalplane = ob.telescope.focalplane
-
-            #         for det in dets:
-            #             # Detector quaternion offset from the boresight.
-            #             # Real experiments may require additional information
-            #             # such as parameters of a physical pointing model or
-            #             # observatory velocity vector (for aberration correction).
-            #             # In such cases, the detector quaternion can depend on
-            #             # time and the observing direction and a custom detector
-            #             # pointing operator needs to be implemented.
-            #             detquat = np.array(focalplane[det]["quat"], dtype=np.float64)
-
-            #             # Timestream of detector quaternions
-            #             quats = qa.mult(boresight, detquat)
-            #             if flags is not None:
-            #                 quats[flags != 0] = qa.null_quat
-            #             views.detdata[self.quats][vw][det] = quats
-
         return
 
     def _finalize(self, data, **kwargs):

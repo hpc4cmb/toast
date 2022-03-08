@@ -6,6 +6,8 @@
 
 #include <qarray.hpp>
 
+#include <intervals.hpp>
+
 #include <accelerator.hpp>
 
 
@@ -14,6 +16,9 @@
 
 // 2/3
 #define TWOTHIRDS 0.66666666666666666667
+
+
+#pragma omp declare target
 
 typedef struct {
     int64_t nside;
@@ -67,7 +72,6 @@ void hpix_init(hpix * hp, int64_t nside) {
     return;
 }
 
-#pragma acc routine seq
 uint64_t hpix_xy2pix(hpix * hp, uint64_t x, uint64_t y) {
     return hp->utab[x & 0xff] | (hp->utab[(x >> 8) & 0xff] << 16) |
            (hp->utab[(x >> 16) & 0xff] << 32) |
@@ -77,7 +81,6 @@ uint64_t hpix_xy2pix(hpix * hp, uint64_t x, uint64_t y) {
            (hp->utab[(y >> 24) & 0xff] << 49);
 }
 
-#pragma acc routine seq
 void hpix_vec2zphi(hpix * hp, double const * vec,
                    double * phi, int * region, double * z,
                    double * rtz) {
@@ -92,7 +95,6 @@ void hpix_vec2zphi(hpix * hp, double const * vec,
     return;
 }
 
-#pragma acc routine seq
 void hpix_zphi2nest(hpix * hp, double phi, int region, double z,
                     double rtz, int64_t * pix) {
     double tt = (phi >= 0.0) ? phi * TWOINVPI : phi * TWOINVPI + 4.0;
@@ -163,7 +165,6 @@ void hpix_zphi2nest(hpix * hp, double phi, int region, double z,
     return;
 }
 
-#pragma acc routine seq
 void hpix_zphi2ring(hpix * hp, double phi, int region, double z,
                     double rtz, int64_t * pix) {
     double tt = (phi >= 0.0) ? phi * TWOINVPI : phi * TWOINVPI + 4.0;
@@ -210,202 +211,149 @@ void hpix_zphi2ring(hpix * hp, double phi, int region, double z,
     return;
 }
 
+#pragma omp end declare target
+
 void init_ops_pixels_healpix(py::module & m) {
     m.def(
         "pixels_healpix", [](
-            py::buffer quat_indx,
+            py::buffer quat_index,
             py::buffer quats,
-            py::buffer pixel_indx,
+            py::buffer pixel_index,
             py::buffer pixels,
-            py::buffer shared_flags,
+            py::buffer intervals,
             py::buffer hit_submaps,
             int64_t n_pix_submap,
-            uint8_t shared_flag_mask, int64_t nside, bool nest
+            int64_t nside,
+            bool nest,
+            bool use_accel
         ) {
-            auto info_pixindx = pixel_indx.request();
-            int32_t * raw_pixindx = reinterpret_cast <int32_t *> (info_pixindx.ptr);
+            // This is used to return the actual shape of each buffer
+            std::vector <int64_t> temp_shape(3);
 
-            auto info_pixels = pixels.request();
-            int64_t * raw_pixels = reinterpret_cast <int64_t *> (info_pixels.ptr);
+            int32_t * raw_quat_index = extract_buffer <int32_t> (
+                quat_index, "quat_index", 1, temp_shape, {-1}
+            );
+            int64_t n_det = temp_shape[0];
 
-            auto info_quatindx = quat_indx.request();
-            int32_t * raw_quatindx = reinterpret_cast <int32_t *> (info_quatindx.ptr);
+            int32_t * raw_pixel_index = extract_buffer <int32_t> (
+                pixel_index, "pixel_index", 1, temp_shape, {n_det}
+            );
 
-            auto info_quats = quats.request();
-            double * raw_quats = reinterpret_cast <double *> (info_quats.ptr);
+            int64_t * raw_pixels = extract_buffer <int64_t> (
+                pixels, "pixels", 2, temp_shape, {n_det, -1}
+            );
+            int64_t n_samp = temp_shape[1];
 
-            auto info_flags = shared_flags.request();
-            uint8_t * raw_flags = reinterpret_cast <uint8_t *> (info_flags.ptr);
+            double * raw_quats = extract_buffer <double> (
+                quats, "quats", 3, temp_shape, {n_det, n_samp, 4}
+            );
 
-            auto info_hsub = hit_submaps.request();
-            uint8_t * raw_hsub = reinterpret_cast <uint8_t *> (info_hsub.ptr);
+            Interval * raw_intervals = extract_buffer <Interval> (
+                intervals, "intervals", 1, temp_shape, {-1}
+            );
+            int64_t n_view = temp_shape[0];
 
-            size_t n_det = info_pixindx.shape[0];
-            if (info_quatindx.shape[0] != n_det) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "pixel and quat indices do not have same number of dets";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
+            uint8_t * raw_hsub = extract_buffer <uint8_t> (
+                hit_submaps, "hit_submaps", 1, temp_shape, {-1}
+            );
+
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (! omgr.device_is_host()) && use_accel;
+
+            int64_t * dev_pixels = raw_pixels;
+            double * dev_quats = raw_quats;
+            Interval * dev_intervals = raw_intervals;
+            if (offload) {
+                dev_pixels = (int64_t*)omgr.device_ptr((void*)raw_pixels);
+                dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
+                dev_intervals = (Interval*)omgr.device_ptr(
+                    (void*)raw_intervals
+                );
             }
-            if (info_pixels.shape[0] < n_det) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "det pixels have fewer detectors than the index";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            size_t n_samp = info_pixels.shape[1];
-            if (info_flags.shape[0] != n_samp) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "shared flags do not have same number of samples as pixels";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            if (info_quats.shape[0] < n_det) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "det quats have fewer detectors than the index";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            if (info_quats.shape[1] != n_samp) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "det quats do not have same number of samples as pixels";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            if (info_quats.shape[2] != 4) {
-                auto log = toast::Logger::get();
-                std::ostringstream o;
-                o << "det quats do not have 4 elements per sample";
-                log.error(o.str().c_str());
-                throw std::runtime_error(o.str().c_str());
-            }
-            size_t len_pixels = info_pixels.shape[0] * n_samp;
-            size_t len_flags = n_samp;
-            size_t len_quats = info_quats.shape[0] * n_samp * 4;
-            size_t n_submap = info_hsub.shape[0];
 
-            hpix hp;
-            hpix_init(&hp, nside);
+            #pragma omp target data \
+                device(dev) \
+                map(to: \
+                    raw_pixel_index[0:n_det], \
+                    raw_quat_index[0:n_det], \
+                    n_pix_submap, \
+                    nside, \
+                    nest, \
+                    n_view, \
+                    n_det, \
+                    n_samp \
+                ) \
+                map(tofrom: raw_hsub) \
+                use_device_ptr(dev_pixels, dev_quats, dev_intervals) \
+                if(offload)
+            {
+                hpix hp;
+                hpix_init(&hp, nside);
+                if (nest) {
+                    #pragma omp target teams distribute collapse(2) if(offload)
+                    for (int64_t idet = 0; idet < n_det; idet++) {
+                        for (int64_t iview = 0; iview < n_view; iview++) {
+                            #pragma omp parallel for
+                            for (
+                                int64_t isamp = dev_intervals[iview].first;
+                                isamp <= dev_intervals[iview].last;
+                                isamp++
+                            ) {
+                                const double zaxis[3] = {0.0, 0.0, 1.0};
+                                int32_t p_indx = raw_pixel_index[idet];
+                                int32_t q_indx = raw_quat_index[idet];
+                                double dir[3];
+                                double z;
+                                double rtz;
+                                double phi;
+                                int region;
+                                size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
+                                size_t poff = p_indx * n_samp + isamp;
+                                int64_t sub_map;
 
-            // if (nest) {
-            //     #pragma \
-            //     acc data copy(raw_hsub[:n_submap]) copyin(n_det, n_samp, shared_flag_mask, hp, n_pix_submap, raw_pixindx[:n_det], raw_quatindx[:n_det]) present(raw_pixels[:len_pixels], raw_flags[:len_flags], raw_quats[:len_quats])
-            //     {
-            //         if (fake_openacc()) {
-            //             // Set all "present" data to point at the fake device pointers
-            //             auto & fake = FakeMemPool::get();
-            //             raw_pixels = (int64_t *)fake.device_ptr(raw_pixels);
-            //             raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
-            //             raw_quats = (double *)fake.device_ptr(raw_quats);
-            //             // for (size_t idet = 0; idet < n_det; idet++) {
-            //             //     for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //             //         std::cout << "NEST input quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
-            //             //     }
-            //             // }
-            //         }
-            //         #pragma acc parallel
-            //         #pragma acc loop independent
-            //         for (size_t idet = 0; idet < n_det; idet++) {
-            //             int32_t q_indx = raw_quatindx[idet];
-            //             int32_t p_indx = raw_pixindx[idet];
-            //             #pragma acc loop independent
-            //             for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //                 const double zaxis[3] = {0.0, 0.0, 1.0};
-            //                 double dir[3];
-            //                 double z;
-            //                 double rtz;
-            //                 double phi;
-            //                 int region;
-            //                 size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
-            //                 size_t poff = p_indx * n_samp + isamp;
-            //                 int64_t sub_map;
+                                qa_rotate(&(dev_quats[qoff]), zaxis, dir);
+                                hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
+                                hpix_zphi2nest(&hp, phi, region, z, rtz,
+                                                &(dev_pixels[poff]));
+                                sub_map = (int64_t)(dev_pixels[poff] / n_pix_submap);
+                                raw_hsub[sub_map] = 1;
+                            }
+                        }
+                    }
+                } else {
+                    #pragma omp target teams distribute collapse(2) if(offload)
+                    for (int64_t idet = 0; idet < n_det; idet++) {
+                        for (int64_t iview = 0; iview < n_view; iview++) {
+                            #pragma omp parallel for
+                            for (
+                                int64_t isamp = dev_intervals[iview].first;
+                                isamp <= dev_intervals[iview].last;
+                                isamp++
+                            ) {
+                                const double zaxis[3] = {0.0, 0.0, 1.0};
+                                int32_t p_indx = raw_pixel_index[idet];
+                                int32_t q_indx = raw_quat_index[idet];
+                                double dir[3];
+                                double z;
+                                double rtz;
+                                double phi;
+                                int region;
+                                size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
+                                size_t poff = p_indx * n_samp + isamp;
+                                int64_t sub_map;
 
-            //                 if ((raw_flags[isamp] & shared_flag_mask) == 0) {
-            //                     // Good data
-            //                     qa_rotate(&(raw_quats[qoff]), zaxis, dir);
-            //                     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
-            //                     hpix_zphi2nest(&hp, phi, region, z, rtz,
-            //                                    &(raw_pixels[poff]));
-            //                     sub_map = (int64_t)(raw_pixels[poff] / n_pix_submap);
-            //                     raw_hsub[sub_map] = 1;
-            //                 } else {
-            //                     // Bad data
-            //                     raw_pixels[poff] = -1;
-            //                 }
-            //             }
-            //         }
-            //         // if (fake_openacc()) {
-            //         //     for (size_t idet = 0; idet < n_det; idet++) {
-            //         //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //         //             std::cout << "NEST output " << idet << ": " << isamp << ": " << raw_pixels[idet * n_samp + isamp] << std::endl;
-            //         //         }
-            //         //     }
-            //         // }
-            //     }
-            // } else {
-            //     #pragma \
-            //     acc data copy(raw_hsub[:n_submap]) copyin(n_det, n_samp, shared_flag_mask, hp, n_pix_submap, raw_pixindx[:n_det], raw_quatindx[:n_det]) present(raw_pixels[:len_pixels], raw_flags[:len_flags], raw_quats[:len_quats])
-            //     {
-            //         if (fake_openacc()) {
-            //             // Set all "present" data to point at the fake device pointers
-            //             auto & fake = FakeMemPool::get();
-            //             raw_pixels = (int64_t *)fake.device_ptr(raw_pixels);
-            //             raw_flags = (uint8_t *)fake.device_ptr(raw_flags);
-            //             raw_quats = (double *)fake.device_ptr(raw_quats);
-            //             // for (size_t idet = 0; idet < n_det; idet++) {
-            //             //     for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //             //         std::cout << "RING input quat " << idet << ": " << isamp << ": " << raw_quats[4*(idet * n_samp + isamp)] << ", " << raw_quats[4*(idet * n_samp + isamp)+1] << ", " << raw_quats[4*(idet * n_samp + isamp)+2] << ", " << raw_quats[4*(idet * n_samp + isamp)+3] << std::endl;
-            //             //     }
-            //             // }
-            //         }
-            //         #pragma acc parallel
-            //         #pragma acc loop independent
-            //         for (size_t idet = 0; idet < n_det; idet++) {
-            //             int32_t q_indx = raw_quatindx[idet];
-            //             int32_t p_indx = raw_pixindx[idet];
-            //             #pragma acc loop independent
-            //             for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //                 const double zaxis[3] = {0.0, 0.0, 1.0};
-            //                 double dir[3];
-            //                 double z;
-            //                 double rtz;
-            //                 double phi;
-            //                 int region;
-            //                 size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
-            //                 size_t poff = p_indx * n_samp + isamp;
-            //                 int64_t sub_map;
-
-            //                 if ((raw_flags[isamp] & shared_flag_mask) == 0) {
-            //                     // Good data
-            //                     qa_rotate(&(raw_quats[qoff]), zaxis, dir);
-            //                     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
-            //                     hpix_zphi2ring(&hp, phi, region, z, rtz,
-            //                                    &(raw_pixels[poff]));
-            //                     sub_map = (int64_t)(raw_pixels[poff] / n_pix_submap);
-            //                     raw_hsub[sub_map] = 1;
-            //                 } else {
-            //                     // Bad data
-            //                     raw_pixels[poff] = -1;
-            //                 }
-            //                 // std::cout << "hpixels " << isamp << ": "
-            //                 // << raw_pixels[poff] << " sm = " << sub_map
-            //                 // << std::endl;
-            //             }
-            //         }
-            //         // if (fake_openacc()) {
-            //         //     for (size_t idet = 0; idet < n_det; idet++) {
-            //         //         for (size_t isamp = 0; isamp < n_samp; isamp++) {
-            //         //             std::cout << "RING output " << idet << ": " << isamp << ": " << raw_pixels[idet * n_samp + isamp] << std::endl;
-            //         //         }
-            //         //     }
-            //         // }
-            //     }
-            // }
+                                qa_rotate(&(raw_quats[qoff]), zaxis, dir);
+                                hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
+                                hpix_zphi2ring(&hp, phi, region, z, rtz,
+                                                &(raw_pixels[poff]));
+                                sub_map = (int64_t)(raw_pixels[poff] / n_pix_submap);
+                                raw_hsub[sub_map] = 1;
+                            }
+                        }
+                    }
+                }
+            }
             return;
         });
 }

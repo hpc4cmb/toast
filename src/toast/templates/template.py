@@ -62,7 +62,7 @@ class Template(TraitConfig):
         defaults.det_mask_invalid, help="Bit mask value for solver flags"
     )
 
-    use_acc = Bool(False, help="If True, use the accelerator")
+    use_accel = Bool(False, help="If True, use the accelerator")
 
     @traitlets.validate("data")
     def _check_data(self, proposal):
