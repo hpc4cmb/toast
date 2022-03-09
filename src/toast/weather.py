@@ -28,13 +28,50 @@ class Weather(object):
     these are constant, under the assumption that the weather changes slowly during a
     good science observation.
 
+    This base class can be used directly to hold values specified at construction.
+
+    Args:
+        time (datetime):  A python date/time in UTC.
+        ice_water (Quantity):  Precipitable ice water.
+        liquid_water (Quantity):  Precipitable liquid water.
+        pwv (Quantity):  Precipitable water vapor.
+        humidity (Quantity):  Specific humidity at 10m altitude.
+        surface_pressure (Quantity):  Surface pressure.
+        surface_temperature (Quantity):  Surface temperature.
+        air_temperature (Quantity):  Air temperature at 10m altitude.
+        west_wind (Quantity):  Eastward moving wind at 10m altitude.
+        south_wind (Quantity):  Northward moving wind at 10m altitude.
+
     """
 
-    def __init__(self):
-        pass
+    def __init__(
+        self,
+        time=None,
+        ice_water=None,
+        liquid_water=None,
+        pwv=None,
+        humidity=None,
+        surface_pressure=None,
+        surface_temperature=None,
+        air_temperature=None,
+        west_wind=None,
+        south_wind=None,
+    ):
+        self._time_val = time
+        self._ice_water_val = ice_water
+        self._liquid_water_val = liquid_water
+        self._pwv_val = pwv
+        self._humidity_val = humidity
+        self._surface_pressure_val = surface_pressure
+        self._surface_temperature_val = surface_temperature
+        self._air_temperature_val = air_temperature
+        self._west_wind_val = west_wind
+        self._south_wind_val = south_wind
 
     def _time(self):
-        raise NotImplementedError("Derived class must implement _time()")
+        if self._time_val is None:
+            raise NotImplementedError("Base class _time() called, but has no value")
+        return self._time_val
 
     @property
     def time(self):
@@ -42,7 +79,11 @@ class Weather(object):
         return self._time()
 
     def _ice_water(self):
-        raise NotImplementedError("Derived class must implement _ice_water()")
+        if self._ice_water_val is None:
+            raise NotImplementedError(
+                "Base class _ice_water() called, but has no value"
+            )
+        return self._ice_water_val
 
     @property
     def ice_water(self):
@@ -50,7 +91,11 @@ class Weather(object):
         return self._ice_water()
 
     def _liquid_water(self):
-        raise NotImplementedError("Derived class must implement _liquid_water()")
+        if self._liquid_water_val is None:
+            raise NotImplementedError(
+                "Base class _liquid_water() called, but has no value"
+            )
+        return self._liquid_water_val
 
     @property
     def liquid_water(self):
@@ -58,7 +103,9 @@ class Weather(object):
         return self._liquid_water()
 
     def _pwv(self):
-        raise NotImplementedError("Derived class must implement _pwv()")
+        if self._pwv_val is None:
+            raise NotImplementedError("Base class _pwv() called, but has no value")
+        return self._pwv_val
 
     @property
     def pwv(self):
@@ -66,7 +113,9 @@ class Weather(object):
         return self._pwv()
 
     def _humidity(self):
-        raise NotImplementedError("Derived class must implement _humidity()")
+        if self._humidity_val is None:
+            raise NotImplementedError("Base class _humidity() called, but has no value")
+        return self._humidity_val
 
     @property
     def humidity(self):
@@ -74,7 +123,11 @@ class Weather(object):
         return self._humidity()
 
     def _surface_pressure(self):
-        raise NotImplementedError("Derived class must implement _surface_pressure()")
+        if self._surface_pressure_val is None:
+            raise NotImplementedError(
+                "Base class _surface_pressure() called, but has no value"
+            )
+        return self._surface_pressure_val
 
     @property
     def surface_pressure(self):
@@ -82,7 +135,11 @@ class Weather(object):
         return self._surface_pressure()
 
     def _surface_temperature(self):
-        raise NotImplementedError("Derived class must implement _surface_temperature()")
+        if self._surface_temperature_val is None:
+            raise NotImplementedError(
+                "Base class _surface_temperature() called, but has no value"
+            )
+        return self._surface_temperature_val
 
     @property
     def surface_temperature(self):
@@ -90,7 +147,11 @@ class Weather(object):
         return self._surface_temperature()
 
     def _air_temperature(self):
-        raise NotImplementedError("Derived class must implement _air_temperature()")
+        if self._air_temperature_val is None:
+            raise NotImplementedError(
+                "Base class _air_temperature() called, but has no value"
+            )
+        return self._air_temperature_val
 
     @property
     def air_temperature(self):
@@ -98,7 +159,11 @@ class Weather(object):
         return self._air_temperature()
 
     def _west_wind(self):
-        raise NotImplementedError("Derived class must implement _west_wind()")
+        if self._west_wind_val is None:
+            raise NotImplementedError(
+                "Base class _west_wind() called, but has no value"
+            )
+        return self._west_wind_val
 
     @property
     def west_wind(self):
@@ -106,7 +171,11 @@ class Weather(object):
         return self._west_wind()
 
     def _south_wind(self):
-        raise NotImplementedError("Derived class must implement _south_wind()")
+        if self._south_wind_val is None:
+            raise NotImplementedError(
+                "Base class _south_wind() called, but has no value"
+            )
+        return self._south_wind_val
 
     @property
     def south_wind(self):
