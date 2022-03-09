@@ -30,8 +30,6 @@ from .delete import Delete
 
 from .copy import Copy
 
-from .arithmetic import Subtract
-
 from .scan_map import ScanMap, ScanMask
 
 from .mapmaker_utils import CovarianceAndHits
@@ -243,6 +241,8 @@ class MapMaker(Operator):
         comm = data.comm.comm_world
         rank = data.comm.world_rank
 
+        timer.start()
+
         # Solve for template amplitudes
         amplitudes_solve = SolveAmplitudes(
             det_data=self.det_data,
@@ -260,6 +260,36 @@ class MapMaker(Operator):
         )
         amplitudes_solve.apply(data)
 
+        log.info_rank(
+            f"{log_prefix}  finished template amplitude solve in",
+            comm=comm,
+            timer=timer,
+        )
+
+        # Apply solved amplitudes
+
+        log.info_rank(
+            f"{log_prefix} begin apply template amplitudes",
+            comm=comm,
+        )
+
+        if self.amplitudes_apply is None:
+            # Create a default operator that subtracts amplitudes
+            self.amplitudes_apply = ApplyAmplitudes(
+                op="subtract",
+                det_data=self.det_data,
+                amplitudes=amplitudes_solve.amplitudes,
+                template_matrix=self.template_matrix,
+                output=None,
+            )
+        self.amplitudes_apply.apply(data)
+
+        log.info_rank(
+            f"{log_prefix}  finished apply template amplitudes in",
+            comm=comm,
+            timer=timer,
+        )
+
         # Check map binning
         map_binning = self.map_binning
         if self.map_binning is None or not self.map_binning.enabled:
@@ -269,7 +299,31 @@ class MapMaker(Operator):
         # Now construct the noise covariance, hits, and condition number mask for the
         # final binned map.
 
+        mc_root = None
+        if self.mc_mode and self.mc_index is not None:
+            mc_root = "{}_{:05d}".format(self.name, self.mc_index)
+        else:
+            mc_root = self.name
+
+        self.hits_name = "{}_hits".format(self.name)
+        self.cov_name = "{}_cov".format(self.name)
+        self.invcov_name = "{}_invcov".format(self.name)
+        self.rcond_name = "{}_rcond".format(self.name)
+        self.flag_name = "{}_flags".format(self.name)
+
+        self.clean_name = "{}_cleaned".format(mc_root)
+        self.map_name = "{}_map".format(mc_root)
+        self.noiseweighted_map_name = "{}_noiseweighted_map".format(mc_root)
+
+        save_binned = map_binning.binned
+        save_covariance = map_binning.covariance
+
+        if self.amplitudes_apply.output is None:
+            map_binning.det_data = self.det_data
+        else:
+            map_binning.det_data = self.amplitudes_apply.output
         map_binning.covariance = self.cov_name
+        map_binning.binned = self.map_name
 
         if self.mc_mode:
             # Verify that our covariance and other products exist.
@@ -323,19 +377,6 @@ class MapMaker(Operator):
 
             memreport.prefix = "After constructing final covariance and hits"
             memreport.apply(data)
-
-        # Apply solved amplitudes
-
-        if self.amplitudes_apply is None:
-            # Create a default operator that subtracts amplitudes
-            self.amplitudes_apply = ApplyAmplitudes(
-                op="subtract",
-                det_data=self.det_data,
-                amplitudes=amplitudes_solve.amplitudes,
-                template_matrix=self.template_matrix,
-                output=None,
-            )
-        self.amplitudes_apply.apply(data)
 
         log.info_rank(
             f"{log_prefix} begin final map binning",

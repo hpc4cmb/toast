@@ -34,8 +34,6 @@ from .delete import Delete
 
 from .copy import Copy
 
-from .arithmetic import Subtract
-
 from .pointing import BuildPixelDistribution
 
 from .mapmaker_utils import BuildNoiseWeighted

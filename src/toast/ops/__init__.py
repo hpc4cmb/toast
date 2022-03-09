@@ -14,7 +14,7 @@ from .copy import Copy
 
 from .reset import Reset
 
-from .arithmetic import Add, Subtract
+from .arithmetic import Combine
 
 from .pipeline import Pipeline
 

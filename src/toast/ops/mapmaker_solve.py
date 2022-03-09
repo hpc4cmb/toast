@@ -30,8 +30,6 @@ from .scan_map import ScanMap
 
 from .noise_weight import NoiseWeight
 
-from .mapmaker_templates import TemplateMatrix
-
 
 @trait_docs
 class SolverRHS(Operator):
