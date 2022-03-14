@@ -13,8 +13,6 @@ from .timing import function_timer
 from .utils import Logger
 
 from ._libtoast import (
-    use_accel_jax,
-    use_accel_omp,
     accel_enabled,
     accel_present,
     accel_create,
@@ -23,20 +21,31 @@ from ._libtoast import (
     accel_update_host,
 )
 
+from .accelerator import use_accel_jax, use_accel_omp
+
 if use_accel_jax:
     import jax
     import jax.numpy as jnp
 
 
-interval_dtype_order = "<" if sys.byteorder == "little" else ">"
 interval_dtype = np.dtype(
     [
-        ("start", interval_dtype_order + "f8"),
-        ("stop", interval_dtype_order + "f8"),
-        ("first", interval_dtype_order + "i8"),
-        ("last", interval_dtype_order + "i8"),
+        ("start", "d"),
+        ("stop", "d"),
+        ("first", "q"),
+        ("last", "q"),
     ]
 )
+
+# interval_dtype_order = "<" if sys.byteorder == "little" else ">"
+# interval_dtype = np.dtype(
+#     [
+#         ("start", interval_dtype_order + "f8"),
+#         ("stop", interval_dtype_order + "f8"),
+#         ("first", interval_dtype_order + "i8"),
+#         ("last", interval_dtype_order + "i8"),
+#     ]
+# )
 
 # class Interval(object):
 #     """Class storing a single time and sample range.

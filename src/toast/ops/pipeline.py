@@ -95,7 +95,7 @@ class Pipeline(Operator):
                 comp_dets = set(data.all_local_detectors(selection=None))
             else:
                 comp_dets = set(detectors)
-            if accel_enabled() and self.supports_acc():
+            if accel_enabled() and self.supports_accel():
                 # All our operators support it.
                 msg = "Pipeline operators {}".format(
                     [f"{x.name}, " for x in self.operators]
@@ -261,9 +261,9 @@ class Pipeline(Operator):
             interm[k] = list(interm[k])
         return interm
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         # This is a logical AND of our operators
         for op in self.operators:
-            if not op.supports_acc():
+            if not op.supports_accel():
                 return False
         return True

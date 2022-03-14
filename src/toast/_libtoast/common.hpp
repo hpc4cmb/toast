@@ -52,7 +52,7 @@ T * extract_buffer(
         auto log = toast::Logger::get();
         std::ostringstream o;
         o << "Object " << name << " has format \"" << buffer_format
-        << "\" instead of " << target_format;
+        << "\" instead of \"" << target_format << "\"";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }

@@ -161,6 +161,9 @@ class PointingDetectorSimple(Operator):
 
             # FIXME: handle coordinate transforms here too...
 
+            idata = ob.intervals[self.view].data
+            print(idata, flush=True)
+            print(idata.dtype, flush=True)
             pointing_detector(
                 fp_quats,
                 ob.shared[self.boresight].data,

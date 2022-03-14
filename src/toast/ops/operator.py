@@ -178,7 +178,7 @@ class Operator(TraitConfig):
             (bool):  True if the operator can use OpenACC, else False.
 
         """
-        return self._supports_acc()
+        return self._supports_accel()
 
     def accel_have_requires(self, data):
         # Helper function to determine if all requirements are met to use OpenACC

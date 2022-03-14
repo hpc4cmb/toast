@@ -67,7 +67,8 @@ std::string get_format(std::string const & format) {
 
     std::string fmt = format;
     if (format.length() > 1) {
-        // The format string includes endianness information
+        // The format string includes endianness information or
+        // is a compound type.
         std::string endianness = format.substr(0, 1);
         if (
             (endianness == ">"  &&  !little_endian)  ||
