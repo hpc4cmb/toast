@@ -275,6 +275,7 @@ conf["install_requires"] = [
     "pyyaml",
     "astropy",
     "healpy",
+    "pixell",
     "ephem",
 ]
 conf["extras_require"] = {

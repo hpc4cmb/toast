@@ -887,11 +887,11 @@ class PixelData(AcceleratorObject):
         rank = 0
         if self._dist.comm is not None:
             rank = self._dist.comm.rank
-        comm_submap = self._dist.comm_nsubmap(comm_bytes)
+        comm_submap = self.comm_nsubmap(comm_bytes)
 
         # we make the assumption that FITS binary tables are still stored in
         # blocks of 2880 bytes just like always...
-        dbytes = self._dtype(1).itemsize
+        dbytes = self._dtype.itemsize
         rowbytes = self._n_value * dbytes
         optrows = int(2880 / rowbytes)
 
@@ -918,8 +918,8 @@ class PixelData(AcceleratorObject):
             # is this the last block for this communication?
             islast = False
             copyrows = rows
-            if out_off + rows > (comm_submap * self._dist.npix_submap):
-                copyrows = (comm_submap * self._dist.npix_submap) - out_off
+            if out_off + rows > (comm_submap * self._dist.n_pix_submap):
+                copyrows = (comm_submap * self._dist.n_pix_submap) - out_off
                 islast = True
 
             if rank == 0:

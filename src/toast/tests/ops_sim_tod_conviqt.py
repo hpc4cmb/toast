@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import ops as ops
 from .. import qarray as qa
 from ..observation import default_values as defaults
-from ..pixels_io import write_healpix_fits
+from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import (
     create_fake_beam_alm,

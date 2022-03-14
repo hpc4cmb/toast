@@ -13,7 +13,7 @@ from .. import qarray as qa
 from ..atm import available_atm, available_utils
 from ..dipole import dipole
 from ..observation import default_values as defaults
-from ..pixels_io import write_healpix_fits
+from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import create_ground_data, create_outdir
 from .mpi import MPITestCase

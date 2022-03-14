@@ -4,7 +4,6 @@
 
 from time import time
 
-import healpy as hp
 import numpy as np
 import traitlets
 from astropy import units as u
