@@ -278,8 +278,7 @@ class MapMaker(Operator):
         self.map_name = "{}_map".format(mc_root)
         self.noiseweighted_map_name = "{}_noiseweighted_map".format(mc_root)
 
-        # Apply (subtract) solved amplitudes.  If needed, we make a copy of the input
-        # detector data before subtracting the projected amplitudes in place.
+        # Apply (subtract) solved amplitudes.
 
         log.info_rank(
             f"{log_prefix} begin apply template amplitudes",
@@ -290,13 +289,6 @@ class MapMaker(Operator):
         if self.save_cleaned and self.overwrite_cleaned:
             # Modify data in place
             out_cleaned = self.det_data
-        else:
-            # Copy data
-            Copy(
-                detdata=[
-                    (self.det_data, self.clean_name),
-                ]
-            ).apply(data)
 
         amplitudes_apply = ApplyAmplitudes(
             op="subtract",
@@ -484,4 +476,191 @@ class MapMaker(Operator):
             prov["global"] = [self.map_binning.binned]
         else:
             prov["global"] = [self.binning.binned]
+        return prov
+
+
+@trait_docs
+class Calibrate(Operator):
+    """Operator for calibrating timestreams using solved templates.
+
+    This operator first solves for a maximum likelihood set of template amplitudes
+    that model the timestream contributions from noise, systematics, etc:
+
+    .. math::
+        \left[ M^T N^{-1} Z M + M_p \right] a = M^T N^{-1} Z d
+
+    Where `a` are the solved amplitudes and `d` is the input data.  `N` is the
+    diagonal time domain noise covariance.  `M` is a matrix of templates that
+    project from the amplitudes into the time domain, and the `Z` operator is given
+    by:
+
+    .. math::
+        Z = I - P (P^T N^{-1} P)^{-1} P^T N^{-1}
+
+    or in terms of the binning operation:
+
+    .. math::
+        Z = I - P B
+
+    Where `P` is the pointing matrix.  This operator takes one operator for the
+    template matrix `M` and one operator for the binning, `B`.  It then
+    uses a conjugate gradient solver to solve for the amplitudes.
+
+    After solving for the template amplitudes, they are projected into the time
+    domain and the input data is element-wise divided by this.
+
+    If the result trait is not set, then the input is overwritten.
+
+    """
+
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    det_data = Unicode(
+        defaults.det_data, help="Observation detdata key for the timestream data"
+    )
+
+    result = Unicode(
+        None, allow_none=True, help="Observation detdata key for the output"
+    )
+
+    convergence = Float(1.0e-12, help="Relative convergence limit")
+
+    iter_max = Int(100, help="Maximum number of iterations")
+
+    solve_rcond_threshold = Float(
+        1.0e-8,
+        help="When solving, minimum value for inverse pixel condition number cut.",
+    )
+
+    mask = Unicode(
+        None,
+        allow_none=True,
+        help="Data key for pixel mask to use in solving.  First bit of pixel values is tested",
+    )
+
+    binning = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Binning operator used for solving template amplitudes",
+    )
+
+    template_matrix = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a template matrix operator",
+    )
+
+    keep_solver_products = Bool(
+        False, help="If True, keep the map domain solver products in data"
+    )
+
+    mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
+
+    mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
+
+    reset_pix_dist = Bool(
+        False,
+        help="Clear any existing pixel distribution.  Useful when applying "
+        "repeatedly to different data objects.",
+    )
+
+    report_memory = Bool(False, help="Report memory throughout the execution")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
+        timer = Timer()
+        log_prefix = "Calibrate"
+
+        memreport = MemoryCounter()
+        if not self.report_memory:
+            memreport.enabled = False
+
+        memreport.prefix = "Start of calibration"
+        memreport.apply(data)
+
+        # The global communicator we are using (or None)
+        comm = data.comm.comm_world
+        rank = data.comm.world_rank
+
+        timer.start()
+
+        # Solve for template amplitudes
+        amplitudes_solve = SolveAmplitudes(
+            det_data=self.det_data,
+            convergence=self.convergence,
+            iter_max=self.iter_max,
+            solve_rcond_threshold=self.solve_rcond_threshold,
+            mask=self.mask,
+            binning=self.binning,
+            template_matrix=self.template_matrix,
+            keep_solver_products=self.keep_solver_products,
+            mc_mode=self.mc_mode,
+            mc_index=self.mc_index,
+            reset_pix_dist=self.reset_pix_dist,
+            report_memory=self.report_memory,
+        )
+        amplitudes_solve.apply(data)
+
+        log.info_rank(
+            f"{log_prefix}  finished template amplitude solve in",
+            comm=comm,
+            timer=timer,
+        )
+
+        # Apply (divide) solved amplitudes.
+
+        log.info_rank(
+            f"{log_prefix} begin apply template amplitudes",
+            comm=comm,
+        )
+
+        out_calib = self.det_data
+        if self.result is not None:
+            out_calib = self.result
+
+        amplitudes_apply = ApplyAmplitudes(
+            op="divide",
+            det_data=self.det_data,
+            amplitudes=amplitudes_solve.amplitudes,
+            template_matrix=self.template_matrix,
+            output=out_calib,
+        )
+        amplitudes_apply.apply(data)
+
+        log.info_rank(
+            f"{log_prefix}  finished apply template amplitudes in",
+            comm=comm,
+            timer=timer,
+        )
+
+        memreport.prefix = "After calibration"
+        memreport.apply(data)
+
+        return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        # This operator requires everything that its sub-operators needs.
+        req = self.binning.requires()
+        if self.template_matrix is not None:
+            req.update(self.template_matrix.requires())
+        req["detdata"].append(self.det_data)
+        return req
+
+    def _provides(self):
+        prov = dict()
+        if self.map_binning is not None:
+            prov["global"] = [self.map_binning.binned]
+        else:
+            prov["global"] = [self.binning.binned]
+        if self.result is not None:
+            prov["detdata"] = [self.result]
         return prov
