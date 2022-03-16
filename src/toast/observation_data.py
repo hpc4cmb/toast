@@ -279,7 +279,7 @@ class DetectorData(object):
         """
         if hasattr(self, "_data"):
             del self._data
-        if not self._is_view:
+        if hasattr(self, "_is_view") and not self._is_view:
             if hasattr(self, "_flatdata"):
                 del self._flatdata
             if hasattr(self, "_raw"):

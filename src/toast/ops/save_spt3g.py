@@ -40,6 +40,8 @@ class SaveSpt3g(Operator):
 
     framefile_mb = Float(100.0, help="Target frame file size in MB")
 
+    gzip = Bool(False, help="If True, gzip compress the frame files")
+
     # FIXME:  We should add a filtering mechanism here to dump a subset of
     # observations and / or detectors.
 
@@ -79,13 +81,6 @@ class SaveSpt3g(Operator):
                 "You must set the obs_export trait before calling exec()"
             )
 
-        # Find the process rank which will have all the frames
-        ex_rank = self.obs_export.export_rank
-        if ex_rank is None:
-            raise RuntimeError(
-                "The obs_export class must be configured to export frames on one process"
-            )
-
         # One process creates the top directory
         if data.comm.world_rank == 0:
             os.makedirs(self.directory, exist_ok=True)
@@ -98,29 +93,52 @@ class SaveSpt3g(Operator):
                 raise RuntimeError(
                     "Observations must have a name in order to save to SPT3G format"
                 )
+            ob_dir = os.path.join(self.directory, ob.name)
+            if ob.comm.group_rank == 0:
+                # Make observation directory.  This should NOT already exist.
+                os.makedirs(ob_dir)
+            if ob.comm.comm_group is not None:
+                ob.comm.comm_group.barrier()
 
-            # Export observation to frames on one process
+            # Export observation to frames
             frames = self.obs_export(ob)
 
-            # One process writes frame files
-            if ob.comm.group_rank == ex_rank:
-                # Make observation directory.  This should NOT already exist.
-                ob_dir = os.path.join(self.directory, ob.name)
-                os.makedirs(ob_dir)
-
+            # If the export rank is set, then frames will be gathered to one
+            # process and written.  Otherwise each process will write to
+            # sequential, independent frame files.
+            ex_rank = self.obs_export.export_rank
+            if ex_rank is None:
+                # All processes write independently
                 emitter = frame_emitter(frames=frames)
-
                 save_pipe = c3g.G3Pipeline()
                 save_pipe.Add(emitter)
+                fname = f"frames-{ob.comm.group_rank:04d}.g3"
+                if self.gzip:
+                    fname += ".gz"
                 save_pipe.Add(
-                    c3g.G3MultiFileWriter,
-                    filename=os.path.join(ob_dir, "frames-%05u.g3"),
-                    size_limit=int(self.framefile_mb * 1024**2),
+                    c3g.G3Writer,
+                    filename=os.path.join(ob_dir, fname),
                 )
                 save_pipe.Run()
-
                 del save_pipe
                 del emitter
+            else:
+                # Gather frames to one process and write
+                if ob.comm.group_rank == ex_rank:
+                    emitter = frame_emitter(frames=frames)
+                    save_pipe = c3g.G3Pipeline()
+                    save_pipe.Add(emitter)
+                    fpattern = "frames-%04u.g3"
+                    if self.gzip:
+                        fpattern += ".gz"
+                    save_pipe.Add(
+                        c3g.G3MultiFileWriter,
+                        filename=os.path.join(ob_dir, fpattern),
+                        size_limit=int(self.framefile_mb * 1024**2),
+                    )
+                    save_pipe.Run()
+                    del save_pipe
+                    del emitter
 
             if ob.comm.comm_group is not None:
                 ob.comm.comm_group.barrier()

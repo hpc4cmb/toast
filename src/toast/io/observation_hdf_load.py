@@ -564,4 +564,10 @@ def load_hdf5(
         timer=timer,
     )
 
+    # Clean up
+    del hgroup
+    if hf is not None:
+        hf.close()
+    del hf
+
     return obs

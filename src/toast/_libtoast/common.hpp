@@ -29,7 +29,7 @@ namespace py = pybind11;
 
 template <typename T>
 std::vector <char> align_format() {
-    return std::vector <char> ({'V'});
+    return std::vector <char> ({ 'V' });
 }
 
 template <>
@@ -72,6 +72,8 @@ void pybuffer_check_1D(py::buffer data) {
     for (auto const & atp : tp) {
         if (info.format[0] == atp) {
             valid = true;
+        } else if ((info.format[0] == '<') && (info.format[1] == atp)) {
+            valid = true;
         }
     }
     if (!valid) {
@@ -106,6 +108,8 @@ void pybuffer_check(py::buffer data) {
     bool valid = false;
     for (auto const & atp : tp) {
         if (info.format[0] == atp) {
+            valid = true;
+        } else if ((info.format[0] == '<') && (info.format[1] == atp)) {
             valid = true;
         }
     }
