@@ -200,9 +200,8 @@ class TemplateMatrix(Operator):
                     f"TemplateMatrix {ob.name}:  input host detdata={ob.detdata[self.det_data][:][0:10]}"
                 )
                 if use_accel:
-                    if not ob.detdata.accel_present(self.det_data):
+                    if not exists and not ob.detdata.accel_present(self.det_data):
                         ob.detdata.accel_create(self.det_data)
-                    ob.detdata.accel_update_device(self.det_data)
 
             for d in all_dets:
                 for tmpl in self.templates:
@@ -249,9 +248,9 @@ class TemplateMatrix(Operator):
             prov["detdata"] = [self.det_data]
         return prov
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         # This is a logical AND of our templates
         for tmpl in self.templates:
-            if not tmpl.supports_acc():
+            if not tmpl.supports_accel():
                 return False
         return True

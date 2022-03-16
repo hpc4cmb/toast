@@ -60,10 +60,16 @@ std::vector <char> align_format <double> () {
 
 
 
-std::string get_format(std::string const & format) {
+std::string get_format(std::string const & input) {
     // Machine endianness
     int32_t test = 1;
     bool little_endian = (*(int8_t*)&test == 1);
+
+    std::string format = input;
+    // Remove leading caret, if present.
+    if (format.substr(0, 1) == "^") {
+        format = input.substr(1, input.length() - 1);
+    }
 
     std::string fmt = format;
     if (format.length() > 1) {

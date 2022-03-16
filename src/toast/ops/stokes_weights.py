@@ -155,7 +155,7 @@ class StokesWeights(Operator):
 
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.apply(data, detectors=detectors, use_acc=use_acc)
+        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
         # We do the calculation over buffers of timestream samples to reduce memory
         # overhead from temporary arrays.
@@ -218,8 +218,10 @@ class StokesWeights(Operator):
                     )
                     log.verbose(msg)
                 continue
-            elif use_accel:
-                ob.detdata.accel_create(self.weights)
+
+            if use_accel:
+                if not ob.detdata.accel_present(self.weights):
+                    ob.detdata.accel_create(self.weights)
 
             # FIXME:  temporary hack until instrument classes are also pre-staged
             # to GPU
@@ -276,5 +278,5 @@ class StokesWeights(Operator):
         prov["detdata"].append(self.weights)
         return prov
 
-    def _supports_acc(self):
-        return self.detector_pointing.supports_acc()
+    def _supports_accel(self):
+        return self.detector_pointing.supports_accel()

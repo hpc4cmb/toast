@@ -64,17 +64,16 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL NVHPC)
     target_compile_options(_libtoast PRIVATE -Wc,--pending_instantiations=0)
 endif()
 
-set(OMP_LIBS "")
+target_link_libraries(_libtoast PRIVATE toast)
+
 if(OpenMP_CXX_FOUND)
     target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")
     set_target_properties(_libtoast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
-    set(OMP_LIBS "${OpenMP_CXX_LIBRARIES}")
     if(USE_OPENMP_TARGET)
         target_compile_definitions(_libtoast PRIVATE HAVE_OPENMP_TARGET=1)
     endif()
+    target_link_libraries(_libtoast PRIVATE "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
-
-target_link_libraries(_libtoast PRIVATE toast "${OMP_LIBS}")
 
 if(AATM_FOUND)
     target_compile_definitions(_libtoast PRIVATE HAVE_AATM=1)

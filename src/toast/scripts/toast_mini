@@ -110,9 +110,10 @@ def parse_arguments():
 
     # Focalplane
     args.sample_rate = 100
-    args.max_detector = (
-        2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
-    )
+    # args.max_detector = (
+    #     2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
+    # )
+    args.max_detector = 4
     args.width = 10
     args.obs_minutes = 60
     args.num_obs = 4380

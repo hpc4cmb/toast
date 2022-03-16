@@ -356,7 +356,8 @@ class Data(MutableMapping):
         """Create a set of data objects on the device.
 
         This takes a dictionary with the same format as those used by the Operator
-        provides() and requires() methods.
+        provides() and requires() methods.  If the data already exists on the
+        device then no action is taken.
 
         Args:
             names (dict):  Dictionary of lists.
@@ -370,16 +371,25 @@ class Data(MutableMapping):
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
-                log.verbose(f"Calling ob {ob.name} detdata accel_create for {key}")
-                ob.detdata.accel_create(key)
+                if not ob.detdata.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} detdata accel_create for {key}")
+                    ob.detdata.accel_create(key)
             for key in names["shared"]:
-                log.verbose(f"Calling ob {ob.name} shared accel_create for {key}")
-                ob.shared.accel_create(key)
+                if not ob.shared.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} shared accel_create for {key}")
+                    ob.shared.accel_create(key)
+            for key in names["intervals"]:
+                if not ob.intervals.accel_present(key):
+                    log.verbose(
+                        f"Calling ob {ob.name} intervals accel_create for {key}"
+                    )
+                    ob.intervals.accel_create(key)
         for key in names["global"]:
             val = self._internal[key]
             if hasattr(val, "accel_create"):
-                log.verbose(f"Calling Data accel_create for {key}")
-                val.accel_create()
+                if not val.accel_present():
+                    log.verbose(f"Calling Data accel_create for {key}")
+                    val.accel_create()
 
     def accel_update_device(self, names):
         """Copy a set of data objects to the device.
@@ -404,6 +414,9 @@ class Data(MutableMapping):
             for key in names["shared"]:
                 log.verbose(f"Calling ob {ob.name} shared update_device for {key}")
                 ob.shared.accel_update_device(key)
+            for key in names["intervals"]:
+                log.verbose(f"Calling ob {ob.name} intervals update_device for {key}")
+                ob.intervals.accel_update_device(key)
         for key in names["global"]:
             val = self._internal[key]
             if hasattr(val, "accel_update_device"):
@@ -443,7 +456,14 @@ class Data(MutableMapping):
                     log.verbose(
                         f"Skip update_host for ob {ob.name} shared {key}, data not present"
                     )
-            # FIXME:  implement intervals too.
+            for key in names["intervals"]:
+                if ob.intervals.accel_present(key):
+                    log.verbose(f"Calling ob {ob.name} intervals update_host for {key}")
+                    ob.intervals.accel_update_host(key)
+                else:
+                    log.verbose(
+                        f"Skip update_host for ob {ob.name} intervals {key}, data not present"
+                    )
         for key in names["global"]:
             val = self._internal[key]
             if hasattr(val, "accel_update_host"):
@@ -483,7 +503,16 @@ class Data(MutableMapping):
                     log.verbose(
                         f"Skip delete for ob {ob.name} shared {key}, data not present"
                     )
-            # FIXME:  implement intervals too.
+            for key in names["intervals"]:
+                if ob.intervals.accel_present(key):
+                    log.verbose(
+                        f"Calling ob {ob.name} intervals accel_delete for {key}"
+                    )
+                    ob.intervals.accel_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} intervals {key}, data not present"
+                    )
         for key in names["global"]:
             val = self._internal[key]
             if hasattr(val, "accel_delete"):

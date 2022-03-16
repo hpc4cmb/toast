@@ -499,7 +499,7 @@ class DetectorData(object):
         """
         if not accel_enabled():
             return
-        if use_accel_omp and self.accel_present():
+        if use_accel_omp:
             _ = accel_update_device(self._raw)
         elif use_accel_jax:
             self._raw_jax = accel_update_device(self._raw.array())
@@ -681,8 +681,8 @@ class DetDataManager(MutableMapping):
         DetectorData.change_detectors() method to re-use this existing memory buffer if
         possible.
 
-        The boolean return value indicates whether the change_detectors() method was
-        called (which invalidates the contents of the memory).
+        The return value is true if the data already exists and includes the specified
+        detectors.
 
         Args:
             name (str): The name of the detector data (signal, flags, etc)
@@ -693,7 +693,7 @@ class DetDataManager(MutableMapping):
             units (Unit):  Optional scalar unit associated with this data.
 
         Returns:
-            (bool):  True if the specified detectors already exist, else False.
+            (bool):  True if the data exists.
 
         """
         log = Logger.get()
@@ -1812,7 +1812,7 @@ class IntervalsManager(MutableMapping):
 
     # Mapping methods
 
-    def __getitem__(self, key):
+    def _real_key(self, key):
         if key is None:
             if self.all_name not in self._internal:
                 # Create fake intervals
@@ -1820,10 +1820,16 @@ class IntervalsManager(MutableMapping):
                 self._internal[self.all_name] = IntervalList(
                     faketimes, samplespans=[(0, self._local_samples - 1)]
                 )
-            key = self.all_name
+            return self.all_name
+        else:
+            return key
+
+    def __getitem__(self, key):
+        key = self._real_key(key)
         return self._internal[key]
 
     def __delitem__(self, key):
+        key = self._real_key(key)
         if key in self._del_callbacks:
             try:
                 self._del_callbacks[key](key)
@@ -1894,6 +1900,7 @@ class IntervalsManager(MutableMapping):
         if not accel_enabled():
             return False
         log = Logger.get()
+        key = self._real_key(key)
         result = self._internal[key].accel_present()
         log.verbose(f"IntervalsManager {key} accel_present = {result}")
         return result
@@ -1911,6 +1918,7 @@ class IntervalsManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
+        key = self._real_key(key)
         log.verbose(f"IntervalsManager {key} accel_create")
         self._internal[key].accel_create()
 
@@ -1927,6 +1935,7 @@ class IntervalsManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
+        key = self._real_key(key)
         log.verbose(f"IntervalsManager {key} accel_update_device")
         self._internal[key].accel_update_device()
 
@@ -1943,6 +1952,7 @@ class IntervalsManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
+        key = self._real_key(key)
         log.verbose(f"IntervalsManager {key} accel_update_host")
         self._internal[key].accel_update_host()
 
@@ -1959,6 +1969,7 @@ class IntervalsManager(MutableMapping):
         log = Logger.get()
         if not accel_enabled():
             return
+        key = self._real_key(key)
         if not self._internal[key].accel_present():
             msg = f"Intervals list '{key}' is not present on device, cannot delete"
             log.error(msg)

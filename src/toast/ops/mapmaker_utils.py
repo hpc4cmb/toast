@@ -68,13 +68,17 @@ class BuildHitMap(Operator):
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
@@ -255,13 +259,17 @@ class BuildInverseCovariance(Operator):
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
@@ -564,7 +572,7 @@ class BuildNoiseWeighted(Operator):
 
         dist = data[self.pixel_dist]
         if data.comm.world_rank == 0:
-            log.debug(
+            log.verbose(
                 "Building noise weighted map with pixel_distribution {}".format(
                     self.pixel_dist
                 )
@@ -636,10 +644,7 @@ class BuildNoiseWeighted(Operator):
             flag_indx = ob.detdata[self.det_flags].indices(dets)
 
             build_noise_weighted(
-                np.array(
-                    zmap.distribution.global_submap_to_local,
-                    dtype=np.int64,
-                ),
+                zmap.distribution.global_submap_to_local.array(),
                 zmap.data,
                 pix_indx,
                 ob.detdata[self.pixels].data,
@@ -648,7 +653,7 @@ class BuildNoiseWeighted(Operator):
                 data_indx,
                 ob.detdata[self.det_data].data,
                 flag_indx,
-                ob.detdata[use_flags].data,
+                ob.detdata[self.det_flags].data,
                 detweights,
                 self.det_flag_mask,
                 ob.intervals[self.view].data,
@@ -704,7 +709,7 @@ class BuildNoiseWeighted(Operator):
         }
         return prov
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         return True
 
 
@@ -759,13 +764,17 @@ class CovarianceAndHits(Operator):
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")

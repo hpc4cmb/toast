@@ -680,6 +680,8 @@ class Observation(MutableMapping):
             self.detdata.accel_create(key)
         for key in names["shared"]:
             self.shared.accel_create(key)
+        for key in names["intervals"]:
+            self.intervals.accel_create(key)
 
     def accel_update_device(self, names):
         """Copy data objects to the device.
@@ -698,6 +700,8 @@ class Observation(MutableMapping):
             self.detdata.accel_update_device(key)
         for key in names["shared"]:
             self.shared.accel_update_device(key)
+        for key in names["intervals"]:
+            self.intervals.accel_update_device(key)
 
     def accel_update_host(self, names):
         """Copy data objects from the device.
@@ -716,7 +720,10 @@ class Observation(MutableMapping):
             self.detdata.accel_update_host(key)
         for key in names["shared"]:
             self.shared.accel_update_host(key)
+        for key in names["intervals"]:
+            self.intervals.accel_update_host(key)
 
     def accel_clear(self):
         self.detdata.accel_clear()
         self.shared.accel_clear()
+        self.intervals.accel_clear()

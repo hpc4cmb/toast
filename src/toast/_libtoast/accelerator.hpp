@@ -24,7 +24,7 @@ class OmpManager {
 
         static OmpManager & get();
 
-        void assign_device(int node_procs, int node_rank);
+        void assign_device(int node_procs, int node_rank, bool disabled = false);
         int get_device();
         bool device_is_host();
 

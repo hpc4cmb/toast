@@ -17,7 +17,9 @@ from ..utils import (
     dtype_to_aligned,
 )
 
-from .._libtoast import (
+from ..accelerator import (
+    use_accel_jax,
+    use_accel_omp,
     accel_enabled,
     accel_present,
     accel_create,
@@ -25,6 +27,10 @@ from .._libtoast import (
     accel_update_device,
     accel_update_host,
 )
+
+if use_accel_jax:
+    import jax
+    import jax.numpy as jnp
 
 
 class Amplitudes(object):
@@ -145,6 +151,7 @@ class Amplitudes(object):
                 self._global_last = self._local_indices[-1]
         self._raw = self._storage_class.zeros(self._n_local)
         self.local = self._raw.array()
+        self.local_jax = None
 
         # Support flagging of template amplitudes.  This can be used to flag some
         # amplitudes if too many timestream samples contributing to the amplitude value
@@ -153,6 +160,7 @@ class Amplitudes(object):
         # a bit of memory and use a whole byte per amplitude.
         self._raw_flags = AlignedU8.zeros(self._n_local)
         self.local_flags = self._raw_flags.array()
+        self.local_flags_jax = None
 
     def clear(self):
         """Delete the underlying memory.
@@ -165,6 +173,8 @@ class Amplitudes(object):
         if hasattr(self, "local"):
             del self.local
         if hasattr(self, "_raw"):
+            if self.accel_present():
+                self.accel_delete()
             self._raw.clear()
             del self._raw
         if hasattr(self, "local_flags"):
@@ -655,11 +665,12 @@ class Amplitudes(object):
         """
         if not accel_enabled():
             return False
-        if not accel_present(self.local):
+        if use_accel_omp:
+            return accel_present(self._raw) and accel_present(self._raw_flags)
+        elif use_accel_jax:
+            return accel_present(self.local_jax) and accel_present(self.local_flags_jax)
+        else:
             return False
-        if not accel_present(self.local_flags):
-            return False
-        return True
 
     def accel_create(self):
         """Create the amplitude data on the accelerator.
@@ -670,8 +681,12 @@ class Amplitudes(object):
         """
         if not accel_enabled():
             return
-        accel_create(self.local)
-        accel_create(self.local_flags)
+        if use_accel_omp:
+            accel_create(self._raw)
+            accel_create(self._raw_flags)
+        elif use_accel_jax:
+            accel_create(self.local_jax)
+            accel_create(self.local_flags_jax)
 
     def accel_update_device(self):
         """Copy the amplitude data to the accelerator.
@@ -687,8 +702,12 @@ class Amplitudes(object):
             msg = "Amplitude data not on device, cannot update"
             log.error(msg)
             raise RuntimeError(msg)
-        accel_update_device(self.local)
-        accel_update_device(self.local_flags)
+        if use_accel_omp:
+            _ = accel_update_device(self._raw)
+            _ = accel_update_device(self._raw_flags)
+        elif use_accel_jax:
+            self.local_jax = accel_update_device(self.local)
+            self.local_flags_jax = accel_update_device(self.local_flags)
 
     def accel_update_host(self):
         """Copy the amplitude data from the accelerator.
@@ -699,13 +718,19 @@ class Amplitudes(object):
         """
         if not accel_enabled():
             return
-        log = Logger.get()
         if not self.accel_present():
-            msg = "Amplitude data not on device, cannot update host"
+            log = Logger.get()
+            msg = f"Data is not present on device, cannot update host"
             log.error(msg)
             raise RuntimeError(msg)
-        accel_update_host(self.local)
-        accel_update_host(self.local_flags)
+        if use_accel_omp:
+            _ = accel_update_host(self._raw)
+            _ = accel_update_host(self._raw_flags)
+        elif use_accel_jax:
+            self.local[:] = accel_update_host(self.local_jax)
+            self.local_flags[:] = accel_update_host(self.local_flags_jax)
+            self.local_jax = None
+            self.local_flags_jax = None
 
     def accel_delete(self):
         """Delete the amplitude data from the accelerator.
@@ -716,13 +741,15 @@ class Amplitudes(object):
         """
         if not accel_enabled():
             return
-        log = Logger.get()
-        if not self.accel_present():
-            msg = "Amplitude data not on device, cannot delete"
-            log.error(msg)
-            raise RuntimeError(msg)
-        accel_delete(self.local)
-        accel_delete(self.local_flags)
+        if self.accel_present():
+            if use_accel_omp:
+                accel_delete(self._raw)
+                accel_delete(self._raw_flags)
+            elif use_accel_jax:
+                del self.local_jax
+                del self.local_flags_jax
+                self.local_jax = None
+                self.local_flags_jax = None
 
 
 class AmplitudesMap(MutableMapping):

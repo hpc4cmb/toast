@@ -555,7 +555,6 @@ class MapMaker(Operator):
             )
 
             # Set our binning operator to use only our new solver flags
-            self.binning.shared_flags = None
             self.binning.shared_flag_mask = 0
             self.binning.det_flags = self.flag_name
             self.binning.det_flag_mask = 255

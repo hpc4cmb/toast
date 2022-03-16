@@ -140,6 +140,9 @@ class Operator(TraitConfig):
         for key in ["global", "meta", "detdata", "shared", "intervals"]:
             if key not in req:
                 req[key] = list()
+        # All operators use an implied interval list of the full sample range
+        if None not in req["intervals"]:
+            req["intervals"].append(None)
         return req
 
     def _provides(self):
@@ -184,7 +187,7 @@ class Operator(TraitConfig):
         # Helper function to determine if all requirements are met to use OpenACC
         # for a data object.
         log = Logger.get()
-        if not self.supports_acc():
+        if not self.supports_accel():
             # No support for OpenACC
             return False
         all_present = True

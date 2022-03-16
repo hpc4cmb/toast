@@ -27,7 +27,7 @@
 namespace py = pybind11;
 
 
-std::string get_format(std::string const & format);
+std::string get_format(std::string const & input);
 
 
 template <typename T>
@@ -49,12 +49,21 @@ T * extract_buffer(
 
     // Verify format string
     if (buffer_format != target_format) {
-        auto log = toast::Logger::get();
-        std::ostringstream o;
-        o << "Object " << name << " has format \"" << buffer_format
-        << "\" instead of \"" << target_format << "\"";
-        log.error(o.str().c_str());
-        throw std::runtime_error(o.str().c_str());
+        // On 64bit linux, numpy is internally inconsistent with the
+        // format codes for int64_t and long long:
+        //   https://github.com/numpy/numpy/issues/12264
+        // Here we treat them as equivalent.
+        if (((buffer_format == "q") || (buffer_format == "l"))
+            && ((target_format == "q") || (target_format == "l"))) {
+            // What could possibly go wrong...
+        } else {
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "Object " << name << " has format \"" << buffer_format
+            << "\" instead of \"" << target_format << "\"";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
     }
 
     // Verify itemsize
@@ -88,7 +97,8 @@ T * extract_buffer(
         if (info.strides[d] != stride) {
             auto log = toast::Logger::get();
             std::ostringstream o;
-            o << "Python buffers must be contiguous in memory.";
+            o << "Object " << name
+            << ": python buffers must be contiguous in memory.";
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
@@ -102,7 +112,8 @@ T * extract_buffer(
             if (assert_shape[d] != shape[d]) {
                 auto log = toast::Logger::get();
                 std::ostringstream o;
-                o << "Dimension " << d << " has length " << shape[d]
+                o << "Object " << name << " dimension " << d
+                << " has length " << shape[d]
                 << " instead of " << assert_shape[d];
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());

@@ -233,17 +233,17 @@ class Template(TraitConfig):
         if self._check_enabled():
             return self._apply_precond(amplitudes_in, amplitudes_out)
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         return False
 
-    def supports_acc(self):
+    def supports_accel(self):
         """Query whether the template supports OpenACC
 
         Returns:
             (bool):  True if the template can use OpenACC, else False.
 
         """
-        return self._supports_acc()
+        return self._supports_accel()
 
     @classmethod
     def get_class_config_path(cls):

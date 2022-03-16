@@ -136,6 +136,15 @@ class PointingDetectorSimple(Operator):
                 detectors=dets,
             )
 
+            if exists:
+                if data.comm.group_rank == 0:
+                    msg = (
+                        f"Group {data.comm.group}, ob {ob.name}, det quats "
+                        f"already computed for {dets}"
+                    )
+                    log.verbose(msg)
+                continue
+
             # FIXME:  temporary hack until instrument classes are also pre-staged
             # to GPU
             focalplane = ob.telescope.focalplane
@@ -145,9 +154,9 @@ class PointingDetectorSimple(Operator):
 
             quat_indx = ob.detdata[self.quats].indices(dets)
 
-            if not exists or not ob.detdata.accel_present(self.quats):
-                # This was created above, create on device
-                ob.detdata.accel_create(self.quats)
+            if use_accel:
+                if not ob.detdata.accel_present(self.quats):
+                    ob.detdata.accel_create(self.quats)
 
             if self.shared_flags is None:
                 flags = np.zeros(0, dtype=np.uint8)
@@ -162,8 +171,6 @@ class PointingDetectorSimple(Operator):
             # FIXME: handle coordinate transforms here too...
 
             idata = ob.intervals[self.view].data
-            print(idata, flush=True)
-            print(idata.dtype, flush=True)
             pointing_detector(
                 fp_quats,
                 ob.shared[self.boresight].data,

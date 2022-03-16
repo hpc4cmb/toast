@@ -18,7 +18,9 @@
 #define TWOTHIRDS 0.66666666666666666667
 
 
+#ifdef HAVE_OPENMP_TARGET
 #pragma omp declare target
+#endif
 
 typedef struct {
     int64_t nside;
@@ -211,7 +213,75 @@ void hpix_zphi2ring(hpix * hp, double phi, int region, double z,
     return;
 }
 
+void pixels_healpix_nest_inner(
+    hpix & hp,
+    int32_t const * quat_index,
+    int32_t const * pixel_index,
+    double const * quats,
+    uint8_t * hsub,
+    int64_t * pixels,
+    int64_t n_pix_submap,
+    int64_t isamp,
+    int64_t n_samp,
+    int64_t idet
+) {
+    const double zaxis[3] = {0.0, 0.0, 1.0};
+    int32_t p_indx = pixel_index[idet];
+    int32_t q_indx = quat_index[idet];
+    double dir[3];
+    double z;
+    double rtz;
+    double phi;
+    int region;
+    size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
+    size_t poff = p_indx * n_samp + isamp;
+    int64_t sub_map;
+
+    qa_rotate(&(quats[qoff]), zaxis, dir);
+    hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
+    hpix_zphi2nest(&hp, phi, region, z, rtz, &(pixels[poff]));
+    sub_map = (int64_t)(pixels[poff] / n_pix_submap);
+    hsub[sub_map] = 1;
+
+    return;
+}
+
+void pixels_healpix_ring_inner(
+    hpix & hp,
+    int32_t const * quat_index,
+    int32_t const * pixel_index,
+    double const * quats,
+    uint8_t * hsub,
+    int64_t * pixels,
+    int64_t n_pix_submap,
+    int64_t isamp,
+    int64_t n_samp,
+    int64_t idet
+) {
+    const double zaxis[3] = {0.0, 0.0, 1.0};
+    int32_t p_indx = pixel_index[idet];
+    int32_t q_indx = quat_index[idet];
+    double dir[3];
+    double z;
+    double rtz;
+    double phi;
+    int region;
+    size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
+    size_t poff = p_indx * n_samp + isamp;
+    int64_t sub_map;
+
+    qa_rotate(&(quats[qoff]), zaxis, dir);
+    hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
+    hpix_zphi2ring(&hp, phi, region, z, rtz, &(pixels[poff]));
+    sub_map = (int64_t)(pixels[poff] / n_pix_submap);
+    hsub[sub_map] = 1;
+
+    return;
+}
+
+#ifdef HAVE_OPENMP_TARGET
 #pragma omp end declare target
+#endif
 
 void init_ops_pixels_healpix(py::module & m) {
     m.def(
@@ -240,12 +310,12 @@ void init_ops_pixels_healpix(py::module & m) {
             );
 
             int64_t * raw_pixels = extract_buffer <int64_t> (
-                pixels, "pixels", 2, temp_shape, {n_det, -1}
+                pixels, "pixels", 2, temp_shape, {-1, -1}
             );
             int64_t n_samp = temp_shape[1];
 
             double * raw_quats = extract_buffer <double> (
-                quats, "quats", 3, temp_shape, {n_det, n_samp, 4}
+                quats, "quats", 3, temp_shape, {-1, n_samp, 4}
             );
 
             Interval * raw_intervals = extract_buffer <Interval> (
@@ -265,33 +335,89 @@ void init_ops_pixels_healpix(py::module & m) {
             double * dev_quats = raw_quats;
             Interval * dev_intervals = raw_intervals;
             if (offload) {
+                #ifdef HAVE_OPENMP_TARGET
+
                 dev_pixels = (int64_t*)omgr.device_ptr((void*)raw_pixels);
                 dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
                 dev_intervals = (Interval*)omgr.device_ptr(
                     (void*)raw_intervals
                 );
-            }
 
-            #pragma omp target data \
-                device(dev) \
-                map(to: \
-                    raw_pixel_index[0:n_det], \
-                    raw_quat_index[0:n_det], \
-                    n_pix_submap, \
-                    nside, \
-                    nest, \
-                    n_view, \
-                    n_det, \
-                    n_samp \
-                ) \
-                map(tofrom: raw_hsub) \
-                use_device_ptr(dev_pixels, dev_quats, dev_intervals) \
-                if(offload)
-            {
+                #pragma omp target data \
+                    device(dev) \
+                    map(to: \
+                        raw_pixel_index[0:n_det], \
+                        raw_quat_index[0:n_det], \
+                        n_pix_submap, \
+                        nside, \
+                        nest, \
+                        n_view, \
+                        n_det, \
+                        n_samp \
+                    ) \
+                    map(tofrom: raw_hsub) \
+                    use_device_ptr(dev_pixels, dev_quats, dev_intervals)
+                {
+                    hpix hp;
+                    hpix_init(&hp, nside);
+                    if (nest) {
+                        #pragma omp target teams distribute collapse(2)
+                        for (int64_t idet = 0; idet < n_det; idet++) {
+                            for (int64_t iview = 0; iview < n_view; iview++) {
+                                #pragma omp parallel for
+                                for (
+                                    int64_t isamp = dev_intervals[iview].first;
+                                    isamp <= dev_intervals[iview].last;
+                                    isamp++
+                                ) {
+                                    pixels_healpix_nest_inner(
+                                        hp,
+                                        raw_quat_index,
+                                        raw_pixel_index,
+                                        dev_quats,
+                                        raw_hsub,
+                                        dev_pixels,
+                                        n_pix_submap,
+                                        isamp,
+                                        n_samp,
+                                        idet
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        #pragma omp target teams distribute collapse(2)
+                        for (int64_t idet = 0; idet < n_det; idet++) {
+                            for (int64_t iview = 0; iview < n_view; iview++) {
+                                #pragma omp parallel for
+                                for (
+                                    int64_t isamp = dev_intervals[iview].first;
+                                    isamp <= dev_intervals[iview].last;
+                                    isamp++
+                                ) {
+                                    pixels_healpix_ring_inner(
+                                        hp,
+                                        raw_quat_index,
+                                        raw_pixel_index,
+                                        dev_quats,
+                                        raw_hsub,
+                                        dev_pixels,
+                                        n_pix_submap,
+                                        isamp,
+                                        n_samp,
+                                        idet
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                #endif
+            } else {
                 hpix hp;
                 hpix_init(&hp, nside);
                 if (nest) {
-                    #pragma omp target teams distribute collapse(2) if(offload)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             #pragma omp parallel for
@@ -300,29 +426,22 @@ void init_ops_pixels_healpix(py::module & m) {
                                 isamp <= dev_intervals[iview].last;
                                 isamp++
                             ) {
-                                const double zaxis[3] = {0.0, 0.0, 1.0};
-                                int32_t p_indx = raw_pixel_index[idet];
-                                int32_t q_indx = raw_quat_index[idet];
-                                double dir[3];
-                                double z;
-                                double rtz;
-                                double phi;
-                                int region;
-                                size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
-                                size_t poff = p_indx * n_samp + isamp;
-                                int64_t sub_map;
-
-                                qa_rotate(&(dev_quats[qoff]), zaxis, dir);
-                                hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
-                                hpix_zphi2nest(&hp, phi, region, z, rtz,
-                                                &(dev_pixels[poff]));
-                                sub_map = (int64_t)(dev_pixels[poff] / n_pix_submap);
-                                raw_hsub[sub_map] = 1;
+                                pixels_healpix_nest_inner(
+                                    hp,
+                                    raw_quat_index,
+                                    raw_pixel_index,
+                                    dev_quats,
+                                    raw_hsub,
+                                    dev_pixels,
+                                    n_pix_submap,
+                                    isamp,
+                                    n_samp,
+                                    idet
+                                );
                             }
                         }
                     }
                 } else {
-                    #pragma omp target teams distribute collapse(2) if(offload)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             #pragma omp parallel for
@@ -331,24 +450,18 @@ void init_ops_pixels_healpix(py::module & m) {
                                 isamp <= dev_intervals[iview].last;
                                 isamp++
                             ) {
-                                const double zaxis[3] = {0.0, 0.0, 1.0};
-                                int32_t p_indx = raw_pixel_index[idet];
-                                int32_t q_indx = raw_quat_index[idet];
-                                double dir[3];
-                                double z;
-                                double rtz;
-                                double phi;
-                                int region;
-                                size_t qoff = (q_indx * 4 * n_samp) + 4 * isamp;
-                                size_t poff = p_indx * n_samp + isamp;
-                                int64_t sub_map;
-
-                                qa_rotate(&(raw_quats[qoff]), zaxis, dir);
-                                hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
-                                hpix_zphi2ring(&hp, phi, region, z, rtz,
-                                                &(raw_pixels[poff]));
-                                sub_map = (int64_t)(raw_pixels[poff] / n_pix_submap);
-                                raw_hsub[sub_map] = 1;
+                                pixels_healpix_ring_inner(
+                                    hp,
+                                    raw_quat_index,
+                                    raw_pixel_index,
+                                    dev_quats,
+                                    raw_hsub,
+                                    dev_pixels,
+                                    n_pix_submap,
+                                    isamp,
+                                    n_samp,
+                                    idet
+                                );
                             }
                         }
                     }

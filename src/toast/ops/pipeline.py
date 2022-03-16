@@ -14,9 +14,9 @@ from ..traits import trait_docs, Int, Unicode, List
 
 from ..data import Data
 
-from .operator import Operator
+from ..accelerator import use_accel_jax, use_accel_omp
 
-from .._libtoast import accel_enabled
+from .operator import Operator
 
 
 @trait_docs
@@ -95,7 +95,7 @@ class Pipeline(Operator):
                 comp_dets = set(data.all_local_detectors(selection=None))
             else:
                 comp_dets = set(detectors)
-            if accel_enabled() and self.supports_accel():
+            if (use_accel_omp or use_accel_jax) and self.supports_accel():
                 # All our operators support it.
                 msg = "Pipeline operators {}".format(
                     [f"{x.name}, " for x in self.operators]
@@ -124,6 +124,13 @@ class Pipeline(Operator):
                             msg += f"the host but not the device.  Deleting."
                             log.verbose_rank(msg, comm=data.comm.comm_group)
                             del ob.shared[obj]
+                    for obj in interm["intervals"]:
+                        if obj in ob.intervals and not ob.intervals.accel_present(obj):
+                            msg = f"Pipeline intermediate intervals '{obj}' in "
+                            msg += f"observation '{ob.name}' exists on "
+                            msg += f"the host but not the device.  Deleting."
+                            log.verbose_rank(msg, comm=data.comm.comm_group)
+                            del ob.intervals[obj]
 
                 data.accel_create(self.requires())
                 data.accel_update_device(self.requires())

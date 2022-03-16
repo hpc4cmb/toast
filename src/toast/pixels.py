@@ -30,7 +30,9 @@ from .utils import (
 
 from ._libtoast import global_to_local as libtoast_global_to_local
 
-from ._libtoast import (
+from .accelerator import (
+    use_accel_jax,
+    use_accel_omp,
     accel_enabled,
     accel_present,
     accel_create,
@@ -38,6 +40,10 @@ from ._libtoast import (
     accel_update_device,
     accel_update_host,
 )
+
+if use_accel_jax:
+    import jax
+    import jax.numpy as jnp
 
 
 class PixelDistribution(object):
@@ -470,6 +476,7 @@ class PixelData(object):
 
         self.raw = self.storage_class.zeros(self._flatshape)
         self.data = self.raw.array().reshape(self._shape)
+        self.data_jax = None
 
         # Allreduce quantities
         self._all_comm_submap = None
@@ -500,7 +507,8 @@ class PixelData(object):
         if hasattr(self, "data"):
             del self.data
         if hasattr(self, "raw"):
-            self.accel_clear()
+            if self.accel_present():
+                self.accel_delete()
             self.raw.clear()
             del self.raw
         if hasattr(self, "receive"):
@@ -959,9 +967,14 @@ class PixelData(object):
             (bool):  True if the data is present.
 
         """
-        if not accel_enabled:
-            return
-        return accel_present(self.raw)
+        if not accel_enabled():
+            return False
+        if use_accel_omp:
+            return accel_present(self.raw)
+        elif use_accel_jax:
+            return accel_present(self.data_jax)
+        else:
+            return False
 
     def accel_create(self):
         """Create the data on the accelerator.
@@ -970,9 +983,12 @@ class PixelData(object):
             None
 
         """
-        if not accel_enabled:
+        if not accel_enabled():
             return
-        accel_create(self.raw)
+        if use_accel_omp:
+            accel_create(self.raw)
+        elif use_accel_jax:
+            accel_create(self.data_jax)
 
     def accel_update_device(self):
         """Copy the data to the accelerator.
@@ -981,14 +997,12 @@ class PixelData(object):
             None
 
         """
-        if not accel_enabled:
+        if not accel_enabled():
             return
-        if not accel_present(self.raw):
-            log = Logger.get()
-            msg = f"PixelData raw data is not present on device, cannot update"
-            log.error(msg)
-            raise RuntimeError(msg)
-        accel_update_device(self.raw)
+        if use_accel_omp:
+            _ = accel_update_device(self.raw)
+        elif use_accel_jax:
+            self.data_jax = accel_update_device(self.data)
 
     def accel_update_host(self):
         """Copy the data from the accelerator to the host.
@@ -997,14 +1011,18 @@ class PixelData(object):
             None
 
         """
-        if not accel_enabled:
+        if not accel_enabled():
             return
-        if not accel_present(self.raw):
+        if not self.accel_present():
             log = Logger.get()
-            msg = f"PixelData raw data is not present on device, cannot update host"
+            msg = f"Data is not present on device, cannot update host"
             log.error(msg)
             raise RuntimeError(msg)
-        accel_update_host(self.raw)
+        if use_accel_omp:
+            _ = accel_update_host(self.raw)
+        elif use_accel_jax:
+            self.data[:] = accel_update_host(self.data_jax)
+            self.data_jax = None
 
     def accel_delete(self):
         """Delete the data from the accelerator.
@@ -1013,24 +1031,11 @@ class PixelData(object):
             None
 
         """
-        log = Logger.get()
-        if not accel_enabled:
+        if not accel_enabled():
             return
-        if not accel_present(self.raw):
-            msg = f"PixelData raw data is not present on device, cannot delete"
-            log.error(msg)
-            raise RuntimeError(msg)
-        accel_delete(self.raw)
-
-    def accel_clear(self):
-        """Delete accelerator data.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled:
-            return
-        log = Logger.get()
-        if accel_present(self.raw):
-            accel_delete(self.raw)
+        if self.accel_present():
+            if use_accel_omp:
+                accel_delete(self.raw)
+            elif use_accel_jax:
+                del self.data_jax
+                self.data_jax = None

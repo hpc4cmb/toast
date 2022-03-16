@@ -530,11 +530,11 @@ class Offset(Template):
             )
 
             template_offset_project_signal(
+                det_indx,
+                ob.detdata[self.det_data][:],
                 step_length,
                 amp_offset,
                 amplitudes.local,
-                det_indx,
-                ob.detdata[self.det_data][:],
                 ob.intervals[self.view].data,
                 self.use_accel,
             )
@@ -621,5 +621,5 @@ class Offset(Template):
             )
         return
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         return True

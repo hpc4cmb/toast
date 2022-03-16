@@ -45,23 +45,25 @@ if use_mpi is None:
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-    # Assign each process to an accelerator device
-    from .accelerator import use_accel_jax, use_accel_omp
+# Assign each process to an accelerator device
+from .accelerator import use_accel_jax, use_accel_omp
 
-    if use_accel_omp:
-        from ._libtoast import accel_assign_device
+from ._libtoast import accel_assign_device
 
-        if use_mpi:
-            # We need to compute which process goes to which device
-            nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
-            node_procs = nodecomm.size
-            node_rank = nodecomm.rank
-            accel_assign_device(node_procs, node_rank)
-            nodecomm.Free()
-            del nodecomm
-        else:
-            accel_assign_device(1, 0)
-    elif use_accel_jax:
+if use_accel_omp:
+    if use_mpi:
+        # We need to compute which process goes to which device
+        nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
+        node_procs = nodecomm.size
+        node_rank = nodecomm.rank
+        accel_assign_device(node_procs, node_rank, False)
+        nodecomm.Free()
+        del nodecomm
+    else:
+        accel_assign_device(1, 0, False)
+else:
+    accel_assign_device(1, 0, True)
+    if use_accel_jax:
         # FIXME:  do the same with jax somehow...
         pass
 

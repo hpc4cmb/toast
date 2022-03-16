@@ -51,30 +51,46 @@ void init_template_offset(py::module & m) {
             Interval * dev_intervals = raw_intervals;
 
             if (offload) {
+                #ifdef HAVE_OPENMP_TARGET
+
                 dev_amplitudes = (double*)omgr.device_ptr((void*)raw_amplitudes);
                 dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
                 dev_intervals = (Interval*)omgr.device_ptr(
                     (void*)raw_intervals
                 );
-            }
 
-            #pragma omp target data \
-                device(dev) \
-                map(to: \
-                    n_view, \
-                    n_samp, \
-                    data_index, \
-                    step_length, \
-                    amp_offset \
-                ) \
-                use_device_ptr( \
-                    dev_amplitudes, \
-                    dev_det_data, \
-                    dev_intervals \
-                ) \
-                if(offload)
-            {
-                #pragma omp target teams distribute if(offload)
+                #pragma omp target data \
+                    device(dev) \
+                    map(to: \
+                        n_view, \
+                        n_samp, \
+                        data_index, \
+                        step_length, \
+                        amp_offset \
+                    ) \
+                    use_device_ptr( \
+                        dev_amplitudes, \
+                        dev_det_data, \
+                        dev_intervals \
+                    )
+                {
+                    #pragma omp target teams distribute
+                    for (int64_t iview = 0; iview < n_view; iview++) {
+                        #pragma omp parallel for
+                        for (
+                            int64_t isamp = dev_intervals[iview].first;
+                            isamp <= dev_intervals[iview].last;
+                            isamp++
+                        ) {
+                            int64_t d = data_index * n_samp * isamp;
+                            int64_t amp = amp_offset + (int64_t)(isamp / step_length);
+                            dev_det_data[d] += dev_amplitudes[amp];
+                        }
+                    }
+                }
+
+                #endif
+            } else {
                 for (int64_t iview = 0; iview < n_view; iview++) {
                     #pragma omp parallel for
                     for (
@@ -93,11 +109,11 @@ void init_template_offset(py::module & m) {
 
     m.def(
         "template_offset_project_signal", [](
+            int32_t data_index,
+            py::buffer det_data,
             int64_t step_length,
             int64_t amp_offset,
             py::buffer amplitudes,
-            int32_t data_index,
-            py::buffer det_data,
             py::buffer intervals,
             bool use_accel
         ) {
@@ -129,30 +145,46 @@ void init_template_offset(py::module & m) {
             Interval * dev_intervals = raw_intervals;
 
             if (offload) {
+                #ifdef HAVE_OPENMP_TARGET
+
                 dev_amplitudes = (double*)omgr.device_ptr((void*)raw_amplitudes);
                 dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
                 dev_intervals = (Interval*)omgr.device_ptr(
                     (void*)raw_intervals
                 );
-            }
 
-            #pragma omp target data \
-                device(dev) \
-                map(to: \
-                    n_view, \
-                    n_samp, \
-                    data_index, \
-                    step_length, \
-                    amp_offset \
-                ) \
-                use_device_ptr( \
-                    dev_amplitudes, \
-                    dev_det_data, \
-                    dev_intervals \
-                ) \
-                if(offload)
-            {
-                #pragma omp target teams distribute if(offload)
+                #pragma omp target data \
+                    device(dev) \
+                    map(to: \
+                        n_view, \
+                        n_samp, \
+                        data_index, \
+                        step_length, \
+                        amp_offset \
+                    ) \
+                    use_device_ptr( \
+                        dev_amplitudes, \
+                        dev_det_data, \
+                        dev_intervals \
+                    )
+                {
+                    #pragma omp target teams distribute
+                    for (int64_t iview = 0; iview < n_view; iview++) {
+                        #pragma omp parallel for
+                        for (
+                            int64_t isamp = dev_intervals[iview].first;
+                            isamp <= dev_intervals[iview].last;
+                            isamp++
+                        ) {
+                            int64_t d = data_index * n_samp * isamp;
+                            int64_t amp = amp_offset + (int64_t)(isamp / step_length);
+                            dev_amplitudes[amp] += dev_det_data[d];
+                        }
+                    }
+                }
+
+                #endif
+            } else {
                 for (int64_t iview = 0; iview < n_view; iview++) {
                     #pragma omp parallel for
                     for (
@@ -201,23 +233,32 @@ void init_template_offset(py::module & m) {
             double * dev_amp_out = raw_amp_out;
             double * dev_offset_var = raw_offset_var;
             if (offload) {
+                #ifdef HAVE_OPENMP_TARGET
+
                 dev_amp_in = (double*)omgr.device_ptr((void*)raw_amp_in);
                 dev_amp_out = (double*)omgr.device_ptr((void*)raw_amp_out);
                 dev_offset_var = (double*)omgr.device_ptr((void*)raw_offset_var);
-            }
 
-            #pragma omp target data \
-                device(dev) \
-                map(to: \
-                    n_amp \
-                ) \
-                use_device_ptr( \
-                    dev_amp_in, \
-                    dev_amp_out, \
-                    dev_offset_var \
-                ) \
-                if(offload)
-            {
+                #pragma omp target data \
+                    device(dev) \
+                    map(to: \
+                        n_amp \
+                    ) \
+                    use_device_ptr( \
+                        dev_amp_in, \
+                        dev_amp_out, \
+                        dev_offset_var \
+                    )
+                {
+                    #pragma omp parallel for
+                    for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+                        dev_amp_out[iamp] = dev_amp_in[iamp];
+                        dev_amp_out[iamp] *= dev_offset_var[iamp];
+                    }
+                }
+
+                #endif
+            } else {
                 #pragma omp parallel for
                 for (int64_t iamp = 0; iamp < n_amp; iamp++) {
                     dev_amp_out[iamp] = dev_amp_in[iamp];

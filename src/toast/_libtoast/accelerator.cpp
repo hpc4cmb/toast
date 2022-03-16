@@ -15,7 +15,7 @@ OmpManager & OmpManager::get() {
     return instance;
 }
 
-void OmpManager::assign_device(int node_procs, int node_rank) {
+void OmpManager::assign_device(int node_procs, int node_rank, bool disabled) {
     std::ostringstream o;
     auto log = toast::Logger::get();
     if ((node_procs < 1) || (node_rank < 0)) {
@@ -40,9 +40,14 @@ void OmpManager::assign_device(int node_procs, int node_rank) {
     #ifdef HAVE_OPENMP_TARGET
     n_target = omp_get_num_devices();
     #endif
+    if (disabled) {
+        n_target = 0;
+    }
 
     // If we have no accelerator (target) devices, assign all processes to
     // the host device.
+    int proc_per_dev = 0;
+
     if (n_target == 0) {
         target_dev_ = host_dev_;
         o.str("");
@@ -50,7 +55,7 @@ void OmpManager::assign_device(int node_procs, int node_rank) {
         << " processes per node, no target devices available, assigning to host device";
         log.verbose(o.str().c_str());
     } else {
-        int proc_per_dev = (int)(node_procs / n_target);
+        proc_per_dev = (int)(node_procs / n_target);
         if (n_target * proc_per_dev < node_procs) {
             proc_per_dev += 1;
         }
@@ -62,13 +67,16 @@ void OmpManager::assign_device(int node_procs, int node_rank) {
         log.verbose(o.str().c_str());
     }
 
+    auto & env = toast::Environment::get();
+    env.set_acc(n_target, proc_per_dev, target_dev_);
+
     return;
 }
 
 int OmpManager::get_device() {
     std::ostringstream o;
     auto log = toast::Logger::get();
-    if (target_dev_ < 0) {
+    if (target_dev_ < -1) {
         o << "OmpManager:  device not yet assigned, call assign_device() first";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
@@ -88,6 +96,11 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
     size_t n = mem_size_.count(buffer);
     std::ostringstream o;
     auto log = toast::Logger::get();
+
+    // If the device is the host device, return
+    if (device_is_host()) {
+        return buffer;
+    }
 
     #ifdef HAVE_OPENMP_TARGET
 
@@ -140,6 +153,11 @@ void OmpManager::remove(void * buffer, size_t nbytes) {
     auto log = toast::Logger::get();
     std::ostringstream o;
 
+    // If the device is the host device, return
+    if (device_is_host()) {
+        return;
+    }
+
     #ifdef HAVE_OPENMP_TARGET
 
     if (n == 0) {
@@ -191,6 +209,11 @@ void OmpManager::update_device(void * buffer, size_t nbytes) {
     auto log = toast::Logger::get();
     std::ostringstream o;
 
+    // If the device is the host device, return
+    if (device_is_host()) {
+        return;
+    }
+
     #ifdef HAVE_OPENMP_TARGET
 
     if (n == 0) {
@@ -237,6 +260,11 @@ void OmpManager::update_host(void * buffer, size_t nbytes) {
     auto log = toast::Logger::get();
     std::ostringstream o;
 
+    // If the device is the host device, return
+    if (device_is_host()) {
+        return;
+    }
+
     #ifdef HAVE_OPENMP_TARGET
 
     if (n == 0) {
@@ -282,6 +310,11 @@ int OmpManager::present(void * buffer, size_t nbytes) {
     auto log = toast::Logger::get();
     std::ostringstream o;
 
+    // If the device is the host device, return
+    if (device_is_host()) {
+        return 1;
+    }
+
     #ifdef HAVE_OPENMP_TARGET
 
     size_t n = mem_.count(buffer);
@@ -304,12 +337,19 @@ int OmpManager::present(void * buffer, size_t nbytes) {
     log.error(o.str().c_str());
     throw std::runtime_error(o.str().c_str());
 
+    return 0;
+
     #endif
 }
 
 void * OmpManager::device_ptr(void * buffer) {
     auto log = toast::Logger::get();
     std::ostringstream o;
+
+    // If the device is the host device, return
+    if (device_is_host()) {
+        return buffer;
+    }
 
     #ifdef HAVE_OPENMP_TARGET
 
@@ -328,6 +368,8 @@ void * OmpManager::device_ptr(void * buffer) {
     o << "OmpManager:  OpenMP target support disabled";
     log.error(o.str().c_str());
     throw std::runtime_error(o.str().c_str());
+
+    return NULL;
 
     #endif
 }
@@ -349,7 +391,7 @@ OmpManager::OmpManager() : mem_size_(), mem_() {
     #ifdef HAVE_OPENMP_TARGET
     host_dev_ = omp_get_initial_device();
     #endif
-    target_dev_ = -1;
+    target_dev_ = -2;
     node_procs_ = -1;
     node_rank_ = -1;
 }
@@ -406,21 +448,10 @@ void init_accelerator(py::module & m) {
         )");
 
     m.def(
-        "accel_assign_device", [](int node_procs, int node_rank)
+        "accel_assign_device", [](int node_procs, int node_rank, bool disabled)
         {
-            auto & log = toast::Logger::get();
-
-            std::ostringstream o;
-            #ifndef HAVE_OPENMP_TARGET
-            o.str("");
-            o << "TOAST not built with OpenMP target support";
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-            #endif
-
             auto & omgr = OmpManager::get();
-            omgr.assign_device(node_procs, node_rank);
-
+            omgr.assign_device(node_procs, node_rank, disabled);
             return;
         },
         R"(
@@ -694,9 +725,11 @@ void init_accelerator(py::module & m) {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = ! omgr.device_is_host();
+
             void * dev_raw = omgr.device_ptr(raw);
 
-            #pragma omp target data device(dev) use_device_ptr(dev_raw) if(offload)
+            #ifdef HAVE_OPENMP_TARGET
+            #pragma omp target data device(dev) use_device_ptr(dev_raw)
             {
                 #pragma omp target teams distribute parallel for collapse(2)
                 for (int64_t i = 0; i < n_det; i++) {
@@ -705,6 +738,7 @@ void init_accelerator(py::module & m) {
                     }
                 }
             }
+            #endif
             return;
         });
 
@@ -722,7 +756,8 @@ void init_accelerator(py::module & m) {
             bool offload = ! omgr.device_is_host();
             void * dev_raw = omgr.device_ptr(raw);
 
-            #pragma omp target data device(dev) use_device_ptr(dev_raw) if(offload)
+            #ifdef HAVE_OPENMP_TARGET
+            #pragma omp target data device(dev) use_device_ptr(dev_raw)
             {
                 #pragma omp target teams distribute parallel for collapse(2)
                 for (size_t i = 0; i < n_det; i++) {
@@ -731,6 +766,7 @@ void init_accelerator(py::module & m) {
                     }
                 }
             }
+            #endif
             return;
         });
 }

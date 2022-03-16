@@ -247,9 +247,10 @@ class PixelsHealpix(Operator):
                     )
                     log.verbose(msg)
                 continue
-            elif use_accel:
-                # If the pixels got created above, then create the device data
-                ob.detdata.accel_create(self.pixels)
+
+            if use_accel:
+                if not ob.detdata.accel_present(self.pixels):
+                    ob.detdata.accel_create(self.pixels)
 
             pixels_healpix(
                 quat_indx,
@@ -318,5 +319,5 @@ class PixelsHealpix(Operator):
             prov["global"].append(self.create_dist)
         return prov
 
-    def _supports_acc(self):
-        return self.detector_pointing.supports_acc()
+    def _supports_accel(self):
+        return self.detector_pointing.supports_accel()
