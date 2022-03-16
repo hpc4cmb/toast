@@ -223,9 +223,7 @@ def compress_timestream(ts, params, rmstarget=2**10, rmsmode="white"):
         offset (float) :  The removed offset
 
     """
-    if params is None:
-        return ts, 1, 0
-    if isinstance(params, bool) and not params:
+    if params is None or not params:
         return ts, 1, 0
     gain = None
     offset = None
