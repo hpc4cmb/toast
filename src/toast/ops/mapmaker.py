@@ -123,12 +123,6 @@ class MapMaker(Operator):
         help="This must be an instance of a template matrix operator",
     )
 
-    amplitudes_apply = Instance(
-        klass=Operator,
-        allow_none=True,
-        help="Instance of ApplyAmplitudes to be used on the input timestreams",
-    )
-
     map_binning = Instance(
         klass=Operator,
         allow_none=True,
@@ -266,38 +260,7 @@ class MapMaker(Operator):
             timer=timer,
         )
 
-        # Apply solved amplitudes
-
-        log.info_rank(
-            f"{log_prefix} begin apply template amplitudes",
-            comm=comm,
-        )
-
-        if self.amplitudes_apply is None:
-            # Create a default operator that subtracts amplitudes
-            self.amplitudes_apply = ApplyAmplitudes(
-                op="subtract",
-                det_data=self.det_data,
-                amplitudes=amplitudes_solve.amplitudes,
-                template_matrix=self.template_matrix,
-                output=None,
-            )
-        self.amplitudes_apply.apply(data)
-
-        log.info_rank(
-            f"{log_prefix}  finished apply template amplitudes in",
-            comm=comm,
-            timer=timer,
-        )
-
-        # Check map binning
-        map_binning = self.map_binning
-        if self.map_binning is None or not self.map_binning.enabled:
-            # Use the same binning used in the solver.
-            map_binning = self.binning
-
-        # Now construct the noise covariance, hits, and condition number mask for the
-        # final binned map.
+        # Data names of outputs
 
         mc_root = None
         if self.mc_mode and self.mc_index is not None:
@@ -315,13 +278,54 @@ class MapMaker(Operator):
         self.map_name = "{}_map".format(mc_root)
         self.noiseweighted_map_name = "{}_noiseweighted_map".format(mc_root)
 
+        # Apply (subtract) solved amplitudes.  If needed, we make a copy of the input
+        # detector data before subtracting the projected amplitudes in place.
+
+        log.info_rank(
+            f"{log_prefix} begin apply template amplitudes",
+            comm=comm,
+        )
+
+        out_cleaned = self.clean_name
+        if self.save_cleaned and self.overwrite_cleaned:
+            # Modify data in place
+            out_cleaned = self.det_data
+        else:
+            # Copy data
+            Copy(
+                detdata=[
+                    (self.det_data, self.clean_name),
+                ]
+            ).apply(data)
+
+        amplitudes_apply = ApplyAmplitudes(
+            op="subtract",
+            det_data=self.det_data,
+            amplitudes=amplitudes_solve.amplitudes,
+            template_matrix=self.template_matrix,
+            output=out_cleaned,
+        )
+        amplitudes_apply.apply(data)
+
+        log.info_rank(
+            f"{log_prefix}  finished apply template amplitudes in",
+            comm=comm,
+            timer=timer,
+        )
+
+        # Check map binning
+        map_binning = self.map_binning
+        if self.map_binning is None or not self.map_binning.enabled:
+            # Use the same binning used in the solver.
+            map_binning = self.binning
+
+        # Now construct the noise covariance, hits, and condition number mask for the
+        # final binned map.
+
         save_binned = map_binning.binned
         save_covariance = map_binning.covariance
 
-        if self.amplitudes_apply.output is None:
-            map_binning.det_data = self.det_data
-        else:
-            map_binning.det_data = self.amplitudes_apply.output
+        map_binning.det_data = out_cleaned
         map_binning.covariance = self.cov_name
         map_binning.binned = self.map_name
 
@@ -399,6 +403,13 @@ class MapMaker(Operator):
         memreport.apply(data)
 
         # Write and delete the outputs
+
+        if not self.save_cleaned:
+            Delete(
+                detdata=[
+                    self.clean_name,
+                ]
+            ).apply(data)
 
         # FIXME:  This all assumes the pointing operator is an instance of the
         # PointingHealpix class.  We need to generalize distributed pixel data

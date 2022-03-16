@@ -433,6 +433,7 @@ class SolveAmplitudes(Operator):
         else:
             mc_root = self.name
 
+        self.solver_flags = "{}_solve_flags".format(self.name)
         self.solver_hits_name = "{}_solve_hits".format(self.name)
         self.solver_cov_name = "{}_solve_cov".format(self.name)
         self.solver_rcond_name = "{}_solve_rcond".format(self.name)
@@ -458,14 +459,16 @@ class SolveAmplitudes(Operator):
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
-                if self.flag_name not in ob.detdata:
-                    msg = "In MC mode, flags missing for observation {}".format(ob.name)
+                if self.solver_flags not in ob.detdata:
+                    msg = "In MC mode, solver flags missing for observation {}".format(
+                        ob.name
+                    )
                     log.error(msg)
                     raise RuntimeError(msg)
-                det_check = set(ob.detdata[self.flag_name].detectors)
+                det_check = set(ob.detdata[self.solver_flags].detectors)
                 for d in dets:
                     if d not in det_check:
-                        msg = "In MC mode, flags missing for observation {}, det {}".format(
+                        msg = "In MC mode, solver flags missing for observation {}, det {}".format(
                             ob.name, d
                         )
                         log.error(msg)
@@ -485,7 +488,7 @@ class SolveAmplitudes(Operator):
                     continue
                 # Create the new solver flags
                 exists = ob.detdata.ensure(
-                    self.flag_name, dtype=np.uint8, detectors=detectors
+                    self.solver_flags, dtype=np.uint8, detectors=detectors
                 )
                 # The data views
                 views = ob.view[solve_view]
@@ -506,15 +509,15 @@ class SolveAmplitudes(Operator):
                             0,
                         )
                     for d in dets:
-                        views.detdata[self.flag_name][vw][d, :] = starting_flags
+                        views.detdata[self.solver_flags][vw][d, :] = starting_flags
                         if save_det_flags is not None:
-                            views.detdata[self.flag_name][vw][d, :] |= np.where(
+                            views.detdata[self.solver_flags][vw][d, :] |= np.where(
                                 views.detdata[save_det_flags][vw][d]
                                 & save_det_flag_mask
                                 > 0,
                                 1,
                                 0,
-                            ).astype(views.detdata[self.flag_name][vw].dtype)
+                            ).astype(views.detdata[self.solver_flags][vw].dtype)
 
             # Now scan any input mask to this same flag field.  We use the second
             # bit (== 2) for these mask flags.  For the input mask bit we check the
@@ -528,7 +531,7 @@ class SolveAmplitudes(Operator):
             scan_pointing = self.binning.pixel_pointing
 
             scanner = ScanMask(
-                det_flags=self.flag_name,
+                det_flags=self.solver_flags,
                 pixels=scan_pointing.pixels,
                 view=solve_view,
                 mask_bits=1,
@@ -583,7 +586,7 @@ class SolveAmplitudes(Operator):
                 covariance=self.solver_cov_name,
                 hits=self.solver_hits_name,
                 rcond=self.solver_rcond_name,
-                det_flags=self.flag_name,
+                det_flags=self.solver_flags,
                 det_flag_mask=255,
                 pixel_pointing=self.binning.pixel_pointing,
                 stokes_weights=self.binning.stokes_weights,
@@ -627,7 +630,7 @@ class SolveAmplitudes(Operator):
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
-                for vw in ob.view[solve_view].detdata[self.flag_name]:
+                for vw in ob.view[solve_view].detdata[self.solver_flags]:
                     for d in dets:
                         local_total += len(vw[d])
                         local_cut += np.count_nonzero(vw[d])
@@ -660,9 +663,8 @@ class SolveAmplitudes(Operator):
         )
 
         # Set our binning operator to use only our new solver flags
-        self.binning.shared_flags = None
         self.binning.shared_flag_mask = 0
-        self.binning.det_flags = self.flag_name
+        self.binning.det_flags = self.solver_flags
         self.binning.det_flag_mask = 255
 
         # Set the binning operator to output to temporary map.  This will be
@@ -740,6 +742,8 @@ class SolveAmplitudes(Operator):
                 if prod in data:
                     data[prod].clear()
                     del data[prod]
+            for ob in data.obs:
+                del ob.detdata[self.solver_flags]
 
             memreport.prefix = "After deleting solver products"
             memreport.apply(data)
@@ -784,6 +788,7 @@ class SolveAmplitudes(Operator):
                     self.solver_bin,
                 ]
             )
+            prov["detdata"] = [self.solver_flags]
         return prov
 
 
@@ -874,9 +879,9 @@ class ApplyAmplitudes(Operator):
         # Arithmetic operator
         combine = Combine(op=self.op, first=self.det_data, second=result)
         if self.output is None:
-            combine.output = self.det_data
+            combine.result = self.det_data
         else:
-            combine.output = self.output
+            combine.result = self.output
 
         # Project and operate, one detector at a time
         pipe = Pipeline(

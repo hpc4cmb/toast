@@ -351,6 +351,7 @@ class MapmakerTest(MPITestCase):
                 plt.close()
 
                 if not np.allclose(toast_map[stokes], madam_map[stokes], rtol=0.01):
+                    print(f"FAIL: max {ststr} diff = {np.max(diff_map)}")
                     fail = True
 
         if data.comm.comm_world is not None:

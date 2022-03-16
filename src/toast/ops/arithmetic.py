@@ -61,10 +61,16 @@ class Combine(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        for check in [self.first, self.second, self.result, self.op]:
-            msg = f"The {check} trait must be set before calling exec"
-            log.error(msg)
-            raise RuntimeError(msg)
+        for check_name, check_val in [
+            ("first", self.first),
+            ("second", self.second),
+            ("result", self.result),
+            ("op", self.op),
+        ]:
+            if check_val is None:
+                msg = f"The {check_name} trait must be set before calling exec"
+                log.error(msg)
+                raise RuntimeError(msg)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
