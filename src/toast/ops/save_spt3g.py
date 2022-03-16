@@ -40,6 +40,8 @@ class SaveSpt3g(Operator):
 
     framefile_mb = Float(100.0, help="Target frame file size in MB")
 
+    gzip = Bool(False, help="If True, gzip compress the frame files")
+
     # FIXME:  We should add a filtering mechanism here to dump a subset of
     # observations and / or detectors.
 
@@ -111,6 +113,8 @@ class SaveSpt3g(Operator):
                 save_pipe = c3g.G3Pipeline()
                 save_pipe.Add(emitter)
                 fname = f"frames-{ob.comm.group_rank:04d}.g3"
+                if self.gzip:
+                    fname += ".gz"
                 save_pipe.Add(
                     c3g.G3Writer,
                     filename=os.path.join(ob_dir, fname),
@@ -124,9 +128,12 @@ class SaveSpt3g(Operator):
                     emitter = frame_emitter(frames=frames)
                     save_pipe = c3g.G3Pipeline()
                     save_pipe.Add(emitter)
+                    fpattern = "frames-%04u.g3"
+                    if self.gzip:
+                        fpattern += ".gz"
                     save_pipe.Add(
                         c3g.G3MultiFileWriter,
-                        filename=os.path.join(ob_dir, "frames-%04u.g3"),
+                        filename=os.path.join(ob_dir, fpattern),
                         size_limit=int(self.framefile_mb * 1024**2),
                     )
                     save_pipe.Run()
