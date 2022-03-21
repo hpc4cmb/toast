@@ -239,6 +239,7 @@ class MapMaker(Operator):
 
         # Solve for template amplitudes
         amplitudes_solve = SolveAmplitudes(
+            name=self.name,
             det_data=self.det_data,
             convergence=self.convergence,
             iter_max=self.iter_max,

@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import re
 
 import numpy as np
 import traitlets
@@ -693,7 +694,7 @@ class Madam(Operator):
                 for det in all_dets:
                     if det not in ob.local_detectors:
                         continue
-                    psd = nse.psd(det).to_value(u.K**2 * u.second) * nse_scale**2
+                    psd = nse.psd(det).to_value(u.K ** 2 * u.second) * nse_scale ** 2
                     detw = nse.detector_weight(det)
                     if det not in psds:
                         psds[det] = [(0.0, psd, detw)]
