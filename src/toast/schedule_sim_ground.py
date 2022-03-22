@@ -1834,8 +1834,17 @@ def get_boresight_angle(args, t, t0=0):
     if args.boresight_angle_step_deg == 0 or args.boresight_angle_time_min == 0:
         return 0
 
-    istep = int((t - t0) / 60 / args.boresight_angle_time_min)
-    return (args.boresight_angle_step_deg * istep) % 360
+    nstep = int(np.round(
+        (args.boresight_angle_max_deg - args.boresight_angle_min_deg)
+        / args.boresight_angle_step_deg
+    ))
+    if (args.boresight_angle_min_deg % 360) != (args.boresight_angle_max_deg % 360):
+        # The range does not wrap around.
+        # Include both ends of the range as separate steps
+        nstep += 1
+    istep = int((t - t0) / 60 / args.boresight_angle_time_min) % nstep
+    angle = args.boresight_angle_min_deg + istep * args.boresight_angle_step_deg
+    return angle
 
 
 @function_timer
@@ -2303,6 +2312,20 @@ def parse_args(opts=None):
         default=0,
         type=np.float,
         help="Boresight rotation step size [deg]",
+    )
+    parser.add_argument(
+        "--boresight-angle-min-deg",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Boresight rotation angle minimum [deg]",
+    )
+    parser.add_argument(
+        "--boresight-angle-max-deg",
+        required=False,
+        default=360,
+        type=np.float,
+        help="Boresight rotation angle maximum [deg]",
     )
     parser.add_argument(
         "--boresight-angle-time-min",
