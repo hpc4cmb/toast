@@ -100,12 +100,12 @@ def combine_observation_matrix(rootname):
     if current_row != nrow_tot:
         all_indptr.append(np.zeros(nrow_tot - current_row) + current_offset)
 
-    log.info("Constructing CSR matrix ...")
+    log.info("Constructing CSR array ...")
 
     all_data = np.hstack(all_data)
     all_indices = np.hstack(all_indices)
     all_indptr = np.hstack(all_indptr)
-    obs_matrix = scipy.sparse.csr_matrix((all_data, all_indices, all_indptr), shape)
+    obs_matrix = scipy.sparse.csr_array((all_data, all_indices, all_indptr), shape)
 
     log.info_rank(f"Constructed in", timer=timer, comm=None)
 
@@ -605,6 +605,7 @@ class FilterBin(Operator):
                 t2 = time()
                 all_covs = []
                 for itemplates in range(len(all_templates)):
+
                     templates = all_templates[itemplates]
                     # Normalize the templates to improve the condition number of the
                     # template covariance matrix
@@ -612,10 +613,10 @@ class FilterBin(Operator):
                     ntemplate, nsample_tot = templates.shape
                     good_templates = []
                     for itemplate in range(ntemplate):
-                        template = templates[itemplate, :].toarray().ravel()
+                        template = templates[[itemplate], :].toarray().ravel()
                         norm = np.sum(template[full_good_fit] ** 2)
                         if norm > 1e-3:
-                            templates[itemplate] /= norm ** .5
+                            templates[[itemplate], :] /= norm ** .5
                             good_templates.append(itemplate)
                     nbad = ntemplate - len(good_templates)
                     if nbad != 0:
@@ -628,7 +629,10 @@ class FilterBin(Operator):
                     # Now build the inverse covariance matrix
 
                     invcov = templates.dot(full_noise_weights.dot(templates.T))
-                    invcov = invcov.toarray()
+
+                    nrow, ncol = invcov.shape
+                    if nrow < 1000:
+                        invcov = invcov.toarray()
 
                     if self.grank == 0:
                         log.debug(
@@ -638,25 +642,29 @@ class FilterBin(Operator):
                         )
                         t1 = time()
 
-                    # Invert the sub-matrix that has non-zero diagonal
+                    if isinstance(invcov, np.ndarray):
+                        # avoid inverting singular matrices
 
-                    rcond = 1 / np.linalg.cond(invcov)
-                    if self.grank == 0:
-                        log.debug(
-                            f"{self.group:4} : FilterBin:   Template covariance matrix "
-                            f"rcond = {rcond} in {time() - t1:.2f} s",
-                        )
-                        t1 = time()
+                        rcond = 1 / np.linalg.cond(invcov)
+                        if self.grank == 0:
+                            log.debug(
+                                f"{self.group:4} : FilterBin:   Template covariance matrix "
+                                f"rcond = {rcond} in {time() - t1:.2f} s",
+                            )
+                            t1 = time()
 
-                    if rcond > 1e-6:
-                        cov = np.linalg.inv(invcov)
+                        if rcond > 1e-6:
+                            cov = np.linalg.inv(invcov)
+                        else:
+                            log.warning(
+                                f"{self.group:4} : FilterBin: WARNING: template "
+                                f"covariance matrix is poorly conditioned: "
+                                f"rcond = {rcond}.  Using matrix pseudoinverse.",
+                            )
+                            cov = np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
                     else:
-                        log.warning(
-                            f"{self.group:4} : FilterBin: WARNING: template covariance matrix "
-                            f"is poorly conditioned: "
-                            f"rcond = {rcond}.  Using matrix pseudoinverse.",
-                        )
-                        cov = np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
+                        # Trust our regularization
+                        cov = scipy.sparse.linalg.inv(invcov)
 
                     all_templates[itemplates] = templates
                     all_covs.append(cov)
@@ -668,9 +676,6 @@ class FilterBin(Operator):
                             f"in {time() - t1:.2f} s",
                         )
                         t1 = time()
-
-                    import pdb
-                    pdb.set_trace()
 
                 if self.grank == 0:
                     log.debug(
@@ -684,8 +689,7 @@ class FilterBin(Operator):
                     templates = all_templates[itemplates]
                     cov = all_covs[itemplates]
                     proj = templates.dot(full_noise_weights.dot(full_signal))
-                    coeff = np.dot(cov, proj)
-
+                    coeff = cov.dot(proj)
                     full_signal -= np.array(templates.T.dot(coeff.T)).ravel()
 
                 full_signal = full_signal.reshape([ndet, -1])
@@ -803,7 +807,7 @@ class FilterBin(Operator):
                     legendre_filter.append(temp)
             legendre_filter = np.vstack(legendre_filter)
 
-        return scipy.sparse.csr_matrix(legendre_filter)
+        return scipy.sparse.csr_array(legendre_filter)
 
     @function_timer
     def _get_poly_templates(self, obs):
@@ -815,7 +819,7 @@ class FilterBin(Operator):
         ninterval = len(intervals)
         ntemplate = ninterval * norder
         nsample = obs.n_all_samples
-        templates = scipy.sparse.lil_matrix((ntemplate, nsample))
+        templates = scipy.sparse.lil_array((ntemplate, nsample))
 
         if self.shared_flags is None:
             shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
@@ -868,7 +872,7 @@ class FilterBin(Operator):
                     ntemplate_full += ntemplate
             if ntemplate_full == 0:
                 return None
-            full_templates = scipy.sparse.lil_matrix((ntemplate_full, nsample * ndet))
+            full_templates = scipy.sparse.lil_array((ntemplate_full, nsample * ndet))
             offset = 0
             for idet, det_templates in enumerate(templates):
                 ntemplate, nsample = det_templates.shape
@@ -880,7 +884,7 @@ class FilterBin(Operator):
         else:
             # Only one set of templates to apply to all detectors
             ntemplate, nsample = templates.shape
-            full_templates = scipy.sparse.lil_matrix((ntemplate * ndet, nsample * ndet))
+            full_templates = scipy.sparse.lil_array((ntemplate * ndet, nsample * ndet))
             for idet in range(ndet):
                 full_templates[
                     idet * ntemplate : (idet + 1) * ntemplate,
@@ -899,7 +903,7 @@ class FilterBin(Operator):
         norder = (self.poly2d_filter_order + 1) ** 2
         ntemplate = nsample * norder
         # The templates matrix will be transposed before returning it
-        templates = scipy.sparse.lil_matrix((nsample * ndet, ntemplate))
+        templates = scipy.sparse.lil_array((nsample * ndet, ntemplate))
 
         focalplane = obs.telescope.focalplane
 
@@ -974,7 +978,7 @@ class FilterBin(Operator):
         norm = np.dot(common_templates[0], common_templates[0])
 
         ntemplate = nnz
-        templates = scipy.sparse.lil_matrix((ntemplate, nsample))
+        templates = scipy.sparse.lil_array((ntemplate, nsample))
         for inz in range(self._deproject_nnz):
             weights[:] = 0
             weights[:, inz] = 1
@@ -1024,7 +1028,7 @@ class FilterBin(Operator):
             indptr,
         )
 
-        sparse_matrix = scipy.sparse.csr_matrix(
+        sparse_matrix = scipy.sparse.csr_array(
             (compressed_matrix.ravel(), indices, indptr),
             shape=(self.npixtot, self.npixtot),
         )
@@ -1066,7 +1070,7 @@ class FilterBin(Operator):
                 mm_data = np.load(fname_cache + ".data.npy")
                 mm_indices = np.load(fname_cache + ".indices.npy")
                 mm_indptr = np.load(fname_cache + ".indptr.npy")
-                local_obs_matrix = scipy.sparse.csr_matrix(
+                local_obs_matrix = scipy.sparse.csr_array(
                     (mm_data, mm_indices, mm_indptr),
                     self.obs_matrix.shape,
                 )
@@ -1105,7 +1109,7 @@ class FilterBin(Operator):
 
             Ztot = None
             for templates, cov in zip(all_templates, all_covs):
-                cov = scipy.sparse.csr_matrix(cov)
+                cov = scipy.sparse.csr_array(cov)
                 Z = scipy.sparse.identity(nsample * ndet) \
                     - templates.T.dot(cov.dot(templates.dot(noise_weights)))
                 if Ztot is None:
@@ -1118,7 +1122,7 @@ class FilterBin(Operator):
             npix = c_npix
             npixtot = c_npixtot
 
-            P = scipy.sparse.lil_matrix((nsample * ndet, npixtot))
+            P = scipy.sparse.lil_array((nsample * ndet, npixtot))
             for idet in range(ndet):
                 for isample in range(nsample):
                     pix = c_pixels[idet * nsample + isample]
@@ -1133,9 +1137,6 @@ class FilterBin(Operator):
             det_weights = scipy.sparse.diags((det_weights))
 
             c_obs_matrix = P.T.dot(det_weights.dot(Ztot.dot(P))).toarray()
-            #import pdb
-            #import matplotlib.pyplot as plt
-            #pdb.set_trace()
 
             if self.grank == 0:
                 log.debug(
@@ -1215,7 +1216,7 @@ class FilterBin(Operator):
     @function_timer
     def _initialize_obs_matrix(self):
         if self.write_obs_matrix:
-            self.obs_matrix = scipy.sparse.csr_matrix(
+            self.obs_matrix = scipy.sparse.csr_array(
                 (self.npixtot, self.npixtot), dtype=np.float64
             )
             if self.rank == 0 and self.cache_dir is not None:
@@ -1233,7 +1234,7 @@ class FilterBin(Operator):
             return
         # Apply the white noise covariance to the observation matrix
         white_noise_cov = data[self.binning.covariance]
-        cc = scipy.sparse.dok_matrix((self.npixtot, self.npixtot), dtype=np.float64)
+        cc = scipy.sparse.dok_array((self.npixtot, self.npixtot), dtype=np.float64)
         nsubmap = white_noise_cov.distribution.n_submap
         npix_submap = white_noise_cov.distribution.n_pix_submap
         for isubmap_local, isubmap_global in enumerate(
@@ -1328,7 +1329,7 @@ class FilterBin(Operator):
                             source=receive_from,
                             tag=factor + 3 * self.ntask,
                         )
-                        obs_matrix_slice += scipy.sparse.csr_matrix(
+                        obs_matrix_slice += scipy.sparse.csr_array(
                             (data_recv, indices_recv, indptr_recv),
                             obs_matrix_slice.shape,
                         )
