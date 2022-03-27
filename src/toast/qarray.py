@@ -11,6 +11,7 @@ from ._libtoast import (
     qa_exp,
     qa_from_angles,
     qa_from_axisangle,
+    qa_from_iso,
     qa_from_position,
     qa_from_rotmat,
     qa_from_vectors,
@@ -23,6 +24,7 @@ from ._libtoast import (
     qa_slerp,
     qa_to_angles,
     qa_to_axisangle,
+    qa_to_iso,
     qa_to_position,
     qa_to_rotmat,
 )
@@ -412,6 +414,122 @@ def from_vectors(v1, v2):
         return out.array().reshape((-1, 4))
 
 
+def from_iso(theta, phi, psi):
+    """Create quaternions from ISO theta, phi, psi spherical coordinates.
+
+    The input angles describe the ZYZ rotations used to build the quaternion.
+
+    Args:
+        theta (array):  Array or scalar theta values in radians
+        phi (array):  Array or scalar phi values in radians
+        psi (array):  Array or scalar psi values in radians
+
+    Returns:
+        (array):  The quaternions.
+
+    """
+    intheta = ensure_buffer_f64(theta)
+    inphi = ensure_buffer_f64(phi)
+    inpsi = ensure_buffer_f64(psi)
+    lt = len(intheta)
+    out = AlignedF64(4 * lt)
+    qa_from_iso(intheta, inphi, inpsi, out)
+    if len(out) == 4:
+        if (
+            (object_ndim(theta) == 1)
+            or (object_ndim(phi) == 1)
+            or (object_ndim(psi) == 1)
+        ):
+            return out.array().reshape((1, 4))
+        else:
+            return out.array()
+    else:
+        return out.array().reshape((-1, 4))
+
+
+def from_lonlat(lon, lat, psi):
+    """Create quaternions from longitude, latitude, and psi spherical coordinates.
+
+    Args:
+        lon (array):  Array or scalar lon values in radians
+        lat (array):  Array or scalar lat values in radians
+        psi (array):  Array or scalar psi values in radians
+
+    Returns:
+        (array):  The quaternions.
+
+    """
+    inlon = ensure_buffer_f64(lon)
+    inlat = ensure_buffer_f64(lat)
+    inpsi = ensure_buffer_f64(psi)
+    lt = len(inlon)
+    out = AlignedF64(4 * lt)
+    theta = AlignedF64(lt)
+    theta[:] = 0.5 * np.pi - np.array(inlat)
+    qa_from_iso(theta, inlon, inpsi, out)
+    if len(out) == 4:
+        if (
+            (object_ndim(lon) == 1)
+            or (object_ndim(lat) == 1)
+            or (object_ndim(psi) == 1)
+        ):
+            return out.array().reshape((1, 4))
+        else:
+            return out.array()
+    else:
+        return out.array().reshape((-1, 4))
+
+
+def to_iso(q):
+    """Convert quaternions to ISO theta, phi, psi spherical coordinates.
+
+    Args:
+        q (array_like):  The input quaternions.
+
+    Returns:
+        (tuple):  The theta, phi, psi angles in radians.
+
+    """
+    inq = ensure_buffer_f64(q)
+    lq = len(inq) // 4
+    theta = AlignedF64(lq)
+    phi = AlignedF64(lq)
+    psi = AlignedF64(lq)
+    qa_to_iso(inq, theta, phi, psi)
+    if len(inq) == 4:
+        if object_ndim(q) == 2:
+            return (theta.array(), phi.array(), psi.array())
+        else:
+            return (float(theta[0]), float(phi[0]), float(psi[0]))
+    return (theta.array(), phi.array(), psi.array())
+
+
+def to_lonlat(q):
+    """Convert quaternions to longitude, latitude, and psi spherical coordinates.
+
+    Args:
+        q (array_like):  The input quaternions.
+
+    Returns:
+        (tuple):  The longitude, latitude, psi angles in radians.
+
+    """
+    inq = ensure_buffer_f64(q)
+    lq = len(inq) // 4
+    lat = AlignedF64(lq)
+    theta = AlignedF64(lq)
+    phi = AlignedF64(lq)
+    psi = AlignedF64(lq)
+    qa_to_iso(inq, theta, phi, psi)
+    lat[:] = 0.5 * np.pi - np.array(theta)
+    if len(inq) == 4:
+        if object_ndim(q) == 2:
+            return (phi.array(), lat.array(), psi.array())
+        else:
+            return (float(phi[0]), float(lat[0]), float(psi[0]))
+    return (phi.array(), lat.array(), psi.array())
+
+
 def from_angles(theta, phi, pa, IAU=False):
     """Create quaternions from spherical coordinates.
 
@@ -430,6 +548,8 @@ def from_angles(theta, phi, pa, IAU=False):
         (array):  The quaternions.
 
     """
+    log = Logger.get()
+    log.warning("from_angles() is deprecated, Use from_iso() or from_lonlat() instead")
     thetain = ensure_buffer_f64(theta)
     phiin = ensure_buffer_f64(phi)
     pain = ensure_buffer_f64(pa)
@@ -465,6 +585,8 @@ def to_angles(q, IAU=False):
         (tuple):  The (theta, phi, pa) arrays.
 
     """
+    log = Logger.get()
+    log.warning("to_angles() is deprecated, Use to_iso() or to_lonlat() instead")
     qin = ensure_buffer_f64(q)
     lq = len(qin) // 4
     theta = AlignedF64(lq)
@@ -493,6 +615,10 @@ def from_position(theta, phi):
         (array):  The quaternions.
 
     """
+    log = Logger.get()
+    log.warning(
+        "from_position() is deprecated, Use from_iso() or from_lonlat() instead"
+    )
     thetain = ensure_buffer_f64(theta)
     phiin = ensure_buffer_f64(phi)
     lt = len(thetain)
@@ -520,6 +646,8 @@ def to_position(q):
         (tuple):  The (theta, phi) arrays.
 
     """
+    log = Logger.get()
+    log.warning("to_position() is deprecated, Use to_iso() or to_lonlat() instead")
     qin = ensure_buffer_f64(q)
     lq = len(qin) // 4
     theta = AlignedF64(lq)

@@ -120,7 +120,7 @@ class CrossLinking(Operator):
         self.pixel_pointing.detector_pointing.apply(obs_data, detectors=[det])
         quat = obs.detdata[self.pixel_pointing.detector_pointing.quats][det]
         # measure the scan direction wrt the local meridian for each sample
-        theta, phi = qa.to_position(quat)
+        theta, phi, _ = qa.to_iso(quat)
         theta = np.pi / 2 - theta
         # scan direction across the reference sample
         dphi = np.roll(phi, -1) - np.roll(phi, 1)

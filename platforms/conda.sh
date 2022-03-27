@@ -28,10 +28,9 @@ else
     CMAKE_BUILD_TYPE=Release
 fi
 
-CMAKE_PLATFORM_FLAGS=""
 shext="so"
 if [[ ${CONDA_TOOLCHAIN_HOST} =~ .*darwin.* ]]; then
-    CMAKE_PLATFORM_FLAGS+=(-DCMAKE_OSX_SYSROOT="${CONDA_BUILD_SYSROOT}")
+    export TOAST_BUILD_CMAKE_OSX_SYSROOT="${CONDA_BUILD_SYSROOT}"
     shext="dylib"
 fi
 

@@ -188,7 +188,7 @@ class GroundFilter(Operator):
                 az = obs.shared[self.azimuth]
             else:
                 quats = obs.shared[self.boresight_azel]
-                theta, phi = qa.to_position(quats)
+                theta, phi, _ = qa.to_iso(quats)
                 az = 2 * np.pi - phi
         except Exception as e:
             msg = (

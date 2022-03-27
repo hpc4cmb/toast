@@ -23,8 +23,9 @@ class StokesWeights(Operator):
 
     Given the individual detector pointing, this computes the pointing weights
     assuming that the detector is a linear polarizer followed by a total
-    power measurement.  An optional dictionary of pointing weight calibration factors
-    may be specified for each observation.
+    power measurement.  By definition, the detector coordinate frame has the X-axis
+    aligned with the polarization sensitive direction.  An optional dictionary of
+    pointing weight calibration factors may be specified for each observation.
 
     For each observation, the cross-polar response for every detector is obtained from
     the Focalplane, and if a HWP angle timestream exists, then a perfect HWP Mueller
@@ -40,6 +41,23 @@ class StokesWeights(Operator):
 
     .. math::
         d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{2a+4w} + U \\sin{2a+4w}\\right]\\right]
+
+    The angle "a" in the above formalism is the angle (at each sample) between the
+    transformed X-axis of the detector frame and the local meridian of the coordinate
+    system.  This is computed by rotating the Z and X coordinate axes by the detector
+    pointing quaternion and then computing the rotation angle from meridian to this
+    polarization sensitive direction.  This means that "a" is positive in a
+    right-handed sense, since the rotated Z-axis points in the detector line of sight:
+
+    .. math::
+        v_m = vector parallel to local meridian
+        v_o = orientation vector (transformed x-axis)
+        v_d = direction vector (transformed z-axis)
+        a = atan2((v_m X v_o) \\dot v_d, v_m \\dot v_o)
+
+    By default, this operator uses the "COSMO" convention for Q/U.  If the "IAU" trait
+    is set to True, then resulting weights will differ by the sign of the U Stokes
+    weight.
 
     If the view trait is not specified, then this operator will use the same data
     view as the detector pointing operator when computing the pointing matrix pixels
@@ -85,6 +103,8 @@ class StokesWeights(Operator):
         help="The observation key with a dictionary of pointing weight "
         "calibration for each det",
     )
+
+    IAU = Bool(False, help="If True, use the IAU convention rather than COSMO")
 
     use_python = Bool(False, help="If True, use python implementation")
 
@@ -310,22 +330,33 @@ class StokesWeights(Operator):
                     samples = slice(vw.first, vw.last + 1, 1)
                     dir = qa.rotate(quat_data[qidx][samples], zaxis)
                     orient = qa.rotate(quat_data[qidx][samples], xaxis)
-                    ay = np.multiply(orient[:, 0], dir[:, 1]) - np.multiply(
-                        orient[:, 1], dir[:, 0]
+
+                    # The vector orthogonal to the line of sight that is parallel
+                    # to the local meridian.
+                    dir_ang = np.arctan2(dir[:, 1], dir[:, 0])
+                    dir_r = np.sqrt(1.0 - dir[:, 2] * dir[:, 2])
+                    m_z = dir_r
+                    m_x = -dir[:, 2] * np.cos(dir_ang)
+                    m_y = -dir[:, 2] * np.sin(dir_ang)
+
+                    # Compute the rotation angle from the meridian vector to the
+                    # orientation vector.  The direction vector is normal to the plane
+                    # containing these two vectors, so the rotation angle is:
+                    #
+                    # angle = atan2((v_m x v_o) . v_d, v_m . v_o)
+                    # angle = atan2(
+                    #     d_x (m_y o_z - m_z o_y)
+                    #       - d_y (m_x o_z - m_z o_x)
+                    #       + d_z (m_x o_y - m_y o_x),
+                    #     m_x o_x + m_y o_y + m_z o_z
+                    # )
+                    #
+                    ay = (
+                        dir[:, 0] * (m_y * orient[:, 2] - m_z * orient[:, 1])
+                        - dir[:, 1] * (m_x * orient[:, 2] - m_z * orient[:, 0])
+                        + dir[:, 2] * (m_x * orient[:, 1] - m_y * orient[:, 0])
                     )
-                    ax = (
-                        np.multiply(
-                            orient[:, 0], np.multiply(-1.0 * dir[:, 2], dir[:, 0])
-                        )
-                        + np.multiply(
-                            orient[:, 1], np.multiply(-1.0 * dir[:, 2], dir[:, 1])
-                        )
-                        + np.multiply(
-                            orient[:, 2],
-                            np.multiply(dir[:, 0], dir[:, 0])
-                            + np.multiply(dir[:, 1], dir[:, 1]),
-                        )
-                    )
+                    ax = m_x * orient[:, 0] + m_y * orient[:, 1] + m_z * orient[:, 2]
                     ang = np.arctan2(ay, ax)
                     if hwp_data is not None:
                         ang += 2.0 * hwp_data[samples]

@@ -195,7 +195,7 @@ class FlagSSO(Operator):
                 quats = obs.detdata[self.detector_pointing.quats][det]
 
             # Convert Az/El quaternion of the detector into angles
-            theta, phi = qa.to_position(quats)
+            theta, phi, _ = qa.to_iso(quats)
 
             # Azimuth is measured in the opposite direction
             # than longitude

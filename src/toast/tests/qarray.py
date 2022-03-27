@@ -89,7 +89,7 @@ class QarrayTest(MPITestCase):
         phi = (10.0 / (2.0 * np.pi)) * np.arange(nsamp, dtype=np.float64)
         pa = np.zeros(nsamp, dtype=np.float64)
 
-        quats = qa.from_angles(theta, phi, pa)
+        quats = qa.from_iso(theta, phi, pa)
 
         check = np.zeros((nsamp, 3), dtype=np.float64)
         for i in range(nsamp):
@@ -241,126 +241,197 @@ class QarrayTest(MPITestCase):
             np.testing.assert_almost_equal(check, np.cos(radius))
         return
 
+    def check_iso(self, actual, desired):
+        """Check that input / output angles are the same."""
+        check_theta = np.array(actual[0])
+        check_phi = np.array(actual[1])
+        check_psi = np.array(actual[2])
+        theta = np.array(desired[0])
+        phi = np.array(desired[1])
+        psi = np.array(desired[2])
+        # Convert the phi / psi angles to +/- PI
+        try:
+            lt = len(theta)
+            extreme_theta = np.logical_or(
+                np.isclose(theta, 0.0), np.isclose(theta, np.pi)
+            )
+            psi[extreme_theta] += phi[extreme_theta]
+            phi[extreme_theta] = 0.0
+            check_psi[extreme_theta] += check_phi[extreme_theta]
+            check_phi[extreme_theta] = 0.0
+            for ang in phi, psi, check_phi, check_psi:
+                high = ang > np.pi
+                low = ang <= -np.pi
+                ang[high] -= 2 * np.pi
+                ang[low] += 2 * np.pi
+        except TypeError:
+            # scalar values
+            if np.isclose(theta, 0.0) or np.isclose(theta, np.pi):
+                psi += phi
+                phi = 0.0
+                check_psi += check_phi
+                check_phi = 0.0
+            for ang in phi, psi, check_phi, check_psi:
+                if ang > np.pi:
+                    ang -= 2 * np.pi
+                if ang <= -np.pi:
+                    ang += 2 * np.pi
+        if not np.allclose(check_theta, theta, rtol=1.0e-7, atol=1.0e-6):
+            print(f"ISO theta check failed:")
+            print(f"{np.transpose((check_theta, theta))}")
+            raise ValueError("ISO theta values not equal")
+        if not np.allclose(check_phi, phi, rtol=1.0e-7, atol=1.0e-6):
+            print(f"ISO phi check failed:")
+            print(f"{np.transpose((check_phi, phi))}")
+            raise ValueError("ISO phi values not equal")
+        if not np.allclose(check_psi, psi, rtol=1.0e-7, atol=1.0e-6):
+            print(f"ISO psi check failed:")
+            print(f"{np.transpose((check_psi, psi))}")
+            raise ValueError("ISO psi values not equal")
+
+    def check_zx(self, actual, desired):
+        """Check that input / output vectors are the same."""
+        check_z = np.array(actual[0])
+        check_x = np.array(actual[1])
+        z = np.array(desired[0])
+        x = np.array(desired[1])
+        if not np.allclose(check_z, z, rtol=1.0e-7, atol=1.0e-6):
+            print(f"Z check failed:")
+            print(f"{np.transpose((check_z, z))}")
+            raise ValueError("Z values not equal")
+        if not np.allclose(check_x, x, rtol=1.0e-7, atol=1.0e-6):
+            print(f"X check failed:")
+            print(f"{np.transpose((check_x, x))}")
+            raise ValueError("X values not equal")
+
     def test_angles(self):
-        ntheta = 5
-        nphi = 5
-        n = ntheta * nphi
         xaxis = np.array([1.0, 0.0, 0.0])
         zaxis = np.array([0.0, 0.0, 1.0])
 
+        # Test a few specific angle cases
+        all_theta = [
+            0.0,
+            np.pi / 2,
+            np.pi / 4,
+            np.pi / 4,
+            np.pi,
+            np.pi / 2,
+        ]
+        all_phi = [
+            0.0,
+            0.0,
+            np.pi / 4,
+            np.pi / 4,
+            np.pi,
+            np.pi / 2,
+        ]
+        all_psi = [
+            0.0,
+            0.0,
+            0.0,
+            np.pi / 2,
+            np.pi,
+            np.pi / 2,
+        ]
+        all_z = [
+            np.array([0.0, 0.0, 1.0]),  # no change
+            np.array([1.0, 0.0, 0.0]),  # rotated to the x-axis
+            np.array(
+                [
+                    np.cos(np.pi / 4) * np.cos(np.pi / 4),
+                    np.cos(np.pi / 4) * np.sin(np.pi / 4),
+                    np.sin(np.pi / 4),
+                ]
+            ),
+            np.array(
+                [
+                    np.cos(np.pi / 4) * np.cos(np.pi / 4),
+                    np.cos(np.pi / 4) * np.sin(np.pi / 4),
+                    np.sin(np.pi / 4),
+                ]
+            ),
+            np.array([0.0, 0.0, -1.0]),
+            np.array([0.0, 1.0, 0.0]),
+        ]
+        all_x = [
+            np.array([1.0, 0.0, 0.0]),  # no change
+            np.array([0.0, 0.0, -1.0]),  # rotated to -z axis
+            np.array(
+                [
+                    np.cos(np.pi / 4) * np.cos(np.pi / 4),
+                    np.cos(np.pi / 4) * np.sin(np.pi / 4),
+                    -np.sin(np.pi / 4),
+                ]
+            ),
+            np.array(
+                [
+                    -np.cos(np.pi / 4),
+                    np.sin(np.pi / 4),
+                    0.0,
+                ]
+            ),
+            np.array([-1.0, 0.0, 0.0]),
+            np.array([-1.0, 0.0, 0.0]),
+        ]
+        for theta, phi, psi, vz, vx in zip(all_theta, all_phi, all_psi, all_z, all_x):
+            quat = qa.from_iso(theta, phi, psi)
+            zrot = qa.rotate(quat, zaxis)
+            xrot = qa.rotate(quat, xaxis)
+            # print(f"{(zrot, xrot)} {(vz, vx)}")
+            self.check_zx((zrot, xrot), (vz, vx))
+
+            check_theta, check_phi, check_psi = qa.to_iso(quat)
+            # print(f"  {(check_theta, check_phi, check_psi)} {(theta, phi, psi)}")
+            self.check_iso((check_theta, check_phi, check_psi), (theta, phi, psi))
+
+        ntheta = 3
+        nphi = 3
+        npsi = 3
+        n = ntheta * nphi * npsi
+
         theta = np.zeros(n, dtype=np.float64)
         phi = np.zeros(n, dtype=np.float64)
-        pa = np.zeros(n, dtype=np.float64)
-
-        # Healpix convention
+        psi = np.zeros(n, dtype=np.float64)
 
         for i in range(ntheta):
+            toff = i * nphi * npsi
             for j in range(nphi):
-                theta[i * nphi + j] = (0.5 + i) * np.pi / float(ntheta)
-                phi[i * nphi + j] = j * 2.0 * np.pi / float(nphi)
-                pa[i * nphi + j] = j * 2.0 * np.pi / float(nphi) - np.pi
-
-        quat = qa.from_angles(theta, phi, pa, IAU=False)
-
+                poff = j * npsi
+                for k in range(npsi):
+                    theta[toff + poff + k] = i * np.pi / float(ntheta)
+                    phi[toff + poff + k] = j * 2.0 * np.pi / float(nphi)
+                    psi[toff + poff + k] = k * 2.0 * np.pi / float(npsi)
+        # print(f"Input {np.transpose((theta, phi, psi))}")
+        quat = qa.from_iso(theta, phi, psi)
         dir = qa.rotate(quat, np.tile(zaxis, n).reshape((n, 3)))
         orient = qa.rotate(quat, np.tile(xaxis, n).reshape((n, 3)))
+        # print(f"Vec {np.transpose((dir, orient), axes=(1, 0, 2))}")
 
-        np.testing.assert_array_almost_equal(
-            np.pi / 2 - np.arcsin(dir[:, 2]), theta, decimal=4
+        check_theta, check_phi, check_psi = qa.to_iso(quat)
+        # print(f"Check {np.transpose((check_theta, check_phi, check_psi))}")
+        self.check_iso((check_theta, check_phi, check_psi), (theta, phi, psi))
+
+    def test_angles_zero(self):
+        # Test roundtrip ISO angle conversions at the origin
+        psi = np.array(
+            [
+                0.0,
+                45.0,
+                90.0,
+                135.0,
+                180.0,
+                225.0,
+                270.0,
+                315.0,
+                360.0,
+            ]
         )
-
-        check = np.arctan2(dir[:, 1], dir[:, 0])
-
-        check[check < 0.0] += 2.0 * np.pi
-        check[check > 2.0 * np.pi] -= 2.0 * np.pi
-        check[(np.absolute(check) < 2.0e-16)] = 0.0
-        check[(np.absolute(check - 2.0 * np.pi) < 2.0e-16)] = 0.0
-
-        np.testing.assert_array_almost_equal(check, phi, decimal=6)
-
-        check = np.arctan2(
-            orient[:, 0] * dir[:, 1] - orient[:, 1] * dir[:, 0],
-            -(orient[:, 0] * dir[:, 2] * dir[:, 0])
-            - (orient[:, 1] * dir[:, 2] * dir[:, 1])
-            + (orient[:, 2] * (dir[:, 0] * dir[:, 0] + dir[:, 1] * dir[:, 1])),
-        )
-
-        np.testing.assert_array_almost_equal(check, pa, decimal=6)
-
-        check_theta, check_phi, check_pa = qa.to_angles(quat, IAU=False)
-
-        np.testing.assert_array_almost_equal(check_theta, theta, decimal=4)
-
-        check_phi[(np.absolute(check_phi) < 2.0e-6)] = 0.0
-        check_phi[(np.absolute(check_phi - 2.0 * np.pi) < 2.0e-6)] = 0.0
-
-        np.testing.assert_array_almost_equal(check_phi, phi, decimal=4)
-
-        np.testing.assert_array_almost_equal(check_pa, pa, decimal=4)
-
-        # IAU convention
-
-        for i in range(ntheta):
-            for j in range(nphi):
-                theta[i * nphi + j] = (0.5 + i) * np.pi / float(ntheta)
-                phi[i * nphi + j] = j * 2.0 * np.pi / float(nphi)
-                pa[i * nphi + j] = -j * 2.0 * np.pi / float(nphi) - np.pi
-
-        quat = qa.from_angles(theta, phi, pa, IAU=True)
-
-        dir = qa.rotate(quat, np.tile(zaxis, n).reshape((n, 3)))
-        orient = qa.rotate(quat, np.tile(xaxis, n).reshape((n, 3)))
-
-        np.testing.assert_array_almost_equal(
-            np.pi / 2 - np.arcsin(dir[:, 2]), theta, decimal=4
-        )
-
-        check = np.arctan2(dir[:, 1], dir[:, 0])
-
-        check[check < 0.0] += 2.0 * np.pi
-        check[check > 2.0 * np.pi] -= 2.0 * np.pi
-        check[(np.absolute(check) < 2.0e-16)] = 0.0
-        check[(np.absolute(check - 2.0 * np.pi) < 2.0e-16)] = 0.0
-
-        np.testing.assert_array_almost_equal(check, phi, decimal=6)
-
-        check = -(
-            np.arctan2(
-                orient[:, 0] * dir[:, 1] - orient[:, 1] * dir[:, 0],
-                -(orient[:, 0] * dir[:, 2] * dir[:, 0])
-                - (orient[:, 1] * dir[:, 2] * dir[:, 1])
-                + (orient[:, 2] * (dir[:, 0] * dir[:, 0] + dir[:, 1] * dir[:, 1])),
-            )
-        )
-
-        check[check < -np.pi] += 2.0 * np.pi
-        check[check > np.pi] -= 2.0 * np.pi
-
-        comp_pa = np.copy(pa)
-        comp_pa[comp_pa - check < -np.pi] += 2.0 * np.pi
-        comp_pa[comp_pa - check > np.pi] -= 2.0 * np.pi
-
-        np.testing.assert_array_almost_equal(check, comp_pa, decimal=6)
-
-        check_theta, check_phi, check_pa = qa.to_angles(quat, IAU=True)
-
-        np.testing.assert_array_almost_equal(check_theta, theta, decimal=4)
-
-        check_phi[(np.absolute(check_phi) < 2.0e-6)] = 0.0
-        check_phi[(np.absolute(check_phi - 2.0 * np.pi) < 2.0e-6)] = 0.0
-
-        np.testing.assert_array_almost_equal(check_phi, phi, decimal=4)
-
-        np.testing.assert_array_almost_equal(check_pa, comp_pa, decimal=4)
-
-        # to_position test
-
-        check_theta, check_phi = qa.to_position(quat)
-        check_theta2, check_phi2, check_pa = qa.to_angles(quat, IAU=False)
-
-        np.testing.assert_array_almost_equal(check_theta, check_theta2, decimal=4)
-        np.testing.assert_array_almost_equal(check_phi, check_phi2, decimal=4)
-        return
+        psi *= np.pi / 180.0
+        theta = np.zeros_like(psi)
+        phi = np.zeros_like(psi)
+        quat = qa.from_iso(theta, phi, psi)
+        check_theta, check_phi, check_psi = qa.to_iso(quat)
+        self.check_iso((check_theta, check_phi, check_psi), (theta, phi, psi))
 
     def test_depths(self):
         # Verify that qarray methods preserve the depths of their inputs
@@ -412,12 +483,12 @@ class QarrayTest(MPITestCase):
         np.testing.assert_equal(ret2[0].shape, (1, 3))
         np.testing.assert_equal(np.shape(ret2[1]), (1,))
 
-        np.testing.assert_equal(np.shape(qa.from_angles(0, 0, 0)), (4,))
-        np.testing.assert_equal(np.shape(qa.from_angles([0], 0, 0)), (1, 4))
-        np.testing.assert_equal(np.shape(qa.from_angles([0], [0], [0])), (1, 4))
+        np.testing.assert_equal(np.shape(qa.from_iso(0, 0, 0)), (4,))
+        np.testing.assert_equal(np.shape(qa.from_iso([0], 0, 0)), (1, 4))
+        np.testing.assert_equal(np.shape(qa.from_iso([0], [0], [0])), (1, 4))
 
-        ret1 = qa.to_angles(self.q1)
-        ret2 = qa.to_angles(np.atleast_2d(self.q1))
+        ret1 = qa.to_iso(self.q1)
+        ret2 = qa.to_iso(np.atleast_2d(self.q1))
         np.testing.assert_equal(np.shape(ret1[0]), ())
         np.testing.assert_equal(np.shape(ret1[1]), ())
         np.testing.assert_equal(np.shape(ret1[2]), ())
