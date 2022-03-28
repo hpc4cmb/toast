@@ -8,7 +8,7 @@ from .observation_hdf_save import save_hdf5
 
 from .observation_hdf_load import load_hdf5
 
-from .observation_hdf_utils import (
+from .hdf_utils import (
     have_hdf5_parallel,
     hdf5_config,
     hdf5_open,
