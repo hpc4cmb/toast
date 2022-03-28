@@ -37,7 +37,8 @@ class MapmakerTest(MPITestCase):
         np.random.seed(123456)
         # We want to hold the number of observations fixed, so that we can compare
         # results across different concurrencies.
-        self.total_obs = 8
+        # FIXME: change back to a larger value after debugging
+        self.total_obs = 1
         self.obs_per_group = self.total_obs
         if self.comm is not None and self.comm.size >= 2:
             self.obs_per_group = self.total_obs // 2
@@ -288,6 +289,7 @@ class MapmakerTest(MPITestCase):
         pars["write_hits"] = "T"
         pars["write_base"] = "T"
         pars["kfilter"] = "F"
+        pars["info"] = 2
         pars["path_output"] = testdir
 
         madam = ops.Madam(
