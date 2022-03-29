@@ -324,7 +324,7 @@ class SimWeather(Weather):
                 cdf[:] = new_cdf
         return
 
-    def set(self, time=None, realization=0, site_uid=0):
+    def set(self, time=None, realization=None, site_uid=None):
         """Set new parameters for weather simulation.
 
         This (re-)sets the time, realization, and site_uid for drawing random weather
