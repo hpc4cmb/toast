@@ -16,10 +16,17 @@ from .operator import Operator
 
 
 @trait_docs
-class Add(Operator):
-    """Add two detdata timestreams.
+class Combine(Operator):
+    """Arithmetic with detector data.
 
-    The result is stored in the first detdata object.
+    Two detdata objects are combined element-wise using addition, subtraction,
+    multiplication, or division.  The desired operation is specified by the "op"
+    trait as a string.  The result is stored in the specified detdata object:
+
+    result = first (op) second
+
+    If the result name is the same as the first or second input, then this
+    input will be overwritten.
 
     """
 
@@ -27,9 +34,25 @@ class Add(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    op = Unicode(
+        None,
+        allow_none=True,
+        help="Operation on the timestreams: 'subtract', 'add', 'multiply', or 'divide'",
+    )
+
     first = Unicode(None, allow_none=True, help="The first detdata object")
 
     second = Unicode(None, allow_none=True, help="The second detdata object")
+
+    result = Unicode(None, allow_none=True, help="The resulting detdata object")
+
+    @traitlets.validate("op")
+    def _check_op(self, proposal):
+        val = proposal["value"]
+        if val is not None:
+            if val not in ["add", "subtract", "multiply", "divide"]:
+                raise traitlets.TraitError("op must be one of the 4 allowed strings")
+        return val
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -38,15 +61,16 @@ class Add(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        if self.first is None:
-            msg = "The first trait must be set before calling exec"
-            log.error(msg)
-            raise RuntimeError(msg)
-
-        if self.second is None:
-            msg = "The second trait must be set before calling exec"
-            log.error(msg)
-            raise RuntimeError(msg)
+        for check_name, check_val in [
+            ("first", self.first),
+            ("second", self.second),
+            ("result", self.result),
+            ("op", self.op),
+        ]:
+            if check_val is None:
+                msg = f"The {check_name} trait must be set before calling exec"
+                log.error(msg)
+                raise RuntimeError(msg)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -66,8 +90,34 @@ class Add(Operator):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
-            for d in dets:
-                ob.detdata[self.first][d, :] += ob.detdata[self.second][d, :]
+            if (self.result != self.first) and (self.result != self.second):
+                # We are creating a new field for the output
+                exists = ob.detdata.ensure(
+                    self.result,
+                    sample_shape=ob.detdata[self.first].detector_shape[1:],
+                    dtype=ob.detdata[self.first].dtype,
+                    detectors=ob.detdata[self.first].detectors,
+                )
+            if self.op == "add":
+                for d in dets:
+                    ob.detdata[self.result][d, :] = (
+                        ob.detdata[self.first][d, :] + ob.detdata[self.second][d, :]
+                    )
+            elif self.op == "subtract":
+                for d in dets:
+                    ob.detdata[self.result][d, :] = (
+                        ob.detdata[self.first][d, :] - ob.detdata[self.second][d, :]
+                    )
+            elif self.op == "multiply":
+                for d in dets:
+                    ob.detdata[self.result][d, :] = (
+                        ob.detdata[self.first][d, :] * ob.detdata[self.second][d, :]
+                    )
+            elif self.op == "divide":
+                for d in dets:
+                    ob.detdata[self.result][d, :] = (
+                        ob.detdata[self.first][d, :] / ob.detdata[self.second][d, :]
+                    )
 
     def _finalize(self, data, **kwargs):
         return None
@@ -77,71 +127,7 @@ class Add(Operator):
         return req
 
     def _provides(self):
-        prov = dict()
-        return prov
-
-
-@trait_docs
-class Subtract(Operator):
-    """Subtract two detdata timestreams.
-
-    The result is stored in the first detdata object.
-
-    """
-
-    # Class traits
-
-    API = Int(0, help="Internal interface version for this operator")
-
-    first = Unicode(None, allow_none=True, help="The first detdata object")
-
-    second = Unicode(None, allow_none=True, help="The second detdata object")
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
-        log = Logger.get()
-
-        if self.first is None:
-            msg = "The first trait must be set before calling exec"
-            log.error(msg)
-            raise RuntimeError(msg)
-
-        if self.second is None:
-            msg = "The second trait must be set before calling exec"
-            log.error(msg)
-            raise RuntimeError(msg)
-
-        for ob in data.obs:
-            # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
-            if self.first not in ob.detdata:
-                msg = "The first detdata key '{}' does not exist in observation {}".format(
-                    self.first, ob.name
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
-            if self.second not in ob.detdata:
-                msg = "The second detdata key '{}' does not exist in observation {}".format(
-                    self.second, ob.name
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
-            for d in dets:
-                ob.detdata[self.first][d, :] -= ob.detdata[self.second][d, :]
-
-    def _finalize(self, data, **kwargs):
-        return None
-
-    def _requires(self):
-        req = {"detdata": [self.first, self.second]}
-        return req
-
-    def _provides(self):
-        prov = dict()
+        prov = {"detdata": list()}
+        if (self.result != self.first) and (self.result != self.second):
+            prov["detdata"].append(self.result)
         return prov

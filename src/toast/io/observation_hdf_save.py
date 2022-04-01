@@ -30,7 +30,7 @@ from ..observation import default_values as defaults
 
 from ..observation_dist import global_interval_times
 
-from .observation_hdf_utils import check_dataset_buffer_size, hdf5_open
+from .hdf_utils import check_dataset_buffer_size, hdf5_open
 
 
 @function_timer
