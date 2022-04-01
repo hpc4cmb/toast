@@ -57,7 +57,7 @@ from .mapmaker_binning import BinMap
 
 from .mapmaker_templates import TemplateMatrix
 
-from .mapmaker import MapMaker
+from .mapmaker import MapMaker, Calibrate
 
 from .madam import Madam, madam_params_from_mapmaker
 
