@@ -29,7 +29,7 @@ namespace py = pybind11;
 
 template <typename T>
 std::vector <char> align_format() {
-    return std::vector <char> ({ 'V' });
+    return std::vector <char> ({'V'});
 }
 
 template <>

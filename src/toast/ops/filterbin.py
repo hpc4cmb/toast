@@ -113,7 +113,7 @@ class SparseTemplates:
         """Normalize templates"""
         for start, stop, template in zip(self.starts, self.stops, self.templates):
             if good is None:
-                norm = np.sum(template ** 2) ** 0.5
+                norm = np.sum(template**2) ** 0.5
             else:
                 norm = np.sum((template * good[start:stop]) ** 2) ** 0.5
             template /= norm
