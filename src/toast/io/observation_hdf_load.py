@@ -31,7 +31,7 @@ from ..weather import SimWeather
 
 from ..observation import Observation
 
-from .observation_hdf_utils import check_dataset_buffer_size, hdf5_open, hdf5_config
+from .hdf_utils import check_dataset_buffer_size, hdf5_open, hdf5_config
 
 
 @function_timer

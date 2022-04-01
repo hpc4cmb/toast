@@ -56,18 +56,8 @@ class Noise(object):
         if mixmatrix is None:
             # Default diagonal mixing matrix
             self._keys = self._dets
-            self._keys_for_dets = {
-                x: [
-                    x,
-                ]
-                for x in self._dets
-            }
-            self._dets_for_keys = {
-                x: [
-                    x,
-                ]
-                for x in self._dets
-            }
+            self._keys_for_dets = {x: [x,] for x in self._dets}
+            self._dets_for_keys = {x: [x,] for x in self._dets}
             self._mixmatrix = {d: {d: 1.0} for d in self._dets}
         else:
             # Assemble the list of keys needed for the specified detectors
