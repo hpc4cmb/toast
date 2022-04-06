@@ -27,6 +27,7 @@ from .utils import Logger
 from . import qarray as qa
 from .timing import function_timer
 from .coordinates import to_DJD, to_MJD, to_UTC, DJDtoUNIX
+from .ops.jax_ops.qarray import mult as qa_mult
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
@@ -792,7 +793,7 @@ def attempt_scan(
 def from_angles(az, el):
     elquat = qa.rotation(YAXIS, np.radians(90 - el))
     azquat = qa.rotation(ZAXIS, np.radians(az))
-    return qa.mult(azquat, elquat)
+    return qa_mult(azquat, elquat)
 
 
 def unwind_quat(quat1, quat2):
@@ -1630,13 +1631,13 @@ def add_scan(
 
                 az_offset_rot = qa.rotation(ZAXIS, az_offset)
                 el_offset_rot = qa.rotation(YAXIS, el_offset)
-                offset_rot = qa.mult(az_offset_rot, el_offset_rot)
+                offset_rot = qa_mult(az_offset_rot, el_offset_rot)
                 offset_vec = qa.rotate(offset_rot, XAXIS)
 
                 az_min_rot = qa.rotation(ZAXIS, np.radians(azmin))
                 az_max_rot = qa.rotation(ZAXIS, np.radians(azmax))
                 el_rot = qa.rotation(YAXIS, -el)
-                min_rot = qa.mult(az_min_rot, el_rot)
+                min_rot = qa_mult(az_min_rot, el_rot)
 
                 vec_min = qa.rotate(min_rot, offset_vec)
 

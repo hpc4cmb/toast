@@ -28,8 +28,8 @@ from ..utils import (
 )
 from ..observation import default_values as defaults
 
-from .._libtoast import filter_polynomial, filter_poly2D, sum_detectors, subtract_mean
-
+from .._libtoast import sum_detectors, subtract_mean
+from .jax_ops import filter_polynomial, filter_poly2D
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 

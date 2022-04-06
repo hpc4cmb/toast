@@ -9,11 +9,12 @@ import jax
 import jax.numpy as jnp
 
 from .utils import ImplementationType, select_implementation
+from ..._libtoast import template_offset_add_to_signal as template_offset_add_to_signal_compiled, template_offset_project_signal as template_offset_project_signal_compiled, template_offset_apply_diag_precond as template_offset_apply_diag_precond_compiled
 
 # -------------------------------------------------------------------------------------------------
 # JAX
 
-def template_offset_add_to_signal_jax(step_length, amp_offset, amplitudes, data_index, det_data, intervals):
+def template_offset_add_to_signal_jax(step_length, amp_offset, amplitudes, data_index, det_data, intervals, use_accel):
     """
     Accumulate offset amplitudes to timestream data.
     Each amplitude value is accumulated to `step_length` number of samples.
@@ -25,6 +26,7 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, amplitudes, data_
         data_index (int)
         det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
         intervals (array, Interval): size n_view
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in det_data).
@@ -44,7 +46,7 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, amplitudes, data_
         # TODO this does not use JAX as there is too little computation
         data_interval[:] += amplitudes_interval
 
-def template_offset_project_signal_jax(data_index, det_data, step_length, amp_offset, amplitudes, intervals):
+def template_offset_project_signal_jax(data_index, det_data, step_length, amp_offset, amplitudes, intervals, use_accel):
     """
     Accumulate timestream data into offset amplitudes.
     Chunks of `step_length` number of samples are accumulated into the offset amplitudes.
@@ -56,6 +58,7 @@ def template_offset_project_signal_jax(data_index, det_data, step_length, amp_of
         amp_offset (int)
         amplitudes (array, double): The float64 amplitude values (size n_amp)
         intervals (array, Interval): size n_view
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in amplitudes).
@@ -75,12 +78,13 @@ def template_offset_project_signal_jax(data_index, det_data, step_length, amp_of
         # TODO this does not use JAX as there is too little computation
         amplitudes_interval[:] += data_interval
 
-def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes_out):
+def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes_out, use_accel):
     """
     Args:
         offset_var (array, double): size n_amp
         amplitudes_in (array, double): size n_amp
         amplitudes_out (array, double): size n_amp
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in amplitudes_out).
@@ -95,7 +99,7 @@ def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes
 # -------------------------------------------------------------------------------------------------
 # NUMPY
 
-def template_offset_add_to_signal_numpy(step_length, amp_offset, amplitudes, data_index, det_data, intervals):
+def template_offset_add_to_signal_numpy(step_length, amp_offset, amplitudes, data_index, det_data, intervals, use_accel):
     """
     Accumulate offset amplitudes to timestream data.
     Each amplitude value is accumulated to `step_length` number of samples.
@@ -107,6 +111,7 @@ def template_offset_add_to_signal_numpy(step_length, amp_offset, amplitudes, dat
         data_index (int)
         det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
         intervals (array, Interval): size n_view
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in det_data).
@@ -120,7 +125,7 @@ def template_offset_add_to_signal_numpy(step_length, amp_offset, amplitudes, dat
             amp = amp_offset + int(isamp / step_length)
             det_data[data_index,isamp] += amplitudes[amp]
 
-def template_offset_project_signal_numpy(data_index, det_data, step_length, amp_offset, amplitudes, intervals):
+def template_offset_project_signal_numpy(data_index, det_data, step_length, amp_offset, amplitudes, intervals, use_accel):
     """
     Accumulate timestream data into offset amplitudes.
     Chunks of `step_length` number of samples are accumulated into the offset amplitudes.
@@ -132,6 +137,7 @@ def template_offset_project_signal_numpy(data_index, det_data, step_length, amp_
         amp_offset (int)
         amplitudes (array, double): The float64 amplitude values (size n_amp)
         intervals (array, Interval): size n_view
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in amplitudes).
@@ -145,12 +151,13 @@ def template_offset_project_signal_numpy(data_index, det_data, step_length, amp_
             amp = amp_offset + int(isamp / step_length)
             amplitudes[amp] += det_data[data_index,isamp]
 
-def template_offset_apply_diag_precond_numpy(offset_var, amplitudes_in, amplitudes_out):
+def template_offset_apply_diag_precond_numpy(offset_var, amplitudes_in, amplitudes_out, use_accel):
     """
     Args:
         offset_var (array, double): size n_amp
         amplitudes_in (array, double): size n_amp
         amplitudes_out (array, double): size n_amp
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in amplitudes_out).
@@ -268,15 +275,15 @@ void template_offset_apply_diag_precond(
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-template_offset_add_to_signal = select_implementation(template_offset_add_to_signal_numpy, 
+template_offset_add_to_signal = select_implementation(template_offset_add_to_signal_compiled, 
                                                       template_offset_add_to_signal_numpy, 
                                                       template_offset_add_to_signal_jax, 
                                                       default_implementationType=ImplementationType.NUMPY)
-template_offset_project_signal = select_implementation(template_offset_project_signal_numpy, 
+template_offset_project_signal = select_implementation(template_offset_project_signal_compiled, 
                                                        template_offset_project_signal_numpy, 
                                                        template_offset_project_signal_jax, 
                                                        default_implementationType=ImplementationType.NUMPY)
-template_offset_apply_diag_precond = select_implementation(template_offset_apply_diag_precond_numpy, 
+template_offset_apply_diag_precond = select_implementation(template_offset_apply_diag_precond_compiled, 
                                                            template_offset_apply_diag_precond_numpy, 
                                                            template_offset_apply_diag_precond_jax, 
                                                            default_implementationType=ImplementationType.NUMPY)

@@ -1,6 +1,4 @@
 # TODO
-# merge with c++ branch
-#
 # test C++, numpy and jax version of each operator:
 # - pointing detector: pointing detector
 # - stockes weight: stockes weigts

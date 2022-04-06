@@ -19,10 +19,8 @@ from ..covariance import covariance_invert
 from ..observation import default_values as defaults
 
 from .._libtoast import (
-    cov_accum_zmap,
     cov_accum_diag_hits,
     cov_accum_diag_invnpp,
-    build_noise_weighted,
 )
 
 from .operator import Operator
@@ -33,6 +31,7 @@ from .pipeline import Pipeline
 
 from .pointing import BuildPixelDistribution
 
+from .jax_ops import build_noise_weighted
 
 @trait_docs
 class BuildHitMap(Operator):

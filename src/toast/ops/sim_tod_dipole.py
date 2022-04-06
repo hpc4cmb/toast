@@ -24,6 +24,8 @@ from ..observation import default_values as defaults
 
 from ..dipole import dipole
 
+from .jax_ops.qarray import mult as qa_mult
+
 
 @trait_docs
 class SimDipole(Operator):
@@ -189,7 +191,7 @@ class SimDipole(Operator):
                     detquat = props["quat"]
 
                     # Timestream of detector quaternions
-                    quats = qa.mult(boresight, detquat)
+                    quats = qa_mult(boresight, detquat)
 
                     # Compute the dipole timestream for this view and detector
                     dipole_tod = dipole(

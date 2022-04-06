@@ -39,6 +39,7 @@ from .operator import Operator
 
 from .sim_hwp import simulate_hwp_response
 
+from .jax_ops.qarray import mult as qa_mult
 
 @function_timer
 def satellite_scanning(
@@ -191,8 +192,8 @@ def satellite_scanning(
 
             # compose final rotation
 
-            boresight[bslice, :] = qa.mult(
-                satrot, qa.mult(precrot, qa.mult(precopen, qa.mult(spinrot, spinopen)))
+            boresight[bslice, :] = qa_mult(
+                satrot, qa_mult(precrot, qa_mult(precopen, qa_mult(spinrot, spinopen)))
             )
             buf_off += buf_n
 

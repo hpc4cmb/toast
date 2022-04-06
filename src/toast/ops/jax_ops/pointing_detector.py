@@ -10,6 +10,7 @@ import jax.numpy as jnp
 
 from .utils import select_implementation, ImplementationType
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
+from ..._libtoast import pointing_detector as pointing_detector_compiled
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -57,7 +58,7 @@ def pointing_detector_unjitted_jax(focalplane, boresight, shared_flags, shared_f
 # jit compiling
 pointing_detector_jitted_jax = jax.jit(pointing_detector_unjitted_jax, static_argnames='shared_flag_mask')
 
-def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask):
+def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accell):
     """
     Args:
         focalplane (array, double): size n_det*4
@@ -67,6 +68,7 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
         intervals (array, Interval): The intervals to modify (size n_view)
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
+        use_accell (bool): should weuse the accelerator
 
     Returns:
         None (the result is put in quats).
@@ -105,7 +107,7 @@ def pointing_detector_inner_numpy(flag, boresight, focalplane, mask):
 
     return quats
 
-def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask):
+def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accell):
     """
     Args:
         focalplane (array, double): size n_det*4
@@ -115,6 +117,7 @@ def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals,
         intervals (array, Interval): The intervals to modify (size n_view)
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
+        use_accell (bool): should weuse the accelerator
 
     Returns:
         None (the result is put in quats).
@@ -229,7 +232,7 @@ void pointing_detector(
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-pointing_detector = select_implementation(pointing_detector_numpy, 
+pointing_detector = select_implementation(pointing_detector_compiled, 
                                           pointing_detector_numpy, 
                                           pointing_detector_jax, 
                                           default_implementationType=ImplementationType.NUMPY)

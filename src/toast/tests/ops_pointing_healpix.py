@@ -16,6 +16,7 @@ from ..observation import default_values as defaults
 from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
+from ..ops.jax_ops.qarray import mult as qa_mult
 
 class PointingHealpixTest(MPITestCase):
     def setUp(self):
@@ -95,11 +96,11 @@ class PointingHealpixTest(MPITestCase):
         xaxis, yaxis, zaxis = np.eye(3)
         thetarot = qa.rotation(yaxis, theta)
         phirot = qa.rotation(zaxis, phi)
-        pixrot = qa.mult(phirot, thetarot)
+        pixrot = qa_mult(phirot, thetarot)
         quats = []
         for psi in psivec:
             psirot = qa.rotation(zaxis, psi)
-            quats.append(qa.mult(pixrot, psirot))
+            quats.append(qa_mult(pixrot, psirot))
         quats = np.vstack(quats)
         stokes_weights(
             eps,
@@ -145,11 +146,11 @@ class PointingHealpixTest(MPITestCase):
         xaxis, yaxis, zaxis = np.eye(3)
         thetarot = qa.rotation(yaxis, theta)
         phirot = qa.rotation(zaxis, phi)
-        pixrot = qa.mult(phirot, thetarot)
+        pixrot = qa_mult(phirot, thetarot)
         quats = []
         for psi in psivec:
             psirot = qa.rotation(zaxis, psi)
-            quats.append(qa.mult(pixrot, psirot))
+            quats.append(qa_mult(pixrot, psirot))
         quats = np.vstack(quats)
 
         # First with HWP angle == 0.0

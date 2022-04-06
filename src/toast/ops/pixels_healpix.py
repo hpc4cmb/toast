@@ -20,13 +20,11 @@ from ..pixels import PixelDistribution
 
 from ..observation import default_values as defaults
 
-# This is just wrong- will be confusing until cleanup of
-# libtoast / _libtoast...
-from .._libtoast import healpix_pixels, pixels_healpix
-
 from .operator import Operator
 
 from .delete import Delete
+
+from .jax_ops import pixels_healpix
 
 
 @trait_docs

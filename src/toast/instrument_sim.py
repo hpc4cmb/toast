@@ -9,6 +9,7 @@ from astropy import units as u
 from astropy.table import QTable, Column
 
 from . import qarray as qa
+from .ops.jax_ops.qarray import mult as qa_mult
 
 from .instrument import Focalplane
 
@@ -41,7 +42,7 @@ def cartesian_to_quat(offsets):
         wz = np.sqrt(1.0 - (wx * wx + wy * wy))
         wdir = np.array([wx, wy, wz])
         posrot = qa.from_vectors(zaxis, wdir)
-        centers.append(qa.mult(posrot, angrot))
+        centers.append(qa_mult(posrot, angrot))
     return centers
 
 
@@ -323,7 +324,7 @@ def hex_layout(
             pixrot = qa.from_vectors(zaxis, pixdir)
 
         dprops = {}
-        dprops["quat"] = qa.mult(center, qa.mult(pixrot, polrot))
+        dprops["quat"] = qa_mult(center, qa_mult(pixrot, polrot))
         dprops["polangle_deg"] = pol[pix]
 
         dets[dname] = dprops
@@ -510,7 +511,7 @@ def rhombus_layout(
         pixrot = qa.from_vectors(zaxis, pixdir)
 
         dprops = {}
-        dprops["quat"] = qa.mult(center, qa.mult(pixrot, polrot))
+        dprops["quat"] = qa_mult(center, qa_mult(pixrot, polrot))
 
         dets[dname] = dprops
 

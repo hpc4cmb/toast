@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 
 from .utils import select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
+from ..._libtoast import pixels_healpix as pixels_healpix_compiled
 
 # -------------------------------------------------------------------------------------------------
 # JAX
@@ -67,7 +68,7 @@ def pixels_healpix_unjitted_jax(hpix, quats, nest):
 pixels_healpix_jitted_jax = jax.jit(pixels_healpix_unjitted_jax, static_argnames=['hpix, nest'])
 
 
-def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest):
+def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accell):
     """
     Compute the healpix pixel indices for the detectors.
 
@@ -81,6 +82,7 @@ def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_su
         n_pix_submap (array, float64):  
         nside (int): Used to build the healpix projection object.
         nest (bool): If True, then use NESTED ordering, else RING.
+        use_accell (bool): should we use the accelerator
 
     Returns:
         None (results are stored in pixels and hit_submaps).
@@ -134,7 +136,7 @@ def pixels_healpix_inner_numpy(hpix, quats, nest):
 
     return pixel
 
-def pixels_healpix_numpy(quat_index, quats, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest):
+def pixels_healpix_numpy(quat_index, quats, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accell):
     """
     Compute the healpix pixel indices for the detectors.
 
@@ -148,6 +150,7 @@ def pixels_healpix_numpy(quat_index, quats, pixel_index, pixels, intervals, hit_
         n_pix_submap (array, float64):  
         nside (int): Used to build the healpix projection object.
         nest (bool): If True, then use NESTED ordering, else RING.
+        use_accell (bool): should we use the accelerator
 
     Returns:
         None (results are stored in pixels and hit_submaps).
@@ -282,7 +285,7 @@ void pixels_healpix(
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-pixels_healpix = select_implementation(pixels_healpix_numpy,
+pixels_healpix = select_implementation(pixels_healpix_compiled,
                                        pixels_healpix_numpy,
                                        pixels_healpix_jax,
                                        default_implementationType=ImplementationType.NUMPY)

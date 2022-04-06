@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 
 from .utils import select_implementation, ImplementationType
+from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -67,7 +68,7 @@ def build_noise_weighted_unjitted_jax(zmap, pixels, weights, det_data, det_flags
 # jit compiling
 build_noise_weighted_jitted_jax = jax.jit(build_noise_weighted_unjitted_jax, static_argnames=['det_flag_mask','shared_flag_mask'])
 
-def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, intervals, shared_flags, shared_flag_mask):
+def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, intervals, shared_flags, shared_flag_mask, use_accel):
     """
     Args:
         global2local (array, int): size n_global_submap
@@ -85,6 +86,7 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
         intervals (array, Interval): The intervals to modify (size n_view)
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
+        use_accel (Bool): should we use the accelerator?
 
     Returns:
         None (the result is put in zmap).
@@ -145,7 +147,7 @@ def build_noise_weighted_inner_numpy(global2local, data, det_flag, shared_flag, 
         # accumulates
         zmap[local_submap, isubpix, :] += scaled_data * weights
 
-def build_noise_weighted_numpy(global2local, zmap, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, intervals, shared_flags, shared_flag_mask):
+def build_noise_weighted_numpy(global2local, zmap, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, intervals, shared_flags, shared_flag_mask, use_accel):
     """
     Args:
         global2local (array, int): size n_global_submap
@@ -163,6 +165,7 @@ def build_noise_weighted_numpy(global2local, zmap, pixel_index, pixels, weight_i
         intervals (array, Interval): The intervals to modify (size n_view)
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
+        use_accel (Bool): should we use the accelerator?
 
     Returns:
         None (the result is put in zmap).
@@ -365,7 +368,7 @@ void build_noise_weighted(
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-build_noise_weighted = select_implementation(build_noise_weighted_numpy, 
+build_noise_weighted = select_implementation(build_noise_weighted_compiled, 
                                              build_noise_weighted_numpy, 
                                              build_noise_weighted_jax, 
                                              default_implementationType=ImplementationType.NUMPY)

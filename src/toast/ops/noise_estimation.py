@@ -15,7 +15,7 @@ import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
-from .._libtoast import filter_poly2D, filter_polynomial, subtract_mean, sum_detectors
+from .._libtoast import subtract_mean, sum_detectors
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer

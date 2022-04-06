@@ -20,7 +20,7 @@ from .. import qarray as qa
 
 from .operator import Operator
 
-from .._libtoast import pointing_detector
+from ..ops.jax_ops import pointing_detector
 
 
 @trait_docs

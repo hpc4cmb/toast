@@ -9,6 +9,7 @@ import jax.numpy as jnp
 
 from .utils import select_implementation, ImplementationType
 from .utils import math_qarray as qarray
+from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -374,11 +375,11 @@ void stokes_weights_I(py::buffer weight_index, py::buffer weights, py::buffer in
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-stokes_weights_I = select_implementation(stokes_weights_I_numpy, 
+stokes_weights_I = select_implementation(stokes_weights_I_compiled, 
                                          stokes_weights_I_numpy, 
                                          stokes_weights_I_jax, 
                                          default_implementationType=ImplementationType.NUMPY)
-stokes_weights_IQU = select_implementation(stokes_weights_IQU_numpy, 
+stokes_weights_IQU = select_implementation(stokes_weights_IQU_compiled, 
                                            stokes_weights_IQU_numpy, 
                                            stokes_weights_IQU_jax, 
                                            default_implementationType=ImplementationType.NUMPY)
