@@ -371,7 +371,7 @@ void build_noise_weighted(
 build_noise_weighted = select_implementation(build_noise_weighted_compiled, 
                                              build_noise_weighted_numpy, 
                                              build_noise_weighted_jax, 
-                                             default_implementationType=ImplementationType.NUMPY)
+                                             default_implementationType=ImplementationType.COMPILED)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning")'

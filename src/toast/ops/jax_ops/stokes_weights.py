@@ -378,11 +378,11 @@ void stokes_weights_I(py::buffer weight_index, py::buffer weights, py::buffer in
 stokes_weights_I = select_implementation(stokes_weights_I_compiled, 
                                          stokes_weights_I_numpy, 
                                          stokes_weights_I_jax, 
-                                         default_implementationType=ImplementationType.NUMPY)
+                                         default_implementationType=ImplementationType.COMPILED)
 stokes_weights_IQU = select_implementation(stokes_weights_IQU_compiled, 
                                            stokes_weights_IQU_numpy, 
                                            stokes_weights_IQU_jax, 
-                                           default_implementationType=ImplementationType.NUMPY)
+                                           default_implementationType=ImplementationType.COMPILED)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'

@@ -235,7 +235,7 @@ void pointing_detector(
 pointing_detector = select_implementation(pointing_detector_compiled, 
                                           pointing_detector_numpy, 
                                           pointing_detector_jax, 
-                                          default_implementationType=ImplementationType.NUMPY)
+                                          default_implementationType=ImplementationType.COMPILED)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
