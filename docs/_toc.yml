@@ -1,0 +1,26 @@
+format: jb-book
+root: index
+chapters:
+- file: intro
+- file: install
+  sections:
+  - file: install_user
+  - file: install_dev
+  - file: nersc
+- file: data_model
+- file: processing_model
+- file: simulation_operators
+  sections:
+  - file: simulation_operators_satellite
+  - file: simulation_operators_ground
+  - file: simulation_operators_sky
+  - file: simulation_operators_instrument
+- file: reduction_operators
+- file: utility_operators
+- file: tutorial
+  sections:
+  - file: tutorial_intro
+- file: dev
+- file: benchmark
+- file: changes
+- file: api

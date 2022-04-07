@@ -57,7 +57,7 @@ def parse_arguments():
         required=True,
         default="toast_benchmark_ground_inputs",
         type=str,
-        help="The output directory",
+        help="The input directory",
     )
     parser.add_argument(
         "--out_dir",

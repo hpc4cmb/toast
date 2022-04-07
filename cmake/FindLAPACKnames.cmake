@@ -12,16 +12,22 @@ set(MANGLING_OPTIONS
   "LOWER"
   "UPPER"
   "UBACK"
-  "UFRONT")
+  "UFRONT"
+)
 
 set(LAPACK_NAMES "")
+
+set(OMP_BLAS "")
+if(OpenMP_C_FOUND)
+  set(OMP_BLAS "${OpenMP_C_FLAGS}")
+endif()
 
 foreach(MANGLING IN LISTS MANGLING_OPTIONS)
   try_compile(TRY_MANGLING ${CMAKE_BINARY_DIR}/tmpLapack
               ${CMAKE_MODULE_PATH}/lapack_mangling.cpp
               CMAKE_FLAGS "${BLAS_LINKER_FLAGS}" "${LAPACK_LINKER_FLAGS}"
               COMPILE_DEFINITIONS "-DLAPACK_${MANGLING}"
-              LINK_LIBRARIES "${LAPACK_LIBRARIES}" "${BLAS_LIBRARIES}" "${OpenMP_C_FLAGS}"
+              LINK_LIBRARIES "${LAPACK_LIBRARIES}" "${BLAS_LIBRARIES}" "${OMP_BLAS}"
               OUTPUT_VARIABLE OUTPUT_MANGLING)
   #message("Test output for LAPACK_${MANGLING}:")
   #message(${OUTPUT_MANGLING})
