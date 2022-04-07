@@ -129,6 +129,10 @@ class MapMaker(Operator):
         help="Binning operator for final map making.  Default is same as solver",
     )
 
+    write_binmap = Bool(
+        True, help="If True, write the projected map *before* template subtraction"
+    )
+
     write_map = Bool(True, help="If True, write the projected map")
 
     write_hdf5 = Bool(
@@ -276,54 +280,19 @@ class MapMaker(Operator):
         self.flag_name = "{}_flags".format(self.name)
 
         self.clean_name = "{}_cleaned".format(mc_root)
+        self.binmap_name = "{}_binmap".format(mc_root)
         self.map_name = "{}_map".format(mc_root)
         self.noiseweighted_map_name = "{}_noiseweighted_map".format(mc_root)
 
-        # Apply (subtract) solved amplitudes.
-
-        log.info_rank(
-            f"{log_prefix} begin apply template amplitudes",
-            comm=comm,
-        )
-
-        out_cleaned = self.clean_name
-        if self.save_cleaned and self.overwrite_cleaned:
-            # Modify data in place
-            out_cleaned = self.det_data
-
-        amplitudes_apply = ApplyAmplitudes(
-            op="subtract",
-            det_data=self.det_data,
-            amplitudes=amplitudes_solve.amplitudes,
-            template_matrix=self.template_matrix,
-            output=out_cleaned,
-        )
-        amplitudes_apply.apply(data)
-
-        log.info_rank(
-            f"{log_prefix}  finished apply template amplitudes in",
-            comm=comm,
-            timer=timer,
-        )
-
         # Check map binning
+
         map_binning = self.map_binning
         if self.map_binning is None or not self.map_binning.enabled:
             # Use the same binning used in the solver.
             map_binning = self.binning
+        map_binning.pre_process = None
 
-        # Now construct the noise covariance, hits, and condition number mask for the
-        # final binned map.
-
-        save_binned = map_binning.binned
-        save_covariance = map_binning.covariance
-
-        map_binning.det_data = out_cleaned
         map_binning.covariance = self.cov_name
-        if self.write_noiseweighted_map:
-            map_binning.noiseweighted = self.noiseweighted_map_name
-        map_binning.binned = self.map_name
-
         if self.mc_mode:
             # Verify that our covariance and other products exist.
             if map_binning.pixel_dist not in data:
@@ -343,6 +312,9 @@ class MapMaker(Operator):
                 comm=comm,
             )
         else:
+            # Construct the noise covariance, hits, and condition number mask for the
+            # final binned map.
+
             log.info_rank(
                 f"{log_prefix} begin build of final binning covariance",
                 comm=comm,
@@ -377,15 +349,63 @@ class MapMaker(Operator):
             memreport.prefix = "After constructing final covariance and hits"
             memreport.apply(data)
 
+        if self.write_binmap:
+            map_binning.det_data = self.det_data
+            map_binning.binned = self.binmap_name
+            map_binning.noiseweighted = None
+            log.info_rank(
+                f"{log_prefix} begin map binning",
+                comm=comm,
+            )
+            map_binning.apply(data, detectors=detectors)
+            log.info_rank(
+                f"{log_prefix}  finished binning in",
+                comm=comm,
+                timer=timer,
+            )
+
+        if self.template_matrix is None or self.template_matrix.n_enabled_templates == 0:
+            # No templates to subtract, bin the input signal
+            out_cleaned = self.det_data
+        else:
+            # Apply (subtract) solved amplitudes.
+
+            log.info_rank(
+                f"{log_prefix} begin apply template amplitudes",
+                comm=comm,
+            )
+
+            out_cleaned = self.clean_name
+            if self.save_cleaned and self.overwrite_cleaned:
+                # Modify data in place
+                out_cleaned = self.det_data
+
+            amplitudes_apply = ApplyAmplitudes(
+                op="subtract",
+                det_data=self.det_data,
+                amplitudes=amplitudes_solve.amplitudes,
+                template_matrix=self.template_matrix,
+                output=out_cleaned,
+            )
+            amplitudes_apply.apply(data)
+
+            log.info_rank(
+                f"{log_prefix}  finished apply template amplitudes in",
+                comm=comm,
+                timer=timer,
+            )
+
+        map_binning.det_data = out_cleaned
+        if self.write_noiseweighted_map:
+            map_binning.noiseweighted = self.noiseweighted_map_name
+        map_binning.binned = self.map_name
+
         log.info_rank(
             f"{log_prefix} begin final map binning",
             comm=comm,
         )
 
-        map_binning.det_data = self.det_data
-
         # Do the final binning
-        map_binning.pre_process = None
         map_binning.apply(data, detectors=detectors)
 
         log.info_rank(
@@ -414,6 +434,7 @@ class MapMaker(Operator):
         write_del.append((self.hits_name, self.write_hits))
         write_del.append((self.rcond_name, self.write_rcond))
         write_del.append((self.noiseweighted_map_name, self.write_noiseweighted_map))
+        write_del.append((self.binmap_name, self.write_binmap))
         write_del.append((self.map_name, self.write_map))
         write_del.append((self.invcov_name, self.write_invcov))
         write_del.append((self.cov_name, self.write_cov))
