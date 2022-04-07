@@ -242,7 +242,7 @@ def main():
                 args.rcond,
                 nest=True,
                 single_precision=not args.double_precision,
-                force_serial=True,
+                force_serial=True
             )
         log.info_rank(f"Wrote {args.rcond}", timer=timer, comm=comm)
     del dist_rcond
@@ -261,7 +261,7 @@ def main():
                 args.cov,
                 nest=True,
                 single_precision=not args.double_precision,
-                force_serial=True,
+                force_serial=True
             )
         log.info_rank(f"Wrote {args.cov}", timer=timer, comm=comm)
     del dist_cov
@@ -275,7 +275,7 @@ def main():
             args.outmap,
             nest=True,
             single_precision=not args.double_precision,
-            force_serial=True,
+            force_serial=True
         )
     log.info_rank(f"Wrote {args.outmap}", timer=timer, comm=comm)
 

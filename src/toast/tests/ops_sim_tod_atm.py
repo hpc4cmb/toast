@@ -297,6 +297,7 @@ class SimAtmTest(MPITestCase):
             detector_pointing=detpointing_azel,
             detector_weights=azel_weights,
             polarization_fraction=0.2,
+            add_loading=False,  # Loading is not polarized
         )
         sim_atm.apply(data)
 

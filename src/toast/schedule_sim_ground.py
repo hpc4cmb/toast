@@ -344,6 +344,22 @@ class Patch(object):
             pass
         return
 
+    def el_range(self, observer, rising):
+        """Return the minimum and maximum elevation"""
+        self.update(observer)
+        patch_el_max = -1000
+        patch_el_min = 1000
+        in_view = False
+        for i, corner in enumerate(self.corners):
+            corner.compute(observer)
+            if rising and corner.az > np.pi:
+                continue
+            if not rising and corner.az < np.pi:
+                continue
+            patch_el_min = min(patch_el_min, corner.alt)
+            patch_el_max = max(patch_el_max, corner.alt)
+        return patch_el_min, patch_el_max
+
     def visible(
         self,
         el_min,
@@ -627,7 +643,7 @@ def patch_is_rising(patch):
 
 
 @function_timer
-def prioritize(args, visible):
+def prioritize(args, observer, visible, last_el):
     """Order visible targets by priority and number of scans."""
     log = Logger.get()
     for i in range(len(visible)):
@@ -640,7 +656,8 @@ def prioritize(args, visible):
                 weight1 = visible[j].weight
                 weight2 = visible[j + 1].weight
             else:
-                if patch_is_rising(visible[j]):
+                rising1 = patch_is_rising(visible[j])
+                if rising1:
                     if args.equalize_time:
                         hits1 = visible[j].rising_time
                     else:
@@ -652,7 +669,8 @@ def prioritize(args, visible):
                     else:
                         hits1 = visible[j].setting_hits
                     el1 = np.degrees(visible[j].current_el_min)
-                if patch_is_rising(visible[j + 1]):
+                rising2 = patch_is_rising(visible[j + 1])
+                if rising2:
                     if args.equalize_time:
                         hits2 = visible[j + 1].rising_time
                     else:
@@ -676,12 +694,41 @@ def prioritize(args, visible):
                         weight1 *= (lim / el1) ** args.elevation_penalty_power
                     if el2 < lim:
                         weight2 *= (lim / el2) ** args.elevation_penalty_power
+                # Optional elevation change penalty
+                if (
+                    last_el is not None
+                    and args.elevation_change_limit_deg > 0
+                    and args.elevation_change_penalty != 1
+                ):
+                    lim = args.elevation_change_limit_deg
+                    last_el_deg = np.degrees(last_el)
+                    # How much will the corners drift during stabilization?
+                    future_observer = observer.copy()
+                    future_observer.date += args.elevation_change_time_s / 86400
+                    if rising1:
+                        el1_drift = visible[j].el_range(future_observer, rising1)[1]
+                    else:
+                        el1_drift = visible[j].el_range(future_observer, rising1)[0]
+                    if rising2:
+                        el2_drift = visible[j + 1].el_range(future_observer, rising2)[1]
+                    else:
+                        el2_drift = visible[j + 1].el_range(future_observer, rising2)[0]
+                    el1_drift = np.degrees(el1_drift)
+                    el2_drift = np.degrees(el2_drift)
+                    # No penalty is applied if it is more expedient to just
+                    # wait for the patch to reach current elevation
+                    if np.abs(last_el_deg - el1) > lim:
+                        if (el1 - last_el_deg) * (el1_drift - last_el_deg) > 0:
+                            weight1 *= args.elevation_change_penalty
+                    if np.abs(last_el_deg - el2) > lim:
+                        if (el2 - last_el_deg) * (el2_drift - last_el_deg) > 0:
+                            weight2 *= args.elevation_change_penalty
             if weight1 > weight2:
                 visible[j], visible[j + 1] = visible[j + 1], visible[j]
     names = []
     for patch in visible:
         names.append(patch.name)
-    log.debug("Prioritized list of viewable patches: {}".format(names))
+    log.debug(f"Prioritized list of viewable patches: {names}")
     return
 
 
@@ -702,6 +749,8 @@ def attempt_scan(
     fout_fmt,
     ods,
     boresight_angle,
+    last_t,
+    last_el,
 ):
     """Attempt scanning the visible patches in order until success."""
     log = Logger.get()
@@ -730,7 +779,22 @@ def attempt_scan(
                 break
             # All on-sky targets
             for rising in [True, False]:
-                observer.date = to_DJD(t)
+                if last_el is not None and args.elevation_change_limit_deg != 0:
+                    # See if we need to add extra stabilization time before
+                    # observing the target due to change in elevation
+                    observer.date = to_DJD(t)
+                    el_min, el_max = patch.el_range(observer, rising)
+                    if rising:
+                        delta_el = np.degrees(np.abs(last_el - el_max))
+                    else:
+                        delta_el = np.degrees(np.abs(last_el - el_min))
+                    if delta_el > args.elevation_change_limit_deg:
+                        t_try = max(t, last_t + args.elevation_change_time_s)
+                    else:
+                        t_try = t
+                else:
+                    t_try = t
+                observer.date = to_DJD(t_try)
                 el = get_constant_elevation(
                     args,
                     observer,
@@ -742,11 +806,42 @@ def attempt_scan(
                 )
                 if el is None:
                     continue
+                if t_try != t:
+                    # Decide if we should wait at the present observing elevation
+                    # instead of changing elevation and waiting for the system to
+                    # stabilize
+
+                    observer.date = to_DJD(t)
+                    el_range_then = patch.el_range(observer, rising)
+                    observer.date = to_DJD(t_try)
+                    el_range_now = patch.el_range(observer, rising)
+                    # drift is 15 degrees / hour (upper limit)
+                    t_drift = delta_el / 15 * 3600
+                    if rising and (
+                        (el_range_then[1] - last_el) * (el_range_now[1] - last_el) < 0
+                    ):
+                        log.debug(
+                            f"Will wait at {np.degrees(last_el)} rather than move "
+                            f"to {np.degrees(el)} and stabilize"
+                        )
+                        el = last_el
+                        t_try = t
+                        observer.date = to_DJD(t_try)
+                    elif not rising and (
+                        (el_range_then[0] - last_el) * (el_range_now[0] - last_el) < 0
+                    ):
+                        log.debug(
+                            f"Will wait at {np.degrees(last_el)} rather than move "
+                            f"to {np.degrees(el)} and stabilize"
+                        )
+                        el = last_el
+                        t_try = t
+                    observer.date = to_DJD(t_try)
                 success, azmins, azmaxs, aztimes, tstop = scan_patch(
                     args,
                     el,
                     patch,
-                    t,
+                    t_try,
                     fp_radius,
                     observer,
                     sun,
@@ -759,7 +854,7 @@ def attempt_scan(
                     try:
                         t, _ = add_scan(
                             args,
-                            t,
+                            t_try,
                             tstop,
                             aztimes,
                             azmins,
@@ -786,7 +881,7 @@ def attempt_scan(
                 break
         if success:
             break
-    return success, t
+    return success, t, el
 
 
 def from_angles(az, el):
@@ -940,13 +1035,14 @@ def attempt_scan_pole(
                     success = False
                     pole_success = False
         if success:
+            el -= np.radians(args.pole_el_step_deg)
             break
     tstop = t
     if args.one_scan_per_day:
         day1 = int(to_MJD(tstart))
         while int(to_MJD(tstop)) == day1:
             tstop += 60.0
-    return success, tstop
+    return success, tstop, el
 
 
 @function_timer
@@ -972,6 +1068,8 @@ def get_constant_elevation(
             not_visible.append((patch.name, "No setting corners"))
         else:
             el = np.amin(els[ind_setting]) - fp_radius
+
+    # Check that the elevation is valid
 
     if el is not None and patch.elevations is not None:
         # Fixed elevation mode.  Find the first allowed observing elevation.
@@ -1037,7 +1135,7 @@ def get_constant_elevation(
                 )
                 el = None
     if el is None:
-        log.debug("NO ELEVATION: {}".format(not_visible[-1]))
+        log.debug(f"NO ELEVATION: {not_visible[-1]}")
     else:
         log.debug(
             "{} : ELEVATION = {}, rising = {}, partial = {}".format(
@@ -1073,7 +1171,7 @@ def get_constant_elevation_pole(
         )
         el = None
     if el is None:
-        log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+        log.debug(f"NOT VISIBLE: {not_visible[-1]}")
     return el
 
 
@@ -1090,7 +1188,7 @@ def check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
                     "".format(np.degrees(sun.alt), rising),
                 )
             )
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+            log.debug(f"NOT VISIBLE: {not_visible[-1]}")
             return True
     return False
 
@@ -1131,10 +1229,8 @@ def scan_patch(
     scan_started = False
     while True:
         if tstop > stop_timestamp or tstop - t > 86400:
-            not_visible.append(
-                (patch.name, "Ran out of time rising = {}".format(rising))
-            )
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+            not_visible.append((patch.name, f"Ran out of time rising = {rising}"))
+            log.debug(f"NOT VISIBLE: {not_visible[-1]}")
             break
         if check_sun_el(tstop, observer, sun, sun_el_max, args, not_visible):
             break
@@ -1311,7 +1407,7 @@ def scan_patch_pole(
     # Check if el is above the target.  If so, there is nothing to do.
     if np.amax(els) + fp_radius < el:
         not_visible.append((patch.name, "Patch below {:.2f}".format(el / degree)))
-        log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+        log.debug(f"NOT VISIBLE: {not_visible[-1]}")
     else:
         if args.pole_raster_scan:
             scan_time, azmin_raster, azmax_raster = get_pole_raster_scan(
@@ -1328,11 +1424,11 @@ def scan_patch_pole(
                     not_visible.append(
                         (patch.name, "No overlap at {:.2f}".format(el / degree))
                     )
-                    log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+                    log.debug(f"NOT VISIBLE: {not_visible[-1]}")
                 break
             if tstop > stop_timestamp or tstop - t > 86400:
                 not_visible.append((patch.name, "Ran out of time"))
-                log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+                log.debug(f"NOT VISIBLE: {not_visible[-1]}")
                 break
             observer.date = to_DJD(tstop)
             sun.compute(observer)
@@ -1340,7 +1436,7 @@ def scan_patch_pole(
                 not_visible.append(
                     (patch.name, "Sun too high {:.2f}".format(sun.alt / degree))
                 )
-                log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+                log.debug(f"NOT VISIBLE: {not_visible[-1]}")
                 break
             azs, els = patch.corner_coordinates(observer)
             radius = max(np.radians(1), fp_radius)
@@ -1824,7 +1920,7 @@ def get_visible(args, observer, sun, moon, patches, el_min):
                 )
             )
         else:
-            log.debug("NOT VISIBLE: {}".format(not_visible[-1]))
+            log.debug(f"NOT VISIBLE: {not_visible[-1]}")
     return visible, not_visible
 
 
@@ -1906,11 +2002,7 @@ def apply_blockouts(args, t_in):
         if start < current and current < stop:
             # `t` is inside the block out.
             # Advance to the end of the block out.
-            log.info(
-                "{} is inside block out {}, advancing to {}".format(
-                    current, block_out, stop
-                )
-            )
+            log.info(f"{current} is inside block out {block_out}, advancing to {stop}")
             t = stop.timestamp()
             blocked = True
     return t, blocked
@@ -1949,7 +2041,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
     fname_out = args.out
     dir_out = os.path.dirname(fname_out)
     if dir_out:
-        log.info("Creating '{}'".format(dir_out))
+        log.info(f"Creating '{dir_out}'")
         os.makedirs(dir_out, exist_ok=True)
     fout = open(fname_out, "w")
 
@@ -2015,11 +2107,15 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
     t = start_timestamp
     last_successful = t
+    last_el = None
     while True:
         t, blocked = apply_blockouts(args, t)
         boresight_angle = get_boresight_angle(args, t)
         if t > stop_timestamp:
             break
+        if t - last_successful > args.elevation_change_time_s:
+            # It no longer matters what the last used elevation was
+            last_el = None
         if t - last_successful > 86400 or blocked:
             # A long time has passed since the last successfully
             # scheduled scan.
@@ -2033,14 +2129,14 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 # `t` <-> `last_successful` means that we will not trigger
                 # this branch again without scheduling a succesful scan
                 log.debug(
-                    "Resetting patches and returning to the last successful "
-                    "scan: {}".format(to_UTC(last_successful))
+                    f"Resetting patches and returning to the last successful "
+                    f"scan: {to_UTC(last_successful)}"
                 )
                 t, last_successful = last_successful, t
 
         # Determine which patches are observable at time t.
 
-        log.debug("t = {}".format(to_UTC(t)))
+        log.debug(f"t = {to_UTC(t)}")
         # Determine which patches are visible
         observer.date = to_DJD(t)
         sun.compute(observer)
@@ -2057,7 +2153,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         visible, not_visible = get_visible(args, observer, sun, moon, patches, el_min)
 
         if len(visible) == 0:
-            log.debug("No patches visible at {}: {}".format(to_UTC(t), not_visible))
+            log.debug(f"No patches visible at {to_UTC(t)}: {not_visible}")
             t = advance_time(t, args.time_step_s)
             continue
 
@@ -2075,10 +2171,10 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         # If the criteria are not met, advance the time by a step
         # and try again
 
-        prioritize(args, visible)
+        prioritize(args, observer, visible, last_el)
 
         if args.pole_mode:
-            success, t = attempt_scan_pole(
+            success, t, el = attempt_scan_pole(
                 args,
                 observer,
                 visible,
@@ -2096,9 +2192,11 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
+                last_successful,
+                last_el,
             )
         else:
-            success, t = attempt_scan(
+            success, t, el = attempt_scan(
                 args,
                 observer,
                 visible,
@@ -2114,18 +2212,19 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
+                last_successful,
+                last_el,
             )
 
         if args.operational_days and len(ods) > args.operational_days:
             break
 
         if not success:
-            log.debug(
-                "No patches could be scanned at {}: {}".format(to_UTC(t), not_visible)
-            )
+            log.debug(f"No patches could be scanned at {to_UTC(t)}: {to_UTC(t)}")
             t = advance_time(t, args.time_step_s)
         else:
             last_successful = t
+            last_el = el
 
     fout.close()
     return
@@ -2212,7 +2311,31 @@ def parse_args(opts=None):
         required=False,
         default=2,
         type=np.float,
-        help="Power in the elevation penalty function [> 0] ",
+        help="Power in the elevation penalty function [> 0]",
+    )
+    parser.add_argument(
+        "--elevation-change-limit-deg",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Assign a penalty to changes in elevation larger than this limit [degrees].  "
+        "See --elevation-change-penalty and --elevation-change-time-s",
+    )
+    parser.add_argument(
+        "--elevation-change-penalty",
+        required=False,
+        default=1,
+        type=np.float,
+        help="Multiplicative elevation change penalty triggered by "
+        "--elevation-change-limit-deg",
+    )
+    parser.add_argument(
+        "--elevation-change-time-s",
+        required=False,
+        default=0,
+        type=np.float,
+        help="Time it takes for the telescope to stabilize after a change in observing "
+        "elevation [seconds].  Triggered by --elevation-change-limit-deg",
     )
     parser.add_argument(
         "--equalize-area",
@@ -2660,12 +2783,12 @@ def parse_patch_explicit(args, parts):
         elif args.patch_coord == "G":
             corner = ephem.Galactic(lon, lat, epoch="2000")
         else:
-            raise RuntimeError("Unknown coordinate system: {}".format(args.patch_coord))
+            raise RuntimeError(f"Unknown coordinate system: {args.patch_coord}")
         corner = ephem.Equatorial(corner)
         if corner.dec > 80 * degree or corner.dec < -80 * degree:
             raise RuntimeError(
-                "{} has at least one circumpolar corner. "
-                "Circumpolar targeting not yet implemented".format(name)
+                f"{name} has at least one circumpolar corner. "
+                "Circumpolar targeting not yet implemented"
             )
         patch_corner = ephem.FixedBody()
         patch_corner._ra = corner.ra
@@ -2724,8 +2847,8 @@ def parse_patch_rectangular(args, parts):
     for corner in corners_temp:
         if corner.dec > 80 * degree or corner.dec < -80 * degree:
             raise RuntimeError(
-                "{} has at least one circumpolar corner. "
-                "Circumpolar targeting not yet implemented".format(name)
+                f"{name} has at least one circumpolar corner. "
+                "Circumpolar targeting not yet implemented"
             )
         patch_corner = ephem.FixedBody()
         patch_corner._ra = corner.ra
@@ -2817,7 +2940,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
     for patch_def in args.patch:
         parts = patch_def.split(",")
         name = parts[0]
-        log.info('Adding patch "{}"'.format(name))
+        log.info(f'Adding patch "{name}"')
         if parts[1].upper() == "HORIZONTAL":
             patch = parse_patch_horizontal(args, parts)
         elif parts[1].upper() == "SSO":
@@ -2995,9 +3118,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     continue
                 lon.append(lon[0])
                 lat.append(lat[0])
-                log.info(
-                    "{} corners:\n lon = {}\n lat= {}".format(patch.name, lon, lat)
-                )
+                log.info(f"{patch.name,} corners:\n lon = {lon}\n lat= {lat}")
                 hp.projplot(
                     lon,
                     lat,

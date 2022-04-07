@@ -92,7 +92,8 @@ class ObserveAtmosphere(Operator):
 
     n_bandpass_freqs = Int(
         100,
-        help="The number of sampling frequencies used when convolving the bandpass with atmosphere absorption and loading",
+        help="The number of sampling frequencies used when convolving the bandpass "
+        "with atmosphere absorption and loading",
     )
 
     sample_rate = Quantity(
@@ -100,6 +101,12 @@ class ObserveAtmosphere(Operator):
         allow_none=True,
         help="Rate at which to sample atmospheric TOD before interpolation.  "
         "Default is no interpolation.",
+    )
+
+    fade_time = Quantity(
+        None,
+        allow_none=True,
+        help="Fade in/out time to avoid a step at wind break.",
     )
 
     gain = Float(1.0, help="Scaling applied to the simulated TOD")
@@ -126,6 +133,11 @@ class ObserveAtmosphere(Operator):
         env = Environment.get()
         log = Logger.get()
         gt = GlobalTimers.get()
+
+        for trait in ("absorption",):
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
         gt.start("ObserveAtmosphere:  total")
 
@@ -365,16 +377,34 @@ class ObserveAtmosphere(Operator):
 
                     gt.start("ObserveAtmosphere:  detector accumulate")
 
-                    # Calibrate the atmopsheric fluctuations to appropriate bandpass
+                    # Calibrate the atmospheric fluctuations to appropriate bandpass
                     atmdata *= self.gain * absorption[det]
 
-                    # Add the elevation-dependent atmospheric loading
-                    atmdata += loading[det] / np.sin(el)
+                    # If we are simulating disjoint wind views, we need to suppress
+                    # a jump between them
+
+                    if len(views) > 1 and self.fade_time is not None:
+                        atmdata -= np.mean(atmdata)  # Add thermal loading after this
+                        fsample = (times.size - 1) / (times[-1] - times[0])
+                        nfade = min(
+                            int(self.fade_time.to_value(u.s) * fsample),
+                            atmdata.size // 2
+                        )
+                        if vw < len(views) - 1:
+                            # Fade out the end
+                            atmdata[-nfade:] *= np.arange(nfade - 1, -1, -1) / nfade
+                        if vw > 0:
+                            # Fade out the beginning
+                            atmdata[:nfade] *= np.arange(nfade) / nfade
 
                     # Add polarization.  In our simple model, there is only Q-polarization
                     # and the polarization fraction is constant.
                     pfrac = self.polarization_fraction
                     atmdata *= weights_I + weights_Q * pfrac
+
+                    if loading is not None:
+                        # Add the elevation-dependent atmospheric loading
+                        atmdata += loading[det] / np.sin(el)
 
                     # Add contribution to output
                     views.detdata[self.det_data][vw][det][good] += atmdata
@@ -399,14 +429,18 @@ class ObserveAtmosphere(Operator):
         n_freq = self.n_bandpass_freqs
         freqs = np.linspace(freq_min, freq_max, n_freq)
 
-        absorption = obs[self.absorption]
-        loading = obs[self.loading]
-
         absorption_det = {}
-        loading_det = {}
         for det in dets:
-            absorption_det[det] = bandpass.convolve(det, freqs, absorption, rj=True)
-            loading_det[det] = bandpass.convolve(det, freqs, loading, rj=True)
+            absorption_det[det] = bandpass.convolve(
+                det, freqs, obs[self.absorption], rj=True
+            )
+
+        if self.loading is None:
+            loading_det = None
+        else:
+            loading_det = {}
+            for det in dets:
+                loading_det[det] = bandpass.convolve(det, freqs, obs[self.loading], rj=True)
 
         return absorption_det, loading_det
 
