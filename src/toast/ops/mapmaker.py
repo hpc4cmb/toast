@@ -93,6 +93,8 @@ class MapMaker(Operator):
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
 
+    iter_min = Int(3, help="Minimum number of iterations")
+
     iter_max = Int(100, help="Maximum number of iterations")
 
     solve_rcond_threshold = Float(
@@ -246,6 +248,7 @@ class MapMaker(Operator):
             name=self.name,
             det_data=self.det_data,
             convergence=self.convergence,
+            iter_min=self.iter_min,
             iter_max=self.iter_max,
             solve_rcond_threshold=self.solve_rcond_threshold,
             mask=self.mask,
@@ -551,6 +554,8 @@ class Calibrate(Operator):
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
 
+    iter_min = Int(3, help="Minimum number of iterations")
+
     iter_max = Int(100, help="Maximum number of iterations")
 
     solve_rcond_threshold = Float(
@@ -618,6 +623,7 @@ class Calibrate(Operator):
         amplitudes_solve = SolveAmplitudes(
             det_data=self.det_data,
             convergence=self.convergence,
+            iter_min=self.iter_min,
             iter_max=self.iter_max,
             solve_rcond_threshold=self.solve_rcond_threshold,
             mask=self.mask,

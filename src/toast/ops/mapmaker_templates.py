@@ -305,6 +305,8 @@ class SolveAmplitudes(Operator):
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
 
+    iter_min = Int(3, help="Minimum number of iterations")
+
     iter_max = Int(100, help="Maximum number of iterations")
 
     solve_rcond_threshold = Float(
@@ -717,6 +719,7 @@ class SolveAmplitudes(Operator):
             self.solver_rhs,
             self.amplitudes,
             convergence=self.convergence,
+            n_iter_min=self.iter_min,
             n_iter_max=self.iter_max,
         )
 
