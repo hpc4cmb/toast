@@ -7,6 +7,7 @@ import numpy as np
 
 import jax
 import jax.numpy as jnp
+from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
@@ -14,7 +15,7 @@ from ..._libtoast import pixels_healpix as pixels_healpix_compiled
 # -------------------------------------------------------------------------------------------------
 # JAX
 
-def pixels_healpix_single_sample_jax(hpix, quats, nest):
+def pixels_healpix_inner_jax(hpix, quats, nest):
     """
     Compute the healpix pixel indices for the detectors.
 
@@ -41,15 +42,17 @@ def pixels_healpix_single_sample_jax(hpix, quats, nest):
 
     return pixel
 
-# vmap over samples
-pixels_healpix_single_detector_jax = jax.vmap(pixels_healpix_single_sample_jax, in_axes=(None,0,None), out_axes=0)
-# vmap over detectors
-pixels_healpix_interval_jax = jax.vmap(pixels_healpix_single_detector_jax, in_axes=(None,0,None), out_axes=0)
+# maps over samples and detectors
+pixels_healpix_inner_jax = jax_xmap(pixels_healpix_inner_jax, 
+                                    in_axes=[[...], # hpix
+                                             ['detectors','samples',...], # quats
+                                             [...]], # nest
+                                    out_axes=['detectors','samples',...])
 
-def pixels_healpix_unjitted_jax(hpix, quats, nest):
+def pixels_healpix_interval_jax(hpix, quats, nest):
     """
     Process a full interval at once.
-    NOTE: this function was added for debugging purposes, one could replace it with `pixels_healpix_interval_jax`
+    NOTE: this function was added for debugging purposes, one could replace it with `pixels_healpix_inner_jax`
 
     Args:
         hpix (HPIX_JAX): Healpix projection object.
@@ -62,10 +65,10 @@ def pixels_healpix_unjitted_jax(hpix, quats, nest):
     # display sizes
     print(f"DEBUG: jit compiling 'pixels_healpix_interval_jax' with n_side:{hpix.nside} n_det:{quats.shape[0]} n_samp_interval:{quats.shape[1]} nest:{nest}")
     # does the computation
-    return pixels_healpix_interval_jax(hpix, quats, nest)
+    return pixels_healpix_inner_jax(hpix, quats, nest)
 
 # jit compiling
-pixels_healpix_jitted_jax = jax.jit(pixels_healpix_unjitted_jax, static_argnames=['hpix, nest'])
+pixels_healpix_interval_jax = jax.jit(pixels_healpix_interval_jax, static_argnames=['hpix, nest'])
 
 
 def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accell):
@@ -98,7 +101,7 @@ def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_su
         quats_interval = quats[quat_index, interval_start:interval_end, :]
         pixels_interval = pixels[pixel_index, interval_start:interval_end]
         # does the computation and stores the result in pixels
-        pixels_interval[:] = pixels_healpix_jitted_jax(hpix, quats_interval, nest)
+        pixels_interval[:] = pixels_healpix_interval_jax(hpix, quats_interval, nest)
         # modifies hit_submap in place
         submap_interval = pixels_interval // n_pix_submap
         hit_submaps[submap_interval] = 1

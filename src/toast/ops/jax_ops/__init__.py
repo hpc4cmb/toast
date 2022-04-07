@@ -10,6 +10,11 @@
 # - try merging intervals into a single indexes vector
 # - try grouping intervals by size and then running with a (intervals_starts,length) input
 # - try putting some template_offset operations in a jitted section
+#
+# NOTE:
+# the code uses [xmap](https://jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html) 
+# in order to map over named axis for increased redeability
+# however, one could use several vmap to reproduce this functionality
 
 # enable 64bits precision
 from jax.config import config as jax_config

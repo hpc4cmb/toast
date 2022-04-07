@@ -6,6 +6,7 @@ import numpy as np
 
 import jax
 import jax.numpy as jnp
+from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import select_implementation, ImplementationType
 from .utils import math_qarray as qarray
@@ -14,7 +15,7 @@ from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_w
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def stokes_weights_IQU_single_sample_jax(eps, cal, pin, hwpang):
+def stokes_weights_IQU_inner_jax(eps, cal, pin, hwpang):
     """
     Compute the Stokes weights for one detector.
 
@@ -49,15 +50,18 @@ def stokes_weights_IQU_single_sample_jax(eps, cal, pin, hwpang):
     weights = jnp.array([cal, jnp.cos(detang) * eta * cal, jnp.sin(detang) * eta * cal])
     return weights
 
-# vmap over samples
-stokes_weights_IQU_single_detector_jax = jax.vmap(stokes_weights_IQU_single_sample_jax, in_axes=(None,None,0,0), out_axes=0)
-# vmap over detectors
-stokes_weights_IQU_interval_jax = jax.vmap(stokes_weights_IQU_single_detector_jax, in_axes=(0,None,0,None), out_axes=0)
+# maps over samples and detectors
+stokes_weights_IQU_inner_jax = jax_xmap(stokes_weights_IQU_inner_jax, 
+                                        in_axes=[['detectors'], # epsilon
+                                                 [...], # cal
+                                                 ['detectors','samples',...], # quats
+                                                 ['samples']], # hwp
+                                        out_axes=['detectors','samples',...])
 
-def stokes_weights_IQU_unjitted_jax(epsilon, cal, quats, hwp):
+def stokes_weights_IQU_interval_jax(epsilon, cal, quats, hwp):
     """
     Process a full interval at once.
-    NOTE: this function was added for debugging purposes, one could replace it with `stokes_weights_IQU_interval_jax`
+    NOTE: this function was added for debugging purposes, one could replace it with `stokes_weights_IQU_inner_jax`
 
     Args:
         epsilon (array, float):  The cross polar response (size n_det).
@@ -71,10 +75,10 @@ def stokes_weights_IQU_unjitted_jax(epsilon, cal, quats, hwp):
     # display sizes
     print(f"DEBUG: jit compiling 'stokes_weights_IQU_interval_jax' with n_det:{epsilon.size} cal:{cal} n_samp_interval:{hwp.size}")
     # does the computation
-    return stokes_weights_IQU_interval_jax(epsilon, cal, quats, hwp)
+    return stokes_weights_IQU_inner_jax(epsilon, cal, quats, hwp)
 
 # jit compiling
-stokes_weights_IQU_jitted_jax = jax.jit(stokes_weights_IQU_unjitted_jax, static_argnames=['cal'])
+stokes_weights_IQU_interval_jax = jax.jit(stokes_weights_IQU_interval_jax, static_argnames=['cal'])
 
 def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal):
     """
@@ -102,7 +106,7 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
         hwp_interval = hwp[interval_start:interval_end]
         weights_interval = weights[weight_index, interval_start:interval_end, :]
         # does the computation and puts the result in weights
-        weights_interval[:] = stokes_weights_IQU_jitted_jax(epsilon, cal, quats_interval, hwp_interval)
+        weights_interval[:] = stokes_weights_IQU_interval_jax(epsilon, cal, quats_interval, hwp_interval)
 
 def stokes_weights_I_jax(weight_index, weights, intervals, cal):
     """

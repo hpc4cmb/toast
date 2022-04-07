@@ -6,6 +6,7 @@ import numpy as np
 
 import jax
 import jax.numpy as jnp
+from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import select_implementation, ImplementationType
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
@@ -13,7 +14,7 @@ from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def build_noise_weighted_single_sample_jax(zmap, pixel, weights, data, det_flag, det_scale, det_mask, shared_flag, shared_mask):
+def build_noise_weighted_inner_jax(zmap, pixel, weights, data, det_flag, det_scale, det_mask, shared_flag, shared_mask):
     """
     The update to be added to zmap.
 
@@ -36,15 +37,23 @@ def build_noise_weighted_single_sample_jax(zmap, pixel, weights, data, det_flag,
                          zmap) # else
     return new_zmap
 
-# vmap over samples
-build_noise_weighted_single_detector_jax = jax.vmap(build_noise_weighted_single_sample_jax, in_axes=(0,0,0,0,0,None,None,0,None), out_axes=0)
-# vmap over detectors
-build_noise_weighted_interval_jax = jax.vmap(build_noise_weighted_single_detector_jax, in_axes=(0,0,0,0,0,0,None,None,None), out_axes=0)
+# maps over samples and detectors
+build_noise_weighted_inner_jax = jax_xmap(build_noise_weighted_inner_jax, 
+                                         in_axes=[['detectors','intervals',...], # zmap
+                                                  ['detectors','intervals'], # pixel
+                                                  ['detectors','samples',...], # weights
+                                                  ['detectors','intervals'], # data
+                                                  ['detectors','intervals'], # det_flag
+                                                  ['detectors'], # det_scale
+                                                  [...], # det_mask
+                                                  ['samples'], # shared_flag
+                                                  [...]], # shared_mask
+                                         out_axes=['detectors','samples',...])
 
-def build_noise_weighted_unjitted_jax(zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask):
+def build_noise_weighted_interval_jax(zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask):
     """
     Process a full interval at once.
-    NOTE: this function was added for debugging purposes, one could replace it with `build_noise_weighted_interval_jax`
+    NOTE: this function was added for debugging purposes, one could replace it with `build_noise_weighted_inner_jax`
 
     Args:
         zmap (array, double): size n_det*n_samp_interval*nnz
@@ -63,10 +72,10 @@ def build_noise_weighted_unjitted_jax(zmap, pixels, weights, det_data, det_flags
     # display sizes
     print(f"DEBUG: jit compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{shared_flags.size} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask}")
     # does the computation
-    return build_noise_weighted_interval_jax(zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask)
+    return build_noise_weighted_inner_jax(zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask)
 
 # jit compiling
-build_noise_weighted_jitted_jax = jax.jit(build_noise_weighted_unjitted_jax, static_argnames=['det_flag_mask','shared_flag_mask'])
+build_noise_weighted_interval_jax = jax.jit(build_noise_weighted_interval_jax, static_argnames=['det_flag_mask','shared_flag_mask'])
 
 def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, intervals, shared_flags, shared_flag_mask, use_accel):
     """
@@ -112,7 +121,7 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
         shared_flags_interval = shared_flags[interval_start:interval_end]
         subzmap_interval = subzmap[:, interval_start:interval_end, :]
         # process the interval then updates zmap in place
-        subzmap_interval[:] = build_noise_weighted_jitted_jax(subzmap_interval, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale, det_flag_mask, shared_flags_interval, shared_flag_mask)
+        subzmap_interval[:] = build_noise_weighted_interval_jax(subzmap_interval, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale, det_flag_mask, shared_flags_interval, shared_flag_mask)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
