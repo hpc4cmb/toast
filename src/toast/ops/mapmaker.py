@@ -320,6 +320,8 @@ class MapMaker(Operator):
 
         map_binning.det_data = out_cleaned
         map_binning.covariance = self.cov_name
+        if self.write_noiseweighted_map:
+            map_binning.noiseweighted = self.noiseweighted_map_name
         map_binning.binned = self.map_name
 
         if self.mc_mode:
