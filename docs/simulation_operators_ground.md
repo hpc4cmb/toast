@@ -20,7 +20,7 @@ length of time:
 Because ground schedules are more complex, they are usually generated
 with a commandline tool:
 
-```{include} simulation_operators_ground_sched.inc
+```{include} toast_ground_schedule.inc
 ```
 
 This writes the schedule to a custom format that can later be loaded

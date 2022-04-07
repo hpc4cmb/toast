@@ -20,7 +20,7 @@ length of time:
 For generating large schedules, it is best to use the included
 commandline tool:
 
-```{include} simulation_operators_sat_sched.inc
+```{include} toast_satellite_schedule.inc
 ```
 
 Which writes the schedule to an ECSV file. This file can then be loaded
