@@ -152,6 +152,14 @@ class TemplateMatrix(Operator):
         for tmpl in self.templates:
             tmpl.add_prior(amps_in[tmpl.name], amps_out[tmpl.name])
 
+    @property
+    def n_enabled_templates(self):
+        n_enabled_templates = 0
+        for template in self.templates:
+            if template.enabled:
+                n_enabled_templates += 1
+        return n_enabled_templates
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
@@ -380,16 +388,8 @@ class SolveAmplitudes(Operator):
         log_prefix = "SolveAmplitudes"
 
         # Check if we have any templates
-        if self.template_matrix is None:
-            return
-
-        n_enabled_templates = 0
-        for template in self.template_matrix.templates:
-            if template.enabled:
-                n_enabled_templates += 1
-
-        if n_enabled_templates == 0:
-            # Nothing to do!
+        if self.template_matrix is None \
+           or self.template_matrix.n_enabled_templates == 0:
             return
 
         memreport = MemoryCounter()
