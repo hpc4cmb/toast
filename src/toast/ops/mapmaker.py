@@ -34,8 +34,6 @@ from .scan_map import ScanMap, ScanMask
 
 from .mapmaker_utils import CovarianceAndHits
 
-from .mapmaker_solve import solve, SolverRHS, SolverLHS
-
 from .mapmaker_templates import SolveAmplitudes, ApplyAmplitudes
 
 from .memory_counter import MemoryCounter
@@ -280,7 +278,7 @@ class MapMaker(Operator):
         self.cov_name = "{}_cov".format(self.name)
         self.invcov_name = "{}_invcov".format(self.name)
         self.rcond_name = "{}_rcond".format(self.name)
-        self.flag_name = "{}_flags".format(self.name)
+        self.det_flag_name = "{}_flags".format(self.name)
 
         self.clean_name = "{}_cleaned".format(mc_root)
         self.binmap_name = "{}_binmap".format(mc_root)
