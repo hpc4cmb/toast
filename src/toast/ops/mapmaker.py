@@ -365,7 +365,10 @@ class MapMaker(Operator):
                 timer=timer,
             )
 
-        if self.template_matrix is None or self.template_matrix.n_enabled_templates == 0:
+        if (
+            self.template_matrix is None
+            or self.template_matrix.n_enabled_templates == 0
+        ):
             # No templates to subtract, bin the input signal
             out_cleaned = self.det_data
         else:

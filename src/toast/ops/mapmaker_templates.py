@@ -390,8 +390,10 @@ class SolveAmplitudes(Operator):
         log_prefix = "SolveAmplitudes"
 
         # Check if we have any templates
-        if self.template_matrix is None \
-           or self.template_matrix.n_enabled_templates == 0:
+        if (
+            self.template_matrix is None
+            or self.template_matrix.n_enabled_templates == 0
+        ):
             return
 
         memreport = MemoryCounter()

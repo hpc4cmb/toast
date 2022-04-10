@@ -388,7 +388,7 @@ class ObserveAtmosphere(Operator):
                         fsample = (times.size - 1) / (times[-1] - times[0])
                         nfade = min(
                             int(self.fade_time.to_value(u.s) * fsample),
-                            atmdata.size // 2
+                            atmdata.size // 2,
                         )
                         if vw < len(views) - 1:
                             # Fade out the end
@@ -440,7 +440,9 @@ class ObserveAtmosphere(Operator):
         else:
             loading_det = {}
             for det in dets:
-                loading_det[det] = bandpass.convolve(det, freqs, obs[self.loading], rj=True)
+                loading_det[det] = bandpass.convolve(
+                    det, freqs, obs[self.loading], rj=True
+                )
 
         return absorption_det, loading_det
 

@@ -511,10 +511,12 @@ class Offset(Template):
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
             )
-            for iview, (todview, flagview) in enumerate(zip(
+            for iview, (todview, flagview) in enumerate(
+                zip(
                     ob.view[self.view].detdata[self.det_data],
                     ob.view[self.view].detdata[self.det_flags],
-            )):
+                )
+            ):
                 n_amp_view = self._obs_views[iob][iview]
                 mask = (flagview[detector] & self.det_flag_mask) == 0
                 template_offset_project_signal(

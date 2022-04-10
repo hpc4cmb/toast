@@ -104,14 +104,14 @@ class SimGround(Operator):
 
     scan_rate_az = Quantity(
         1.0 * u.degree / u.second,
-        help="The sky or mount azimuth scanning rate.  See `fix_rate_on_sky`"
+        help="The sky or mount azimuth scanning rate.  See `fix_rate_on_sky`",
     )
 
     fix_rate_on_sky = Bool(
         True,
         help="If True, `scan_rate_az` is given in sky coordinates and azimuthal rate "
         "on mount will be adjusted to meet it.  If False, `scan_rate_az` is used as "
-        "the mount azimuthal rate."
+        "the mount azimuthal rate.",
     )
 
     scan_rate_el = Quantity(

@@ -330,7 +330,8 @@ class MapmakerTest(MPITestCase):
                     if not np.allclose(toast_base, madam_base, rtol=0.01):
                         print(
                             f"FAIL: {det} diff : PtP = {np.ptp(diff_base)}, "
-                            f"mean = {np.mean(diff_base)}")
+                            f"mean = {np.mean(diff_base)}"
+                        )
                         fail = True
 
             # Compare hit maps
@@ -375,7 +376,9 @@ class MapmakerTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                if not np.allclose(toast_map[stokes][good], madam_map[stokes][good], rtol=0.01):
+                if not np.allclose(
+                    toast_map[stokes][good], madam_map[stokes][good], rtol=0.01
+                ):
                     print(f"FAIL: max {ststr} diff = {np.max(diff_map[good])}")
                     fail = True
 
