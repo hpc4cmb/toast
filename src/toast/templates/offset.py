@@ -511,11 +511,18 @@ class Offset(Template):
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
             )
-            for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
-                n_amp_view = self._obs_views[iob][ivw]
+            for iview, todview in enumerate(
+                    ob.view[self.view].detdata[self.det_data]
+            ):
+                n_amp_view = self._obs_views[iob][iview]
+                if self.det_flags is not None:
+                    flagview = ob.view[self.view].detdata[self.det_flags][iview]
+                    mask = (flagview[detector] & self.det_flag_mask) == 0
+                else:
+                    mask = 1
                 template_offset_project_signal(
                     step_length,
-                    vw[detector],
+                    todview[detector] * mask,
                     amplitudes.local[offset : offset + n_amp_view],
                 )
                 offset += n_amp_view

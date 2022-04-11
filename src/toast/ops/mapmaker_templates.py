@@ -65,11 +65,11 @@ class TemplateMatrix(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
-    flags = Unicode(
+    det_flags = Unicode(
         None, allow_none=True, help="Observation detdata key for solver flags to use"
     )
 
-    flag_mask = Int(0, help="Bit mask value for solver flags")
+    det_flag_mask = Int(0, help="Bit mask value for solver flags")
 
     @traitlets.validate("templates")
     def _check_templates(self, proposal):
@@ -104,8 +104,8 @@ class TemplateMatrix(Operator):
             transpose=self.transpose,
             view=self.view,
             det_data=self.det_data,
-            flags=self.flags,
-            flag_mask=self.flag_mask,
+            det_flags=self.det_flags,
+            det_flag_mask=self.det_flag_mask,
         )
         ret._initialized = self._initialized
         return ret
@@ -152,6 +152,14 @@ class TemplateMatrix(Operator):
         for tmpl in self.templates:
             tmpl.add_prior(amps_in[tmpl.name], amps_out[tmpl.name])
 
+    @property
+    def n_enabled_templates(self):
+        n_enabled_templates = 0
+        for template in self.templates:
+            if template.enabled:
+                n_enabled_templates += 1
+        return n_enabled_templates
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
@@ -171,8 +179,8 @@ class TemplateMatrix(Operator):
         if not self._initialized:
             for tmpl in self.templates:
                 tmpl.view = self.view
-                tmpl.flags = self.flags
-                tmpl.flag_mask = self.flag_mask
+                tmpl.det_flags = self.det_flags
+                tmpl.det_flag_mask = self.det_flag_mask
                 # This next line will trigger calculation of the number
                 # of amplitudes within each template.
                 tmpl.data = data
@@ -297,6 +305,8 @@ class SolveAmplitudes(Operator):
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
 
+    iter_min = Int(3, help="Minimum number of iterations")
+
     iter_max = Int(100, help="Maximum number of iterations")
 
     solve_rcond_threshold = Float(
@@ -380,16 +390,10 @@ class SolveAmplitudes(Operator):
         log_prefix = "SolveAmplitudes"
 
         # Check if we have any templates
-        if self.template_matrix is None:
-            return
-
-        n_enabled_templates = 0
-        for template in self.template_matrix.templates:
-            if template.enabled:
-                n_enabled_templates += 1
-
-        if n_enabled_templates == 0:
-            # Nothing to do!
+        if (
+            self.template_matrix is None
+            or self.template_matrix.n_enabled_templates == 0
+        ):
             return
 
         memreport = MemoryCounter()
@@ -604,8 +608,8 @@ class SolveAmplitudes(Operator):
             data[self.solver_rcond_mask_name] = PixelData(
                 data[self.binning.pixel_dist], dtype=np.uint8, n_value=1
             )
-            data[self.solver_rcond_mask_name].raw[
-                data[self.solver_rcond_name].raw.array() < self.solve_rcond_threshold
+            data[self.solver_rcond_mask_name].data[
+                data[self.solver_rcond_name].data < self.solve_rcond_threshold
             ] = 1
 
             memreport.prefix = "After constructing rcond mask"
@@ -662,6 +666,11 @@ class SolveAmplitudes(Operator):
             comm=comm,
         )
 
+        # First application of the template matrix will propagate flags and
+        # the flag mask to the templates
+        self.template_matrix.det_flags = self.solver_flags
+        self.template_matrix.det_flag_mask = 255
+
         # Set our binning operator to use only our new solver flags
         self.binning.shared_flag_mask = 0
         self.binning.det_flags = self.solver_flags
@@ -674,7 +683,7 @@ class SolveAmplitudes(Operator):
 
         self.template_matrix.amplitudes = self.solver_rhs
         rhs_calc = SolverRHS(
-            name="{}_rhs".format(self.name),
+            name=f"{self.name}_rhs",
             det_data=self.det_data,
             overwrite=False,
             binning=self.binning,
@@ -717,6 +726,7 @@ class SolveAmplitudes(Operator):
             self.solver_rhs,
             self.amplitudes,
             convergence=self.convergence,
+            n_iter_min=self.iter_min,
             n_iter_max=self.iter_max,
         )
 

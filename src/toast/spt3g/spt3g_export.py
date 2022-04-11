@@ -532,12 +532,12 @@ class export_obs(object):
                 offset = 0
                 for intr in obs.intervals[self._data_export.frame_intervals]:
                     chunk = intr.last - offset + 1
-                    local_sets.append([chunk,])
+                    local_sets.append([chunk])
                     offset += chunk
                 if offset != obs.n_local_samples:
                     local_sets.append([obs.n_local_samples - offset])
                 # Gather across the row
-                all_sets = [local_sets,]
+                all_sets = [local_sets]
                 if obs.comm_row is not None:
                     all_sets = obs.comm_row.gather(local_sets, root=0)
                 if obs.comm_row_rank == 0:

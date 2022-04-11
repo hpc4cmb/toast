@@ -206,9 +206,10 @@ def restore_local(
                 view_samples = vw.stop - vw.start
             offset = interval_starts[interval]
             ldet = 0
-            for idet, det in enumerate(dets):
+            for det in dets:
                 if det not in ob.local_detectors:
                     continue
+                idet = ob.local_detectors.index(det)
                 slc = slice(
                     (idet * nsamp + offset) * nnz,
                     (idet * nsamp + offset + view_samples) * nnz,

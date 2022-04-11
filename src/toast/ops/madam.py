@@ -565,7 +565,7 @@ class Madam(Operator):
         nsamp = nsamp_valid
 
         interval_starts = np.array(interval_starts, dtype=np.int64)
-        all_dets = list(all_dets)
+        all_dets = sorted(all_dets)
         ndet = len(all_dets)
 
         nnz_full = len(self.stokes_weights.mode)
