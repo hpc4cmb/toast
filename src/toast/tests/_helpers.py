@@ -586,8 +586,9 @@ def create_fake_beam_alm(
         #blmT[0] =blm[0].copy() 
         #blmP[0] =blm[1 ] + blm[2]  
         
-        blmT =blm[0].copy() 
-        blmP =blm[1 ] + blm[2]  
+        blmT =blm[0].copy()
+        blmP = blm.copy()
+        blmP[0] = 0
         
         return [blmT, blmP ]  
     else:

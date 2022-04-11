@@ -55,9 +55,16 @@ class SimConviqtTest(MPITestCase):
             self.slm = create_fake_sky_alm(self.lmax, self.fwhm_sky)
 
             hp.write_alm(self.fname_sky, self.slm, lmax=self.lmax, overwrite=True)
+
+            # Inputs for the TEB convolution
+            # FIXME : the TEB conviqt operator should do this match rather than leave it for the user
             hp.write_alm(self.fname_sky.replace(".fits","_T.fits"), self.slm[0] , lmax=self.lmax, overwrite=True)
-            hp.write_alm(self.fname_sky.replace(".fits","_E.fits"), self.slm[1] , lmax=self.lmax, overwrite=True)
-            hp.write_alm(self.fname_sky.replace(".fits","_B.fits"), self.slm[2] , lmax=self.lmax, overwrite=True)
+            slm = self.slm.copy()
+            slm[0] = 0
+            hp.write_alm(self.fname_sky.replace(".fits","_EB.fits"), slm , lmax=self.lmax, overwrite=True)
+            slm[1] = self.slm[2]
+            slm[2] = -self.slm[1]
+            hp.write_alm(self.fname_sky.replace(".fits","_BE.fits"), slm, lmax=self.lmax, overwrite=True)
             
             self.blm = create_fake_beam_alm(
                 self.lmax,
@@ -150,7 +157,8 @@ class SimConviqtTest(MPITestCase):
                 overwrite=True,
             )
 
-            # we explicitly store 3 separate beams for the T, E and B sky alm.
+            # we explicitly store temperature and polarization beams
+            # FIXME : Another place where the operator should handle the decomposition.
             blm_T, blm_P  = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
