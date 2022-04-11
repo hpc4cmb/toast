@@ -335,7 +335,7 @@ class StokesWeights(Operator):
                             + np.multiply(dir[:, 1], dir[:, 1]),
                         )
                     )
-                    ang = np.atan2(ay, ax)
+                    ang = np.arctan2(ay, ax)
                     if hwp_data is not None:
                         ang += 2.0 * hwp_data[samples]
                     ang *= 2.0

@@ -32,9 +32,6 @@ class TemplateOffsetTest(MPITestCase):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
-        for ob in data.obs:
-            print(f"ob {ob.name}: all = {ob.intervals[None]}")
-
         # Create a default noise model
         noise_model = ops.DefaultNoiseModel()
         noise_model.apply(data)
@@ -96,6 +93,75 @@ class TemplateOffsetTest(MPITestCase):
                     np.testing.assert_equal(
                         np.sum(ob.detdata[defaults.det_data][det, slc]), 1.0 * sz
                     )
+
+        del data
+        return
+
+    def test_compare(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+        for ob in data.obs:
+            ob.detdata.create("pydata")
+
+        # Create a default noise model
+        noise_model = ops.DefaultNoiseModel()
+        noise_model.apply(data)
+
+        # Use 1/10 of an observation as the baseline length.  Make it not evenly
+        # divisible in order to test handling of the final amplitude.
+        ob_time = (
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
+        )
+        step_seconds = float(int(ob_time / 10.0))
+
+        tmpl = Offset(
+            det_data=defaults.det_data,
+            times=defaults.times,
+            noise_model=noise_model.noise_model,
+            step_time=step_seconds * u.second,
+        )
+        pytmpl = Offset(
+            det_data="pydata",
+            times=defaults.times,
+            noise_model=noise_model.noise_model,
+            step_time=step_seconds * u.second,
+            use_python=True,
+        )
+
+        # Set the data
+        tmpl.data = data
+        pytmpl.data = data
+
+        # Get some amplitudes and set to one
+        amps = tmpl.zeros()
+        amps.local[:] = 1.0
+        pyamps = pytmpl.zeros()
+        pyamps.local[:] = 1.0
+
+        # Project.
+        for det in tmpl.detectors():
+            for ob in data.obs:
+                tmpl.add_to_signal(det, amps)
+        for det in pytmpl.detectors():
+            for ob in data.obs:
+                pytmpl.add_to_signal(det, pyamps)
+
+        for ob in data.obs:
+            np.testing.assert_allclose(
+                ob.detdata[defaults.det_data], ob.detdata["pydata"]
+            )
+
+        # Accumulate amplitudes
+        for det in tmpl.detectors():
+            for ob in data.obs:
+                tmpl.project_signal(det, amps)
+        for det in pytmpl.detectors():
+            for ob in data.obs:
+                pytmpl.project_signal(det, pyamps)
+
+        # Verify
+        np.testing.assert_allclose(amps.local, pyamps.local)
 
         del data
         return

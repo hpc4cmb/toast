@@ -240,5 +240,5 @@ class PointingDetectorSimple(Operator):
                 bore = np.array(bore_data[samples])
                 if self.shared_flags is not None:
                     good = flag_data[samples] & self.shared_flag_mask == 0
-                    bore[not good] = np.array([0, 0, 0, 1], dtype=np.float64)
+                    bore[np.invert(good)] = np.array([0, 0, 0, 1], dtype=np.float64)
                 quat_data[qidx][samples] = qa.mult(bore, fp_quats[idet])

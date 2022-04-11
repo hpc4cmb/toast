@@ -24,7 +24,7 @@ class PointingHealpixTest(MPITestCase):
 
     def test_pointing_matrix_healpix2(self):
         nside = 64
-        npix = 12 * nside ** 2
+        npix = 12 * nside**2
         hpix = HealpixPixels(64)
         nest = True
         phivec = np.radians(
@@ -218,6 +218,19 @@ class PointingHealpixTest(MPITestCase):
         )
         pixels.apply(data)
 
+        # Also make a copy using a python codepath
+        detpointing.use_python = True
+        detpointing.quats = "pyquat"
+        pixels.use_python = True
+        pixels.quats = "pyquat"
+        pixels.pixels = "pypix"
+        pixels.apply(data)
+
+        for ob in data.obs:
+            np.testing.assert_array_equal(
+                ob.detdata[defaults.pixels], ob.detdata["pypix"]
+            )
+
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
@@ -240,6 +253,19 @@ class PointingHealpixTest(MPITestCase):
             detector_pointing=detpointing,
         )
         weights.apply(data)
+
+        # Also make a copy using a python codepath
+        detpointing.use_python = True
+        detpointing.quats = "pyquat"
+        weights.use_python = True
+        weights.quats = "pyquat"
+        weights.weights = "pyweight"
+        weights.apply(data)
+
+        for ob in data.obs:
+            np.testing.assert_allclose(
+                ob.detdata[defaults.weights], ob.detdata["pyweight"]
+            )
 
         rank = 0
         if self.comm is not None:

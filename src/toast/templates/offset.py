@@ -78,6 +78,8 @@ class Offset(Template):
 
     precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
 
+    use_python = Bool(False, help="If True, use python implementation")
+
     @traitlets.validate("precond_width")
     def _check_precond_width(self, proposal):
         w = proposal["value"]
@@ -112,6 +114,9 @@ class Offset(Template):
         # This function is called whenever a new data trait is assigned to the template.
         # Clear any C-allocated buffers from previous uses.
         self.clear()
+
+        if self.use_python and self.use_accel:
+            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         # Compute the step boundaries for every observation and the number of
         # amplitude values on this process.  Every process only stores amplitudes
@@ -504,15 +509,25 @@ class Offset(Template):
                 self.step_time.to_value(u.second), self._obs_rate[iob]
             )
 
-            template_offset_add_to_signal(
-                step_length,
-                amp_offset,
-                amplitudes.local,
-                det_indx,
-                ob.detdata[self.det_data][:],
-                ob.intervals[self.view].data,
-                self.use_accel,
-            )
+            if self.use_python:
+                self._py_add_to_signal(
+                    step_length,
+                    amp_offset,
+                    amplitudes.local,
+                    det_indx,
+                    ob.detdata[self.det_data],
+                    ob.intervals[self.view].data,
+                )
+            else:
+                template_offset_add_to_signal(
+                    step_length,
+                    amp_offset,
+                    amplitudes.local,
+                    det_indx,
+                    ob.detdata[self.det_data][:],
+                    ob.intervals[self.view].data,
+                    self.use_accel,
+                )
 
     @function_timer
     def _project_signal(self, detector, amplitudes):
@@ -532,18 +547,32 @@ class Offset(Template):
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
             )
-            template_offset_project_signal(
-                det_indx,
-                ob.detdata[self.det_data][:],
-                flag_indx,
-                flag_data,
-                self.det_flag_mask,
-                step_length,
-                amp_offset,
-                amplitudes.local,
-                ob.intervals[self.view].data,
-                self.use_accel,
-            )
+
+            if self.use_python:
+                self._py_project_signal(
+                    det_indx,
+                    ob.detdata[self.det_data],
+                    flag_indx,
+                    flag_data,
+                    self.det_flag_mask,
+                    step_length,
+                    amp_offset,
+                    amplitudes.local,
+                    ob.intervals[self.view].data,
+                )
+            else:
+                template_offset_project_signal(
+                    det_indx,
+                    ob.detdata[self.det_data][:],
+                    flag_indx,
+                    flag_data,
+                    self.det_flag_mask,
+                    step_length,
+                    amp_offset,
+                    amplitudes.local,
+                    ob.intervals[self.view].data,
+                    self.use_accel,
+                )
 
     @function_timer
     def _add_prior(self, amplitudes_in, amplitudes_out):
@@ -619,13 +648,53 @@ class Offset(Template):
         else:
             # Since we do not have a noise filter term in our LHS, our diagonal
             # preconditioner is just the application of offset variance.
-            template_offset_apply_diag_precond(
-                self._offsetvar,
-                amplitudes_in.local,
-                amplitudes_out.local,
-                self.use_accel,
-            )
+            if self.use_python:
+                self._py_apply_diag_precond(
+                    self._offsetvar,
+                    amplitudes_in.local,
+                    amplitudes_out.local,
+                )
+            else:
+                template_offset_apply_diag_precond(
+                    self._offsetvar,
+                    amplitudes_in.local,
+                    amplitudes_out.local,
+                    self.use_accel,
+                )
         return
 
     def _supports_accel(self):
         return True
+
+    def _py_add_to_signal(
+        self, step_length, amp_offset, amplitudes, data_index, det_data, intr_data
+    ):
+        """Internal python implementation for comparison testing."""
+        for vw in intr_data:
+            samples = slice(vw.first, vw.last + 1, 1)
+            sampidx = np.arange(vw.first, vw.last + 1, dtype=np.int64)
+            amp_vals = np.array(
+                [amplitudes[amp_offset + x] for x in (sampidx // step_length)]
+            )
+            det_data[data_index[0], samples] += amp_vals
+
+    def _py_project_signal(
+        self, data_index, det_data, step_length, amp_offset, amplitudes, intr_data
+    ):
+        """Internal python implementation for comparison testing."""
+        for vw in intr_data:
+            samples = slice(vw.first, vw.last + 1, 1)
+            ampidx = (
+                amp_offset
+                + np.arange(vw.first, vw.last + 1, dtype=np.int64) // step_length
+            )
+            # for a, d in zip(ampidx, det_data[data_index[0]][samples]):
+            #     amplitudes[a] += d
+            tempamp = np.zeros_like(amplitudes)
+            np.add.at(tempamp, ampidx, det_data[data_index[0]][samples])
+            amplitudes += tempamp
+
+    def _py_apply_diag_precond(self, offset_var, amp_in, amp_out):
+        """Internal python implementation for comparison testing."""
+        amp_out[:] = amp_in
+        amp_out *= offset_var
