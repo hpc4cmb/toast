@@ -28,9 +28,7 @@ class TemplateGainTest(MPITestCase):
 
     def test_offset(self):
         # Create a fake satellite data set for testing
-        data = create_satellite_data(
-            self.comm
-        )
+        data = create_satellite_data(self.comm)
 
         # Create a noise model from focalplane detector properties
         noise_model = ops.DefaultNoiseModel()
@@ -47,7 +45,7 @@ class TemplateGainTest(MPITestCase):
         key = "signal"
         sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
         sim_dipole.apply(data)
-        key_template ="template"
+        key_template = "template"
         sim_dipole = ops.SimDipole(det_data="template", mode="solar", coord="G")
         sim_dipole.apply(data)
         # Set up binning operator for solving
@@ -58,10 +56,10 @@ class TemplateGainTest(MPITestCase):
         )
         # set up a gain fluctuation template
         tmpl = GainTemplate(
-            det_data=key ,
+            det_data=key,
             noise_model=noise_model.noise_model,
             template_name=key_template,
-            order=1
+            order=1,
         )
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
 
@@ -73,7 +71,6 @@ class TemplateGainTest(MPITestCase):
             template_matrix=tmatrix,
         )
         mapper.apply(data)
-
 
         del data
         return

@@ -20,6 +20,7 @@ from .amplitudes import Amplitudes
 
 import scipy
 
+
 @trait_docs
 class GainTemplate(Template):
     """This class aims at fitting and mitigating gain fluctuations in the data.
@@ -41,13 +42,13 @@ class GainTemplate(Template):
     #    flag_mask        : Bit mask for detector solver flags
     #
 
-    order=  Int(1, help="The order of Legendre polynomials to fit the gain amplitudes ")
-
+    order = Int(1, help="The order of Legendre polynomials to fit the gain amplitudes ")
 
     template_name = Unicode(
         None,
         allow_none=True,
-        help= "detdata key encoding the signal estimate to fit the gain amplitudes"    )
+        help="detdata key encoding the signal estimate to fit the gain amplitudes",
+    )
 
     noise_model = Unicode(
         None,
@@ -58,9 +59,9 @@ class GainTemplate(Template):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _get_polynomials(self, N ):
-        norder= self.order+1
-        L = np.zeros(( N, norder  ), dtype=np.float64)
+    def _get_polynomials(self, N):
+        norder = self.order + 1
+        L = np.zeros((N, norder), dtype=np.float64)
         x = np.linspace(-1.0, 1.0, N)
         for i in range(norder):
             L[:, i] = scipy.special.legendre(i)(x)
@@ -68,7 +69,7 @@ class GainTemplate(Template):
 
     def _initialize(self, new_data):
 
-        self.norder= self.order+1
+        self.norder = self.order + 1
         # Use this as an "Ordered Set".  We want the unique detectors on this process,
         # but sorted in order of occurrence.
         all_dets = OrderedDict()
@@ -123,7 +124,7 @@ class GainTemplate(Template):
             noise = None
             if self.noise_model in ob:
                 noise = ob[self.noise_model]
-            #import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             views = ob.view[self.view]
             for ivw, vw in enumerate(views):
                 view_len = None
@@ -133,9 +134,9 @@ class GainTemplate(Template):
                 else:
                     view_len = vw.stop - vw.start
                 # get legendre polynomials
-                L = self._get_polynomials(view_len )
+                L = self._get_polynomials(view_len)
                 # store them in the template dictionary
-                self._templates[iob].append(  L)
+                self._templates[iob].append(L)
 
                 self._precond[iob][ivw] = dict()
                 for det in ob.local_detectors:
@@ -149,12 +150,12 @@ class GainTemplate(Template):
                         good = flags & self.flag_mask != 0
 
                     prec = np.zeros((norder, norder), dtype=np.float64)
-                    T =  ob.detdata[self.template_name][det]
+                    T = ob.detdata[self.template_name][det]
 
                     LT = L.T.copy()
-                    for row in LT :
-                        row *=T*np.sqrt(detweight)
-                    M= LT.dot(LT.T )
+                    for row in LT:
+                        row *= T * np.sqrt(detweight)
+                    M = LT.dot(LT.T)
                     self._precond[iob][ivw][det] = np.linalg.inv(M)
 
     def _detectors(self):
@@ -173,12 +174,12 @@ class GainTemplate(Template):
             if detector not in ob.local_detectors:
                 continue
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
-                legendre_poly= self._templates[iob][ivw]
+                legendre_poly = self._templates[iob][ivw]
                 poly_amps = amplitudes.local[offset : offset + norder]
                 delta_gain = legendre_poly.dot(poly_amps)
                 signal_estimate = ob.detdata[self.template_name][detector]
                 gain_fluctuation = signal_estimate * delta_gain
-                vw[detector] +=gain_fluctuation
+                vw[detector] += gain_fluctuation
 
     def _project_signal(self, detector, amplitudes):
         norder = self.order + 1
@@ -187,20 +188,17 @@ class GainTemplate(Template):
             if detector not in ob.local_detectors:
                 continue
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
-                legendre_poly= self._templates[iob][ivw]
+                legendre_poly = self._templates[iob][ivw]
                 signal_estimate = ob.detdata[self.template_name][detector]
                 LT = legendre_poly.T.copy()
                 for row in LT:
                     row *= signal_estimate
                 poly_amps = amplitudes.local[offset : offset + norder]
-                poly_amps += np.dot(LT,vw[detector] )
-
-
+                poly_amps += np.dot(LT, vw[detector])
 
     def _add_prior(self, amplitudes_in, amplitudes_out):
         # No prior for this template, nothing to accumulate to output.
         return
-
 
     def _apply_precond(self, amplitudes_in, amplitudes_out):
         norder = self.order + 1
@@ -227,7 +225,7 @@ class GainTemplate(Template):
             if detector not in ob.local_detectors:
                 continue
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
-                legendre_poly= self._templates[iob][ivw]
+                legendre_poly = self._templates[iob][ivw]
                 poly_amps = amplitudes.local[offset : offset + norder]
                 delta_gain = legendre_poly.dot(poly_amps)
-                vw[detector] /=gain_fluctuation
+                vw[detector] /= gain_fluctuation

@@ -14,4 +14,4 @@ from .fourier2d import Fourier2D
 
 from .subharmonic import SubHarmonic
 
-from .gaintemplate  import GainTemplate
+from .gaintemplate import GainTemplate
