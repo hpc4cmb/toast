@@ -24,12 +24,11 @@ import scipy
 @trait_docs
 class GainTemplate(Template):
     """This class aims at fitting and mitigating gain fluctuations in the data.
-    The fluctuations  are modeled as a linear combination of Legendre polynomials (up to a given order, commonly
-    `n<5` ) weighted by the so called _gain amplitudes_. The gain template is therefore obtained by estimating
-    the polynomial amplitudes by assuming a _signal estimate_ provided by a template map (encoding a coarse
-    estimate of the underlying signal. )
-
-
+    The fluctuations  are modeled as a linear combination of Legendre polynomials (up
+    to a given order, commonly `n<5` ) weighted by the so called _gain amplitudes_.
+    The gain template is therefore obtained by estimating the polynomial amplitudes by
+    assuming a _signal estimate_ provided by a template map (encoding a coarse estimate
+    of the underlying signal.)
 
     """
 
@@ -38,8 +37,8 @@ class GainTemplate(Template):
     #    data             : The Data instance we are working with
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
-    #    flags            : Optional detector solver flags
-    #    flag_mask        : Bit mask for detector solver flags
+    #    det_flags        : Optional detector solver flags
+    #    det_flag_mask    : Bit mask for detector solver flags
     #
 
     order = Int(1, help="The order of Legendre polynomials to fit the gain amplitudes ")
@@ -145,9 +144,9 @@ class GainTemplate(Template):
                         detweight = noise.detector_weight(det)
 
                     good = slice(0, view_len, 1)
-                    if self.flags is not None:
-                        flags = views.detdata[self.flags][ivw][det]
-                        good = flags & self.flag_mask != 0
+                    if self.det_flags is not None:
+                        flags = views.detdata[self.det_flags][ivw][det]
+                        good = flags & self.det_flag_mask == 0
 
                     prec = np.zeros((norder, norder), dtype=np.float64)
                     T = ob.detdata[self.template_name][det]
@@ -190,11 +189,16 @@ class GainTemplate(Template):
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 legendre_poly = self._templates[iob][ivw]
                 signal_estimate = ob.detdata[self.template_name][detector]
+                if self.det_flags is not None:
+                    flagview = ob.view[self.view].detdata[self.det_flags][ivw]
+                    mask = (flagview[detector] & self.det_flag_mask) == 0
+                else:
+                    mask = 1
                 LT = legendre_poly.T.copy()
                 for row in LT:
                     row *= signal_estimate
                 poly_amps = amplitudes.local[offset : offset + norder]
-                poly_amps += np.dot(LT, vw[detector])
+                poly_amps += np.dot(LT, vw[detector] * mask)
 
     def _add_prior(self, amplitudes_in, amplitudes_out):
         # No prior for this template, nothing to accumulate to output.
@@ -213,19 +217,3 @@ class GainTemplate(Template):
                     amps_out = amplitudes_out.local[offset : offset + norder]
                     amps_out[:] = np.dot(self._precond[iob][ivw][det], amps_in)
                     offset += norder
-
-    def calibrate(self, detector, amplitudes):
-        """
-        Get  the optimal gain fluctuation amplitudes at   PCG convergence  and
-        recalibrate off the data by dividing the TODs by the estimated gain fluctuation.
-        """
-        norder = self.order + 1
-        offset = self._det_start[detector]
-        for iob, ob in enumerate(self.data.obs):
-            if detector not in ob.local_detectors:
-                continue
-            for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
-                legendre_poly = self._templates[iob][ivw]
-                poly_amps = amplitudes.local[offset : offset + norder]
-                delta_gain = legendre_poly.dot(poly_amps)
-                vw[detector] /= gain_fluctuation

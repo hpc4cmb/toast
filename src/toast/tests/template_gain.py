@@ -33,14 +33,19 @@ class TemplateGainTest(MPITestCase):
         # Create a noise model from focalplane detector properties
         noise_model = ops.DefaultNoiseModel()
         noise_model.apply(data)
+
         # make a simple pointing matrix
         detpointing = ops.PointingDetectorSimple()
-        pointing = ops.PointingHealpix(
+        pixels = ops.PixelsHealpix(
             nside=16,
             nest=False,
-            mode="IQU",
             detector_pointing=detpointing,
         )
+        weights = ops.StokesWeights(
+            mode="I",
+            detector_pointing=detpointing,
+        )
+
         # Generate timestreams
         key = "signal"
         sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
@@ -48,12 +53,15 @@ class TemplateGainTest(MPITestCase):
         key_template = "template"
         sim_dipole = ops.SimDipole(det_data="template", mode="solar", coord="G")
         sim_dipole.apply(data)
+
         # Set up binning operator for solving
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            pointing=pointing,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
             noise_model=noise_model.noise_model,
         )
+
         # set up a gain fluctuation template
         tmpl = GainTemplate(
             det_data=key,
@@ -63,14 +71,21 @@ class TemplateGainTest(MPITestCase):
         )
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
 
-        # Map maker
-        mapper = ops.MapMaker(
-            name="test1",
+        # Solve for template amplitudes
+        calibration = ops.Calibrate(
             det_data="signal",
+            result="calibrated",
             binning=binner,
             template_matrix=tmatrix,
         )
-        mapper.apply(data)
+        calibration.apply(data)
+
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                np.testing.assert_allclose(
+                    ob.detdata["calibrated"][det],
+                    np.ones(ob.n_local_samples)
+                )
 
         del data
         return

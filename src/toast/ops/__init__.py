@@ -55,7 +55,7 @@ from .mapmaker_utils import (
 
 from .mapmaker_binning import BinMap
 
-from .mapmaker_templates import TemplateMatrix
+from .mapmaker_templates import TemplateMatrix, SolveAmplitudes
 
 from .mapmaker import MapMaker, Calibrate
 
