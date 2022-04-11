@@ -91,7 +91,6 @@ class MapmakerSolveTest(MPITestCase):
         step_seconds = float(int(ob_time / 10.0))
         tmpl = Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -183,7 +182,6 @@ class MapmakerSolveTest(MPITestCase):
         step_seconds = float(int(ob_time / 10.0))
         tmpl = Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
