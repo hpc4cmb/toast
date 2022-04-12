@@ -237,6 +237,9 @@ class SimConviqt(Operator):
         if self.detector_pointing is None:
             raise RuntimeError("detector_pointing cannot be None.")
 
+        if self.hwp_angle is not None:
+            raise RuntimeError("Standard conviqt operator cannot handle HWP angle")
+
         log = Logger.get()
 
         timer = Timer()
@@ -265,9 +268,9 @@ class SimConviqt(Operator):
 
             detector = self.get_detector(det)
 
-            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
-            np.savez(f'{self.det_data}_{det}.npz', psi=psi, psi_pol=psi_pol,
-                    theta=theta, phi=phi) 
+            theta, phi, psi, psi_pol, hwp_angle = self.get_pointing(data, det, verbose)
+            #np.savez(f'{self.det_data}_{det}.npz', psi=psi, psi_pol=psi_pol,
+            #        theta=theta, phi=phi)
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             del theta, phi, psi
 
@@ -397,7 +400,7 @@ class SimConviqt(Operator):
         nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
         timer = Timer()
         timer.start()
-        all_theta, all_phi, all_psi, all_psi_pol = [], [], [], []
+        all_theta, all_phi, all_psi, all_psi_pol, all_hwp_angle = [], [], [], [], []
         for obs in data.obs:
             if det not in obs.local_detectors:
                 continue
@@ -441,6 +444,7 @@ class SimConviqt(Operator):
                 if self.hwp_angle is not None:
                     hwp_angle = views.shared[self.hwp_angle][view]
                     psi_pol += 2 * hwp_angle
+                    all_hwp_angle.append(hwp_angle)
                 all_theta.append(theta)
                 all_phi.append(phi)
                 all_psi.append(psi)
@@ -451,10 +455,14 @@ class SimConviqt(Operator):
             all_phi = np.hstack(all_phi)
             all_psi = np.hstack(all_psi)
             all_psi_pol = np.hstack(all_psi_pol)
+            if self.hwp_angle is not None:
+                all_hwp_angle = np.hstack(all_hwp_angle)
+            else:
+                all_hwp_angle = 0
 
         if verbose:
             timer.report_clear(f"compute pointing angles for detector {det}")
-        return all_theta, all_phi, all_psi, all_psi_pol
+        return all_theta, all_phi, all_psi, all_psi_pol, all_hwp_angle
 
     def get_buffer(self, theta, phi, psi, det, verbose):
         """Pack the pointing into the conviqt pointing array"""
@@ -623,7 +631,7 @@ class SimWeightedConviqt(SimConviqt):
 
             detector = self.get_detector(det)
 
-            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
+            theta, phi, psi, psi_pol, hwp_angle = self.get_pointing(data, det, verbose)
 
             # I-beam convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
@@ -739,25 +747,28 @@ class SimTEBConviqt(SimConviqt):
             beam_T, beam_P= self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
-            
-            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
+
+            theta, phi, psi, psi_pol, hwp_angle = self.get_pointing(data, det, verbose)
             # T-convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
 
-            convolved_data = self.convolve(skyT, beam_T, detector, pnt, det, verbose, pol=False)
+            convolved_data = self.convolve(
+                skyT, beam_T, detector, pnt, det, verbose, pol=False
+            )
 
             del (pnt,)
             # EB-convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data += np.cos(2 * psi_pol) * self.convolve(
+            convolved_data += np.cos(4 * hwp_angle) * self.convolve(
                 skyEB, beam_P, detector, pnt, det, verbose, pol=True
             )
             del (pnt,)
             # BE-convolution
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
-            convolved_data += np.sin(2 * psi_pol) * self.convolve(
+            convolved_data += np.sin(4 * hwp_angle) * self.convolve(
                 skyBE, beam_P, detector, pnt, det, verbose, pol=True
             )
+
             del theta, phi, psi
 
             self.calibrate_signal(
