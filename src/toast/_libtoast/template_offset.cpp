@@ -161,7 +161,7 @@ void init_template_offset(py::module & m) {
                 dev_amplitudes = (double*)omgr.device_ptr((void*)raw_amplitudes);
                 dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
                 if (raw_det_flags != NULL) {
-                    dev_det_flags = (double*)omgr.device_ptr((void*)raw_det_flags);
+                    dev_det_flags = (uint8_t*)omgr.device_ptr((void*)raw_det_flags);
                 }
                 dev_intervals = (Interval*)omgr.device_ptr(
                     (void*)raw_intervals

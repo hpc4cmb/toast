@@ -70,7 +70,7 @@ void build_noise_weighted_inner(
         scaled_data = data[off_d] * det_scale[idet];
 
         for (int64_t iweight = 0; iweight < nnz; iweight++) {
-            #pragma omp atomic update
+            // #pragma omp atomic update
             zmap[zoff + iweight] += scaled_data * weights[off_wt + iweight];
         }
     }
@@ -172,6 +172,8 @@ void init_ops_mapmaker_utils(py::module & m) {
             uint8_t * dev_shared_flags = raw_shared_flags;
             double * dev_zmap = raw_zmap;
 
+            int64_t n_zmap = n_local_submap * n_pix_submap * nnz;
+
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
@@ -215,7 +217,8 @@ void init_ops_mapmaker_utils(py::module & m) {
                     #pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for default(shared)
+                            #pragma omp parallel for default(shared) \
+                                reduction(+:dev_zmap[:n_zmap])
                             for (
                                 int64_t isamp = dev_intervals[iview].first;
                                 isamp <= dev_intervals[iview].last;
@@ -251,7 +254,8 @@ void init_ops_mapmaker_utils(py::module & m) {
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        #pragma omp parallel for default(shared)
+                        #pragma omp parallel for ordered default(shared) \
+                            reduction(+:dev_zmap[:n_zmap])
                         for (
                             int64_t isamp = dev_intervals[iview].first;
                             isamp <= dev_intervals[iview].last;
