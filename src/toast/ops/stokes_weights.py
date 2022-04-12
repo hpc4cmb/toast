@@ -347,4 +347,4 @@ class StokesWeights(Operator):
                 widx = weight_indx[idet]
                 for vw in intr_data:
                     samples = slice(vw.first, vw.last + 1, 1)
-                    weight_data[widx][samples, 0] = cal
+                    weight_data[widx][samples] = cal

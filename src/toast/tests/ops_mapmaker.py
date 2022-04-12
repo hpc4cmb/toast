@@ -39,8 +39,7 @@ class MapmakerTest(MPITestCase):
         np.random.seed(123456)
         # We want to hold the number of observations fixed, so that we can compare
         # results across different concurrencies.
-        # FIXME: change back to a larger value after debugging
-        self.total_obs = 1
+        self.total_obs = 2
         self.obs_per_group = self.total_obs
         if self.comm is not None and self.comm.size >= 2:
             self.obs_per_group = self.total_obs // 2
@@ -231,7 +230,6 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -298,7 +296,6 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -333,6 +330,7 @@ class MapmakerTest(MPITestCase):
                     diff_base = madam_base - toast_base
 
                     print(f"TOAST baseline rms = {np.std(toast_base)}")
+                    print(f"MADAM baseline rms = {np.std(madam_base)}")
 
                     if not np.allclose(toast_base, madam_base, rtol=0.01):
                         print(
@@ -474,7 +472,6 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -545,7 +542,6 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -667,7 +663,9 @@ class MapmakerTest(MPITestCase):
         scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
-        delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights])
+        delete_pointing = ops.Delete(
+            detdata=[pixels.pixels, weights.weights, detpointing.quats]
+        )
         delete_pointing.apply(data)
         pixels.create_dist = None
 
@@ -701,7 +699,6 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -772,7 +769,6 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",

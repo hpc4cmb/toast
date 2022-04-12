@@ -499,11 +499,7 @@ class Offset(Template):
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
                 continue
-            det_indx = ob.detdata[self.det_data].indices(
-                [
-                    detector,
-                ]
-            )
+            det_indx = ob.detdata[self.det_data].indices([detector])
             # The step length for this observation
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
@@ -523,7 +519,7 @@ class Offset(Template):
                     step_length,
                     amp_offset,
                     amplitudes.local,
-                    det_indx,
+                    det_indx[0],
                     ob.detdata[self.det_data][:],
                     ob.intervals[self.view].data,
                     self.use_accel,
@@ -538,11 +534,11 @@ class Offset(Template):
                 continue
             det_indx = ob.detdata[self.det_data].indices([detector])
             if self.det_flags is not None:
-                flag_indx = -1
                 flag_indx = ob.detdata[self.det_flags].indices([detector])
+                flag_data = ob.detdata[self.det_flags]
             else:
-                flag_indx = -1
-                flag_data = np.zeros(0, dtype=np.uint8)
+                flag_indx = np.array([-1], dtype=np.int32)
+                flag_data = np.zeros(1, dtype=np.uint8)
             # The step length for this observation
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
@@ -562,10 +558,10 @@ class Offset(Template):
                 )
             else:
                 template_offset_project_signal(
-                    det_indx,
+                    det_indx[0],
                     ob.detdata[self.det_data][:],
-                    flag_indx,
-                    flag_data,
+                    flag_indx[0],
+                    flag_data[:],
                     self.det_flag_mask,
                     step_length,
                     amp_offset,
@@ -679,7 +675,16 @@ class Offset(Template):
             det_data[data_index[0], samples] += amp_vals
 
     def _py_project_signal(
-        self, data_index, det_data, step_length, amp_offset, amplitudes, intr_data
+        self,
+        data_index,
+        det_data,
+        flag_index,
+        flag_data,
+        flag_mask,
+        step_length,
+        amp_offset,
+        amplitudes,
+        intr_data,
     ):
         """Internal python implementation for comparison testing."""
         for vw in intr_data:
@@ -688,11 +693,14 @@ class Offset(Template):
                 amp_offset
                 + np.arange(vw.first, vw.last + 1, dtype=np.int64) // step_length
             )
-            # for a, d in zip(ampidx, det_data[data_index[0]][samples]):
-            #     amplitudes[a] += d
-            tempamp = np.zeros_like(amplitudes)
-            np.add.at(tempamp, ampidx, det_data[data_index[0]][samples])
-            amplitudes += tempamp
+            ddata = det_data[data_index[0]][samples]
+            if flag_index[0] >= 0:
+                # We have detector flags
+                ddata = np.array(
+                    (flag_data[flag_index[0]] & flag_mask == 0), dtype=np.float64
+                )
+                ddata *= det_data[data_index[0]][samples]
+            np.add.at(amplitudes, ampidx, ddata)
 
     def _py_apply_diag_precond(self, offset_var, amp_in, amp_out):
         """Internal python implementation for comparison testing."""

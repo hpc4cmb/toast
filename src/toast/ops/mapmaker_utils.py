@@ -783,9 +783,15 @@ class BuildNoiseWeighted(Operator):
                 local_submap = np.array(
                     [global2local[x] for x in global_submap], dtype=np.int64
                 )
-                zmap.data[zip(local_submap, submap_pix)] += det_scale[
-                    idet
-                ] * np.multiply(weight_buffer[good], det_buffer[good])
+                tempdata = np.multiply(
+                    weight_buffer[good],
+                    np.multiply(det_scale[idet], det_buffer[good])[:, np.newaxis],
+                )
+                np.add.at(
+                    zmap.data,
+                    (local_submap, submap_pix),
+                    tempdata,
+                )
 
 
 @trait_docs

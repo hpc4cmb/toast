@@ -31,8 +31,7 @@ void build_noise_weighted_inner(
     int64_t nnz,
     uint8_t det_mask,
     uint8_t shared_mask,
-    int64_t n_pix_submap,
-    double npix_submap_inv
+    int64_t n_pix_submap
 ) {
     int32_t w_indx = weight_index[idet];
     int32_t p_indx = pixel_index[idet];
@@ -50,13 +49,16 @@ void build_noise_weighted_inner(
     int64_t local_submap;
     int64_t global_submap;
 
+    uint8_t det_check = det_flags[off_f] & det_mask;
+    uint8_t shared_check = shared_flags[isamp] & shared_mask;
+
     if (
         (pixels[off_p] >= 0) &&
-        ((det_flags[off_f] & det_mask) == 0) &&
-        ((shared_flags[isamp] & shared_mask) == 0)
+        (det_check == 0) &&
+        (shared_check == 0)
     ) {
         // Good data, accumulate
-        global_submap = (int64_t)(pixels[off_p] * npix_submap_inv);
+        global_submap = (int64_t)(pixels[off_p] / n_pix_submap);
 
         local_submap = global2local[global_submap];
 
@@ -68,6 +70,7 @@ void build_noise_weighted_inner(
         scaled_data = data[off_d] * det_scale[idet];
 
         for (int64_t iweight = 0; iweight < nnz; iweight++) {
+            #pragma omp atomic update
             zmap[zoff + iweight] += scaled_data * weights[off_wt + iweight];
         }
     }
@@ -169,8 +172,6 @@ void init_ops_mapmaker_utils(py::module & m) {
             uint8_t * dev_shared_flags = raw_shared_flags;
             double * dev_zmap = raw_zmap;
 
-            double npix_submap_inv = 1.0 / (double)(n_pix_submap);
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
@@ -199,7 +200,6 @@ void init_ops_mapmaker_utils(py::module & m) {
                         nnz, \
                         n_pix_submap, \
                         det_flag_mask, \
-                        npix_submap_inv, \
                         shared_flag_mask \
                     ) \
                     use_device_ptr( \
@@ -240,8 +240,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     nnz,
                                     det_flag_mask,
                                     shared_flag_mask,
-                                    n_pix_submap,
-                                    npix_submap_inv
+                                    n_pix_submap
                                 );
                             }
                         }
@@ -277,8 +276,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                                 nnz,
                                 det_flag_mask,
                                 shared_flag_mask,
-                                n_pix_submap,
-                                npix_submap_inv
+                                n_pix_submap
                             );
                         }
                     }

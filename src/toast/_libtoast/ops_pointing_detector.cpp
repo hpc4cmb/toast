@@ -27,7 +27,8 @@ void pointing_detector_inner(
 ) {
     int32_t qidx = q_index[idet];
     double temp_bore[4];
-    if ((flags[isamp] & mask) == 0) {
+    uint8_t check = flags[isamp] & mask;
+    if (check == 0) {
         temp_bore[0] = boresight[4 * isamp];
         temp_bore[1] = boresight[4 * isamp + 1];
         temp_bore[2] = boresight[4 * isamp + 2];
