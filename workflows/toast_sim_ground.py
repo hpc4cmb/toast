@@ -524,6 +524,7 @@ def reduce_data(job, args, data):
         data._comm = orig_comm
     else:
         ops.mapmaker.apply(data)
+        ops.filterbin.apply(data)
     log.info_rank("  Finished map-making in", comm=world_comm, timer=timer)
 
     ops.mem_count.prefix = "After mapmaker"
