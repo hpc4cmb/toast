@@ -22,7 +22,7 @@ from ..pixels import PixelData, PixelDistribution
 from ..pixels_io import (filename_is_fits, filename_is_hdf5, read_healpix_fits,
                          read_healpix_hdf5, write_healpix_fits,
                          write_healpix_hdf5)
-from ..timing import Timer, function_timer
+from ..timing import Timer, function_timer, GlobalTimers
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
 from .copy import Copy
@@ -339,6 +339,7 @@ class FilterBin(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        gt = GlobalTimers.get()
 
         timer = Timer()
         timer.start()
@@ -406,7 +407,7 @@ class FilterBin(Operator):
             "FilterBin: Binned unfiltered map in", comm=self.comm, timer=timer
         )
 
-        log.debug_rank("FilterBin: Filtering signal", comm=self.comm)
+        log.info_rank("FilterBin: Filtering signal", comm=self.comm)
 
         timer1 = Timer()
         timer1.start()
@@ -415,6 +416,8 @@ class FilterBin(Operator):
 
         memreport.prefix = "Before filtering"
         memreport.apply(data)
+
+        gt.start("FilterBin: filter TOD")
 
         t1 = time()
         for iobs, obs in enumerate(data.obs):
@@ -444,9 +447,9 @@ class FilterBin(Operator):
             values = sorted(detectors_by_value.keys())
 
             if self.grank == 0:
-                log.debug(
+                log.info(
                     f"{self.group:4} : FilterBin: Processing observation "
-                    f"{iobs} / {len(data.obs)}",
+                    f"{iobs + 1} / {len(data.obs)}",
                 )
 
             ground_templates = self._get_ground_templates(obs)
@@ -468,118 +471,35 @@ class FilterBin(Operator):
             memreport.apply(data)
 
             last_good_fit = None
-            template_covariance = None
 
+            gt.start("FilterBin: loop values")  # DEBUG
             for ivalue, value in enumerate(values):
+                gt.start("FilterBin: common templates")  # DEBUG
                 dets = detectors_by_value[value]
                 ndet = len(dets)
 
                 all_templates = []
-                spatial_templates = self._get_spatial_templates(obs, dets)
-                if spatial_templates is not None:
-                    all_templates.append(spatial_templates)
-                full_ground_templates = self._expand_templates(ground_templates, ndet)
-                if full_ground_templates is not None:
-                    all_templates.append(full_ground_templates)
-                full_poly_templates = self._expand_templates(poly_templates, ndet)
-                if full_poly_templates is not None:
-                    all_templates.append(full_poly_templates)
-                full_deprojection_templates = []
+                self._get_spatial_templates(obs, dets, all_templates)
+                self._expand_templates(ground_templates, ndet, all_templates)
+                self._expand_templates(poly_templates, ndet, all_templates)
+                gt.stop("FilterBin: common templates")  # DEBUG
 
-                full_signal = []
-                full_good_fit = []
-                full_good_bin = []
-                full_pixels = []
-                full_weights = []
-
-                for idet, det in enumerate(detectors_by_value[value]):
-                    if self.grank == 0:
-                        log.debug(
-                            f"{self.group:4} : FilterBin:   Processing detector "
-                            f"# {idet + 1} / {ndet} : key = {value}",
-                        )
-
-                    # FIXME: even if jointly-filtered detectors are not on the same
-                    # process, every process will need to participate in the collective
-                    # operations
-
-                    signal = obs.detdata[self.det_data][det]
-                    flags = obs.detdata[self.det_flags][det]
-                    # `good` is essentially the diagonal noise matrix used in
-                    # template regression.  All good detector samples have the
-                    # same noise weight and rest have zero weight.
-                    good_fit = np.logical_and(
-                        (common_flags & self.shared_flag_mask) == 0,
-                        (flags & self.det_flag_mask) == 0,
-                    )
-                    good_bin = np.logical_and(
-                        (common_flags & self.binning.shared_flag_mask) == 0,
-                        (flags & self.binning.det_flag_mask) == 0,
-                    )
-
-                    full_signal.append(signal)
-                    full_good_fit.append(good_fit)
-                    full_good_bin.append(good_bin)
-
-                    if np.sum(good_fit) == 0:
-                        continue
-
-                    deproject = (
-                        self.deproject_map is not None
-                        and self._deproject_pattern.match(det) is not None
-                    )
-
-                    if deproject or self.write_obs_matrix:
-                        # We'll need pixel numbers
-                        obs_data = data.select(obs_uid=obs.uid)
-                        self.binning.pixel_pointing.apply(obs_data, detectors=[det])
-                        pixels = obs.detdata[self.binning.pixel_pointing.pixels][det]
-                        # and weights
-                        self.binning.stokes_weights.apply(obs_data, detectors=[det])
-                        weights = obs.detdata[self.binning.stokes_weights.weights][det]
-                        if weights.ndim == 1:
-                            weights = weights.reshape(-1, 1)
-                        full_pixels.append(pixels)
-                        full_weights.append(weights)
-                    else:
-                        pixels = None
-                        weights = None
-
-                    #det_templates = common_templates.mask(good_fit)
-
-                    if (
-                        self.deproject_map is not None
-                        and self._deproject_pattern.match(det) is not None
-                    ):
-                        deprojection_templates = self._get_deprojection_templates(
-                            data, obs, pixels, det_templates
-                        )
-                        # Must re-evaluate the template covariance
-                        template_covariance = None
-                    else:
-                        deprojection_templates = None
-                    full_deprojection_templates.append(deprojection_templates)
-
-                    if self.grank == 0:
-                        log.debug(
-                            f"{self.group:4} : FilterBin:   Built deprojection "
-                            f"templates in {time() - t1:.2f} s."
-                        )
-                        t1 = time()
-
-                    memreport.prefix = "After detector templates"
-                    memreport.apply(data)
+                (
+                    full_signal,
+                    full_good_fit,
+                    full_good_bin,
+                    full_pixels,
+                    full_weights,
+                    full_deprojection_templates,
+                ) = self._get_detector_templates(data, obs, dets, common_flags, value, memreport)
 
                 # Concatenate lists
 
+                gt.start("FilterBin: concatenate lists")  # DEBUG
                 full_signal = np.hstack(full_signal)
                 full_good_fit = np.hstack(full_good_fit)
                 full_good_bin = np.hstack(full_good_bin)
-                full_deprojection_templates = self._expand_templates(
-                    full_deprojection_templates, ndet
-                )
-                if full_deprojection_templates is not None:
-                    all_templates.append(full_deprojection_templates)
+                self._expand_templates(full_deprojection_templates, ndet, all_templates)
 
                 full_noise_weights = scipy.sparse.diags(full_good_fit, dtype=float)
 
@@ -601,82 +521,12 @@ class FilterBin(Operator):
                             f"key={value} in {time() - t1:.2f} s",
                         )
                         t1 = time()
+                gt.stop("FilterBin: concatenate lists")  # DEBUG
 
                 t2 = time()
-                all_covs = []
-                for itemplates in range(len(all_templates)):
-
-                    templates = all_templates[itemplates]
-                    # Normalize the templates to improve the condition number of the
-                    # template covariance matrix
-
-                    ntemplate, nsample_tot = templates.shape
-                    good_templates = []
-                    for itemplate in range(ntemplate):
-                        template = templates[[itemplate], :].toarray().ravel()
-                        norm = np.sum(template[full_good_fit] ** 2)
-                        if norm > 1e-3:
-                            templates[[itemplate], :] /= norm ** .5
-                            good_templates.append(itemplate)
-                    nbad = ntemplate - len(good_templates)
-                    if nbad != 0:
-                        log.debug(
-                            f"{self.group:4} : FilterBin:   Discarding {nbad} "
-                            f"poorly-constrained templates"
-                        )
-                        templates = templates[good_templates]
-
-                    # Now build the inverse covariance matrix
-
-                    invcov = templates.dot(full_noise_weights.dot(templates.T))
-
-                    nrow, ncol = invcov.shape
-                    if nrow < 1000:
-                        invcov = invcov.toarray()
-
-                    if self.grank == 0:
-                        log.debug(
-                            f"{self.group:4} : FilterBin:   Stacked templates for "
-                            f"key={value} : {itemplates + 1}/{len(all_templates)} "
-                            f"in {time() - t1:.2f} s",
-                        )
-                        t1 = time()
-
-                    if isinstance(invcov, np.ndarray):
-                        # avoid inverting singular matrices
-
-                        rcond = 1 / np.linalg.cond(invcov)
-                        if self.grank == 0:
-                            log.debug(
-                                f"{self.group:4} : FilterBin:   Template covariance matrix "
-                                f"rcond = {rcond} in {time() - t1:.2f} s",
-                            )
-                            t1 = time()
-
-                        if rcond > 1e-6:
-                            cov = np.linalg.inv(invcov)
-                        else:
-                            log.warning(
-                                f"{self.group:4} : FilterBin: WARNING: template "
-                                f"covariance matrix is poorly conditioned: "
-                                f"rcond = {rcond}.  Using matrix pseudoinverse.",
-                            )
-                            cov = np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
-                    else:
-                        # Trust our regularization
-                        cov = scipy.sparse.linalg.inv(invcov)
-
-                    all_templates[itemplates] = templates
-                    all_covs.append(cov)
-
-                    if self.grank == 0:
-                        log.debug(
-                            f"{self.group:4} : FilterBin:   Inverted covariance for "
-                            f"key={value} : {itemplates + 1}/{len(all_templates)} "
-                            f"in {time() - t1:.2f} s",
-                        )
-                        t1 = time()
-
+                all_covs = self._build_template_covariance(
+                    all_templates, full_good_fit, full_noise_weights, value
+                )
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:   Built template covariance "
@@ -684,17 +534,9 @@ class FilterBin(Operator):
                     )
                     t1 = time()
 
-                fitted_signal = np.zeros_like(full_signal)
-                for itemplates in range(len(all_templates)):
-                    templates = all_templates[itemplates]
-                    cov = all_covs[itemplates]
-                    proj = templates.dot(full_noise_weights.dot(full_signal))
-                    coeff = cov.dot(proj)
-                    full_signal -= np.array(templates.T.dot(coeff.T)).ravel()
-
-                full_signal = full_signal.reshape([ndet, -1])
-                for idet, det in enumerate(dets):
-                    obs.detdata[self.det_data][det] = full_signal[idet]
+                self._regress_templates(
+                    obs, dets, full_signal, full_noise_weights, all_templates, all_covs
+                )
 
                 if self.grank == 0:
                     log.debug(
@@ -715,6 +557,9 @@ class FilterBin(Operator):
                     all_covs,
                     full_noise_weights,
                 )
+            gt.stop("FilterBin: loop values")  # DEBUG
+
+        gt.stop("FilterBin: filter TOD")
 
         log.debug_rank(
             f"{self.group:4} : FilterBin:   Filtered group data in",
@@ -771,6 +616,211 @@ class FilterBin(Operator):
             memreport.apply(data)
 
         return
+
+    @function_timer
+    def _get_detector_templates(self, data, obs, dets, common_flags, value, memreport):
+        log = Logger.get()
+        gt = GlobalTimers.get()
+        ndet = len(dets)
+        t1 = time()
+
+        full_deprojection_templates = []
+        full_signal = []
+        full_good_fit = []
+        full_good_bin = []
+        full_pixels = []
+        full_weights = []
+
+        for idet, det in enumerate(dets):
+            gt.start("FilterBin: detector loop")  # DEBUG
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin:   Processing detector "
+                    f"# {idet + 1} / {ndet} : key = {value}",
+                )
+
+            # FIXME: even if jointly-filtered detectors are not on the same
+            # process, every process will need to participate in the collective
+            # operations
+
+            signal = obs.detdata[self.det_data][det]
+            flags = obs.detdata[self.det_flags][det]
+            # `good` is essentially the diagonal noise matrix used in
+            # template regression.  All good detector samples have the
+            # same noise weight and rest have zero weight.
+            good_fit = np.logical_and(
+                (common_flags & self.shared_flag_mask) == 0,
+                (flags & self.det_flag_mask) == 0,
+            )
+            good_bin = np.logical_and(
+                (common_flags & self.binning.shared_flag_mask) == 0,
+                (flags & self.binning.det_flag_mask) == 0,
+            )
+
+            full_signal.append(signal)
+            full_good_fit.append(good_fit)
+            full_good_bin.append(good_bin)
+
+            if np.sum(good_fit) == 0:
+                continue
+
+            deproject = (
+                self.deproject_map is not None
+                and self._deproject_pattern.match(det) is not None
+            )
+
+            if deproject or self.write_obs_matrix:
+                # We'll need pixel numbers
+                obs_data = data.select(obs_uid=obs.uid)
+                self.binning.pixel_pointing.apply(obs_data, detectors=[det])
+                pixels = obs.detdata[self.binning.pixel_pointing.pixels][det]
+                # and weights
+                self.binning.stokes_weights.apply(obs_data, detectors=[det])
+                weights = obs.detdata[self.binning.stokes_weights.weights][det]
+                if weights.ndim == 1:
+                    weights = weights.reshape(-1, 1)
+                full_pixels.append(pixels)
+                full_weights.append(weights)
+            else:
+                pixels = None
+                weights = None
+
+            if (
+                self.deproject_map is not None
+                and self._deproject_pattern.match(det) is not None
+            ):
+                deprojection_templates = self._get_deprojection_templates(
+                    data, obs, pixels, det_templates
+                )
+            else:
+                deprojection_templates = None
+            full_deprojection_templates.append(deprojection_templates)
+
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin:   Built deprojection "
+                    f"templates in {time() - t1:.2f} s."
+                )
+                t1 = time()
+
+            memreport.prefix = "After detector templates"
+            memreport.apply(data)
+            gt.stop("FilterBin: detector loop")  # DEBUG
+
+        return (
+            full_signal,
+            full_good_fit,
+            full_good_bin,
+            full_pixels,
+            full_weights,
+            full_deprojection_templates,
+        )
+
+    @function_timer
+    def _regress_templates(
+            self, obs, dets, full_signal, full_noise_weights, all_templates, all_covs
+    ):
+        ndet = len(dets)
+
+        for itemplates in range(len(all_templates)):
+            templates = all_templates[itemplates]
+            cov = all_covs[itemplates]
+            proj = templates.dot(full_noise_weights.dot(full_signal))
+            coeff = cov.dot(proj)
+            full_signal -= np.array(templates.T.dot(coeff.T)).ravel()
+
+        full_signal = full_signal.reshape([ndet, -1])
+        for idet, det in enumerate(dets):
+            obs.detdata[self.det_data][det] = full_signal[idet]
+        return
+
+    @function_timer
+    def _build_template_covariance(
+            self, all_templates, full_good_fit, full_noise_weights, value
+    ):
+        log = Logger.get()
+        gt = GlobalTimers.get()
+        t1 = time()
+
+        all_covs = []
+        for itemplates in range(len(all_templates)):
+
+            templates = all_templates[itemplates]
+            # Normalize the templates to improve the condition number of the
+            # template covariance matrix
+
+            gt.start("FilterBin: Normalize templates")
+            ntemplate, nsample_tot = templates.shape
+            good_templates = []
+            for itemplate in range(ntemplate):
+                template = templates[[itemplate], :].toarray().ravel()
+                norm = np.sum(template[full_good_fit] ** 2)
+                if norm > 1e-3:
+                    templates[[itemplate], :] /= norm ** .5
+                    good_templates.append(itemplate)
+            nbad = ntemplate - len(good_templates)
+            if nbad != 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin:   Discarding {nbad} "
+                    f"poorly-constrained templates"
+                )
+                templates = templates[good_templates]
+            gt.stop("FilterBin: Normalize templates")
+
+            # Now build the inverse covariance matrix
+
+            invcov = templates.dot(full_noise_weights.dot(templates.T))
+
+            nrow, ncol = invcov.shape
+            if nrow < 1000:
+                invcov = invcov.toarray()
+
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin:   Stacked templates for "
+                    f"key={value} : {itemplates + 1}/{len(all_templates)} "
+                    f"in {time() - t1:.2f} s",
+                )
+                t1 = time()
+
+            gt.start("FilterBin: Invert template covariance")
+            if isinstance(invcov, np.ndarray):
+                # avoid inverting singular matrices
+
+                rcond = 1 / np.linalg.cond(invcov)
+                if self.grank == 0:
+                    log.debug(
+                        f"{self.group:4} : FilterBin:   Template covariance matrix "
+                        f"rcond = {rcond} in {time() - t1:.2f} s",
+                    )
+                    t1 = time()
+
+                if rcond > 1e-6:
+                    cov = np.linalg.inv(invcov)
+                else:
+                    log.warning(
+                        f"{self.group:4} : FilterBin: WARNING: template "
+                        f"covariance matrix is poorly conditioned: "
+                        f"rcond = {rcond}.  Using matrix pseudoinverse.",
+                    )
+                    cov = np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
+            else:
+                # Trust our regularization
+                cov = scipy.sparse.linalg.inv(invcov)
+            gt.stop("FilterBin: Invert template covariance")
+
+            all_templates[itemplates] = templates
+            all_covs.append(cov)
+
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin:   Inverted covariance for "
+                    f"key={value} : {itemplates + 1}/{len(all_templates)} "
+                    f"in {time() - t1:.2f} s",
+                )
+                t1 = time()
+
+        return all_covs
 
     @function_timer
     def _get_ground_templates(self, obs):
@@ -856,7 +906,7 @@ class FilterBin(Operator):
         return templates
 
     @function_timer
-    def _expand_templates(self, templates, ndet):
+    def _expand_templates(self, templates, ndet, all_templates=None):
         """ Take template matrix and tile it to
         filter an entire detector set """
         if templates is None:
@@ -891,10 +941,13 @@ class FilterBin(Operator):
                     idet * nsample : (idet + 1) * nsample,
                 ] = templates
 
+        if all_templates is not None:
+            all_templates.append(full_templates)
+
         return full_templates
 
     @function_timer
-    def _get_spatial_templates(self, obs, detectors):
+    def _get_spatial_templates(self, obs, detectors, all_templates):
         if self.focalplane_key is None:
             return None
 
@@ -946,7 +999,9 @@ class FilterBin(Operator):
                 ] = snapshot[idet]
         templates = templates.T  # Into [ntemplates, nsample * ndet]
 
-        return templates
+        all_templates.append(templates)
+
+        return
 
     @function_timer
     def _build_common_templates(self, obs):
@@ -1436,7 +1491,13 @@ class FilterBin(Operator):
 
         cov.apply(data, detectors=detectors)
 
+        log.info_rank(
+            f"FilterBin: Computed covariance and hits in", comm=self.comm, timer=timer
+        )
+
         self.binning.apply(data, detectors=detectors)
+
+        log.info_rank(f"FilterBin: Binned signal in", comm=self.comm, timer=timer)
 
         binned = not filtered
         for key, write, keep in [
@@ -1467,7 +1528,9 @@ class FilterBin(Operator):
                 except Exception as e:
                     msg = f"ERROR: failed to write {fname} : {e}"
                     raise RuntimeError(msg)
-                log.info_rank(f"Wrote {fname} in", comm=self.comm, timer=timer)
+                log.info_rank(
+                    f"FilterBin: Wrote {fname} in", comm=self.comm, timer=timer
+                )
             if not keep and key in data:
                 data[key].clear()
                 del data[key]
