@@ -1,4 +1,5 @@
 # TODO
+#
 # test C++, numpy and jax version of each operator:
 # - pointing detector: pointing detector
 # - stockes weight: stockes weigts
@@ -6,10 +7,14 @@
 # - build_noise_weighted: mapmaker_utils
 # - template_offset: ../templates/offset
 #
-# things to test for the interval loops:
-# - try merging intervals into a single indexes vector
-# - try grouping intervals by size and then running with a (intervals_starts,length) input
-# - try putting some template_offset operations in a jitted section
+# - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
+#   (we could cache that intervals_index at a higher level within toast if the intervals are constant)
+# - try grouping intervals by size and then running with a (intervals_starts,length) input 
+#   (only if the previous approach does not deliver)
+# - try putting some template_offset operations in a jitted section 
+#   (would be done by default if we can turn intervals into an index)
+# - in pixels_healpix, does pixels matter or is hit_submaps the only real output?
+# - update scan_map to slightly simplify it (cf associated TODO)
 #
 # NOTE:
 # the code uses [xmap](https://jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html) 

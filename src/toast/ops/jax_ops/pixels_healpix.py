@@ -89,6 +89,7 @@ def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_su
 
     Returns:
         None (results are stored in pixels and hit_submaps).
+        TODO does pixels matter or is it only hit_submaps?
     """
     # initialize hpix for all computations
     hpix = healpix.HPIX_JAX(nside)

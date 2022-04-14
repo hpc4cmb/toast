@@ -53,12 +53,12 @@ def scan_map_jax(mapdata, nmap, submap, subpix, weights, tod):
     Returns:
         None: the result is put in tod.
 
-    NOTE: JAX port of the C++ implementation.
     NOTE: as tod is always set to 0 just before calling the function, we put the value in to instead of adding them to tod
     """
     # gets number of pixels in each submap
     npix_submap = mapdata.distribution.n_pix_submap
     # converts mapdata to a jax array
+    # TODO mapdata.data should already be an array reshaped properly shaped:(n_local_submap,npix_submap,n_value)
     mapdata = mapdata.raw.array()
     # runs computations
     tod[:] = scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights)
@@ -84,7 +84,6 @@ def scan_map_numpy(mapdata, nmap, submap, subpix, weights, tod):
     Returns:
         None: the result is put in tod.
 
-    NOTE: Numpy port of the C++ implementation.
     NOTE: as tod is always set to 0 just before calling the function, we put the value in to instead of adding them to tod
     """
     # gets number of pixels in each submap

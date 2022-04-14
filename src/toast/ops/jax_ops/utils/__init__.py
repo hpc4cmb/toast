@@ -1,6 +1,35 @@
 from time import time
 from enum import Enum
 import jax
+import numpy
+
+#------------------------------------------------------------------------------
+# INTERVAL INDEXING
+
+def make_interval_mask(size, intervals):
+    """
+    Creates a mask of the given size
+    the mask will select data in the union of the intervals
+    NOTE: indexes presents in several intervals will be covered only once
+    """
+    mask = numpy.full(shape=size, fill_value=False)
+    for interval in intervals:
+        interval_start = interval['first']
+        interval_end = interval['last']+1
+        mask[interval_start:interval_end] = True
+    return mask
+
+def make_interval_indexes(intervals):
+    """
+    Creates an array of indexes that is quivalent to the concatenation of the given intervals
+    """
+    result = []
+    for interval in intervals:
+        interval_start = interval['first']
+        interval_end = interval['last']+1
+        interval_indexes = numpy.arange(start=interval_start, stop=interval_end)
+        result.append(interval_indexes)
+    return numpy.concatenate(result)
 
 #------------------------------------------------------------------------------
 # GPU SELECTIONS
