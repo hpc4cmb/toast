@@ -10,6 +10,7 @@
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
 #   (we could cache that intervals_index at a higher level within toast if the intervals are constant)
 # - try grouping intervals by size and then running with a (intervals_starts,length) input 
+#   or take an upper bound on the intervals (starts, end-start+lengthmax), process the array thus constructed then later throw the parts that are not of interest
 #   (only if the previous approach does not deliver)
 # - try putting some template_offset operations in a jitted section 
 #   (would be done by default if we can turn intervals into an index)
