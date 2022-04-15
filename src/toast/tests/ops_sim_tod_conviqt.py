@@ -229,7 +229,7 @@ class SimConviqtTest(MPITestCase):
                 self.beam_file_dict[det] = fname2
 
         return
-    """
+     
     def test_sim_conviqt(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -348,8 +348,7 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-        # Create a fake scan strategy that hits every pixel once.
-        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
+
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
@@ -575,7 +574,7 @@ class SimConviqtTest(MPITestCase):
             np.testing.assert_almost_equal(cl_out, cl_outw, decimal=2)
 
         return
-    """ 
+    
     def test_sim_hwp(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -637,6 +636,7 @@ class SimConviqtTest(MPITestCase):
         
         weights_nohwp = ops.StokesWeights(
             mode="IQU",
+            #  we initialize the Stokes weights consistently w/o spinning HWP
             hwp_angle=None,
             detector_pointing=detpointing,
         )
@@ -671,7 +671,8 @@ class SimConviqtTest(MPITestCase):
         
         weights_hwp = ops.StokesWeights(
             mode="IQU",
-            hwp_angle=None,#########
+            #  we initialize the Stokes weights consistently w/ spinning HWP 
+            hwp_angle="hwp_angle", 
             detector_pointing=detpointing,
         )
         weights_hwp.apply(data)
