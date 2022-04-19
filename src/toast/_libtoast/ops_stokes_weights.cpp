@@ -124,21 +124,8 @@ void init_ops_stokes_weights(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // double * dev_weights = raw_weights;
-            // double * dev_hwp = raw_hwp;
-            // double * dev_quats = raw_quats;
-            // Interval * dev_intervals = raw_intervals;
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
-
-                // dev_weights = (double*)omgr.device_ptr((void*)raw_weights);
-                // if (raw_hwp != NULL) {
-                //     dev_hwp = (double*)omgr.device_ptr((void*)raw_hwp);
-                // }
-                // dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
-                // dev_intervals = (Interval*)omgr.device_ptr(
-                //     (void*)raw_intervals
-                // );
 
                 #pragma omp target data \
                     device(dev) \
@@ -249,15 +236,8 @@ void init_ops_stokes_weights(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // double * dev_weights = raw_weights;
-            // Interval * dev_intervals = raw_intervals;
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
-
-                // dev_weights = (double*)omgr.device_ptr((void*)raw_weights);
-                // dev_intervals = (Interval*)omgr.device_ptr(
-                //     (void*)raw_intervals
-                // );
 
                 #pragma omp target data \
                     device(dev) \

@@ -164,28 +164,10 @@ void init_ops_mapmaker_utils(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // int64_t * dev_pixels = raw_pixels;
-            // double * dev_weights = raw_weights;
-            // double * dev_det_data = raw_det_data;
-            // uint8_t * dev_det_flags = raw_det_flags;
-            // Interval * dev_intervals = raw_intervals;
-            // uint8_t * dev_shared_flags = raw_shared_flags;
-            // double * dev_zmap = raw_zmap;
-
             int64_t n_zmap = n_local_submap * n_pix_submap * nnz;
 
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
-
-                // dev_pixels = (int64_t*)omgr.device_ptr((void*)raw_pixels);
-                // dev_weights = (double*)omgr.device_ptr((void*)raw_weights);
-                // dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
-                // dev_det_flags = (uint8_t*)omgr.device_ptr((void*)raw_det_flags);
-                // dev_intervals = (Interval*)omgr.device_ptr(
-                //     (void*)raw_intervals
-                // );
-                // dev_shared_flags = (uint8_t*)omgr.device_ptr((void*)raw_shared_flags);
-                // dev_zmap = (double*)omgr.device_ptr((void*)raw_zmap);
 
                 #pragma omp target data \
                     device(dev) \

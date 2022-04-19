@@ -103,23 +103,8 @@ void init_ops_pointing_detector(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // double * dev_boresight = raw_boresight;
-            // double * dev_quats = raw_quats;
-            // Interval * dev_intervals = raw_intervals;
-            // uint8_t * dev_flags = raw_flags;
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
-
-                //std::cerr << "pointing_detector:  Start OFFLOAD" << std::endl;
-
-                // dev_boresight = (double*)omgr.device_ptr((void*)raw_boresight);
-                // dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
-                // dev_intervals = (Interval*)omgr.device_ptr(
-                //     (void*)raw_intervals
-                // );
-                // dev_flags = (uint8_t*)omgr.device_ptr((void*)raw_flags);
-
-                //std::cerr << "pointing_detector mem: bore=" << (int64_t)raw_boresight << "-->" << (int64_t)dev_boresight << " quats=" << (int64_t)raw_quats << "-->" << (int64_t)dev_quats << " intr=" << (int64_t)raw_intervals << "-->" << (int64_t)dev_intervals << " flags=" << (int64_t)raw_flags << "-->" << (int64_t)dev_flags << std::endl;
 
                 #pragma omp target data \
                     device(dev) \
@@ -164,8 +149,6 @@ void init_ops_pointing_detector(py::module & m) {
                         }
                     }
                 }
-
-                std::cerr << "pointing_detector:  Stop OFFLOAD" << std::endl;
 
                 #endif
             } else {

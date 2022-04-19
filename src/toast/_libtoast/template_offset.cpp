@@ -46,18 +46,8 @@ void init_template_offset(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // double * dev_amplitudes = raw_amplitudes;
-            // double * dev_det_data = raw_det_data;
-            // Interval * dev_intervals = raw_intervals;
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
-
-                // dev_amplitudes = (double*)omgr.device_ptr((void*)raw_amplitudes);
-                // dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
-                // dev_intervals = (Interval*)omgr.device_ptr(
-                //     (void*)raw_intervals
-                // );
 
                 #pragma omp target data \
                     device(dev) \
@@ -150,22 +140,8 @@ void init_template_offset(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // double * dev_amplitudes = raw_amplitudes;
-            // double * dev_det_data = raw_det_data;
-            // uint8_t * dev_det_flags = raw_det_flags;
-            // Interval * dev_intervals = raw_intervals;
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
-
-                // dev_amplitudes = (double*)omgr.device_ptr((void*)raw_amplitudes);
-                // dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
-                // if (raw_det_flags != NULL) {
-                //     dev_det_flags = (uint8_t*)omgr.device_ptr((void*)raw_det_flags);
-                // }
-                // dev_intervals = (Interval*)omgr.device_ptr(
-                //     (void*)raw_intervals
-                // );
 
                 #pragma omp target data \
                     device(dev) \
@@ -261,15 +237,8 @@ void init_template_offset(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // double * dev_amp_in = raw_amp_in;
-            // double * dev_amp_out = raw_amp_out;
-            // double * dev_offset_var = raw_offset_var;
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
-
-                // dev_amp_in = (double*)omgr.device_ptr((void*)raw_amp_in);
-                // dev_amp_out = (double*)omgr.device_ptr((void*)raw_amp_out);
-                // dev_offset_var = (double*)omgr.device_ptr((void*)raw_offset_var);
 
                 #pragma omp target data \
                     device(dev) \

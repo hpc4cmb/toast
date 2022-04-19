@@ -331,18 +331,8 @@ void init_ops_pixels_healpix(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            // int64_t * dev_pixels = raw_pixels;
-            // double * dev_quats = raw_quats;
-            // Interval * dev_intervals = raw_intervals;
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
-
-                // dev_pixels = (int64_t*)omgr.device_ptr((void*)raw_pixels);
-                // dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
-                // dev_intervals = (Interval*)omgr.device_ptr(
-                //     (void*)raw_intervals
-                // );
 
                 #pragma omp target data \
                     device(dev) \
