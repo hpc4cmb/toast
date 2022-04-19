@@ -197,6 +197,7 @@ class StokesWeights(Operator):
                     sample_shape=(self._nnz,),
                     dtype=np.float32,
                     detectors=dets,
+                    accel=use_accel,
                 )
             else:
                 exists = ob.detdata.ensure(
@@ -204,6 +205,7 @@ class StokesWeights(Operator):
                     sample_shape=(self._nnz,),
                     dtype=np.float64,
                     detectors=dets,
+                    accel=use_accel,
                 )
 
             quat_indx = ob.detdata[quats_name].indices(dets)
@@ -221,7 +223,7 @@ class StokesWeights(Operator):
                 continue
 
             if use_accel:
-                if not ob.detdata.accel_present(self.weights):
+                if not ob.detdata.accel_exists(self.weights):
                     ob.detdata.accel_create(self.weights)
 
             # FIXME:  temporary hack until instrument classes are also pre-staged
@@ -289,8 +291,7 @@ class StokesWeights(Operator):
         return req
 
     def _provides(self):
-        prov = self.detector_pointing.provides()
-        prov["detdata"].append(self.weights)
+        prov = {"detdata": [self.weights]}
         return prov
 
     def _supports_accel(self):

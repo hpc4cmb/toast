@@ -511,7 +511,7 @@ class Offset(Template):
                     amp_offset,
                     amplitudes.local,
                     det_indx,
-                    ob.detdata[self.det_data],
+                    ob.detdata[self.det_data].data,
                     ob.intervals[self.view].data,
                 )
             else:
@@ -520,7 +520,7 @@ class Offset(Template):
                     amp_offset,
                     amplitudes.local,
                     det_indx[0],
-                    ob.detdata[self.det_data][:],
+                    ob.detdata[self.det_data].data,
                     ob.intervals[self.view].data,
                     self.use_accel,
                 )
@@ -535,7 +535,7 @@ class Offset(Template):
             det_indx = ob.detdata[self.det_data].indices([detector])
             if self.det_flags is not None:
                 flag_indx = ob.detdata[self.det_flags].indices([detector])
-                flag_data = ob.detdata[self.det_flags]
+                flag_data = ob.detdata[self.det_flags].data
             else:
                 flag_indx = np.array([-1], dtype=np.int32)
                 flag_data = np.zeros(1, dtype=np.uint8)
@@ -547,7 +547,7 @@ class Offset(Template):
             if self.use_python:
                 self._py_project_signal(
                     det_indx,
-                    ob.detdata[self.det_data],
+                    ob.detdata[self.det_data].data,
                     flag_indx,
                     flag_data,
                     self.det_flag_mask,
@@ -559,9 +559,9 @@ class Offset(Template):
             else:
                 template_offset_project_signal(
                     det_indx[0],
-                    ob.detdata[self.det_data][:],
+                    ob.detdata[self.det_data].data,
                     flag_indx[0],
-                    flag_data[:],
+                    flag_data,
                     self.det_flag_mask,
                     step_length,
                     amp_offset,

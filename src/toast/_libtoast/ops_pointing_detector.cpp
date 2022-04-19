@@ -66,6 +66,9 @@ void init_ops_pointing_detector(py::module & m) {
             uint8_t shared_flag_mask,
             bool use_accel
         ) {
+
+            // What if quats has more dets than we are considering in quat_index?
+
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -100,21 +103,23 @@ void init_ops_pointing_detector(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            double * dev_boresight = raw_boresight;
-            double * dev_quats = raw_quats;
-            Interval * dev_intervals = raw_intervals;
-            uint8_t * dev_flags = raw_flags;
+            // double * dev_boresight = raw_boresight;
+            // double * dev_quats = raw_quats;
+            // Interval * dev_intervals = raw_intervals;
+            // uint8_t * dev_flags = raw_flags;
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
                 //std::cerr << "pointing_detector:  Start OFFLOAD" << std::endl;
 
-                dev_boresight = (double*)omgr.device_ptr((void*)raw_boresight);
-                dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
-                dev_intervals = (Interval*)omgr.device_ptr(
-                    (void*)raw_intervals
-                );
-                dev_flags = (uint8_t*)omgr.device_ptr((void*)raw_flags);
+                // dev_boresight = (double*)omgr.device_ptr((void*)raw_boresight);
+                // dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
+                // dev_intervals = (Interval*)omgr.device_ptr(
+                //     (void*)raw_intervals
+                // );
+                // dev_flags = (uint8_t*)omgr.device_ptr((void*)raw_flags);
+
+                //std::cerr << "pointing_detector mem: bore=" << (int64_t)raw_boresight << "-->" << (int64_t)dev_boresight << " quats=" << (int64_t)raw_quats << "-->" << (int64_t)dev_quats << " intr=" << (int64_t)raw_intervals << "-->" << (int64_t)dev_intervals << " flags=" << (int64_t)raw_flags << "-->" << (int64_t)dev_flags << std::endl;
 
                 #pragma omp target data \
                     device(dev) \
@@ -126,23 +131,30 @@ void init_ops_pointing_detector(py::module & m) {
                         n_det, \
                         n_samp \
                     ) \
-                    use_device_ptr(dev_boresight, dev_quats, dev_intervals, dev_flags)
+                    use_device_ptr( \
+                        raw_boresight, \
+                        raw_quats, \
+                        raw_intervals, \
+                        raw_flags, \
+                        raw_focalplane, \
+                        raw_quat_index \
+                    )
                 {
                     #pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for
+                            #pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
                                 pointing_detector_inner(
                                     raw_quat_index,
-                                    dev_flags,
-                                    dev_boresight,
+                                    raw_flags,
+                                    raw_boresight,
                                     raw_focalplane,
-                                    dev_quats,
+                                    raw_quats,
                                     isamp,
                                     n_samp,
                                     idet,
@@ -153,7 +165,7 @@ void init_ops_pointing_detector(py::module & m) {
                     }
                 }
 
-                //std::cerr << "pointing_detector:  Stop OFFLOAD" << std::endl;
+                std::cerr << "pointing_detector:  Stop OFFLOAD" << std::endl;
 
                 #endif
             } else {
@@ -161,16 +173,16 @@ void init_ops_pointing_detector(py::module & m) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         #pragma omp parallel for default(shared)
                         for (
-                            int64_t isamp = dev_intervals[iview].first;
-                            isamp <= dev_intervals[iview].last;
+                            int64_t isamp = raw_intervals[iview].first;
+                            isamp <= raw_intervals[iview].last;
                             isamp++
                         ) {
                             pointing_detector_inner(
                                 raw_quat_index,
-                                dev_flags,
-                                dev_boresight,
+                                raw_flags,
+                                raw_boresight,
                                 raw_focalplane,
-                                dev_quats,
+                                raw_quats,
                                 isamp,
                                 n_samp,
                                 idet,

@@ -371,15 +371,15 @@ class Data(MutableMapping):
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
-                if not ob.detdata.accel_present(key):
+                if not ob.detdata.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} detdata accel_create for {key}")
                     ob.detdata.accel_create(key)
             for key in names["shared"]:
-                if not ob.shared.accel_present(key):
+                if not ob.shared.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} shared accel_create for {key}")
                     ob.shared.accel_create(key)
             for key in names["intervals"]:
-                if not ob.intervals.accel_present(key):
+                if not ob.intervals.accel_exists(key):
                     log.verbose(
                         f"Calling ob {ob.name} intervals accel_create for {key}"
                     )
@@ -387,7 +387,7 @@ class Data(MutableMapping):
         for key in names["global"]:
             val = self._internal[key]
             if hasattr(val, "accel_create"):
-                if not val.accel_present():
+                if not val.accel_exists():
                     log.verbose(f"Calling Data accel_create for {key}")
                     val.accel_create()
 
@@ -441,7 +441,7 @@ class Data(MutableMapping):
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
-                if ob.detdata.accel_present(key):
+                if ob.detdata.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} detdata update_host for {key}")
                     ob.detdata.accel_update_host(key)
                 else:
@@ -449,7 +449,7 @@ class Data(MutableMapping):
                         f"Skip update_self for ob {ob.name} detdata {key}, data not present"
                     )
             for key in names["shared"]:
-                if ob.shared.accel_present(key):
+                if ob.shared.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} shared update_host for {key}")
                     ob.shared.accel_update_host(key)
                 else:
@@ -457,7 +457,7 @@ class Data(MutableMapping):
                         f"Skip update_host for ob {ob.name} shared {key}, data not present"
                     )
             for key in names["intervals"]:
-                if ob.intervals.accel_present(key):
+                if ob.intervals.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} intervals update_host for {key}")
                     ob.intervals.accel_update_host(key)
                 else:
@@ -488,7 +488,7 @@ class Data(MutableMapping):
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
-                if ob.detdata.accel_present(key):
+                if ob.detdata.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} detdata accel_delete for {key}")
                     ob.detdata.accel_delete(key)
                 else:
@@ -496,7 +496,7 @@ class Data(MutableMapping):
                         f"Skip delete for ob {ob.name} detdata {key}, data not present"
                     )
             for key in names["shared"]:
-                if ob.shared.accel_present(key):
+                if ob.shared.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} shared accel_delete for {key}")
                     ob.shared.accel_delete(key)
                 else:
@@ -504,7 +504,7 @@ class Data(MutableMapping):
                         f"Skip delete for ob {ob.name} shared {key}, data not present"
                     )
             for key in names["intervals"]:
-                if ob.intervals.accel_present(key):
+                if ob.intervals.accel_exists(key):
                     log.verbose(
                         f"Calling ob {ob.name} intervals accel_delete for {key}"
                     )

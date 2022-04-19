@@ -184,7 +184,7 @@ class Operator(TraitConfig):
         return self._supports_accel()
 
     def accel_have_requires(self, data):
-        # Helper function to determine if all requirements are met to use OpenACC
+        # Helper function to determine if all requirements are met to use accelerator
         # for a data object.
         log = Logger.get()
         if not self.supports_accel():
@@ -194,14 +194,14 @@ class Operator(TraitConfig):
         req = self.requires()
         for ob in data.obs:
             for key in req["detdata"]:
-                if not ob.detdata.accel_present(key):
+                if not ob.detdata.accel_exists(key):
                     msg = f"{self.name}:  obs {ob.name}, detdata {key} not on device"
                     all_present = False
                 else:
                     msg = f"{self.name}:  obs {ob.name}, detdata {key} is on device"
                 log.verbose(msg)
             for key in req["shared"]:
-                if not ob.shared.accel_present(key):
+                if not ob.shared.accel_exists(key):
                     msg = f"{self.name}:  obs {ob.name}, shared {key} not on device"
                     all_present = False
                 else:

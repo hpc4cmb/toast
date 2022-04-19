@@ -615,7 +615,7 @@ class BuildNoiseWeighted(Operator):
             zmap = data[self.zmap]
 
         if use_accel:
-            if not zmap.accel_present():
+            if not zmap.accel_exists():
                 log.verbose_rank(
                     f"Operator {self.name} zmap not yet on device, copying in",
                     comm=data.comm.comm_group,
@@ -704,7 +704,7 @@ class BuildNoiseWeighted(Operator):
                     f"Operator {self.name} finalize calling zmap update self",
                     comm=data.comm.comm_group,
                 )
-                data[self.zmap].acc_update_self()
+                data[self.zmap].accel_update_host()
             if self.sync_type == "alltoallv":
                 data[self.zmap].sync_alltoallv()
             else:
@@ -715,7 +715,7 @@ class BuildNoiseWeighted(Operator):
                     f"Operator {self.name} finalize calling zmap update device",
                     comm=data.comm.comm_group,
                 )
-                data[self.zmap].acc_update_device()
+                data[self.zmap].accel_update_device()
         return
 
     def _requires(self):

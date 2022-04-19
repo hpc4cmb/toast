@@ -331,17 +331,18 @@ void init_ops_pixels_healpix(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            int64_t * dev_pixels = raw_pixels;
-            double * dev_quats = raw_quats;
-            Interval * dev_intervals = raw_intervals;
+            // int64_t * dev_pixels = raw_pixels;
+            // double * dev_quats = raw_quats;
+            // Interval * dev_intervals = raw_intervals;
+
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
-                dev_pixels = (int64_t*)omgr.device_ptr((void*)raw_pixels);
-                dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
-                dev_intervals = (Interval*)omgr.device_ptr(
-                    (void*)raw_intervals
-                );
+                // dev_pixels = (int64_t*)omgr.device_ptr((void*)raw_pixels);
+                // dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
+                // dev_intervals = (Interval*)omgr.device_ptr(
+                //     (void*)raw_intervals
+                // );
 
                 #pragma omp target data \
                     device(dev) \
@@ -356,7 +357,14 @@ void init_ops_pixels_healpix(py::module & m) {
                         n_samp \
                     ) \
                     map(tofrom: raw_hsub) \
-                    use_device_ptr(dev_pixels, dev_quats, dev_intervals)
+                    use_device_ptr( \
+                        raw_pixels, \
+                        raw_quats, \
+                        raw_intervals, \
+                        raw_pixel_index, \
+                        raw_quat_index, \
+                        raw_hsub \
+                    )
                 {
                     hpix hp;
                     hpix_init(&hp, nside);
@@ -366,17 +374,17 @@ void init_ops_pixels_healpix(py::module & m) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 #pragma omp parallel for default(shared)
                                 for (
-                                    int64_t isamp = dev_intervals[iview].first;
-                                    isamp <= dev_intervals[iview].last;
+                                    int64_t isamp = raw_intervals[iview].first;
+                                    isamp <= raw_intervals[iview].last;
                                     isamp++
                                 ) {
                                     pixels_healpix_nest_inner(
                                         hp,
                                         raw_quat_index,
                                         raw_pixel_index,
-                                        dev_quats,
+                                        raw_quats,
                                         raw_hsub,
-                                        dev_pixels,
+                                        raw_pixels,
                                         n_pix_submap,
                                         isamp,
                                         n_samp,
@@ -391,17 +399,17 @@ void init_ops_pixels_healpix(py::module & m) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 #pragma omp parallel for default(shared)
                                 for (
-                                    int64_t isamp = dev_intervals[iview].first;
-                                    isamp <= dev_intervals[iview].last;
+                                    int64_t isamp = raw_intervals[iview].first;
+                                    isamp <= raw_intervals[iview].last;
                                     isamp++
                                 ) {
                                     pixels_healpix_ring_inner(
                                         hp,
                                         raw_quat_index,
                                         raw_pixel_index,
-                                        dev_quats,
+                                        raw_quats,
                                         raw_hsub,
-                                        dev_pixels,
+                                        raw_pixels,
                                         n_pix_submap,
                                         isamp,
                                         n_samp,
@@ -422,17 +430,17 @@ void init_ops_pixels_healpix(py::module & m) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             #pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
                                 pixels_healpix_nest_inner(
                                     hp,
                                     raw_quat_index,
                                     raw_pixel_index,
-                                    dev_quats,
+                                    raw_quats,
                                     raw_hsub,
-                                    dev_pixels,
+                                    raw_pixels,
                                     n_pix_submap,
                                     isamp,
                                     n_samp,
@@ -446,17 +454,17 @@ void init_ops_pixels_healpix(py::module & m) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             #pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
                                 pixels_healpix_ring_inner(
                                     hp,
                                     raw_quat_index,
                                     raw_pixel_index,
-                                    dev_quats,
+                                    raw_quats,
                                     raw_hsub,
-                                    dev_pixels,
+                                    raw_pixels,
                                     n_pix_submap,
                                     isamp,
                                     n_samp,

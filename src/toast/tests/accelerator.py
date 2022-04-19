@@ -27,11 +27,11 @@ from ..accelerator import (
     use_accel_jax,
     use_accel_omp,
     accel_enabled,
-    accel_present,
-    accel_create,
-    accel_delete,
-    accel_update_device,
-    accel_update_host,
+    accel_data_present,
+    accel_data_create,
+    accel_data_delete,
+    accel_data_update_device,
+    accel_data_update_host,
 )
 
 from ..data import Data
@@ -118,16 +118,16 @@ class AcceleratorTest(MPITestCase):
 
         # Verify that data is not on the device
         for tname, buffer in data.items():
-            self.assertFalse(accel_present(buffer))
+            self.assertFalse(accel_data_present(buffer))
 
         # Copy to device
         for tname, buffer in data.items():
-            accel_create(buffer)
-            accel_update_device(buffer)
+            accel_data_create(buffer)
+            accel_data_update_device(buffer)
 
         # Check that it is present
         for tname, buffer in data.items():
-            self.assertTrue(accel_present(buffer))
+            self.assertTrue(accel_data_present(buffer))
 
         # Change host copy
         for tname, buffer in data.items():
@@ -135,7 +135,7 @@ class AcceleratorTest(MPITestCase):
 
         # Update device copy
         for tname, buffer in data.items():
-            accel_update_device(buffer)
+            accel_data_update_device(buffer)
 
         # Reset host copy
         for tname, buffer in data.items():
@@ -143,7 +143,7 @@ class AcceleratorTest(MPITestCase):
 
         # Update host copy from device
         for tname, buffer in data.items():
-            accel_update_host(buffer)
+            accel_data_update_host(buffer)
 
         # Check Values
         for tname, buffer in data.items():
@@ -151,11 +151,11 @@ class AcceleratorTest(MPITestCase):
 
         # Delete device copy
         for tname, buffer in data.items():
-            accel_delete(buffer)
+            accel_data_delete(buffer)
 
         # Verify that data is not on the device
         for tname, buffer in data.items():
-            self.assertFalse(accel_present(buffer))
+            self.assertFalse(accel_data_present(buffer))
 
     def test_data_stage(self):
         if not (use_accel_omp or use_accel_jax):
@@ -298,6 +298,7 @@ class AcceleratorTest(MPITestCase):
                     # This will set the host copy to zero and invalidate the device copy
                     ob.detdata[name].change_detectors(ob.local_detectors[0:2])
                     check.detdata[name].change_detectors(check.local_detectors[0:2])
+                    ob.detdata[name].accel_update_host()
                     # Reset host copy
                     ob.detdata[name][:] = itp + 1
                     check.detdata[name][:] = itp + 1

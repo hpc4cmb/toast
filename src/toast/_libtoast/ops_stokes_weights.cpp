@@ -124,21 +124,21 @@ void init_ops_stokes_weights(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            double * dev_weights = raw_weights;
-            double * dev_hwp = raw_hwp;
-            double * dev_quats = raw_quats;
-            Interval * dev_intervals = raw_intervals;
+            // double * dev_weights = raw_weights;
+            // double * dev_hwp = raw_hwp;
+            // double * dev_quats = raw_quats;
+            // Interval * dev_intervals = raw_intervals;
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
-                dev_weights = (double*)omgr.device_ptr((void*)raw_weights);
-                if (raw_hwp != NULL) {
-                    dev_hwp = (double*)omgr.device_ptr((void*)raw_hwp);
-                }
-                dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
-                dev_intervals = (Interval*)omgr.device_ptr(
-                    (void*)raw_intervals
-                );
+                // dev_weights = (double*)omgr.device_ptr((void*)raw_weights);
+                // if (raw_hwp != NULL) {
+                //     dev_hwp = (double*)omgr.device_ptr((void*)raw_hwp);
+                // }
+                // dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
+                // dev_intervals = (Interval*)omgr.device_ptr(
+                //     (void*)raw_intervals
+                // );
 
                 #pragma omp target data \
                     device(dev) \
@@ -151,25 +151,33 @@ void init_ops_stokes_weights(py::module & m) {
                         n_det, \
                         n_samp \
                     ) \
-                    use_device_ptr(dev_weights, dev_quats, dev_intervals, dev_hwp)
+                    use_device_ptr( \
+                        raw_weights, \
+                        raw_quats, \
+                        raw_intervals, \
+                        raw_hwp, \
+                        raw_weight_index, \
+                        raw_quat_index, \
+                        raw_epsilon \
+                    )
                 {
                     #pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for
+                            #pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
                                 stokes_weights_IQU_inner(
                                     cal,
                                     raw_quat_index,
                                     raw_weight_index,
-                                    dev_quats,
-                                    dev_hwp,
+                                    raw_quats,
+                                    raw_hwp,
                                     raw_epsilon,
-                                    dev_weights,
+                                    raw_weights,
                                     isamp,
                                     n_samp,
                                     idet
@@ -185,18 +193,18 @@ void init_ops_stokes_weights(py::module & m) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         #pragma omp parallel for default(shared)
                         for (
-                            int64_t isamp = dev_intervals[iview].first;
-                            isamp <= dev_intervals[iview].last;
+                            int64_t isamp = raw_intervals[iview].first;
+                            isamp <= raw_intervals[iview].last;
                             isamp++
                         ) {
                             stokes_weights_IQU_inner(
                                 cal,
                                 raw_quat_index,
                                 raw_weight_index,
-                                dev_quats,
-                                dev_hwp,
+                                raw_quats,
+                                raw_hwp,
                                 raw_epsilon,
-                                dev_weights,
+                                raw_weights,
                                 isamp,
                                 n_samp,
                                 idet
@@ -241,15 +249,15 @@ void init_ops_stokes_weights(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            double * dev_weights = raw_weights;
-            Interval * dev_intervals = raw_intervals;
+            // double * dev_weights = raw_weights;
+            // Interval * dev_intervals = raw_intervals;
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
-                dev_weights = (double*)omgr.device_ptr((void*)raw_weights);
-                dev_intervals = (Interval*)omgr.device_ptr(
-                    (void*)raw_intervals
-                );
+                // dev_weights = (double*)omgr.device_ptr((void*)raw_weights);
+                // dev_intervals = (Interval*)omgr.device_ptr(
+                //     (void*)raw_intervals
+                // );
 
                 #pragma omp target data \
                     device(dev) \
@@ -259,20 +267,24 @@ void init_ops_stokes_weights(py::module & m) {
                         n_det, \
                         n_samp \
                     ) \
-                    use_device_ptr(dev_weights, dev_intervals)
+                    use_device_ptr( \
+                        raw_weights, \
+                        raw_intervals, \
+                        raw_weight_index \
+                    )
                 {
                     #pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for
+                            #pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
                                 int32_t w_indx = raw_weight_index[idet];
                                 int64_t off = (w_indx * n_samp) + isamp;
-                                dev_weights[off] = cal;
+                                raw_weights[off] = cal;
                             }
                         }
                     }
@@ -284,13 +296,13 @@ void init_ops_stokes_weights(py::module & m) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         #pragma omp parallel for default(shared)
                         for (
-                            int64_t isamp = dev_intervals[iview].first;
-                            isamp <= dev_intervals[iview].last;
+                            int64_t isamp = raw_intervals[iview].first;
+                            isamp <= raw_intervals[iview].last;
                             isamp++
                         ) {
                             int32_t w_indx = raw_weight_index[idet];
                             int64_t off = (w_indx * n_samp) + isamp;
-                            dev_weights[off] = cal;
+                            raw_weights[off] = cal;
                         }
                     }
                 }

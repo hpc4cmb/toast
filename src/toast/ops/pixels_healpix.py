@@ -217,11 +217,19 @@ class PixelsHealpix(Operator):
 
             if self.single_precision:
                 exists = ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
+                    self.pixels,
+                    sample_shape=(),
+                    dtype=np.int32,
+                    detectors=dets,
+                    accel=use_accel,
                 )
             else:
                 exists = ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
+                    self.pixels,
+                    sample_shape=(),
+                    dtype=np.int64,
+                    detectors=dets,
+                    accel=use_accel,
                 )
 
             hit_submaps = self._local_submaps
@@ -254,7 +262,7 @@ class PixelsHealpix(Operator):
                 continue
 
             if use_accel:
-                if not ob.detdata.accel_present(self.pixels):
+                if not ob.detdata.accel_exists(self.pixels):
                     ob.detdata.accel_create(self.pixels)
 
             if self.use_python:
@@ -328,8 +336,10 @@ class PixelsHealpix(Operator):
         return req
 
     def _provides(self):
-        prov = self.detector_pointing.provides()
-        prov["detdata"].append(self.pixels)
+        prov = {
+            "detdata": [self.pixels],
+            "global": list(),
+        }
         if self.create_dist is not None:
             prov["global"].append(self.create_dist)
         return prov

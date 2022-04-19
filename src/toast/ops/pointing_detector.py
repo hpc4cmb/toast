@@ -137,6 +137,7 @@ class PointingDetectorSimple(Operator):
                 sample_shape=(4,),
                 dtype=np.float64,
                 detectors=dets,
+                accel=use_accel,
             )
 
             if exists:
@@ -158,7 +159,7 @@ class PointingDetectorSimple(Operator):
             quat_indx = ob.detdata[self.quats].indices(dets)
 
             if use_accel:
-                if not ob.detdata.accel_present(self.quats):
+                if not ob.detdata.accel_exists(self.quats):
                     ob.detdata.accel_create(self.quats)
 
             if self.shared_flags is None:

@@ -242,21 +242,30 @@ class PointingHealpixTest(MPITestCase):
         if rank == 0:
             handle.close()
 
-    def test_weights_simple(self):
+    def test_pixweight_pipe(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
         detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            detector_pointing=detpointing,
+        )
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
-        weights.apply(data)
+        pipe = ops.Pipeline(operators=[pixels, weights])
+        pipe.apply(data)
 
         # Also make a copy using a python codepath
         detpointing.use_python = True
         detpointing.quats = "pyquat"
+        pixels.use_python = True
+        pixels.quats = "pyquat"
+        pixels.pixels = "pypixels"
+        pixels.apply(data)
         weights.use_python = True
         weights.quats = "pyquat"
         weights.weights = "pyweight"
@@ -266,6 +275,7 @@ class PointingHealpixTest(MPITestCase):
             np.testing.assert_allclose(
                 ob.detdata[defaults.weights], ob.detdata["pyweight"]
             )
+            np.testing.assert_equal(ob.detdata[defaults.pixels], ob.detdata["pypixels"])
 
         rank = 0
         if self.comm is not None:
@@ -273,9 +283,7 @@ class PointingHealpixTest(MPITestCase):
 
         handle = None
         if rank == 0:
-            handle = open(
-                os.path.join(self.outdir, "out_test_weights_simple_info"), "w"
-            )
+            handle = open(os.path.join(self.outdir, "out_test_pixweight_pipe"), "w")
         data.info(handle=handle)
         if rank == 0:
             handle.close()
