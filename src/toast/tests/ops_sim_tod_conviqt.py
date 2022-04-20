@@ -65,7 +65,7 @@ class SimConviqtTest(MPITestCase):
             slm[1] = self.slm[2]
             slm[2] = -self.slm[1]
             hp.write_alm(self.fname_sky.replace(".fits","_BE.fits"), slm, lmax=self.lmax, overwrite=True)
-            
+
             self.blm = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
@@ -229,7 +229,7 @@ class SimConviqtTest(MPITestCase):
                 self.beam_file_dict[det] = fname2
 
         return
-     
+
     def test_sim_conviqt(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
@@ -425,14 +425,14 @@ class SimConviqtTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        
+
         binner.det_data = key1
         binner.binned = "binned1"
         binner.apply(data)
         binner.det_data = key2
         binner.binned = "binned2"
         binner.apply(data)
-        
+
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
@@ -465,16 +465,16 @@ class SimConviqtTest(MPITestCase):
         # Create a fake scan strategy that hits every pixel once.
         #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
-            self.comm, obs_time=120 * u.min, pixel_per_process=2
+            self.comm, obs_time=120 * u.min, pixel_per_process=2, hwp_rpm=None,
         )
         self.make_beam_file_dict(data)
-        
-        
+
+
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
-        
-        
+
+
         key1 = "conviqt0"
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
@@ -487,11 +487,11 @@ class SimConviqtTest(MPITestCase):
             normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-    
+
         sim_conviqt.apply(data)
-        
+
         key2 = "tebconviqt"
-        
+
         sim_wconviqt = ops.SimTEBConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
@@ -499,12 +499,12 @@ class SimConviqtTest(MPITestCase):
             beam_file_dict=self.beam_file_dict,
             dxx=False  ,
             det_data=key2,
-            pol=False ,
+            pol=True,
             normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-        
-            
+
+
         sim_wconviqt.apply(data)
         # Bin a map to study
 
@@ -543,14 +543,14 @@ class SimConviqtTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        
+
         binner.det_data = key1
         binner.binned = "binned1"
         binner.apply(data)
         binner.det_data = key2
         binner.binned = "binned2"
         binner.apply(data)
-        
+
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
@@ -574,57 +574,61 @@ class SimConviqtTest(MPITestCase):
             np.testing.assert_almost_equal(cl_out, cl_outw, decimal=2)
 
         return
-    
+
     def test_sim_hwp(self):
         if not ops.conviqt.available():
             print("libconviqt not available, skipping tests")
             return
 
 
-        data = create_satellite_data(
-            self.comm, obs_time=120 * u.min, pixel_per_process=2
+        data_wo_hwp = create_satellite_data(
+            self.comm, obs_time=120 * u.min, pixel_per_process=2, hwp_rpm=None,
         )
-        self.make_beam_file_dict(data)
-        
-        
+        data_w_hwp = create_satellite_data(
+            self.comm, obs_time=120 * u.min, pixel_per_process=2, hwp_rpm=100,
+        )
+        self.make_beam_file_dict(data_wo_hwp)
+        self.make_beam_file_dict(data_w_hwp)
+
+
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
-        
-        
-        key1 = "conviqt_0hwp"
-        sim_conviqt = ops.SimConviqt(
+
+
+        key_wo_hwp = "conviqt_wo_hwp"
+        sim_wo_hwp_conviqt = ops.SimConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
             beam_file_dict=self.beam_file_dict,
             dxx=False,
-            det_data=key1,
+            det_data=key_wo_hwp,
             pol=True,
             normalize_beam=False,
             fwhm=self.fwhm_sky,
-            hwp_angle= None 
+            hwp_angle= None
         )
-    
-        sim_conviqt.apply(data)
-        
-        key2 = "tebconviqt_hwp"
-        
-        sim_wconviqt = ops.SimTEBConviqt(
+
+        sim_wo_hwp_conviqt.apply(data_wo_hwp)
+
+        key_w_hwp = "tebconviqt_w_hwp"
+
+        sim_w_hwp_conviqt = ops.SimTEBConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
             beam_file_dict=self.beam_file_dict,
             dxx=False  ,
-            det_data=key2,
-            pol=False ,
+            det_data=key_w_hwp,
+            pol=True,
             normalize_beam=False,
             fwhm=self.fwhm_sky,
-            hwp_angle= "hwp_angle" 
+            hwp_angle= "hwp_angle"
         )
-        
-            
-        sim_wconviqt.apply(data)
+
+
+        sim_w_hwp_conviqt.apply(data_w_hwp)
         # Bin a map to study
 
         pixels = ops.PixelsHealpix(
@@ -632,96 +636,137 @@ class SimConviqtTest(MPITestCase):
             nest=False,
             detector_pointing=detpointing,
         )
-        pixels.apply(data)
-        
-        weights_nohwp = ops.StokesWeights(
+        pixels.apply(data_w_hwp)
+        pixels.apply(data_wo_hwp)
+
+        weights_wo_hwp = ops.StokesWeights(
             mode="IQU",
-            #  we initialize the Stokes weights consistently w/o spinning HWP
             hwp_angle=None,
             detector_pointing=detpointing,
         )
-        weights_nohwp.apply(data)
+        weights_wo_hwp.apply(data_wo_hwp)
 
         default_model = ops.DefaultNoiseModel()
-        default_model.apply(data)
+        default_model.apply(data_w_hwp)
+        default_model.apply(data_wo_hwp)
 
-        cov_and_hits_nohwp = ops.CovarianceAndHits(
+        cov_and_hits_wo_hwp = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
             pixel_pointing=pixels,
-            stokes_weights=weights_nohwp ,
+            stokes_weights=weights_wo_hwp ,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
         )
-        cov_and_hits_nohwp.apply(data)
+        cov_and_hits_wo_hwp.apply(data_wo_hwp)
 
-        binner_nohwp  = ops.BinMap(
+        binner_wo_hwp  = ops.BinMap(
             pixel_dist="pixel_dist",
-            covariance=cov_and_hits_nohwp.covariance,
+            covariance=cov_and_hits_wo_hwp.covariance,
             det_flags=None,
             pixel_pointing=pixels,
-            stokes_weights=weights_nohwp,
+            stokes_weights=weights_wo_hwp,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        
-        binner_nohwp.det_data = key1
-        binner_nohwp.binned = "binned1"
-        binner_nohwp.apply(data)
-        
-        weights_hwp = ops.StokesWeights(
+
+        binner_wo_hwp.det_data = key_wo_hwp
+        binner_wo_hwp.binned = "binned_wo_hwp"
+        binner_wo_hwp.apply(data_wo_hwp)
+
+        weights_w_hwp = ops.StokesWeights(
             mode="IQU",
-            #  we initialize the Stokes weights consistently w/ spinning HWP 
-            hwp_angle="hwp_angle", 
+            hwp_angle="hwp_angle",
             detector_pointing=detpointing,
         )
-        weights_hwp.apply(data)
+        weights_w_hwp.apply(data_w_hwp)
 
-        cov_and_hits_hwp = ops.CovarianceAndHits(
+        cov_and_hits_w_hwp = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
             pixel_pointing=pixels,
-            stokes_weights=weights_hwp ,
+            stokes_weights=weights_w_hwp ,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
         )
-        cov_and_hits_hwp.apply(data)
+        cov_and_hits_w_hwp.apply(data_w_hwp)
 
-        binner_hwp  = ops.BinMap(
+        binner_w_hwp  = ops.BinMap(
             pixel_dist="pixel_dist",
-            covariance=cov_and_hits_hwp.covariance,
+            covariance=cov_and_hits_w_hwp.covariance,
             det_flags=None,
             pixel_pointing=pixels,
-            stokes_weights=weights_hwp,
+            stokes_weights=weights_w_hwp,
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        binner_hwp.det_data = key2
-        binner_hwp.binned = "binned2"
-        binner_hwp.apply(data)
-        
+        binner_w_hwp.det_data = key_w_hwp
+        binner_w_hwp.binned = "binned_w_hwp"
+        binner_w_hwp.apply(data_w_hwp)
+
         # Study the map on the root process
 
-        toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
-        write_healpix_fits(data["binned1"], toast_bin_path, nest=pixels.nest)
-        toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
-        write_healpix_fits(data["binned2"], toast_bin_path, nest=pixels.nest)
+        toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key_wo_hwp}.fits")
+        write_healpix_fits(data_wo_hwp["binned_wo_hwp"], toast_bin_path, nest=pixels.nest)
+        toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key_w_hwp}.fits")
+        write_healpix_fits(data_w_hwp["binned_w_hwp"], toast_bin_path, nest=pixels.nest)
 
-        toast_hits_path = os.path.join(self.outdir, "toast_hits_nohwp.fits")
-        write_healpix_fits(data[cov_and_hits_nohwp.hits], toast_hits_path, nest=pixels.nest)
-        toast_hits_path = os.path.join(self.outdir, "toast_hits_hwp.fits")
-        write_healpix_fits(data[cov_and_hits_hwp.hits], toast_hits_path, nest=pixels.nest)
+        toast_hits_path = os.path.join(self.outdir, "toast_hits_wo_hwp.fits")
+        write_healpix_fits(data_wo_hwp[cov_and_hits_wo_hwp.hits], toast_hits_path, nest=pixels.nest)
+        toast_hits_path = os.path.join(self.outdir, "toast_hits_w_hwp.fits")
+        write_healpix_fits(data_w_hwp[cov_and_hits_w_hwp.hits], toast_hits_path, nest=pixels.nest)
         fail = False
         if self.rank == 0:
-            mapfile = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
-            mdata = hp.read_map(mapfile, field=range(3))
-            mapfile = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
-            mdataw = hp.read_map(mapfile, field=range(3))
+            import matplotlib.pyplot as plt
 
-            cl_out = hp.anafast(mdata, lmax=self.lmax)
-            cl_outw = hp.anafast(mdataw, lmax=self.lmax)
+            bl_in = hp.gauss_beam(self.fwhm_sky.to_value(u.radian), lmax=self.lmax, pol=True).T
+            bl_out = hp.gauss_beam(self.fwhm_beam.to_value(u.radian), lmax=self.lmax, pol=True).T
+            slm = self.slm.copy()
+            bl_in[bl_in == 0] = 1
+            bl_out[bl_out == 0] = 1
+            for i in range(3):
+                slm[i] = hp.almxfl(slm[i], bl_out[i] / bl_in[i])
+            reference = hp.alm2map(slm, self.nside, lmax=self.lmax, pixwin=True)
 
-            np.testing.assert_almost_equal(cl_out, cl_outw, decimal=2)
+            mapfile = os.path.join(self.outdir, f"toast_bin.{key_wo_hwp}.fits")
+            mdata_wo_hwp = hp.read_map(mapfile, field=range(3))
+            mapfile = os.path.join(self.outdir, f"toast_bin.{key_w_hwp}.fits")
+            mdata_w_hwp = hp.read_map(mapfile, field=range(3))
+            diff = mdata_w_hwp - mdata_wo_hwp
+            for m in mdata_wo_hwp, mdata_w_hwp, diff:
+                m[m == 0] = hp.UNSEEN
+            reference[m == hp.UNSEEN] = hp.UNSEEN
+
+            args = {"rot" : [156, 11], "xsize" : 1200, "reso" : 3, "cmap" : "bwr"}
+            nrow, ncol = 3, 3
+            fig = plt.figure(figsize=[18, 12])
+            for col, stokes in enumerate("IQU"):
+                hp.gnomview(mdata_wo_hwp[col], **args, sub=[nrow, ncol, 1 + col], title=f"{stokes} w/o HWP")
+                hp.gnomview(mdata_w_hwp[col], **args, sub=[nrow, ncol, 4 + col], title=f"{stokes} w/ HWP")
+                hp.gnomview(reference[col], **args, sub=[nrow, ncol, 7 + col], title=f"{stokes} reference")
+            fname = os.path.join(self.outdir, "map_comparison_w_wo_hwp.png")
+            fig.savefig(fname)
+
+            cl_reference = hp.anafast(reference, lmax=self.lmax)
+            cl_out_wo_hwp = hp.anafast(mdata_wo_hwp, lmax=self.lmax)
+            cl_out_w_hwp = hp.anafast(mdata_w_hwp, lmax=self.lmax)
+
+            nrow, ncol = 2, 3
+            fig = plt.figure(figsize=[18, 12])
+            for col, spec in enumerate(["TT", "EE", "BB"]):
+                ax = fig.add_subplot(nrow, ncol, 1 + col)
+                ax.set_title(f"{spec}")
+                ax.semilogx(cl_reference[col], color="black", label="reference")
+                ax.semilogx(cl_out_wo_hwp[col], color="tab:blue", label="w/o HWP")
+                ax.semilogx(cl_out_w_hwp[col], color="tab:orange", label="w/ HWP")
+                ax = fig.add_subplot(nrow, ncol, 1 + ncol + col)
+                ax.set_title(f"{spec}")
+                ax.semilogx(cl_reference[col] / cl_out_wo_hwp[col], color="tab:blue", label="ref / w/o HWP")
+                ax.semilogx(cl_reference[col] / cl_out_w_hwp[col], color="tab:orange", label="ref / w/ HWP")
+            ax.legend(loc="best")
+            fname = os.path.join(self.outdir, "cl_comparison_w_wo_hwp.png")
+            fig.savefig(fname)
+
+            np.testing.assert_almost_equal(cl_out_wo_hwp, cl_out_w_hwp, decimal=2)
 
         return
-
