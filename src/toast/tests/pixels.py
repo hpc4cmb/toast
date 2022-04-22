@@ -47,7 +47,7 @@ class PixelTest(MPITestCase):
         pass
 
     def _make_pixdist(self, nside, nsub, comm):
-        npix = 12 * nside ** 2
+        npix = 12 * nside**2
         valid_submaps = np.arange(0, nsub, 2, dtype=np.int32)
         # Make up some local submaps for each process
         local_submaps = None

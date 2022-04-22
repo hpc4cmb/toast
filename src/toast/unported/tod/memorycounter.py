@@ -81,9 +81,9 @@ class OpMemoryCounter(Operator):
                 - Max memory (group): {:.2f} GB\n\
                 Total memory: {:.2f} GB\n\
                 ".format(
-                (tot_task_max / 2 ** 30),
-                (tot_group_max / 2 ** 30),
-                (tot_world / 2 ** 30),
+                (tot_task_max / 2**30),
+                (tot_group_max / 2**30),
+                (tot_world / 2**30),
             )
             log.info(msg)
 

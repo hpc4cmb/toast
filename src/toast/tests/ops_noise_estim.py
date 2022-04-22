@@ -134,9 +134,9 @@ class NoiseEstimTest(MPITestCase):
                 freq, psd = hdulist[2].data.field(0)
                 ax.loglog(freq, psd, label=label)
             net = obs.telescope.focalplane["D0A"]["psd_net"]
-            net = net.to_value(u.K / u.Hz ** 0.5)
+            net = net.to_value(u.K / u.Hz**0.5)
             ax.axhline(
-                net ** 2,
+                net**2,
                 label=f"NET = {net:.3f} K" + " / $\sqrt{\mathrm{Hz}}$",
                 linestyle="--",
                 color="k",

@@ -17,7 +17,7 @@ from .. import qarray
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
-def name2id(name, maxval=2 ** 16):
+def name2id(name, maxval=2**16):
     """Map a name into an index."""
     value = 0
     for c in name:
@@ -131,7 +131,7 @@ class Focalplane:
                     fsample = detdata["fsample"]
                 else:
                     fsample = self.sample_rate
-                detweight = 1.0 / (fsample * net ** 2)
+                detweight = 1.0 / (fsample * net**2)
                 self._detweights[detname] = detweight
         return self._detweights
 

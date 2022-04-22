@@ -311,7 +311,7 @@ def rhomb_dim(npix):
     For a rhombus layout, return the dimension of one side.
     """
     dim = int(np.sqrt(float(npix)))
-    if dim ** 2 != npix:
+    if dim**2 != npix:
         raise ValueError("number of pixels for a rhombus wafer must be square")
     return dim
 
@@ -458,7 +458,7 @@ def rhombus_layout(
         if pixrow >= dim:
             relrow = (2 * dim - 2) - pixrow
         colang = (float(pixcol) - float(relrow) / 2.0) * pixdiam
-        distang = np.sqrt(rowang ** 2 + colang ** 2)
+        distang = np.sqrt(rowang**2 + colang**2)
         zang = np.cos(distang)
         pixdir = np.array([colang, rowang, zang], dtype=np.float64)
         norm = np.sqrt(np.dot(pixdir, pixdir))

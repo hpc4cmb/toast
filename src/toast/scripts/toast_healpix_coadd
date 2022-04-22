@@ -211,7 +211,7 @@ def main():
 
     # Assign submaps, invert and apply local portions of the matrix
 
-    npix_submap = 12 * args.nside_submap ** 2
+    npix_submap = 12 * args.nside_submap**2
     nsubmap = npix // npix_submap
     local_submaps = [submap for submap in range(nsubmap) if submap % ntask == rank]
     dist = PixelDistribution(
@@ -222,8 +222,8 @@ def main():
     for local_submap, global_submap in enumerate(local_submaps):
         pix_start = global_submap * npix_submap
         pix_stop = pix_start + npix_submap
-        dist_map.data[local_submap] = noiseweighted_sum[:, pix_start : pix_stop].T
-        dist_cov.data[local_submap] = invcov_sum[:, pix_start : pix_stop].T
+        dist_map.data[local_submap] = noiseweighted_sum[:, pix_start:pix_stop].T
+        dist_cov.data[local_submap] = invcov_sum[:, pix_start:pix_stop].T
     del noiseweighted_sum
     del invcov_sum
 
@@ -242,7 +242,7 @@ def main():
                 args.rcond,
                 nest=True,
                 single_precision=not args.double_precision,
-                force_serial=True
+                force_serial=True,
             )
         log.info_rank(f"Wrote {args.rcond}", timer=timer, comm=comm)
     del dist_rcond
@@ -261,7 +261,7 @@ def main():
                 args.cov,
                 nest=True,
                 single_precision=not args.double_precision,
-                force_serial=True
+                force_serial=True,
             )
         log.info_rank(f"Wrote {args.cov}", timer=timer, comm=comm)
     del dist_cov
@@ -275,7 +275,7 @@ def main():
             args.outmap,
             nest=True,
             single_precision=not args.double_precision,
-            force_serial=True
+            force_serial=True,
         )
     log.info_rank(f"Wrote {args.outmap}", timer=timer, comm=comm)
 

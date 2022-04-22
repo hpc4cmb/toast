@@ -57,10 +57,10 @@ class BinnedTest(MPITestCase):
         # Pixelization
 
         self.sim_nside = 32
-        self.sim_npix = 12 * self.sim_nside ** 2
+        self.sim_npix = 12 * self.sim_nside**2
 
         self.map_nside = 32
-        self.map_npix = 12 * self.map_nside ** 2
+        self.map_npix = 12 * self.map_nside**2
 
         # Scan strategy
 

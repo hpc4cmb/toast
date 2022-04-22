@@ -309,9 +309,9 @@ class ObserveAtmosphere(Operator):
                         )
 
                         if err != 0:
-                            #import pdb
-                            #import matplotlib.pyplot as plt
-                            #pdb.set_trace()
+                            # import pdb
+                            # import matplotlib.pyplot as plt
+                            # pdb.set_trace()
                             # Observing failed
                             if self.sample_rate is None:
                                 full_data = atmdata

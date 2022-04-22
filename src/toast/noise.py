@@ -84,7 +84,7 @@ class Noise(object):
                 raise TypeError("Each PSD array must be a Quantity")
             # Ensure that the PSDs are convertible to expected units
             try:
-                test_convert = psds[key].to_value(u.K ** 2 * u.second)
+                test_convert = psds[key].to_value(u.K**2 * u.second)
             except Exception:
                 raise ValueError("Each PSD must be convertible to K**2 * s")
             self._freqs[key] = np.copy(freqs[key])
@@ -200,7 +200,7 @@ class Noise(object):
                 psd = self.psd(k)
                 rate = self.rate(k)
                 ind = np.logical_and(freq > rate * 0.2, freq < rate * 0.4)
-                noisevar = np.median(psd[ind].to_value(u.K ** 2 * u.second))
+                noisevar = np.median(psd[ind].to_value(u.K**2 * u.second))
                 for det in self.detectors:
                     wt = self.weight(det, k)
                     if wt != 0.0:
@@ -385,7 +385,7 @@ class Noise(object):
                 self._rates[key] = rate * u.Hz
                 self._indices[key] = indx
                 self._freqs[key] = u.Quantity(freq, u.Hz)
-                self._psds[key] = u.Quantity(psdrow, u.K ** 2 * u.second)
+                self._psds[key] = u.Quantity(psdrow, u.K**2 * u.second)
             del ds
 
     def _load_hdf5(self, handle, comm=None, **kwargs):

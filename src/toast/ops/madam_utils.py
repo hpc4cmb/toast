@@ -36,7 +36,7 @@ def log_time_memory(
 
         if data.comm.group_rank == 0:
             msg = "{} {} Group {} memory = {:0.2f} GB".format(
-                prefix, mem_msg, data.comm.group, toast_bytes / 1024 ** 2
+                prefix, mem_msg, data.comm.group, toast_bytes / 1024**2
             )
             log.debug(msg)
         if full_mem:
