@@ -221,14 +221,14 @@ class SimConviqtTest(MPITestCase):
 
         fname2 = self.fname_beam.replace(".fits", "_bottom.fits")
 
-        self.beam_file_dict = {}
+        beam_file_dict = {}
         for det in data.obs[0].local_detectors:
             if det[-1] == "A":
-                self.beam_file_dict[det] = self.fname_beam
+                beam_file_dict[det] = self.fname_beam
             else:
-                self.beam_file_dict[det] = fname2
+                beam_file_dict[det] = fname2
 
-        return
+        return beam_file_dict 
 
     def test_sim_conviqt(self):
         if not ops.conviqt.available():
@@ -240,7 +240,7 @@ class SimConviqtTest(MPITestCase):
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
-        self.make_beam_file_dict(data)
+        beam_file_dict= self.make_beam_file_dict(data)
 
         # Generate timestreams
 
@@ -251,7 +251,7 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict=self.beam_file_dict,
+            beam_file_dict=beam_file_dict,
             dxx=False,
             det_data=key,
             pol=True,
@@ -352,7 +352,7 @@ class SimConviqtTest(MPITestCase):
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
-        self.make_beam_file_dict(data)
+        beam_file_dict= self.make_beam_file_dict(data)
 
         # Generate timestreams
 
@@ -363,7 +363,7 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict=self.beam_file_dict,
+            beam_file_dict= beam_file_dict,
             dxx=False,
             det_data=key1,
             pol=True,
@@ -379,7 +379,7 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict=self.beam_file_dict,
+            beam_file_dict=beam_file_dict,
             dxx=False,
             det_data=key2,
             pol=True,
@@ -467,8 +467,8 @@ class SimConviqtTest(MPITestCase):
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2, hwp_rpm=None,
         )
-        self.make_beam_file_dict(data)
 
+        beam_file_dict= self.make_beam_file_dict(data) 
 
         # Generate timestreams
 
@@ -480,7 +480,7 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict=self.beam_file_dict,
+            beam_file_dict=beam_file_dict,
             dxx=False,
             det_data=key1,
             pol=True,
@@ -496,7 +496,7 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict=self.beam_file_dict,
+            beam_file_dict=beam_file_dict,
             dxx=False  ,
             det_data=key2,
             pol=True,
@@ -587,8 +587,8 @@ class SimConviqtTest(MPITestCase):
         data_w_hwp = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2, hwp_rpm=100,
         )
-        self.make_beam_file_dict(data_wo_hwp)
-        self.make_beam_file_dict(data_w_hwp)
+        beam_file_dict_wo_hwp= self.make_beam_file_dict(data_wo_hwp)
+        beam_file_dict_w_hwp= self.make_beam_file_dict(data_w_hwp)
 
 
         # Generate timestreams
@@ -601,7 +601,7 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict=self.beam_file_dict,
+            beam_file_dict=beam_file_dict_wo_hwp,
             dxx=False,
             det_data=key_wo_hwp,
             pol=True,
@@ -618,7 +618,7 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict=self.beam_file_dict,
+            beam_file_dict=beam_file_dict_w_hwp,
             dxx=False  ,
             det_data=key_w_hwp,
             pol=True,
