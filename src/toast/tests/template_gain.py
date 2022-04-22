@@ -83,8 +83,7 @@ class TemplateGainTest(MPITestCase):
         for ob in data.obs:
             for det in ob.local_detectors:
                 np.testing.assert_allclose(
-                    ob.detdata["calibrated"][det],
-                    np.ones(ob.n_local_samples)
+                    ob.detdata["calibrated"][det], np.ones(ob.n_local_samples)
                 )
 
         del data
