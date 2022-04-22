@@ -266,6 +266,8 @@ class SimConviqt(Operator):
             detector = self.get_detector(det)
 
             theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
+            np.savez(f'{self.det_data}_{det}.npz', psi=psi, psi_pol=psi_pol,
+                    theta=theta, phi=phi) 
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             del theta, phi, psi
 
@@ -610,13 +612,8 @@ class SimWeightedConviqt(SimConviqt):
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
-            beam_file_i00 = beam_file.replace(".fits", "_I000.fits")
-            beam_file_0i0 = beam_file.replace(".fits", "_0I00.fits")
-            beam_file_00i = beam_file.replace(".fits", "_00I0.fits")
 
-            beamI00 = self.get_beam(beam_file_i00, det, verbose)
-            beam0I0 = self.get_beam(beam_file_0i0, det, verbose)
-            beam00I = self.get_beam(beam_file_00i, det, verbose)
+            beamI00, beam0I0, beam00I = self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
 
@@ -656,3 +653,131 @@ class SimWeightedConviqt(SimConviqt):
                 timer.report_clear(f"conviqt process detector {det}")
 
         return
+
+    def get_beam(self, beamfile, det, verbose):
+        timer = Timer()
+        timer.start()
+        beam_file_i00 = beamfile.replace(".fits", "_I000.fits")
+        beam_file_0i0 = beamfile.replace(".fits", "_0I00.fits")
+        beam_file_00i = beamfile.replace(".fits", "_00I0.fits")
+        beami00 = conviqt.Beam(
+            self.lmax, self.beammmax, self.pol, beam_file_i00, self.comm
+        )
+        beam0i0 = conviqt.Beam(
+            self.lmax, self.beammmax, self.pol, beam_file_0i0, self.comm
+        )
+        beam00i = conviqt.Beam(
+            self.lmax, self.beammmax, self.pol, beam_file_00i, self.comm
+        )
+
+        if verbose:
+            timer.report_clear(f"initialize beam for detector {det}")
+        return beami00, beam0i0, beam00i
+
+
+class SimTEBConviqt(SimConviqt):
+    """
+    Operator that uses libconviqt to generate beam-convolved timestreams.
+    This operator should be used in presence of a spinning HWP which makes the beam time-dependent,
+    constantly mapping the co- and cross-polar responses on to each other.
+    In the parent class OpSimConviqt we assume the beam to be static.
+
+
+    The convolution  is performed by  coupling each IQU component of the signal propertly as:
+    :math:`skyT_lm * beamT_lm, skyE_lm * Re{P}, skyB_lm * Im{P}`.
+
+    For extra details please refer to [this note ](https://giuspugl.github.io/reports/Notes_TEB_convolution.html)
+    """
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        if not self.available:
+            raise RuntimeError("libconviqt is not available")
+
+        if self.comm is None:
+            raise RuntimeError("libconviqt requires MPI")
+
+        if self.detector_pointing is None:
+            raise RuntimeError("detector_pointing cannot be None.")
+
+        log = Logger.get()
+
+        timer = Timer()
+        timer.start()
+
+        # Expand detector pointing
+        self.detector_pointing.apply(data, detectors=detectors)
+
+        all_detectors = self._get_all_detectors(data, detectors)
+
+        for det in all_detectors:
+            verbose = self.comm.rank == 0 and self.verbosity > 0
+
+            # Expand detector pointing
+            self.detector_pointing.apply(data, detectors=[det])
+
+            if det in self.sky_file_dict:
+                sky_file = self.sky_file_dict[det]
+            else:
+                sky_file = self.sky_file.format(detector=det, mc=self.mc)
+            skyT = self.get_sky(sky_file.replace(".fits","_T.fits"), det, verbose)
+            skyE = self.get_sky(sky_file.replace(".fits","_E.fits"), det, verbose)
+            skyB = self.get_sky(sky_file.replace(".fits","_B.fits"), det, verbose)
+
+            if det in self.beam_file_dict:
+                beam_file = self.beam_file_dict[det]
+            else:
+                beam_file = self.beam_file.format(detector=det, mc=self.mc)
+
+            beam_T, beam_P= self.get_beam(beam_file, det, verbose)
+
+            detector = self.get_detector(det)
+            
+            
+            theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
+            # T-convolution
+            pnt = self.get_buffer(theta, phi, psi, det, verbose)
+
+            convolved_data = self.convolve(skyT, beam_T, detector, pnt, det, verbose)
+
+            del (pnt,)
+            # E-convolution
+            pnt = self.get_buffer(theta, phi, psi, det, verbose)
+            convolved_data += np.cos(2 * psi_pol) * self.convolve(
+                skyE, beam_P, detector, pnt, det, verbose
+            )
+            del (pnt,)
+            # B-convolution
+            pnt = self.get_buffer(theta, phi, psi, det, verbose)
+            convolved_data += np.sin(2 * psi_pol) * self.convolve(
+                skyB, beam_P, detector, pnt, det, verbose
+            )
+            del theta, phi, psi
+
+            self.calibrate_signal(
+                data,
+                det,
+                beam_T,
+                convolved_data,
+                verbose,
+            )
+            self.save(data, det, convolved_data, verbose)
+
+            del pnt, detector, beam_T, beam_P , skyT, skyE, skyB
+
+            if verbose:
+                timer.report_clear(f"conviqt process detector {det}")
+
+        return
+
+    def get_beam(self, beamfile, det, verbose):
+        timer = Timer()
+        timer.start()
+        beam_file_T = beamfile.replace(".fits", "_T.fits")
+        beam_file_P = beamfile.replace(".fits", "_P.fits")
+        beamT = conviqt.Beam(lmax = self.lmax, mmax = self.beammmax,  pol = self.pol , beamfile=beam_file_T, comm= self.comm)
+        beamP = conviqt.Beam(lmax = self.lmax, mmax = self.beammmax,  pol = self.pol , beamfile=beam_file_P, comm= self.comm)
+
+        if verbose:
+            timer.report_clear(f"initialize beam for detector {det}")
+        return beamT, beamP
