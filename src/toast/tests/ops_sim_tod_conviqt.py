@@ -58,13 +58,28 @@ class SimConviqtTest(MPITestCase):
 
             # Inputs for the TEB convolution
             # FIXME : the TEB conviqt operator should do this match rather than leave it for the user
-            hp.write_alm(self.fname_sky.replace(".fits","_T.fits"), self.slm[0] , lmax=self.lmax, overwrite=True)
+            hp.write_alm(
+                self.fname_sky.replace(".fits", "_T.fits"),
+                self.slm[0],
+                lmax=self.lmax,
+                overwrite=True,
+            )
             slm = self.slm.copy()
             slm[0] = 0
-            hp.write_alm(self.fname_sky.replace(".fits","_EB.fits"), slm , lmax=self.lmax, overwrite=True)
+            hp.write_alm(
+                self.fname_sky.replace(".fits", "_EB.fits"),
+                slm,
+                lmax=self.lmax,
+                overwrite=True,
+            )
             slm[1] = self.slm[2]
             slm[2] = -self.slm[1]
-            hp.write_alm(self.fname_sky.replace(".fits","_BE.fits"), slm, lmax=self.lmax, overwrite=True)
+            hp.write_alm(
+                self.fname_sky.replace(".fits", "_BE.fits"),
+                slm,
+                lmax=self.lmax,
+                overwrite=True,
+            )
 
             self.blm = create_fake_beam_alm(
                 self.lmax,
@@ -159,7 +174,7 @@ class SimConviqtTest(MPITestCase):
 
             # we explicitly store temperature and polarization beams
             # FIXME : Another place where the operator should handle the decomposition.
-            blm_T, blm_P  = create_fake_beam_alm(
+            blm_T, blm_P = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
                 fwhm_x=self.fwhm_beam,
@@ -168,7 +183,7 @@ class SimConviqtTest(MPITestCase):
                 detB_beam=False,
                 normalize_beam=True,
             )
-            blm_Tbot, blm_Pbot  = create_fake_beam_alm(
+            blm_Tbot, blm_Pbot = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
                 fwhm_x=self.fwhm_beam,
@@ -228,7 +243,7 @@ class SimConviqtTest(MPITestCase):
             else:
                 beam_file_dict[det] = fname2
 
-        return beam_file_dict 
+        return beam_file_dict
 
     def test_sim_conviqt(self):
         if not ops.conviqt.available():
@@ -240,7 +255,7 @@ class SimConviqtTest(MPITestCase):
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
-        beam_file_dict= self.make_beam_file_dict(data)
+        beam_file_dict = self.make_beam_file_dict(data)
 
         # Generate timestreams
 
@@ -348,11 +363,10 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
-        beam_file_dict= self.make_beam_file_dict(data)
+        beam_file_dict = self.make_beam_file_dict(data)
 
         # Generate timestreams
 
@@ -363,7 +377,7 @@ class SimConviqtTest(MPITestCase):
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
-            beam_file_dict= beam_file_dict,
+            beam_file_dict=beam_file_dict,
             dxx=False,
             det_data=key1,
             pol=True,
@@ -416,7 +430,7 @@ class SimConviqtTest(MPITestCase):
         )
         cov_and_hits.apply(data)
 
-        binner  = ops.BinMap(
+        binner = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_flags=None,
@@ -465,15 +479,17 @@ class SimConviqtTest(MPITestCase):
         # Create a fake scan strategy that hits every pixel once.
         #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
-            self.comm, obs_time=120 * u.min, pixel_per_process=2, hwp_rpm=None,
+            self.comm,
+            obs_time=120 * u.min,
+            pixel_per_process=2,
+            hwp_rpm=None,
         )
 
-        beam_file_dict= self.make_beam_file_dict(data) 
+        beam_file_dict = self.make_beam_file_dict(data)
 
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
-
 
         key1 = "conviqt0"
         sim_conviqt = ops.SimConviqt(
@@ -497,13 +513,12 @@ class SimConviqtTest(MPITestCase):
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
             beam_file_dict=beam_file_dict,
-            dxx=False  ,
+            dxx=False,
             det_data=key2,
             pol=True,
             normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-
 
         sim_wconviqt.apply(data)
         # Bin a map to study
@@ -534,7 +549,7 @@ class SimConviqtTest(MPITestCase):
         )
         cov_and_hits.apply(data)
 
-        binner  = ops.BinMap(
+        binner = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_flags=None,
@@ -580,21 +595,24 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-
         data_wo_hwp = create_satellite_data(
-            self.comm, obs_time=120 * u.min, pixel_per_process=2, hwp_rpm=None,
+            self.comm,
+            obs_time=120 * u.min,
+            pixel_per_process=2,
+            hwp_rpm=None,
         )
         data_w_hwp = create_satellite_data(
-            self.comm, obs_time=120 * u.min, pixel_per_process=2, hwp_rpm=100,
+            self.comm,
+            obs_time=120 * u.min,
+            pixel_per_process=2,
+            hwp_rpm=100,
         )
-        beam_file_dict_wo_hwp= self.make_beam_file_dict(data_wo_hwp)
-        beam_file_dict_w_hwp= self.make_beam_file_dict(data_w_hwp)
-
+        beam_file_dict_wo_hwp = self.make_beam_file_dict(data_wo_hwp)
+        beam_file_dict_w_hwp = self.make_beam_file_dict(data_w_hwp)
 
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
-
 
         key_wo_hwp = "conviqt_wo_hwp"
         sim_wo_hwp_conviqt = ops.SimConviqt(
@@ -607,7 +625,7 @@ class SimConviqtTest(MPITestCase):
             pol=True,
             normalize_beam=False,
             fwhm=self.fwhm_sky,
-            hwp_angle= None
+            hwp_angle=None,
         )
 
         sim_wo_hwp_conviqt.apply(data_wo_hwp)
@@ -619,14 +637,13 @@ class SimConviqtTest(MPITestCase):
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
             beam_file_dict=beam_file_dict_w_hwp,
-            dxx=False  ,
+            dxx=False,
             det_data=key_w_hwp,
             pol=True,
             normalize_beam=False,
             fwhm=self.fwhm_sky,
-            hwp_angle= "hwp_angle"
+            hwp_angle="hwp_angle",
         )
-
 
         sim_w_hwp_conviqt.apply(data_w_hwp)
         # Bin a map to study
@@ -653,14 +670,14 @@ class SimConviqtTest(MPITestCase):
         cov_and_hits_wo_hwp = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
             pixel_pointing=pixels,
-            stokes_weights=weights_wo_hwp ,
+            stokes_weights=weights_wo_hwp,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
         )
         cov_and_hits_wo_hwp.apply(data_wo_hwp)
 
-        binner_wo_hwp  = ops.BinMap(
+        binner_wo_hwp = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits_wo_hwp.covariance,
             det_flags=None,
@@ -684,14 +701,14 @@ class SimConviqtTest(MPITestCase):
         cov_and_hits_w_hwp = ops.CovarianceAndHits(
             pixel_dist="pixel_dist",
             pixel_pointing=pixels,
-            stokes_weights=weights_w_hwp ,
+            stokes_weights=weights_w_hwp,
             noise_model=default_model.noise_model,
             rcond_threshold=1.0e-6,
             sync_type="alltoallv",
         )
         cov_and_hits_w_hwp.apply(data_w_hwp)
 
-        binner_w_hwp  = ops.BinMap(
+        binner_w_hwp = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits_w_hwp.covariance,
             det_flags=None,
@@ -707,20 +724,30 @@ class SimConviqtTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key_wo_hwp}.fits")
-        write_healpix_fits(data_wo_hwp["binned_wo_hwp"], toast_bin_path, nest=pixels.nest)
+        write_healpix_fits(
+            data_wo_hwp["binned_wo_hwp"], toast_bin_path, nest=pixels.nest
+        )
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key_w_hwp}.fits")
         write_healpix_fits(data_w_hwp["binned_w_hwp"], toast_bin_path, nest=pixels.nest)
 
         toast_hits_path = os.path.join(self.outdir, "toast_hits_wo_hwp.fits")
-        write_healpix_fits(data_wo_hwp[cov_and_hits_wo_hwp.hits], toast_hits_path, nest=pixels.nest)
+        write_healpix_fits(
+            data_wo_hwp[cov_and_hits_wo_hwp.hits], toast_hits_path, nest=pixels.nest
+        )
         toast_hits_path = os.path.join(self.outdir, "toast_hits_w_hwp.fits")
-        write_healpix_fits(data_w_hwp[cov_and_hits_w_hwp.hits], toast_hits_path, nest=pixels.nest)
+        write_healpix_fits(
+            data_w_hwp[cov_and_hits_w_hwp.hits], toast_hits_path, nest=pixels.nest
+        )
         fail = False
         if self.rank == 0:
             import matplotlib.pyplot as plt
 
-            bl_in = hp.gauss_beam(self.fwhm_sky.to_value(u.radian), lmax=self.lmax, pol=True).T
-            bl_out = hp.gauss_beam(self.fwhm_beam.to_value(u.radian), lmax=self.lmax, pol=True).T
+            bl_in = hp.gauss_beam(
+                self.fwhm_sky.to_value(u.radian), lmax=self.lmax, pol=True
+            ).T
+            bl_out = hp.gauss_beam(
+                self.fwhm_beam.to_value(u.radian), lmax=self.lmax, pol=True
+            ).T
             slm = self.slm.copy()
             bl_in[bl_in == 0] = 1
             bl_out[bl_out == 0] = 1
@@ -737,13 +764,28 @@ class SimConviqtTest(MPITestCase):
                 m[m == 0] = hp.UNSEEN
             reference[m == hp.UNSEEN] = hp.UNSEEN
 
-            args = {"rot" : [156, 11], "xsize" : 1200, "reso" : 3, "cmap" : "bwr"}
+            args = {"rot": [156, 11], "xsize": 1200, "reso": 3, "cmap": "bwr"}
             nrow, ncol = 3, 3
             fig = plt.figure(figsize=[18, 12])
             for col, stokes in enumerate("IQU"):
-                hp.gnomview(mdata_wo_hwp[col], **args, sub=[nrow, ncol, 1 + col], title=f"{stokes} w/o HWP")
-                hp.gnomview(mdata_w_hwp[col], **args, sub=[nrow, ncol, 4 + col], title=f"{stokes} w/ HWP")
-                hp.gnomview(reference[col], **args, sub=[nrow, ncol, 7 + col], title=f"{stokes} reference")
+                hp.gnomview(
+                    mdata_wo_hwp[col],
+                    **args,
+                    sub=[nrow, ncol, 1 + col],
+                    title=f"{stokes} w/o HWP",
+                )
+                hp.gnomview(
+                    mdata_w_hwp[col],
+                    **args,
+                    sub=[nrow, ncol, 4 + col],
+                    title=f"{stokes} w/ HWP",
+                )
+                hp.gnomview(
+                    reference[col],
+                    **args,
+                    sub=[nrow, ncol, 7 + col],
+                    title=f"{stokes} reference",
+                )
             fname = os.path.join(self.outdir, "map_comparison_w_wo_hwp.png")
             fig.savefig(fname)
 
@@ -761,8 +803,16 @@ class SimConviqtTest(MPITestCase):
                 ax.semilogx(cl_out_w_hwp[col], color="tab:orange", label="w/ HWP")
                 ax = fig.add_subplot(nrow, ncol, 1 + ncol + col)
                 ax.set_title(f"{spec}")
-                ax.semilogx(cl_reference[col] / cl_out_wo_hwp[col], color="tab:blue", label="ref / w/o HWP")
-                ax.semilogx(cl_reference[col] / cl_out_w_hwp[col], color="tab:orange", label="ref / w/ HWP")
+                ax.semilogx(
+                    cl_reference[col] / cl_out_wo_hwp[col],
+                    color="tab:blue",
+                    label="ref / w/o HWP",
+                )
+                ax.semilogx(
+                    cl_reference[col] / cl_out_w_hwp[col],
+                    color="tab:orange",
+                    label="ref / w/ HWP",
+                )
             ax.legend(loc="best")
             fname = os.path.join(self.outdir, "cl_comparison_w_wo_hwp.png")
             fig.savefig(fname)

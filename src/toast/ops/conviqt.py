@@ -734,17 +734,23 @@ class SimTEBConviqt(SimConviqt):
                 sky_file = self.sky_file_dict[det]
             else:
                 sky_file = self.sky_file.format(detector=det, mc=self.mc)
-            skyT = self.get_sky(sky_file.replace(".fits","_T.fits"), det, verbose, pol=False)
+            skyT = self.get_sky(
+                sky_file.replace(".fits", "_T.fits"), det, verbose, pol=False
+            )
             if self.pol:
-                skyEB = self.get_sky(sky_file.replace(".fits","_EB.fits"), det, verbose, pol=True)
-                skyBE = self.get_sky(sky_file.replace(".fits","_BE.fits"), det, verbose, pol=True)
+                skyEB = self.get_sky(
+                    sky_file.replace(".fits", "_EB.fits"), det, verbose, pol=True
+                )
+                skyBE = self.get_sky(
+                    sky_file.replace(".fits", "_BE.fits"), det, verbose, pol=True
+                )
 
             if det in self.beam_file_dict:
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(detector=det, mc=self.mc)
 
-            beam_T, beam_P= self.get_beam(beam_file, det, verbose)
+            beam_T, beam_P = self.get_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
 
@@ -782,7 +788,7 @@ class SimTEBConviqt(SimConviqt):
             )
             self.save(data, det, convolved_data, verbose)
 
-            del pnt, detector, beam_T, beam_P , skyT
+            del pnt, detector, beam_T, beam_P, skyT
 
             if verbose:
                 timer.report_clear(f"conviqt process detector {det}")
@@ -793,10 +799,22 @@ class SimTEBConviqt(SimConviqt):
         timer = Timer()
         timer.start()
         beam_file_T = beamfile.replace(".fits", "_T.fits")
-        beamT = conviqt.Beam(lmax = self.lmax, mmax = self.beammmax,  pol = False, beamfile=beam_file_T, comm= self.comm)
+        beamT = conviqt.Beam(
+            lmax=self.lmax,
+            mmax=self.beammmax,
+            pol=False,
+            beamfile=beam_file_T,
+            comm=self.comm,
+        )
         if self.pol:
             beam_file_P = beamfile.replace(".fits", "_P.fits")
-            beamP = conviqt.Beam(lmax = self.lmax, mmax = self.beammmax,  pol = True, beamfile=beam_file_P, comm= self.comm)
+            beamP = conviqt.Beam(
+                lmax=self.lmax,
+                mmax=self.beammmax,
+                pol=True,
+                beamfile=beam_file_P,
+                comm=self.comm,
+            )
         else:
             beamP = None
 
