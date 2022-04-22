@@ -84,11 +84,11 @@ def main():
         nside = mpiworld.bcast(nside, root=0)
         nnz = mpiworld.bcast(nnz, root=0)
 
-    npix = 12 * nside ** 2
+    npix = 12 * nside**2
     subnside = int(nside / 16)
     if subnside == 0:
         subnside = 1
-    subnpix = 12 * subnside ** 2
+    subnpix = 12 * subnside**2
     nsubmap = int(npix / subnpix)
 
     # divide the submaps as evenly as possible among processes

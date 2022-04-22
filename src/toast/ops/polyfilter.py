@@ -118,7 +118,7 @@ class PolyFilter2D(Operator):
         if detectors is not None:
             raise RuntimeError("PolyFilter2D cannot be run on subsets of detectors")
         norder = self.order + 1
-        nmode = norder ** 2
+        nmode = norder**2
         pat = re.compile(self.pattern)
 
         for obs in data.obs:
@@ -259,7 +259,7 @@ class PolyFilter2D(Operator):
                     continue
                 idet = detector_index[det]
                 theta, phi = detector_position[det]
-                detector_templates[idet] = theta ** xorders * phi ** yorders
+                detector_templates[idet] = theta**xorders * phi**yorders
 
             gt.stop("Poly2D:  Detector setup")
 

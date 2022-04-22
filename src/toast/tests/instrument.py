@@ -55,7 +55,7 @@ class InstrumentTest(MPITestCase):
         psd_fmin = np.ones(ndet) * 1e-5 * u.Hz
         psd_fknee = np.ones(ndet) * 1e-2 * u.Hz
         psd_alpha = np.ones(ndet) * 1.0
-        psd_NET = np.ones(ndet) * 1e-3 * u.K * u.s ** 0.5
+        psd_NET = np.ones(ndet) * 1e-3 * u.K * u.s**0.5
         # Bandpass parameters (optional)
         bandcenter = np.ones(ndet) * 1e2 * u.GHz
         bandwidth = bandcenter * 0.1

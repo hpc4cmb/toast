@@ -170,6 +170,7 @@ def create_satellite_data(
     sample_rate=10.0 * u.Hz,
     obs_time=10.0 * u.minute,
     pixel_per_process=1,
+    hwp_rpm=10.0,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -211,12 +212,16 @@ def create_satellite_data(
 
     # Scan fast enough to cover some sky in a short amount of time.  Reduce the
     # angles to achieve a more compact hit map.
+    if hwp_rpm == 0 or hwp_rpm is None:
+        hwp_angle = None
+    else:
+        hwp_angle = defaults.hwp_angle
     sim_sat = ops.SimSatellite(
         name="sim_sat",
         telescope=tele,
         schedule=sch,
-        hwp_angle=defaults.hwp_angle,
-        hwp_rpm=10.0,
+        hwp_angle=hwp_angle,
+        hwp_rpm=hwp_rpm,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
         detset_key="pixel",
@@ -322,7 +327,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         toast.Data: the distributed data with named observations.
 
     """
-    nsamp = 12 * nside ** 2
+    nsamp = 12 * nside**2
     rate = 10.0
 
     toastcomm = create_comm(mpicomm)
@@ -485,7 +490,7 @@ def create_fake_sky_alm(lmax=128, fwhm=10 * u.degree, pol=True, pointsources=Fal
         nside = 512
         while nside < lmax:
             nside *= 2
-        npix = 12 * nside ** 2
+        npix = 12 * nside**2
         m = np.zeros(npix)
         for lon in np.linspace(-180, 180, 6):
             for lat in np.linspace(-80, 80, 6):
@@ -521,9 +526,9 @@ def create_fake_beam_alm(
     mmax=10,
     fwhm_x=10 * u.degree,
     fwhm_y=10 * u.degree,
-    pol = True, 
+    pol=True,
     separate_IQU=False,
-    separate_TP=False ,
+    separate_TP=False,
     detB_beam=False,
     normalize_beam=False,
 ):
@@ -532,25 +537,23 @@ def create_fake_beam_alm(
     nside = 2
     while nside < lmax:
         nside *= 2
-    npix = 12 * nside ** 2
+    npix = 12 * nside**2
     pix = np.arange(npix)
     x, y, z = hp.pix2vec(nside, pix, nest=False)
     sigma_z = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    beam = np.exp(-((z ** 2 / 2 / sigma_z ** 2 + y ** 2 / 2 / sigma_y ** 2)))
+    beam = np.exp(-((z**2 / 2 / sigma_z**2 + y**2 / 2 / sigma_y**2)))
     beam[x < 0] = 0
     beam_map = np.zeros([3, npix])
     beam_map[0] = beam
-    beam_map[1] = beam
-    bl, blm = hp.anafast(beam_map, lmax=lmax, iter=0, alm=True, pol=pol)
-    hp.rotate_alm(blm, psi=0, theta=-np.pi / 2, phi=0)
-    
     if detB_beam:
         # we make sure that the two detectors within the same pair encode
         # two beams with the  flipped sign in Q   U beams
-        beam_map = hp.alm2map(blm, nside=nside, lmax=lmax, mmax=mmax)
-        beam_map[1:] *= -1
-        blm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
+        beam_map[1] = -beam
+    else:
+        beam_map[1] = beam
+    blm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
+    hp.rotate_alm(blm, psi=0, theta=-np.pi / 2, phi=0, lmax=lmax, mmax=mmax)
 
     if normalize_beam:
         # We make sure that the simulated beams are normalized in the test
@@ -558,38 +561,55 @@ def create_fake_beam_alm(
         # i.e. the monopole term in the map is left unchanged
         idx = hp.Alm.getidx(lmax=lmax, l=0, m=0)
         norm = 2 * np.pi * blm[0, idx].real
-        
-    else: 
-        norm=1. 
-    
+
+    else:
+        norm = 1.0
+
     blm /= norm
+    # DEBUG begin
+    # import matplotlib.pyplot as plt
+    # ref = hp.gauss_beam(fwhm_x.to_value(u.radian), lmax=lmax, pol=True).T ** 2
+    # bl = hp.alm2cl(blm)
+    # fig = plt.figure()
+    # for col, name in enumerate("TEB"):
+    #     plt.semilogx(bl[col] * (2 * np.pi) ** 2, label=f"blm {name}")
+    #     plt.semilogx(ref[col], label=f"ref {name}")
+    # plt.legend()
+    # fig.savefig("bl.png")
+    # DEBUG end
     if separate_IQU:
         empty = np.zeros_like(beam_map[0])
         beam_map_I = np.vstack([beam_map[0], empty, empty])
         beam_map_Q = np.vstack([empty, beam_map[1], empty])
         beam_map_U = np.vstack([empty, empty, beam_map[1]])
         try:
-            blmi00 = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False, pol=True)/norm
-            blm0i0 = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False, pol=True )/norm
-            blm00i= hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False, pol=True)/norm
+            blmi00 = (
+                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
+            blm0i0 = (
+                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
+            blm00i = (
+                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
         except TypeError:
             # older healpy which does not have verbose keyword
-            blmi00 = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax,pol=True)/norm
-            blm0i0 = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax,pol=True)/norm
-            blm00i = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax,pol=True)/norm
-        return [blmi00,blm0i0,blm00i]
-    
-    elif separate_TP : 
-        #blmT=np.zeros_like(blm  ) 
-        #blmP=np.zeros_like(blm  ) 
-        
-        #blmT[0] =blm[0].copy() 
-        #blmP[0] =blm[1 ] + blm[2]  
-        
-        blmT =blm[0].copy() 
-        blmP =blm[1 ] + blm[2]  
-        
-        return [blmT, blmP ]  
+            blmi00 = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, pol=True) / norm
+            blm0i0 = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, pol=True) / norm
+            blm00i = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, pol=True) / norm
+        for b_lm in blmi00, blm0i0, blm00i:
+            hp.rotate_alm(b_lm, psi=0, theta=-np.pi / 2, phi=0, lmax=lmax, mmax=mmax)
+        return [blmi00, blm0i0, blm00i]
+
+    elif separate_TP:
+        blmT = blm[0].copy()
+        blmP = blm.copy()
+        blmP[0] = 0
+
+        return [blmT, blmP]
     else:
         return blm
 
@@ -712,7 +732,7 @@ def create_ground_data(
         det_flags="flags",
         det_data="signal",
         shared_flags="flags",
-        scan_accel_az=3 * u.degree / u.second ** 2,
+        scan_accel_az=3 * u.degree / u.second**2,
     )
     sim_ground.apply(data)
 

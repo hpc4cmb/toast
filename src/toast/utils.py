@@ -335,17 +335,17 @@ try:
                 vlist2 = np.array(vlist2, dtype=np.float64)
                 if key != "percent":
                     # From bytes to better units
-                    if np.amax(vlist) < 2 ** 20:
-                        vlist /= 2 ** 10
-                        vlist2 /= 2 ** 10
+                    if np.amax(vlist) < 2**20:
+                        vlist /= 2**10
+                        vlist2 /= 2**10
                         unit = "kB"
-                    elif np.amax(vlist) < 2 ** 30:
-                        vlist /= 2 ** 20
-                        vlist2 /= 2 ** 20
+                    elif np.amax(vlist) < 2**30:
+                        vlist /= 2**20
+                        vlist2 /= 2**20
                         unit = "MB"
                     else:
-                        vlist /= 2 ** 30
-                        vlist2 /= 2 ** 30
+                        vlist /= 2**30
+                        vlist2 /= 2**30
                         unit = "GB"
                 else:
                     unit = "% "
@@ -391,7 +391,6 @@ try:
         if comm is not None:
             comm.Barrier()
         return memstr
-
 
 except ImportError:
 

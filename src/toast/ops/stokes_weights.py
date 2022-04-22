@@ -280,9 +280,9 @@ class StokesWeights(Operator):
                             fslice = flags[bslice].reshape(-1)
 
                         # Weight buffer
-                        wtslice = views.detdata[self.weights][vw][
-                            det, bslice
-                        ].reshape(-1)
+                        wtslice = views.detdata[self.weights][vw][det, bslice].reshape(
+                            -1
+                        )
 
                         if self.single_precision:
                             wbuf = np.zeros(len(wtslice), dtype=np.float64)

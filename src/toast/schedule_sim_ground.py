@@ -194,7 +194,7 @@ class Patch(object):
     def get_area(self, observer, nside=32, equalize=False):
         self.update(observer)
         if self._area is None:
-            npix = 12 * nside ** 2
+            npix = 12 * nside**2
             hitmap = np.zeros(npix)
             for corner in self.corners:
                 corner.compute(observer)
@@ -407,7 +407,7 @@ class SSOPatch(Patch):
         self.name = name
         self.weight = weight
         self.radius = radius
-        self._area = np.pi * radius ** 2 / (4 * np.pi)
+        self._area = np.pi * radius**2 / (4 * np.pi)
         self.el_min0 = el_min
         self.el_min = el_min
         self.el_max = el_max
@@ -521,7 +521,7 @@ class CoolerCyclePatch(Patch):
             weight = (self.hold_time_max - hold_time) / (
                 self.hold_time_max - self.hold_time_min
             )
-            self.weight = self.weight0 * weight ** self.power
+            self.weight = self.weight0 * weight**self.power
         return
 
 
@@ -1221,13 +1221,13 @@ def get_pole_raster_scan(
 
     # Time it takes to perform one elevation step
     t_accel_el = el_rate / el_accel  # acceleration time
-    if el_accel * t_accel_el ** 2 > el_step:
+    if el_accel * t_accel_el**2 > el_step:
         # Telescope does not reach constant el_rate during the step.
         # The step is made of acceleration and deceleration
         t_el_step = 2 * np.sqrt(el_step / el_accel)
     else:
         # length of constant elevation rate scan
-        el_scan = el_step - el_accel * t_accel ** 2
+        el_scan = el_step - el_accel * t_accel**2
         # The elevation step is made of acceleration,
         # constant scan and deceleration
         t_el_step = 2 * t_accel_el + el_scan / el_rate
@@ -2544,7 +2544,7 @@ def parse_args(opts=None):
     start_timestamp = start_time.timestamp()
     if stop_time is None:
         # Keep scheduling until the desired number of operational days is full.
-        stop_timestamp = 2 ** 60
+        stop_timestamp = 2**60
     else:
         stop_timestamp = stop_time.timestamp()
     return args, start_timestamp, stop_timestamp
@@ -2872,7 +2872,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             title = scoord  # + ' patch locations'
             if polmap is None:
                 nside = 256
-                avoidance_map = np.zeros(12 * nside ** 2)
+                avoidance_map = np.zeros(12 * nside**2)
                 # hp.mollview(np.zeros(12) + hp.UNSEEN, coord=coord, cbar=False,
                 #            title='', sub=[1, 3, 1 + iplot], cmap=cmap)
             else:

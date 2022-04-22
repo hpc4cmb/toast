@@ -24,7 +24,7 @@ def scan_time(coord_in, coord_out, scanrate, scan_accel):
     """
     d = np.abs(coord_in - coord_out)
     t_accel = scanrate / scan_accel
-    d_accel = 0.5 * scan_accel * t_accel ** 2
+    d_accel = 0.5 * scan_accel * t_accel**2
     if 2 * d_accel > d:
         # No time to reach scan speed
         d_accel = d / 2
@@ -46,7 +46,7 @@ def scan_profile(coord_in, coord_out, scanrate, scan_accel, times, nstep=10000):
 
     d = np.abs(coord_in - coord_out)
     t_accel = scanrate / scan_accel
-    d_accel = 0.5 * scan_accel * t_accel ** 2
+    d_accel = 0.5 * scan_accel * t_accel**2
     if 2 * d_accel > d:
         # No time to reach scan speed
         d_accel = d / 2
@@ -228,7 +228,7 @@ def oscillate_el(
     """
     tt = times - times[0]
     # Shift the starting time by a random phase
-    np.random.seed(int(times[0] % 2 ** 32))
+    np.random.seed(int(times[0] % 2**32))
     tt += np.random.rand() / el_mod_rate
 
     if el_mod_sine:
@@ -254,7 +254,7 @@ def oscillate_el(
         a = el_accel
         b = -0.5 * el_accel * t_mod
         c = 2 * el_mod_amplitude
-        if b ** 2 - 4 * a * c < 0:
+        if b**2 - 4 * a * c < 0:
             raise RuntimeError(
                 "Cannot perform {:.2f} deg elevation oscillation in {:.2f} s "
                 "with {:.2f} deg/s^2 acceleration".format(
@@ -262,8 +262,8 @@ def oscillate_el(
                     np.degrees(el_accel),
                 )
             )
-        root1 = (-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
-        root2 = (-b + np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)
+        root1 = (-b - np.sqrt(b**2 - 4 * a * c)) / (2 * a)
+        root2 = (-b + np.sqrt(b**2 - 4 * a * c)) / (2 * a)
         if root1 > 0:
             t_accel = root1
         else:
@@ -287,7 +287,7 @@ def oscillate_el(
         # accelerate
         t = np.linspace(0, t_accel, n)
         t_interp.append(t)
-        el_interp.append(0.5 * el_accel * t ** 2)
+        el_interp.append(0.5 * el_accel * t**2)
         # scan
         t_last = t_interp[-1][-1]
         el_last = el_interp[-1][-1]
@@ -299,7 +299,7 @@ def oscillate_el(
         el_last = el_interp[-1][-1]
         t = np.linspace(0, 2 * t_accel, n)
         t_interp.append(t_last + t)
-        el_interp.append(el_last + scanrate * t - 0.5 * el_accel * t ** 2)
+        el_interp.append(el_last + scanrate * t - 0.5 * el_accel * t**2)
         # scan
         t_last = t_interp[-1][-1]
         el_last = el_interp[-1][-1]
@@ -311,7 +311,7 @@ def oscillate_el(
         el_last = el_interp[-1][-1]
         t = np.linspace(0, t_accel, n)
         t_interp.append(t_last + t)
-        el_interp.append(el_last - scanrate * t + 0.5 * el_accel * t ** 2)
+        el_interp.append(el_last - scanrate * t + 0.5 * el_accel * t**2)
 
         t_interp = np.hstack(t_interp)
         el_interp = np.hstack(el_interp)
@@ -348,7 +348,7 @@ def step_el(
     # simulate a single elevation step at high resolution
 
     t_accel = el_rate / el_accel
-    el_step_accel = 0.5 * el_accel * t_accel ** 2
+    el_step_accel = 0.5 * el_accel * t_accel**2
     if el_step > 2 * el_step_accel:
         # Step is large enough to reach elevation scan rate
         t_scan = (el_step - 2 * el_step_accel) / el_rate
@@ -364,7 +364,7 @@ def step_el(
     # accelerate
     t = np.linspace(0, t_accel, n)
     t_interp.append(t)
-    el_interp.append(0.5 * el_accel * t ** 2)
+    el_interp.append(0.5 * el_accel * t**2)
     # scan
     if t_scan > 0:
         t_last = t_interp[-1][-1]
@@ -378,7 +378,7 @@ def step_el(
     el_rate_last = el_accel * t_accel
     t = np.linspace(0, t_accel, n)
     t_interp.append(t_last + t)
-    el_interp.append(el_last + el_rate_last * t - 0.5 * el_accel * t ** 2)
+    el_interp.append(el_last + el_rate_last * t - 0.5 * el_accel * t**2)
 
     t_interp = np.hstack(t_interp)
     t_interp -= t_interp[t_interp.size // 2]

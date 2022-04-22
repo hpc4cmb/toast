@@ -35,9 +35,9 @@ def count_caches(data, comm, nodecomm, madamcache, msg=""):
         print(
             "Node has {:.3f} GB allocated in TOAST TOD caches and "
             "{:.3f} GB in Madam caches ({:.3f} GB total) {}".format(
-                node_todsize / 2 ** 30,
-                node_cachesize / 2 ** 30,
-                (node_todsize + node_cachesize) / 2 ** 30,
+                node_todsize / 2**30,
+                node_cachesize / 2**30,
+                (node_todsize + node_cachesize) / 2**30,
                 msg,
             )
         )
@@ -529,7 +529,7 @@ class OpMadam(Operator):
                     noise_scale = 1
                 if nse is not None:
                     for det in detectors:
-                        psd = nse.psd(det) * noise_scale ** 2
+                        psd = nse.psd(det) * noise_scale**2
                         if det not in psds:
                             psds[det] = [(0, psd)]
                         else:
@@ -939,7 +939,7 @@ class OpMadam(Operator):
                         )
                         pixels[istart:istop] = self._madam_pixels[dslice]
                         offset += nn
-                    npix = 12 * nside ** 2
+                    npix = 12 * nside**2
                     good = np.logical_and(pixels >= 0, pixels < npix)
                     if not self._pixels_nested:
                         pixels[good] = hp.nest2ring(nside, pixels[good])

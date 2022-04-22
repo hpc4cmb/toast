@@ -81,7 +81,7 @@ class OpMapMakerTest(MPITestCase):
         self.nnz = 3
 
         # Samples per observation
-        self.npix = 12 * self.sim_nside ** 2
+        self.npix = 12 * self.sim_nside**2
         self.ninterval = 4
         self.totsamp = self.ninterval * self.npix
 
@@ -138,7 +138,7 @@ class OpMapMakerTest(MPITestCase):
 
         # Write processing masks
 
-        self.npix = 12 * self.map_nside ** 2
+        self.npix = 12 * self.map_nside**2
         pix = np.arange(self.npix)
         pix = hp.reorder(pix, r2n=True)
 

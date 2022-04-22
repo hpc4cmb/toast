@@ -54,7 +54,7 @@ class MemoryCounter(Operator):
     def _finalize(self, data, **kwargs):
         log = Logger.get()
         if not self.silent:
-            total_gb = self.total_bytes / 2 ** 30
+            total_gb = self.total_bytes / 2**30
             if data.comm.comm_group_rank is not None:
                 total_gb = data.comm.comm_group_rank.allreduce(total_gb)
             if data.comm.world_rank == 0:

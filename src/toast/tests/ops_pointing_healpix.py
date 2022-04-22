@@ -24,7 +24,7 @@ class PointingHealpixTest(MPITestCase):
 
     def test_pointing_matrix_healpix2(self):
         nside = 64
-        npix = 12 * nside ** 2
+        npix = 12 * nside**2
         hpix = HealpixPixels(64)
         nest = True
         phivec = np.radians(

@@ -345,7 +345,7 @@ def rhomb_dim(npix):
 
     """
     dim = int(np.sqrt(float(npix)))
-    if dim ** 2 != npix:
+    if dim**2 != npix:
         raise ValueError("number of pixels for a rhombus wafer must be square")
     return dim
 
@@ -501,7 +501,7 @@ def rhombus_layout(
         if pixrow >= dim:
             relrow = (2 * dim - 2) - pixrow
         colang = (float(pixcol) - float(relrow) / 2.0) * pixdiam
-        distang = np.sqrt(rowang ** 2 + colang ** 2)
+        distang = np.sqrt(rowang**2 + colang**2)
         zang = np.cos(distang)
         pixdir = np.array([colang, rowang, zang], dtype=np.float64)
         norm = np.sqrt(np.dot(pixdir, pixdir))
@@ -591,6 +591,7 @@ def fake_hexagon_focalplane(
             Column(name="name", data=[x for x in det_data.keys()]),
             Column(name="quat", data=[det_data[x]["quat"] for x in det_data.keys()]),
             Column(name="pol_leakage", length=n_det, unit=None),
+            Column(name="psi_pol", length=n_det, unit=u.rad),
             Column(name="fwhm", length=n_det, unit=u.arcmin),
             Column(name="psd_fmin", length=n_det, unit=u.Hz),
             Column(name="psd_fknee", length=n_det, unit=u.Hz),
@@ -610,6 +611,10 @@ def fake_hexagon_focalplane(
         det_table[idet]["name"] = det
         det_table[idet]["quat"] = det_data[det]["quat"]
         det_table[idet]["pol_leakage"] = epsilon
+        if det.endswith("A"):
+            det_table[idet]["psi_pol"] = 0 * u.rad
+        else:
+            det_table[idet]["psi_pol"] = np.pi / 2 * u.rad
         det_table[idet]["fwhm"] = fwhm * (
             1 + np.random.randn() * fwhm_sigma.to_value(fwhm.unit)
         )

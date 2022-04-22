@@ -52,7 +52,7 @@ class OpSimDipoleTest(MPITestCase):
 
         # Pixelization
         self.nside = 64
-        self.npix = 12 * self.nside ** 2
+        self.npix = 12 * self.nside**2
 
         # Samples per observation
         self.totsamp = self.npix

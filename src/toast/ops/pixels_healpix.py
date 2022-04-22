@@ -144,8 +144,8 @@ class PixelsHealpix(Operator):
 
     def _set_hpix(self, nside, nside_submap):
         self.hpix = HealpixPixels(nside)
-        self._n_pix = 12 * nside ** 2
-        self._n_pix_submap = 12 * nside_submap ** 2
+        self._n_pix = 12 * nside**2
+        self._n_pix_submap = 12 * nside_submap**2
         self._n_submap = (nside // nside_submap) ** 2
         self._local_submaps = None
 
@@ -278,9 +278,9 @@ class PixelsHealpix(Operator):
                             fslice = flags[bslice].reshape(-1)
 
                         # Pixel buffer
-                        pxslice = views.detdata[self.pixels][vw][
-                            det, bslice
-                        ].reshape(-1)
+                        pxslice = views.detdata[self.pixels][vw][det, bslice].reshape(
+                            -1
+                        )
 
                         if self.single_precision:
                             pbuf = np.zeros(len(pxslice), dtype=np.int64)
@@ -302,8 +302,7 @@ class PixelsHealpix(Operator):
 
                     if self.create_dist is not None:
                         self._local_submaps[
-                            views.detdata[self.pixels][vw][det]
-                            // self._n_pix_submap
+                            views.detdata[self.pixels][vw][det] // self._n_pix_submap
                         ] = 1
 
         return

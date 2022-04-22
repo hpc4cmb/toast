@@ -400,7 +400,7 @@ class Demodulate(Operator):
             # qweights = eta * cos(2 * psi_det + 4 * psi_hwp)
             # uweights = eta * sin(2 * psi_det + 4 * psi_hwp)
             iweights, qweights, uweights = weights.T
-            etainv = 1 / np.sqrt(qweights ** 2 + uweights ** 2)
+            etainv = 1 / np.sqrt(qweights**2 + uweights**2)
 
             det_data = demod_obs.detdata[self.det_data]
             det_data[f"demod0_{det}"] = lowpass(signal)

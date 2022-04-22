@@ -24,7 +24,7 @@ def get_node_mem(world_comm, node_rank):
         (int):  The minimum number of bytes of available node memory.
 
     """
-    min_avail = 2 ** 62
+    min_avail = 2**62
     max_avail = 0
     if node_rank == 0:
         vmem = psutil.virtual_memory()._asdict()
@@ -97,7 +97,7 @@ def job_group_size(
 
     """
     log = Logger.get()
-    gb = 1024 ** 3
+    gb = 1024**3
 
     rank = 0
     procs = 1

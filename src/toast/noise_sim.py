@@ -137,7 +137,7 @@ class AnalyticNoise(Noise):
         return self._NET[det]
 
     def _detector_weight(self, det):
-        return 1.0 / (self._NET[det] ** 2).to_value(u.K ** 2 * u.second)
+        return 1.0 / (self._NET[det] ** 2).to_value(u.K**2 * u.second)
 
     def _save_hdf5(self, handle, comm=None, force_serial=False, **kwargs):
         """Internal method which can be overridden by derived classes."""

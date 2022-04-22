@@ -92,7 +92,7 @@ class OpPointingHpix(Operator):
         self._keep_quats = keep_quats
         self._single_precision = single_precision
         self._nside_submap = min(nside, nside_submap)
-        self._npix_submap = 12 * self._nside_submap ** 2
+        self._npix_submap = 12 * self._nside_submap**2
         self._nsubmap = (self._nside // self._nside_submap) ** 2
         self._hit_submaps = np.zeros(self._nsubmap, dtype=np.bool)
 
@@ -278,7 +278,7 @@ class OpPointingHpix(Operator):
         nsubmap_name = "{}_nsubmap".format(self._pixels)
         data[nsubmap_name] = self._nsubmap
         npix_name = "{}_npix".format(self._pixels)
-        data[npix_name] = 12 * self._nside ** 2
+        data[npix_name] = 12 * self._nside**2
 
         return
 
@@ -370,7 +370,7 @@ class OpMuellerPointingHpix(Operator):
         self._keep_quats = keep_quats
         self._single_precision = single_precision
         self._nside_submap = min(nside, nside_submap)
-        self._npix_submap = 12 * self._nside_submap ** 2
+        self._npix_submap = 12 * self._nside_submap**2
         self._nsubmap = (self._nside // self._nside_submap) ** 2
         self._hit_submaps = np.zeros(self._nsubmap, dtype=np.bool)
         self._hwp_parameters_set = hwp_parameters_set
@@ -584,6 +584,6 @@ class OpMuellerPointingHpix(Operator):
         nsubmap_name = "{}_nsubmap".format(self._pixels)
         data[nsubmap_name] = self._nsubmap
         npix_name = "{}_npix".format(self._pixels)
-        data[npix_name] = 12 * self._nside ** 2
+        data[npix_name] = 12 * self._nside**2
 
         return

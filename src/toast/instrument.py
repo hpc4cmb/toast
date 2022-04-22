@@ -563,7 +563,7 @@ class Focalplane(object):
                 quat = row["quat"]
                 a = quat[3]
                 d = quat[2]
-                pol_angle = np.arctan2(2 * a * d, a ** 2 - d ** 2) % np.pi
+                pol_angle = np.arctan2(2 * a * d, a**2 - d**2) % np.pi
                 row["pol_angle"] = pol_angle * u.radian
 
     @function_timer

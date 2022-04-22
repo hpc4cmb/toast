@@ -143,7 +143,7 @@ class SimNoiseTest(MPITestCase):
                     ax = fig.add_subplot(1, 1, 1, aspect="auto")
                     ax.loglog(
                         nse.freq(det).to_value(u.Hz),
-                        nse.psd(det).to_value(u.K ** 2 * u.second),
+                        nse.psd(det).to_value(u.K**2 * u.second),
                         marker="o",
                         c="red",
                         label="{}: rate={:0.1f} NET={:0.1f} fknee={:0.4f}, "
@@ -197,7 +197,7 @@ class SimNoiseTest(MPITestCase):
                     samples=ob.n_local_samples,
                     oversample=self.oversample,
                     freq=nse.freq(det).to_value(u.Hz),
-                    psd=nse.psd(det).to_value(u.K ** 2 * u.second),
+                    psd=nse.psd(det).to_value(u.K**2 * u.second),
                     py=True,
                 )
                 np.testing.assert_array_almost_equal(
@@ -326,7 +326,7 @@ class SimNoiseTest(MPITestCase):
                     samples=ob.n_local_samples,
                     oversample=self.oversample,
                     freq=nse.freq(det).to_value(u.Hz),
-                    psd=nse.psd(det).to_value(u.K ** 2 * u.second),
+                    psd=nse.psd(det).to_value(u.K**2 * u.second),
                     py=True,
                 )
                 pytod.clear()
@@ -411,7 +411,7 @@ class SimNoiseTest(MPITestCase):
                     buffer[offset : offset + len(tod)] = tod
                     rawpsd = np.fft.rfft(buffer)
                     norm = 1.0 / (sample_rate * ob.n_local_samples)
-                    rawpsd = norm * np.abs(rawpsd ** 2)
+                    rawpsd = norm * np.abs(rawpsd**2)
                     bpsd = np.bincount(checkbinmap, weights=rawpsd)
                     good = bcount > 0
                     bpsd[good] /= bcount[good]
