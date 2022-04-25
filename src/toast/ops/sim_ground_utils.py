@@ -559,16 +559,8 @@ def simulate_ces_scan(
     # sample rate are enforced and the stop time is adjusted if needed to
     # produce a whole number of samples.
 
-    samples = int((t_stop - t_start) * rate) + 1
-    t_stop = t_start + ((samples - 1) / rate)
-
-    times = np.linspace(
-        t_start,
-        t_stop,
-        num=samples,
-        endpoint=True,
-        dtype=np.float64,
-    )
+    samples = int((t_stop - t_start) * rate)
+    times = t_start + np.arange(samples) / rate
 
     tmin, tmax = tvec[0], tvec[-1]
     tdelta = tmax - tmin
