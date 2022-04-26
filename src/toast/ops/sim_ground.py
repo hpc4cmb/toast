@@ -102,6 +102,11 @@ class SimGround(Operator):
         0, help="The (integer) timezone offset in hours from UTC to apply to schedule"
     )
 
+    randomize_phase = Bool(
+        False,
+        help="If True, the Constant Elevation Scan will begin at a randomized phase.",
+    )
+
     scan_rate_az = Quantity(
         1.0 * u.degree / u.second,
         help="The sky or mount azimuth scanning rate.  See `fix_rate_on_sky`",
@@ -606,6 +611,7 @@ class SimGround(Operator):
                 scan_min_az,
                 scan_max_az,
                 cosecant_modulation=self.scan_cosecant_modulation,
+                randomize_phase=self.randomize_phase,
             )
 
             # Do any adjustments to the El motion
