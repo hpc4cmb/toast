@@ -1,11 +1,8 @@
 # Tutorial
 
-The TOAST tutorial is based on a series of notebooks that were presented
-in past workshops. You can find them inside the `tutorial` directory in
-the [top level of the source
-tree](https://github.com/hpc4cmb/toast/tree/master/tutorial). These
-notebooks are designed to be run interactively from a laptop or
-workstation. To avoid adding binary objects to the git repository, these
-notebooks do not have any outputs saved. You can either run them to view
-the output or you can browse a copy of the [generated output
-here](https://portal.nersc.gov/project/cmb/toast-tutorial/).
+The following tutorials are notebooks designed to walk through different aspects of using TOAST.  I addition to the normal TOAST dependencies, running these notebooks require a few additional packages:
+
+- [wurlitzer](https://pypi.org/project/wurlitzer/)
+- [ipywidgets](https://pypi.org/project/ipywidgets/)
+- [plotly](https://pypi.org/project/plotly/)
+- [plotly-resampler](https://pypi.org/project/plotly-resampler/)

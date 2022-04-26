@@ -136,6 +136,7 @@ install(FILES
     schedule.py
     schedule_sim_ground.py
     schedule_sim_satellite.py
+    widgets.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )
