@@ -774,3 +774,236 @@ def compute_science_metric(args, runtime, n_nodes, rank, log):
         with open(os.path.join(args.out_dir, "log"), "a") as f:
             f.write(msg)
             f.write("\n\n")
+
+#--------------------------------------------------------------------------------------------------
+# apply
+
+import numpy as np
+from toast.observation import Observation
+from toast.dist import distribute_discrete
+from toast.utils import Environment, name_UID, Logger
+from toast.ops.sim_hwp import simulate_hwp_response
+from toast.ops.sim_satellite import satellite_scanning
+from toast import qarray as qa
+from toast.timing import function_timer_stackskip, function_timer
+
+@function_timer
+def _exec(job_ops, data, detectors=None):
+    zaxis = np.array([0, 0, 1], dtype=np.float64)
+    log = Logger.get()
+    if job_ops.sim_satellite.telescope is None:
+        raise RuntimeError(
+            "The telescope attribute must be set before calling exec()"
+        )
+    if job_ops.sim_satellite.schedule is None:
+        raise RuntimeError(
+            "The schedule attribute must be set before calling exec()"
+        )
+    focalplane = job_ops.sim_satellite.telescope.focalplane
+    rate = focalplane.sample_rate.to_value(u.Hz)
+    site = job_ops.sim_satellite.telescope.site
+    comm = data.comm
+
+    # List of detectors in this pipeline
+    pipedets = None
+    if detectors is None:
+        pipedets = focalplane.detectors
+    else:
+        pipedets = list()
+        for det in focalplane.detectors:
+            if det in detectors:
+                pipedets.append(det)
+
+    # Group by detector sets and prune to include only the detectors we
+    # are using.
+    detsets = None
+    if job_ops.sim_satellite.detset_key is not None:
+        detsets = dict()
+        dsets = focalplane.detector_groups(job_ops.sim_satellite.detset_key)
+        for k, v in dsets.items():
+            detsets[k] = list()
+            for d in v:
+                if d in pipedets:
+                    detsets[k].append(d)
+
+    # Data distribution in the detector direction
+    det_ranks = comm.group_size
+    if job_ops.sim_satellite.distribute_time:
+        det_ranks = 1
+
+    # Verify that we have enough data for all of our processes.  If we are
+    # distributing by time, we have no sample sets, so can accomodate any
+    # number of processes.  If we are distributing by detector, we must have
+    # at least one detector set for each process.
+
+    if not job_ops.sim_satellite.distribute_time:
+        # distributing by detector...
+        n_detset = None
+        if detsets is None:
+            # Every detector is independently distributed
+            n_detset = len(pipedets)
+        else:
+            n_detset = len(detsets)
+        if det_ranks > n_detset:
+            if comm.group_rank == 0:
+                msg = f"Group {comm.group} has {comm.group_size} processes but {n_detset} detector sets."
+                log.error(msg)
+                raise RuntimeError(msg)
+
+    # The global start is the beginning of the first scan
+
+    mission_start = job_ops.sim_satellite.schedule.scans[0].start
+
+    # Satellite motion is continuous across multiple observations, so we simulate
+    # continuous sampling and find the actual start / stop times for the samples
+    # that fall in each scan time range.
+
+    scan_starts = list()
+    scan_stops = list()
+    scan_offsets = list()
+    scan_samples = list()
+
+    incr = 1.0 / rate
+    off = 0
+    for scan in job_ops.sim_satellite.schedule.scans:
+        ffirst = rate * (scan.start - mission_start).total_seconds()
+        first = int(ffirst)
+        if ffirst - first > 1.0e-3 * incr:
+            first += 1
+        start = first * incr + mission_start.timestamp()
+        ns = 1 + int(rate * (scan.stop.timestamp() - start))
+        stop = (ns - 1) * incr + mission_start.timestamp()
+        scan_starts.append(start)
+        scan_stops.append(stop)
+        scan_samples.append(ns)
+        scan_offsets.append(off)
+        off += ns
+
+    # Distribute the observations uniformly among groups.  We take each scan and
+    # weight it by the duration.
+
+    groupdist = distribute_discrete(scan_samples, comm.ngroups)
+
+    # Every process group creates its observations
+
+    group_firstobs = groupdist[comm.group][0]
+    group_numobs = groupdist[comm.group][1]
+
+    for obindx in range(group_firstobs, group_firstobs + group_numobs):
+        scan = job_ops.sim_satellite.schedule.scans[obindx]
+
+        ob = Observation(
+            comm,
+            job_ops.sim_satellite.telescope,
+            scan_samples[obindx],
+            name=f"{scan.name}_{int(scan.start.timestamp())}",
+            uid=name_UID(scan.name),
+            detector_sets=detsets,
+            process_rows=det_ranks,
+        )
+        
+        # Create shared objects for timestamps, common flags, position,
+        # and velocity.
+        ob.shared.create_column(
+            job_ops.sim_satellite.times,
+            shape=(ob.n_local_samples,),
+            dtype=np.float64,
+        )
+        ob.shared.create_column(
+            job_ops.sim_satellite.shared_flags,
+            shape=(ob.n_local_samples,),
+            dtype=np.uint8,
+        )
+        ob.shared.create_column(
+            job_ops.sim_satellite.position,
+            shape=(ob.n_local_samples, 3),
+            dtype=np.float64,
+        )
+        ob.shared.create_column(
+            job_ops.sim_satellite.velocity,
+            shape=(ob.n_local_samples, 3),
+            dtype=np.float64,
+        )
+
+        # Rank zero of each grid column creates the data
+
+        stamps = None
+        position = None
+        velocity = None
+        q_prec = None
+
+        if ob.comm_col_rank == 0:
+            start_time = scan_starts[obindx] + float(ob.local_index_offset) / rate
+            stop_time = start_time + float(ob.n_local_samples - 1) / rate
+            stamps = np.linspace(
+                start_time,
+                stop_time,
+                num=ob.n_local_samples,
+                endpoint=True,
+                dtype=np.float64,
+            )
+
+            # Get the motion of the site for these times.
+            position, velocity = site.position_velocity(stamps)
+
+            # Get the quaternions for the precession axis.  For now, assume that
+            # it simply points away from the solar system barycenter
+
+            pos_norm = np.sqrt((position * position).sum(axis=1)).reshape(-1, 1)
+            pos_norm = 1.0 / pos_norm
+            prec_axis = pos_norm * position
+            q_prec = qa.from_vectors(
+                np.tile(zaxis, ob.n_local_samples).reshape(-1, 3), prec_axis
+            )
+
+        ob.shared[job_ops.sim_satellite.times].set(stamps, offset=(0,), fromrank=0)
+        ob.shared[job_ops.sim_satellite.position].set(position, offset=(0, 0), fromrank=0)
+        ob.shared[job_ops.sim_satellite.velocity].set(velocity, offset=(0, 0), fromrank=0)
+
+        # Create boresight pointing
+
+        satellite_scanning(
+            ob,
+            job_ops.sim_satellite.boresight,
+            sample_offset=scan_offsets[obindx],
+            q_prec=q_prec,
+            spin_period_m=scan.spin_period.to_value(u.minute),
+            spin_angle_deg=job_ops.sim_satellite.spin_angle.to_value(u.degree),
+            prec_period_m=scan.prec_period.to_value(u.minute),
+            prec_angle_deg=job_ops.sim_satellite.prec_angle.to_value(u.degree),
+        )
+
+        # Set HWP angle
+
+        simulate_hwp_response(
+            ob,
+            ob_time_key=job_ops.sim_satellite.times,
+            ob_angle_key=job_ops.sim_satellite.hwp_angle,
+            ob_mueller_key=None,
+            hwp_start=scan_starts[obindx] * u.second,
+            hwp_rpm=job_ops.sim_satellite.hwp_rpm,
+            hwp_step=job_ops.sim_satellite.hwp_step,
+            hwp_step_time=job_ops.sim_satellite.hwp_step_time,
+        )
+
+        # Optionally initialize detector data
+
+        dets = ob.select_local_detectors(detectors)
+
+        if job_ops.sim_satellite.det_data is not None:
+            exists_data = ob.detdata.ensure(
+                job_ops.sim_satellite.det_data, dtype=np.float64, detectors=dets
+            )
+
+        if job_ops.sim_satellite.det_flags is not None:
+            exists_flags = ob.detdata.ensure(
+                job_ops.sim_satellite.det_flags, dtype=np.uint8, detectors=dets
+            )
+
+        data.obs.append(ob)
+
+
+@function_timer_stackskip
+def exec(job_ops, data, detectors=None, **kwargs):
+    log = Logger.get()
+    _exec(job_ops, data, detectors=detectors, **kwargs)

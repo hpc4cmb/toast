@@ -30,6 +30,7 @@ from toast.scripts.benchmarking_utilities import (
     compute_science_metric,
     estimate_memory_overhead,
     python_startup_time,
+    _exec as job_ops_sim_satellite_apply
 )
 
 
@@ -178,7 +179,6 @@ def make_schedule(args, world_comm):
         schedule = world_comm.bcast(schedule, root=0)
     args.schedule = schedule
 
-
 @function_timer
 def main():
     env = toast.utils.Environment.get()
@@ -259,7 +259,8 @@ def main():
     # Simulate the telescope pointing
     job_ops.sim_satellite.telescope = telescope
     job_ops.sim_satellite.schedule = args.schedule
-    job_ops.sim_satellite.apply(data)
+    job_ops_sim_satellite_apply(job_ops, data)
+    #job_ops.sim_satellite.apply(data) # TODO this hangs on alvarez
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
     # Construct a "perfect" noise model just from the focalplane parameters
