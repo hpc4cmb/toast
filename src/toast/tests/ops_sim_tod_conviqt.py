@@ -24,7 +24,6 @@ from ..pixels_io import write_healpix_fits
 
 from ._helpers import (
     create_outdir,
-    create_healpix_ring_satellite,
     create_satellite_data,
     create_fake_sky_alm,
     create_fake_beam_alm,
@@ -227,8 +226,6 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-        # Create a fake scan strategy that hits every pixel once.
-        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
@@ -340,8 +337,6 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-        # Create a fake scan strategy that hits every pixel once.
-        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
@@ -455,8 +450,6 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-        # Create a fake scan strategy that hits every pixel once.
-        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
