@@ -428,9 +428,6 @@ class Focalplane(object):
             increase the effective size of the focalplane when simulating atmosphere,
             etc.  Will be calculated from the detector offsets by default.
         sample_rate (Quantity):  The common (nominal) sample rate for all detectors.
-        file (str):  Load the focalplane from this file.
-        comm (MPI.Comm):  If loading from a file, optional communicator to broadcast
-            across.
         thinfp (int):  Only sample the detectors in the file.
 
     """
@@ -725,6 +722,8 @@ class Focalplane(object):
 
         Args:
             handle (h5py.Group):  The group containing the "focalplane" dataset.
+            comm (MPI.Comm):  If loading from a file, optional communicator to broadcast
+                across.
 
         Returns:
             None
@@ -767,6 +766,8 @@ class Focalplane(object):
 
         Args:
             handle (h5py.Group):  The parent group of the focalplane dataset.
+            comm (MPI.Comm):  If loading from a file, optional communicator to broadcast
+                across.
 
         Returns:
             None

@@ -150,6 +150,11 @@ class SimAtmosphere(Operator):
         help="Maximum wind drift before discarding the volume and creating a new one",
     )
 
+    fade_time = Quantity(
+        60.0 * u.s,
+        help="Fade in/out time to avoid a step at wind break.",
+    )
+
     sample_rate = Quantity(
         None,
         allow_none=True,
@@ -187,6 +192,8 @@ class SimAtmosphere(Operator):
     )
 
     debug_plots = Bool(False, help="If True, make plots of the debug snapshots")
+
+    add_loading = Bool(True, help="Add elevation-dependent loading.")
 
     field_of_view = Quantity(
         None,
@@ -302,7 +309,10 @@ class SimAtmosphere(Operator):
 
         # Observation key for storing absorption and loading
         absorption_key = f"{self.name}_absorption"
-        loading_key = f"{self.name}_loading"
+        if self.add_loading:
+            loading_key = f"{self.name}_loading"
+        else:
+            loading_key = None
 
         # Set up the observing operator
         if self.shared_flags is None:
@@ -325,6 +335,7 @@ class SimAtmosphere(Operator):
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             wind_view=wind_intervals,
+            fade_time=self.fade_time,
             sim=atm_sim_key,
             absorption=absorption_key,
             loading=loading_key,

@@ -44,7 +44,7 @@ from .noise_estimation_utils import autocov_psd, crosscov_psd, flagged_running_a
 from .operator import Operator
 from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 from .copy import Copy
-from .arithmetic import Subtract
+from .arithmetic import Combine
 from .polyfilter import CommonModeFilter
 from .delete import Delete
 
@@ -301,7 +301,12 @@ class NoiseEstim(Operator):
                 det_flag_mask=self.det_flag_mask,
                 focalplane_key=self.focalplane_key,
             ).apply(data)
-            Subtract(first=self.det_data, second="temp_signal").apply(data)
+            Combine(
+                op="subtract",
+                first=self.det_data,
+                second="temp_signal",
+                output=self.det_data,
+            ).apply(data)
             Delete(detdata="temp_signal")
 
         self.rank = data.comm.world_rank

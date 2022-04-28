@@ -38,7 +38,6 @@ class TemplateFourier2DTest(MPITestCase):
 
         tmpl = Fourier2D(
             det_data=defaults.det_data,
-            det_flags=None,
             times=defaults.times,
             noise_model=noise_model.noise_model,
         )

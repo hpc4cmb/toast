@@ -23,6 +23,8 @@ from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float, Quantity
 
 from ..data import Data
 
+from ..observation import default_values as defaults
+
 from .template import Template
 
 from .amplitudes import Amplitudes
@@ -47,7 +49,7 @@ class Fourier2D(Template):
     #    det_flag_mask    : Bit mask for detector solver flags
     #
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     correlation_length = Quantity(10.0 * u.second, help="Correlation length in time")
 

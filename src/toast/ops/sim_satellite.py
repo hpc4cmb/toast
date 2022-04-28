@@ -20,8 +20,6 @@ from ..dist import distribute_discrete
 
 from ..timing import function_timer, Timer
 
-from ..intervals import interval_dtype
-
 from ..schedule import SatelliteSchedule
 
 from ..noise_sim import AnalyticNoise

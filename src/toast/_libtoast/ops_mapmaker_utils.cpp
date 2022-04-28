@@ -13,27 +13,26 @@
 #endif
 
 void build_noise_weighted_inner(
-    int32_t const * pixel_index,
-    int32_t const * weight_index,
-    int32_t const * flag_index,
-    int32_t const * data_index,
-    int64_t const * global2local,
-    double const * data,
-    uint8_t const * det_flags,
-    uint8_t const * shared_flags,
-    int64_t const * pixels,
-    double const * weights,
-    double const * det_scale,
-    double * zmap,
+    int32_t const *pixel_index,
+    int32_t const *weight_index,
+    int32_t const *flag_index,
+    int32_t const *data_index,
+    int64_t const *global2local,
+    double const *data,
+    uint8_t const *det_flags,
+    uint8_t const *shared_flags,
+    int64_t const *pixels,
+    double const *weights,
+    double const *det_scale,
+    double *zmap,
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
     int64_t nnz,
     uint8_t det_mask,
     uint8_t shared_mask,
-    int64_t n_pix_submap,
-    double npix_submap_inv
-) {
+    int64_t n_pix_submap)
+{
     int32_t w_indx = weight_index[idet];
     int32_t p_indx = pixel_index[idet];
     int32_t f_indx = flag_index[idet];
@@ -50,13 +49,16 @@ void build_noise_weighted_inner(
     int64_t local_submap;
     int64_t global_submap;
 
+    uint8_t det_check = det_flags[off_f] & det_mask;
+    uint8_t shared_check = shared_flags[isamp] & shared_mask;
+
     if (
         (pixels[off_p] >= 0) &&
-        ((det_flags[off_f] & det_mask) == 0) &&
-        ((shared_flags[off_p] & shared_mask) == 0)
-    ) {
+        (det_check == 0) &&
+        (shared_check == 0))
+    {
         // Good data, accumulate
-        global_submap = (int64_t)(pixels[off_p] * npix_submap_inv);
+        global_submap = (int64_t)(pixels[off_p] / n_pix_submap);
 
         local_submap = global2local[global_submap];
 
@@ -67,7 +69,9 @@ void build_noise_weighted_inner(
 
         scaled_data = data[off_d] * det_scale[idet];
 
-        for (int64_t iweight = 0; iweight < nnz; iweight++) {
+        for (int64_t iweight = 0; iweight < nnz; iweight++)
+        {
+            // #pragma omp atomic update
             zmap[zoff + iweight] += scaled_data * weights[off_wt + iweight];
         }
     }
@@ -78,26 +82,27 @@ void build_noise_weighted_inner(
 #pragma omp end declare target
 #endif
 
-void init_ops_mapmaker_utils(py::module & m) {
+void init_ops_mapmaker_utils(py::module &m)
+{
     m.def(
         "build_noise_weighted", [](
-            py::buffer global2local,
-            py::buffer zmap,
-            py::buffer pixel_index,
-            py::buffer pixels,
-            py::buffer weight_index,
-            py::buffer weights,
-            py::buffer data_index,
-            py::buffer det_data,
-            py::buffer flag_index,
-            py::buffer det_flags,
-            py::buffer det_scale,
-            uint8_t det_flag_mask,
-            py::buffer intervals,
-            py::buffer shared_flags,
-            uint8_t shared_flag_mask,
-            bool use_accel
-        ) {
+                                    py::buffer global2local,
+                                    py::buffer zmap,
+                                    py::buffer pixel_index,
+                                    py::buffer pixels,
+                                    py::buffer weight_index,
+                                    py::buffer weights,
+                                    py::buffer data_index,
+                                    py::buffer det_data,
+                                    py::buffer flag_index,
+                                    py::buffer det_flags,
+                                    py::buffer det_scale,
+                                    uint8_t det_flag_mask,
+                                    py::buffer intervals,
+                                    py::buffer shared_flags,
+                                    uint8_t shared_flag_mask,
+                                    bool use_accel)
+        {
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -161,64 +166,52 @@ void init_ops_mapmaker_utils(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            int64_t * dev_pixels = raw_pixels;
-            double * dev_weights = raw_weights;
-            double * dev_det_data = raw_det_data;
-            uint8_t * dev_det_flags = raw_det_flags;
-            Interval * dev_intervals = raw_intervals;
-            uint8_t * dev_shared_flags = raw_shared_flags;
-            double * dev_zmap = raw_zmap;
-
-            double npix_submap_inv = 1.0 / (double)(n_pix_submap);
+            int64_t n_zmap = n_local_submap * n_pix_submap * nnz;
 
             if (offload) {
-                #ifdef HAVE_OPENMP_TARGET
+#ifdef HAVE_OPENMP_TARGET
 
-                dev_pixels = (int64_t*)omgr.device_ptr((void*)raw_pixels);
-                dev_weights = (double*)omgr.device_ptr((void*)raw_weights);
-                dev_det_data = (double*)omgr.device_ptr((void*)raw_det_data);
-                dev_det_flags = (uint8_t*)omgr.device_ptr((void*)raw_det_flags);
-                dev_intervals = (Interval*)omgr.device_ptr(
-                    (void*)raw_intervals
-                );
-                dev_shared_flags = (uint8_t*)omgr.device_ptr((void*)raw_shared_flags);
-                dev_zmap = (double*)omgr.device_ptr((void*)raw_zmap);
-
-                #pragma omp target data \
-                    device(dev) \
-                    map(to: \
-                        raw_weight_index[0:n_det], \
-                        raw_pixel_index[0:n_det], \
-                        raw_flag_index[0:n_det], \
-                        raw_data_index[0:n_det], \
-                        raw_det_scale[0:n_det], \
-                        raw_global2local[0:n_global_submap], \
-                        n_view, \
-                        n_det, \
-                        n_samp, \
-                        nnz, \
-                        n_pix_submap, \
-                        det_flag_mask, \
-                        npix_submap_inv, \
-                        shared_flag_mask \
-                    ) \
-                    use_device_ptr( \
-                        dev_pixels, \
-                        dev_weights, \
-                        dev_det_data, \
-                        dev_det_flags, \
-                        dev_intervals, \
-                        dev_shared_flags, \
-                        dev_zmap \
-                    )
+#pragma omp target data                       \
+device(dev)                                   \
+    map(to                                    \
+        :                                     \
+        raw_weight_index [0:n_det],           \
+        raw_pixel_index [0:n_det],            \
+        raw_flag_index [0:n_det],             \
+        raw_data_index [0:n_det],             \
+        raw_det_scale [0:n_det],              \
+        raw_global2local [0:n_global_submap], \
+        n_view,                               \
+        n_det,                                \
+        n_samp,                               \
+        nnz,                                  \
+        n_pix_submap,                         \
+        det_flag_mask,                        \
+        shared_flag_mask)                     \
+        use_device_ptr(                       \
+            raw_pixels,                       \
+            raw_weights,                      \
+            raw_det_data,                     \
+            raw_det_flags,                    \
+            raw_intervals,                    \
+            raw_shared_flags,                 \
+            raw_zmap,                         \
+            raw_weight_index,                 \
+            raw_pixel_index,                  \
+            raw_flag_index,                   \
+            raw_data_index,                   \
+            raw_det_scale,                    \
+            raw_global2local)
                 {
-                    #pragma omp target teams distribute collapse(2)
+#pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for
+#pragma omp parallel for default(shared) \
+    reduction(+                          \
+              : raw_zmap[:n_zmap])
                             for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
                                 build_noise_weighted_inner(
@@ -227,35 +220,36 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     raw_flag_index,
                                     raw_data_index,
                                     raw_global2local,
-                                    dev_det_data,
-                                    dev_det_flags,
-                                    dev_shared_flags,
-                                    dev_pixels,
-                                    dev_weights,
+                                    raw_det_data,
+                                    raw_det_flags,
+                                    raw_shared_flags,
+                                    raw_pixels,
+                                    raw_weights,
                                     raw_det_scale,
-                                    dev_zmap,
+                                    raw_zmap,
                                     isamp,
                                     n_samp,
                                     idet,
                                     nnz,
                                     det_flag_mask,
                                     shared_flag_mask,
-                                    n_pix_submap,
-                                    npix_submap_inv
+                                    n_pix_submap
                                 );
                             }
                         }
                     }
                 }
 
-                #endif
+#endif
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        #pragma omp parallel for
+#pragma omp parallel for default(shared) \
+    reduction(+                          \
+              : raw_zmap[:n_zmap])
                         for (
-                            int64_t isamp = dev_intervals[iview].first;
-                            isamp <= dev_intervals[iview].last;
+                            int64_t isamp = raw_intervals[iview].first;
+                            isamp <= raw_intervals[iview].last;
                             isamp++
                         ) {
                             build_noise_weighted_inner(
@@ -264,27 +258,24 @@ void init_ops_mapmaker_utils(py::module & m) {
                                 raw_flag_index,
                                 raw_data_index,
                                 raw_global2local,
-                                dev_det_data,
-                                dev_det_flags,
-                                dev_shared_flags,
-                                dev_pixels,
-                                dev_weights,
+                                raw_det_data,
+                                raw_det_flags,
+                                raw_shared_flags,
+                                raw_pixels,
+                                raw_weights,
                                 raw_det_scale,
-                                dev_zmap,
+                                raw_zmap,
                                 isamp,
                                 n_samp,
                                 idet,
                                 nnz,
                                 det_flag_mask,
                                 shared_flag_mask,
-                                n_pix_submap,
-                                npix_submap_inv
+                                n_pix_submap
                             );
                         }
                     }
                 }
             }
-            return;
-        });
-
+            return; });
 }

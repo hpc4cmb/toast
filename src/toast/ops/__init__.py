@@ -14,7 +14,7 @@ from .copy import Copy
 
 from .reset import Reset
 
-from .arithmetic import Add, Subtract
+from .arithmetic import Combine
 
 from .pipeline import Pipeline
 
@@ -55,9 +55,9 @@ from .mapmaker_utils import (
 
 from .mapmaker_binning import BinMap
 
-from .mapmaker_templates import TemplateMatrix
+from .mapmaker_templates import TemplateMatrix, SolveAmplitudes
 
-from .mapmaker import MapMaker
+from .mapmaker import MapMaker, Calibrate
 
 from .madam import Madam, madam_params_from_mapmaker
 

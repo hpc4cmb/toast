@@ -21,11 +21,12 @@ from ..accelerator import (
     use_accel_jax,
     use_accel_omp,
     accel_enabled,
-    accel_present,
-    accel_create,
-    accel_delete,
-    accel_update_device,
-    accel_update_host,
+    accel_data_present,
+    accel_data_create,
+    accel_data_delete,
+    accel_data_update_device,
+    accel_data_update_host,
+    AcceleratorObject,
 )
 
 if use_accel_jax:
@@ -33,7 +34,7 @@ if use_accel_jax:
     import jax.numpy as jnp
 
 
-class Amplitudes(object):
+class Amplitudes(AcceleratorObject):
     """Class for distributed template amplitudes.
 
     In the general case, template amplitudes exist as sparse, non-unique values across
@@ -161,6 +162,7 @@ class Amplitudes(object):
         self._raw_flags = AlignedU8.zeros(self._n_local)
         self.local_flags = self._raw_flags.array()
         self.local_flags_jax = None
+        super().__init__()
 
     def clear(self):
         """Delete the underlying memory.
@@ -656,100 +658,51 @@ class Amplitudes(object):
 
         return result
 
-    def accel_present(self):
-        """Check if the amplitudes are present on the accelerator.
-
-        Returns:
-            (bool):  True if the data is present.
-
-        """
-        if not accel_enabled():
-            return False
+    def _accel_exists(self):
         if use_accel_omp:
-            return accel_present(self._raw) and accel_present(self._raw_flags)
+            return accel_data_present(self._raw) and accel_data_present(self._raw_flags)
         elif use_accel_jax:
-            return accel_present(self.local_jax) and accel_present(self.local_flags_jax)
+            return accel_data_present(self.local_jax) and accel_data_present(
+                self.local_flags_jax
+            )
         else:
             return False
 
-    def accel_create(self):
-        """Create the amplitude data on the accelerator.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
+    def _accel_create(self):
         if use_accel_omp:
-            accel_create(self._raw)
-            accel_create(self._raw_flags)
+            accel_data_create(self._raw)
+            accel_data_create(self._raw_flags)
         elif use_accel_jax:
-            accel_create(self.local_jax)
-            accel_create(self.local_flags_jax)
+            accel_data_create(self.local_jax)
+            accel_data_create(self.local_flags_jax)
 
-    def accel_update_device(self):
-        """Copy the amplitude data to the accelerator.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
-        log = Logger.get()
-        if not self.accel_present():
-            msg = "Amplitude data not on device, cannot update"
-            log.error(msg)
-            raise RuntimeError(msg)
+    def _accel_update_device(self):
         if use_accel_omp:
-            _ = accel_update_device(self._raw)
-            _ = accel_update_device(self._raw_flags)
+            _ = accel_data_update_device(self._raw)
+            _ = accel_data_update_device(self._raw_flags)
         elif use_accel_jax:
-            self.local_jax = accel_update_device(self.local)
-            self.local_flags_jax = accel_update_device(self.local_flags)
+            self.local_jax = accel_data_update_device(self.local)
+            self.local_flags_jax = accel_data_update_device(self.local_flags)
 
-    def accel_update_host(self):
-        """Copy the amplitude data from the accelerator.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
-        if not self.accel_present():
-            log = Logger.get()
-            msg = f"Data is not present on device, cannot update host"
-            log.error(msg)
-            raise RuntimeError(msg)
+    def _accel_update_host(self):
         if use_accel_omp:
-            _ = accel_update_host(self._raw)
-            _ = accel_update_host(self._raw_flags)
+            _ = accel_data_update_host(self._raw)
+            _ = accel_data_update_host(self._raw_flags)
         elif use_accel_jax:
-            self.local[:] = accel_update_host(self.local_jax)
-            self.local_flags[:] = accel_update_host(self.local_flags_jax)
+            self.local[:] = accel_data_update_host(self.local_jax)
+            self.local_flags[:] = accel_data_update_host(self.local_flags_jax)
             self.local_jax = None
             self.local_flags_jax = None
 
-    def accel_delete(self):
-        """Delete the amplitude data from the accelerator.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
-        if self.accel_present():
-            if use_accel_omp:
-                accel_delete(self._raw)
-                accel_delete(self._raw_flags)
-            elif use_accel_jax:
-                del self.local_jax
-                del self.local_flags_jax
-                self.local_jax = None
-                self.local_flags_jax = None
+    def _accel_delete(self):
+        if use_accel_omp:
+            accel_data_delete(self._raw)
+            accel_data_delete(self._raw_flags)
+        elif use_accel_jax:
+            del self.local_jax
+            del self.local_flags_jax
+            self.local_jax = None
+            self.local_flags_jax = None
 
 
 class AmplitudesMap(MutableMapping):
@@ -920,8 +873,8 @@ class AmplitudesMap(MutableMapping):
             result += v.dot(other[k])
         return result
 
-    def accel_present(self):
-        """Check if the amplitude data is present on the accelerator.
+    def accel_exists(self):
+        """Check if the amplitude data exists on the accelerator.
 
         Returns:
             (bool):  True if the data is present.
@@ -929,14 +882,58 @@ class AmplitudesMap(MutableMapping):
         """
         if not accel_enabled():
             return False
-        log = Logger.get()
+        result = 0
         for k, v in self._internal.items():
-            if not v.accel_present():
-                log.verbose(f"Amplitude {k} not on device")
-                return False
-            else:
-                log.verbose(f"Amplitude {k} present on device")
+            if v.accel_exists():
+                result += 1
+        if result == 0:
+            return False
+        elif result != len(self._internal):
+            log = Logger.get()
+            msg = f"Only some of the Amplitudes exist on device"
+            log.error(msg)
+            raise RuntimeError(msg)
         return True
+
+    def accel_in_use(self):
+        """Check if the device data copy is the one currently in use.
+
+        Returns:
+            (bool):  True if the accelerator device copy is being used.
+
+        """
+        if not accel_enabled():
+            return False
+        result = 0
+        for k, v in self._internal.items():
+            if v.accel_in_use():
+                result += 1
+        if result == 0:
+            return False
+        elif result != len(self._internal):
+            log = Logger.get()
+            msg = f"Only some of the Amplitudes are in use on device"
+            log.error(msg)
+            raise RuntimeError(msg)
+        return True
+
+    def accel_used(self, state):
+        """Set the in-use state of the device data copy.
+
+        Setting the state to `True` is only possible if the data exists
+        on the device.
+
+        Args:
+            state (bool):  True if the device copy is in use, else False.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        for k, v in self._internal.items():
+            v.accel_used(state)
 
     def accel_create(self):
         """Create the amplitude data on the accelerator.
@@ -947,9 +944,7 @@ class AmplitudesMap(MutableMapping):
         """
         if not accel_enabled():
             return
-        log = Logger.get()
         for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} accel_create")
             v.accel_create()
 
     def accel_update_device(self):
@@ -961,9 +956,7 @@ class AmplitudesMap(MutableMapping):
         """
         if not accel_enabled():
             return
-        log = Logger.get()
         for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} accel_update_device")
             v.accel_update_device()
 
     def accel_update_host(self):
@@ -975,9 +968,7 @@ class AmplitudesMap(MutableMapping):
         """
         if not accel_enabled():
             return
-        log = Logger.get()
         for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} accel_update_host")
             v.accel_update_host()
 
     def accel_delete(self, key):
@@ -989,7 +980,5 @@ class AmplitudesMap(MutableMapping):
         """
         if not accel_enabled():
             return
-        log = Logger.get()
         for k, v in self._internal.items():
-            log.verbose(f"Amplitude {k} accel_delete")
             v.accel_delete()

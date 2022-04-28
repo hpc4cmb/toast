@@ -96,6 +96,8 @@ class StokesWeights(Operator):
         "calibration for each det",
     )
 
+    use_python = Bool(False, help="If True, use python implementation")
+
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
         detpointing = proposal["value"]
@@ -139,6 +141,9 @@ class StokesWeights(Operator):
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
 
+        if self.use_python and use_accel:
+            raise RuntimeError("Cannot use accelerator with pure python implementation")
+
         # Expand detector pointing
         if self.quats is not None:
             quats_name = self.quats
@@ -157,9 +162,9 @@ class StokesWeights(Operator):
         self.detector_pointing.quats = quats_name
         self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
-        # We do the calculation over buffers of timestream samples to reduce memory
-        # overhead from temporary arrays.
-        tod_buffer_length = env.tod_buffer_length()
+        cal = self.cal
+        if cal is None:
+            cal = 1.0
 
         cal = self.cal
         if cal is None:
@@ -196,6 +201,7 @@ class StokesWeights(Operator):
                     sample_shape=(self._nnz,),
                     dtype=np.float32,
                     detectors=dets,
+                    accel=use_accel,
                 )
             else:
                 exists = ob.detdata.ensure(
@@ -203,6 +209,7 @@ class StokesWeights(Operator):
                     sample_shape=(self._nnz,),
                     dtype=np.float64,
                     detectors=dets,
+                    accel=use_accel,
                 )
 
             quat_indx = ob.detdata[quats_name].indices(dets)
@@ -220,7 +227,7 @@ class StokesWeights(Operator):
                 continue
 
             if use_accel:
-                if not ob.detdata.accel_present(self.weights):
+                if not ob.detdata.accel_exists(self.weights):
                     ob.detdata.accel_create(self.weights)
 
             # FIXME:  temporary hack until instrument classes are also pre-staged
@@ -233,31 +240,45 @@ class StokesWeights(Operator):
                 for idet, d in enumerate(dets):
                     det_epsilon[idet] = focalplane[d]["pol_leakage"]
 
-            if self.mode == "IQU":
-                stokes_weights_IQU(
+            if self.use_python:
+                hwp_data = None
+                if self.hwp_angle is not None:
+                    hwp_data = ob.shared[self.hwp_angle].data
+                self._py_stokes_weights(
                     quat_indx,
                     ob.detdata[quats_name].data,
                     weight_indx,
                     ob.detdata[self.weights].data,
-                    ob.shared[self.hwp_angle].data,
                     ob.intervals[self.view].data,
+                    cal,
                     det_epsilon,
-                    cal,
-                    use_accel,
-                )
-            elif self.mode == "I":
-                stokes_weights_I(
-                    weight_indx,
-                    ob.detdata[self.weights].data,
-                    ob.intervals[self.view].data,
-                    cal,
-                    use_accel,
+                    hwp_data,
                 )
             else:
-                msg = f"unsupported stokes weights mode {self.mode}"
-                log.error(msg)
-                raise RuntimeError(msg)
-
+                if self.mode == "IQU":
+                    if self.hwp_angle is None:
+                        hwp_data = np.zeros((0,), dtype=np.float64)
+                    else:
+                        hwp_data = ob.shared[self.hwp_angle].data
+                    stokes_weights_IQU(
+                        quat_indx,
+                        ob.detdata[quats_name].data,
+                        weight_indx,
+                        ob.detdata[self.weights].data,
+                        hwp_data,
+                        ob.intervals[self.view].data,
+                        det_epsilon,
+                        cal,
+                        use_accel,
+                    )
+                else:
+                    stokes_weights_I(
+                        weight_indx,
+                        ob.detdata[self.weights].data,
+                        ob.intervals[self.view].data,
+                        cal,
+                        use_accel,
+                    )
         return
 
     def _finalize(self, data, **kwargs):
@@ -274,9 +295,61 @@ class StokesWeights(Operator):
         return req
 
     def _provides(self):
-        prov = self.detector_pointing.provides()
-        prov["detdata"].append(self.weights)
+        prov = {"detdata": [self.weights]}
         return prov
 
     def _supports_accel(self):
         return self.detector_pointing.supports_accel()
+
+    def _py_stokes_weights(
+        self,
+        quat_indx,
+        quat_data,
+        weight_indx,
+        weight_data,
+        intr_data,
+        cal,
+        det_epsilon,
+        hwp_data,
+    ):
+        """Internal python implementation for comparison tests."""
+        zaxis = np.array([0, 0, 1], dtype=np.float64)
+        xaxis = np.array([1, 0, 0], dtype=np.float64)
+        if self.mode == "IQU":
+            for idet in range(len(quat_indx)):
+                qidx = quat_indx[idet]
+                widx = weight_indx[idet]
+                eta = (1.0 - det_epsilon[idet]) / (1.0 + det_epsilon[idet])
+                for vw in intr_data:
+                    samples = slice(vw.first, vw.last + 1, 1)
+                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
+                    orient = qa.rotate(quat_data[qidx][samples], xaxis)
+                    ay = np.multiply(orient[:, 0], dir[:, 1]) - np.multiply(
+                        orient[:, 1], dir[:, 0]
+                    )
+                    ax = (
+                        np.multiply(
+                            orient[:, 0], np.multiply(-1.0 * dir[:, 2], dir[:, 0])
+                        )
+                        + np.multiply(
+                            orient[:, 1], np.multiply(-1.0 * dir[:, 2], dir[:, 1])
+                        )
+                        + np.multiply(
+                            orient[:, 2],
+                            np.multiply(dir[:, 0], dir[:, 0])
+                            + np.multiply(dir[:, 1], dir[:, 1]),
+                        )
+                    )
+                    ang = np.arctan2(ay, ax)
+                    if hwp_data is not None:
+                        ang += 2.0 * hwp_data[samples]
+                    ang *= 2.0
+                    weight_data[widx][samples, 0] = cal
+                    weight_data[widx][samples, 1] = cal * eta * np.cos(ang)
+                    weight_data[widx][samples, 2] = cal * eta * np.sin(ang)
+        else:
+            for idet in range(len(quat_indx)):
+                widx = weight_indx[idet]
+                for vw in intr_data:
+                    samples = slice(vw.first, vw.last + 1, 1)
+                    weight_data[widx][samples] = cal

@@ -39,7 +39,7 @@ class MapmakerTest(MPITestCase):
         np.random.seed(123456)
         # We want to hold the number of observations fixed, so that we can compare
         # results across different concurrencies.
-        self.total_obs = 8
+        self.total_obs = 2
         self.obs_per_group = self.total_obs
         if self.comm is not None and self.comm.size >= 2:
             self.obs_per_group = self.total_obs // 2
@@ -114,7 +114,6 @@ class MapmakerTest(MPITestCase):
         step_seconds = float(int(ob_time / 10.0))
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -131,6 +130,7 @@ class MapmakerTest(MPITestCase):
             write_map=False,
             write_cov=False,
             write_rcond=False,
+            keep_solver_products=True,
             keep_final_products=True,
         )
 
@@ -230,12 +230,13 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        ops.Copy(detdata=[(defaults.det_data, "input_signal")]).apply(data)
 
         # Map maker
         mapper = ops.MapMaker(
@@ -243,29 +244,27 @@ class MapmakerTest(MPITestCase):
             det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
-            solve_rcond_threshold=1.0e-6,
-            map_rcond_threshold=1.0e-6,
-            iter_max=10,
-            write_hits=False,
-            write_map=False,
+            solve_rcond_threshold=1e-1,
+            map_rcond_threshold=1e-1,
+            iter_min=30,
+            iter_max=100,
+            write_hits=True,
+            write_map=True,
+            write_binmap=False,
+            write_noiseweighted_map=False,
             write_cov=False,
             write_rcond=False,
             keep_final_products=True,
+            output_dir=testdir,
+            save_cleaned=True,
+            overwrite_cleaned=False,
         )
 
         # Make the map
         mapper.apply(data)
 
-        # Outputs
-        toast_hits = "toastmap_hits"
-        toast_map = "toastmap_map"
-
-        # Write map to disk so we can load the whole thing on one process.
-
-        toast_hit_path = os.path.join(testdir, "toast_hits.fits")
-        toast_map_path = os.path.join(testdir, "toast_map.fits")
-        write_healpix_fits(data[toast_map], toast_map_path, nest=True)
-        write_healpix_fits(data[toast_hits], toast_hit_path, nest=True)
+        toast_hit_path = os.path.join(testdir, f"{mapper.name}_hits.fits")
+        toast_map_path = os.path.join(testdir, f"{mapper.name}_map.fits")
 
         # Now run Madam on the same data and compare
 
@@ -273,31 +272,34 @@ class MapmakerTest(MPITestCase):
 
         pars = {}
         pars["kfirst"] = "T"
-        pars["iter_max"] = 10
+        pars["iter_min"] = 30
+        pars["iter_max"] = 100
         pars["base_first"] = step_seconds
         pars["fsample"] = sample_rate
         pars["nside_map"] = pixels.nside
         pars["nside_cross"] = pixels.nside
         pars["nside_submap"] = min(8, pixels.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
-        pars["pixlim_cross"] = 1.0e-6
-        pars["pixlim_map"] = 1.0e-6
+        pars["pixlim_cross"] = 1e-1
+        pars["pixlim_map"] = 1e-1
         pars["write_map"] = "T"
-        pars["write_binmap"] = "F"
+        pars["write_binmap"] = "T"
         pars["write_matrix"] = "F"
         pars["write_wcov"] = "F"
         pars["write_hits"] = "T"
-        pars["write_base"] = "T"
+        pars["write_base"] = "F"
+        pars["write_mask"] = "F"
         pars["kfilter"] = "F"
+        pars["info"] = 2
         pars["path_output"] = testdir
 
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
+            det_out="madam_cleaned",
         )
 
         # Generate persistent pointing
@@ -315,6 +317,27 @@ class MapmakerTest(MPITestCase):
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
             import matplotlib.pyplot as plt
+
+            # Compare destriped TOD
+
+            for ob in data.obs:
+                for det in ob.local_detectors:
+                    input_signal = ob.detdata["signal"][det]
+                    madam_signal = ob.detdata["madam_cleaned"][det]
+                    toast_signal = ob.detdata["toastmap_cleaned"][det]
+                    madam_base = input_signal - madam_signal
+                    toast_base = input_signal - toast_signal
+                    diff_base = madam_base - toast_base
+
+                    print(f"TOAST baseline rms = {np.std(toast_base)}")
+                    print(f"MADAM baseline rms = {np.std(madam_base)}")
+
+                    if not np.allclose(toast_base, madam_base, rtol=0.01):
+                        print(
+                            f"FAIL: {det} diff : PtP = {np.ptp(diff_base)}, "
+                            f"mean = {np.mean(diff_base)}"
+                        )
+                        fail = True
 
             # Compare hit maps
 
@@ -341,10 +364,10 @@ class MapmakerTest(MPITestCase):
             madam_map = hp.read_map(madam_map_path, field=None, nest=True)
             # Set madam unhit pixels to zero
             for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
-                mask = hp.mask_bad(madam_map[stokes])
-                madam_map[stokes][mask] = 0.0
+                good = madam_map[stokes] != hp.UNSEEN
                 diff_map = toast_map[stokes] - madam_map[stokes]
-                print("diff map {} has rms {}".format(ststr, np.std(diff_map)))
+
+                print("diff map {} has rms {}".format(ststr, np.std(diff_map[good])))
                 outfile = os.path.join(testdir, "madam_map_{}.png".format(ststr))
                 hp.mollview(madam_map[stokes], xsize=1600, nest=True)
                 plt.savefig(outfile)
@@ -358,7 +381,10 @@ class MapmakerTest(MPITestCase):
                 plt.savefig(outfile)
                 plt.close()
 
-                if not np.allclose(toast_map[stokes], madam_map[stokes], rtol=0.01):
+                if not np.allclose(
+                    toast_map[stokes][good], madam_map[stokes][good], rtol=0.01
+                ):
+                    print(f"FAIL: max {ststr} diff = {np.max(diff_map[good])}")
                     fail = True
 
         if data.comm.comm_world is not None:
@@ -446,7 +472,6 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -517,7 +542,6 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -639,7 +663,9 @@ class MapmakerTest(MPITestCase):
         scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
-        delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights])
+        delete_pointing = ops.Delete(
+            detdata=[pixels.pixels, weights.weights, detpointing.quats]
+        )
         delete_pointing.apply(data)
         pixels.create_dist = None
 
@@ -673,7 +699,6 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -744,7 +769,6 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",

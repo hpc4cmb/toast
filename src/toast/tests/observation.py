@@ -553,8 +553,8 @@ class ObservationTest(MPITestCase):
         # Redistribute, and make a copy for verification later
         original = list()
         for ob in data.obs:
-            original.append(ob.duplicate(times="times"))
-            ob.redistribute(1, times="times")
+            original.append(ob.duplicate(times=defaults.times))
+            ob.redistribute(1, times=defaults.times)
             self.assertTrue(ob.comm_col_size == 1)
             self.assertTrue(ob.comm_row_size == data.comm.group_size)
             self.assertTrue(ob.local_detectors == ob.all_detectors)
@@ -567,7 +567,7 @@ class ObservationTest(MPITestCase):
 
         # Redistribute back and verify
         for ob, orig in zip(data.obs, original):
-            ob.redistribute(orig.comm.group_size, times="times")
+            ob.redistribute(orig.comm.group_size, times=defaults.times)
             if ob != orig:
                 print(f"Rank {self.comm.rank}: {orig} != {ob}", flush=True)
             self.assertTrue(ob == orig)

@@ -11,28 +11,9 @@ set -e
 
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
-topdir=$(pwd)
+scriptdir=$(pwd)
 popd >/dev/null 2>&1
-
-# Install xz
-
-yum -y install xz
-
-# Install MPICH
-
-yum -y install mpich-devel mpich-autoload
-
-# Pick up mpich changes
-
-. /etc/profile
-
-# Get newer cmake with pip
-
-pip install cmake
-
-# Install mpi4py
-
-pip install mpi4py
+echo "Wheel script directory = ${scriptdir}"
 
 # Build options
 
@@ -47,6 +28,44 @@ CXXFLAGS="-O3 -fPIC -pthread -std=c++11"
 MAKEJ=2
 
 PREFIX=/usr
+
+# Use yum to install OS packages
+
+yum update -y
+yum -y install xz
+yum -y install mpich-devel mpich-autoload
+
+# Pick up mpich changes
+. /etc/profile
+
+# In order to maximize ABI compatibility with numpy, build with the newest numpy
+# version containing the oldest ABI version compatible with the python we are using.
+pyver=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
+if [ ${pyver} == "3.7" ]; then
+    numpy_ver="1.20"
+fi
+if [ ${pyver} == "3.8" ]; then
+    numpy_ver="1.20"
+fi
+if [ ${pyver} == "3.9" ]; then
+    numpy_ver="1.20"
+fi
+if [ ${pyver} == "3.10" ]; then
+    numpy_ver="1.22"
+fi
+
+# Update pip
+pip install --upgrade pip
+
+# Install a couple of base packages that are always required
+pip install -v "numpy<${numpy_ver}" cmake wheel
+
+# Install build requirements.
+CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt"
+
+# Install mpi4py
+
+pip install mpi4py
 
 # libgmp
 
@@ -105,7 +124,7 @@ tar xf ${mpfr_pkg} \
 
 # Install Openblas
 
-openblas_version=0.3.13
+openblas_version=0.3.19
 openblas_dir=OpenBLAS-${openblas_version}
 openblas_pkg=${openblas_dir}.tar.gz
 
@@ -124,9 +143,8 @@ tar xzf ${openblas_pkg} \
     MAKE_NB_JOBS=${MAKEJ} \
     CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
     COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
-    LDFLAGS="-fopenmp -lm" \
-    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC \
-    PREFIX="${PREFIX}" install \
+    LDFLAGS="-fopenmp -lm" libs netlib shared \
+    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
     && popd >/dev/null 2>&1
 
 # Install FFTW
@@ -148,7 +166,7 @@ tar xzf ${fftw_pkg} \
     && pushd ${fftw_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
-    --enable-threads \
+    --enable-openmp \
     --enable-static \
     --disable-shared \
     --prefix="${PREFIX}" \
@@ -204,7 +222,7 @@ echo "Building SuiteSparse..."
 rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
     && pushd ${ssparse_dir} >/dev/null 2>&1 \
-    && patch -p1 < "${topdir}/suitesparse.patch" \
+    && patch -p1 < "${scriptdir}/suitesparse.patch" \
     && make library JOBS=${MAKEJ} \
     CC="${CC}" CXX="${CXX}" \
     CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \

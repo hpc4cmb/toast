@@ -30,7 +30,7 @@ class IntervalTest(MPITestCase):
                 for x in range(10)
             ],
             dtype=interval_dtype,
-        )
+        ).view(np.recarray)
         check_neg = [
             (0.0, 1.0, 0, 1),
         ]
@@ -41,7 +41,7 @@ class IntervalTest(MPITestCase):
             ]
         )
         check_neg.append((96.0, 99.0, 96, 99))
-        check_neg = np.array(check_neg, dtype=interval_dtype)
+        check_neg = np.array(check_neg, dtype=interval_dtype).view(np.recarray)
 
         itime = IntervalList(stamps, timespans=timespans)
 
@@ -60,7 +60,7 @@ class IntervalTest(MPITestCase):
         stamps = np.arange(100, dtype=np.float64)
         boundaries = [10 * x for x in range(1, 9)]
         ranges = [(x, x + 9) for x in boundaries]
-        check = np.array([(stamps[10], stamps[89], 10, 89)], dtype=interval_dtype)
+        check = np.array([(stamps[10], stamps[89], 10, 89)], dtype=interval_dtype).view(np.recarray)
         ival = IntervalList(stamps, samplespans=ranges)
         # print("ival = ", ival)
         ival.simplify()
@@ -75,14 +75,14 @@ class IntervalTest(MPITestCase):
                 for x in range(10)
             ],
             dtype=interval_dtype,
-        )
+        ).view(np.recarray)
         ival = IntervalList(stamps, intervals=raw)
         neg = ~ival
 
         full = ival | neg
         full.simplify()
         # print("full = ", full)
-        check = np.array([(stamps[0], stamps[-1], 0, 99)], dtype=interval_dtype)
+        check = np.array([(stamps[0], stamps[-1], 0, 99)], dtype=interval_dtype).view(np.recarray)
         # print(f"check = {check}")
         self.assertTrue(full[0] == check)
 
@@ -95,7 +95,7 @@ class IntervalTest(MPITestCase):
                 for x in range(10)
             ],
             dtype=interval_dtype,
-        )
+        ).view(np.recarray)
         shifted = IntervalList(stamps, intervals=rawshift)
 
         and_check = IntervalList(
@@ -111,7 +111,7 @@ class IntervalTest(MPITestCase):
                     for x in range(10)
                 ],
                 dtype=interval_dtype,
-            ),
+            ).view(np.recarray),
         )
 
         or_check = IntervalList(
@@ -127,7 +127,7 @@ class IntervalTest(MPITestCase):
                     for x in range(10)
                 ],
                 dtype=interval_dtype,
-            ),
+            ).view(np.recarray),
         )
 
         test = ival & shifted

@@ -30,8 +30,6 @@ from .scan_map import ScanMap
 
 from .noise_weight import NoiseWeight
 
-from .mapmaker_templates import TemplateMatrix
-
 
 @trait_docs
 class SolverRHS(Operator):
@@ -95,7 +93,7 @@ class SolverRHS(Operator):
                 "full_pointing",
             ]:
                 if not bin.has_trait(trt):
-                    msg = "binning operator should have a '{}' trait".format(trt)
+                    msg = f"binning operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
         return bin
 

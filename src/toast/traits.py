@@ -213,6 +213,10 @@ def trait_docs(cls):
 
     """
     doc = str(cls.__doc__)
+    doc += "Note:\n"
+    doc += "\t**The following traits can be set at construction or afterwards**\n\n"
+    doc += "    Attributes:\n"
+    # doc += "Attributes:\n"
     for trait_name, trait in cls.class_traits().items():
         default = trait.default_value
         trait_type = trait_type_to_string(trait)

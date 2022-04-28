@@ -10,19 +10,18 @@
 
 #include <accelerator.hpp>
 
-
 // 2/PI
 #define TWOINVPI 0.63661977236758134308
 
 // 2/3
 #define TWOTHIRDS 0.66666666666666666667
 
-
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp declare target
 #endif
 
-typedef struct {
+typedef struct
+{
     int64_t nside;
     int64_t npix;
     int64_t ncap;
@@ -40,11 +39,12 @@ typedef struct {
     uint64_t ctab[0x100];
 } hpix;
 
-void hpix_init(hpix * hp, int64_t nside) {
+void hpix_init(hpix *hp, int64_t nside)
+{
     hp->nside = nside;
     hp->ncap = 2 * (nside * nside - nside);
     hp->npix = 12 * nside * nside;
-    hp->dnside = static_cast <double> (nside);
+    hp->dnside = static_cast<double>(nside);
     hp->twonside = 2 * nside;
     hp->fournside = 4 * nside;
     hp->nsideplusone = nside + 1;
@@ -52,7 +52,8 @@ void hpix_init(hpix * hp, int64_t nside) {
     hp->tqnside = 0.75 * (hp->dnside);
     hp->factor = 0;
     hp->nsideminusone = nside - 1;
-    while (nside != (1ll << hp->factor)) {
+    while (nside != (1ll << hp->factor))
+    {
         ++hp->factor;
     }
 
@@ -62,7 +63,8 @@ void hpix_init(hpix * hp, int64_t nside) {
     static const int64_t init_jp[12] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
     memcpy(hp->jp, init_jp, sizeof(init_jp));
 
-    for (uint64_t m = 0; m < 0x100; ++m) {
+    for (uint64_t m = 0; m < 0x100; ++m)
+    {
         hp->utab[m] = (m & 0x1) | ((m & 0x2) << 1) | ((m & 0x4) << 2) |
                       ((m & 0x8) << 3) | ((m & 0x10) << 4) | ((m & 0x20) << 5) |
                       ((m & 0x40) << 6) | ((m & 0x80) << 7);
@@ -74,7 +76,8 @@ void hpix_init(hpix * hp, int64_t nside) {
     return;
 }
 
-uint64_t hpix_xy2pix(hpix * hp, uint64_t x, uint64_t y) {
+uint64_t hpix_xy2pix(hpix *hp, uint64_t x, uint64_t y)
+{
     return hp->utab[x & 0xff] | (hp->utab[(x >> 8) & 0xff] << 16) |
            (hp->utab[(x >> 16) & 0xff] << 32) |
            (hp->utab[(x >> 24) & 0xff] << 48) |
@@ -83,9 +86,10 @@ uint64_t hpix_xy2pix(hpix * hp, uint64_t x, uint64_t y) {
            (hp->utab[(y >> 24) & 0xff] << 49);
 }
 
-void hpix_vec2zphi(hpix * hp, double const * vec,
-                   double * phi, int * region, double * z,
-                   double * rtz) {
+void hpix_vec2zphi(hpix *hp, double const *vec,
+                   double *phi, int *region, double *z,
+                   double *rtz)
+{
     // region encodes BOTH the sign of Z and whether its
     // absolute value is greater than 2/3.
     (*z) = vec[2];
@@ -97,8 +101,9 @@ void hpix_vec2zphi(hpix * hp, double const * vec,
     return;
 }
 
-void hpix_zphi2nest(hpix * hp, double phi, int region, double z,
-                    double rtz, int64_t * pix) {
+void hpix_zphi2nest(hpix *hp, double phi, int region, double z,
+                    double rtz, int64_t *pix)
+{
     double tt = (phi >= 0.0) ? phi * TWOINVPI : phi * TWOINVPI + 4.0;
     int64_t x;
     int64_t y;
@@ -112,7 +117,8 @@ void hpix_zphi2nest(hpix * hp, double phi, int region, double z,
     int64_t ntt;
     double tp;
 
-    if ((region == 1) || (region == -1)) {
+    if ((region == 1) || (region == -1))
+    {
         temp1 = hp->halfnside + hp->dnside * tt;
         temp2 = hp->tqnside * z;
 
@@ -122,17 +128,24 @@ void hpix_zphi2nest(hpix * hp, double phi, int region, double z,
         ifp = jp >> hp->factor;
         ifm = jm >> hp->factor;
 
-        if (ifp == ifm) {
+        if (ifp == ifm)
+        {
             face = (ifp == 4) ? (int64_t)4 : ifp + 4;
-        } else if (ifp < ifm) {
+        }
+        else if (ifp < ifm)
+        {
             face = ifp;
-        } else {
+        }
+        else
+        {
             face = ifm + 8;
         }
 
         x = jm & hp->nsideminusone;
         y = hp->nsideminusone - (jp & hp->nsideminusone);
-    } else {
+    }
+    else
+    {
         ntt = (int64_t)tt;
 
         tp = tt - (double)ntt;
@@ -142,18 +155,23 @@ void hpix_zphi2nest(hpix * hp, double phi, int region, double z,
         jp = (int64_t)(tp * temp1);
         jm = (int64_t)((1.0 - tp) * temp1);
 
-        if (jp >= hp->nside) {
+        if (jp >= hp->nside)
+        {
             jp = hp->nsideminusone;
         }
-        if (jm >= hp->nside) {
+        if (jm >= hp->nside)
+        {
             jm = hp->nsideminusone;
         }
 
-        if (z >= 0) {
+        if (z >= 0)
+        {
             face = ntt;
             x = hp->nsideminusone - jm;
             y = hp->nsideminusone - jp;
-        } else {
+        }
+        else
+        {
             face = ntt + 8;
             x = jp;
             y = jm;
@@ -167,8 +185,9 @@ void hpix_zphi2nest(hpix * hp, double phi, int region, double z,
     return;
 }
 
-void hpix_zphi2ring(hpix * hp, double phi, int region, double z,
-                    double rtz, int64_t * pix) {
+void hpix_zphi2ring(hpix *hp, double phi, int region, double z,
+                    double rtz, int64_t *pix)
+{
     double tt = (phi >= 0.0) ? phi * TWOINVPI : phi * TWOINVPI + 4.0;
     double tp;
     int64_t longpart;
@@ -180,7 +199,8 @@ void hpix_zphi2ring(hpix * hp, double phi, int region, double z,
     int64_t ir;
     int64_t kshift;
 
-    if ((region == 1) || (region == -1)) {
+    if ((region == 1) || (region == -1))
+    {
         temp1 = hp->halfnside + hp->dnside * tt;
         temp2 = hp->tqnside * z;
 
@@ -194,7 +214,9 @@ void hpix_zphi2ring(hpix * hp, double phi, int region, double z,
         ip = ip % hp->fournside;
 
         (*pix) = hp->ncap + ((ir - 1) * hp->fournside + ip);
-    } else {
+    }
+    else
+    {
         tp = tt - floor(tt);
 
         temp1 = hp->dnside * rtz;
@@ -207,24 +229,24 @@ void hpix_zphi2ring(hpix * hp, double phi, int region, double z,
         ip -= longpart;
 
         (*pix) = (region > 0) ? (2 * ir * (ir - 1) + ip)
-                 : (hp->npix - 2 * ir * (ir + 1) + ip);
+                              : (hp->npix - 2 * ir * (ir + 1) + ip);
     }
 
     return;
 }
 
 void pixels_healpix_nest_inner(
-    hpix & hp,
-    int32_t const * quat_index,
-    int32_t const * pixel_index,
-    double const * quats,
-    uint8_t * hsub,
-    int64_t * pixels,
+    hpix &hp,
+    int32_t const *quat_index,
+    int32_t const *pixel_index,
+    double const *quats,
+    uint8_t *hsub,
+    int64_t *pixels,
     int64_t n_pix_submap,
     int64_t isamp,
     int64_t n_samp,
-    int64_t idet
-) {
+    int64_t idet)
+{
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
     int32_t q_indx = quat_index[idet];
@@ -247,17 +269,17 @@ void pixels_healpix_nest_inner(
 }
 
 void pixels_healpix_ring_inner(
-    hpix & hp,
-    int32_t const * quat_index,
-    int32_t const * pixel_index,
-    double const * quats,
-    uint8_t * hsub,
-    int64_t * pixels,
+    hpix &hp,
+    int32_t const *quat_index,
+    int32_t const *pixel_index,
+    double const *quats,
+    uint8_t *hsub,
+    int64_t *pixels,
     int64_t n_pix_submap,
     int64_t isamp,
     int64_t n_samp,
-    int64_t idet
-) {
+    int64_t idet)
+{
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
     int32_t q_indx = quat_index[idet];
@@ -283,20 +305,21 @@ void pixels_healpix_ring_inner(
 #pragma omp end declare target
 #endif
 
-void init_ops_pixels_healpix(py::module & m) {
+void init_ops_pixels_healpix(py::module &m)
+{
     m.def(
         "pixels_healpix", [](
-            py::buffer quat_index,
-            py::buffer quats,
-            py::buffer pixel_index,
-            py::buffer pixels,
-            py::buffer intervals,
-            py::buffer hit_submaps,
-            int64_t n_pix_submap,
-            int64_t nside,
-            bool nest,
-            bool use_accel
-        ) {
+                              py::buffer quat_index,
+                              py::buffer quats,
+                              py::buffer pixel_index,
+                              py::buffer pixels,
+                              py::buffer intervals,
+                              py::buffer hit_submaps,
+                              int64_t n_pix_submap,
+                              int64_t nside,
+                              bool nest,
+                              bool use_accel)
+        {
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -331,52 +354,50 @@ void init_ops_pixels_healpix(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (! omgr.device_is_host()) && use_accel;
 
-            int64_t * dev_pixels = raw_pixels;
-            double * dev_quats = raw_quats;
-            Interval * dev_intervals = raw_intervals;
             if (offload) {
-                #ifdef HAVE_OPENMP_TARGET
+#ifdef HAVE_OPENMP_TARGET
 
-                dev_pixels = (int64_t*)omgr.device_ptr((void*)raw_pixels);
-                dev_quats = (double*)omgr.device_ptr((void*)raw_quats);
-                dev_intervals = (Interval*)omgr.device_ptr(
-                    (void*)raw_intervals
-                );
-
-                #pragma omp target data \
-                    device(dev) \
-                    map(to: \
-                        raw_pixel_index[0:n_det], \
-                        raw_quat_index[0:n_det], \
-                        n_pix_submap, \
-                        nside, \
-                        nest, \
-                        n_view, \
-                        n_det, \
-                        n_samp \
-                    ) \
-                    map(tofrom: raw_hsub) \
-                    use_device_ptr(dev_pixels, dev_quats, dev_intervals)
+#pragma omp target data            \
+device(dev)                        \
+    map(to                         \
+        :                          \
+        raw_pixel_index [0:n_det], \
+        raw_quat_index [0:n_det],  \
+        n_pix_submap,              \
+        nside,                     \
+        nest,                      \
+        n_view,                    \
+        n_det,                     \
+        n_samp)                    \
+        map(tofrom                 \
+            : raw_hsub)            \
+            use_device_ptr(        \
+                raw_pixels,        \
+                raw_quats,         \
+                raw_intervals,     \
+                raw_pixel_index,   \
+                raw_quat_index,    \
+                raw_hsub)
                 {
                     hpix hp;
                     hpix_init(&hp, nside);
                     if (nest) {
-                        #pragma omp target teams distribute collapse(2)
+#pragma omp target teams distribute collapse(2)
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
-                                #pragma omp parallel for
+#pragma omp parallel for default(shared)
                                 for (
-                                    int64_t isamp = dev_intervals[iview].first;
-                                    isamp <= dev_intervals[iview].last;
+                                    int64_t isamp = raw_intervals[iview].first;
+                                    isamp <= raw_intervals[iview].last;
                                     isamp++
                                 ) {
                                     pixels_healpix_nest_inner(
                                         hp,
                                         raw_quat_index,
                                         raw_pixel_index,
-                                        dev_quats,
+                                        raw_quats,
                                         raw_hsub,
-                                        dev_pixels,
+                                        raw_pixels,
                                         n_pix_submap,
                                         isamp,
                                         n_samp,
@@ -386,22 +407,22 @@ void init_ops_pixels_healpix(py::module & m) {
                             }
                         }
                     } else {
-                        #pragma omp target teams distribute collapse(2)
+#pragma omp target teams distribute collapse(2)
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
-                                #pragma omp parallel for
+#pragma omp parallel for default(shared)
                                 for (
-                                    int64_t isamp = dev_intervals[iview].first;
-                                    isamp <= dev_intervals[iview].last;
+                                    int64_t isamp = raw_intervals[iview].first;
+                                    isamp <= raw_intervals[iview].last;
                                     isamp++
                                 ) {
                                     pixels_healpix_ring_inner(
                                         hp,
                                         raw_quat_index,
                                         raw_pixel_index,
-                                        dev_quats,
+                                        raw_quats,
                                         raw_hsub,
-                                        dev_pixels,
+                                        raw_pixels,
                                         n_pix_submap,
                                         isamp,
                                         n_samp,
@@ -413,26 +434,26 @@ void init_ops_pixels_healpix(py::module & m) {
                     }
                 }
 
-                #endif
+#endif
             } else {
                 hpix hp;
                 hpix_init(&hp, nside);
                 if (nest) {
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for
+#pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
                                 pixels_healpix_nest_inner(
                                     hp,
                                     raw_quat_index,
                                     raw_pixel_index,
-                                    dev_quats,
+                                    raw_quats,
                                     raw_hsub,
-                                    dev_pixels,
+                                    raw_pixels,
                                     n_pix_submap,
                                     isamp,
                                     n_samp,
@@ -444,19 +465,19 @@ void init_ops_pixels_healpix(py::module & m) {
                 } else {
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for
+#pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
                                 pixels_healpix_ring_inner(
                                     hp,
                                     raw_quat_index,
                                     raw_pixel_index,
-                                    dev_quats,
+                                    raw_quats,
                                     raw_hsub,
-                                    dev_pixels,
+                                    raw_pixels,
                                     n_pix_submap,
                                     isamp,
                                     n_samp,
@@ -467,6 +488,5 @@ void init_ops_pixels_healpix(py::module & m) {
                     }
                 }
             }
-            return;
-        });
+            return; });
 }

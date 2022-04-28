@@ -49,6 +49,11 @@ if use_accel_omp and use_accel_jax:
     raise RuntimeError(msg)
 
 
+# This stores the assigned jax device for this process, computed during
+# MPI initialization.
+jax_local_device = None
+
+
 # Wrapper functions that work with either numpy arrays mapped to omp device memory
 # or jax arrays.
 
@@ -60,18 +65,20 @@ def accel_enabled():
 
 def accel_get_device():
     """Return the device ID assigned to this process."""
+    global jax_local_device
     if use_accel_omp:
         return omp_accel_get_device()
     elif use_accel_jax:
-        # FIXME: what to return for jax?
-        return 0
+        if jax_local_device is None:
+            raise RuntimeError("Jax device is not set!")
+        return jax_local_device
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, returning device -1")
         return -1
 
 
-def accel_present(data):
+def accel_data_present(data):
     """Check if data is present on the device.
 
     For OpenMP target offload, this checks if the input data has an entry in the
@@ -100,7 +107,7 @@ def accel_present(data):
         return False
 
 
-def accel_create(data):
+def accel_data_create(data):
     """Create device buffers.
 
     Using the input data array, create a corresponding device array.  For OpenMP
@@ -124,7 +131,7 @@ def accel_create(data):
         log.warning("Accelerator support not enabled, cannot create")
 
 
-def accel_update_device(data):
+def accel_data_update_device(data):
     """Update device buffers.
 
     Ensure that the input data is updated on the device.  For OpenMP target offload,
@@ -149,7 +156,7 @@ def accel_update_device(data):
         return None
 
 
-def accel_update_host(data):
+def accel_data_update_host(data):
     """Update host buffers.
 
     Ensure that the input data is updated on the host.  For OpenMP target offload,
@@ -179,7 +186,7 @@ def accel_update_host(data):
         log.warning("Accelerator support not enabled, not updating host")
 
 
-def accel_delete(data):
+def accel_data_delete(data):
     """Delete device copy of the data.
 
     For OpenMP target offload, this deletes the device allocated memory and removes
@@ -199,3 +206,156 @@ def accel_delete(data):
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot delete device data")
+
+
+class AcceleratorObject(object):
+    """Base class for objects that support offload to an accelerator.
+
+    This provides the API for classes that can move their data to and from one
+    of the supported accelerator devices.  The public methods provide a central
+    place for docstrings and use the internal methods.  These provide a way to
+    add boilerplate and checks in a single place in the code.  The internal
+    methods should be overloaded by descendent classes.
+
+    Args:
+        None
+
+    """
+
+    def __init__(self):
+        # Data always starts off on host
+        self._accel_used = False
+
+    def _accel_exists(self):
+        return False
+
+    def accel_exists(self):
+        """Check if a data copy exists on the accelerator.
+
+        Returns:
+            (bool):  True if the data is present.
+
+        """
+        if not accel_enabled():
+            return False
+        return self._accel_exists()
+
+    def accel_in_use(self):
+        """Check if the device data copy is the one currently in use.
+
+        Returns:
+            (bool):  True if the accelerator device copy is being used.
+
+        """
+        return self._accel_used
+
+    def accel_used(self, state):
+        """Set the in-use state of the device data copy.
+
+        Setting the state to `True` is only possible if the data exists
+        on the device.
+
+        Args:
+            state (bool):  True if the device copy is in use, else False.
+
+        Returns:
+            None
+
+        """
+        if state and not self.accel_exists():
+            log = Logger.get()
+            msg = f"Data is not present on device, cannot set state to in-use"
+            log.error(msg)
+            raise RuntimeError(msg)
+        self._accel_used = state
+
+    def _accel_create(self):
+        pass
+
+    def accel_create(self):
+        """Create a copy of the data on the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if self.accel_exists():
+            log = Logger.get()
+            msg = f"Data already exists on device, cannot create"
+            log.error(msg)
+            raise RuntimeError(msg)
+        self._accel_create()
+
+    def _accel_update_device(self):
+        pass
+
+    def accel_update_device(self):
+        """Copy the data to the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if not self.accel_exists():
+            log = Logger.get()
+            msg = f"Data does not exist on device, cannot update"
+            log.error(msg)
+            raise RuntimeError(msg)
+        if self.accel_in_use():
+            # The active copy is on the device
+            log = Logger.get()
+            msg = f"Active data is already on device, cannot update"
+            log.error(msg)
+            raise RuntimeError(msg)
+        self._accel_update_device()
+        self.accel_used(True)
+
+    def _accel_update_host(self):
+        pass
+
+    def accel_update_host(self):
+        """Copy the data to the host from the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if not self.accel_exists():
+            log = Logger.get()
+            msg = f"Data does not exist on device, cannot update host"
+            log.error(msg)
+            raise RuntimeError(msg)
+        if not self.accel_in_use():
+            # The active copy is on the host
+            log = Logger.get()
+            msg = f"Active data is already on host, cannot update"
+            log.error(msg)
+            raise RuntimeError(msg)
+        self._accel_update_host()
+        self.accel_used(False)
+
+    def _accel_delete(self):
+        pass
+
+    def accel_delete(self):
+        """Delete the data from the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if not self.accel_exists():
+            log = Logger.get()
+            msg = f"Data does not exist on device, cannot delete"
+            log.error(msg)
+            raise RuntimeError(msg)
+        self._accel_delete()
+        self._accel_used = False

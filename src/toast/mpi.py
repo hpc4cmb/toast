@@ -46,11 +46,13 @@ if use_mpi is None:
                 use_mpi = False
 
 # Assign each process to an accelerator device
-from .accelerator import use_accel_jax, use_accel_omp
+from .accelerator import use_accel_jax, use_accel_omp, jax_local_device
 
 from ._libtoast import accel_assign_device
 
-if use_accel_omp:
+if use_accel_omp or use_accel_jax:
+    node_procs = 1
+    node_rank = 0
     if use_mpi:
         # We need to compute which process goes to which device
         nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
@@ -59,13 +61,23 @@ if use_accel_omp:
         accel_assign_device(node_procs, node_rank, False)
         nodecomm.Free()
         del nodecomm
+    if use_accel_omp:
+        accel_assign_device(node_procs, node_rank, False)
     else:
-        accel_assign_device(1, 0, False)
+        import jax
+
+        n_target = len(jax.devices())
+        if n_target == 0:
+            jax_local_device = 0
+        else:
+            proc_per_dev = node_procs // n_target
+            if n_target * proc_per_dev < node_procs:
+                proc_per_dev += 1
+            target_dev = node_rank // proc_per_dev
+            jax_local_device = jax.devices()[target_dev]
 else:
+    # Disabled == True
     accel_assign_device(1, 0, True)
-    if use_accel_jax:
-        # FIXME:  do the same with jax somehow...
-        pass
 
 # We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
 

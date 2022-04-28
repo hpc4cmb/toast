@@ -98,7 +98,7 @@ class Pipeline(Operator):
             if (use_accel_omp or use_accel_jax) and self.supports_accel():
                 # All our operators support it.
                 msg = "Pipeline operators {}".format(
-                    [f"{x.name}, " for x in self.operators]
+                    ", ".join([x.name for x in self.operators])
                 )
                 msg += " all support accelerators, data to be staged: "
                 msg += f"{self.requires()}"
@@ -108,7 +108,7 @@ class Pipeline(Operator):
                 log.verbose(f"intermediate = {interm}")
                 for ob in data.obs:
                     for obj in interm["detdata"]:
-                        if obj in ob.detdata and not ob.detdata.accel_present(obj):
+                        if obj in ob.detdata and not ob.detdata.accel_exists(obj):
                             # The data exists on the host from a previous call, but is
                             # not on the device.  Delete the host copy so that it will
                             # be re-created consistently.
@@ -118,14 +118,14 @@ class Pipeline(Operator):
                             log.verbose_rank(msg, comm=data.comm.comm_group)
                             del ob.detdata[obj]
                     for obj in interm["shared"]:
-                        if obj in ob.shared and not ob.shared.accel_present(obj):
+                        if obj in ob.shared and not ob.shared.accel_exists(obj):
                             msg = f"Pipeline intermediate shared data '{obj}' in "
                             msg += f"observation '{ob.name}' exists on "
                             msg += f"the host but not the device.  Deleting."
                             log.verbose_rank(msg, comm=data.comm.comm_group)
                             del ob.shared[obj]
                     for obj in interm["intervals"]:
-                        if obj in ob.intervals and not ob.intervals.accel_present(obj):
+                        if obj in ob.intervals and not ob.intervals.accel_exists(obj):
                             msg = f"Pipeline intermediate intervals '{obj}' in "
                             msg += f"observation '{ob.name}' exists on "
                             msg += f"the host but not the device.  Deleting."
@@ -211,7 +211,7 @@ class Pipeline(Operator):
         # Copy out from accelerator if we did the copy in.
         if self._staged_accel:
             prov = self.provides()
-            msg = f"{pstr} Pipeline copying out acc data products: {prov}"
+            msg = f"{pstr} Pipeline copying out accel data products: {prov}"
             log.verbose(msg)
             data.accel_update_host(self.provides())
         return result

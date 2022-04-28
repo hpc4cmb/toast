@@ -58,9 +58,8 @@ find_package(OpenMP)
 
 if(OpenMP_CXX_FOUND)
     message(STATUS
-        "Found OpenMP version: " ${OpenMP_CXX_VERSION_MAJOR}
-        "." ${OpenMP_CXX_VERSION_MINOR}
-        " spec date " ${OpenMP_CXX_SPEC_DATE}
+        "Found OpenMP version: \"" ${OpenMP_CXX_VERSION}
+        "\" spec date " ${OpenMP_CXX_SPEC_DATE}
     )
     # Allow the user to force enabling of target offload.  Some compilers support all
     # the features we need in the 5.0 spec, but return a supported version less than
@@ -70,7 +69,12 @@ if(OpenMP_CXX_FOUND)
         if(OpenMP_CXX_VERSION_MAJOR GREATER_EQUAL 5)
             set(USE_OPENMP_TARGET TRUE)
         else()
-            set(USE_OPENMP_TARGET FALSE)
+            if(OpenMP_CXX_SPEC_DATE GREATER_EQUAL 201811)
+                # This is the spec date for the 5.0 standard
+                set(USE_OPENMP_TARGET TRUE)
+            else()
+                set(USE_OPENMP_TARGET FALSE)
+            endif()
         endif()
     endif()
     if(USE_OPENMP_TARGET)

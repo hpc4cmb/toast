@@ -33,7 +33,6 @@ from ..pixels_io import (
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
-from .arithmetic import Subtract
 from .copy import Copy
 from .delete import Delete
 from .mapmaker_solve import SolverLHS, SolverRHS, solve

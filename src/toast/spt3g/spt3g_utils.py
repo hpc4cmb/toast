@@ -204,10 +204,6 @@ def compress_timestream(ts, params, rmstarget=2**10, rmsmode="white"):
 
     Args:
         ts (G3Timestream) :  Input signal
-        params (bool or dict) :  if True, compress with default
-            parameters.  If dict with 'rmstarget' member, override
-            default `rmstarget`.  If dict with `gain` and `offset`
-            members, use those instead.
         params (None, bool or dict) :  If None, False or an empty dict,
              no compression or casting to integers.  If True or
              non-empty dictionary, enable compression.  Expected fields
@@ -227,7 +223,7 @@ def compress_timestream(ts, params, rmstarget=2**10, rmsmode="white"):
         offset (float) :  The removed offset
 
     """
-    if not params:
+    if params is None or not params:
         return ts, 1, 0
     gain = None
     offset = None

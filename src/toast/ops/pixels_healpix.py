@@ -10,7 +10,7 @@ from ..utils import Environment, Logger
 
 from ..traits import trait_docs, Int, Unicode, Bool, Instance
 
-from ..healpix import HealpixPixels
+from ..healpix import Pixels
 
 from ..timing import function_timer
 
@@ -77,6 +77,8 @@ class PixelsHealpix(Operator):
     )
 
     single_precision = Bool(False, help="If True, use 32bit int in output")
+
+    use_python = Bool(False, help="If True, use python implementation")
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
@@ -147,9 +149,9 @@ class PixelsHealpix(Operator):
         self._set_hpix(nside, nside_submap)
 
     def _set_hpix(self, nside, nside_submap):
-        self.hpix = HealpixPixels(nside)
-        self._n_pix = 12 * nside ** 2
-        self._n_pix_submap = 12 * nside_submap ** 2
+        self.hpix = Pixels(nside)
+        self._n_pix = 12 * nside**2
+        self._n_pix_submap = 12 * nside_submap**2
         self._n_submap = (nside // nside_submap) ** 2
         self._local_submaps = None
 
@@ -160,6 +162,9 @@ class PixelsHealpix(Operator):
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
+
+        if self.use_python and use_accel:
+            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         if self._local_submaps is None and self.create_dist is not None:
             self._local_submaps = np.zeros(self._n_submap, dtype=np.uint8)
@@ -210,11 +215,19 @@ class PixelsHealpix(Operator):
 
             if self.single_precision:
                 exists = ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
+                    self.pixels,
+                    sample_shape=(),
+                    dtype=np.int32,
+                    detectors=dets,
+                    accel=use_accel,
                 )
             else:
                 exists = ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
+                    self.pixels,
+                    sample_shape=(),
+                    dtype=np.int64,
+                    detectors=dets,
+                    accel=use_accel,
                 )
 
             hit_submaps = self._local_submaps
@@ -247,21 +260,31 @@ class PixelsHealpix(Operator):
                 continue
 
             if use_accel:
-                if not ob.detdata.accel_present(self.pixels):
+                if not ob.detdata.accel_exists(self.pixels):
                     ob.detdata.accel_create(self.pixels)
 
-            pixels_healpix(
-                quat_indx,
-                ob.detdata[quats_name].data,
-                pix_indx,
-                ob.detdata[self.pixels].data,
-                ob.intervals[self.view].data,
-                hit_submaps,
-                self._n_pix_submap,
-                self.nside,
-                self.nest,
-                use_accel,
-            )
+            if self.use_python:
+                self._py_pixels_healpix(
+                    quat_indx,
+                    ob.detdata[quats_name].data,
+                    pix_indx,
+                    ob.detdata[self.pixels].data,
+                    ob.intervals[self.view].data,
+                    hit_submaps,
+                )
+            else:
+                pixels_healpix(
+                    quat_indx,
+                    ob.detdata[quats_name].data,
+                    pix_indx,
+                    ob.detdata[self.pixels].data,
+                    ob.intervals[self.view].data,
+                    hit_submaps,
+                    self._n_pix_submap,
+                    self.nside,
+                    self.nest,
+                    use_accel,
+                )
             if self._local_submaps is not None:
                 self._local_submaps[:] |= hit_submaps
 
@@ -311,11 +334,45 @@ class PixelsHealpix(Operator):
         return req
 
     def _provides(self):
-        prov = self.detector_pointing.provides()
-        prov["detdata"].append(self.pixels)
+        prov = {
+            "detdata": [self.pixels],
+            "global": list(),
+        }
         if self.create_dist is not None:
             prov["global"].append(self.create_dist)
         return prov
 
     def _supports_accel(self):
         return self.detector_pointing.supports_accel()
+
+    def _py_pixels_healpix(
+        self,
+        quat_indx,
+        quat_data,
+        pix_indx,
+        pix_data,
+        intr_data,
+        hit_submaps,
+    ):
+        """Internal python implementation for comparison tests."""
+        zaxis = np.array([0, 0, 1], dtype=np.float64)
+        if self.nest:
+            for idet in range(len(quat_indx)):
+                qidx = quat_indx[idet]
+                pidx = pix_indx[idet]
+                for vw in intr_data:
+                    samples = slice(vw.first, vw.last + 1, 1)
+                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
+                    pix_data[pidx][samples] = self.hpix.vec2nest(dir)
+                    sub_maps = pix_data[pidx][samples] // self._n_pix_submap
+                    hit_submaps[sub_maps] = 1
+        else:
+            for idet in range(len(quat_indx)):
+                qidx = quat_indx[idet]
+                pidx = pix_indx[idet]
+                for vw in intr_data:
+                    samples = slice(vw.first, vw.last + 1, 1)
+                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
+                    pix_data[pidx][samples] = self.hpix.vec2ring(dir)
+                    sub_maps = pix_data[pidx][samples] // self._n_pix_submap
+                    hit_submaps[sub_maps] = 1

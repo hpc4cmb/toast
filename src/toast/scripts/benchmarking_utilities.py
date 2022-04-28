@@ -660,7 +660,6 @@ def create_input_maps(
         sigma=None,
         new=True,
         fwhm=np.radians(3.0 / 60.0),
-        verbose=False,
     )
     healpy.write_map(input_map_path, maps, nest=True, fits_IDL=False, dtype=np.float32)
 
@@ -707,9 +706,9 @@ def default_sim_atmosphere():
         gain=1.0e-4,
         zatm=40000 * u.meter,
         zmax=200 * u.meter,
-        xstep=5 * u.meter,
-        ystep=5 * u.meter,
-        zstep=5 * u.meter,
+        xstep=10 * u.meter,
+        ystep=10 * u.meter,
+        zstep=10 * u.meter,
         nelem_sim_max=10000,
         wind_dist=3000 * u.meter,
         z0_center=2000 * u.meter,
@@ -758,23 +757,17 @@ def run_madam(job_ops, args, tmpls, data):
 
 
 def compute_science_metric(args, runtime, n_nodes, rank, log):
+    """Return the samples per node-second processed by a benchmark run.
+
+    NOTE:  This number can only be used to compare workflows whose configuration
+    options are identical aside from the data volume.
+
     """
-    Computes the science metric and stores it.
-    The metric represents the efficiency of the job in a way that is normalized,
-    taking the job size into account
-    """
-    prefactor = 1.0e-3
-    kilo_samples = 1.0e-3 * args.total_samples
-    sample_factor = 1.2
-    det_factor = 2.0
-    metric = (
-        prefactor
-        * args.n_detector**det_factor
-        * kilo_samples**sample_factor
-        / (n_nodes * runtime)
-    )
+    metric = args.total_samples / (n_nodes * runtime)
     if rank == 0:
-        msg = f"Science Metric: {prefactor:0.1e} * ({args.n_detector:d}**{det_factor:0.2f}) * ({kilo_samples:0.3e}**{sample_factor:0.3f}) / ({runtime:0.1f} * {n_nodes}) = {metric:0.2f}"
+        msg = f"Science Metric (samples per node-second):  "
+        msg += f"({args.total_samples:0.3e}) / ({runtime:0.1f} * {n_nodes})"
+        msg += f" = {metric:0.2f}"
         log.info("")
         log.info(msg)
         log.info("")

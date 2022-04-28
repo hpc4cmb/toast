@@ -34,11 +34,12 @@ from .accelerator import (
     use_accel_jax,
     use_accel_omp,
     accel_enabled,
-    accel_present,
-    accel_create,
-    accel_delete,
-    accel_update_device,
-    accel_update_host,
+    accel_data_present,
+    accel_data_create,
+    accel_data_delete,
+    accel_data_update_device,
+    accel_data_update_host,
+    AcceleratorObject,
 )
 
 if use_accel_jax:
@@ -398,7 +399,7 @@ class PixelDistribution(object):
         return self._alltoallv_info
 
 
-class PixelData(object):
+class PixelData(AcceleratorObject):
     """Distributed map-domain data.
 
     The distribution information is stored in a PixelDistribution instance passed to
@@ -496,6 +497,8 @@ class PixelData(object):
         self.reduce_buf = None
         self._reduce_buf_raw = None
 
+        super().__init__()
+
     def clear(self):
         """Delete the underlying memory.
 
@@ -507,7 +510,7 @@ class PixelData(object):
         if hasattr(self, "data"):
             del self.data
         if hasattr(self, "raw"):
-            if self.accel_present():
+            if self.accel_exists():
                 self.accel_delete()
             self.raw.clear()
             del self.raw
@@ -960,82 +963,36 @@ class PixelData(object):
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
 
-    def accel_present(self):
-        """Check if the pixel data is present on the accelerator.
-
-        Returns:
-            (bool):  True if the data is present.
-
-        """
-        if not accel_enabled():
-            return False
+    def _accel_exists(self):
         if use_accel_omp:
-            return accel_present(self.raw)
+            return accel_data_present(self.raw)
         elif use_accel_jax:
-            return accel_present(self.data_jax)
+            return accel_data_present(self.data_jax)
         else:
             return False
 
-    def accel_create(self):
-        """Create the data on the accelerator.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
+    def _accel_create(self):
         if use_accel_omp:
-            accel_create(self.raw)
+            accel_data_create(self.raw)
         elif use_accel_jax:
-            accel_create(self.data_jax)
+            accel_data_create(self.data_jax)
 
-    def accel_update_device(self):
-        """Copy the data to the accelerator.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
+    def _accel_update_device(self):
         if use_accel_omp:
-            _ = accel_update_device(self.raw)
+            _ = accel_data_update_device(self.raw)
         elif use_accel_jax:
-            self.data_jax = accel_update_device(self.data)
+            self.data_jax = accel_data_update_device(self.data)
 
-    def accel_update_host(self):
-        """Copy the data from the accelerator to the host.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
-        if not self.accel_present():
-            log = Logger.get()
-            msg = f"Data is not present on device, cannot update host"
-            log.error(msg)
-            raise RuntimeError(msg)
+    def _accel_update_host(self):
         if use_accel_omp:
-            _ = accel_update_host(self.raw)
+            _ = accel_data_update_host(self.raw)
         elif use_accel_jax:
-            self.data[:] = accel_update_host(self.data_jax)
+            self.data[:] = accel_data_update_host(self.data_jax)
             self.data_jax = None
 
-    def accel_delete(self):
-        """Delete the data from the accelerator.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
-        if self.accel_present():
-            if use_accel_omp:
-                accel_delete(self.raw)
-            elif use_accel_jax:
-                del self.data_jax
-                self.data_jax = None
+    def _accel_delete(self):
+        if use_accel_omp:
+            accel_data_delete(self.raw)
+        elif use_accel_jax:
+            del self.data_jax
+            self.data_jax = None

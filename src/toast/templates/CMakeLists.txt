@@ -8,5 +8,6 @@ install(FILES
     offset.py
     fourier2d.py
     subharmonic.py
+    gaintemplate.py
     DESTINATION ${PYTHON_SITE}/toast/templates
 )

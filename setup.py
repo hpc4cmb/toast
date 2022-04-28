@@ -32,14 +32,14 @@ def find_compilers():
             mpicc_com = subprocess.check_output(
                 "{} -show".format(mpicc), shell=True, universal_newlines=True
             )
-        except CalledProcessError:
+        except subprocess.CalledProcessError:
             # Cannot run the MPI C compiler, give up
             raise ImportError
         try:
             mpicxx_com = subprocess.check_output(
                 "{} -show".format(mpicxx), shell=True, universal_newlines=True
             )
-        except CalledProcessError:
+        except subprocess.CalledProcessError:
             # Cannot run the MPI C++ compiler, give up
             raise ImportError
         # Extract the serial compilers
@@ -73,11 +73,20 @@ def get_version():
                 mat = re.match(r'.*RELEASE_VERSION = "(.*)".*', line)
                 if mat is not None:
                     rel_ver = mat.group(1)
-        if (git_ver is not None) and (git_ver != ""):
+        if (
+            "READTHEDOCS" in os.environ
+            or "CI" in os.environ
+            or "CIBUILDWHEEL" in os.environ
+        ):
+            # We are running inside build infrastructure that requires a PEP440 version
+            # and may be using a shallow clone, so the git version is malformed.  Always
+            # use the release version in this case.
+            ver = rel_ver
+        elif (git_ver is not None) and (git_ver != ""):
             ver = git_ver
         else:
             ver = rel_ver
-    except CalledProcessError:
+    except subprocess.CalledProcessError:
         raise RuntimeError("Cannot generate version!")
     return ver
 
@@ -132,6 +141,7 @@ class CMakeBuild(build_ext):
                 cmake_opts[mat.group(1)] = v
 
         cmake_args = ["-DPYTHON_EXECUTABLE=" + sys.executable]
+        cmake_args += ["-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON"]
 
         cfg = "Debug" if self.debug else "Release"
         build_args = ["--config", cfg]
@@ -192,6 +202,10 @@ class CMakeBuild(build_ext):
         cmake_cmd = ["cmake", "--build", "."] + self.build_args
         subprocess.check_call(cmake_cmd, cwd=self.build_temp)
 
+        # If we are running on readthedocs, prepare sphinx inputs
+        if "READTHEDOCS" in os.environ:
+            subprocess.check_call([os.path.join("docs", "setup_docs.sh")])
+
         # Move from build temp to final position
         for ext in self.extensions:
             self.move_output(ext)
@@ -217,7 +231,7 @@ def readme():
 
 
 conf = dict()
-conf["name"] = "toast-cmb"
+conf["name"] = "toast"
 conf["description"] = "Time Ordered Astrophysics Scalable Tools"
 conf["long_description"] = readme()
 conf["long_description_content_type"] = "text/markdown"
@@ -238,6 +252,7 @@ conf["install_requires"] = [
     "psutil",
     "h5py",
     "pshmem>=0.2.10",
+    "pyyaml",
     "astropy",
     "healpy",
     "ephem",
@@ -248,6 +263,7 @@ conf["extras_require"] = {
 }
 conf["packages"] = find_packages("src")
 conf["package_dir"] = {"": "src"}
+conf["include_package_data"] = True
 conf["ext_modules"] = ext_modules
 conf["scripts"] = scripts
 conf["entry_points"] = {
@@ -277,6 +293,7 @@ conf["classifiers"] = [
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 

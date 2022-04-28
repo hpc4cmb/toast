@@ -19,6 +19,8 @@ from ..noise import Noise
 
 from ..noise_sim import AnalyticNoise
 
+from ..instrument_sim import fake_hexagon_focalplane
+
 from ..io import H5File
 
 from ._helpers import create_outdir
@@ -82,7 +84,9 @@ class InstrumentTest(MPITestCase):
             with H5File(
                 nse_file, "w", comm=self.comm, force_serial=(droot == "serial")
             ) as f:
-                nse.save_hdf5(f.handle, comm=self.comm, force_serial=(droot == "serial"))
+                nse.save_hdf5(
+                    f.handle, comm=self.comm, force_serial=(droot == "serial")
+                )
 
         if self.comm is not None:
             self.comm.barrier()
@@ -91,5 +95,87 @@ class InstrumentTest(MPITestCase):
             nse_file = os.path.join(self.outdir, f"sim_noise_{droot}.h5")
             new_nse = AnalyticNoise()
             with H5File(nse_file, "r", comm=self.comm) as f:
-                new_nse.load_hdf5(f.handle, comm=self.comm, force_serial=(droot == "serial"))
+                new_nse.load_hdf5(
+                    f.handle, comm=self.comm, force_serial=(droot == "serial")
+                )
             self.assertTrue(nse == new_nse)
+
+    def test_noise_weights(self):
+        rate = 200.0 * u.Hz
+        npix = 1
+        ring = 1
+        # NOTE: increase the number here to test performance of huge focalplanes.
+        while 2 * npix <= 2000:
+            npix += 6 * ring
+            ring += 1
+        fp = fake_hexagon_focalplane(
+            n_pix=npix,
+            sample_rate=rate,
+            psd_fmin=1.0e-5 * u.Hz,
+            psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+            psd_fknee=(rate / 2000.0),
+        )
+        nse = fp.noise
+        freqs = {x: nse.freq(x) for i, x in enumerate(nse.keys)}
+        psds = {x: nse.psd(x) for i, x in enumerate(nse.keys)}
+        indices = {x: 100 + i for i, x in enumerate(nse.keys)}
+        model = Noise(
+            detectors=fp.detectors,
+            freqs=freqs,
+            psds=psds,
+            indices=indices,
+            mixmatrix=nse.mixing_matrix,
+        )
+        for d in fp.detectors:
+            wt = model.detector_weight(d)
+
+    def test_noise_corr_weights(self):
+        rate = 200.0 * u.Hz
+        npix = 1
+        ring = 1
+        # NOTE: increase the number here to test performance of huge focalplanes.
+        while 2 * npix <= 2000:
+            npix += 6 * ring
+            ring += 1
+        fp = fake_hexagon_focalplane(
+            n_pix=npix,
+            sample_rate=rate,
+            psd_fmin=1.0e-5 * u.Hz,
+            psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+            psd_fknee=(rate / 2000.0),
+        )
+        nse = fp.noise
+        corr_freqs = {f"noise_{i}": nse.freq(x) for i, x in enumerate(fp.detectors)}
+        corr_psds = {f"noise_{i}": nse.psd(x) for i, x in enumerate(fp.detectors)}
+        corr_indices = {f"noise_{i}": 100 + i for i, x in enumerate(fp.detectors)}
+        corr_mix = dict()
+        ndet = len(fp.detectors)
+        for i, x in enumerate(fp.detectors):
+            if i == 0:
+                corr_mix[x] = {
+                    f"noise_{ndet-1}": 0.25,
+                    f"noise_{i}": 0.5,
+                    f"noise_{i+1}": 0.25,
+                }
+            elif i == ndet - 1:
+                corr_mix[x] = {
+                    f"noise_{i-1}": 0.25,
+                    f"noise_{i}": 0.5,
+                    f"noise_{0}": 0.25,
+                }
+            else:
+                corr_mix[x] = {
+                    f"noise_{i-1}": 0.25,
+                    f"noise_{i}": 0.5,
+                    f"noise_{i+1}": 0.25,
+                }
+        model = Noise(
+            detectors=fp.detectors,
+            freqs=corr_freqs,
+            psds=corr_psds,
+            mixmatrix=corr_mix,
+            indices=corr_indices,
+        )
+
+        for d in fp.detectors:
+            wt = model.detector_weight(d)

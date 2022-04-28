@@ -412,6 +412,7 @@ def simulate_ces_scan(
     az_max,
     az_start,
     az_rate,
+    fix_rate_on_sky,
     az_accel,
     scan_min_az,
     scan_max_az,
@@ -453,8 +454,12 @@ def simulate_ces_scan(
     all_az = list()
     all_flags = list()
 
-    # translate scan rate from sky to mount coordinates
-    base_rate = az_rate / np.cos(el)
+    if fix_rate_on_sky:
+        # translate scan rate from sky to mount coordinates
+        base_rate = az_rate / np.cos(el)
+    else:
+        # azimuthal rate is already in mount coordinates
+        base_rate = az_rate
     # scan acceleration is already in the mount coordinates
     scan_accel = az_accel
 

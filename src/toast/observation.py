@@ -22,7 +22,7 @@ from .instrument import Telescope
 
 from .dist import distribute_samples
 
-from .intervals import IntervalList
+from .intervals import IntervalList, interval_dtype
 
 from .utils import (
     Logger,
@@ -127,33 +127,36 @@ class Observation(MutableMapping):
     "intervals" attribute and data views can use any interval list to access subsets
     of detector and shared data.
 
+    **Notes on distributed use with MPI**
+
     The detector data within an Observation is distributed among the processes in an
     MPI communicator.  The processes in the communicator are arranged in a rectangular
     grid, with each process storing some number of detectors for a piece of time
     covered by the observation.  The most common configuration (and the default) is to
     make this grid the size of the communicator in the "detector direction" and a size
-    of one in the "sample direction":
+    of one in the "sample direction"::
 
         MPI           det1  sample(0), sample(1), sample(2), ...., sample(N-1)
         rank 0        det2  sample(0), sample(1), sample(2), ...., sample(N-1)
-        --------------------------------------------------------------------------
+        ----------------------------------------------------------------------
         MPI           det3  sample(0), sample(1), sample(2), ...., sample(N-1)
         rank 1        det4  sample(0), sample(1), sample(2), ...., sample(N-1)
 
     So each process has a subset of detectors for the whole span of the observation
     time.  You can override this shape by setting the process_rows to something
-    else.  For example, process_rows=1 would result in:
+    else.  For example, process_rows=1 would result in this::
 
-                  MPI rank 0              |          MPI rank 1
-                                          |
+        MPI rank 0                        |        MPI rank 1
+        ----------------------------------+----------------------------
         det1  sample(0), sample(1), ...,  |  ...., sample(N-1)
         det2  sample(0), sample(1), ...,  |  ...., sample(N-1)
         det3  sample(0), sample(1), ...,  |  ...., sample(N-1)
         det4  sample(0), sample(1), ...,  |  ...., sample(N-1)
 
+
     Args:
         comm (toast.Comm):  The toast communicator containing information about the
-            process group.
+            process group for this observation.
         telescope (Telescope):  An instance of a Telescope object.
         n_samples (int):  The total number of samples for this observation.
         name (str):  (Optional) The observation name.
@@ -534,8 +537,13 @@ class Observation(MutableMapping):
         for name, data in self.detdata.items():
             if detdata is None or name in detdata:
                 new_obs.detdata[name] = data
+        copy_shared = list()
+        if times is not None:
+            copy_shared.append(times)
+        if shared is not None:
+            copy_shared.extend(shared)
         for name, data in self.shared.items():
-            if shared is None or name in shared:
+            if shared is None or name in copy_shared:
                 # Create the object on the corresponding communicator in the new obs
                 new_obs.shared.assign_mpishared(name, data, self.shared.comm_type(name))
         for name, data in self.intervals.items():
@@ -564,12 +572,7 @@ class Observation(MutableMapping):
         # to the local total
         for iname, it in self.intervals.items():
             if len(it) > 0:
-                local_mem += len(it) * (
-                    sys.getsizeof(it[0]._start)
-                    + sys.getsizeof(it[0]._stop)
-                    + sys.getsizeof(it[0]._first)
-                    + sys.getsizeof(it[0]._last)
-                )
+                local_mem += len(it) * interval_dtype.itemsize
 
         # Sum the aggregate local memory
         total = None
