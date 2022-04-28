@@ -24,13 +24,14 @@ from ..pixels_io import write_healpix_fits
 
 from ._helpers import (
     create_outdir,
+    create_healpix_ring_satellite,
     create_satellite_data,
     create_fake_sky_alm,
     create_fake_beam_alm,
 )
 
 
-class SimConviqtTest(MPITestCase):
+class SimTotalconvolveTest(MPITestCase):
     def setUp(self):
 
         np.random.seed(777)
@@ -221,11 +222,13 @@ class SimConviqtTest(MPITestCase):
 
         return
 
-    def test_sim_conviqt(self):
-        if not ops.conviqt.available():
-            print("libconviqt not available, skipping tests")
+    def test_sim_totalconvolve(self):
+        if not ops.totalconvolve.available():
+            print("libtotalconvolve not available, skipping tests")
             return
 
+        # Create a fake scan strategy that hits every pixel once.
+        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
@@ -236,7 +239,7 @@ class SimConviqtTest(MPITestCase):
         detpointing = ops.PointingDetectorSimple()
 
         key = defaults.det_data
-        sim_conviqt = ops.SimConviqt(
+        sim_totalconvolve = ops.SimTotalconvolve(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
@@ -248,7 +251,7 @@ class SimConviqtTest(MPITestCase):
             fwhm=self.fwhm_sky,
         )
 
-        sim_conviqt.apply(data)
+        sim_totalconvolve.apply(data)
 
         # Bin a map to study
 
@@ -332,11 +335,13 @@ class SimConviqtTest(MPITestCase):
 
         return
 
-    def test_sim_weighted_conviqt(self):
-        if not ops.conviqt.available():
-            print("libconviqt not available, skipping tests")
+    def test_sim_weighted_totalconvolve(self):
+        if not ops.totalconvolve.available():
+            print("libtotalconvolve not available, skipping tests")
             return
 
+        # Create a fake scan strategy that hits every pixel once.
+        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
@@ -346,8 +351,8 @@ class SimConviqtTest(MPITestCase):
 
         detpointing = ops.PointingDetectorSimple()
 
-        key1 = "conviqt"
-        sim_conviqt = ops.SimConviqt(
+        key1 = "totalconvolve"
+        sim_totalconvolve = ops.SimTotalconvolve(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
@@ -359,11 +364,11 @@ class SimConviqtTest(MPITestCase):
             fwhm=self.fwhm_sky,
         )
 
-        sim_conviqt.apply(data)
+        sim_totalconvolve.apply(data)
 
-        key2 = "wconviqt"
+        key2 = "wtotalconvolve"
 
-        sim_wconviqt = ops.SimWeightedConviqt(
+        sim_wtotalconvolve = ops.SimWeightedTotalconvolve(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
@@ -375,7 +380,7 @@ class SimConviqtTest(MPITestCase):
             fwhm=self.fwhm_sky,
         )
 
-        sim_wconviqt.apply(data)
+        sim_wtotalconvolve.apply(data)
         # Bin a map to study
 
         pixels = ops.PixelsHealpix(
@@ -445,11 +450,13 @@ class SimConviqtTest(MPITestCase):
 
         return
 
-    def test_sim_TEB_conviqt(self):
-        if not ops.conviqt.available():
-            print("libconviqt not available, skipping tests")
+    def test_sim_TEB_totalconvolve(self):
+        if not ops.totalconvolve.available():
+            print("libtotalconvolve not available, skipping tests")
             return
 
+        # Create a fake scan strategy that hits every pixel once.
+        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
@@ -461,8 +468,8 @@ class SimConviqtTest(MPITestCase):
         detpointing = ops.PointingDetectorSimple()
 
 
-        key1 = "conviqt0"
-        sim_conviqt = ops.SimConviqt(
+        key1 = "totalconvolve0"
+        sim_totalconvolve = ops.SimTotalconvolve(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
@@ -474,11 +481,11 @@ class SimConviqtTest(MPITestCase):
             fwhm=self.fwhm_sky,
         )
 
-        sim_conviqt.apply(data)
+        sim_totalconvolve.apply(data)
 
-        key2 = "tebconviqt"
+        key2 = "tebtotalconvolve"
 
-        sim_wconviqt = ops.SimTEBConviqt(
+        sim_wtotalconvolve = ops.SimTEBTotalconvolve(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
@@ -491,7 +498,7 @@ class SimConviqtTest(MPITestCase):
         )
 
 
-        sim_wconviqt.apply(data)
+        sim_wtotalconvolve.apply(data)
         # Bin a map to study
 
         pixels = ops.PixelsHealpix(
@@ -563,15 +570,15 @@ class SimConviqtTest(MPITestCase):
 
     """
     def test_sim_hwp(self):
-        if not ops.conviqt.available():
-            print("libconviqt not available, skipping tests")
+        if not ops.totalconvolve.available():
+            print("libtotalconvolve not available, skipping tests")
             return
         # Create a fake scan strategy that hits every pixel once.
         data = create_satellite_data(self.comm)
         # make a simple pointing matrix
         detpointing = ops.PointingDetectorSimple()
         # Generate timestreams
-        sim_conviqt = ops.SimWeightedConviqt(
+        sim_totalconvolve = ops.SimWeightedTotalconvolve(
             comm=self.comm,
             detector_pointing=detpointing,
             sky_file=self.fname_sky,
@@ -579,6 +586,6 @@ class SimConviqtTest(MPITestCase):
             dxx=False,
             hwp_angle="hwp_angle",
         )
-        sim_conviqt.exec(data)
+        sim_totalconvolve.exec(data)
         return
     """

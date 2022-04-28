@@ -68,7 +68,11 @@ from .sim_crosstalk import CrossTalk, MitigateCrossTalk
 
 from .sim_cosmic_rays import InjectCosmicRays
 
-from .totalconvolve import SimTotalconvolve
+from .totalconvolve import (
+    SimTotalconvolve,
+    SimWeightedTotalconvolve,
+    SimTEBTotalconvolve,
+)
 
 from .polyfilter import PolyFilter, PolyFilter2D, CommonModeFilter
 
