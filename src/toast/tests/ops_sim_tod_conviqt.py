@@ -24,7 +24,6 @@ from ..pixels_io import write_healpix_fits
 
 from ._helpers import (
     create_outdir,
-    create_healpix_ring_satellite,
     create_satellite_data,
     create_fake_sky_alm,
     create_fake_beam_alm,
@@ -58,7 +57,7 @@ class SimConviqtTest(MPITestCase):
             hp.write_alm(self.fname_sky.replace(".fits","_T.fits"), self.slm[0] , lmax=self.lmax, overwrite=True)
             hp.write_alm(self.fname_sky.replace(".fits","_E.fits"), self.slm[1] , lmax=self.lmax, overwrite=True)
             hp.write_alm(self.fname_sky.replace(".fits","_B.fits"), self.slm[2] , lmax=self.lmax, overwrite=True)
-            
+
             self.blm = create_fake_beam_alm(
                 self.lmax,
                 self.mmax,
@@ -227,8 +226,6 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-        # Create a fake scan strategy that hits every pixel once.
-        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
@@ -340,8 +337,6 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-        # Create a fake scan strategy that hits every pixel once.
-        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
@@ -418,14 +413,14 @@ class SimConviqtTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        
+
         binner.det_data = key1
         binner.binned = "binned1"
         binner.apply(data)
         binner.det_data = key2
         binner.binned = "binned2"
         binner.apply(data)
-        
+
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
@@ -455,19 +450,17 @@ class SimConviqtTest(MPITestCase):
             print("libconviqt not available, skipping tests")
             return
 
-        # Create a fake scan strategy that hits every pixel once.
-        #        data = create_healpix_ring_satellite(self.comm, nside=self.nside)
         data = create_satellite_data(
             self.comm, obs_time=120 * u.min, pixel_per_process=2
         )
         self.make_beam_file_dict(data)
-        
-        
+
+
         # Generate timestreams
 
         detpointing = ops.PointingDetectorSimple()
-        
-        
+
+
         key1 = "conviqt0"
         sim_conviqt = ops.SimConviqt(
             comm=self.comm,
@@ -480,11 +473,11 @@ class SimConviqtTest(MPITestCase):
             normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-    
+
         sim_conviqt.apply(data)
-        
+
         key2 = "tebconviqt"
-        
+
         sim_wconviqt = ops.SimTEBConviqt(
             comm=self.comm,
             detector_pointing=detpointing,
@@ -496,8 +489,8 @@ class SimConviqtTest(MPITestCase):
             normalize_beam=False,
             fwhm=self.fwhm_sky,
         )
-        
-            
+
+
         sim_wconviqt.apply(data)
         # Bin a map to study
 
@@ -536,14 +529,14 @@ class SimConviqtTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="alltoallv",
         )
-        
+
         binner.det_data = key1
         binner.binned = "binned1"
         binner.apply(data)
         binner.det_data = key2
         binner.binned = "binned2"
         binner.apply(data)
-        
+
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
