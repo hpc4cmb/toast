@@ -17,6 +17,8 @@
 # - in pixels_healpix, does pixels matter or is hit_submaps the only real output?
 # - update scan_map to slightly simplify it (cf associated TODO)
 #
+# - get rid of the self.use_python versions
+#
 # NOTE:
 # the code uses [xmap](https://jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html) 
 # in order to map over named axis for increased redeability
