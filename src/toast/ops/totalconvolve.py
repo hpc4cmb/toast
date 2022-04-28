@@ -277,13 +277,13 @@ class SimTotalconvolve(Operator):
             beam = self.get_beam(beam_file, lmax, mmax, det, verbose)
 
             theta, phi, psi, psi_pol = self.get_pointing(data, det, verbose)
-            np.savez(
-                f"{self.det_data}_{det}.npz",
-                psi=psi,
-                psi_pol=psi_pol,
-                theta=theta,
-                phi=phi,
-            )
+#            np.savez(
+#                f"{self.det_data}_{det}.npz",
+#                psi=psi,
+#                psi_pol=psi_pol,
+#                theta=theta,
+#                phi=phi,
+#            )
             pnt = self.get_buffer(theta, phi, psi, det, verbose)
             del theta, phi, psi
             if self.hwp_angle is None:
