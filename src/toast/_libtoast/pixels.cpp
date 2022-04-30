@@ -11,7 +11,7 @@ py::tuple global_to_local(
     py::array_t <T> global_pixels,
     size_t npix_submap,
     py::array_t <int64_t> global2local
-    ) {
+) {
     // Get raw pointers to input.
     py::buffer_info gpinfo = global_pixels.request();
     py::buffer_info glinfo = global2local.request();
@@ -36,7 +36,7 @@ py::tuple global_to_local(
     toast::global_to_local <T> (
         nsamp, global_pixels_raw, npix_submap,
         global_to_local_raw, local_submaps_raw, local_pixels_raw
-        );
+    );
     return py::make_tuple(local_submaps, local_pixels);
 }
 

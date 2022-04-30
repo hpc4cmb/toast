@@ -89,7 +89,7 @@ bool toast::atm_sim_in_cone(
     double const & maxdist,
     double const & cosel0,
     double const & sinel0
-    ) {
+) {
     // Input coordinates are in the scan frame, rotate to horizontal frame
 
     double tstep = 1;
@@ -217,7 +217,7 @@ void toast::atm_sim_compress_flag_hits_rank(
     double maxdist,
     double cosel0,
     double sinel0
-    ) {
+) {
     double t_fake = -1.0;
     for (int64_t ix = 0; ix < nx; ++ix) {
         if (ix % ntask != rank) {
@@ -253,7 +253,7 @@ void toast::atm_sim_compress_flag_extend_rank(
     int64_t xstride,
     int64_t ystride,
     int64_t zstride
-    ) {
+) {
     for (int64_t ix = 1; ix < nx - 1; ++ix) {
         if (ix % ntask != rank) {
             continue;
