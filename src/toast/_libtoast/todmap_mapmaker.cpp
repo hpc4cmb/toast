@@ -94,7 +94,7 @@ void expand_matrix(py::array_t <double> compressed_matrix,
                    int64_t nnz,
                    py::array_t <int64_t> indices,
                    py::array_t <int64_t> indptr
-                   ) {
+) {
     auto fast_matrix = compressed_matrix.unchecked <2>();
     auto fast_local_to_global = local_to_global.unchecked <1>();
     auto fast_indices = indices.mutable_unchecked <1>();

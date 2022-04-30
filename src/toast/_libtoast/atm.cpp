@@ -195,7 +195,7 @@ void init_atm(py::module & m) {
                   counter1,
                   counter2,
                   raw_realiz
-                  );
+              );
               return;
           }, R"(
      Internal function used by AtmSim class.
@@ -323,7 +323,7 @@ void init_atm(py::module & m) {
                   raw_comp,
                   raw_full,
                   raw_realiz
-                  );
+              );
               return status;
           }, R"(
      Internal function used by AtmSim class.
@@ -388,7 +388,7 @@ void init_atm(py::module & m) {
                   maxdist,
                   cosel0,
                   sinel0
-                  );
+              );
               return;
           }, R"(
      Internal function used by AtmSim class.
@@ -432,7 +432,7 @@ void init_atm(py::module & m) {
                   xstride,
                   ystride,
                   zstride
-                  );
+              );
               return;
           }, R"(
      Internal function used by AtmSim class.
@@ -468,7 +468,7 @@ void init_atm(py::module & m) {
                   lmax,
                   ntask,
                   rank
-                  );
+              );
               return py::make_tuple(kolmo_x, kolmo_y);
           }, R"(
        Internal function used by AtmSim class.

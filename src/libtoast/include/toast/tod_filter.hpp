@@ -24,7 +24,7 @@ void filter_poly2D_solve(
     int64_t nsample, int32_t ndet, int32_t ngroup, int32_t nmode,
     int32_t const * det_group, double const * templates, uint8_t const * masks,
     double const * signals, double * coeff
-    );
+);
 }
 
 #endif // ifndef TOAST_TOD_FILTER_HPP

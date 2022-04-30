@@ -36,7 +36,7 @@ void toast::atm_sim_kolmogorov_init_rank(
     double lmax,
     int ntask,
     int rank
-    ) {
+) {
     // Numerically integrate the modified Kolmogorov spectrum for the
     // correlation function at grid points. We integrate down from
     // 10*kappamax to 0 for numerical precision
@@ -179,7 +179,7 @@ double toast::atm_sim_kolmogorov(
     double const & rmax_kolmo,
     double const * kolmo_x,
     double const * kolmo_y
-    ) {
+) {
     // Return autocovariance of a Kolmogorov process at separation r
 
     if (r == 0) return kolmo_y[0];
@@ -235,7 +235,7 @@ double toast::atm_sim_cov_eval(
     bool smooth,
     double xxstep,
     double zzstep
-    ) {
+) {
     // Evaluate the atmospheric absorption covariance between two coordinates
     // Church (1995) Eq.(6) & (9)
     // Coordinates are in the horizontal frame
@@ -329,7 +329,7 @@ double toast::atm_sim_cov_eval(
                         rmax_kolmo,
                         kolmo_x,
                         kolmo_y
-                        );
+                    );
 
                     val += chi1 * chi2;
                 }
@@ -358,7 +358,7 @@ void toast::atm_sim_ind2coord(
     int64_t const * full_index,
     int64_t const & i,
     double * coord
-    ) {
+) {
     // Translate a compressed index into xyz-coordinates
     // in the horizontal frame
 
@@ -399,7 +399,7 @@ int64_t toast::atm_sim_coord2ind(
     double const & x,
     double const & y,
     double const & z
-    ) {
+) {
     // Translate scan frame xyz-coordinates into a compressed index
 
     // TK: these are mixed types being implicitly cast back to int64.
@@ -453,7 +453,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
     double xxstep,
     double zzstep,
     int rank
-    ) {
+) {
     // Build a sparse covariance matrix.
 
     auto & chol = toast::CholmodCommon::get();
@@ -508,7 +508,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                 full_index,
                 i + ind_start,
                 coord
-                );
+            );
             diagonal[i] = toast::atm_sim_cov_eval(
                 nr,
                 rmin_kolmo,
@@ -522,7 +522,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                 smooth,
                 xxstep,
                 zzstep
-                );
+            );
         }
 
         # pragma omp for schedule(static, 10)
@@ -547,7 +547,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                 full_index,
                 icol + ind_start,
                 colcoord
-                );
+            );
             for (int64_t irow = icol; irow < nelem; ++irow) {
                 // Evaluate the covariance between the two coordinates
                 double rowcoord[3];
@@ -569,7 +569,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                     full_index,
                     irow + ind_start,
                     rowcoord
-                    );
+                );
 
                 // Skip pairs of volume elements that are further
                 // apart than maximum correlation distance
@@ -590,7 +590,7 @@ cholmod_sparse * toast::atm_sim_build_sparse_covariance(
                     smooth,
                     xxstep,
                     zzstep
-                    );
+                );
                 if (icol == irow) {
                     // Regularize the matrix by promoting the diagonal
                     val *= 1.01;
@@ -680,7 +680,7 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
     int64_t ind_start,
     int64_t ind_stop,
     int rank
-    ) {
+) {
     // Cholesky-factorize the provided sparse matrix and return the
     // sparse matrix representation of the factorization
 
@@ -835,7 +835,7 @@ void toast::atm_sim_apply_sparse_covariance(
     uint64_t counter2,
     double * realization,
     int rank
-    ) {
+) {
     // Apply the Cholesky-decomposed (square-root) sparse covariance
     // matrix to a vector of Gaussian random numbers to impose the
     // desired correlation properties.
@@ -943,7 +943,7 @@ void toast::atm_sim_compute_slice(
     uint64_t counter1,
     uint64_t counter2,
     double * realization
-    ) {
+) {
     auto & chol = toast::CholmodCommon::get();
 
     auto & gt = toast::GlobalTimers::get();
@@ -976,7 +976,7 @@ void toast::atm_sim_compute_slice(
         xxstep,
         zzstep,
         rank
-        );
+    );
 
     gt.stop("atm_sim_build_sparse_covariance");
 
@@ -987,7 +987,7 @@ void toast::atm_sim_compute_slice(
         ind_start,
         ind_stop,
         rank
-        );
+    );
 
     gt.stop("atm_sim_sqrt_sparse_covariance");
 
@@ -1005,7 +1005,7 @@ void toast::atm_sim_compute_slice(
         counter2,
         realization,
         rank
-        );
+    );
 
     gt.stop("atm_sim_apply_sparse_covariance");
 

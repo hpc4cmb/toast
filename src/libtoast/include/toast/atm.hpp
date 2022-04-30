@@ -51,7 +51,7 @@ bool atm_sim_in_cone(
     double const & maxdist,
     double const & cosel0,
     double const & sinel0
-    );
+);
 
 void atm_sim_compress_flag_hits_rank(
     int64_t nn,
@@ -80,7 +80,7 @@ void atm_sim_compress_flag_hits_rank(
     double maxdist,
     double cosel0,
     double sinel0
-    );
+);
 
 void atm_sim_compress_flag_extend_rank(
     uint8_t * hit,
@@ -93,7 +93,7 @@ void atm_sim_compress_flag_extend_rank(
     int64_t xstride,
     int64_t ystride,
     int64_t zstride
-    );
+);
 
 double atm_sim_interp(
     double const & x,
@@ -132,7 +132,7 @@ double atm_sim_interp(
     int64_t const * compressed_index,
     int64_t const * full_index,
     double const * realization
-    );
+);
 
 int atm_sim_observe(
     size_t nsamp,
@@ -176,7 +176,7 @@ int atm_sim_observe(
     int64_t * compressed_index,
     int64_t * full_index,
     double * realization
-    );
+);
 
 void atm_sim_kolmogorov_init_rank(
     int64_t nr,
@@ -189,7 +189,7 @@ void atm_sim_kolmogorov_init_rank(
     double lmax,
     int ntask,
     int rank
-    );
+);
 
 double atm_sim_kolmogorov(
     double const & r,
@@ -198,7 +198,7 @@ double atm_sim_kolmogorov(
     double const & rmax_kolmo,
     double const * kolmo_x,
     double const * kolmo_y
-    );
+);
 
 double atm_sim_cov_eval(
     int64_t const & nr,
@@ -213,7 +213,7 @@ double atm_sim_cov_eval(
     bool smooth,
     double xxstep,
     double zzstep
-    );
+);
 
 void atm_sim_ind2coord(
     double const & xstart,
@@ -233,7 +233,7 @@ void atm_sim_ind2coord(
     int64_t const * full_index,
     int64_t const & i,
     double * coord
-    );
+);
 
 int64_t atm_sim_coord2ind(
     double const & xstart,
@@ -252,7 +252,7 @@ int64_t atm_sim_coord2ind(
     double const & x,
     double const & y,
     double const & z
-    );
+);
 
 cholmod_sparse * atm_sim_build_sparse_covariance(
     int64_t ind_start,
@@ -280,14 +280,14 @@ cholmod_sparse * atm_sim_build_sparse_covariance(
     double xxstep,
     double zzstep,
     int rank
-    );
+);
 
 cholmod_sparse * atm_sim_sqrt_sparse_covariance(
     cholmod_sparse * cov,
     int64_t ind_start,
     int64_t ind_stop,
     int rank
-    );
+);
 
 void atm_sim_apply_sparse_covariance(
     cholmod_sparse * sqrt_cov,
@@ -299,7 +299,7 @@ void atm_sim_apply_sparse_covariance(
     uint64_t counter2,
     double * realization,
     int rank
-    );
+);
 
 void atm_sim_compute_slice(
     int64_t ind_start,
@@ -332,7 +332,7 @@ void atm_sim_compute_slice(
     uint64_t counter1,
     uint64_t counter2,
     double * realization
-    );
+);
 }
 
 #endif // ifdef HAVE_CHOLMOD
