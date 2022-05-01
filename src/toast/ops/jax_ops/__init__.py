@@ -1,7 +1,6 @@
 # TODO
 #
 # test C++, numpy and jax version of each operator:
-# - stockes weight: stockes weigts
 # - template_offset: ../templates/offset
 # In progress:
 # - healpix_pixels: pixels_healpix
@@ -9,6 +8,7 @@
 # Done:
 # - pointing detector: pointing detector
 # - build_noise_weighted: mapmaker_utils
+# - stockes weight: stockes weigts
 #
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
 #   (we could cache that intervals_index at a higher level within toast if the intervals are constant)
