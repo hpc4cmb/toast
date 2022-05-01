@@ -4,8 +4,9 @@
 # - pointing detector: pointing detector
 # - stockes weight: stockes weigts
 # - healpix_pixels: pixels_healpix
-# - build_noise_weighted: mapmaker_utils
 # - template_offset: ../templates/offset
+# Done:
+# - build_noise_weighted: mapmaker_utils
 #
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
 #   (we could cache that intervals_index at a higher level within toast if the intervals are constant)

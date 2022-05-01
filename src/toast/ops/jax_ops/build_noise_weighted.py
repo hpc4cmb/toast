@@ -32,18 +32,18 @@ def build_noise_weighted_inner_jax(zmap, pixel, weights, data, det_flag, det_sca
     Returns:
         zmap (array, double): size nnz
     """
-    new_zmap = jnp.where((pixel >= 0) and ((det_flag & det_mask) == 0) and ((shared_flag & shared_mask) == 0), # if
+    new_zmap = jnp.where((pixel >= 0) & ((det_flag & det_mask) == 0) & ((shared_flag & shared_mask) == 0), # if
                          zmap + (data * det_scale * weights), # then
                          zmap) # else
     return new_zmap
 
 # maps over samples and detectors
 build_noise_weighted_inner_jax = jax_xmap(build_noise_weighted_inner_jax, 
-                                         in_axes=[['detectors','intervals',...], # zmap
-                                                  ['detectors','intervals'], # pixel
+                                         in_axes=[['detectors','samples',...], # zmap
+                                                  ['detectors','samples'], # pixel
                                                   ['detectors','samples',...], # weights
-                                                  ['detectors','intervals'], # data
-                                                  ['detectors','intervals'], # det_flag
+                                                  ['detectors','samples'], # data
+                                                  ['detectors','samples'], # det_flag
                                                   ['detectors'], # det_scale
                                                   [...], # det_mask
                                                   ['samples'], # shared_flag
@@ -380,7 +380,7 @@ void build_noise_weighted(
 build_noise_weighted = select_implementation(build_noise_weighted_compiled, 
                                              build_noise_weighted_numpy, 
                                              build_noise_weighted_jax, 
-                                             default_implementationType=ImplementationType.COMPILED)
+                                             default_implementationType=ImplementationType.JAX)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning")'
