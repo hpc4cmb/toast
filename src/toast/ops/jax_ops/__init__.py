@@ -1,11 +1,13 @@
 # TODO
 #
 # test C++, numpy and jax version of each operator:
-# - pointing detector: pointing detector
 # - stockes weight: stockes weigts
-# - healpix_pixels: pixels_healpix
 # - template_offset: ../templates/offset
+# In progress:
+# - healpix_pixels: pixels_healpix
+#   this one does not pass the numpy test, might be a change inside the base healpix operations
 # Done:
+# - pointing detector: pointing detector
 # - build_noise_weighted: mapmaker_utils
 #
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
