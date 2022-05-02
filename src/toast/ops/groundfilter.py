@@ -4,31 +4,20 @@
 
 from time import time
 
-from ..mpi import MPI
-
 import traitlets
-
 import numpy as np
-
 from astropy import units as u
-
 import healpy as hp
 
+from ..mpi import MPI
 from ..timing import function_timer
-
 from .. import qarray as qa
-
 from ..data import Data
-
 from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
-
-from .operator import Operator
-
 from ..utils import Environment, Logger, Timer
-
 from .._libtoast import bin_proj, bin_invcov, add_templates, legendre
-
 from ..observation import default_values as defaults
+from .operator import Operator
 
 
 # Wrappers for more precise timing

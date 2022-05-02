@@ -12,8 +12,6 @@ import numpy as np
 import traitlets
 
 from ..mpi import MPI, MPI_Comm, use_mpi, Comm
-
-from .operator import Operator
 from .. import qarray as qa
 from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
@@ -27,8 +25,8 @@ from ..utils import (
     AlignedU8,
 )
 from ..observation import default_values as defaults
-
 from .._libtoast import filter_polynomial, filter_poly2D, sum_detectors, subtract_mean
+from .operator import Operator
 
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)

@@ -2,37 +2,24 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
 import os
 
 import traitlets
-
 import numpy as np
-
 from astropy import units as u
-
 import healpy as hp
 
+from ..mpi import MPI
 from ..timing import function_timer
-
 from .. import qarray as qa
-
 from ..data import Data
-
 from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
-
-from .operator import Operator
-
-from .pipeline import Pipeline
-
 from ..utils import Environment, Logger, Timer
-
 from ..atm import AtmSim, available_utils, available_atm
-
 from ..observation import default_values as defaults
-
 from .sim_tod_atm_utils import ObserveAtmosphere
+from .operator import Operator
+from .pipeline import Pipeline
 
 if available_atm:
     from ..atm import AtmSim
@@ -83,10 +70,14 @@ class SimAtmosphere(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+    )
 
     det_flags = Unicode(
         defaults.det_flags,

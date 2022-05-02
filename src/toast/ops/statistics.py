@@ -13,14 +13,12 @@ import numpy as np
 import traitlets
 
 from ..mpi import MPI, MPI_Comm, use_mpi, Comm
-
-from .operator import Operator
 from .. import qarray as qa
 from ..timing import function_timer
 from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
-
 from ..observation import default_values as defaults
+from .operator import Operator
 
 
 @trait_docs

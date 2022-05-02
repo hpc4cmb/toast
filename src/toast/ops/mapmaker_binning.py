@@ -3,27 +3,17 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import traitlets
-
 import numpy as np
 
 from ..utils import Logger
-
 from ..traits import trait_docs, Int, Unicode, Bool, Instance
-
 from ..timing import function_timer
-
 from ..pixels import PixelDistribution, PixelData
-
 from ..covariance import covariance_apply
-
 from ..observation import default_values as defaults
-
 from .operator import Operator
-
 from .pipeline import Pipeline
-
 from .delete import Delete
-
 from .mapmaker_utils import BuildHitMap, BuildNoiseWeighted, BuildInverseCovariance
 
 

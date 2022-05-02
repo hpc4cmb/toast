@@ -7,16 +7,10 @@ from collections import OrderedDict
 import traitlets
 
 from ..utils import Logger
-
 from ..timing import function_timer
-
 from ..traits import trait_docs, Int, Unicode, List
-
 from ..data import Data
-
 from .operator import Operator
-
-from .._libtoast import acc_enabled
 
 
 @trait_docs

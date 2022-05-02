@@ -3,27 +3,17 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import traitlets
-
 import numpy as np
-
 from scipy import interpolate
-
 from astropy import units as u
 
 from .. import rng
-
 from ..timing import function_timer
-
 from ..traits import trait_docs, Int, Unicode, Quantity, Bool
-
 from ..fft import FFTPlanReal1DStore
-
 from ..utils import rate_from_times, Logger, AlignedF64
-
 from ..observation import default_values as defaults
-
 from .._libtoast import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
-
 from .operator import Operator
 
 

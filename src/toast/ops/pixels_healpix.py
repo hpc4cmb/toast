@@ -3,27 +3,17 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import traitlets
-
 import numpy as np
 
 from ..utils import Environment, Logger
-
 from ..traits import trait_docs, Int, Unicode, Bool, Instance
-
 from ..healpix import HealpixPixels
-
 from ..timing import function_timer
-
 from .. import qarray as qa
-
 from ..pixels import PixelDistribution
-
 from ..observation import default_values as defaults
-
 from .._libtoast import healpix_pixels
-
 from .operator import Operator
-
 from .delete import Delete
 
 

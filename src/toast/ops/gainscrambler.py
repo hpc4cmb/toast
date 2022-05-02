@@ -6,17 +6,12 @@ import re
 
 import traitlets
 
-from .operator import Operator
-
 from ..traits import trait_docs, Int, Float, Unicode
-
 from .. import rng
-
 from ..utils import Logger
-
 from ..timing import function_timer
-
 from ..observation import default_values as defaults
+from .operator import Operator
 
 
 @trait_docs

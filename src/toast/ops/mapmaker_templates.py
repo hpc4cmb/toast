@@ -5,39 +5,23 @@
 from collections import OrderedDict
 
 import traitlets
-
 import numpy as np
 
 from ..mpi import MPI
-
 from ..utils import Logger
-
 from ..traits import trait_docs, Int, Unicode, Bool, List, Float, Instance
-
 from ..timing import function_timer, Timer
-
 from ..templates import Template, AmplitudesMap
-
 from ..observation import default_values as defaults
-
 from ..pixels import PixelDistribution, PixelData
-
 from .operator import Operator
-
 from .pipeline import Pipeline
-
 from .delete import Delete
-
 from .copy import Copy
-
 from .arithmetic import Combine
-
 from .scan_map import ScanMap, ScanMask
-
 from .mapmaker_utils import CovarianceAndHits
-
 from .mapmaker_solve import solve, SolverRHS, SolverLHS
-
 from .memory_counter import MemoryCounter
 
 
@@ -66,10 +50,14 @@ class TemplateMatrix(Operator):
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for solver flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for solver flags")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     @traitlets.validate("templates")
     def _check_templates(self, proposal):

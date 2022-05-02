@@ -3,26 +3,17 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import traitlets
-
 import numpy as np
-
 from astropy import units as u
-
 import healpy as hp
 
 from ..timing import function_timer
-
 from .. import qarray as qa
-
 from ..traits import trait_docs, Int, Unicode, Bool, Quantity
-
-from .operator import Operator
-
 from ..utils import Environment, Logger
-
 from ..observation import default_values as defaults
-
 from ..dipole import dipole
+from .operator import Operator
 
 
 @trait_docs

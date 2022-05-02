@@ -3,40 +3,23 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import traitlets
-
 import numpy as np
-
 from scipy.constants import degree
-
 import healpy as hp
-
 from astropy import units as u
 
 from .. import qarray as qa
-
 from ..utils import Environment, name_UID, Logger, rate_from_times
-
 from ..dist import distribute_discrete
-
 from ..timing import function_timer, Timer
-
 from ..intervals import Interval
-
 from ..schedule import SatelliteSchedule
-
 from ..noise_sim import AnalyticNoise
-
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
-
-from ..observation import Observation
-from ..observation import default_values as defaults
-
+from ..observation import Observation, default_values as defaults
 from ..instrument import Telescope
-
 from ..healpix import ang2vec
-
 from .operator import Operator
-
 from .sim_hwp import simulate_hwp_response
 
 

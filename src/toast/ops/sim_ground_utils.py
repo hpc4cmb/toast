@@ -5,9 +5,7 @@
 import datetime
 
 import numpy as np
-
 from astropy import units as u
-
 import ephem
 
 from ..timing import function_timer, Timer

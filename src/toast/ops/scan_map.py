@@ -3,21 +3,14 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import traitlets
-
 import numpy as np
 
 from ..utils import Logger, AlignedF64
-
 from ..traits import trait_docs, Int, Unicode, Bool
-
 from ..timing import function_timer
-
 from ..pixels import PixelDistribution, PixelData
-
 from ..observation import default_values as defaults
-
 from .._libtoast import scan_map_float64, scan_map_float32
-
 from .operator import Operator
 
 
@@ -221,7 +214,9 @@ class ScanMask(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to set"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flags_value = Int(

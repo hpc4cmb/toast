@@ -3,7 +3,6 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 from astropy import units as u
 
 from ..timing import function_timer, Timer

@@ -2,7 +2,6 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import h5py
 import os
 from time import time
 import warnings
@@ -10,10 +9,9 @@ import warnings
 from astropy import units as u
 import numpy as np
 import traitlets
+import h5py
 
 from ..mpi import MPI, MPI_Comm, use_mpi, Comm
-
-from .operator import Operator
 from .. import qarray as qa
 from ..data import Data
 from ..timing import function_timer
@@ -21,6 +19,7 @@ from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
 from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
 from ..observation import default_values as defaults
 from ..coordinates import to_MJD
+from .operator import Operator
 from .pointing import BuildPixelDistribution
 
 

@@ -3,17 +3,12 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 import traitlets
 
 from ..utils import Environment, Logger, memreport
-
 from ..timing import function_timer, Timer
-
 from ..noise_sim import AnalyticNoise
-
 from ..traits import trait_docs, Int, Bool, Unicode
-
 from .operator import Operator
 
 

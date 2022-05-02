@@ -3,32 +3,22 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import traitlets
-
 import numpy as np
 
 from ..utils import Logger
-
 from ..traits import trait_docs, Int, Unicode, Bool, Instance
-
 from ..timing import function_timer
-
 from ..pixels import PixelDistribution, PixelData
-
 from ..pixels_io import (
     read_healpix_fits,
     read_healpix_hdf5,
     filename_is_fits,
     filename_is_hdf5,
 )
-
 from ..observation import default_values as defaults
-
 from .operator import Operator
-
 from .scan_map import ScanMap, ScanMask
-
 from .pointing import BuildPixelDistribution
-
 from .pipeline import Pipeline
 
 
@@ -236,7 +226,9 @@ class ScanHealpixMask(Operator):
     file = Unicode(None, allow_none=True, help="Path to healpix FITS file")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to set"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flags_value = Int(

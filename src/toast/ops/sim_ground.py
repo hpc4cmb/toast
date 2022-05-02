@@ -3,22 +3,16 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import datetime
-
 import copy
 
 import traitlets
-
 import numpy as np
-
 from scipy.constants import degree
-
 import healpy as hp
-
 from astropy import units as u
-from toast.weather import SimWeather
 
+from ..weather import SimWeather
 from .. import qarray as qa
-
 from ..utils import (
     Environment,
     name_UID,
@@ -27,35 +21,20 @@ from ..utils import (
     astropy_control,
     memreport,
 )
-
 from ..dist import distribute_uniform, distribute_discrete
-
 from ..timing import function_timer, Timer, GlobalTimers
-
 from ..intervals import Interval, regular_intervals, IntervalList
-
 from ..noise_sim import AnalyticNoise
-
 from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity, List
-
 from ..observation import Observation
-
 from ..instrument import Telescope
-
 from ..schedule import GroundSchedule
-
 from ..coordinates import azel_to_radec
-
 from ..healpix import ang2vec
-
 from ..observation import default_values as defaults
-
 from .operator import Operator
-
 from .sim_hwp import simulate_hwp_response
-
 from .flag_intervals import FlagIntervals
-
 from .sim_ground_utils import (
     simulate_elnod,
     simulate_ces_scan,
