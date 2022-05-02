@@ -5,27 +5,17 @@
 import copy
 
 import numpy as np
-
+import traitlets
 from astropy import units as u
 
-import traitlets
-
-from ..utils import Environment, Logger
-
-from ..timing import function_timer, Timer
-
-from ..noise import Noise
-
-from ..noise_sim import AnalyticNoise
-
-from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
-
-from ..observation import default_values as defaults
-
-from ..intervals import IntervalList
-
 from .. import qarray as qa
-
+from ..intervals import IntervalList
+from ..noise import Noise
+from ..noise_sim import AnalyticNoise
+from ..observation import default_values as defaults
+from ..timing import Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .operator import Operator
 
 

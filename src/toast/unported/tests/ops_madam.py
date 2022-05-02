@@ -2,19 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
-
 import shutil
 
+import healpy as hp
 import numpy as np
 
-import healpy as hp
-
-from ..todmap import TODHpixSpiral, OpSimGradient, OpPointingHpix, OpMadam
-
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
+from ..todmap import OpMadam, OpPointingHpix, OpSimGradient, TODHpixSpiral
+from ._helpers import boresight_focalplane, create_distdata, create_outdir
+from .mpi import MPITestCase
 
 
 class OpMadamTest(MPITestCase):

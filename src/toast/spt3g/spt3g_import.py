@@ -2,37 +2,29 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
-import io
-import re
 import datetime
-
-import numpy as np
+import io
+import os
+import re
 
 import h5py
-
+import numpy as np
 from astropy import units as u
 
-from ..utils import Environment, Logger, import_from_name
-
-from ..timing import function_timer
-
 from ..instrument import Focalplane, GroundSite, SpaceSite
-
-from ..weather import SimWeather
-
-from ..observation import Observation
-
 from ..intervals import IntervalList
-
+from ..observation import Observation
+from ..timing import function_timer
+from ..utils import Environment, Logger, import_from_name
+from ..weather import SimWeather
 from .spt3g_utils import (
     available,
-    from_g3_array_type,
-    from_g3_scalar_type,
-    from_g3_unit,
-    from_g3_time,
-    from_g3_quats,
     decompress_timestream,
+    from_g3_array_type,
+    from_g3_quats,
+    from_g3_scalar_type,
+    from_g3_time,
+    from_g3_unit,
 )
 
 if available:

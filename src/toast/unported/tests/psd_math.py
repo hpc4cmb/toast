@@ -2,24 +2,20 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 
 import numpy as np
 
+from ..fod import autocov_psd
 from ..tod import AnalyticNoise, OpSimNoise
 from ..todmap import TODHpixSpiral
-
-from ..fod import autocov_psd
-
 from ._helpers import (
-    create_outdir,
-    create_distdata,
     boresight_focalplane,
+    create_distdata,
+    create_outdir,
     uniform_chunks,
 )
-
+from .mpi import MPITestCase
 
 # FIXME:  This seems like a useful generic function- maybe move it into
 # toast.fod.psd_math?

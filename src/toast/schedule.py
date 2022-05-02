@@ -4,20 +4,15 @@
 
 import os
 import sys
-
 from datetime import datetime
 
 import dateutil
-
 import numpy as np
-
 from astropy import units as u
+from astropy.table import Column, QTable
 
-from astropy.table import QTable, Column
-
-from .timing import function_timer, Timer
-
-from .utils import Logger, Environment
+from .timing import Timer, function_timer
+from .utils import Environment, Logger
 
 
 class Scan(object):

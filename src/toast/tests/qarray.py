@@ -4,9 +4,8 @@
 
 import numpy as np
 
-from .mpi import MPITestCase
-
 from .. import qarray as qa
+from .mpi import MPITestCase
 
 
 class QarrayTest(MPITestCase):

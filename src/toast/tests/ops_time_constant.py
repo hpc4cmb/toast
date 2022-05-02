@@ -6,24 +6,16 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 from astropy.table import Column
 
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
 from .. import ops as ops
-
-from ..vis import set_matplotlib_backend
-
-from ..pixels import PixelDistribution, PixelData
-
 from .. import qarray as qa
-
-from ._helpers import create_outdir, create_satellite_data, create_fake_sky, fake_flags
-
+from ..noise import Noise
+from ..pixels import PixelData, PixelDistribution
+from ..vis import set_matplotlib_backend
+from ._helpers import create_fake_sky, create_outdir, create_satellite_data, fake_flags
+from .mpi import MPITestCase
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 

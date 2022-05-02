@@ -3,15 +3,11 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 from astropy import units as u
-
-from astropy.table import QTable, Column
+from astropy.table import Column, QTable
 
 from . import qarray as qa
-
 from .instrument import Focalplane
-
 from .vis import set_matplotlib_backend
 
 

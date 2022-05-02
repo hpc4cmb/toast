@@ -5,25 +5,17 @@
 import os
 import sys
 
-import numpy as np
-
 import h5py
-
-from .mpi import MPITestCase
-
+import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from ..noise import Noise
-
-from ..noise_sim import AnalyticNoise
-
 from ..instrument_sim import fake_hexagon_focalplane
-
 from ..io import H5File
-
+from ..noise import Noise
+from ..noise_sim import AnalyticNoise
 from ._helpers import create_outdir
+from .mpi import MPITestCase
 
 
 class InstrumentTest(MPITestCase):

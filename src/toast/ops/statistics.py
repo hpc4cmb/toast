@@ -4,23 +4,21 @@
 
 import os
 import re
-from time import time
 import warnings
+from time import time
 
-from astropy import units as u
 import h5py
 import numpy as np
 import traitlets
+from astropy import units as u
 
-from ..mpi import MPI, MPI_Comm, use_mpi, Comm
-
-from .operator import Operator
 from .. import qarray as qa
-from ..timing import function_timer
-from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
-from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
-
+from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
+from .operator import Operator
 
 
 @trait_docs

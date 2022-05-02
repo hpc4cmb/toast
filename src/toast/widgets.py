@@ -2,20 +2,20 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from datetime import datetime, timezone, timedelta
-import re
 import copy
+import re
+from datetime import datetime, timedelta, timezone
 
-import numpy as np
 import ipywidgets as widgets
-from IPython.display import display, clear_output
+import numpy as np
 import plotly.graph_objects as go
+from IPython.display import clear_output, display
 from plotly_resampler import FigureResampler
 
+from .intervals import IntervalList
+from .noise import Noise
 from .observation import default_values as defaults
 from .pixels import PixelData
-from .noise import Noise
-from .intervals import IntervalList
 
 
 class ObservationWidget(object):

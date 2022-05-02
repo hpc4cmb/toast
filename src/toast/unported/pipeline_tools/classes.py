@@ -8,11 +8,10 @@ import sys
 
 import numpy as np
 
-from ..timing import function_timer, Timer
-from ..tod import AnalyticNoise
-from ..utils import Logger, Environment
 from .. import qarray
-
+from ..timing import Timer, function_timer
+from ..tod import AnalyticNoise
+from ..utils import Environment, Logger
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 

@@ -7,15 +7,12 @@ try:
 except ImportError:
     from scipy.integrate import simps as simpson
 
-from .mpi import MPITestCase
-
-from ..utils import AlignedU64
-
-from ..rng import random, random_multi
-
 import numpy as np
 
 from .._libtoast import integrate_simpson
+from ..rng import random, random_multi
+from ..utils import AlignedU64
+from .mpi import MPITestCase
 
 
 class MathMiscTest(MPITestCase):

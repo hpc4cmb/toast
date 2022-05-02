@@ -5,12 +5,7 @@
 import os
 import time
 
-from ._libtoast import (
-    Logger,
-    Environment,
-    acc_enabled,
-    acc_get_num_devices,
-)
+from ._libtoast import Environment, Logger, acc_enabled, acc_get_num_devices
 
 use_mpi = None
 MPI = None
@@ -87,14 +82,13 @@ if use_mpi is None:
 
 # We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
 
-import sys
 import itertools
-from contextlib import contextmanager
+import sys
 import traceback
+from contextlib import contextmanager
 
 import numpy as np
-
-from pshmem import MPIShared, MPILock
+from pshmem import MPILock, MPIShared
 
 from ._libtoast import Logger
 

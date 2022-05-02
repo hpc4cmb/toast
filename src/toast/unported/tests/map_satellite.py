@@ -2,37 +2,32 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 import shutil
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
 
-import healpy as hp
-
 from .. import qarray as qa
-
+from ..map import DistPixels
 from ..tod import AnalyticNoise, OpSimNoise
 from ..todmap import (
-    TODSatellite,
+    OpMadam,
     OpPointingHpix,
     OpSimGradient,
-    slew_precession_axis,
-    satellite_scanning,
     OpSimScan,
-    OpMadam,
+    TODSatellite,
+    satellite_scanning,
+    slew_precession_axis,
 )
-
-from ..map import DistPixels
-
 from ._helpers import (
-    create_outdir,
-    create_distdata,
     boresight_focalplane,
+    create_distdata,
+    create_outdir,
     uniform_chunks,
 )
+from .mpi import MPITestCase
 
 
 class MapSatelliteTest(MPITestCase):

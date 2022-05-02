@@ -7,28 +7,23 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from toast.mpi import MPI, finalize
-
+import argparse
 import os
+import pickle
+import re
 import sys
 import time
-
-import re
-import argparse
 import traceback
-
-import pickle
 
 import numpy as np
 
 import toast
-import toast.tod as tt
 import toast.map as tm
-import toast.todmap as ttm
-
 import toast.qarray as qa
 import toast.timing as timing
-
+import toast.tod as tt
+import toast.todmap as ttm
+from toast.mpi import MPI, finalize
 from toast.vis import set_backend
 
 if tt.tidas_available:

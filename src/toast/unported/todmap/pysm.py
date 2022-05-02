@@ -2,19 +2,17 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..utils import set_numba_threading
-
 from ..timing import function_timer
-
+from ..utils import set_numba_threading
 
 pysm = None
 try:
-    import pysm
-    import pysm.units as u
-
     # Disable PySM warnings generated when accessing local
     # data, since these fill the logs.
     import warnings
+
+    import pysm
+    import pysm.units as u
 
     warnings.filterwarnings("ignore", category=UserWarning, module="pysm")
 except ImportError:

@@ -4,8 +4,7 @@
 
 import numpy as np
 
-from ._libtoast import FFTPlanType, FFTDirection, FFTPlanReal1D, FFTPlanReal1DStore
-
+from ._libtoast import FFTDirection, FFTPlanReal1D, FFTPlanReal1DStore, FFTPlanType
 from .utils import object_ndim
 
 

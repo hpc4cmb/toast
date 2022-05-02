@@ -2,26 +2,22 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import scipy.constants as constants
 import numpy as np
-
-from ..timing import function_timer, GlobalTimers
-
-from ..operator import Operator
+import scipy.constants as constants
 
 from .. import qarray as qa
-
 from .._libtoast import (
+    apply_flags_to_pixels,
     cov_accum_diag,
-    cov_accum_zmap,
     cov_accum_diag_hits,
     cov_accum_diag_invnpp,
-    scan_map_float64,
+    cov_accum_zmap,
     scan_map_float32,
-    apply_flags_to_pixels,
+    scan_map_float64,
 )
-
 from ..map import DistPixels
+from ..operator import Operator
+from ..timing import GlobalTimers, function_timer
 
 
 class OpAccumDiag(Operator):

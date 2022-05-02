@@ -2,30 +2,20 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from numpy.core.fromnumeric import size
-import traitlets
-
-import numpy as np
-
-from astropy import units as u
-
 import healpy as hp
-
+import numpy as np
 import scipy.interpolate
-
-from ..timing import function_timer, GlobalTimers
+import traitlets
+from astropy import units as u
+from numpy.core.fromnumeric import size
 
 from .. import qarray as qa
-
-from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
-
-from .operator import Operator
-
-from ..utils import Environment, Logger
-
-from ..observation import default_values as defaults
-
 from ..atm import AtmSim
+from ..observation import default_values as defaults
+from ..timing import GlobalTimers, function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger
+from .operator import Operator
 
 
 @trait_docs
@@ -71,16 +61,24 @@ class ObserveAtmosphere(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+    )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     sim = Unicode("atmsim", help="The observation key for the list of AtmSim objects")
 

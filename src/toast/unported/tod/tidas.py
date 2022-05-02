@@ -2,29 +2,26 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
 import os
 import re
 
 import numpy as np
 
 from .. import qarray as qa
-
-from ..utils import Logger
-from ..timing import function_timer, Timer
-
-from ..dist import distribute_discrete
 from ..data import Data
+from ..dist import distribute_discrete
+from ..mpi import MPI
 from ..operator import Operator
-
-from .tod import TOD
+from ..timing import Timer, function_timer
+from ..utils import Logger
 from .interval import Interval, intervals_to_chunklist
+from .tod import TOD
 
 available = True
 try:
     import tidas as tds
     from tidas.mpi import MPIVolume
+
     from . import tidas_utils as tdsutils
 except ImportError:
     available = False

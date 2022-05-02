@@ -2,28 +2,25 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 import re
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from ..dist import distribute_uniform, distribute_discrete
 from ..data import Data
+from ..dist import distribute_discrete, distribute_uniform
+from ..mpi import MPI, Comm
 from ..observation import Observation
-from ..mpi import Comm, MPI
-
 from ._helpers import (
-    create_outdir,
-    create_satellite_empty,
     create_comm,
     create_ground_telescope,
+    create_outdir,
     create_satellite_data,
+    create_satellite_empty,
 )
+from .mpi import MPITestCase
 
 
 class DataTest(MPITestCase):

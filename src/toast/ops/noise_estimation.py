@@ -16,10 +16,10 @@ from astropy import units as u
 
 from .. import qarray as qa
 from .._libtoast import filter_poly2D, filter_polynomial, subtract_mean, sum_detectors
+from ..intervals import Interval
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..intervals import Interval
 from ..traits import (
     Bool,
     Dict,
@@ -40,13 +40,13 @@ from ..utils import (
     Timer,
     dtype_to_aligned,
 )
+from .arithmetic import Combine
+from .copy import Copy
+from .delete import Delete
 from .noise_estimation_utils import autocov_psd, crosscov_psd, flagged_running_average
 from .operator import Operator
-from .scan_healpix import ScanHealpixMap, ScanHealpixMask
-from .copy import Copy
-from .arithmetic import Combine
 from .polyfilter import CommonModeFilter
-from .delete import Delete
+from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 
 
 @trait_docs

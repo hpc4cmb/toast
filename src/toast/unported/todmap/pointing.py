@@ -2,21 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import healpy as hp
 import numpy as np
 
-import healpy as hp
-
-from ..qarray import rotate
-
-from ..utils import Environment
-
-from ..healpix import HealpixPixels
-
-from ..operator import Operator
-
-from ..timing import function_timer
-
 from .._libtoast import pointing_matrix_healpix
+from ..healpix import HealpixPixels
+from ..operator import Operator
+from ..qarray import rotate
+from ..timing import function_timer
+from ..utils import Environment
 
 
 class OpPointingHpix(Operator):

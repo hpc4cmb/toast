@@ -6,11 +6,9 @@ import os
 
 import numpy as np
 
-from .mpi import MPITestCase
-
 from ..todmap import OpPointingHpix, TODHpixSpiral, pysm
-
-from ._helpers import create_outdir, create_distdata, uniform_chunks
+from ._helpers import create_distdata, create_outdir, uniform_chunks
+from .mpi import MPITestCase
 
 if pysm is not None:
     from ..todmap import PySMSky, OpSimPySM

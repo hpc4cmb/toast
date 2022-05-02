@@ -9,11 +9,10 @@ import re
 
 import numpy as np
 
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
-
-from ..todmap import OpMapMaker
+from ..timing import Timer, function_timer
 from ..tod import OpPolyFilter
+from ..todmap import OpMapMaker
+from ..utils import Environment, Logger
 
 
 def add_mapmaker_args(parser):

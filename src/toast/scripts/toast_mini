@@ -11,29 +11,25 @@ The workflow is tailored to the size of the communicator.
 total_sample = num_obs * obs_minutes * sample_rate * n_detector
 """
 
+import argparse
 import os
 import sys
-import argparse
 from datetime import datetime
 
 from astropy import units as u
 
 import toast
-
 import toast.ops
-
-from toast.timing import gather_timers, dump, function_timer
-
 from toast.schedule_sim_satellite import create_satellite_schedule
-
 from toast.scripts.benchmarking_utilities import (
-    get_mpi_settings,
-    select_case,
-    make_focalplane,
-    estimate_memory_overhead,
-    python_startup_time,
     default_sim_atmosphere,
+    estimate_memory_overhead,
+    get_mpi_settings,
+    make_focalplane,
+    python_startup_time,
+    select_case,
 )
+from toast.timing import dump, function_timer, gather_timers
 
 
 def parse_arguments():

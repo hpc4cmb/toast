@@ -2,16 +2,13 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from collections.abc import MutableMapping
-
-from collections import OrderedDict
-
 import re
+from collections import OrderedDict
+from collections.abc import MutableMapping
 
 import numpy as np
 
 from .mpi import Comm
-
 from .utils import Logger
 
 

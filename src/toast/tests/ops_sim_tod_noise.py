@@ -6,22 +6,15 @@ import os
 import sys
 
 import numpy as np
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
-
-from .. import rng as rng
-
-from ..noise import Noise
-
 from .. import ops as ops
-
+from .. import rng as rng
+from ..noise import Noise
 from ..ops.sim_tod_noise import sim_noise_timestream
-
+from ..vis import set_matplotlib_backend
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class SimNoiseTest(MPITestCase):

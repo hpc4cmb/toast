@@ -2,11 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
 from ..timing import function_timer_stackskip
-from ..utils import Logger
-
 from ..traits import TraitConfig
+from ..utils import Logger
 
 
 class Operator(TraitConfig):

@@ -6,11 +6,9 @@ import os
 
 import numpy as np
 
-from .mpi import MPITestCase
-
 from ..tod import TODCache
-
 from ._helpers import create_outdir
+from .mpi import MPITestCase
 
 
 class TODTest(MPITestCase):

@@ -7,10 +7,9 @@ import os
 
 import numpy as np
 
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
-
+from ..timing import Timer, function_timer
 from ..tod import OpGainScrambler
+from ..utils import Environment, Logger
 
 
 def add_gainscrambler_args(parser):

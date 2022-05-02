@@ -13,17 +13,15 @@ useful starting point for interactively hacking on a specific use case or test.
 
 """
 
+import argparse
 import os
 import sys
 import traceback
-import argparse
 
 import numpy as np
-
 from astropy import units as u
 
 import toast
-
 from toast.mpi import MPI
 from toast.ops import noise_model
 

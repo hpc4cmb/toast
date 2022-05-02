@@ -6,18 +6,13 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
-from ..utils import rate_from_times
-
 from .. import ops
-
 from ..templates import GainTemplate
-
+from ..utils import rate_from_times
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class TemplateGainTest(MPITestCase):

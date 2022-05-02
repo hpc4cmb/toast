@@ -8,20 +8,23 @@ Functions common to all benchmarking scripts.
 total_sample = num_obs * obs_minutes * sample_rate * n_detector
 """
 
-import math
 import copy
-import healpy
+import math
 import os
 from datetime import datetime
-import numpy as np
+
+import healpy
 import matplotlib.pyplot as plt
+import numpy as np
 from astropy import units as u
 from astropy.table import QTable
+
 import toast
 import toast.ops
-from toast.job import job_size, get_node_mem
 from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
+from toast.job import get_node_mem, job_size
+
 from ..utils import Environment, Logger, Timer
 
 

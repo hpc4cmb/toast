@@ -7,11 +7,10 @@ import os
 
 import numpy as np
 
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
-
 from ..map import DistPixels
+from ..timing import Timer, function_timer
 from ..todmap import OpMadam, OpPointingHpix
+from ..utils import Environment, Logger
 
 
 def add_pointing_args(parser):

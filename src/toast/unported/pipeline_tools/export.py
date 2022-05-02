@@ -7,10 +7,9 @@ import os
 
 import numpy as np
 
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
-
-from ..tod import tidas_available, spt3g_available
+from ..timing import Timer, function_timer
+from ..tod import spt3g_available, tidas_available
+from ..utils import Environment, Logger
 
 if tidas_available:
     from ..tod.tidas import OpTidasExport, TODTidas

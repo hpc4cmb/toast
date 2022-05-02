@@ -8,36 +8,25 @@
 Prototype of TOAST 3.0 interfaces
 """
 
+import argparse
 import os
 import sys
-
-import argparse
-
 import traceback
 
 import numpy as np
 
 import toast
-
-from toast import qarray as qa
-
 from toast import Telescope
-
-from toast.mpi import get_world, Comm
-
-from toast.data import Data
-
-from toast.utils import Logger, Environment
-
-from toast.timing import GlobalTimers, gather_timers
-
-from toast.timing import dump as dump_timing
-
-from toast.config import dump_toml, parse_config, create
-
 from toast import future_ops as ops
-
+from toast import qarray as qa
+from toast.config import create, dump_toml, parse_config
+from toast.data import Data
 from toast.future_ops.sim_focalplane import fake_hexagon_focalplane
+from toast.mpi import Comm, get_world
+from toast.timing import GlobalTimers
+from toast.timing import dump as dump_timing
+from toast.timing import gather_timers
+from toast.utils import Environment, Logger
 
 
 def main():

@@ -25,26 +25,23 @@ an interactive python session.
 
 """
 
-# Import toast first to avoid thread addinity issues with numpy and OpenBLAS
-import toast
-
+import argparse
+import datetime
 import os
 import pickle
 import sys
 import traceback
-import argparse
-import datetime
 
 import numpy as np
-
 from astropy import units as u
+
+# Import toast first to avoid thread addinity issues with numpy and OpenBLAS
+import toast
 
 # import toast
 import toast.ops
-
-from toast.mpi import MPI, Comm
-
 from toast import spt3g as t3g
+from toast.mpi import MPI, Comm
 
 if t3g.available:
     from spt3g import core as c3g

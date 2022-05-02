@@ -5,20 +5,17 @@
 import os
 import warnings
 
-from astropy import units as u
 import numpy as np
 import traitlets
+from astropy import units as u
 
-from ..mpi import MPI, MPI_Comm, use_mpi, Comm
-
-from .operator import Operator
 from .. import qarray as qa
-from ..timing import function_timer
-from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Instance
-from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
-
+from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
-
+from ..timing import function_timer
+from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
+from .operator import Operator
 
 conviqt = None
 
@@ -57,16 +54,24 @@ class SimConviqt(Operator):
     )
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to use"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(0, help="Bit mask value for optional detector flagging")
+    det_flag_mask = Int(
+        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+    )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+    )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"

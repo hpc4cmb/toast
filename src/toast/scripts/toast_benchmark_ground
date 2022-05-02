@@ -9,36 +9,31 @@ This script runs a simple ground simulation and makes a map.
 The workflow is tailored to the size of the communicator.
 """
 
-import os
-import sys
-import shutil
 import argparse
+import os
+import shutil
+import sys
 
 import numpy as np
-
 from astropy import units as u
 
 import toast
 import toast.ops
-
 from toast import spt3g as t3g
-
 from toast.schedule_sim_ground import run_scheduler
-
-from toast.timing import gather_timers, dump, function_timer
-
 from toast.scripts.benchmarking_utilities import (
-    get_mpi_settings,
-    select_case,
-    make_focalplane,
-    scan_map,
-    run_mapmaker,
-    run_madam,
     compute_science_metric,
-    estimate_memory_overhead,
-    python_startup_time,
     default_sim_atmosphere,
+    estimate_memory_overhead,
+    get_mpi_settings,
+    make_focalplane,
+    python_startup_time,
+    run_madam,
+    run_mapmaker,
+    scan_map,
+    select_case,
 )
+from toast.timing import dump, function_timer, gather_timers
 
 if t3g.available:
     from spt3g import core as c3g

@@ -4,19 +4,14 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 
-from ..timing import function_timer, Timer
-
-from ..mpi import MPI
-
-import healpy as hp
-
-from ..operator import Operator
-
-from ..cache import Cache
-
 from .._libtoast import global_to_local as libtoast_global_to_local
+from ..cache import Cache
+from ..mpi import MPI
+from ..operator import Operator
+from ..timing import Timer, function_timer
 
 
 class DistPixels(object):

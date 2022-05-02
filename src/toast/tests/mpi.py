@@ -2,19 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi
-
 import sys
 import time
 import traceback
-import time
-
 import warnings
-
+from unittest import TestCase, TestResult
 from unittest.signals import registerResult
 
-from unittest import TestCase
-from unittest import TestResult
+from ..mpi import MPI, use_mpi
 
 
 class MPITestCase(TestCase):

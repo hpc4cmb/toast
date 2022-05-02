@@ -2,60 +2,45 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
-import os
-
-import copy
-
-import types
-
 import argparse
-
+import copy
+import os
+import types
 from datetime import datetime
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
-
-from tomlkit import comment, document, nl, table, dumps, loads
-
-from ..utils import Environment, Logger
-
-from ..traits import (
-    trait_docs,
-    Int,
-    Unicode,
-    Float,
-    Bool,
-    Instance,
-    Quantity,
-    Dict,
-    List,
-    Set,
-    Tuple,
-)
-
-from ..config import (
-    load_config,
-    dump_toml,
-    build_config,
-    create_from_config,
-    parse_config,
-)
-
-from ..instrument import Telescope, Focalplane
-
-from ..schedule_sim_satellite import create_satellite_schedule
+from tomlkit import comment, document, dumps, loads, nl, table
 
 from .. import ops
-
-from ..templates import Offset, SubHarmonic
-
+from ..config import (
+    build_config,
+    create_from_config,
+    dump_toml,
+    load_config,
+    parse_config,
+)
 from ..data import Data
-
-from ._helpers import create_outdir, create_comm, create_space_telescope
+from ..instrument import Focalplane, Telescope
+from ..schedule_sim_satellite import create_satellite_schedule
+from ..templates import Offset, SubHarmonic
+from ..traits import (
+    Bool,
+    Dict,
+    Float,
+    Instance,
+    Int,
+    List,
+    Quantity,
+    Set,
+    Tuple,
+    Unicode,
+    trait_docs,
+)
+from ..utils import Environment, Logger
+from ._helpers import create_comm, create_outdir, create_space_telescope
+from .mpi import MPITestCase
 
 
 class FakeClass:

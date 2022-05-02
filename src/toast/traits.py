@@ -2,33 +2,30 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import re
 import copy
-
+import re
 from collections import OrderedDict
 
 import traitlets
-
+from astropy import units as u
 from traitlets import (
-    signature_has_traits,
-    HasTraits,
-    TraitError,
-    Undefined,
-    Unicode,
     Bool,
-    List,
-    Set,
+    Callable,
     Dict,
-    Tuple,
+    Float,
+    HasTraits,
     Instance,
     Int,
-    Float,
-    Callable,
+    List,
+    Set,
+    TraitError,
+    Tuple,
+    Undefined,
+    Unicode,
+    signature_has_traits,
 )
 
-from astropy import units as u
-
-from .utils import object_fullname, import_from_name
+from .utils import import_from_name, object_fullname
 
 
 class Quantity(Float):

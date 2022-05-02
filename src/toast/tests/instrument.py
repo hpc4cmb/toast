@@ -5,22 +5,15 @@
 import os
 
 import numpy as np
-
-from .mpi import MPITestCase
-
 import numpy.testing as nt
-
 from astropy import units as u
-
-from astropy.table import QTable, Column
+from astropy.table import Column, QTable
 
 from ..instrument import Focalplane
-
 from ..instrument_sim import fake_hexagon_focalplane
-
 from ..io import H5File
-
 from ._helpers import create_outdir
+from .mpi import MPITestCase
 
 
 class InstrumentTest(MPITestCase):

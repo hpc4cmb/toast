@@ -2,18 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
 import traitlets
 
-import numpy as np
-
-from ..utils import Environment, Logger
-
-from ..traits import trait_docs, Int, Unicode, Bool, List
-
-from ..timing import function_timer
-
 from .. import qarray as qa
-
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Int, List, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .operator import Operator
 
 
@@ -37,7 +33,9 @@ class FlagIntervals(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for flags to modify"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
     shared_flag_bytes = Int(

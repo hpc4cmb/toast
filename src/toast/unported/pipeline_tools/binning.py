@@ -8,10 +8,10 @@ import os
 import numpy as np
 from healpy import nside2npix
 
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
-from ..map import covariance_apply, covariance_invert, DistPixels
-from ..todmap import OpSimDipole, OpAccumDiag
+from ..map import DistPixels, covariance_apply, covariance_invert
+from ..timing import Timer, function_timer
+from ..todmap import OpAccumDiag, OpSimDipole
+from ..utils import Environment, Logger
 
 
 def add_binner_args(parser):

@@ -2,26 +2,23 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
+
+from ._libtoast import (
+    HealpixPixels,
+    healpix_ang2vec,
+    healpix_vec2ang,
+    healpix_vecs2angpa,
+)
+from .timing import function_timer
 from .utils import (
-    Logger,
     AlignedF64,
     AlignedI64,
+    Logger,
     ensure_buffer_f64,
     ensure_buffer_i64,
     object_ndim,
 )
-
-from ._libtoast import (
-    healpix_ang2vec,
-    healpix_vec2ang,
-    healpix_vecs2angpa,
-    HealpixPixels,
-)
-
-
-import numpy as np
-
-from .timing import function_timer
 
 
 def ang2vec(theta, phi):

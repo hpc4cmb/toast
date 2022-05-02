@@ -3,18 +3,17 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import argparse
-import dateutil.parser
 import os
 
+import dateutil.parser
 import healpy as hp
 import numpy as np
 
 from .. import qarray
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
+from ..timing import Timer, function_timer
+from ..utils import Environment, Logger
 from ..weather import Weather
-
-from .classes import Telescope, Focalplane
+from .classes import Focalplane, Telescope
 from .debug import add_debug_args
 
 # Schedule, Site and CES are small helper classes for building

@@ -2,32 +2,26 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
 import io
-
-import numpy as np
+import os
 
 import h5py
-
+import numpy as np
 from astropy import units as u
 
-from ..utils import Environment, Logger, object_fullname
-
-from ..timing import function_timer
-
-from ..intervals import IntervalList
-
 from ..instrument import GroundSite, SpaceSite
-
+from ..intervals import IntervalList
+from ..timing import function_timer
+from ..utils import Environment, Logger, object_fullname
 from .spt3g_utils import (
     available,
-    to_g3_scalar_type,
+    compress_timestream,
     to_g3_array_type,
     to_g3_map_array_type,
-    to_g3_unit,
-    to_g3_time,
     to_g3_quats,
-    compress_timestream,
+    to_g3_scalar_type,
+    to_g3_time,
+    to_g3_unit,
 )
 
 if available:

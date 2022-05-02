@@ -3,17 +3,14 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-import time
-
 import pickle
+import time
 
 import numpy as np
 
-from .mpi import MPITestCase
-
-from ..timing import Timer, GlobalTimers, function_timer, gather_timers, dump
-
+from ..timing import GlobalTimers, Timer, dump, function_timer, gather_timers
 from ._helpers import create_outdir
+from .mpi import MPITestCase
 
 
 @function_timer

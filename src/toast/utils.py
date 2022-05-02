@@ -2,57 +2,54 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
+import datetime
 import gc
 import hashlib
-import warnings
-
 import importlib
-
-import datetime
-
+import os
+import warnings
 from tempfile import TemporaryDirectory
 
-import numpy as np
-
-import h5py
-
 import astropy.io.misc.hdf5 as aspy5
+import h5py
+import numpy as np
 from astropy.table import meta as aspymeta
 
-
-from ._libtoast import Environment, Timer, GlobalTimers, threading_state
-
 from ._libtoast import (
-    AlignedI8,
-    AlignedU8,
-    AlignedI16,
-    AlignedU16,
-    AlignedI32,
-    AlignedU32,
-    AlignedI64,
-    AlignedU64,
     AlignedF32,
     AlignedF64,
-)
-
-from ._libtoast import vsin, vcos, vsincos, vatan2, vsqrt, vrsqrt, vexp, vlog
-
-from ._libtoast import (
-    vfast_sin,
-    vfast_cos,
-    vfast_sincos,
+    AlignedI8,
+    AlignedI16,
+    AlignedI32,
+    AlignedI64,
+    AlignedU8,
+    AlignedU16,
+    AlignedU32,
+    AlignedU64,
+    Environment,
+    GlobalTimers,
+    Logger,
+    Timer,
+    threading_state,
+    vatan2,
+    vcos,
+    vexp,
     vfast_atan2,
-    vfast_sqrt,
-    vfast_rsqrt,
+    vfast_cos,
+    vfast_erfinv,
     vfast_exp,
     vfast_log,
-    vfast_erfinv,
+    vfast_rsqrt,
+    vfast_sin,
+    vfast_sincos,
+    vfast_sqrt,
+    vlog,
+    vrsqrt,
+    vsin,
+    vsincos,
+    vsqrt,
 )
-
 from .mpi import MPI, use_mpi
-
-from ._libtoast import Logger
 
 
 def _create_log_rank(level):
@@ -211,7 +208,7 @@ def set_numba_threading():
         threading = "tbb"
 
     try:
-        from numba import vectorize, config, threading_layer
+        from numba import config, threading_layer, vectorize
 
         # Set threading layer and number of threads.  Note that this still
         # does not always work.  The conf structure is repopulated from the

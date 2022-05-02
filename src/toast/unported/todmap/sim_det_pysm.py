@@ -2,18 +2,13 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import healpy as hp
 import numpy as np
 
-import healpy as hp
-
 from ..mpi import MPI
-
-from ..timing import function_timer
-
-from ..utils import Logger, Timer
-
 from ..operator import Operator
-
+from ..timing import function_timer
+from ..utils import Logger, Timer
 from .pysm import pysm
 
 if pysm is not None:
@@ -21,7 +16,6 @@ if pysm is not None:
     from .pysm import PySMSky
 
 from ..map import DistPixels
-
 from .sim_det_map import OpSimScan
 
 

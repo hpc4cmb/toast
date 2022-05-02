@@ -6,24 +6,16 @@ import os
 import sys
 
 import numpy as np
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
 from .. import ops as ops
-
-from ..mpi import MPI
-
-from ..data import Data
-
-from ..io import save_hdf5, load_hdf5
-
 from ..config import build_config
-
+from ..data import Data
+from ..io import load_hdf5, save_hdf5
+from ..mpi import MPI
 from ..observation_data import DetectorData
-
-from ._helpers import create_outdir, create_ground_data
+from ._helpers import create_ground_data, create_outdir
+from .mpi import MPITestCase
 
 
 class IoHdf5Test(MPITestCase):

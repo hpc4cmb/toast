@@ -3,18 +3,14 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 import traitlets
 
 from toast.timing import function_timer_stackskip
 
-from ..utils import Logger
-
-from ..traits import TraitConfig, Instance, Unicode, Int
-
 from ..data import Data
-
 from ..observation import default_values as defaults
+from ..traits import Instance, Int, TraitConfig, Unicode
+from ..utils import Logger
 
 
 class Template(TraitConfig):

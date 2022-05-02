@@ -2,18 +2,13 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
 import numpy as np
 
-from ..dist import distribute_samples
-
-from ..cache import Cache
-
 from .. import qarray as qa
-
+from ..cache import Cache
+from ..dist import distribute_samples
+from ..mpi import MPI
 from ..timing import function_timer
-
 from .interval import Interval
 
 

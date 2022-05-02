@@ -4,30 +4,20 @@
 
 from collections import OrderedDict
 
-import traitlets
-
 import numpy as np
-
 import scipy
 import scipy.signal
-
+import traitlets
 from astropy import units as u
 
-from ..utils import Logger, rate_from_times, AlignedF32
-
-from ..timing import function_timer
-
-from ..mpi import MPI
-
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float, Quantity
-
-from ..data import Data
-
-from .template import Template
-
-from .amplitudes import Amplitudes
-
 from .._libtoast import template_offset_add_to_signal, template_offset_project_signal
+from ..data import Data
+from ..mpi import MPI
+from ..timing import function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import AlignedF32, Logger, rate_from_times
+from .amplitudes import Amplitudes
+from .template import Template
 
 
 @trait_docs

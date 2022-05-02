@@ -2,35 +2,27 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import datetime
+import json
 import os
 import re
-import datetime
-
-import numpy as np
-
-from astropy import units as u
 
 import h5py
+import numpy as np
+from astropy import units as u
 
-import json
-
+from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
+from ..mpi import MPI, use_mpi
+from ..observation import Observation
+from ..timing import GlobalTimers, Timer, function_timer
 from ..utils import (
     Environment,
     Logger,
-    import_from_name,
     dtype_to_aligned,
     have_hdf5_parallel,
+    import_from_name,
 )
-
-from ..mpi import MPI, use_mpi
-
-from ..timing import Timer, function_timer, GlobalTimers
-
-from ..instrument import GroundSite, SpaceSite, Focalplane, Telescope
-
 from ..weather import SimWeather
-
-from ..observation import Observation
 
 
 def check_dataset_buffer_size(msg, slices, dtype, parallel):
