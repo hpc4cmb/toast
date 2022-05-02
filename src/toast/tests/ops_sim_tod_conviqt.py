@@ -4,30 +4,22 @@
 
 import os
 
+import healpy as hp
 import numpy as np
-
 from astropy import units as u
 
-import healpy as hp
-
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
-
-from .. import qarray as qa
-
 from .. import ops as ops
-
+from .. import qarray as qa
 from ..observation import default_values as defaults
-
 from ..pixels_io import write_healpix_fits
-
+from ..vis import set_matplotlib_backend
 from ._helpers import (
+    create_fake_beam_alm,
+    create_fake_sky_alm,
     create_outdir,
     create_satellite_data,
-    create_fake_sky_alm,
-    create_fake_beam_alm,
 )
+from .mpi import MPITestCase
 
 
 class SimConviqtTest(MPITestCase):
@@ -236,12 +228,11 @@ class SimConviqtTest(MPITestCase):
         fname2 = self.fname_beam.replace(".fits", "_bottom.fits")
 
         beam_file_dict = {}
-        for det in data.obs[0].local_detectors:
+        for det in data.obs[0].all_detectors:
             if det[-1] == "A":
                 beam_file_dict[det] = self.fname_beam
             else:
                 beam_file_dict[det] = fname2
-
         return beam_file_dict
 
     def test_sim_conviqt(self):

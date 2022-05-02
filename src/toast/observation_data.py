@@ -3,43 +3,30 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import sys
-
-from collections.abc import MutableMapping, Mapping
-
+from collections.abc import Mapping, MutableMapping
 from typing import NamedTuple
 
 import numpy as np
-
 from astropy import units as u
-
 from pshmem import MPIShared
 
-from .mpi import MPI, comm_equivalent, comm_equal
-
+from ._libtoast import acc_copyin, acc_copyout, acc_enabled, acc_is_present
+from .intervals import IntervalList
+from .mpi import MPI, comm_equal, comm_equivalent
+from .timing import function_timer
 from .utils import (
-    Logger,
-    AlignedI8,
-    AlignedU8,
-    AlignedI16,
-    AlignedU16,
-    AlignedI32,
-    AlignedU32,
-    AlignedI64,
-    AlignedU64,
     AlignedF32,
     AlignedF64,
+    AlignedI8,
+    AlignedI16,
+    AlignedI32,
+    AlignedI64,
+    AlignedU8,
+    AlignedU16,
+    AlignedU32,
+    AlignedU64,
+    Logger,
     dtype_to_aligned,
-)
-
-from .intervals import IntervalList
-
-from .timing import function_timer
-
-from ._libtoast import (
-    acc_enabled,
-    acc_is_present,
-    acc_copyin,
-    acc_copyout,
 )
 
 

@@ -2,22 +2,18 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
 import numpy as np
+import traitlets
 
-from ..utils import Logger
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
-from ..timing import function_timer
-from ..pixels import PixelDistribution, PixelData
+from .._libtoast import cov_accum_diag_hits, cov_accum_diag_invnpp, cov_accum_zmap
 from ..covariance import covariance_invert
 from ..observation import default_values as defaults
-from .._libtoast import (
-    cov_accum_zmap,
-    cov_accum_diag_hits,
-    cov_accum_diag_invnpp,
-)
-from .operator import Operator
+from ..pixels import PixelData, PixelDistribution
+from ..timing import function_timer
+from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .delete import Delete
+from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 

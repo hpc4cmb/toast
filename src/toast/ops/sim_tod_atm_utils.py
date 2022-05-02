@@ -2,19 +2,19 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from numpy.core.fromnumeric import size
-import traitlets
-import numpy as np
-from astropy import units as u
 import healpy as hp
+import numpy as np
 import scipy.interpolate
+import traitlets
+from astropy import units as u
+from numpy.core.fromnumeric import size
 
-from ..timing import function_timer, GlobalTimers
 from .. import qarray as qa
-from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
-from ..utils import Environment, Logger
-from ..observation import default_values as defaults
 from ..atm import AtmSim
+from ..observation import default_values as defaults
+from ..timing import GlobalTimers, function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .operator import Operator
 
 

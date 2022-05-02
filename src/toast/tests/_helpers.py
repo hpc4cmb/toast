@@ -3,43 +3,27 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-
+import shutil
+import tempfile
 from datetime import datetime
 
-import tempfile
-
-import shutil
-
-import numpy as np
-
 import healpy as hp
-
+import numpy as np
 from astropy import units as u
-
-from ..mpi import Comm
-
-from ..data import Data
-
-from .. import qarray as qa
-
-from ..instrument import Focalplane, Telescope, GroundSite, SpaceSite
-
-from ..instrument_sim import fake_hexagon_focalplane
-
-from ..schedule import GroundSchedule
-
-from ..schedule_sim_satellite import create_satellite_schedule
-
-from ..schedule_sim_ground import run_scheduler
-
-from ..observation import DetectorData, Observation
-from ..observation import default_values as defaults
-
-from ..pixels import PixelData
+from astropy.table import Column, QTable
 
 from .. import ops as ops
-
-from astropy.table import QTable, Column
+from .. import qarray as qa
+from ..data import Data
+from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
+from ..instrument_sim import fake_hexagon_focalplane
+from ..mpi import Comm
+from ..observation import DetectorData, Observation
+from ..observation import default_values as defaults
+from ..pixels import PixelData
+from ..schedule import GroundSchedule
+from ..schedule_sim_ground import run_scheduler
+from ..schedule_sim_satellite import create_satellite_schedule
 
 ZAXIS = np.array([0.0, 0.0, 1.0])
 

@@ -2,17 +2,17 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
-import numpy as np
-from astropy import units as u
 import healpy as hp
+import numpy as np
+import traitlets
+from astropy import units as u
 
-from ..timing import function_timer
 from .. import qarray as qa
-from ..traits import trait_docs, Int, Unicode, Bool, Quantity
-from ..utils import Environment, Logger
-from ..observation import default_values as defaults
 from ..dipole import dipole
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .operator import Operator
 
 

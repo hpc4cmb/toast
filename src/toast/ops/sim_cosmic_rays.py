@@ -2,16 +2,16 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
 import numpy as np
-from scipy import interpolate, signal
+import traitlets
 from astropy import units as u
+from scipy import interpolate, signal
 
-from ..timing import function_timer
-from ..traits import trait_docs, Int, Float, Unicode, Bool, Quantity, Callable
-from ..utils import Environment, Logger
 from .. import rng
 from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Callable, Float, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .operator import Operator
 
 

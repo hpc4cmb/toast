@@ -2,19 +2,19 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
 import numpy as np
+import traitlets
 
-from ..utils import Logger
-from ..traits import trait_docs, Int, Unicode, Bool, Instance
-from ..timing import function_timer
-from ..pixels import PixelDistribution, PixelData
 from ..covariance import covariance_apply
 from ..observation import default_values as defaults
+from ..pixels import PixelData, PixelDistribution
+from ..timing import function_timer
+from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
+from .delete import Delete
+from .mapmaker_utils import BuildHitMap, BuildInverseCovariance, BuildNoiseWeighted
 from .operator import Operator
 from .pipeline import Pipeline
-from .delete import Delete
-from .mapmaker_utils import BuildHitMap, BuildNoiseWeighted, BuildInverseCovariance
 
 
 @trait_docs

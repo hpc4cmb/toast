@@ -2,36 +2,22 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
-import numpy as np
-
-import re
 import datetime
-
-from astropy import units as u
+import json
+import os
+import re
 
 import h5py
+import numpy as np
+from astropy import units as u
 
-import json
-
-from ..utils import (
-    Environment,
-    Logger,
-    import_from_name,
-    dtype_to_aligned,
-)
-
+from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
 from ..mpi import MPI
-
-from ..timing import Timer, function_timer, GlobalTimers
-
-from ..instrument import GroundSite, SpaceSite, Focalplane, Telescope
-
-from ..weather import SimWeather
-
 from ..observation import Observation
-
-from .hdf_utils import check_dataset_buffer_size, hdf5_open, hdf5_config
+from ..timing import GlobalTimers, Timer, function_timer
+from ..utils import Environment, Logger, dtype_to_aligned, import_from_name
+from ..weather import SimWeather
+from .hdf_utils import check_dataset_buffer_size, hdf5_config, hdf5_open
 
 
 @function_timer

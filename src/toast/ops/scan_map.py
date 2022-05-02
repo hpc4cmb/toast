@@ -2,15 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
 import numpy as np
+import traitlets
 
-from ..utils import Logger, AlignedF64
-from ..traits import trait_docs, Int, Unicode, Bool
-from ..timing import function_timer
-from ..pixels import PixelDistribution, PixelData
+from .._libtoast import scan_map_float32, scan_map_float64
 from ..observation import default_values as defaults
-from .._libtoast import scan_map_float64, scan_map_float32
+from ..pixels import PixelData, PixelDistribution
+from ..timing import function_timer
+from ..traits import Bool, Int, Unicode, trait_docs
+from ..utils import AlignedF64, Logger
 from .operator import Operator
 
 

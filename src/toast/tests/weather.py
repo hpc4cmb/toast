@@ -4,15 +4,12 @@
 
 from datetime import datetime
 
-import numpy as np
-
 import astropy.units as u
-
-from .mpi import MPITestCase
-
+import numpy as np
 import numpy.testing as nt
 
-from ..weather import Weather, SimWeather
+from ..weather import SimWeather, Weather
+from .mpi import MPITestCase
 
 
 class WeatherTest(MPITestCase):

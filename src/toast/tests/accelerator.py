@@ -8,31 +8,22 @@ import time
 import numpy as np
 import numpy.testing as nt
 
-from ..traits import (
-    trait_docs,
-    Int,
-    Unicode,
-)
-
 from .. import ops
-
-from .mpi import MPITestCase
-
 from .._libtoast import (
-    acc_enabled,
-    acc_is_present,
     acc_copyin,
     acc_copyout,
     acc_delete,
+    acc_enabled,
+    acc_is_present,
     acc_update_device,
     acc_update_self,
-    test_acc_op_buffer,
     test_acc_op_array,
+    test_acc_op_buffer,
 )
-
 from ..observation import default_values as defaults
-
-from ._helpers import create_outdir, create_comm, create_satellite_data
+from ..traits import Int, Unicode, trait_docs
+from ._helpers import create_comm, create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 @trait_docs

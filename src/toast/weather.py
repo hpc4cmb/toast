@@ -2,22 +2,16 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import datetime
 import os
-
 from collections import OrderedDict
 
-import datetime
-
+import h5py
+import numpy as np
+from astropy import units as u
 from pkg_resources import resource_filename
 
-import numpy as np
-
-from astropy import units as u
-
-import h5py
-
 from . import rng as rng
-
 from .timing import function_timer
 
 

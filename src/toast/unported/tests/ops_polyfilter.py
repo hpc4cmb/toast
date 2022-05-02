@@ -2,16 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 
 import numpy as np
 
-from ..tod import OpPolyFilter, AnalyticNoise, OpSimNoise, Interval
+from ..tod import AnalyticNoise, Interval, OpPolyFilter, OpSimNoise
 from ..todmap import TODHpixSpiral
-
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
+from ._helpers import boresight_focalplane, create_distdata, create_outdir
+from .mpi import MPITestCase
 
 
 class OpPolyFilterTest(MPITestCase):

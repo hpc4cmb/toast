@@ -4,30 +4,20 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-import healpy as hp
-
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
-from ..vis import set_matplotlib_backend
-
 from .. import ops as ops
-
-from ..observation import default_values as defaults
-
 from .. import templates
-
-from ..pixels import PixelDistribution, PixelData
-
+from ..noise import Noise
+from ..observation import default_values as defaults
+from ..pixels import PixelData, PixelDistribution
 from ..pixels_io import write_healpix_fits
-
-from ._helpers import create_outdir, create_satellite_data, create_fake_sky
+from ..vis import set_matplotlib_backend
+from ._helpers import create_fake_sky, create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class MapmakerTest(MPITestCase):

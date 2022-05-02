@@ -4,17 +4,13 @@
 
 import warnings
 
+import healpy as hp
 import numpy as np
-
 from scipy.constants import arcmin
 
-import healpy as hp
-
-from ..mpi import MPIShared
-
-from ..timing import function_timer
-
 from .._libtoast import fast_scanning_float32
+from ..mpi import MPIShared
+from ..timing import function_timer
 
 DTYPE = np.float32
 

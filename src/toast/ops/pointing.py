@@ -2,16 +2,16 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
 import numpy as np
+import traitlets
 
-from ..utils import Logger
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
-from ..timing import function_timer
-from ..pixels import PixelDistribution, PixelData
 from ..observation import default_values as defaults
-from .operator import Operator
+from ..pixels import PixelData, PixelDistribution
+from ..timing import function_timer
+from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .delete import Delete
+from .operator import Operator
 from .pipeline import Pipeline
 
 

@@ -6,18 +6,13 @@ import os
 import sys
 
 import numpy as np
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
 from .. import ops as ops
-
-from ..mpi import MPI
-
 from ..data import Data
-
-from ._helpers import create_outdir, create_ground_data
+from ..mpi import MPI
+from ._helpers import create_ground_data, create_outdir
+from .mpi import MPITestCase
 
 
 class ElevationNoiseTest(MPITestCase):

@@ -5,36 +5,25 @@
 import os
 
 import numpy as np
-
-from .timing import function_timer, Timer, GlobalTimers
-
-from .dist import distribute_uniform
-
-from .mpi import MPI
-
 from pshmem.utils import mpi_data_type
 
+from ._libtoast import acc_copyin, acc_copyout, acc_enabled, acc_is_present
+from ._libtoast import global_to_local as libtoast_global_to_local
+from .dist import distribute_uniform
+from .mpi import MPI
+from .timing import GlobalTimers, Timer, function_timer
 from .utils import (
-    Logger,
-    AlignedI8,
-    AlignedU8,
-    AlignedI16,
-    AlignedU16,
-    AlignedI32,
-    AlignedU32,
-    AlignedI64,
-    AlignedU64,
     AlignedF32,
     AlignedF64,
-)
-
-from ._libtoast import global_to_local as libtoast_global_to_local
-
-from ._libtoast import (
-    acc_enabled,
-    acc_is_present,
-    acc_copyin,
-    acc_copyout,
+    AlignedI8,
+    AlignedI16,
+    AlignedI32,
+    AlignedI64,
+    AlignedU8,
+    AlignedU16,
+    AlignedU32,
+    AlignedU64,
+    Logger,
 )
 
 

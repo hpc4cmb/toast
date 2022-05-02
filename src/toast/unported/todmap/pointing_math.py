@@ -3,13 +3,10 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 from scipy.constants import c
 
 from .. import qarray as qa
-
 from ..timing import function_timer
-
 
 cinv = 1e3 / c  # Inverse light speed in km / s ( the assumed unit for velocity )
 

@@ -2,30 +2,24 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
-import types
-import re
 import ast
 import copy
-
+import json
+import re
+import sys
+import types
 from collections import OrderedDict
 from collections.abc import MutableMapping
 
-import json
-
 import numpy as np
-
 import tomlkit
-from tomlkit import comment, document, nl, table, loads, dumps
-
 from astropy import units as u
+from tomlkit import comment, document, dumps, loads, nl, table
 
-from .utils import Environment, Logger
-
-from .instrument import Focalplane, Telescope
 from . import instrument
-
+from .instrument import Focalplane, Telescope
 from .traits import TraitConfig
+from .utils import Environment, Logger
 
 
 def build_config(objects):

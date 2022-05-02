@@ -7,21 +7,17 @@
 """Generate a focalplane pickle file compatible with the example scripts.
 """
 
-import sys
 import argparse
+import pickle
+import sys
 import traceback
 
-import pickle
-
 import numpy as np
-
 from scipy.constants import degree
 
 from toast.mpi import get_world
-
+from toast.tod import hex_layout, hex_pol_angles_qu, plot_focalplane
 from toast.utils import Logger
-
-from toast.tod import hex_pol_angles_qu, hex_layout, plot_focalplane
 
 
 def main():

@@ -5,7 +5,6 @@
 import numpy as np
 
 from ..timing import function_timer
-
 from .interval import Interval
 
 

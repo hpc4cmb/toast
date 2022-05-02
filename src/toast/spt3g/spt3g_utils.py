@@ -3,12 +3,11 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-import numpy as np
 
+import numpy as np
 from astropy import units as u
 
 from ..utils import Environment, Logger
-
 
 available = True
 try:

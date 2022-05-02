@@ -2,49 +2,29 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
-
-import types
-
 import copy
-
 import numbers
-
-from collections.abc import MutableMapping, Sequence, Mapping
+import sys
+import types
+from collections.abc import Mapping, MutableMapping, Sequence
 
 import numpy as np
-
 from pshmem.utils import mpi_data_type
 
-from .mpi import MPI, comm_equal
-
-from .instrument import Telescope
-
 from .dist import distribute_samples
-
+from .instrument import Telescope
 from .intervals import IntervalList
-
-from .utils import (
-    Logger,
-    name_UID,
-)
-
-from .timing import function_timer
-
+from .mpi import MPI, comm_equal
 from .observation_data import (
-    DetectorData,
     DetDataManager,
-    SharedDataManager,
+    DetectorData,
     IntervalsManager,
+    SharedDataManager,
 )
-
-from .observation_view import DetDataView, SharedView, View, ViewManager, ViewInterface
-
-from .observation_dist import (
-    DistDetSamp,
-    redistribute_data,
-)
-
+from .observation_dist import DistDetSamp, redistribute_data
+from .observation_view import DetDataView, SharedView, View, ViewInterface, ViewManager
+from .timing import function_timer
+from .utils import Logger, name_UID
 
 default_values = None
 

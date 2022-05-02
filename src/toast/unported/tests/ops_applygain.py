@@ -6,13 +6,10 @@ import os
 
 import numpy as np
 
-from .mpi import MPITestCase
-
-from ..tod.applygain import write_calibration_file, OpApplyGain
-
+from ..tod.applygain import OpApplyGain, write_calibration_file
 from ..tod.tod import TODCache
-
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
+from ._helpers import boresight_focalplane, create_distdata, create_outdir
+from .mpi import MPITestCase
 
 
 class TestApplyGain(MPITestCase):

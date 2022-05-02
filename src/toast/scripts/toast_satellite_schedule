@@ -8,20 +8,16 @@
 This script creates a schedule file compatible with the SatelliteSchedule class.
 """
 
-import sys
-
-from datetime import datetime
-
 import argparse
+import sys
+from datetime import datetime
 
 from astropy import units as u
 
 import toast
 from toast.mpi import get_world
-
-from toast.utils import Logger
-
 from toast.schedule_sim_satellite import create_satellite_schedule
+from toast.utils import Logger
 
 
 def main():

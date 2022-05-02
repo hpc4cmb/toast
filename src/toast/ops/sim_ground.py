@@ -2,46 +2,46 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import datetime
 import copy
+import datetime
 
-import traitlets
-import numpy as np
-from scipy.constants import degree
 import healpy as hp
+import numpy as np
+import traitlets
 from astropy import units as u
+from scipy.constants import degree
 
-from ..weather import SimWeather
 from .. import qarray as qa
+from ..coordinates import azel_to_radec
+from ..dist import distribute_discrete, distribute_uniform
+from ..healpix import ang2vec
+from ..instrument import Telescope
+from ..intervals import Interval, IntervalList, regular_intervals
+from ..noise_sim import AnalyticNoise
+from ..observation import Observation
+from ..observation import default_values as defaults
+from ..schedule import GroundSchedule
+from ..timing import GlobalTimers, Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
 from ..utils import (
     Environment,
-    name_UID,
     Logger,
-    rate_from_times,
     astropy_control,
     memreport,
+    name_UID,
+    rate_from_times,
 )
-from ..dist import distribute_uniform, distribute_discrete
-from ..timing import function_timer, Timer, GlobalTimers
-from ..intervals import Interval, regular_intervals, IntervalList
-from ..noise_sim import AnalyticNoise
-from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity, List
-from ..observation import Observation
-from ..instrument import Telescope
-from ..schedule import GroundSchedule
-from ..coordinates import azel_to_radec
-from ..healpix import ang2vec
-from ..observation import default_values as defaults
-from .operator import Operator
-from .sim_hwp import simulate_hwp_response
+from ..weather import SimWeather
 from .flag_intervals import FlagIntervals
+from .operator import Operator
 from .sim_ground_utils import (
-    simulate_elnod,
-    simulate_ces_scan,
     add_solar_intervals,
     oscillate_el,
+    simulate_ces_scan,
+    simulate_elnod,
     step_el,
 )
+from .sim_hwp import simulate_hwp_response
 
 
 @trait_docs

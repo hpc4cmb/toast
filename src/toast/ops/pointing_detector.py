@@ -2,14 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
 import numpy as np
+import traitlets
 
-from ..utils import Environment, Logger
-from ..traits import trait_docs, Int, Unicode, Bool
-from ..timing import function_timer
-from ..observation import default_values as defaults
 from .. import qarray as qa
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Int, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .operator import Operator
 
 

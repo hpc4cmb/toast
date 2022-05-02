@@ -4,14 +4,14 @@
 
 import os
 
-import traitlets
 import numpy as np
+import traitlets
 
-from ..utils import Logger
-from ..traits import trait_docs, Int, Unicode, List, Dict, Bool
-from ..timing import function_timer
-from ..observation import default_values as defaults
 from ..io import save_hdf5
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Dict, Int, List, Unicode, trait_docs
+from ..utils import Logger
 from .operator import Operator
 
 

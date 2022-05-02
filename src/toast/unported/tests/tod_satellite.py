@@ -4,21 +4,15 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 
-import healpy as hp
-
-from .mpi import MPITestCase
-
-from ..mpi import MPI
-
 from .. import healpix as hpx
-
 from .. import qarray as qa
-
-from ..todmap import slew_precession_axis, satellite_scanning, TODSatellite
-
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
+from ..mpi import MPI
+from ..todmap import TODSatellite, satellite_scanning, slew_precession_axis
+from ._helpers import boresight_focalplane, create_distdata, create_outdir
+from .mpi import MPITestCase
 
 
 class TODSatelliteTest(MPITestCase):

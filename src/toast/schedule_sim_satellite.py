@@ -7,12 +7,10 @@
 import datetime
 
 import numpy as np
-
 from astropy import units as u
 
-from .utils import Logger
-
 from .schedule import SatelliteScan, SatelliteSchedule
+from .utils import Logger
 
 
 def create_satellite_schedule(

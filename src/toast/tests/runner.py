@@ -2,89 +2,73 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi
-
 import os
-import sys
 import shutil
-
+import sys
 import unittest
 
-from .mpi import MPITestRunner
-
-from ..vis import set_matplotlib_backend
-
-from .._libtoast import libtoast_tests
-
 from .. import timing
-
+from .._libtoast import libtoast_tests
+from ..mpi import MPI, use_mpi
+from ..spt3g import available as spt3g_available
+from ..vis import set_matplotlib_backend
+from . import accelerator as test_accelerator
+from . import config as test_config
+from . import covariance as test_covariance
+from . import dist as test_dist
 from . import env as test_env
-from . import timing as test_timing
-from . import rng as test_rng
-from . import math_misc as test_math_misc
 from . import fft as test_fft
 from . import healpix as test_healpix
-from . import qarray as test_qarray
 from . import instrument as test_instrument
 from . import intervals as test_intervals
-from . import pixels as test_pixels
-from . import weather as test_weather
+from . import io_hdf5 as test_io_hdf5
+from . import math_misc as test_math_misc
 from . import noise as test_noise
-
 from . import observation as test_observation
-
-from . import dist as test_dist
-
-from . import config as test_config
-
-from . import ops_sim_satellite as test_ops_sim_satellite
-from . import ops_sim_ground as test_ops_sim_ground
-from . import ops_memory_counter as test_ops_memory_counter
-from . import ops_pointing_healpix as test_ops_pointing_healpix
-from . import ops_sim_tod_noise as test_ops_sim_tod_noise
-from . import ops_sim_tod_dipole as test_ops_sim_tod_dipole
-from . import ops_sim_tod_atm as test_ops_sim_tod_atm
-from . import ops_sim_tod_conviqt as test_ops_sim_tod_conviqt
-
-from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
-
-from . import ops_flag_sso as test_ops_flag_sso
-from . import ops_statistics as test_ops_statistics
-from . import ops_mapmaker_utils as test_ops_mapmaker_utils
-from . import ops_mapmaker_binning as test_ops_mapmaker_binning
-from . import ops_mapmaker_solve as test_ops_mapmaker_solve
-from . import ops_mapmaker as test_ops_mapmaker
-from . import ops_scan_map as test_ops_scan_map
-from . import ops_scan_healpix as test_ops_scan_healpix
-from . import ops_madam as test_ops_madam
-
-from . import ops_gainscrambler as test_ops_gainscrambler
-from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
-from . import ops_sim_crosstalk as test_ops_sim_crosstalk
-from . import ops_polyfilter as test_ops_polyfilter
-from . import ops_groundfilter as test_ops_groundfilter
-from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
-from . import ops_time_constant as test_ops_time_constant
 from . import ops_cadence_map as test_ops_cadence_map
 from . import ops_crosslinking as test_ops_crosslinking
-from . import ops_sss as test_ops_sss
 from . import ops_demodulate as test_ops_demodulate
-from . import ops_filterbin as test_ops_filterbin
-from . import ops_noise_estim as test_ops_noise_estim
-from . import ops_yield_cut as test_ops_yield_cut
 from . import ops_elevation_noise as test_ops_elevation_noise
-
-from . import covariance as test_covariance
-
+from . import ops_filterbin as test_ops_filterbin
+from . import ops_flag_sso as test_ops_flag_sso
+from . import ops_gainscrambler as test_ops_gainscrambler
+from . import ops_groundfilter as test_ops_groundfilter
+from . import ops_madam as test_ops_madam
+from . import ops_mapmaker as test_ops_mapmaker
+from . import ops_mapmaker_binning as test_ops_mapmaker_binning
+from . import ops_mapmaker_solve as test_ops_mapmaker_solve
+from . import ops_mapmaker_utils as test_ops_mapmaker_utils
+from . import ops_memory_counter as test_ops_memory_counter
+from . import ops_noise_estim as test_ops_noise_estim
+from . import ops_pointing_healpix as test_ops_pointing_healpix
+from . import ops_polyfilter as test_ops_polyfilter
+from . import ops_scan_healpix as test_ops_scan_healpix
+from . import ops_scan_map as test_ops_scan_map
+from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
+from . import ops_sim_crosstalk as test_ops_sim_crosstalk
+from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
+from . import ops_sim_ground as test_ops_sim_ground
+from . import ops_sim_satellite as test_ops_sim_satellite
+from . import ops_sim_tod_atm as test_ops_sim_tod_atm
+from . import ops_sim_tod_conviqt as test_ops_sim_tod_conviqt
+from . import ops_sim_tod_dipole as test_ops_sim_tod_dipole
+from . import ops_sim_tod_noise as test_ops_sim_tod_noise
+from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
+from . import ops_sss as test_ops_sss
+from . import ops_statistics as test_ops_statistics
+from . import ops_time_constant as test_ops_time_constant
+from . import ops_yield_cut as test_ops_yield_cut
+from . import pixels as test_pixels
+from . import qarray as test_qarray
+from . import rng as test_rng
 from . import template_amplitudes as test_template_amplitudes
-from . import template_offset as test_template_offset
 from . import template_fourier2d as test_template_fourier2d
-from . import template_subharmonic as test_template_subharmonic
 from . import template_gain as test_template_gain
-
-from . import io_hdf5 as test_io_hdf5
-
-from . import accelerator as test_accelerator
+from . import template_offset as test_template_offset
+from . import template_subharmonic as test_template_subharmonic
+from . import timing as test_timing
+from . import weather as test_weather
+from .mpi import MPITestRunner
 
 #
 # from . import psd_math as testpsdmath
@@ -117,7 +101,6 @@ from . import accelerator as test_accelerator
 # tidas_available = False
 #
 
-from ..spt3g import available as spt3g_available
 
 if spt3g_available:
     from . import spt3g as test_spt3g

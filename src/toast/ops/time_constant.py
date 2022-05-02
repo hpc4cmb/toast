@@ -2,18 +2,18 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from astropy import units as u
 import numpy as np
 import traitlets
+from astropy import units as u
 
-from ..mpi import MPI, MPI_Comm, use_mpi, Comm
-from ..fft import FFTPlanReal1DStore
 from .. import qarray as qa
 from .. import rng
-from ..timing import function_timer
-from ..traits import trait_docs, Int, Unicode, Bool, Dict, Quantity, Float
-from ..utils import Logger, Environment, Timer, GlobalTimers, dtype_to_aligned
+from ..fft import FFTPlanReal1DStore
+from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Dict, Float, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
 from .operator import Operator
 
 

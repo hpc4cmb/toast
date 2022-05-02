@@ -7,13 +7,12 @@ from collections.abc import MutableMapping
 import numpy as np
 
 from ..mpi import MPI
-
 from ..utils import (
-    Logger,
-    AlignedU8,
     AlignedF32,
     AlignedF64,
     AlignedI32,
+    AlignedU8,
+    Logger,
     dtype_to_aligned,
 )
 

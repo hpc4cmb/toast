@@ -8,9 +8,9 @@
 minimum variance averages
 """
 
+import argparse
 import os
 import sys
-import argparse
 import traceback
 
 import h5py
@@ -18,9 +18,10 @@ import healpy as hp
 import numpy as np
 
 import toast
-from toast.mpi import get_world, Comm, MPI
-
-from toast.utils import Logger, Environment, Timer
+from toast import PixelData, PixelDistribution
+from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
+from toast.covariance import covariance_apply, covariance_invert
+from toast.mpi import MPI, Comm, get_world
 from toast.pixels_io import (
     filename_is_fits,
     filename_is_hdf5,
@@ -29,9 +30,7 @@ from toast.pixels_io import (
     write_healpix_fits,
     write_healpix_hdf5,
 )
-from toast._libtoast import cov_eigendecompose_diag, cov_apply_diag
-from toast import PixelDistribution, PixelData
-from toast.covariance import covariance_invert, covariance_apply
+from toast.utils import Environment, Logger, Timer
 
 
 def main():

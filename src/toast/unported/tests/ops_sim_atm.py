@@ -2,8 +2,6 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 import shutil
 
@@ -13,22 +11,21 @@ import numpy.testing as nt
 from ..mpi import MPI
 from ..tod import AnalyticNoise, OpSimNoise
 from ..todmap import (
-    TODGround,
     OpPointingHpix,
+    OpSimAtmosphere,
     OpSimGradient,
     OpSimScan,
-    OpSimAtmosphere,
+    TODGround,
     atm_available_utils,
 )
-
 from ..weather import Weather
-
 from ._helpers import (
-    create_outdir,
-    create_distdata,
     boresight_focalplane,
+    create_distdata,
+    create_outdir,
     create_weather,
 )
+from .mpi import MPITestCase
 
 
 class OpsSimAtmosphereTest(MPITestCase):

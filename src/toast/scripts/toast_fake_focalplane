@@ -7,20 +7,17 @@
 """Generate a focalplane file compatible with the example workflows.
 """
 
-import sys
 import argparse
+import sys
 
 import numpy as np
-
 from astropy import units as u
 
 import toast
+from toast.instrument_sim import fake_hexagon_focalplane, plot_focalplane
 from toast.io import H5File
 from toast.mpi import get_world
-
 from toast.utils import Logger
-
-from toast.instrument_sim import fake_hexagon_focalplane, plot_focalplane
 
 
 def main():

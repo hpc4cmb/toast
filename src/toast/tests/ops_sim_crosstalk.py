@@ -4,25 +4,21 @@
 
 import os
 
-import numpy as np
 import healpy as hp
-from .mpi import MPITestCase
-
+import numpy as np
 
 from .. import ops as ops
 from .. import rng
-
-from ..pixels import PixelDistribution, PixelData
-
-from ..pixels_io import write_healpix_fits
-
 from ..covariance import covariance_apply
+from ..pixels import PixelData, PixelDistribution
+from ..pixels_io import write_healpix_fits
 from ._helpers import (
+    create_fake_sky,
     create_outdir,
     create_satellite_data,
     create_satellite_data_big,
-    create_fake_sky,
 )
+from .mpi import MPITestCase
 
 
 class SimCrossTalkTest(MPITestCase):

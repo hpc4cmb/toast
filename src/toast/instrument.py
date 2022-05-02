@@ -5,20 +5,13 @@
 import os
 import sys
 
-import numpy as np
-
-import h5py
-
-from astropy import units as u
-
-import astropy.time as astime
-
 import astropy.coordinates as coord
-
-from astropy.table import QTable, Column
-
-from astropy.io.misc.hdf5 import write_table_hdf5, read_table_hdf5
-
+import astropy.time as astime
+import h5py
+import numpy as np
+from astropy import units as u
+from astropy.io.misc.hdf5 import read_table_hdf5, write_table_hdf5
+from astropy.table import Column, QTable
 from scipy.constants import h, k
 
 try:
@@ -28,22 +21,18 @@ except ImportError:
 
 import tomlkit
 
-from .timing import function_timer, Timer
-
+from . import qarray
 from . import qarray as qa
-
+from ._libtoast import integrate_simpson
 from .noise_sim import AnalyticNoise
+from .timing import Timer, function_timer
 from .utils import (
-    Logger,
     Environment,
+    Logger,
+    hdf5_use_serial,
     name_UID,
     table_write_parallel_hdf5,
-    hdf5_use_serial,
 )
-
-from . import qarray
-
-from ._libtoast import integrate_simpson
 
 # CMB temperature
 TCMB = 2.72548

@@ -2,22 +2,22 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
 import glob
+import os
 
-import traitlets
 import numpy as np
+import traitlets
 
-from ..utils import Logger
 from ..dist import distribute_discrete
-from ..traits import trait_docs, Int, Unicode, Bool, Instance
-from ..timing import function_timer
 from ..spt3g import available
+from ..timing import function_timer
+from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .operator import Operator
-
 
 if available:
     from spt3g import core as c3g
+
     from ..spt3g import frame_collector
 
 

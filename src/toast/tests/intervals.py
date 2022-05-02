@@ -3,12 +3,10 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
-from .mpi import MPITestCase
-
 import numpy.testing as nt
 
 from ..intervals import Interval, IntervalList
+from .mpi import MPITestCase
 
 # from ..tod.interval import intervals_to_chunklist
 #

@@ -6,12 +6,9 @@ import os
 
 import numpy as np
 
-from ..utils import Logger, memreport
-
-from ..timing import function_timer, Timer
-
 from ..operator import Operator
-
+from ..timing import Timer, function_timer
+from ..utils import Logger, memreport
 from .atm import available_utils
 
 if available_utils:
@@ -22,11 +19,10 @@ if available_utils:
         atm_atmospheric_loading_vec,
     )
 
-from .atm import AtmSim
-
+import toast.qarray as qa
 from toast.mpi import MPI
 
-import toast.qarray as qa
+from .atm import AtmSim
 
 
 class OpSimAtmosphere(Operator):
@@ -381,8 +377,9 @@ class OpSimAtmosphere(Operator):
         from ..vis import set_backend
 
         set_backend()
-        import matplotlib.pyplot as plt
         import pickle
+
+        import matplotlib.pyplot as plt
 
         azmin, azmax, elmin, elmax = scan_range
 

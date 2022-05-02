@@ -4,10 +4,10 @@
 
 import traitlets
 
-from ..utils import Logger
 from ..mpi import MPI
 from ..timing import function_timer
-from ..traits import trait_docs, Int, Unicode, List
+from ..traits import Int, List, Unicode, trait_docs
+from ..utils import Logger
 from .operator import Operator
 
 

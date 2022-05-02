@@ -4,25 +4,25 @@
 
 from collections import OrderedDict
 
-import traitlets
 import numpy as np
+import traitlets
 
 from ..mpi import MPI
-from ..utils import Logger
-from ..traits import trait_docs, Int, Unicode, Bool, List, Float, Instance
-from ..timing import function_timer, Timer
-from ..templates import Template, AmplitudesMap
 from ..observation import default_values as defaults
-from ..pixels import PixelDistribution, PixelData
+from ..pixels import PixelData, PixelDistribution
+from ..templates import AmplitudesMap, Template
+from ..timing import Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, List, Unicode, trait_docs
+from ..utils import Logger
+from .arithmetic import Combine
+from .copy import Copy
+from .delete import Delete
+from .mapmaker_solve import SolverLHS, SolverRHS, solve
+from .mapmaker_utils import CovarianceAndHits
+from .memory_counter import MemoryCounter
 from .operator import Operator
 from .pipeline import Pipeline
-from .delete import Delete
-from .copy import Copy
-from .arithmetic import Combine
 from .scan_map import ScanMap, ScanMask
-from .mapmaker_utils import CovarianceAndHits
-from .mapmaker_solve import solve, SolverRHS, SolverLHS
-from .memory_counter import MemoryCounter
 
 
 @trait_docs

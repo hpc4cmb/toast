@@ -4,11 +4,10 @@
 
 # import functions in our public API
 
-from .pixels import DistPixels
-
 from .cov import (
-    covariance_invert,
-    covariance_rcond,
-    covariance_multiply,
     covariance_apply,
+    covariance_invert,
+    covariance_multiply,
+    covariance_rcond,
 )
+from .pixels import DistPixels

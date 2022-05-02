@@ -8,26 +8,21 @@
 This script loads HDF5 format data and exports to SPT3G format data.
 """
 
-import os
-import sys
-import shutil
-import re
-
 import argparse
+import os
+import re
+import shutil
+import sys
 
 import numpy as np
-
 from astropy import units as u
+from spt3g import core as c3g
 
 import toast
 import toast.ops
-
-from toast.timing import gather_timers, dump
-
 from toast import spt3g as t3g
-from spt3g import core as c3g
-
 from toast.observation import default_values as defaults
+from toast.timing import dump, gather_timers
 
 
 def parse_arguments():

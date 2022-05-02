@@ -3,12 +3,9 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..mpi import MPI
-
 from ..operator import Operator
-
-from ..utils import Logger
-
 from ..timing import function_timer
+from ..utils import Logger
 
 
 class OpMemoryCounter(Operator):

@@ -7,13 +7,10 @@ import time
 import numpy as np
 import numpy.testing as nt
 
-from .mpi import MPITestCase
-
+from ..mpi import MPILock, MPIShared
 from ..utils import Environment
-
-from ..mpi import MPIShared, MPILock
-
 from ._helpers import create_comm
+from .mpi import MPITestCase
 
 
 class EnvTest(MPITestCase):

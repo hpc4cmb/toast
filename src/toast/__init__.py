@@ -43,8 +43,8 @@ CUDA_MEMPOOL_FRACTION=<float>
       exhaust the device memory.
 
 """
-import sys
 import os
+import sys
 
 # Get the package version from the libtoast environment if possible.  If this
 # import fails, it is likely due to the toast package being imported prior to
@@ -71,25 +71,16 @@ except ImportError:
     except:
         raise ImportError("Cannot read RELEASE file")
 
+from .config import create_from_config, load_config, parse_config
+from .data import Data
+from .instrument import Focalplane, GroundSite, SpaceSite, Telescope
+from .instrument_sim import fake_hexagon_focalplane
+from .intervals import Interval
+from .job import job_group_size
+
 # Namespace imports
 from .mpi import Comm, get_world
-
-from .timing import Timer, GlobalTimers
-
-from .intervals import Interval
-
 from .observation import Observation
-
-from .data import Data
-
-from .config import load_config, parse_config, create_from_config
-
-from .instrument import Telescope, Focalplane, GroundSite, SpaceSite
-
-from .instrument_sim import fake_hexagon_focalplane
-
+from .pixels import PixelData, PixelDistribution
+from .timing import GlobalTimers, Timer
 from .weather import Weather
-
-from .pixels import PixelDistribution, PixelData
-
-from .job import job_group_size

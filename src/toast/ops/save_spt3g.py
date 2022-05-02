@@ -4,17 +4,18 @@
 
 import os
 
-import traitlets
 import numpy as np
+import traitlets
 
-from ..utils import Logger
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
-from ..timing import function_timer
 from ..spt3g import available
+from ..timing import function_timer
+from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .operator import Operator
 
 if available:
     from spt3g import core as c3g
+
     from ..spt3g import frame_emitter
 
 

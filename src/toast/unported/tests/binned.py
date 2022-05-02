@@ -2,27 +2,23 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 import shutil
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
 
-import healpy as hp
-
-from ..tod import AnalyticNoise, OpSimNoise, regular_intervals, OpFlagGaps
-from ..todmap import TODSatellite, OpPointingHpix, OpMadam, OpAccumDiag
-
-from ..map import DistPixels, covariance_invert, covariance_apply
-
+from ..map import DistPixels, covariance_apply, covariance_invert
+from ..tod import AnalyticNoise, OpFlagGaps, OpSimNoise, regular_intervals
+from ..todmap import OpAccumDiag, OpMadam, OpPointingHpix, TODSatellite
 from ._helpers import (
-    create_outdir,
-    create_distdata,
     boresight_focalplane,
+    create_distdata,
+    create_outdir,
     uniform_chunks,
 )
+from .mpi import MPITestCase
 
 
 class BinnedTest(MPITestCase):

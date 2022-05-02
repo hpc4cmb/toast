@@ -2,15 +2,13 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 
 import numpy as np
 
 from .. import ops
-
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class OpGainScramblerTest(MPITestCase):

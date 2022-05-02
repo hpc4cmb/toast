@@ -2,19 +2,19 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
 import glob
+import os
 
-import traitlets
-import numpy as np
 import h5py
+import numpy as np
+import traitlets
 
-from ..utils import Logger
 from ..dist import distribute_discrete
-from ..traits import trait_docs, Int, Unicode, List, Bool
-from ..timing import function_timer
-from ..observation import default_values as defaults
 from ..io import load_hdf5
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Int, List, Unicode, trait_docs
+from ..utils import Logger
 from .operator import Operator
 
 

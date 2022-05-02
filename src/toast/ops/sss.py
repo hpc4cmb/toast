@@ -4,21 +4,21 @@
 
 from time import time
 
-import traitlets
-import numpy as np
-from astropy import units as u
 import ephem
 import healpy as hp
+import numpy as np
+import traitlets
+from astropy import units as u
 
-from ..mpi import MPI
-from ..timing import function_timer
 from .. import qarray as qa
 from .. import rng
-from ..data import Data
-from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance, List
-from ..utils import Environment, Logger, Timer
-from ..observation import default_values as defaults
 from ..coordinates import to_DJD
+from ..data import Data
+from ..mpi import MPI
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger, Timer
 from .operator import Operator
 from .pipeline import Pipeline
 

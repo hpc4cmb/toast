@@ -4,24 +4,17 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-import healpy as hp
-
-from ..mpi import MPI
-
-from .mpi import MPITestCase
-
 from .. import ops as ops
-
-from ..pixels import PixelDistribution, PixelData
-
-from ..covariance import covariance_invert, covariance_multiply, covariance_apply
-
+from ..covariance import covariance_apply, covariance_invert, covariance_multiply
+from ..mpi import MPI
+from ..pixels import PixelData, PixelDistribution
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class CovarianceTest(MPITestCase):

@@ -4,17 +4,13 @@
 
 import os
 
+import h5py
 import numpy as np
-
 from astropy import units as u
 
-import h5py
-
 from .noise import Noise
-
-from .utils import hdf5_use_serial
-
 from .timing import function_timer
+from .utils import hdf5_use_serial
 
 
 class AnalyticNoise(Noise):
