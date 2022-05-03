@@ -137,7 +137,8 @@ def main():
             prefix = f"{rank:4} : "
         if ifile % ntask != rank:
             continue
-        log.info(f"{prefix}Loading file {ifile + 1} / {nfile} : {infile_map}")
+        nread += 1
+        log.info(f"{prefix}Loading file {nread} / {nread_tot} : {infile_map}")
         inmap = read_healpix(infile_map, None, nest=True, dtype=float)
         log.info_rank(f"{prefix}Loaded {infile_map} in", timer=timer1, comm=None)
         if nnz is None:
