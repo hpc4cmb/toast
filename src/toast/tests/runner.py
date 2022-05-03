@@ -258,6 +258,9 @@ def test(name=None, verbosity=2):
     if not _ret.wasSuccessful():
         ret += 1
 
+    if comm is not None:
+        ret = comm.allreduce(ret, op=MPI.SUM)
+
     if ret > 0:
         sys.exit(ret)
 
