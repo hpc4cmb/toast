@@ -251,6 +251,19 @@ class export_obs_meta(object):
                     else:
                         ob["site_weather_max_pwv"] = c3g.G3Double(site.weather.max_pwv)
                     ob["site_weather_time"] = to_g3_time(site.weather.time.timestamp())
+        session = obs.session
+        if session is not None:
+            ob["session_name"] = c3g.G3String(session.name)
+            ob["session_class"] = c3g.G3String(object_fullname(session.__class__))
+            ob["session_uid"] = c3g.G3Int(session.uid)
+            if session.start is None:
+                ob["session_start"] = c3g.G3String("NONE")
+            else:
+                ob["session_start"] = to_g3_time(session.start.timestamp())
+            if session.end is None:
+                ob["session_end"] = c3g.G3String("NONE")
+            else:
+                ob["session_end"] = to_g3_time(session.end.timestamp())
         m_export = set()
         for m_in, m_out in self._meta_arrays:
             out_type = to_g3_array_type(obs[m_in].dtype)

@@ -501,6 +501,19 @@ def save_hdf5(
                     inst_group.attrs[
                         "site_weather_time"
                     ] = site.weather.time.timestamp()
+        session = obs.session
+        if session is not None:
+            inst_group.attrs["session_name"] = session.name
+            inst_group.attrs["session_class"] = object_fullname(session.__class__)
+            inst_group.attrs["session_uid"] = session.uid
+            if session.start is None:
+                inst_group.attrs["session_start"] = "NONE"
+            else:
+                inst_group.attrs["session_start"] = session.start.timestamp()
+            if session.end is None:
+                inst_group.attrs["session_end"] = "NONE"
+            else:
+                inst_group.attrs["session_end"] = session.end.timestamp()
     log.verbose_rank(
         f"{log_prefix}  Wrote instrument attributes in",
         comm=comm,

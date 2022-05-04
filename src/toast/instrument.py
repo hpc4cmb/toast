@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import datetime
 import os
 import sys
 
@@ -767,6 +768,57 @@ class Focalplane(object):
         table_write_parallel_hdf5(self.detector_data, handle, "focalplane", comm=comm)
 
 
+class Session(object):
+    """Class representing an observing session.
+
+    A session consists of multiple Observation instances with different sets of
+    detectors and possibly different sample rates / times.  However these
+    observations are on the same physical telescope and over the same broad
+    time range.  A session simply tracks that time range and a unique ID which
+    can be used to group the relevant observations.
+
+    Args:
+        name (str):  The name of the session.
+        uid (int):  The Unique ID of the session.  If not specified, it will be
+            constructed from a hash of the name.
+        start (datetime):  The overall start of the session.
+        end (datetime):  The overall end of the session.
+
+    """
+    def __init__(self, name, uid=None, start=None, end=None):
+        self.name = name
+        self.uid = uid
+        if self.uid is None:
+            self.uid = name_UID(name)
+        self.start = start
+        if start is not None and not isinstance(start, datetime.datetime):
+            raise RuntimeError("Session start must be a datetime or None")
+        self.end = end
+        if end is not None and not isinstance(end, datetime.datetime):
+            raise RuntimeError("Session end must be a datetime or None")
+
+    def __repr__(self):
+        value = "<Session '{}': uid = {}, start = {}, end = {}".format(
+            self.name, self.uid, self.start, self.end
+        )
+        value += ">"
+        return value
+
+    def __eq__(self, other):
+        if self.name != other.name:
+            return False
+        if self.uid != other.uid:
+            return False
+        if self.start != other.start:
+            return False
+        if self.end != other.end:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
 class Telescope(object):
     """Class representing telescope properties for one observation.
 
@@ -779,7 +831,7 @@ class Telescope(object):
 
     """
 
-    def __init__(self, name, uid=None, focalplane=None, site=None):
+    def __init__(self, name, uid=None, focalplane=None, site=None, session=None):
         self.name = name
         self.uid = uid
         if self.uid is None:
@@ -792,10 +844,12 @@ class Telescope(object):
         self.site = site
 
     def __repr__(self):
-        value = "<Telescope '{}': uid = {}, site = {}, focalplane = ".format(
-            self.name, self.uid, self.site
+        value = "<Telescope '{}': uid = {}, site = {}, ".format(
+            self.name, self.uid, self.site,
         )
-        value += self.focalplane.__repr__()
+        value += "focalplane = {}".format(
+            self.focalplane.__repr__()
+        )
         value += ">"
         return value
 
