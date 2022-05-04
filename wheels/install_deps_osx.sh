@@ -9,6 +9,14 @@
 
 set -e
 
+arch=$1
+
+# Cross compile option needed for autoconf builds.
+cross=""
+if [ "${arch}" = "macosx_arm64" ]; then
+    cross="--host=arm64-apple-darwin20.6.0"
+fi
+
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
@@ -18,31 +26,83 @@ echo "Wheel script directory = ${scriptdir}"
 # Build options.  If we use clang, then use accelerate framework.  Otherwise
 # build and use OpenBLAS.
 
-use_gcc=yes
+use_gcc=no
 
-CC=gcc-11
-CXX=g++-11
-FC=gfortran-11
-#CC=clang
-#CXX=clang++
-#FC=
-
-CFLAGS="-O3 -fPIC"
-FCFLAGS="-O3 -fPIC"
-# Use the second when building with clang
-CXXFLAGS="-O3 -fPIC -std=c++11"
-#CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
+if [ "x${use_gcc}" = "xyes" ]; then
+    CC=gcc-11
+    CXX=g++-11
+    FC=gfortran-11
+    CFLAGS="-O3 -fPIC"
+    FCFLAGS="-O3 -fPIC"
+    CXXFLAGS="-O3 -fPIC -std=c++11"
+else
+    CC=clang
+    CXX=clang++
+    FC=
+    CFLAGS="-O3 -fPIC"
+    FCFLAGS=""
+    CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
+    if [ "${arch}" = "macosx_arm64" ]; then
+        # We are cross compiling
+        CFLAGS="${CFLAGS} -arch arm64"
+        CXXFLAGS="${CXXFLAGS} -arch arm64"
+    fi
+fi
 
 MAKEJ=2
 
 PREFIX=/usr/local
 
 # Install OS packages with homebrew
-brew install mpich
 
 # Optionally install gcc
 if [ "x${use_gcc}" = "xyes" ]; then
     brew install gcc
+fi
+
+# NOTE:  this is disabled, since the homebrew version of
+# mpich requires gcc, and we might be building with clang.
+#brew install mpich
+
+# Install MPICH with our serial compiler.  Needed to install
+# mpi4py later for testing (MPI is not bundled with the wheel).
+# NOTE:  on arm64 we cannot run tests anyway (since we are
+# cross compiling).  So do not attempt to build mpich / mpi4py.
+
+if [ "${arch}" != "macosx_arm64" ]; then
+    mpich_version=3.4
+    mpich_dir=mpich-${mpich_version}
+    mpich_pkg=${mpich_dir}.tar.gz
+
+    echo "Fetching MPICH..."
+
+    if [ ! -e ${mpich_pkg} ]; then
+        curl -SL https://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
+    fi
+
+    echo "Building MPICH..."
+
+    rm -rf ${mpich_dir}
+    fcopt="--enable-fortran=all"
+    if [ "x${FC}" = "x" ]; then
+        fcopt="--disable-fortran"
+    fi
+    unset F90
+    unset F90FLAGS
+    tar xzf ${mpich_pkg} \
+        && cd ${mpich_dir} \
+        && CC="${CC}" CXX="${CXX}" FC="${FC}" F77="${FC}" \
+        CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
+        FFLAGS="${FCFLAGS}" FCFLAGS="${FCFLAGS}" \
+        MPICH_MPICC_CFLAGS="${CFLAGS}" \
+        MPICH_MPICXX_CXXFLAGS="${CXXFLAGS}" \
+        MPICH_MPIF77_FFLAGS="${FCFLAGS}" \
+        MPICH_MPIFORT_FCFLAGS="${FCFLAGS}" \
+        ./configure ${fcopt} \
+        --with-device=ch3 \
+        --prefix="${PREFIX}" \
+        && make -j ${MAKEJ} \
+        && make install
 fi
 
 # In order to maximize ABI compatibility with numpy, build with the newest numpy
@@ -70,14 +130,19 @@ pip install -v "numpy<${numpy_ver}" cmake wheel
 # Install build requirements.
 CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt"
 
-# Install mpi4py
+# Install mpi4py for running tests (only on x86_64)
 
-pip install mpi4py
+if [ "${arch}" != "macosx_arm64" ]; then
+    echo "mpicc = $(which mpicc)"
+    echo "mpicxx = $(which mpicxx)"
+    echo "mpirun = $(which mpirun)"
+    pip install mpi4py
+fi
 
 # Optionally Install Openblas
 
 if [ "x${use_gcc}" = "xyes" ]; then
-    openblas_version=0.3.19
+    openblas_version=0.3.20
     openblas_dir=OpenBLAS-${openblas_version}
     openblas_pkg=${openblas_dir}.tar.gz
 
@@ -120,7 +185,7 @@ tar xf ${gmp_pkg} \
     && pushd ${gmp_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     && CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" \
-    ./configure \
+    ./configure ${cross} \
     --enable-static \
     --disable-shared \
     --with-pic \
@@ -147,7 +212,7 @@ rm -rf ${mpfr_dir}
 tar xf ${mpfr_pkg} \
     && pushd ${mpfr_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
-    ./configure \
+    ./configure ${cross} \
     --enable-static \
     --disable-shared \
     --with-pic \
@@ -180,7 +245,7 @@ rm -rf ${fftw_dir}
 tar xzf ${fftw_pkg} \
     && pushd ${fftw_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
-    ./configure ${thread_opt} \
+    ./configure ${cross} ${thread_opt} \
     --enable-static \
     --disable-shared \
     --prefix="${PREFIX}" \
@@ -221,7 +286,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.10.1
+ssparse_version=5.11.0
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
