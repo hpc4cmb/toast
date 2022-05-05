@@ -9,9 +9,9 @@ name:  Test Binary Wheels
 #     branches: [ master ]
 
 # Uncomment here for production and comment out push / PR above.
-on:
-  schedule:
-    - cron: '0 4 * * *'
+# on:
+#   schedule:
+#     - cron: '0 4 * * *'
 
 jobs:
   sdist:
