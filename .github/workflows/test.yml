@@ -103,6 +103,7 @@ jobs:
         run: |
           export TOAST_BUILD_CMAKE_C_COMPILER=clang
           export TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
+          export TOAST_BUILD_BLA_VENDOR='Apple'
           export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
           python3 -m pip install .
 
