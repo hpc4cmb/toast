@@ -11,6 +11,7 @@ from astropy import units as u
 
 from ..data import Data
 from ..dist import distribute_discrete, distribute_uniform
+from ..instrument import Session
 from ..mpi import MPI, Comm
 from ..observation import Observation
 from ._helpers import (
@@ -269,3 +270,58 @@ class DataTest(MPITestCase):
         else:
             comm = Comm(MPI.COMM_SELF)
         assert comm.comm_world is None
+
+    def test_session(self):
+        toastcomm = create_comm(self.comm)
+        tele = create_ground_telescope(toastcomm.group_size)
+        data = Data(toastcomm)
+        get_uid = None
+        # Note:  for testing we are just re-using the "season"
+        # as the "session", which is not physical.  This is just
+        # for testing.
+        for season in range(3):
+            data.obs.append(
+                Observation(
+                    toastcomm,
+                    tele,
+                    10,
+                    name=f"atacama-{season:02d}",
+                    session=Session(
+                        f"{season:02d}",
+                    ),
+                )
+            )
+            data.obs[-1]["site"] = "Atacama"
+            data.obs[-1]["season"] = season
+            get_uid = data.obs[-1].uid
+        for season in range(3):
+            data.obs.append(
+                Observation(
+                    toastcomm,
+                    tele,
+                    10,
+                    name=f"pole-{season:02d}",
+                    session=Session(
+                        f"{season:02d}",
+                    ),
+                )
+            )
+            data.obs[-1]["site"] = "Pole"
+            data.obs[-1]["season"] = season
+
+        datasplit_session = data.split(obs_session_name=True)
+        self.assertTrue(len(datasplit_session) == 3)
+        for skey in datasplit_session.keys():
+            self.assertTrue(len(datasplit_session[skey].obs) == 2)
+            for ob in datasplit_session[skey].obs:
+                mat = re.match(r".*-(\d\d)", ob.name)
+                self.assertTrue(mat.group(1) == skey)
+
+        for season in range(3):
+            sname = f"{season:02d}"
+            sel = data.select(obs_session_name=sname)
+            print(f"selecting {sname}")
+            self.assertTrue(len(sel.obs) == 2)
+            for ob in sel.obs:
+                mat = re.match(r".*-(\d\d)", ob.name)
+                self.assertTrue(mat.group(1) == sname)

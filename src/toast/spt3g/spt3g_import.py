@@ -200,6 +200,11 @@ class import_obs_meta(object):
                 "site_lat_deg",
                 "site_lon_deg",
                 "site_alt_m",
+                "session_name",
+                "session_uid",
+                "session_class",
+                "session_start",
+                "session_end",
                 "site_weather_name",
                 "site_weather_time",
                 "site_weather_max_pwv",
@@ -289,6 +294,38 @@ class import_obs_meta(object):
                 )
                 telescope_name = from_g3_scalar_type(frm["telescope_name"])
                 telescope_uid = from_g3_scalar_type(frm["telescope_uid"])
+
+                session = None
+                if "session_name" in frm.keys():
+                    # We have session information
+                    session_class = import_from_name(
+                        from_g3_scalar_type(frm["session_class"])
+                    )
+                    session_name = from_g3_scalar_type(frm["session_name"])
+                    session_uid = from_g3_scalar_type(frm["session_uid"])
+                    session_start = None
+                    try:
+                        session_start = datetime.datetime.fromtimestamp(
+                            from_g3_time(frm["session_start"]),
+                            tz=datetime.timezone.utc,
+                        )
+                    except:
+                        pass
+                    session_end = None
+                    try:
+                        session_end = datetime.datetime.fromtimestamp(
+                            from_g3_time(frm["session_end"]),
+                            tz=datetime.timezone.utc,
+                        )
+                    except:
+                        pass
+                    session = session_class(
+                        session_name,
+                        uid=session_uid,
+                        start=session_start,
+                        end=session_end,
+                    )
+
                 meta = dict()
                 unit_match = re.compile(r"^.*_units$")
                 for f_key, f_val in frm.items():
@@ -347,7 +384,7 @@ class import_obs_meta(object):
         telescope = telescope_class(
             telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
         )
-        return name, uid, meta, detsets, telescope, noise
+        return name, uid, meta, detsets, telescope, session, noise
 
 
 class import_obs_data(object):
@@ -593,6 +630,7 @@ class import_obs(object):
         obs_meta = None
         obs_name = None
         obs_uid = None
+        obs_session = None
         obs_detsets = None
         obs_noise = None
         if self._rank == lead_rank:
@@ -602,6 +640,7 @@ class import_obs(object):
                 obs_meta,
                 obs_detsets,
                 obs_telescope,
+                obs_session,
                 obs_noise,
             ) = self._meta_import(frames)
         if self._comm.comm_group is not None:
@@ -609,6 +648,7 @@ class import_obs(object):
             obs_name = self._comm.comm_group.bcast(obs_name, root=lead_rank)
             obs_meta = self._comm.comm_group.bcast(obs_meta, root=lead_rank)
             obs_uid = self._comm.comm_group.bcast(obs_uid, root=lead_rank)
+            obs_session = self._comm.comm_group.bcast(obs_session, root=lead_rank)
             obs_detsets = self._comm.comm_group.bcast(obs_detsets, root=lead_rank)
             obs_noise = self._comm.comm_group.bcast(obs_noise, root=lead_rank)
 
@@ -650,6 +690,7 @@ class import_obs(object):
             total_samples,
             name=obs_name,
             uid=obs_uid,
+            session=obs_session,
             detector_sets=obs_detsets,
             sample_sets=sample_sets,
             process_rows=1,

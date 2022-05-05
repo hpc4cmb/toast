@@ -12,7 +12,7 @@ import numpy as np
 from pshmem.utils import mpi_data_type
 
 from .dist import distribute_samples
-from .instrument import Telescope
+from .instrument import Telescope, Session
 from .intervals import IntervalList
 from .mpi import MPI, comm_equal
 from .observation_data import (
@@ -142,6 +142,8 @@ class Observation(MutableMapping):
         name (str):  (Optional) The observation name.
         uid (int):  (Optional) The Unique ID for this observation.  If not specified,
             the UID will be computed from a hash of the name.
+        session (Session):  The observing session that this observation is contained
+            in or None.
         detector_sets (list):  (Optional) List of lists containing detector names.
             These discrete detector sets are used to distribute detectors- a detector
             set will always be within a single row of the process grid.  If None,
@@ -168,6 +170,7 @@ class Observation(MutableMapping):
         n_samples,
         name=None,
         uid=None,
+        session=None,
         detector_sets=None,
         sample_sets=None,
         process_rows=None,
@@ -176,9 +179,20 @@ class Observation(MutableMapping):
         self._telescope = telescope
         self._name = name
         self._uid = uid
+        self._session = session
 
         if self._uid is None and self._name is not None:
             self._uid = name_UID(self._name)
+
+        if self._session is None:
+            self._session = Session(
+                name=self._name,
+                uid=self._uid,
+                start=None,
+                end=None,
+            )
+        elif not isinstance(self._session, Session):
+            raise RuntimeError("session should be a Session instance or None")
 
         self.dist = DistDetSamp(
             n_samples,
@@ -228,6 +242,13 @@ class Observation(MutableMapping):
         (int):  The Unique ID for this observation.
         """
         return self._uid
+
+    @property
+    def session(self):
+        """
+        (Session):  The Session instance for this observation.
+        """
+        return self._session
 
     @property
     def comm(self):
@@ -410,6 +431,7 @@ class Observation(MutableMapping):
         else:
             val += f"  group has {self.comm.group_size} processes"
         val += f"\n  telescope = {self._telescope.__repr__()}"
+        val += f"\n  session = {self._session.__repr__()}"
         for k, v in self._internal.items():
             val += f"\n  {k} = {v}"
         val += f"\n  {self.n_all_samples} total samples ({self.n_local_samples} local)"
@@ -434,6 +456,9 @@ class Observation(MutableMapping):
         if self.telescope != other.telescope:
             fail = 1
             log.verbose("Obs telescopes not equal")
+        if self.session != other.session:
+            fail = 1
+            log.verbose("Obs sessions not equal")
         if self.dist != other.dist:
             fail = 1
             log.verbose("Obs distributions not equal")
@@ -506,6 +531,7 @@ class Observation(MutableMapping):
             self.n_all_samples,
             name=self.name,
             uid=self.uid,
+            session=self.session,
             detector_sets=self.all_detector_sets,
             sample_sets=self.all_sample_sets,
             process_rows=self.dist.process_rows,

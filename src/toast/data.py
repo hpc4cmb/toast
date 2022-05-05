@@ -168,6 +168,7 @@ class Data(MutableMapping):
         obs_index=False,
         obs_name=False,
         obs_uid=False,
+        obs_session_name=False,
         obs_key=None,
         require_full=False,
     ):
@@ -176,11 +177,11 @@ class Data(MutableMapping):
         Create new Data objects that have views into unique subsets of the observations
         (the observations are not copied).  Only one "criteria" may be used to perform
         this splitting operation.  The observations may be split by index in the
-        original list, by name, by UID, or by the value of a specified key.
+        original list, by name, by UID, by session, or by the value of a specified key.
 
         The new Data objects are returned in a dictionary whose keys are the value of
         the selection criteria (index, name, uid, or value of the key).  Any observation
-        that cannot be place (because it is missing a name, uid or key) will be ignored
+        that cannot be placed (because it is missing a name, uid or key) will be ignored
         and not added to any of the returned Data objects.  If the `require_full`
         parameter is set to True, such situations will raise an exception.
 
@@ -188,6 +189,7 @@ class Data(MutableMapping):
             obs_index (bool):  If True, split by index in original list of observations.
             obs_name (bool):  If True, split by observation name.
             obs_uid (bool):  If True, split by observation UID.
+            obs_session_name (bool):  If True, split by session name.
             obs_key (str):  Split by values of this observation key.
 
         Returns:
@@ -195,7 +197,13 @@ class Data(MutableMapping):
 
         """
         log = Logger.get()
-        check = int(obs_index) + int(obs_name) + int(obs_uid) + int(obs_key is not None)
+        check = (
+            int(obs_index)
+            + int(obs_name)
+            + int(obs_uid)
+            + int(obs_session_name)
+            + int(obs_key is not None)
+        )
         if check == 0 or check > 1:
             raise RuntimeError("You must specify exactly one split criteria")
 
@@ -205,14 +213,14 @@ class Data(MutableMapping):
         group_comm = self.comm.comm_group
 
         if obs_index:
-            # Splitting by index
+            # Splitting by (unique) index
             for iob, ob in enumerate(self.obs):
                 newdat = Data(comm=self._comm, view=True)
                 newdat._internal = self._internal
                 newdat.obs.append(ob)
                 datasplit[iob] = newdat
         elif obs_name:
-            # Splitting by name
+            # Splitting by (unique) name
             for iob, ob in enumerate(self.obs):
                 if ob.name is None:
                     if require_full:
@@ -237,6 +245,21 @@ class Data(MutableMapping):
                     newdat._internal = self._internal
                     newdat.obs.append(ob)
                     datasplit[ob.uid] = newdat
+        elif obs_session_name:
+            # Splitting by (non-unique) session name
+            for iob, ob in enumerate(self.obs):
+                if ob.session is None:
+                    if require_full:
+                        msg = f"require_full is True, but observation {iob} has no session"
+                        log.error_rank(msg, comm=group_comm)
+                        raise RuntimeError(msg)
+                else:
+                    sname = ob.session.name
+                    if sname not in datasplit:
+                        newdat = Data(comm=self._comm, view=True)
+                        newdat._internal = self._internal
+                        datasplit[sname] = newdat
+                    datasplit[sname].obs.append(ob)
         elif obs_key is not None:
             # Splitting by arbitrary key.  Unlike name / uid which are built it to the
             # observation class, arbitrary keys might be modified in different ways
@@ -268,7 +291,13 @@ class Data(MutableMapping):
         return datasplit
 
     def select(
-        self, obs_index=None, obs_name=None, obs_uid=None, obs_key=None, obs_val=None
+        self,
+        obs_index=None,
+        obs_name=None,
+        obs_uid=None,
+        obs_session_name=None,
+        obs_key=None,
+        obs_val=None,
     ):
         """Create a new Data object with a subset of observations.
 
@@ -280,6 +309,7 @@ class Data(MutableMapping):
             * Index location in the original list of observations
             * Name of the observation
             * UID of the observation
+            * Session of the observation
             * Existence of the specified dictionary key
             * Required value of the specified dictionary key
 
@@ -288,6 +318,7 @@ class Data(MutableMapping):
             obs_name (str):  The observation name or a compiled regular expression
                 object to use for matching.
             obs_uid (int):  The observation UID to select.
+            obs_session_name (str):  The name of the session.
             obs_key (str):  The observation dictionary key to examine.
             obs_val (str):  The required value of the observation dictionary key or a
                 compiled regular expression object to use for matching.
@@ -312,14 +343,25 @@ class Data(MutableMapping):
         for iob, ob in enumerate(self.obs):
             if obs_index is not None and obs_index == iob:
                 new_data.obs.append(ob)
+                continue
             if obs_name is not None and ob.name is not None:
                 if isinstance(obs_name, re.Pattern):
                     if obs_name.match(ob.name) is not None:
                         new_data.obs.append(ob)
+                        continue
                 elif obs_name == ob.name:
                     new_data.obs.append(ob)
+                    continue
             if obs_uid is not None and ob.uid is not None and obs_uid == ob.uid:
                 new_data.obs.append(ob)
+                continue
+            if (
+                obs_session_name is not None
+                and ob.session is not None
+                and obs_session_name == ob.session.name
+            ):
+                new_data.obs.append(ob)
+                continue
             if obs_key is not None and obs_key in ob:
                 # Get the values from all processes in the group and check
                 # for consistency.
@@ -336,12 +378,15 @@ class Data(MutableMapping):
                 if obs_val is None:
                     # We have the key, and are accepting any value
                     new_data.obs.append(ob)
+                    continue
                 elif isinstance(obs_val, re.Pattern):
                     if obs_val.match(ob[obs_key]) is not None:
                         # Matches our regex
                         new_data.obs.append(ob)
+                        continue
                 elif obs_val == ob[obs_key]:
                     new_data.obs.append(ob)
+                    continue
         return new_data
 
     # Accelerator use
