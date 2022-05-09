@@ -785,6 +785,7 @@ class Session(object):
         end (datetime):  The overall end of the session.
 
     """
+
     def __init__(self, name, uid=None, start=None, end=None):
         self.name = name
         self.uid = uid
@@ -831,7 +832,7 @@ class Telescope(object):
 
     """
 
-    def __init__(self, name, uid=None, focalplane=None, site=None, session=None):
+    def __init__(self, name, uid=None, focalplane=None, site=None):
         self.name = name
         self.uid = uid
         if self.uid is None:
@@ -845,11 +846,11 @@ class Telescope(object):
 
     def __repr__(self):
         value = "<Telescope '{}': uid = {}, site = {}, ".format(
-            self.name, self.uid, self.site,
+            self.name,
+            self.uid,
+            self.site,
         )
-        value += "focalplane = {}".format(
-            self.focalplane.__repr__()
-        )
+        value += "focalplane = {}".format(self.focalplane.__repr__())
         value += ">"
         return value
 

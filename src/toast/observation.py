@@ -12,7 +12,7 @@ import numpy as np
 from pshmem.utils import mpi_data_type
 
 from .dist import distribute_samples
-from .instrument import Telescope, Session
+from .instrument import Session, Telescope
 from .intervals import IntervalList
 from .mpi import MPI, comm_equal
 from .observation_data import (
