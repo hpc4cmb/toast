@@ -1,10 +1,10 @@
 # TODO
 #
-# test C++, numpy and jax version of each operator:
-# - template_offset: ../templates/offset
 # In progress:
 # - healpix_pixels: pixels_healpix
 #   this one does not pass the numpy test, might be a change inside the base healpix operations
+# - template_offset: ../templates/offset
+#   the c++ version fails, lets wait for it to be done
 # Done:
 # - pointing detector: pointing detector
 # - build_noise_weighted: mapmaker_utils
