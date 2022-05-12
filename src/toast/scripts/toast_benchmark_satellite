@@ -144,7 +144,7 @@ def parse_arguments():
     # focal plane
     args.sample_rate = 100  # sample_rate is nb sample per second, we do (60 * obs_minutes * sample_rate) sample for one observation of one detector in a minute
     args.max_detector = (
-        2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
+        434  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
     args.width = 10
     args.num_obs = 4320  # 6 months of one-hour observations
@@ -155,7 +155,7 @@ def parse_arguments():
     args.prec_period = 50.0
     args.spin_period = 10.0
     # scan map
-    args.nside = 1024
+    args.nside = 512
     args.input_map = f"fake_input_sky_nside{args.nside}.fits"
 
     return config, args, jobargs
@@ -259,8 +259,8 @@ def main():
     # Simulate the telescope pointing
     job_ops.sim_satellite.telescope = telescope
     job_ops.sim_satellite.schedule = args.schedule
-    job_ops_sim_satellite_apply(job_ops, data)
-    #job_ops.sim_satellite.apply(data) # TODO this hangs on alvarez
+    #job_ops_sim_satellite_apply(job_ops, data)
+    job_ops.sim_satellite.apply(data) # TODO this hangs on alvarez
     log.info_rank("Simulated telescope pointing in", comm=world_comm, timer=timer)
 
     # Construct a "perfect" noise model just from the focalplane parameters

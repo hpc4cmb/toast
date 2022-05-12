@@ -99,7 +99,7 @@ def parse_arguments():
 
     # Focal plane- we will use a dummy focalplane with just 2 detectors.
     args.sample_rate = 100.0  # sample_rate is nb sample per second.
-    args.width = 10.0
+    args.width = 2.0
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
 
@@ -130,13 +130,16 @@ def parse_arguments():
     # args.schedule_stop = "2027-04-01 00:00:00"
 
     # This produces about 26000 scans, and is sufficient for even the "heroic" case:
-    args.schedule_stop = "2027-12-31 00:00:00"
+    # args.schedule_stop = "2027-12-31 00:00:00"
 
     # This produces 75 scans:
     # args.schedule_stop = "2027-01-01 01:00:00"
 
+    # Only 5 days after the start case:
+    args.schedule_stop = "2027-01-05 00:00:00"
+
     # scan map
-    args.nside = 4096
+    args.nside = 512
     args.input_map = f"fake_input_sky_nside{args.nside}.fits"
 
     return config, args, jobargs

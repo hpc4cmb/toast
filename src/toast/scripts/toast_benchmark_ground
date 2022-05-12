@@ -196,16 +196,16 @@ def parse_arguments():
     # hardcoded arguments
     # focal plane
     args.sample_rate = 100  # sample_rate is nb sample per second.
-    args.max_detector = 2054
+    args.max_detector = 2522
     if args.max_n_det is not None:
         args.max_detector = args.max_n_det
 
-    args.width = 10.0
+    args.width = 2.0
     args.psd_net = 50.0e-6
     args.psd_fmin = 1.0e-5
 
     # scan map
-    args.nside = 4096
+    args.nside = 512
 
     return config, args, jobargs
 
