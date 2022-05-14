@@ -1,14 +1,14 @@
 # TODO
 #
 # In progress:
-# - healpix_pixels: pixels_healpix
-#   this one does not pass the numpy test, might be a change inside the base healpix operations
 # - template_offset: ../templates/offset
-#   the c++ version fails, lets wait for it to be done
+#   the c++ version fails (tests 'template_offset' and 'ops_mapmaker_solve')
+#   waiting for it to be fixed before merging the branch then trying to solve the problem
 # Done:
 # - pointing detector: pointing detector
 # - build_noise_weighted: mapmaker_utils
 # - stockes weight: stockes weigts
+# - healpix_pixels: pixels_healpix
 #
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
 #   (we could cache that intervals_index at a higher level within toast if the intervals are constant)
@@ -19,8 +19,10 @@
 #   (would be done by default if we can turn intervals into an index)
 # - in pixels_healpix, does pixels matter or is hit_submaps the only real output?
 # - update scan_map to slightly simplify it (cf associated TODO)
+# - try to introduce donate_argnums in calls to xmap?
 #
 # - get rid of the self.use_python versions
+# - report xmap plus static arg bug
 #
 # NOTE:
 # the code uses [xmap](https://jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html) 

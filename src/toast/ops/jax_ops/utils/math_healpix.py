@@ -6,6 +6,7 @@ from typing import NamedTuple
 import jax
 import numpy as np
 import jax.numpy as jnp
+from typing import NamedTuple
 
 TWOINVPI = 0.63661977236758134308
 MACHINE_EPSILON = np.finfo(np.float).eps
@@ -13,10 +14,10 @@ MACHINE_EPSILON = np.finfo(np.float).eps
 # -------------------------------------------------------------------------------------------------
 # JAX
 
-class HPIX_JAX():
+class HPIX_JAX(NamedTuple):
     """
     Encapsulate the information from a hpix structure in a JAX compatible way
-    This class can be converted into a pytree
+    This class can be converted into a pytree (as it inherits from NamedTuple)
     and has an efficient hash that lets it be cached
     """
     nside: np.int64
@@ -35,32 +36,34 @@ class HPIX_JAX():
     utab: np.array
     ctab: np.array
 
-    def __init__(self, nside):
-        self.nside = nside
-        self.ncap = 2 * (nside * nside - nside)
-        self.npix = 12 * nside * nside
-        self.dnside = float(nside)
-        self.twonside = 2 * nside
-        self.fournside = 4 * nside
-        self.nsideplusone = nside + 1
-        self.halfnside = 0.5 * (self.dnside)
-        self.tqnside = 0.75 * (self.dnside)
-        self.nsideminusone = nside - 1
+    @classmethod
+    def init(cls, nside):
+        ncap = 2 * (nside * nside - nside)
+        npix = 12 * nside * nside
+        dnside = float(nside)
+        twonside = 2 * nside
+        fournside = 4 * nside
+        nsideplusone = nside + 1
+        nsideminusone = nside - 1
+        halfnside = 0.5 * (dnside)
+        tqnside = 0.75 * (dnside)
 
-        self.factor = 0
-        while (nside != (1 << self.factor)):
-            self.factor += 1
+        factor = 0
+        while (nside != (1 << factor)):
+            factor += 1
 
-        self.jr = jnp.array([2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4])
-        self.jq = jnp.array([1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7])
+        jr = jnp.array([2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4])
+        jq = jnp.array([1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7])
 
-        m = jnp.arange(stop=0x100)
-        self.utab = (m & 0x1) | ((m & 0x2) << 1) | ((m & 0x4) << 2) | \
+        m = jnp.arange(start=0, stop=0x100)
+        utab = (m & 0x1) | ((m & 0x2) << 1) | ((m & 0x4) << 2) | \
                     ((m & 0x8) << 3) | ((m & 0x10) << 4) | ((m & 0x20) << 5) | \
                     ((m & 0x40) << 6) | ((m & 0x80) << 7)
-        self.ctab = (m & 0x1) | ((m & 0x2) << 7) | ((m & 0x4) >> 1) | \
+        ctab = (m & 0x1) | ((m & 0x2) << 7) | ((m & 0x4) >> 1) | \
                     ((m & 0x8) << 6) | ((m & 0x10) >> 2) | ((m & 0x20) << 5) | \
                     ((m & 0x40) >> 3) | ((m & 0x80) << 4)
+        
+        return cls(nside,npix,ncap,dnside,twonside,fournside,nsideplusone,nsideminusone,halfnside,tqnside,factor,jr,jq,utab,ctab)
 
     def xy2pix(self, x, y):
         return self.utab[x & 0xff] \
@@ -222,9 +225,7 @@ def vec2zphi_jax(vec):
 
     tz = 3.0 * (1.0 - za)
     rtz = jnp.sqrt(tz)
-
-    # NOTE that the order of inputs is switched compared to C++
-    phi = jnp.arctan2(vec[0], vec[1])
+    phi = jnp.arctan2(vec[1], vec[0])
 
     return (phi, region, z, rtz)
 
@@ -429,9 +430,7 @@ def vec2zphi_numpy(vec):
 
     work1 = 3.0 * (1.0 - za)
     rtz = np.sqrt(work1)
-
-    # NOTE that the order of inputs is switched compared to C++
-    phi = np.arctan2(vec[0], vec[1]) 
+    phi = np.arctan2(vec[1], vec[0]) 
 
     return (phi, region, z, rtz)
 

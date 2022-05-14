@@ -43,11 +43,14 @@ def pixels_healpix_inner_jax(hpix, quats, nest):
     return pixel
 
 # maps over samples and detectors
-pixels_healpix_inner_jax = jax_xmap(pixels_healpix_inner_jax, 
-                                    in_axes=[[...], # hpix
-                                             ['detectors','samples',...], # quats
-                                             [...]], # nest
-                                    out_axes=['detectors','samples',...])
+#pixels_healpix_inner_jax = jax_xmap(pixels_healpix_inner_jax, 
+#                                    in_axes=[[...], # hpix
+#                                             ['detectors','samples',...], # quats
+#                                             [...]], # nest
+#                                    out_axes=['detectors','samples'])
+# TODO xmap is commented out for now due to a bug with static argnum
+pixels_healpix_inner_jax = jax.vmap(pixels_healpix_inner_jax, in_axes=[None,0,None], out_axes=0) # loop on samples
+pixels_healpix_inner_jax = jax.vmap(pixels_healpix_inner_jax, in_axes=[None,0,None], out_axes=0) # loop on detectors
 
 def pixels_healpix_interval_jax(hpix, quats, nest):
     """
@@ -68,8 +71,7 @@ def pixels_healpix_interval_jax(hpix, quats, nest):
     return pixels_healpix_inner_jax(hpix, quats, nest)
 
 # jit compiling
-pixels_healpix_interval_jax = jax.jit(pixels_healpix_interval_jax, static_argnames=['hpix, nest'])
-
+pixels_healpix_interval_jax = jax.jit(pixels_healpix_interval_jax, static_argnames=['hpix', 'nest'])
 
 def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accell):
     """
@@ -92,7 +94,7 @@ def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_su
         TODO does pixels matter or is it only hit_submaps?
     """
     # initialize hpix for all computations
-    hpix = healpix.HPIX_JAX(nside)
+    hpix = healpix.HPIX_JAX.init(nside)
 
     # loop on the intervals
     for interval in intervals:
@@ -102,7 +104,7 @@ def pixels_healpix_jax(quat_index, quats, pixel_index, pixels, intervals, hit_su
         quats_interval = quats[quat_index, interval_start:interval_end, :]
         pixels_interval = pixels[pixel_index, interval_start:interval_end]
         # does the computation and stores the result in pixels
-        pixels_interval[:] = pixels_healpix_interval_jax(hpix, quats_interval, nest)
+        pixels[pixel_index, interval_start:interval_end] = pixels_healpix_interval_jax(hpix, quats_interval, nest)
         # modifies hit_submap in place
         submap_interval = pixels_interval // n_pix_submap
         hit_submaps[submap_interval] = 1
@@ -168,8 +170,8 @@ def pixels_healpix_numpy(quat_index, quats, pixel_index, pixels, intervals, hit_
     for idet in range(n_det):
         for interval in intervals:
             interval_start = interval['first']
-            interval_end = interval['last']
-            for isamp in range(interval_start,interval_end+1):
+            interval_end = interval['last']+1
+            for isamp in range(interval_start,interval_end):
                 # computes pixel value and saves it
                 p_index = pixel_index[idet]
                 q_index = quat_index[idet]
@@ -292,7 +294,7 @@ void pixels_healpix(
 pixels_healpix = select_implementation(pixels_healpix_compiled,
                                        pixels_healpix_numpy,
                                        pixels_healpix_jax,
-                                       default_implementationType=ImplementationType.NUMPY)
+                                       default_implementationType=ImplementationType.JAX)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
