@@ -10,7 +10,7 @@ import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
-from ..atm import AtmSim, available_atm, available_utils
+from ..atm import available_atm, available_utils
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
@@ -19,7 +19,8 @@ from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_
 from ..utils import Environment, Logger, Timer
 from .operator import Operator
 from .pipeline import Pipeline
-from .sim_tod_atm_utils import ObserveAtmosphere
+from .sim_tod_atm_generate import GenerateAtmosphere
+from .sim_tod_atm_observe import ObserveAtmosphere
 
 if available_atm:
     from ..atm import AtmSim
@@ -300,8 +301,51 @@ class SimAtmosphere(Operator):
         else:
             temporary_view = "temporary_view"
 
-        # Observation key for storing the atmosphere sims
-        atm_sim_key = f"{self.name}_atm_sim"
+        # The atmosphere sims are created and stored for each observing session.
+        # This data key contains a dictionary of sims, keyed on session name.
+        atm_sim_key = "atm_sim"
+
+        # Generate (or load) the atmosphere realizations for all sessions
+        gen_atm = GenerateAtmosphere(
+            times=self.times,
+            boresight=self.detector_pointing.boresight,
+            wind_intervals=wind_intervals,
+            shared_flags=self.shared_flags,
+            shared_flag_mask=self.shared_flag_mask,
+            output=atm_sim_key,
+            turnaround_interval=self.turnaround_interval,
+            realization=self.realization,
+            component=self.component,
+            lmin_center=self.lmin_center,
+            lmin_sigma=self.lmin_sigma,
+            lmax_center=self.lmax_center,
+            lmax_sigma=self.lmax_sigma,
+            gain=self.gain,
+            zatm=self.zatm,
+            zmax=self.zmax,
+            xstep=self.xstep,
+            ystep=self.ystep,
+            zstep=self.zstep,
+            z0_center=self.z0_center,
+            z0_sigma=self.z0_sigma,
+            wind_dist=self.wind_dist,
+            fade_time=self.fade_time,
+            sample_rate=self.sample_rate,
+            nelem_sim_max=self.nelem_sim_max,
+            cache_dir=self.cache_dir,
+            overwrite_cache=self.overwrite_cache,
+            cache_only=self.cache_only,
+            debug_spectrum=self.debug_spectrum,
+            debug_snapshots=self.debug_snapshots,
+            debug_plots=self.debug_plots,
+            field_of_view=self.field_of_view,
+        )
+        gen_atm.apply(data)
+
+        if self.cache_only:
+            # In this case, the simulated slabs were written to disk but never stored
+            # in the output data key.
+            return
 
         # Observation key for storing absorption and loading
         absorption_key = f"{self.name}_absorption"
@@ -351,28 +395,17 @@ class SimAtmosphere(Operator):
                 msg = "Atmosphere simulation requires each observation to have a name"
                 raise RuntimeError(msg)
 
-            if ob.comm_row_size > 1:
-                # FIXME: we can remove this check after making the _get_time_range()
-                # method more general below.
-                msg = "Atmosphere simulation requires data distributed by detector, not time"
-                raise RuntimeError(msg)
-
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
 
+            tmr = Timer()
+            tmr.start()
+
             # Prefix for logging
             log_prefix = f"{group} : {ob.name} : "
-
-            # The site and weather for this observation
-            site = ob.telescope.site
-            if not hasattr(site, "weather") or site.weather is None:
-                raise RuntimeError(
-                    "Cannot simulate atmosphere for sites without weather"
-                )
-            weather = site.weather
 
             # Make sure detector data output exists
             exists = ob.detdata.ensure(
@@ -397,130 +430,8 @@ class SimAtmosphere(Operator):
                         )
                         raise RuntimeError(msg)
 
-            # The full time range of this observation.  The processes are arranged
-            # in a grid, and processes along the same column have the same timestamps.
-            # So the first process of the group has the earliest times and the last
-            # process of the group has the latest times.
-
-            times = ob.shared[self.times]
-
-            tmin_tot = times[0]
-            tmax_tot = times[-1]
-            if comm is not None:
-                tmin_tot = comm.bcast(tmin_tot, root=0)
-                tmax_tot = comm.bcast(tmax_tot, root=(data.comm.group_size - 1))
-
-            key1, key2, counter1, counter2 = self._get_rng_keys(ob)
-
-            cachedir = self._get_cache_dir(ob, comm)
-
-            ob[atm_sim_key] = list()
-
-            if comm is not None:
-                comm.Barrier()
-            if rank == 0:
-                msg = f"{log_prefix}Setting up atmosphere simulation"
-                log.debug(msg)
-
-            scan_range = self._get_scan_range(ob, comm, log_prefix)
-
             # Compute the absorption and loading for this observation
-            self._compute_absorption_and_loading(ob, absorption_key, loading_key, comm)
-
-            # Loop over the time span in "wind_time"-sized chunks.
-            # wind_time is intended to reflect the correlation length
-            # in the atmospheric noise.
-
-            wind_times = list()
-
-            tmr = Timer()
-            if comm is not None:
-                comm.Barrier()
-            tmr.start()
-
-            tmin = tmin_tot
-            istart = 0
-            counter1start = counter1
-
-            while tmin < tmax_tot:
-                if comm is not None:
-                    comm.Barrier()
-                istart, istop, tmax = self._get_time_range(
-                    tmin, istart, times, tmax_tot, ob, weather
-                )
-                wind_times.append((tmin, tmax))
-
-                if rank == 0:
-                    log.debug(
-                        f"{log_prefix}Instantiating atmosphere for t = "
-                        f"{tmin - tmin_tot:10.1f} s - {tmax - tmin_tot:10.1f} s "
-                        f"out of {tmax_tot - tmin_tot:10.1f} s"
-                    )
-
-                ind = slice(istart, istop)
-                nind = istop - istart
-
-                rmin = 0
-                rmax = 100
-                scale = 10
-                counter2start = counter2
-                counter1 = counter1start
-                xstep_current = u.Quantity(self.xstep)
-                ystep_current = u.Quantity(self.ystep)
-                zstep_current = u.Quantity(self.zstep)
-
-                sim_list = list()
-
-                while rmax < 100000:
-                    sim, counter2 = self._simulate_atmosphere(
-                        weather,
-                        scan_range,
-                        tmin,
-                        tmax,
-                        comm,
-                        comm_node,
-                        comm_node_rank,
-                        key1,
-                        key2,
-                        counter1,
-                        counter2start,
-                        cachedir,
-                        log_prefix,
-                        tmin_tot,
-                        tmax_tot,
-                        xstep_current,
-                        ystep_current,
-                        zstep_current,
-                        rmin,
-                        rmax,
-                    )
-                    sim_list.append(sim)
-
-                    if self.debug_plots or self.debug_snapshots:
-                        self._plot_snapshots(
-                            sim,
-                            log_prefix,
-                            ob.name,
-                            scan_range,
-                            tmin,
-                            tmax,
-                            comm,
-                            rmin,
-                            rmax,
-                        )
-
-                    rmin = rmax
-                    rmax *= scale
-                    xstep_current *= np.sqrt(scale)
-                    ystep_current *= np.sqrt(scale)
-                    zstep_current *= np.sqrt(scale)
-                    counter1 += 1
-
-                ob[atm_sim_key].append(sim_list)
-                tmin = tmax
-
-            # Create the wind intervals
-            ob.intervals.create_col(wind_intervals, wind_times, ob.shared[self.times])
+            self._common_absorption_and_loading(ob, absorption_key, loading_key, comm)
 
             # Create temporary intervals by combining views
             if temporary_view != wind_intervals:
@@ -528,25 +439,24 @@ class SimAtmosphere(Operator):
                     ob.intervals[view] & ob.intervals[wind_intervals]
                 )
 
-            if not self.cache_only:
-                # Observation pipeline.  We do not want to store persistent detector
-                # pointing, so we build a small pipeline that runs one detector at a
-                # time on only the current observation.
-                pipe_data = data.select(obs_index=iobs)
+            # Observation pipeline.  We do not want to store persistent detector
+            # pointing, so we build a small pipeline that runs one detector at a
+            # time on only the current observation.
+            pipe_data = data.select(obs_index=iobs)
 
-                operators = [self.detector_pointing]
-                if self.detector_weights is not None:
-                    operators.append(self.detector_weights)
-                operators.append(observe_atm)
+            operators = [self.detector_pointing]
+            if self.detector_weights is not None:
+                operators.append(self.detector_weights)
+            operators.append(observe_atm)
 
-                observe_pipe = Pipeline(operators=operators, detector_sets=["SINGLE"])
-                observe_pipe.apply(pipe_data)
+            observe_pipe = Pipeline(operators=operators, detector_sets=["SINGLE"])
+            observe_pipe.apply(pipe_data)
 
-            # Delete the atmosphere slabs for this observation
-            for wind_slabs in ob[atm_sim_key]:
-                for slab in wind_slabs:
-                    slab.close()
-            del ob[atm_sim_key]
+            # Delete the absorption and loading for this observation
+            if absorption_key is not None:
+                del ob[absorption_key]
+            if loading_key is not None:
+                del ob[loading_key]
 
             if comm is not None:
                 comm.Barrier()
@@ -561,48 +471,20 @@ class SimAtmosphere(Operator):
                 del ob.intervals[temporary_view]
             del ob.intervals[wind_intervals]
 
-    def _get_rng_keys(self, obs):
-        """Get random number keys and counters for an observation.
-
-        The observation and telescope UID values are 32bit integers.  The realization
-        index is typically smaller, and should fit within 2^16.  The component index
-        is a small integer.
-
-        The random number generator accepts a key and a counter, each made of two 64bit
-        integers.  For a given observation we set these as:
-            key 1 = site UID * 2^32 + telescope UID
-            key 2 = observation UID * 2^32 + realization * 2^16 + component
-            counter 1 = hierarchical cone counter
-            counter 2 = 0 (this is incremented per RNG stream sample)
-
-        Args:
-            obs (Observation):  The current observation.
-
-        Returns:
-            (tuple): The key1, key2, counter1, counter2 to use.
-
-        """
-        telescope = obs.telescope.uid
-        site = obs.telescope.site.uid
-        obsid = obs.uid
-
-        # site UID in higher bits, telescope UID in lower bits
-        key1 = site * 2**32 + telescope
-
-        # Observation UID in higher bits, realization and component in lower bits
-        key2 = obsid * 2**32 + self.realization * 2**16 + self.component
-
-        # This tracks the number of cones simulated due to the wind speed.
-        counter1 = 0
-
-        # Starting point for the observation, incremented for each slice.
-        counter2 = 0
-
-        return key1, key2, counter1, counter2
+        # Delete the atmosphere slabs for all sessions
+        for sname in list(data[atm_sim_key].keys()):
+            for wind_slabs in data[atm_sim_key][sname]:
+                for slab in wind_slabs:
+                    slab.close()
+            del data[atm_sim_key][sname]
+        del data[atm_sim_key]
 
     @function_timer
-    def _compute_absorption_and_loading(self, obs, absorption_key, loading_key, comm):
+    def _common_absorption_and_loading(self, obs, absorption_key, loading_key, comm):
         """Compute the (common) absorption and loading prior to bandpass convolution."""
+
+        if absorption_key is None and loading_key is None:
+            return
 
         if obs.telescope.focalplane.bandpass is None:
             raise RuntimeError("Focalplane does not define bandpass")
@@ -624,320 +506,40 @@ class SimAtmosphere(Operator):
         my_stop = min(my_start + n_freq_task, n_freq)
         my_n_freq = my_stop - my_start
 
+        absorption = list()
+        loading = list()
+
         if my_n_freq > 0:
-            absorption = atm_absorption_coefficient_vec(
-                altitude.to_value(u.meter),
-                weather.air_temperature.to_value(u.Kelvin),
-                weather.surface_pressure.to_value(u.Pa),
-                weather.pwv.to_value(u.mm),
-                freqs[my_start].to_value(u.GHz),
-                freqs[my_stop - 1].to_value(u.GHz),
-                my_n_freq,
-            )
-            loading = atm_atmospheric_loading_vec(
-                altitude.to_value(u.meter),
-                weather.air_temperature.to_value(u.Kelvin),
-                weather.surface_pressure.to_value(u.Pa),
-                weather.pwv.to_value(u.mm),
-                freqs[my_start].to_value(u.GHz),
-                freqs[my_stop - 1].to_value(u.GHz),
-                my_n_freq,
-            )
-        else:
-            absorption, loading = [], []
-
-        if comm is not None:
-            absorption = np.hstack(comm.allgather(absorption))
-            loading = np.hstack(comm.allgather(loading))
-        obs[absorption_key] = absorption
-        obs[loading_key] = loading
-
-    def _get_cache_dir(self, obs, comm):
-        obsid = obs.uid
-        if self.cache_dir is None:
-            cachedir = None
-        else:
-            # The number of atmospheric realizations can be large.  Use
-            # sub-directories under cachedir.
-            subdir = str(int((obsid % 1000) // 100))
-            subsubdir = str(int((obsid % 100) // 10))
-            subsubsubdir = str(obsid % 10)
-            cachedir = os.path.join(self.cache_dir, subdir, subsubdir, subsubsubdir)
-            if (comm is None) or (comm.rank == 0):
-                # Handle a rare race condition when two process groups
-                # are creating the cache directories at the same time
-                while True:
-                    try:
-                        os.makedirs(cachedir, exist_ok=True)
-                    except OSError:
-                        continue
-                    except FileNotFoundError:
-                        continue
-                    else:
-                        break
-        return cachedir
-
-    @function_timer
-    def _get_scan_range(self, obs, comm, prefix):
-        if self.field_of_view is not None:
-            fov = self.field_of_view
-        else:
-            fov = obs.telescope.focalplane.field_of_view
-        fp_radius = 0.5 * fov.to_value(u.radian)
-
-        # work in parallel
-
-        if comm is None:
-            rank = 0
-            ntask = 1
-        else:
-            rank = comm.rank
-            ntask = comm.size
-
-        # Create a fake focalplane of detectors in a circle around the boresight
-
-        xaxis, yaxis, zaxis = np.eye(3)
-        ndet = 64
-        phidet = np.linspace(0, 2 * np.pi, ndet, endpoint=False)
-        detquats = []
-        thetarot = qa.rotation(yaxis, fp_radius)
-        for phi in phidet:
-            phirot = qa.rotation(zaxis, phi)
-            detquat = qa.mult(phirot, thetarot)
-            detquats.append(detquat)
-
-        # Get fake detector pointing
-
-        az = []
-        el = []
-        quats = obs.shared[self.detector_pointing.boresight][rank::ntask].copy()
-        for detquat in detquats:
-            vecs = qa.rotate(qa.mult(quats, detquat), zaxis)
-            theta, phi = hp.vec2ang(vecs)
-            az.append(2 * np.pi - phi)
-            el.append(np.pi / 2 - theta)
-        az = np.unwrap(np.hstack(az))
-        el = np.hstack(el)
-
-        # find the extremes
-
-        azmin = np.amin(az)
-        azmax = np.amax(az)
-        elmin = np.amin(el)
-        elmax = np.amax(el)
-
-        if azmin < -2 * np.pi:
-            azmin += 2 * np.pi
-            azmax += 2 * np.pi
-        elif azmax > 2 * np.pi:
-            azmin -= 2 * np.pi
-            azmax -= 2 * np.pi
-
-        # Combine results
-
-        if comm is not None:
-            azmin = comm.allreduce(azmin, op=MPI.MIN)
-            azmax = comm.allreduce(azmax, op=MPI.MAX)
-            elmin = comm.allreduce(elmin, op=MPI.MIN)
-            elmax = comm.allreduce(elmax, op=MPI.MAX)
-
-        return azmin * u.radian, azmax * u.radian, elmin * u.radian, elmax * u.radian
-
-    @function_timer
-    def _get_time_range(self, tmin, istart, times, tmax_tot, obs, weather):
-        # FIXME:  This whole function assumes that the data is distributed in the
-        # detector direction, and that each process therefore has the full time
-        # range.  We should instead collect the full timestamps and turnaround
-        # intervals onto a single process and do this calculation there before
-        # broadcasting the result.
-
-        while times[istart] < tmin:
-            istart += 1
-
-        # Translate the wind speed to time span of a correlated interval
-        wx = weather.west_wind.to_value(u.meter / u.second)
-        wy = weather.south_wind.to_value(u.meter / u.second)
-        w = np.sqrt(wx**2 + wy**2)
-        wind_time = self.wind_dist.to_value(u.meter) / w
-
-        tmax = tmin + wind_time
-        if tmax < tmax_tot:
-            istop = istart
-            while istop < len(times) and times[istop] < tmax:
-                istop += 1
-            # Extend the scan to the next turnaround, if we have them
-            if self.turnaround_interval is not None:
-                iturn = 0
-                while iturn < len(obs.intervals[self.turnaround_interval]) - 1 and (
-                    times[istop] > obs.intervals[self.turnaround_interval][iturn].stop
-                ):
-                    iturn += 1
-                if times[istop] > obs.intervals[self.turnaround_interval][iturn].stop:
-                    # We are past the last turnaround.
-                    # Extend to the end of the observation.
-                    istop = len(times)
-                    tmax = tmax_tot
-                else:
-                    # Stop time is either before or in the middle of the turnaround.
-                    # Extend to the start of the turnaround.
-                    while istop < len(times) and (
-                        times[istop]
-                        < obs.intervals[self.turnaround_interval][iturn].start
-                    ):
-                        istop += 1
-                    if istop < len(times):
-                        tmax = times[istop]
-                    else:
-                        tmax = tmax_tot
-            else:
-                tmax = times[istop]
-        else:
-            tmax = tmax_tot
-            istop = len(times)
-        return istart, istop, np.ceil(tmax)
-
-    @function_timer
-    def _simulate_atmosphere(
-        self,
-        weather,
-        scan_range,
-        tmin,
-        tmax,
-        comm,
-        comm_node,
-        comm_node_rank,
-        key1,
-        key2,
-        counter1,
-        counter2,
-        cachedir,
-        prefix,
-        tmin_tot,
-        tmax_tot,
-        xstep,
-        ystep,
-        zstep,
-        rmin,
-        rmax,
-    ):
-        log = Logger.get()
-        rank = 0
-        tmr = Timer()
-        if comm is not None:
-            rank = comm.rank
-            comm.Barrier()
-        tmr.start()
-
-        T0_center = weather.air_temperature
-        wx = weather.west_wind
-        wy = weather.south_wind
-        w_center = np.sqrt(wx**2 + wy**2)
-        wdir_center = np.arctan2(wy, wx)
-
-        azmin, azmax, elmin, elmax = scan_range
-
-        sim = AtmSim(
-            azmin,
-            azmax,
-            elmin,
-            elmax,
-            tmin,
-            tmax,
-            self.lmin_center,
-            self.lmin_sigma,
-            self.lmax_center,
-            self.lmax_sigma,
-            w_center,
-            0 * u.meter / u.second,
-            wdir_center,
-            0 * u.radian,
-            self.z0_center,
-            self.z0_sigma,
-            T0_center,
-            0 * u.Kelvin,
-            self.zatm,
-            self.zmax,
-            xstep,
-            ystep,
-            zstep,
-            self.nelem_sim_max,
-            comm,
-            key1,
-            key2,
-            counter1,
-            counter2,
-            cachedir,
-            rmin * u.meter,
-            rmax * u.meter,
-            write_debug=self.debug_spectrum,
-            node_comm=comm_node,
-            node_rank_comm=comm_node_rank,
-        )
-
-        if comm is not None:
-            comm.Barrier()
-        if rank == 0:
-            tmr.stop()
-            log.debug(
-                f"{prefix}SimAtmosphere: Initialize atmosphere: {tmr.seconds()} seconds"
-            )
-            tmr.clear()
-            tmr.start()
-
-        # Check if the cache already exists.
-
-        use_cache = False
-        have_cache = False
-        if rank == 0:
-            if cachedir is not None:
-                # We are saving to cache
-                use_cache = True
-            fname = None
-            if cachedir is not None:
-                fname = os.path.join(
-                    cachedir, "{}_{}_{}_{}.h5".format(key1, key2, counter1, counter2)
+            if absorption_key is not None:
+                absorption = atm_absorption_coefficient_vec(
+                    altitude.to_value(u.meter),
+                    weather.air_temperature.to_value(u.Kelvin),
+                    weather.surface_pressure.to_value(u.Pa),
+                    weather.pwv.to_value(u.mm),
+                    freqs[my_start].to_value(u.GHz),
+                    freqs[my_stop - 1].to_value(u.GHz),
+                    my_n_freq,
                 )
-                if os.path.isfile(fname):
-                    if self.overwrite_cache:
-                        os.remove(fname)
-                    else:
-                        have_cache = True
-            if have_cache:
-                log.debug(
-                    f"{prefix}Loading the atmosphere for t = {tmin - tmin_tot} from {fname}"
+            if loading_key is not None:
+                loading = atm_atmospheric_loading_vec(
+                    altitude.to_value(u.meter),
+                    weather.air_temperature.to_value(u.Kelvin),
+                    weather.surface_pressure.to_value(u.Pa),
+                    weather.pwv.to_value(u.mm),
+                    freqs[my_start].to_value(u.GHz),
+                    freqs[my_stop - 1].to_value(u.GHz),
+                    my_n_freq,
                 )
-            else:
-                log.debug(
-                    f"{prefix}Simulating the atmosphere for t = {tmin - tmin_tot}"
-                )
-        if comm is not None:
-            use_cache = comm.bcast(use_cache, root=0)
-
-        err = sim.simulate(use_cache=use_cache)
-        if err != 0:
-            raise RuntimeError(prefix + "Simulation failed.")
-
-        # Advance the sample counter in case wind_time broke the
-        # observation in parts
-
-        counter2 += 100000000
 
         if comm is not None:
-            comm.Barrier()
-        if rank == 0:
-            op = None
-            if have_cache:
-                op = "Loaded"
-            else:
-                op = "Simulated"
-            tmr.stop()
-            log.debug(
-                f"{prefix}SimAtmosphere: {op} atmosphere: {tmr.seconds()} seconds"
-            )
-            tmr.clear()
-            tmr.start()
-
-        return sim, counter2
+            if absorption_key is not None:
+                absorption = np.hstack(comm.allgather(absorption))
+            if loading_key is not None:
+                loading = np.hstack(comm.allgather(loading))
+        if absorption_key is not None:
+            obs[absorption_key] = absorption
+        if loading_key is not None:
+            obs[loading_key] = loading
 
     def _finalize(self, data, **kwargs):
         return
@@ -965,113 +567,3 @@ class SimAtmosphere(Operator):
         }
         return prov
 
-    @function_timer
-    def _plot_snapshots(
-        self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax
-    ):
-        """Create snapshots of the atmosphere"""
-        log = Logger.get()
-        from ..vis import set_matplotlib_backend
-
-        set_matplotlib_backend()
-        import pickle
-
-        import matplotlib.pyplot as plt
-
-        azmin, azmax, elmin, elmax = scan_range
-        azmin = azmin.to_value(u.radian)
-        azmax = azmax.to_value(u.radian)
-        elmin = elmin.to_value(u.radian)
-        elmax = elmax.to_value(u.radian)
-
-        # elstep = np.radians(0.01)
-        elstep = (elmax - elmin) / 320
-        azstep = elstep * np.cos(0.5 * (elmin + elmax))
-        azgrid = np.linspace(azmin, azmax, int((azmax - azmin) / azstep) + 1)
-        elgrid = np.linspace(elmin, elmax, int((elmax - elmin) / elstep) + 1)
-        AZ, EL = np.meshgrid(azgrid, elgrid)
-        nn = AZ.size
-        az = AZ.ravel()
-        el = EL.ravel()
-        atmdata = np.zeros(nn, dtype=np.float64)
-        atmtimes = np.zeros(nn, dtype=np.float64)
-
-        rank = 0
-        ntask = 1
-        if comm is not None:
-            rank = comm.rank
-            ntask = comm.size
-
-        r = 0
-        t = 0
-        my_snapshots = []
-        vmin = 1e30
-        vmax = -1e30
-        tstep = 1
-        for i, t in enumerate(np.arange(tmin, tmax, tstep)):
-            if i % ntask != rank:
-                continue
-            err = sim.observe(atmtimes + t, az, el, atmdata, r)
-            if err != 0:
-                raise RuntimeError(prefix + "Observation failed")
-            atmdata *= self.gain
-            vmin = min(vmin, np.amin(atmdata))
-            vmax = max(vmax, np.amax(atmdata))
-            atmdata2d = atmdata.reshape(AZ.shape)
-            my_snapshots.append((t, r, atmdata2d.copy()))
-
-        if self.debug_snapshots:
-            outdir = "snapshots"
-            if rank == 0:
-                try:
-                    os.makedirs(outdir)
-                except FileExistsError:
-                    pass
-            fn = os.path.join(
-                outdir,
-                "atm_{}_{}_t_{}_{}_r_{}_{}.pck".format(
-                    obsname, rank, int(tmin), int(tmax), int(rmin), int(rmax)
-                ),
-            )
-            with open(fn, "wb") as fout:
-                pickle.dump([azgrid, elgrid, my_snapshots], fout)
-
-        log.debug("Snapshots saved in {}".format(fn))
-
-        if self.debug_plots:
-            if comm is not None:
-                vmin = comm.allreduce(vmin, op=MPI.MIN)
-                vmax = comm.allreduce(vmax, op=MPI.MAX)
-
-            for t, r, atmdata2d in my_snapshots:
-                plt.figure(figsize=[12, 4])
-                plt.imshow(
-                    atmdata2d,
-                    interpolation="nearest",
-                    origin="lower",
-                    extent=np.degrees(
-                        [
-                            0,
-                            (azmax - azmin) * np.cos(0.5 * (elmin + elmax)),
-                            elmin,
-                            elmax,
-                        ]
-                    ),
-                    cmap=plt.get_cmap("Blues"),
-                    vmin=vmin,
-                    vmax=vmax,
-                )
-                plt.colorbar()
-                ax = plt.gca()
-                ax.set_title("t = {:15.1f} s, r = {:15.1f} m".format(t, r))
-                ax.set_xlabel("az [deg]")
-                ax.set_ylabel("el [deg]")
-                ax.set_yticks(np.degrees([elmin, elmax]))
-                plt.savefig(
-                    "atm_{}_t_{:04}_r_{:04}.png".format(obsname, int(t), int(r))
-                )
-                plt.close()
-
-        del my_snapshots
-
-        return

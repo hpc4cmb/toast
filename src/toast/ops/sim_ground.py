@@ -741,6 +741,8 @@ class SimGround(Operator):
                 site=site,
             )
 
+            # The session name is the same as the historical observation name,
+            # which allows re-use of previously cached atmosphere sims.
             name = f"{scan.name}-{scan.scan_indx}-{scan.subscan_indx}"
 
             session = Session(
@@ -748,11 +750,17 @@ class SimGround(Operator):
                 start=datetime.fromtimestamp(times[0]).astimezone(timezone.utc),
                 end=datetime.fromtimestamp(times[-1]).astimezone(timezone.utc),
             )
+
+            # FIXME: if / when we support simulating multiple observations within
+            # the same session, we should change the observation name to be some
+            # unique combination of the session name and subset of the focalplane.
+            obs_name = name
+
             ob = Observation(
                 comm,
                 telescope,
                 len(times),
-                name=name,
+                name=obs_name,
                 uid=name_UID(name),
                 session=session,
                 detector_sets=detsets,
