@@ -48,7 +48,7 @@ def pixels_healpix_inner_jax(hpix, quats, nest):
 #                                             ['detectors','samples',...], # quats
 #                                             [...]], # nest
 #                                    out_axes=['detectors','samples'])
-# TODO xmap is commented out for now due to a bug with static argnum
+# TODO xmap is commented out for now due to a [bug with static argnum](https://github.com/google/jax/issues/10741)
 pixels_healpix_inner_jax = jax.vmap(pixels_healpix_inner_jax, in_axes=[None,0,None], out_axes=0) # loop on samples
 pixels_healpix_inner_jax = jax.vmap(pixels_healpix_inner_jax, in_axes=[None,0,None], out_axes=0) # loop on detectors
 
