@@ -2192,8 +2192,10 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
-                last_successful,
-                last_el,
+                # Pole scheduling does not (yet) implement
+                # elevation change penalty
+                # last_successful,
+                # last_el,
             )
         else:
             success, t, el = attempt_scan(
