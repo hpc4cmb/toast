@@ -27,6 +27,8 @@ class FilterBinTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
         self.nside = 64
 
+    """
+
     def test_filterbin(self):
 
         # Create a fake ground data set for testing
@@ -56,12 +58,11 @@ class FilterBinTest(MPITestCase):
         sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
 
-        # Add a strong gradient that should be filtered out completely
+        # Add a strong gradient
         for obs in data.obs:
             times = obs.shared[defaults.times]
             for det in obs.local_detectors:
-                obs.detdata[defaults.det_data] += times.data
-                obs.detdata[defaults.det_data][:] = times.data
+                obs.detdata[defaults.det_data][det][:] = times.data
 
         # Make fake flags
         fake_flags(data)
@@ -104,7 +105,7 @@ class FilterBinTest(MPITestCase):
             rot = [43, -42]
             reso = 4
             fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+            cmap = "bwr"
 
             fname_binned = os.path.join(
                 self.outdir, f"{filterbin.name}_unfiltered_map.h5"
@@ -144,6 +145,135 @@ class FilterBinTest(MPITestCase):
 
         return
 
+    """
+
+    """
+
+    def test_filterbin_2d(self):
+
+        # Create a fake ground data set for testing
+        data = create_ground_data(self.comm)
+
+        nside = 256
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+            # view="scanning",
+        )
+        weights = ops.StokesWeights(
+            mode="I",  # "IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model but make the noise 100% correlated
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
+        sim_noise.apply(data)
+        for obs in data.obs:
+            noise = obs.detdata[defaults.det_data][0].copy()
+            for det in obs.local_detectors:
+                obs.detdata[defaults.det_data][det][:] = noise
+
+        # Add a strong gradient that should be filtered out completely
+        for obs in data.obs:
+            times = obs.shared[defaults.times]
+            for det in obs.local_detectors:
+                obs.detdata[defaults.det_data] += times.data
+                obs.detdata[defaults.det_data][:] = times.data
+
+        # Make fake flags
+        fake_flags(data)
+
+        binning = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance="covariance",
+            det_data=sim_noise.det_data,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            sync_type="allreduce",
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=1,
+            det_flags=defaults.det_flags,
+            det_flag_mask=255,
+        )
+
+        filterbin = ops.FilterBin(
+            name="filterbin_2d",
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
+            det_flag_mask=255,
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=1,
+            binning=binning,
+            ground_filter_order=5,
+            split_ground_template=True,
+            poly_filter_order=0,
+            output_dir=self.outdir,
+            write_hdf5=True,
+            focalplane_key="telescope",
+            poly2d_filter_order=0,
+        )
+        filterbin.apply(data)
+
+        # Confirm that the filtered map has less noise than the unfiltered map
+
+        if data.comm.world_rank == 0:
+            import matplotlib.pyplot as plt
+
+            rot = [43, -42]
+            reso = 4
+            fig = plt.figure(figsize=[18, 12])
+            cmap = "bwr"
+
+            fname_binned = os.path.join(
+                self.outdir, f"{filterbin.name}_unfiltered_map.h5"
+            )
+            fname_filtered = os.path.join(
+                self.outdir, f"{filterbin.name}_filtered_map.h5"
+            )
+
+            binned = np.atleast_2d(read_healpix(fname_binned, None))
+            filtered = np.atleast_2d(read_healpix(fname_filtered, None))
+
+            good = binned != 0
+            rms1 = np.std(binned[good])
+            rms2 = np.std(filtered[good])
+
+            nrow, ncol = 2, 2
+            for m in binned, filtered:
+                m[m == 0] = hp.UNSEEN
+            args = {"rot": rot, "reso": reso, "cmap": cmap}
+            hp.gnomview(
+                binned[0],
+                sub=[nrow, ncol, 1],
+                title=f"Binned map : {rms1}",
+                **args,
+            )
+            hp.gnomview(
+                filtered[0],
+                sub=[nrow, ncol, 2],
+                title=f"Filtered map : {rms2}",
+                **args,
+            )
+
+            fname = os.path.join(self.outdir, "filter_test.png")
+            fig.savefig(fname)
+
+            assert rms2 < 1e-6 * rms1
+
+        return
+
+    """
+
     def test_filterbin_obsmatrix(self):
 
         # Create a fake ground data set for testing
@@ -170,10 +300,13 @@ class FilterBinTest(MPITestCase):
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
 
-        input_map_file = os.path.join(self.outdir, "input_map.fits")
+        input_map_file = os.path.join(self.outdir, "input_map.1.fits")
         if data.comm.world_rank == 0:
             lmax = 3 * self.nside
-            cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
+            if weights.mode == "I":
+                cls = np.ones(lmax + 1)
+            else:
+                cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
             fwhm = np.radians(10)
             input_map = hp.synfast(cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False)
             if pixels.nest:
@@ -216,10 +349,11 @@ class FilterBinTest(MPITestCase):
             shared_flag_mask=1,
             binning=binning,
             ground_filter_order=5,
-            split_ground_template=True,
+            split_ground_template=False, # True,
             poly_filter_order=2,
             output_dir=self.outdir,
             write_obs_matrix=True,
+            filter_in_sequence=True,
         )
         filterbin.apply(data)
 
@@ -229,22 +363,23 @@ class FilterBinTest(MPITestCase):
             rot = [42, -42]
             reso = 4
             fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+            cmap = "bwr"
             nest = pixels.nest
+            nnz = len(weights.mode)
 
             rootname = os.path.join(self.outdir, f"{filterbin.name}_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
 
             obs_matrix = scipy.sparse.load_npz(fname_matrix)
 
-            input_map = hp.read_map(input_map_file, None, nest=nest)
+            input_map = np.atleast_2d(hp.read_map(input_map_file, None, nest=nest))
 
             fname_filtered = os.path.join(
                 self.outdir, f"{filterbin.name}_filtered_map.fits"
             )
-            filtered = hp.read_map(fname_filtered, None, nest=nest)
+            filtered = np.atleast_2d(hp.read_map(fname_filtered, None, nest=nest))
 
-            test_map = obs_matrix.dot(input_map.ravel()).reshape([3, -1])
+            test_map = obs_matrix.dot(input_map.ravel()).reshape([nnz, -1])
 
             good = filtered[0] != 0
 
@@ -264,13 +399,156 @@ class FilterBinTest(MPITestCase):
             fname = os.path.join(self.outdir, "obs_matrix_test.png")
             fig.savefig(fname)
 
-            for i in range(3):
+            for i in range(nnz):
                 rms1 = np.std(filtered[i][good])
                 rms2 = np.std((filtered - test_map)[i][good])
                 assert rms2 < 1e-5 * rms1
 
         return
 
+    def test_filterbin_2d_obsmatrix(self):
+
+        # Create a fake ground data set for testing
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, pixel_per_process=2)
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=self.nside,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+            # view="scanning",
+        )
+        pixels.apply(data)
+
+        weights = ops.StokesWeights(
+            #mode="IQU",
+            mode="I",  # DEBUG
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        input_map_file = os.path.join(self.outdir, "input_map.2.fits")
+        if data.comm.world_rank == 0:
+            lmax = 3 * self.nside
+            if weights.mode == "IQU":
+                cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
+            else:
+                cls = np.ones(lmax + 1)
+            fwhm = np.radians(10)
+            input_map = hp.synfast(cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False)
+            if pixels.nest:
+                input_map = hp.reorder(input_map, r2n=True)
+            hp.write_map(input_map_file, input_map, nest=pixels.nest)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.Barrier()
+
+        # Scan map into timestreams
+        scan_hpix = ops.ScanHealpixMap(
+            file=input_map_file,
+            det_data=defaults.det_data,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+        )
+        scan_hpix.apply(data)
+
+        # Configure and apply the filterbin operator
+        binning = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance="covariance",
+            det_data=defaults.det_data,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            sync_type="allreduce",
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=1,
+            det_flags=defaults.det_flags,
+            det_flag_mask=255,
+        )
+
+        filterbin = ops.FilterBin(
+            name="filterbin_2d_obsmat",
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
+            det_flag_mask=255,
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=1,
+            binning=binning,
+            ground_filter_order=5,
+            split_ground_template=True,
+            poly_filter_order=2,
+            output_dir=self.outdir,
+            write_obs_matrix=True,
+            focalplane_key="telescope",
+            poly2d_filter_order=0,
+            filter_in_sequence=True,
+        )
+        filterbin.apply(data)
+
+        if data.comm.world_rank == 0:
+            import matplotlib.pyplot as plt
+
+            rot = [42, -42]
+            reso = 4
+            fig = plt.figure(figsize=[18, 12])
+            cmap = "bwr"
+            nest = pixels.nest
+            nnz = len(weights.mode)
+
+            rootname = os.path.join(self.outdir, f"{filterbin.name}_obs_matrix")
+            fname_matrix = ops.combine_observation_matrix(rootname)
+
+            obs_matrix = scipy.sparse.load_npz(fname_matrix)
+
+            input_map = np.atleast_2d(hp.read_map(input_map_file, None, nest=nest))
+
+            fname_filtered = os.path.join(
+                self.outdir, f"{filterbin.name}_filtered_map.fits"
+            )
+            filtered = np.atleast_2d(hp.read_map(fname_filtered, None, nest=nest))
+
+            test_map = obs_matrix.dot(input_map.ravel()).reshape([nnz, -1])
+
+            good = filtered[0] != 0
+            mask = np.logical_not(good)
+
+            nrow, ncol = 2, 2
+            args = {"rot": rot, "reso": reso, "cmap": cmap, "nest": nest}
+
+            hp.gnomview(input_map[0], sub=[nrow, ncol, 1], title="Input map", **args)
+            filtered[:, mask] = hp.UNSEEN
+            hp.gnomview(filtered[0], sub=[nrow, ncol, ncol + 1], title="Filtered map", **args)
+
+            col = 2
+            diffmap = test_map - filtered
+            test_map[:, mask] = hp.UNSEEN
+            diffmap[:, mask] = hp.UNSEEN
+
+            hp.gnomview(
+                test_map[0], sub=[nrow, ncol, col], title="Input x obs.matrix", **args
+            )
+            hp.gnomview(
+                diffmap[0], sub=[nrow, ncol, col + ncol], title="Difference", **args
+            )
+
+            fname = os.path.join(self.outdir, "obs_matrix_test.png")
+            fig.savefig(fname)
+
+            for i in range(nnz):
+                rms1 = np.std(filtered[i][good])
+                rms2 = np.std((filtered - test_map)[i][good])
+                assert rms2 < 1e-5 * rms1
+
+        return
+
+    """
     def test_filterbin_obsmatrix_flags(self):
 
         # Create a fake ground data set for testing
@@ -356,7 +634,7 @@ class FilterBinTest(MPITestCase):
             rot = [42, -42]
             reso = 4
             fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+            cmap = "bwr"
             nest = pixels.nest
 
             rootname = os.path.join(self.outdir, f"{filterbin.name}_obs_matrix")
@@ -515,7 +793,7 @@ class FilterBinTest(MPITestCase):
             rot = [42, -42]
             reso = 4
             fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+            cmap = "bwr"
             nest = pixels.nest
 
             rootname = os.path.join(self.outdir, f"cached_run_1_obs_matrix")
@@ -589,3 +867,5 @@ class FilterBinTest(MPITestCase):
                     assert rms2 < 1e-5 * rms1
 
         return
+
+"""
