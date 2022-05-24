@@ -22,7 +22,7 @@ TOAST_FUNCTIME=<value>
     * Any non-empty value will enable python function timers in many parts of the code
 
 TOAST_GPU_OPENMP=<value>
-    * Values "1", "true", or "yes" will enable enable runtime-support for OpenMP
+    * Values "1", "true", or "yes" will enable runtime-support for OpenMP
       target offload.
     * Requires compile-time support for OpenMP 5.x features.
 
