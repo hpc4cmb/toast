@@ -355,7 +355,7 @@ pixels_healpix = select_implementation(pixels_healpix_compiled,
                                        default_implementationType=ImplementationType.COMPILED)
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("test_exec");'
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_ground");  toast.tests.run("ops_sim_satellite");'
 
 # to bench:
 # use scanmap config and check PixelsHealpix._exec field in timing.csv
