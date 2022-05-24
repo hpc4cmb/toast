@@ -144,7 +144,9 @@ class MapMaker(Operator):
 
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
 
-    write_solver_products = Bool(True, help="If True, write out equivalent solver products.")
+    write_solver_products = Bool(
+        True, help="If True, write out equivalent solver products."
+    )
 
     keep_solver_products = Bool(
         False, help="If True, keep the map domain solver products in data"

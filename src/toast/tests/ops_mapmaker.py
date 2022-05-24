@@ -186,7 +186,9 @@ class MapmakerTest(MPITestCase):
         scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
-        delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights, detpointing.quats])
+        delete_pointing = ops.Delete(
+            detdata=[pixels.pixels, weights.weights, detpointing.quats]
+        )
         delete_pointing.apply(data)
         pixels.create_dist = None
 
@@ -220,7 +222,7 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            #det_flags=None,
+            # det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
         )
@@ -274,9 +276,9 @@ class MapmakerTest(MPITestCase):
         pars["nside_submap"] = min(8, pixels.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
         pars["pixlim_cross"] = 1.0e-6
-        pars["pixmode_cross"] = 2 # Use rcond threshold
+        pars["pixmode_cross"] = 2  # Use rcond threshold
         pars["pixlim_map"] = 1.0e-6
-        pars["pixmode_map"] = 2 # Use rcond threshold
+        pars["pixmode_map"] = 2  # Use rcond threshold
         pars["write_map"] = "T"
         pars["write_binmap"] = "T"
         pars["write_matrix"] = "F"
@@ -295,7 +297,7 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            #det_flags=None,
+            # det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -578,9 +580,9 @@ class MapmakerTest(MPITestCase):
         pars["nside_submap"] = min(8, pixels.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
         pars["pixlim_cross"] = 1.0e-4
-        pars["pixmode_cross"] = 2 # Use rcond threshold
+        pars["pixmode_cross"] = 2  # Use rcond threshold
         pars["pixlim_map"] = 1.0e-4
-        pars["pixmode_map"] = 2 # Use rcond threshold
+        pars["pixmode_map"] = 2  # Use rcond threshold
         pars["write_map"] = "T"
         pars["write_binmap"] = "F"
         pars["write_matrix"] = "F"
@@ -809,9 +811,9 @@ class MapmakerTest(MPITestCase):
         pars["nside_submap"] = min(8, pixels.nside)
         pars["good_baseline_fraction"] = tmpl.good_fraction
         pars["pixlim_cross"] = 1.0e-4
-        pars["pixmode_cross"] = 2 # Use rcond threshold
+        pars["pixmode_cross"] = 2  # Use rcond threshold
         pars["pixlim_map"] = 1.0e-4
-        pars["pixmode_map"] = 2 # Use rcond threshold
+        pars["pixmode_map"] = 2  # Use rcond threshold
         pars["write_map"] = "T"
         pars["write_binmap"] = "F"
         pars["write_matrix"] = "F"

@@ -285,7 +285,7 @@ class ScanMask(Operator):
                     local_sm, local_pix = mask_dist.global_pixel_to_submap(pix)
 
                     # We could move this to compiled code if it is too slow...
-                    masked = (mask_data[local_sm, local_pix, 0] & self.mask_bits != 0)
+                    masked = mask_data[local_sm, local_pix, 0] & self.mask_bits != 0
                     dflags[masked] |= self.det_flags_value
 
         return

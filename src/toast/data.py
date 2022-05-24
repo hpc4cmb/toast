@@ -472,7 +472,9 @@ class Data(MutableMapping):
                     msg += "device data in use"
                     log.verbose(msg)
                 else:
-                    log.verbose(f"Calling ob {ob.name} intervals update_device for {key}")
+                    log.verbose(
+                        f"Calling ob {ob.name} intervals update_device for {key}"
+                    )
                     ob.intervals.accel_update_device(key)
         for key in names["global"]:
             val = self._internal[key]
@@ -509,7 +511,9 @@ class Data(MutableMapping):
                         msg += "host data in use"
                         log.verbose(msg)
                     else:
-                        log.verbose(f"Calling ob {ob.name} detdata update_host for {key}")
+                        log.verbose(
+                            f"Calling ob {ob.name} detdata update_host for {key}"
+                        )
                         ob.detdata.accel_update_host(key)
                 else:
                     log.verbose(
@@ -522,7 +526,9 @@ class Data(MutableMapping):
                         msg += "host data in use"
                         log.verbose(msg)
                     else:
-                        log.verbose(f"Calling ob {ob.name} shared update_host for {key}")
+                        log.verbose(
+                            f"Calling ob {ob.name} shared update_host for {key}"
+                        )
                         ob.shared.accel_update_host(key)
                 else:
                     log.verbose(
@@ -535,7 +541,9 @@ class Data(MutableMapping):
                         msg += "host data in use"
                         log.verbose(msg)
                     else:
-                        log.verbose(f"Calling ob {ob.name} intervals update_host for {key}")
+                        log.verbose(
+                            f"Calling ob {ob.name} intervals update_host for {key}"
+                        )
                         ob.intervals.accel_update_host(key)
                 else:
                     log.verbose(

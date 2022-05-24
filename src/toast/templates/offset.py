@@ -666,7 +666,14 @@ class Offset(Template):
         return True
 
     def _py_add_to_signal(
-        self, step_length, amp_offset, n_amp_views, amplitudes, data_index, det_data, intr_data
+        self,
+        step_length,
+        amp_offset,
+        n_amp_views,
+        amplitudes,
+        data_index,
+        det_data,
+        intr_data,
     ):
         """Internal python implementation for comparison testing."""
         offset = amp_offset
@@ -697,8 +704,7 @@ class Offset(Template):
         for ivw, vw in enumerate(intr_data):
             samples = slice(vw.first, vw.last + 1, 1)
             ampidx = (
-                offset
-                + np.arange(vw.first, vw.last + 1, dtype=np.int64) // step_length
+                offset + np.arange(vw.first, vw.last + 1, dtype=np.int64) // step_length
             )
             ddata = det_data[data_index[0]][samples]
             if flag_index[0] >= 0:

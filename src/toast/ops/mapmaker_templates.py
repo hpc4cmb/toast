@@ -2,8 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from collections import OrderedDict
 import os
+from collections import OrderedDict
 
 import numpy as np
 import traitlets
@@ -355,9 +355,7 @@ class SolveAmplitudes(Operator):
         False, help="If True, keep the map domain solver products in data"
     )
 
-    write_solver_products = Bool(
-        False, help="If True, write out solver products"
-    )
+    write_solver_products = Bool(False, help="If True, write out solver products")
 
     write_hdf5 = Bool(
         False, help="If True, outputs are in HDF5 rather than FITS format."
@@ -569,7 +567,7 @@ class SolveAmplitudes(Operator):
                 det_flags=self.solver_flags,
                 pixels=scan_pointing.pixels,
                 view=solve_view,
-                #mask_bits=1,
+                # mask_bits=1,
             )
 
             scanner.det_flags_value = 2
@@ -639,7 +637,9 @@ class SolveAmplitudes(Operator):
             data[self.solver_rcond_mask_name] = PixelData(
                 data[self.binning.pixel_dist], dtype=np.uint8, n_value=1
             )
-            n_bad = np.count_nonzero(data[self.solver_rcond_name].data < self.solve_rcond_threshold)
+            n_bad = np.count_nonzero(
+                data[self.solver_rcond_name].data < self.solve_rcond_threshold
+            )
             n_good = data[self.solver_rcond_name].data.size - n_bad
             data[self.solver_rcond_mask_name].data[
                 data[self.solver_rcond_name].data < self.solve_rcond_threshold

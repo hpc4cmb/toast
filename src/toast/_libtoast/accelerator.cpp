@@ -442,7 +442,7 @@ void OmpManager::free_dummy() {
             throw std::runtime_error(o.str().c_str());
         }
         omp_target_free(dev_null_, target_dev_);
-        #endif
+        #endif // ifdef HAVE_OPENMP_TARGET
     }
     if (null != NULL) {
         free(null);

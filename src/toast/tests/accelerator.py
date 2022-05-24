@@ -23,7 +23,7 @@ from ..accelerator import (
 from ..data import Data
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..traits import trait_docs, Int, Unicode
+from ..traits import Int, Unicode, trait_docs
 from ._helpers import create_comm, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 

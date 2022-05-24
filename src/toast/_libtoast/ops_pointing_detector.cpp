@@ -115,30 +115,30 @@ void init_ops_pointing_detector(py::module & m) {
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
-                #pragma omp target data \
-                device(dev)              \
-                map(to:                  \
+                # pragma omp target data   \
+                device(dev)                \
+                map(to:                    \
                 raw_focalplane[0:4*n_det], \
-                raw_quat_index[0:n_det], \
-                shared_flag_mask,        \
-                n_view,                  \
-                n_det,                   \
-                n_samp,                  \
-                use_flags                \
-                )                        \
-                use_device_ptr(          \
-                raw_boresight,           \
-                raw_quats,               \
-                raw_intervals,           \
-                raw_flags,               \
-                raw_focalplane,          \
-                raw_quat_index           \
+                raw_quat_index[0:n_det],   \
+                shared_flag_mask,          \
+                n_view,                    \
+                n_det,                     \
+                n_samp,                    \
+                use_flags                  \
+                )                          \
+                use_device_ptr(            \
+                raw_boresight,             \
+                raw_quats,                 \
+                raw_intervals,             \
+                raw_flags,                 \
+                raw_focalplane,            \
+                raw_quat_index             \
                 )
                 {
-                    #pragma omp target teams distribute collapse(2)
+                    # pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for default(shared)
+                            # pragma omp parallel for default(shared)
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
                                 isamp <= raw_intervals[iview].last;
