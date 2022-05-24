@@ -255,8 +255,4 @@ std::unique_ptr<C> aligned_uptr(size_t n)
     return std::unique_ptr<C>(new C(n));
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> omp_target
 #endif // ifndef LIBTOAST_COMMON_HPP

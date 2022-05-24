@@ -16,17 +16,17 @@
 #include <vector>
 
 #if defined(PYPY_VERSION)
-#error Embedding the interpreter is not supported with PyPy
+#    error Embedding the interpreter is not supported with PyPy
 #endif
 
 #if PY_MAJOR_VERSION >= 3
-#define PYBIND11_EMBEDDED_MODULE_IMPL(name)           \
-    extern "C" PyObject *pybind11_init_impl_##name(); \
-    extern "C" PyObject *pybind11_init_impl_##name() { return pybind11_init_wrapper_##name(); }
+#    define PYBIND11_EMBEDDED_MODULE_IMPL(name)                                                   \
+        extern "C" PyObject *pybind11_init_impl_##name();                                         \
+        extern "C" PyObject *pybind11_init_impl_##name() { return pybind11_init_wrapper_##name(); }
 #else
-#define PYBIND11_EMBEDDED_MODULE_IMPL(name)      \
-    extern "C" void pybind11_init_impl_##name(); \
-    extern "C" void pybind11_init_impl_##name() { pybind11_init_wrapper_##name(); }
+#    define PYBIND11_EMBEDDED_MODULE_IMPL(name)                                                   \
+        extern "C" void pybind11_init_impl_##name();                                              \
+        extern "C" void pybind11_init_impl_##name() { pybind11_init_wrapper_##name(); }
 #endif
 
 /** \rst
@@ -44,56 +44,48 @@
             });
         }
  \endrst */
-#define PYBIND11_EMBEDDED_MODULE(name, variable)                                             \
-    static ::pybind11::module_::module_def PYBIND11_CONCAT(pybind11_module_def_, name);      \
-    static void PYBIND11_CONCAT(pybind11_init_, name)(::pybind11::module_ &);                \
-    static PyObject PYBIND11_CONCAT(*pybind11_init_wrapper_, name)()                         \
-    {                                                                                        \
-        auto m = ::pybind11::module_::create_extension_module(                               \
-            PYBIND11_TOSTRING(name), nullptr, &PYBIND11_CONCAT(pybind11_module_def_, name)); \
-        try                                                                                  \
-        {                                                                                    \
-            PYBIND11_CONCAT(pybind11_init_, name)                                            \
-            (m);                                                                             \
-            return m.ptr();                                                                  \
-        }                                                                                    \
-        PYBIND11_CATCH_INIT_EXCEPTIONS                                                       \
-    }                                                                                        \
-    PYBIND11_EMBEDDED_MODULE_IMPL(name)                                                      \
-    ::pybind11::detail::embedded_module PYBIND11_CONCAT(pybind11_module_, name)(             \
-        PYBIND11_TOSTRING(name), PYBIND11_CONCAT(pybind11_init_impl_, name));                \
-    void PYBIND11_CONCAT(pybind11_init_, name)(::pybind11::module_ & variable) // NOLINT(bugprone-macro-parentheses)
+#define PYBIND11_EMBEDDED_MODULE(name, variable)                                                  \
+    static ::pybind11::module_::module_def PYBIND11_CONCAT(pybind11_module_def_, name);           \
+    static void PYBIND11_CONCAT(pybind11_init_, name)(::pybind11::module_ &);                     \
+    static PyObject PYBIND11_CONCAT(*pybind11_init_wrapper_, name)() {                            \
+        auto m = ::pybind11::module_::create_extension_module(                                    \
+            PYBIND11_TOSTRING(name), nullptr, &PYBIND11_CONCAT(pybind11_module_def_, name));      \
+        try {                                                                                     \
+            PYBIND11_CONCAT(pybind11_init_, name)(m);                                             \
+            return m.ptr();                                                                       \
+        }                                                                                         \
+        PYBIND11_CATCH_INIT_EXCEPTIONS                                                            \
+    }                                                                                             \
+    PYBIND11_EMBEDDED_MODULE_IMPL(name)                                                           \
+    ::pybind11::detail::embedded_module PYBIND11_CONCAT(pybind11_module_, name)(                  \
+        PYBIND11_TOSTRING(name), PYBIND11_CONCAT(pybind11_init_impl_, name));                     \
+    void PYBIND11_CONCAT(pybind11_init_, name)(::pybind11::module_                                \
+                                               & variable) // NOLINT(bugprone-macro-parentheses)
 
 PYBIND11_NAMESPACE_BEGIN(PYBIND11_NAMESPACE)
 PYBIND11_NAMESPACE_BEGIN(detail)
 
 /// Python 2.7/3.x compatible version of `PyImport_AppendInittab` and error checks.
-struct embedded_module
-{
+struct embedded_module {
 #if PY_MAJOR_VERSION >= 3
-    using init_t = PyObject *(*)();
+    using init_t = PyObject *(*) ();
 #else
     using init_t = void (*)();
 #endif
-    embedded_module(const char *name, init_t init)
-    {
-        if (Py_IsInitialized() != 0)
-        {
+    embedded_module(const char *name, init_t init) {
+        if (Py_IsInitialized() != 0) {
             pybind11_fail("Can't add new modules after the interpreter has been initialized");
         }
 
         auto result = PyImport_AppendInittab(name, init);
-        if (result == -1)
-        {
+        if (result == -1) {
             pybind11_fail("Insufficient memory to add a new module");
         }
     }
 };
 
-struct wide_char_arg_deleter
-{
-    void operator()(wchar_t *ptr) const
-    {
+struct wide_char_arg_deleter {
+    void operator()(wchar_t *ptr) const {
 #if PY_VERSION_HEX >= 0x030500f0
         // API docs: https://docs.python.org/3/c-api/sys.html#c.Py_DecodeLocale
         PyMem_RawFree(ptr);
@@ -103,49 +95,45 @@ struct wide_char_arg_deleter
     }
 };
 
-inline wchar_t *widen_chars(const char *safe_arg)
-{
+inline wchar_t *widen_chars(const char *safe_arg) {
 #if PY_VERSION_HEX >= 0x030500f0
     wchar_t *widened_arg = Py_DecodeLocale(safe_arg, nullptr);
 #else
     wchar_t *widened_arg = nullptr;
 
 // warning C4996: 'mbstowcs': This function or variable may be unsafe.
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996)
-#endif
+#    if defined(_MSC_VER)
+#        pragma warning(push)
+#        pragma warning(disable : 4996)
+#    endif
 
-#if defined(HAVE_BROKEN_MBSTOWCS) && HAVE_BROKEN_MBSTOWCS
+#    if defined(HAVE_BROKEN_MBSTOWCS) && HAVE_BROKEN_MBSTOWCS
     size_t count = std::strlen(safe_arg);
-#else
+#    else
     size_t count = std::mbstowcs(nullptr, safe_arg, 0);
-#endif
-    if (count != static_cast<size_t>(-1))
-    {
+#    endif
+    if (count != static_cast<size_t>(-1)) {
         widened_arg = new wchar_t[count + 1];
         std::mbstowcs(widened_arg, safe_arg, count + 1);
     }
 
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
+#    if defined(_MSC_VER)
+#        pragma warning(pop)
+#    endif
 
 #endif
     return widened_arg;
 }
 
 /// Python 2.x/3.x-compatible version of `PySys_SetArgv`
-inline void set_interpreter_argv(int argc, const char *const *argv, bool add_program_dir_to_path)
-{
+inline void set_interpreter_argv(int argc, const char *const *argv, bool add_program_dir_to_path) {
     // Before it was special-cased in python 3.8, passing an empty or null argv
     // caused a segfault, so we have to reimplement the special case ourselves.
     bool special_case = (argv == nullptr || argc <= 0);
 
     const char *const empty_argv[]{"\0"};
     const char *const *safe_argv = special_case ? empty_argv : argv;
-    if (special_case)
-    {
+    if (special_case) {
         argc = 1;
     }
 
@@ -155,11 +143,9 @@ inline void set_interpreter_argv(int argc, const char *const *argv, bool add_pro
     std::unique_ptr<wchar_t *[]> widened_argv(new wchar_t *[argv_size]);
     std::vector<std::unique_ptr<wchar_t[], wide_char_arg_deleter>> widened_argv_entries;
     widened_argv_entries.reserve(argv_size);
-    for (size_t ii = 0; ii < argv_size; ++ii)
-    {
+    for (size_t ii = 0; ii < argv_size; ++ii) {
         widened_argv_entries.emplace_back(widen_chars(safe_argv[ii]));
-        if (!widened_argv_entries.back())
-        {
+        if (!widened_argv_entries.back()) {
             // A null here indicates a character-encoding failure or the python
             // interpreter out of memory. Give up.
             return;
@@ -204,10 +190,8 @@ PYBIND11_NAMESPACE_END(detail)
 inline void initialize_interpreter(bool init_signal_handlers = true,
                                    int argc = 0,
                                    const char *const *argv = nullptr,
-                                   bool add_program_dir_to_path = true)
-{
-    if (Py_IsInitialized() != 0)
-    {
+                                   bool add_program_dir_to_path = true) {
+    if (Py_IsInitialized() != 0) {
         pybind11_fail("The interpreter is already running");
     }
 
@@ -251,8 +235,7 @@ inline void initialize_interpreter(bool init_signal_handlers = true,
         freed, either due to reference cycles or user-created global data.
 
  \endrst */
-inline void finalize_interpreter()
-{
+inline void finalize_interpreter() {
     handle builtins(PyEval_GetBuiltins());
     const char *id = PYBIND11_INTERNALS_ID;
 
@@ -261,8 +244,7 @@ inline void finalize_interpreter()
     // during destruction), so we get the pointer-pointer here and check it after Py_Finalize().
     detail::internals **internals_ptr_ptr = detail::get_internals_pp();
     // It could also be stashed in builtins, so look there too:
-    if (builtins.contains(id) && isinstance<capsule>(builtins[id]))
-    {
+    if (builtins.contains(id) && isinstance<capsule>(builtins[id])) {
         internals_ptr_ptr = capsule(builtins[id]);
     }
     // Local internals contains data managed by the current interpreter, so we must clear them to
@@ -272,8 +254,7 @@ inline void finalize_interpreter()
 
     Py_Finalize();
 
-    if (internals_ptr_ptr)
-    {
+    if (internals_ptr_ptr) {
         delete *internals_ptr_ptr;
         *internals_ptr_ptr = nullptr;
     }
@@ -294,14 +275,12 @@ inline void finalize_interpreter()
             py::print(Hello, World!);
         } // <-- interpreter shutdown
  \endrst */
-class scoped_interpreter
-{
+class scoped_interpreter {
 public:
     explicit scoped_interpreter(bool init_signal_handlers = true,
                                 int argc = 0,
                                 const char *const *argv = nullptr,
-                                bool add_program_dir_to_path = true)
-    {
+                                bool add_program_dir_to_path = true) {
         initialize_interpreter(init_signal_handlers, argc, argv, add_program_dir_to_path);
     }
 
@@ -310,10 +289,8 @@ public:
     scoped_interpreter &operator=(const scoped_interpreter &) = delete;
     scoped_interpreter &operator=(scoped_interpreter &&) = delete;
 
-    ~scoped_interpreter()
-    {
-        if (is_valid)
-        {
+    ~scoped_interpreter() {
+        if (is_valid) {
             finalize_interpreter();
         }
     }
