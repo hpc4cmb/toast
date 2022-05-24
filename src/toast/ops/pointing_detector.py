@@ -2,22 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
 import traitlets
 
-import numpy as np
-
-from ..utils import Environment, Logger
-
-from ..traits import trait_docs, Int, Unicode, Bool
-
-from ..timing import function_timer
-
-from ..intervals import interval_dtype
-
-from ..observation import default_values as defaults
-
 from .. import qarray as qa
-
+from .._libtoast import pointing_detector
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Int, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .operator import Operator
 
 from ..ops.jax_ops import pointing_detector
@@ -165,7 +158,7 @@ class PointingDetectorSimple(Operator):
                     ob.detdata.accel_create(self.quats)
 
             if self.shared_flags is None:
-                flags = np.zeros(0, dtype=np.uint8)
+                flags = np.zeros(1, dtype=np.uint8)
             else:
                 flags = ob.shared[self.shared_flags].data
 

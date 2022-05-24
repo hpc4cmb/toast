@@ -68,7 +68,7 @@ target_link_libraries(_libtoast PRIVATE toast)
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")
-    set_target_properties(_libtoast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+    set_target_properties(_libtoast PROPERTIES LINK_OPTIONS "${OpenMP_CXX_FLAGS}")
     if(USE_OPENMP_TARGET)
         target_compile_definitions(_libtoast PRIVATE HAVE_OPENMP_TARGET=1)
     endif()
@@ -135,6 +135,7 @@ install(FILES
     schedule.py
     schedule_sim_ground.py
     schedule_sim_satellite.py
+    widgets.py
     accelerator.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast

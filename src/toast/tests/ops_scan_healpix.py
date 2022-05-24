@@ -6,25 +6,19 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
 from .. import ops as ops
-
 from ..observation import default_values as defaults
-
 from ..pixels import PixelData
-
 from ..pixels_io import write_healpix_fits, write_healpix_hdf5
-
 from ._helpers import (
+    create_fake_mask,
+    create_fake_sky,
     create_outdir,
     create_satellite_data,
-    create_fake_sky,
-    create_fake_mask,
 )
+from .mpi import MPITestCase
 
 
 class ScanHealpixTest(MPITestCase):

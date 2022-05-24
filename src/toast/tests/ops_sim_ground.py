@@ -2,42 +2,27 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
-
 from datetime import datetime
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-import healpy as hp
-
-from ..mpi import Comm, MPI
-
-from ..data import Data
-
-from ..observation import default_values as defaults
-
-from ..instrument import Focalplane, Telescope, GroundSite
-
-from ..instrument_sim import fake_hexagon_focalplane
-
-from ..schedule_sim_ground import run_scheduler
-
-from ..schedule import GroundSchedule
-
-from ..pixels_io import write_healpix_fits
-
-from ..vis import set_matplotlib_backend
-
-from .. import qarray as qa
-
 from .. import ops as ops
-
-from ._helpers import create_outdir, create_comm
+from .. import qarray as qa
+from ..data import Data
+from ..instrument import Focalplane, GroundSite, Telescope
+from ..instrument_sim import fake_hexagon_focalplane
+from ..mpi import MPI, Comm
+from ..observation import default_values as defaults
+from ..pixels_io import write_healpix_fits
+from ..schedule import GroundSchedule
+from ..schedule_sim_ground import run_scheduler
+from ..vis import set_matplotlib_backend
+from ._helpers import create_comm, create_outdir
+from .mpi import MPITestCase
 
 
 class SimGroundTest(MPITestCase):
@@ -162,3 +147,86 @@ class SimGroundTest(MPITestCase):
             hp.mollview(hits, xsize=1600, max=50, nest=pixels.nest)
             plt.savefig(outfile)
             plt.close()
+
+    def test_phase(self):
+        # Slow sampling
+        fp = fake_hexagon_focalplane(
+            n_pix=self.npix,
+            sample_rate=10.0 * u.Hz,
+        )
+
+        site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
+
+        tele = Telescope("telescope", focalplane=fp, site=site)
+
+        sch_file = os.path.join(self.outdir, "exec_schedule.txt")
+        schedule = None
+
+        if self.comm is None or self.comm.rank == 0:
+            run_scheduler(
+                opts=[
+                    "--site-name",
+                    site.name,
+                    "--telescope",
+                    tele.name,
+                    "--site-lon",
+                    "{}".format(site.earthloc.lon.to_value(u.degree)),
+                    "--site-lat",
+                    "{}".format(site.earthloc.lat.to_value(u.degree)),
+                    "--site-alt",
+                    "{}".format(site.earthloc.height.to_value(u.meter)),
+                    "--patch",
+                    "small_patch,1,40,-40,44,-44",
+                    "--start",
+                    "2020-01-01 00:00:00",
+                    "--stop",
+                    "2020-01-01 12:00:00",
+                    "--out",
+                    sch_file,
+                ]
+            )
+            schedule = GroundSchedule()
+            schedule.read(sch_file)
+        if self.comm is not None:
+            schedule = self.comm.bcast(schedule, root=0)
+
+        data1 = Data(self.toastcomm)
+        data2 = Data(self.toastcomm)
+
+        sim_ground = ops.SimGround(
+            name="sim_ground",
+            telescope=tele,
+            schedule=schedule,
+            hwp_angle=defaults.hwp_angle,
+            hwp_rpm=1.0,
+            max_pwv=5 * u.mm,
+        )
+        sim_ground.apply(data1)
+        sim_ground.randomize_phase = True
+        sim_ground.apply(data2)
+
+        # Verify the two boresights are in different phase
+
+        az1 = data1.obs[0].shared["azimuth"][:]
+        az2 = data2.obs[0].shared["azimuth"][:]
+
+        assert np.std(az1 - az2) > 1e-10
+
+        # Verify that the flags still identify left-right scans correctly
+
+        flags1 = data1.obs[0].shared["flags"][:]
+        flags2 = data2.obs[0].shared["flags"][:]
+
+        good1 = np.logical_and(
+            flags1 & sim_ground.leftright_mask != 0,
+            flags1 & sim_ground.turnaround_mask == 0,
+        )
+        good2 = np.logical_and(
+            flags2 & sim_ground.leftright_mask != 0,
+            flags2 & sim_ground.turnaround_mask == 0,
+        )
+
+        step1 = np.median(np.diff(az1[good1]))
+        step2 = np.median(np.diff(az2[good2]))
+
+        assert np.abs((step1 - step2) / step1) < 1e-3

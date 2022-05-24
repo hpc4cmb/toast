@@ -1,24 +1,21 @@
-from collections import OrderedDict
 import os
 import sys
+from collections import OrderedDict
 
 import numpy as np
 import scipy.linalg
 import scipy.signal
 
-from ..operator import Operator
-from ..mpi import MPI
-
-from ..timing import gather_timers, GlobalTimers, function_timer, Timer
-from ..utils import Logger, Environment
-from .sim_det_map import OpSimScan
-from .todmap_math import OpAccumDiag, OpScanScale, OpScanMask
-from ..tod import OpCacheClear, OpCacheCopy, OpCacheInit, OpFlagsApply, OpFlagGaps
-from ..map import covariance_apply, covariance_invert, DistPixels, covariance_rcond
 from .. import qarray as qa
-
 from .._libtoast import add_offsets_to_signal, project_signal_offsets
-
+from ..map import DistPixels, covariance_apply, covariance_invert, covariance_rcond
+from ..mpi import MPI
+from ..operator import Operator
+from ..timing import GlobalTimers, Timer, function_timer, gather_timers
+from ..tod import OpCacheClear, OpCacheCopy, OpCacheInit, OpFlagGaps, OpFlagsApply
+from ..utils import Environment, Logger
+from .sim_det_map import OpSimScan
+from .todmap_math import OpAccumDiag, OpScanMask, OpScanScale
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 

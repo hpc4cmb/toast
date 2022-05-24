@@ -2,34 +2,26 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import json
 import os
-import numpy as np
 
+import h5py
+import numpy as np
 from astropy import units as u
 from astropy.table import Table
 
-import h5py
-
-import json
-
+from ..instrument import GroundSite
+from ..mpi import MPI
+from ..observation import default_values as defaults
+from ..observation_dist import global_interval_times
+from ..timing import GlobalTimers, Timer, function_timer
 from ..utils import (
     Environment,
     Logger,
-    object_fullname,
     dtype_to_aligned,
     hdf5_use_serial,
+    object_fullname,
 )
-
-from ..mpi import MPI
-
-from ..timing import Timer, function_timer, GlobalTimers
-
-from ..instrument import GroundSite
-
-from ..observation import default_values as defaults
-
-from ..observation_dist import global_interval_times
-
 from .hdf_utils import check_dataset_buffer_size, hdf5_open
 
 
@@ -509,6 +501,19 @@ def save_hdf5(
                     inst_group.attrs[
                         "site_weather_time"
                     ] = site.weather.time.timestamp()
+        session = obs.session
+        if session is not None:
+            inst_group.attrs["session_name"] = session.name
+            inst_group.attrs["session_class"] = object_fullname(session.__class__)
+            inst_group.attrs["session_uid"] = session.uid
+            if session.start is None:
+                inst_group.attrs["session_start"] = "NONE"
+            else:
+                inst_group.attrs["session_start"] = session.start.timestamp()
+            if session.end is None:
+                inst_group.attrs["session_end"] = "NONE"
+            else:
+                inst_group.attrs["session_end"] = session.end.timestamp()
     log.verbose_rank(
         f"{log_prefix}  Wrote instrument attributes in",
         comm=comm,

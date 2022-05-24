@@ -2,31 +2,26 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 import sys
 import traceback
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
-
 from pshmem import MPIShared
 
-from ..observation import DetectorData, Observation, set_default_values
-
+from ..mpi import MPI, Comm
+from ..observation import DetectorData, Observation
 from ..observation import default_values as defaults
-
-from ..mpi import Comm, MPI
-
+from ..observation import set_default_values
 from ._helpers import (
+    create_ground_data,
     create_outdir,
     create_satellite_empty,
-    create_ground_data,
     fake_flags,
 )
+from .mpi import MPITestCase
 
 
 class ObservationTest(MPITestCase):

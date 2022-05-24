@@ -13,11 +13,10 @@ import numpy as np
 from scipy.constants import degree
 
 from .. import qarray as qa
-from ..timing import function_timer, Timer
-from ..tod import Interval, TOD
 from ..healpix import ang2vec
-from .pointing_math import quat_equ2ecl, quat_equ2gal, quat_ecl2gal
-
+from ..timing import Timer, function_timer
+from ..tod import TOD, Interval
+from .pointing_math import quat_ecl2gal, quat_equ2ecl, quat_equ2gal
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 

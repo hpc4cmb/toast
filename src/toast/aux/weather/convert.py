@@ -3,10 +3,9 @@
 import os
 import sys
 
-import numpy as np
-
 import fitsio
 import h5py
+import numpy as np
 
 infile = sys.argv[1]
 outfile = sys.argv[2]

@@ -3,43 +3,27 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-
+import shutil
+import tempfile
 from datetime import datetime
 
-import tempfile
-
-import shutil
-
-import numpy as np
-
 import healpy as hp
-
+import numpy as np
 from astropy import units as u
-
-from ..mpi import Comm
-
-from ..data import Data
-
-from .. import qarray as qa
-
-from ..instrument import Focalplane, Telescope, GroundSite, SpaceSite
-
-from ..instrument_sim import fake_hexagon_focalplane
-
-from ..schedule import GroundSchedule
-
-from ..schedule_sim_satellite import create_satellite_schedule
-
-from ..schedule_sim_ground import run_scheduler
-
-from ..observation import DetectorData, Observation
-from ..observation import default_values as defaults
-
-from ..pixels import PixelData
+from astropy.table import Column, QTable
 
 from .. import ops as ops
-
-from astropy.table import QTable, Column
+from .. import qarray as qa
+from ..data import Data
+from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
+from ..instrument_sim import fake_hexagon_focalplane
+from ..mpi import Comm
+from ..observation import DetectorData, Observation
+from ..observation import default_values as defaults
+from ..pixels import PixelData
+from ..schedule import GroundSchedule
+from ..schedule_sim_ground import run_scheduler
+from ..schedule_sim_satellite import create_satellite_schedule
 
 ZAXIS = np.array([0.0, 0.0, 1.0])
 
@@ -170,6 +154,7 @@ def create_satellite_data(
     sample_rate=10.0 * u.Hz,
     obs_time=10.0 * u.minute,
     pixel_per_process=1,
+    hwp_rpm=10.0,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -211,12 +196,16 @@ def create_satellite_data(
 
     # Scan fast enough to cover some sky in a short amount of time.  Reduce the
     # angles to achieve a more compact hit map.
+    if hwp_rpm == 0 or hwp_rpm is None:
+        hwp_angle = None
+    else:
+        hwp_angle = defaults.hwp_angle
     sim_sat = ops.SimSatellite(
         name="sim_sat",
         telescope=tele,
         schedule=sch,
-        hwp_angle=defaults.hwp_angle,
-        hwp_rpm=10.0,
+        hwp_angle=hwp_angle,
+        hwp_rpm=hwp_rpm,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
         detset_key="pixel",
@@ -528,50 +517,79 @@ def create_fake_beam_alm(
     fwhm_y=10 * u.degree,
     pol=True,
     separate_IQU=False,
+    separate_TP=False,
+    detB_beam=False,
+    normalize_beam=False,
 ):
 
     # pick an nside >= lmax to be sure that the a_lm will be fairly accurate
     nside = 2
     while nside < lmax:
-
         nside *= 2
     npix = 12 * nside**2
     pix = np.arange(npix)
-    vec = hp.pix2vec(nside, pix, nest=False)
-    theta, phi = hp.vec2dir(vec)
-    x = theta * np.cos(phi)
-    y = theta * np.sin(phi)
-    sigma_x = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
+    x, y, z = hp.pix2vec(nside, pix, nest=False)
+    sigma_z = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    beam_map = np.exp(-0.5 * (x**2 / sigma_x**2 + y**2 / sigma_y**2))
-    empty = np.zeros_like(beam_map)
-    if pol and separate_IQU:
-        beam_map_I = np.vstack([beam_map, empty, empty])
-        beam_map_Q = np.vstack([empty, beam_map, empty])
-        beam_map_U = np.vstack([empty, empty, beam_map])
+    beam = np.exp(-((z**2 / 2 / sigma_z**2 + y**2 / 2 / sigma_y**2)))
+    beam[x < 0] = 0
+    beam_map = np.zeros([3, npix])
+    beam_map[0] = beam
+    if detB_beam:
+        # we make sure that the two detectors within the same pair encode
+        # two beams with the  flipped sign in Q   U beams
+        beam_map[1] = -beam
+    else:
+        beam_map[1] = beam
+    blm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
+    hp.rotate_alm(blm, psi=0, theta=-np.pi / 2, phi=0, lmax=lmax, mmax=mmax)
 
+    if normalize_beam:
+        # We make sure that the simulated beams are normalized in the test
+        # for the normalization we follow the convention adopted in Conviqt,
+        # i.e. the monopole term in the map is left unchanged
+        idx = hp.Alm.getidx(lmax=lmax, l=0, m=0)
+        norm = 2 * np.pi * blm[0, idx].real
+
+    else:
+        norm = 1.0
+
+    blm /= norm
+    if separate_IQU:
+        empty = np.zeros_like(beam_map[0])
+        beam_map_I = np.vstack([beam_map[0], empty, empty])
+        beam_map_Q = np.vstack([empty, beam_map[1], empty])
+        beam_map_U = np.vstack([empty, empty, beam_map[1]])
         try:
-            a_lm = [
-                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False),
-                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False),
-                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False),
-            ]
+            blmi00 = (
+                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
+            blm0i0 = (
+                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
+            blm00i = (
+                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
         except TypeError:
             # older healpy which does not have verbose keyword
-            a_lm = [
-                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax),
-                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax),
-                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax),
-            ]
-    else:
-        if pol:
-            beam_map = np.vstack([beam_map, beam_map, empty])
-        try:
-            a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax, verbose=False)
-        except TypeError:
-            a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
+            blmi00 = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, pol=True) / norm
+            blm0i0 = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, pol=True) / norm
+            blm00i = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, pol=True) / norm
+        for b_lm in blmi00, blm0i0, blm00i:
+            hp.rotate_alm(b_lm, psi=0, theta=-np.pi / 2, phi=0, lmax=lmax, mmax=mmax)
+        return [blmi00, blm0i0, blm00i]
 
-    return a_lm
+    elif separate_TP:
+        blmT = blm[0].copy()
+        blmP = blm.copy()
+        blmP[0] = 0
+
+        return [blmT, blmP]
+    else:
+        return blm
 
 
 def fake_flags(

@@ -5,41 +5,35 @@
 import os
 
 import numpy as np
-
-from .timing import function_timer, Timer, GlobalTimers
-
-from .dist import distribute_uniform
-
-from .mpi import MPI
-
 from pshmem.utils import mpi_data_type
 
-from .utils import (
-    Logger,
-    AlignedI8,
-    AlignedU8,
-    AlignedI16,
-    AlignedU16,
-    AlignedI32,
-    AlignedU32,
-    AlignedI64,
-    AlignedU64,
-    AlignedF32,
-    AlignedF64,
-)
-
 from ._libtoast import global_to_local as libtoast_global_to_local
-
 from .accelerator import (
-    use_accel_jax,
-    use_accel_omp,
-    accel_enabled,
-    accel_data_present,
+    AcceleratorObject,
     accel_data_create,
     accel_data_delete,
+    accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
-    AcceleratorObject,
+    accel_enabled,
+    use_accel_jax,
+    use_accel_omp,
+)
+from .dist import distribute_uniform
+from .mpi import MPI
+from .timing import GlobalTimers, Timer, function_timer
+from .utils import (
+    AlignedF32,
+    AlignedF64,
+    AlignedI8,
+    AlignedI16,
+    AlignedI32,
+    AlignedI64,
+    AlignedU8,
+    AlignedU16,
+    AlignedU32,
+    AlignedU64,
+    Logger,
 )
 
 if use_accel_jax:

@@ -6,15 +6,13 @@ import os
 import time
 
 from ._libtoast import Logger
-
+from ._libtoast import accel_create as omp_accel_create
+from ._libtoast import accel_delete as omp_accel_delete
 from ._libtoast import accel_enabled as omp_accel_enabled
 from ._libtoast import accel_get_device as omp_accel_get_device
 from ._libtoast import accel_present as omp_accel_present
-from ._libtoast import accel_create as omp_accel_create
 from ._libtoast import accel_update_device as omp_accel_update_device
 from ._libtoast import accel_update_host as omp_accel_update_host
-from ._libtoast import accel_delete as omp_accel_delete
-
 
 enable_vals = ["1", "yes", "true"]
 

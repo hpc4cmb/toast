@@ -6,8 +6,8 @@ import argparse
 
 import numpy as np
 
-from toast.timing import function_timer, Timer
-from toast.utils import Logger, Environment
+from toast.timing import Timer, function_timer
+from toast.utils import Environment, Logger
 
 from ..tod import OpPolyFilter, OpPolyFilter2D
 from ..todmap import OpGroundFilter

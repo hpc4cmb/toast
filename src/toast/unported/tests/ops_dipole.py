@@ -2,28 +2,17 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
 
-import healpy as hp
-
 from .. import qarray as qa
-
-from ..todmap import (
-    TODHpixSpiral,
-    OpPointingHpix,
-    OpSimDipole,
-    dipole,
-    OpAccumDiag,
-)
-
-from ..map import DistPixels, covariance_invert, covariance_apply
-
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
+from ..map import DistPixels, covariance_apply, covariance_invert
+from ..todmap import OpAccumDiag, OpPointingHpix, OpSimDipole, TODHpixSpiral, dipole
+from ._helpers import boresight_focalplane, create_distdata, create_outdir
+from .mpi import MPITestCase
 
 
 class OpSimDipoleTest(MPITestCase):

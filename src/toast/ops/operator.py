@@ -2,11 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-
 from ..timing import function_timer_stackskip
-from ..utils import Logger
-
 from ..traits import TraitConfig
+from ..utils import Logger
 
 
 class Operator(TraitConfig):
@@ -207,7 +205,13 @@ class Operator(TraitConfig):
                 else:
                     msg = f"{self.name}:  obs {ob.name}, shared {key} is on device"
                 log.verbose(msg)
-            # FIXME: check intervals too eventually
+            for key in req["intervals"]:
+                if not ob.intervals.accel_exists(key):
+                    msg = f"{self.name}:  obs {ob.name}, intervals {key} not on device"
+                    all_present = False
+                else:
+                    msg = f"{self.name}:  obs {ob.name}, intervals {key} is on device"
+                log.verbose(msg)
         if all_present:
             log.verbose(f"{self.name}:  obs {ob.name} all required inputs on device")
         else:

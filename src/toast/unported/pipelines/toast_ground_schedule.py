@@ -13,8 +13,8 @@ import sys
 import traceback
 
 from toast.mpi import get_world
-from toast.timing import GlobalTimers
 from toast.schedule_sim_ground import run_scheduler
+from toast.timing import GlobalTimers
 
 
 def main():

@@ -9,64 +9,60 @@ Simpler version of the ground simulation script
 """
 
 import argparse
-import dateutil.parser
 import os
 import pickle
 import sys
 import traceback
 
+import dateutil.parser
 import numpy as np
 
-from toast.mpi import get_world, Comm
-
-from toast.dist import distribute_uniform, Data
-
-from toast.utils import Logger, Environment, memreport
-
-from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
-from toast.timing import dump as dump_timing
-
 import toast.qarray as qa
-from toast.tod import OpCacheCopy, plot_focalplane, OpCacheClear
-from toast.todmap import TODGround
-
+from toast.dist import Data, distribute_uniform
+from toast.mpi import Comm, get_world
 from toast.pipeline_tools import (
-    add_dist_args,
-    add_debug_args,
-    get_time_communicators,
-    get_comm,
-    add_polyfilter_args,
-    apply_polyfilter,
-    add_groundfilter_args,
-    apply_groundfilter,
-    add_atmosphere_args,
-    add_noise_args,
-    simulate_noise,
-    add_gainscrambler_args,
-    scramble_gains,
-    add_pointing_args,
-    expand_pointing,
-    add_madam_args,
-    setup_madam,
-    apply_madam,
-    add_sky_map_args,
-    add_pysm_args,
-    scan_sky_signal,
-    simulate_sky_signal,
-    copy_signal,
-    add_tidas_args,
-    output_tidas,
-    add_spt3g_args,
-    output_spt3g,
-    add_todground_args,
-    get_breaks,
     Focalplane,
-    load_schedule,
-    add_mc_args,
+    add_atmosphere_args,
     add_binner_args,
-    init_binner,
+    add_debug_args,
+    add_dist_args,
+    add_gainscrambler_args,
+    add_groundfilter_args,
+    add_madam_args,
+    add_mc_args,
+    add_noise_args,
+    add_pointing_args,
+    add_polyfilter_args,
+    add_pysm_args,
+    add_sky_map_args,
+    add_spt3g_args,
+    add_tidas_args,
+    add_todground_args,
     apply_binner,
+    apply_groundfilter,
+    apply_madam,
+    apply_polyfilter,
+    copy_signal,
+    expand_pointing,
+    get_breaks,
+    get_comm,
+    get_time_communicators,
+    init_binner,
+    load_schedule,
+    output_spt3g,
+    output_tidas,
+    scan_sky_signal,
+    scramble_gains,
+    setup_madam,
+    simulate_noise,
+    simulate_sky_signal,
 )
+from toast.timing import GlobalTimers, Timer
+from toast.timing import dump as dump_timing
+from toast.timing import function_timer, gather_timers
+from toast.tod import OpCacheClear, OpCacheCopy, plot_focalplane
+from toast.todmap import TODGround
+from toast.utils import Environment, Logger, memreport
 
 
 def parse_arguments(comm):

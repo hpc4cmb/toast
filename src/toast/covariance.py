@@ -4,16 +4,14 @@
 
 import numpy as np
 
-from .timing import function_timer
-
 from ._libtoast import (
     AlignedF64,
-    cov_mult_diag,
     cov_apply_diag,
     cov_eigendecompose_diag,
+    cov_mult_diag,
 )
-
 from .pixels import PixelData
+from .timing import function_timer
 
 
 # These are just wrappers to time the libtoast calls

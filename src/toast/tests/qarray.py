@@ -4,10 +4,9 @@
 
 import numpy as np
 
-from .mpi import MPITestCase
-
 from .. import qarray as qa
 from ..ops.jax_ops.qarray import mult as qa_mult
+from .mpi import MPITestCase
 
 
 class QarrayTest(MPITestCase):

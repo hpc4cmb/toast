@@ -2,14 +2,11 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import psutil
-
 import numpy as np
-
+import psutil
 from astropy import units as u
 
 from .mpi import MPI
-
 from .utils import Logger
 
 

@@ -3,19 +3,14 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 import scipy.interpolate as si
 from scipy.signal import fftconvolve
 
-from ..operator import Operator
-
-from ..timing import function_timer
-
-from ..utils import Logger, AlignedF64
-
 from .. import rng as rng
-
 from .._libtoast import tod_sim_noise_timestream
+from ..operator import Operator
+from ..timing import function_timer
+from ..utils import AlignedF64, Logger
 
 
 class OpCacheInit(Operator):

@@ -7,9 +7,9 @@ import os
 
 import numpy as np
 
-from ..timing import function_timer, Timer
+from ..timing import Timer, function_timer
 from ..todmap import OpSimDipole
-from ..utils import Logger, Environment
+from ..utils import Environment, Logger
 
 
 def add_dipole_args(parser):

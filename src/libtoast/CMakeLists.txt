@@ -73,7 +73,7 @@ target_link_libraries(toast gtest)
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
-    set_target_properties(toast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toast PROPERTIES LINK_OPTIONS "${OpenMP_CXX_FLAGS}")
     target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
 
@@ -136,7 +136,7 @@ endif(FFTW_FOUND)
 if(LAPACK_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
     target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-    set_target_properties(toast PROPERTIES LINK_FLAGS
+    set_target_properties(toast PROPERTIES LINK_OPTIONS
         "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
     )
     target_link_libraries(toast "${LAPACK_LIBRARIES}")
@@ -174,7 +174,7 @@ add_executable(toast_test
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(toast_test PRIVATE "${OpenMP_CXX_FLAGS}")
-    set_target_properties(toast_test PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
+    set_target_properties(toast_test PROPERTIES LINK_OPTIONS "${OpenMP_CXX_FLAGS}")
 endif(OpenMP_CXX_FOUND)
 
 target_include_directories(toast_test BEFORE PRIVATE

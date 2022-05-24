@@ -4,15 +4,12 @@
 
 import warnings
 
-from ..mpi import use_mpi
-
 import numpy as np
 
 from .. import qarray as qa
-
+from ..mpi import use_mpi
 from ..operator import Operator
-
-from ..timing import function_timer, Timer
+from ..timing import Timer, function_timer
 
 conviqt = None
 

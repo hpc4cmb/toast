@@ -400,7 +400,6 @@ void toast::HealpixPixels::zphi2nest(int64_t n, double const * phi,
                 ifp = jp >> factor_;
                 ifm = jm >> factor_;
 
-                face;
                 if (ifp == ifm) {
                     face = (ifp == 4) ? static_cast <int64_t> (4) : ifp + 4;
                 } else if (ifp < ifm) {

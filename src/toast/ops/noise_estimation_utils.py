@@ -3,14 +3,11 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 from scipy.signal import fftconvolve
 
-from ..mpi import MPI
-
-from ..timing import function_timer
-
 from .._libtoast import fod_autosums, fod_crosssums
+from ..mpi import MPI
+from ..timing import function_timer
 
 
 @function_timer

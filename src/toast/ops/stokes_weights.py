@@ -2,29 +2,19 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
 import traitlets
 
-import numpy as np
-
-from ..utils import Environment, Logger
-
-from ..traits import trait_docs, Int, Unicode, Bool, Instance
-
-from ..healpix import HealpixPixels
-
-from ..timing import function_timer
-
 from .. import qarray as qa
-
-from ..pixels import PixelDistribution
-
+from ..healpix import HealpixPixels
 from ..observation import default_values as defaults
-
 from .jax_ops import stokes_weights_I, stokes_weights_IQU
-
-from .operator import Operator
-
+from ..pixels import PixelDistribution
+from ..timing import function_timer
+from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .delete import Delete
+from .operator import Operator
 
 
 @trait_docs
@@ -161,10 +151,6 @@ class StokesWeights(Operator):
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
         self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
-
-        cal = self.cal
-        if cal is None:
-            cal = 1.0
 
         cal = self.cal
         if cal is None:

@@ -5,29 +5,19 @@
 from collections import OrderedDict
 
 import numpy as np
-
 import scipy
 import scipy.signal
-
+import traitlets
 from astropy import units as u
 
-import traitlets
-
-from ..mpi import MPI
-
-from ..utils import Logger, AlignedF64
-
 from .. import qarray as qa
-
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float, Quantity
-
 from ..data import Data
-
+from ..mpi import MPI
 from ..observation import default_values as defaults
-
-from .template import Template
-
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import AlignedF64, Logger
 from .amplitudes import Amplitudes
+from .template import Template
 
 
 @trait_docs

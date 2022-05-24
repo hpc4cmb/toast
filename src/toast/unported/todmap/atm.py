@@ -3,25 +3,21 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-import numpy as np
 
 import h5py
-
-from ..utils import Environment, Logger
-
-from ..timing import Timer, function_timer, GlobalTimers
-
-from ..rng import random as toast_rng
-
-from ..mpi import MPI, MPIShared
+import numpy as np
 
 from .._libtoast import (
-    atm_sim_compute_slice,
-    atm_sim_observe,
-    atm_sim_compress_flag_hits_rank,
     atm_sim_compress_flag_extend_rank,
+    atm_sim_compress_flag_hits_rank,
+    atm_sim_compute_slice,
     atm_sim_kolmogorov_init_rank,
+    atm_sim_observe,
 )
+from ..mpi import MPI, MPIShared
+from ..rng import random as toast_rng
+from ..timing import GlobalTimers, Timer, function_timer
+from ..utils import Environment, Logger
 
 available_utils = None
 if available_utils is None:

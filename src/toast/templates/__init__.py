@@ -4,14 +4,9 @@
 
 # Import Templates into our public API
 
-from .template import Template
-
 from .amplitudes import Amplitudes, AmplitudesMap
-
-from .offset import Offset
-
 from .fourier2d import Fourier2D
-
-from .subharmonic import SubHarmonic
-
 from .gaintemplate import GainTemplate
+from .offset import Offset
+from .subharmonic import SubHarmonic
+from .template import Template

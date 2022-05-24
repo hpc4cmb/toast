@@ -2,40 +2,26 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
-
 from datetime import datetime
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-import healpy as hp
-
-from ..mpi import Comm, MPI
-
-from ..data import Data
-
-from ..observation import default_values as defaults
-
-from ..instrument import Focalplane, Telescope, SpaceSite
-
-from ..instrument_sim import fake_hexagon_focalplane
-
-from ..schedule_sim_satellite import create_satellite_schedule
-
-from ..pixels_io import write_healpix_fits
-
-from ..vis import set_matplotlib_backend
-
-from .. import qarray as qa
-
 from .. import ops as ops
-
-from ._helpers import create_outdir, create_comm
+from .. import qarray as qa
+from ..data import Data
+from ..instrument import Focalplane, SpaceSite, Telescope
+from ..instrument_sim import fake_hexagon_focalplane
+from ..mpi import MPI, Comm
+from ..observation import default_values as defaults
+from ..pixels_io import write_healpix_fits
+from ..schedule_sim_satellite import create_satellite_schedule
+from ..vis import set_matplotlib_backend
+from ._helpers import create_comm, create_outdir
+from .mpi import MPITestCase
 
 
 class SimSatelliteTest(MPITestCase):

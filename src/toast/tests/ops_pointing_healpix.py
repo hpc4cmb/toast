@@ -11,7 +11,7 @@ from .. import ops as ops
 from .. import qarray as qa
 from .._libtoast import healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
-from ..intervals import interval_dtype, IntervalList
+from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
 from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase

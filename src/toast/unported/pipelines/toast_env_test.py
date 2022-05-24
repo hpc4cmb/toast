@@ -7,13 +7,12 @@
 """This does some simple tests of the TOAST runtime environment.
 """
 
-import sys
 import argparse
+import sys
 import traceback
 
-from toast.mpi import get_world, Comm
-
-from toast.utils import Logger, Environment, numba_threading_layer
+from toast.mpi import Comm, get_world
+from toast.utils import Environment, Logger, numba_threading_layer
 
 
 def main():

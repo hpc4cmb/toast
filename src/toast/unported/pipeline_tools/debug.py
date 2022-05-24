@@ -5,8 +5,8 @@
 import argparse
 import os
 
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
+from ..timing import Timer, function_timer
+from ..utils import Environment, Logger
 
 
 def add_debug_args(parser):

@@ -12,7 +12,7 @@
 
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp declare target
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
 
 void pointing_detector_inner(
     int32_t const *q_index,
@@ -23,11 +23,16 @@ void pointing_detector_inner(
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
-    uint8_t mask)
+    uint8_t mask,
+    bool use_flags)
 {
     int32_t qidx = q_index[idet];
     double temp_bore[4];
-    uint8_t check = flags[isamp] & mask;
+    uint8_t check = 0;
+    if (use_flags)
+    {
+        check = flags[isamp] & mask;
+    }
     if (check == 0)
     {
         temp_bore[0] = boresight[4 * isamp];
@@ -51,7 +56,7 @@ void pointing_detector_inner(
 
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp end declare target
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
 
 void init_ops_pointing_detector(py::module &m)
 {
@@ -69,7 +74,6 @@ void init_ops_pointing_detector(py::module &m)
                                  uint8_t shared_flag_mask,
                                  bool use_accel)
         {
-
             // What if quats has more dets than we are considering in quat_index?
 
             // This is used to return the actual shape of each buffer
@@ -98,33 +102,40 @@ void init_ops_pointing_detector(py::module &m)
             );
             int64_t n_view = temp_shape[0];
 
-            uint8_t * raw_flags = extract_buffer <uint8_t> (
-                shared_flags, "flags", 1, temp_shape, {n_samp}
-            );
-
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
-            bool offload = (! omgr.device_is_host()) && use_accel;
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
+            // Optionally use flags
+            bool use_flags = true;
+            uint8_t * raw_flags = extract_buffer <uint8_t> (
+                shared_flags, "flags", 1, temp_shape, {-1}
+            );
+            if (temp_shape[0] != n_samp) {
+                raw_flags = (uint8_t *)omgr.null;
+                use_flags = false;
+            }
 
             if (offload) {
 #ifdef HAVE_OPENMP_TARGET
 
-#pragma omp target data           \
-device(dev)                       \
-    map(to                        \
-        :                         \
-        raw_focalplane [0:n_det], \
-        raw_quat_index [0:n_det], \
-        shared_flag_mask,         \
-        n_view,                   \
-        n_det,                    \
-        n_samp)                   \
-        use_device_ptr(           \
-            raw_boresight,        \
-            raw_quats,            \
-            raw_intervals,        \
-            raw_flags,            \
-            raw_focalplane,       \
+#pragma omp target data               \
+device(dev)                           \
+    map(to                            \
+        :                             \
+        raw_focalplane [0:4 * n_det], \
+        raw_quat_index [0:n_det],     \
+        shared_flag_mask,             \
+        n_view,                       \
+        n_det,                        \
+        n_samp,                       \
+        use_flags)                    \
+        use_device_ptr(               \
+            raw_boresight,            \
+            raw_quats,                \
+            raw_intervals,            \
+            raw_flags,                \
+            raw_focalplane,           \
             raw_quat_index)
                 {
 #pragma omp target teams distribute collapse(2)
@@ -145,14 +156,15 @@ device(dev)                       \
                                     isamp,
                                     n_samp,
                                     idet,
-                                    shared_flag_mask
+                                    shared_flag_mask,
+                                    use_flags
                                 );
                             }
                         }
                     }
                 }
 
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
@@ -171,7 +183,8 @@ device(dev)                       \
                                 isamp,
                                 n_samp,
                                 idet,
-                                shared_flag_mask
+                                shared_flag_mask,
+                                use_flags
                             );
                         }
                     }

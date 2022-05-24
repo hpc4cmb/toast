@@ -62,7 +62,7 @@ double toast::atm_sim_interp(
     int64_t const * compressed_index,
     int64_t const * full_index,
     double const * realization
-    ) {
+) {
     // Trilinear interpolation.  This function is called for every sample, so we
     // pass all arguments by reference / pointer.
 
@@ -191,7 +191,7 @@ double toast::atm_sim_interp(
                 t_in, delta_t, delta_az, elmin, elmax,
                 wx, wy, wz, xstep, ystep, zstep,
                 maxdist, cosel0, sinel0
-                    );
+                );
             auto & logger = toast::Logger::get();
             logger.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
@@ -285,7 +285,7 @@ int toast::atm_sim_observe(
     int64_t * compressed_index,
     int64_t * full_index,
     double * realization
-    ) {
+) {
     // For each sample, integrate along the line of sight by summing
     // the atmosphere values. See Church (1995) Section 2.2, first equation.
     // We omit the optical depth factor which is close to unity.
@@ -436,7 +436,7 @@ int toast::atm_sim_observe(
                         maxdist, cosel0, sinel0,
                         nelem, compressed_index, full_index,
                         realization
-                        ) * (1. - z * zatm_inv);
+                               ) * (1. - z * zatm_inv);
                 } catch (const std::runtime_error & e) {
                     # pragma omp flush(error)
                     if (error == 0) {

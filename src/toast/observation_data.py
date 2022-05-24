@@ -3,54 +3,45 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import sys
-
-from collections.abc import MutableMapping, Mapping
-
+from collections.abc import Mapping, MutableMapping
 from typing import NamedTuple
 
 import numpy as np
-
 from astropy import units as u
-
 from pshmem import MPIShared
 
-from .mpi import MPI, comm_equivalent, comm_equal
-
-from .utils import (
-    Logger,
-    AlignedI8,
-    AlignedU8,
-    AlignedI16,
-    AlignedU16,
-    AlignedI32,
-    AlignedU32,
-    AlignedI64,
-    AlignedU64,
-    AlignedF32,
-    AlignedF64,
-    dtype_to_aligned,
-)
-
-from .intervals import IntervalList
-
-from .timing import function_timer
-
 from .accelerator import (
-    use_accel_jax,
-    use_accel_omp,
-    accel_enabled,
-    accel_data_present,
+    AcceleratorObject,
     accel_data_create,
     accel_data_delete,
+    accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
-    AcceleratorObject,
+    accel_enabled,
+    use_accel_jax,
+    use_accel_omp,
+)
+from .intervals import IntervalList
+from .mpi import MPI, comm_equal, comm_equivalent
+from .timing import function_timer
+from .utils import (
+    AlignedF32,
+    AlignedF64,
+    AlignedI8,
+    AlignedI16,
+    AlignedI32,
+    AlignedI64,
+    AlignedU8,
+    AlignedU16,
+    AlignedU32,
+    AlignedU64,
+    Logger,
+    dtype_to_aligned,
 )
 
 if use_accel_jax:
     import jax
     import jax.numpy as jnp
-
 
 class DetectorData(AcceleratorObject):
     """Class representing a logical collection of co-sampled detector data.
@@ -1804,6 +1795,8 @@ class IntervalsManager(MutableMapping):
         self._internal = dict()
         self._del_callbacks = dict()
         self._local_samples = local_samples
+        # Trigger creation of the internal interval list for all samples
+        _ = self._real_key(None)
 
     def create_col(self, name, global_timespans, local_times, fromrank=0):
         """Create local interval lists on the same process column.
@@ -1990,8 +1983,7 @@ class IntervalsManager(MutableMapping):
         if not accel_enabled():
             return False
         log = Logger.get()
-        key = self._real_key(key)
-        result = self._internal[key].accel_exists()
+        result = self[key].accel_exists()
         log.verbose(f"IntervalsManager {key} accel_exists = {result}")
         return result
 
@@ -2005,7 +1997,7 @@ class IntervalsManager(MutableMapping):
             (bool):  True if the accelerator device copy is being used.
 
         """
-        return self._internal[key].accel_in_use()
+        return self[key].accel_in_use()
 
     def accel_used(self, key, state):
         """Set the in-use state of the interval list device copy.
@@ -2021,7 +2013,7 @@ class IntervalsManager(MutableMapping):
             None
 
         """
-        self._internal[key].accel_used(state)
+        self[key].accel_used(state)
 
     def accel_create(self, key):
         """Create the named interval list on the accelerator.
@@ -2036,9 +2028,8 @@ class IntervalsManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        key = self._real_key(key)
         log.verbose(f"IntervalsManager {key} accel_create")
-        self._internal[key].accel_create()
+        self[key].accel_create()
 
     def accel_update_device(self, key):
         """Copy the named interval list to the accelerator.
@@ -2053,9 +2044,8 @@ class IntervalsManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        key = self._real_key(key)
         log.verbose(f"IntervalsManager {key} accel_update_device")
-        self._internal[key].accel_update_device()
+        self[key].accel_update_device()
 
     def accel_update_host(self, key):
         """Copy the named interval list from the accelerator.
@@ -2070,9 +2060,8 @@ class IntervalsManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        key = self._real_key(key)
         log.verbose(f"IntervalsManager {key} accel_update_host")
-        self._internal[key].accel_update_host()
+        self[key].accel_update_host()
 
     def accel_delete(self, key):
         """Delete the named interval list from the accelerator.
@@ -2087,13 +2076,12 @@ class IntervalsManager(MutableMapping):
         log = Logger.get()
         if not accel_enabled():
             return
-        key = self._real_key(key)
-        if not self._internal[key].accel_exists():
+        if not self[key].accel_exists():
             msg = f"Intervals list '{key}' is not present on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
         log.verbose(f"IntervalsManager {key} accel_delete")
-        self._internal[key].accel_delete()
+        self[key].accel_delete()
 
     def accel_clear(self):
         """Clear all interval lists from accelerators
@@ -2106,6 +2094,6 @@ class IntervalsManager(MutableMapping):
             return
         log = Logger.get()
         for key in self._internal:
-            if self._internal[key].accel_exists():
+            if self[key].accel_exists():
                 log.verbose(f"IntervalsManager {key} accel_delete")
-                self._internal[key].accel_delete()
+                self[key].accel_delete()

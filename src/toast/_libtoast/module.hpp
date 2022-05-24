@@ -64,7 +64,7 @@ void register_aligned(py::module & m, char const * name) {
                 1,
                 {self.size()},
                 {sizeof(typename C::value_type)}
-                );
+            );
         })
     .def("__len__", [](const C & self) {
              return self.size();

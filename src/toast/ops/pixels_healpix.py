@@ -2,27 +2,22 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
-
 import numpy as np
-
-from ..utils import Environment, Logger
-
-from ..traits import trait_docs, Int, Unicode, Bool, Instance
-
-from ..healpix import Pixels
-
-from ..timing import function_timer
+import traitlets
 
 from .. import qarray as qa
 
-from ..pixels import PixelDistribution
-
+# This is just wrong- will be confusing until cleanup of
+# libtoast / _libtoast...
+from .._libtoast import healpix_pixels, pixels_healpix
+from ..healpix import Pixels
 from ..observation import default_values as defaults
-
-from .operator import Operator
-
+from ..pixels import PixelDistribution
+from ..timing import function_timer
+from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .delete import Delete
+from .operator import Operator
 
 from .jax_ops import pixels_healpix
 
@@ -237,19 +232,20 @@ class PixelsHealpix(Operator):
             quat_indx = ob.detdata[quats_name].indices(dets)
             pix_indx = ob.detdata[self.pixels].indices(dets)
 
+            view_slices = [slice(x.first, x.last + 1, 1) for x in ob.intervals[view]]
+
             # Do we already have pointing for all requested detectors?
             if exists:
                 # Yes...
                 if self.create_dist is not None:
                     # but the caller wants the pixel distribution
-                    for ob in data.obs:
-                        views = ob.view[self.view]
-                        for det in ob.select_local_detectors(detectors):
-                            for view in range(len(views)):
-                                self._local_submaps[
-                                    views.detdata[self.pixels][view][det]
-                                    // self._n_pix_submap
-                                ] = True
+                    for det in ob.select_local_detectors(detectors):
+                        for vslice in view_slices:
+                            good = ob.detdata[self.pixels][det][vslice] >= 0
+                            self._local_submaps[
+                                ob.detdata[self.pixels][det][vslice][good]
+                                // self._n_pix_submap
+                            ] = True
 
                 if data.comm.group_rank == 0:
                     msg = (
@@ -263,10 +259,21 @@ class PixelsHealpix(Operator):
                 if not ob.detdata.accel_exists(self.pixels):
                     ob.detdata.accel_create(self.pixels)
 
+            # Get the flags if needed.  Use the same flags as
+            # detector pointing.
+            flags = None
+            if self.detector_pointing.shared_flags is not None:
+                flags = np.array(ob.shared[self.detector_pointing.shared_flags])
+                # n_good = np.sum(flags == 0)
+                # n_bad = np.sum(flags != 0)
+                # print(f"Flags using mask {self.detector_pointing.shared_flag_mask}, {n_good} good, {n_bad} bad")
+
             if self.use_python:
                 self._py_pixels_healpix(
                     quat_indx,
                     ob.detdata[quats_name].data,
+                    flags,
+                    self.detector_pointing.shared_flag_mask,
                     pix_indx,
                     ob.detdata[self.pixels].data,
                     ob.intervals[self.view].data,
@@ -276,6 +283,8 @@ class PixelsHealpix(Operator):
                 pixels_healpix(
                     quat_indx,
                     ob.detdata[quats_name].data,
+                    flags,
+                    self.detector_pointing.shared_flag_mask,
                     pix_indx,
                     ob.detdata[self.pixels].data,
                     ob.intervals[self.view].data,
@@ -349,6 +358,8 @@ class PixelsHealpix(Operator):
         self,
         quat_indx,
         quat_data,
+        flag_data,
+        flag_mask,
         pix_indx,
         pix_data,
         intr_data,
@@ -364,8 +375,11 @@ class PixelsHealpix(Operator):
                     samples = slice(vw.first, vw.last + 1, 1)
                     dir = qa.rotate(quat_data[qidx][samples], zaxis)
                     pix_data[pidx][samples] = self.hpix.vec2nest(dir)
-                    sub_maps = pix_data[pidx][samples] // self._n_pix_submap
+                    good = flag_data[samples] & flag_mask == 0
+                    bad = np.logical_not(good)
+                    sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
                     hit_submaps[sub_maps] = 1
+                    pix_data[pidx][samples][bad] = -1
         else:
             for idet in range(len(quat_indx)):
                 qidx = quat_indx[idet]
@@ -374,5 +388,8 @@ class PixelsHealpix(Operator):
                     samples = slice(vw.first, vw.last + 1, 1)
                     dir = qa.rotate(quat_data[qidx][samples], zaxis)
                     pix_data[pidx][samples] = self.hpix.vec2ring(dir)
-                    sub_maps = pix_data[pidx][samples] // self._n_pix_submap
+                    good = flag_data[samples] & flag_mask == 0
+                    bad = np.logical_not(good)
+                    sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
                     hit_submaps[sub_maps] = 1
+                    pix_data[pidx][samples][bad] = -1

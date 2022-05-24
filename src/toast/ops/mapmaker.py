@@ -4,39 +4,24 @@
 
 import os
 
+import numpy as np
 import traitlets
 
-import numpy as np
-
-from ..utils import Logger
-
 from ..mpi import MPI
-
-from ..traits import trait_docs, Int, Unicode, Bool, Float, Instance
-
-from ..timing import function_timer, Timer
-
-from ..pixels import PixelDistribution, PixelData
-
-from ..pixels_io import write_healpix_fits, write_healpix_hdf5
-
 from ..observation import default_values as defaults
-
-from .operator import Operator
-
-from .pipeline import Pipeline
-
-from .delete import Delete
-
+from ..pixels import PixelData, PixelDistribution
+from ..pixels_io import write_healpix_fits, write_healpix_hdf5
+from ..timing import Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .copy import Copy
-
-from .scan_map import ScanMap, ScanMask
-
+from .delete import Delete
+from .mapmaker_templates import ApplyAmplitudes, SolveAmplitudes
 from .mapmaker_utils import CovarianceAndHits
-
-from .mapmaker_templates import SolveAmplitudes, ApplyAmplitudes
-
 from .memory_counter import MemoryCounter
+from .operator import Operator
+from .pipeline import Pipeline
+from .scan_map import ScanMap, ScanMask
 
 
 @trait_docs
@@ -159,6 +144,10 @@ class MapMaker(Operator):
 
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
 
+    write_solver_products = Bool(
+        True, help="If True, write out equivalent solver products."
+    )
+
     keep_solver_products = Bool(
         False, help="If True, keep the map domain solver products in data"
     )
@@ -253,6 +242,10 @@ class MapMaker(Operator):
             binning=self.binning,
             template_matrix=self.template_matrix,
             keep_solver_products=self.keep_solver_products,
+            write_solver_products=self.write_solver_products,
+            write_hdf5=self.write_hdf5,
+            write_hdf5_serial=self.write_hdf5_serial,
+            output_dir=self.output_dir,
             mc_mode=self.mc_mode,
             mc_index=self.mc_index,
             reset_pix_dist=self.reset_pix_dist,

@@ -2,36 +2,22 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
-import numpy as np
-
-import re
 import datetime
-
-from astropy import units as u
+import json
+import os
+import re
 
 import h5py
+import numpy as np
+from astropy import units as u
 
-import json
-
-from ..utils import (
-    Environment,
-    Logger,
-    import_from_name,
-    dtype_to_aligned,
-)
-
+from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
 from ..mpi import MPI
-
-from ..timing import Timer, function_timer, GlobalTimers
-
-from ..instrument import GroundSite, SpaceSite, Focalplane, Telescope
-
-from ..weather import SimWeather
-
 from ..observation import Observation
-
-from .hdf_utils import check_dataset_buffer_size, hdf5_open, hdf5_config
+from ..timing import GlobalTimers, Timer, function_timer
+from ..utils import Environment, Logger, dtype_to_aligned, import_from_name
+from ..weather import SimWeather
+from .hdf_utils import check_dataset_buffer_size, hdf5_config, hdf5_open
 
 
 @function_timer
@@ -387,12 +373,12 @@ def load_hdf5(
 
         inst_group = hgroup["instrument"]
         telescope_name = str(inst_group.attrs["telescope_name"])
-        telescope_class_name = str(inst_group.attrs["telescope_class"])
         telescope_uid = int(inst_group.attrs["telescope_uid"])
+        telescope_class = import_from_name(str(inst_group.attrs["telescope_class"]))
 
         site_name = str(inst_group.attrs["site_name"])
-        site_class_name = str(inst_group.attrs["site_class"])
         site_uid = int(inst_group.attrs["site_uid"])
+        site_class = import_from_name(str(inst_group.attrs["site_class"]))
 
         site = None
         if "site_alt_m" in inst_group.attrs:
@@ -419,7 +405,7 @@ def load_hdf5(
                     max_pwv=weather_max_pwv,
                     median_weather=False,
                 )
-            site = GroundSite(
+            site = site_class(
                 site_name,
                 site_lat_deg * u.degree,
                 site_lon_deg * u.degree,
@@ -428,12 +414,37 @@ def load_hdf5(
                 weather=weather,
             )
         else:
-            site = SpaceSite(site_name, uid=site_uid)
+            site = site_class(site_name, uid=site_uid)
+
+        session = None
+        if "session_name" in inst_group.attrs:
+            session_name = str(inst_group.attrs["session_name"])
+            session_uid = int(inst_group.attrs["session_uid"])
+            session_start = inst_group.attrs["session_start"]
+            if str(session_start) == "NONE":
+                session_start = None
+            else:
+                session_start = datetime.datetime.fromtimestamp(
+                    float(inst_group.attrs["session_start"]),
+                    tz=datetime.timezone.utc,
+                )
+            session_end = inst_group.attrs["session_end"]
+            if str(session_end) == "NONE":
+                session_end = None
+            else:
+                session_end = datetime.datetime.fromtimestamp(
+                    float(inst_group.attrs["session_end"]),
+                    tz=datetime.timezone.utc,
+                )
+            session_class = import_from_name(str(inst_group.attrs["session_class"]))
+            session = session_class(
+                session_name, uid=session_uid, start=session_start, end=session_end
+            )
 
         focalplane = Focalplane()
         focalplane.load_hdf5(inst_group, comm=None)
 
-        telescope = Telescope(
+        telescope = telescope_class(
             telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
         )
         del inst_group
@@ -453,6 +464,7 @@ def load_hdf5(
             obs_samples,
             name=obs_name,
             uid=obs_uid,
+            session=session,
             detector_sets=obs_det_sets,
             sample_sets=obs_sample_sets,
             process_rows=process_rows,

@@ -7,19 +7,17 @@
 """Generate a focalplane file compatible with the example workflows.
 """
 
-import sys
 import argparse
+import sys
 
 import numpy as np
-
 from astropy import units as u
 
 import toast
-from toast.mpi import get_world
-
-from toast.utils import Logger
-
 from toast.instrument_sim import fake_hexagon_focalplane, plot_focalplane
+from toast.io import H5File
+from toast.mpi import get_world
+from toast.utils import Logger
 
 
 def main():
@@ -192,7 +190,8 @@ def main():
     # Guard against being called with multiple processes
     mpiworld, procs, rank = get_world()
     if rank == 0:
-        fp.save_hdf5(args.out)
+        with H5File(args.out, "w", comm=world, force_serial=True) as f:
+            fp.save_hdf5(f.handle)
         plotfile = "{}.pdf".format(args.out)
         plot_focalplane(
             fp,

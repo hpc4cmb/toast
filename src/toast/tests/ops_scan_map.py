@@ -6,18 +6,13 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
 from .. import ops as ops
-
 from ..observation import default_values as defaults
-
 from ..pixels import PixelData
-
-from ._helpers import create_outdir, create_satellite_data, create_fake_sky
+from ._helpers import create_fake_sky, create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class ScanMapTest(MPITestCase):

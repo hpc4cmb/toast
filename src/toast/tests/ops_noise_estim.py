@@ -6,33 +6,24 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 from astropy.table import Column
 
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
 from .. import ops as ops
-
-from ..vis import set_matplotlib_backend
-
-from ..pixels import PixelDistribution, PixelData
-from ..pixels_io import write_healpix_fits
-
 from .. import qarray as qa
-
+from ..noise import Noise
+from ..observation import default_values as defaults
+from ..pixels import PixelData, PixelDistribution
+from ..pixels_io import write_healpix_fits
+from ..vis import set_matplotlib_backend
 from ._helpers import (
+    create_fake_sky,
+    create_ground_data,
     create_outdir,
     create_satellite_data,
-    create_ground_data,
-    create_fake_sky,
     fake_flags,
 )
-
-from ..observation import default_values as defaults
-
+from .mpi import MPITestCase
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
@@ -119,8 +110,8 @@ class NoiseEstimTest(MPITestCase):
         estim.apply(data)
 
         if data.comm.world_rank == 0:
-            import matplotlib.pyplot as plt
             import astropy.io.fits as pf
+            import matplotlib.pyplot as plt
 
             obs = data.obs[0]
             det = obs.local_detectors[0]

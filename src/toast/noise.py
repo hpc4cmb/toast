@@ -3,18 +3,15 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-
-from typing import Type
 import re
-import numpy as np
-
-from astropy import units as u
+from typing import Type
 
 import h5py
+import numpy as np
+from astropy import units as u
 
+from .timing import Timer, function_timer
 from .utils import hdf5_use_serial
-
-from .timing import function_timer, Timer
 
 
 class Noise(object):

@@ -2,36 +2,23 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
 import os
 
-import traitlets
-
+import healpy as hp
 import numpy as np
-
+import traitlets
 from astropy import units as u
 
-import healpy as hp
-
-from ..timing import function_timer
-
 from .. import qarray as qa
-
+from ..atm import AtmSim, available_atm, available_utils
 from ..data import Data
-
-from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
-
-from .operator import Operator
-
-from .pipeline import Pipeline
-
-from ..utils import Environment, Logger, Timer
-
-from ..atm import AtmSim, available_utils, available_atm
-
+from ..mpi import MPI
 from ..observation import default_values as defaults
-
+from ..timing import function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger, Timer
+from .operator import Operator
+from .pipeline import Pipeline
 from .sim_tod_atm_utils import ObserveAtmosphere
 
 if available_atm:
@@ -84,10 +71,14 @@ class SimAtmosphere(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+    )
 
     det_flags = Unicode(
         defaults.det_flags,
@@ -971,8 +962,9 @@ class SimAtmosphere(Operator):
         from ..vis import set_matplotlib_backend
 
         set_matplotlib_backend()
-        import matplotlib.pyplot as plt
         import pickle
+
+        import matplotlib.pyplot as plt
 
         azmin, azmax, elmin, elmax = scan_range
         azmin = azmin.to_value(u.radian)

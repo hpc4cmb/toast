@@ -21,46 +21,32 @@ import time
 wait = random.uniform(0.0, startup_delay)
 time.sleep(wait)
 
-from toast.mpi import MPI
+import argparse
+import copy
 
 # Now import the remaining modules
 import os
-import sys
-import re
-import copy
-import argparse
-import traceback
 import pickle
-
+import re
+import sys
+import traceback
 from datetime import datetime
 
+import healpy as hp
+import numpy as np
 import psutil
 
-import numpy as np
-
-import healpy as hp
-
-from toast.mpi import get_world, Comm
-
-from toast.dist import distribute_uniform, Data, distribute_discrete
-
-from toast.utils import Logger, Environment, memreport
-
-from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
-from toast.timing import dump as dump_timing
-
-from toast.todmap import TODGround
-
-from toast import pipeline_tools
-
-from toast import rng
-
+from toast import pipeline_tools, rng
+from toast.dist import Data, distribute_discrete, distribute_uniform
+from toast.mpi import MPI, Comm, get_world
 from toast.pipeline_tools import Focalplane
-
-from toast.tod.sim_focalplane import hex_pol_angles_qu, hex_layout, hex_nring
-
 from toast.schedule import run_scheduler
-
+from toast.timing import GlobalTimers, Timer
+from toast.timing import dump as dump_timing
+from toast.timing import function_timer, gather_timers
+from toast.tod.sim_focalplane import hex_layout, hex_nring, hex_pol_angles_qu
+from toast.todmap import TODGround
+from toast.utils import Environment, Logger, memreport
 
 # This function is part of the package in TOAST 3.0.  Remove this here when porting.
 

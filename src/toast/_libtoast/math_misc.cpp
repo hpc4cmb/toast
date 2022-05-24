@@ -29,7 +29,7 @@ double integrate_simpson(py::array_t <double> x, py::array_t <double> f) {
             (2 - h2 / h1) * f1 +
             pow(h1 + h2, 2) / (h1 * h2) * f2 +
             (2 - h1 / h2) * f3
-            );
+        );
     }
 
     if (n % 2 == 0) {
@@ -42,7 +42,7 @@ double integrate_simpson(py::array_t <double> x, py::array_t <double> f) {
             (2 * pow(h1, 2) + 3 * h1 * h2) / (6 * (h2 + h1)) * f1 +
             (pow(h1, 2) + 3 * h1 * h2) / (6 * h2) * f2 -
             pow(h1, 3) / (6 * h2 * (h2 + h1)) * f2
-            );
+        );
     }
 
     return result;

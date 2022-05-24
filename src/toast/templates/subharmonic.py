@@ -6,19 +6,13 @@ from collections import OrderedDict
 
 import numpy as np
 
-from ..mpi import MPI
-
-from ..utils import Logger
-
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
-
 from ..data import Data
-
+from ..mpi import MPI
 from ..observation import default_values as defaults
-
-from .template import Template
-
+from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .amplitudes import Amplitudes
+from .template import Template
 
 
 @trait_docs
@@ -149,7 +143,7 @@ class SubHarmonic(Template):
                     good = slice(0, view_len, 1)
                     if self.det_flags is not None:
                         flags = views.detdata[self.det_flags][ivw][det]
-                        good = flags & self.det_flag_mask == 0
+                        good = (flags & self.det_flag_mask) == 0
 
                     prec = np.zeros((norder, norder), dtype=np.float64)
                     for row in range(norder):
@@ -202,9 +196,9 @@ class SubHarmonic(Template):
     def _apply_precond(self, amplitudes_in, amplitudes_out):
         norder = self.order + 1
         for det in self._all_dets:
-            offset = self._det_start[detector]
+            offset = self._det_start[det]
             for iob, ob in enumerate(self.data.obs):
-                if detector not in ob.local_detectors:
+                if det not in ob.local_detectors:
                     continue
                 views = ob.view[self.view]
                 for ivw, vw in enumerate(views):

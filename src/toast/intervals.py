@@ -3,31 +3,29 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import sys
-
 from collections.abc import MutableMapping, Sequence
 
 import numpy as np
 
-from .timing import function_timer
-
-from .utils import Logger
-
 from .accelerator import (
-    use_accel_jax,
-    use_accel_omp,
-    accel_enabled,
-    accel_data_present,
+    AcceleratorObject,
     accel_data_create,
     accel_data_delete,
+    accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
-    AcceleratorObject,
+    accel_enabled,
+    use_accel_jax,
+    use_accel_omp,
 )
+from .timing import function_timer
+from .utils import Logger
 
 if use_accel_jax:
     import jax
     import jax.numpy as jnp
 
+from .utils import Logger
 
 def build_interval_dtype():
     dtdbl = np.dtype("double")

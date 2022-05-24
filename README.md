@@ -1,6 +1,6 @@
 # Time Ordered Astrophysics Scalable Tools
 
-![Build Status](https://github.com/hpc4cmb/toast/workflows/Run%20Test%20Suite/badge.svg?branch=master)
+![Build Status](https://github.com/hpc4cmb/toast/workflows/Run%20Test%20Suite/badge.svg?branch=toast3)
 
 [![DOI](https://zenodo.org/badge/33680104.svg)](https://zenodo.org/badge/latestdoi/33680104)
 
@@ -17,4 +17,4 @@ data must often be analyzed simultaneously to extract an estimate of the sky sig
 
 See the full documentation here:
 
-https://toast-cmb.readthedocs.io/en/latest/
+https://toast-cmb.readthedocs.io/en/toast3/

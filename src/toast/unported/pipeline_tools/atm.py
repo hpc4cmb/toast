@@ -8,19 +8,17 @@ import os
 import numpy as np
 from scipy.constants import h, k
 
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
-
 from .. import qarray as qa
-
+from ..timing import Timer, function_timer
 from ..todmap import OpSimAtmosphere, atm_available_utils
+from ..utils import Environment, Logger
 
 if atm_available_utils:
     from ..todmap.atm import (
-        atm_atmospheric_loading,
-        atm_atmospheric_loading_vec,
         atm_absorption_coefficient,
         atm_absorption_coefficient_vec,
+        atm_atmospheric_loading,
+        atm_atmospheric_loading_vec,
     )
 
 

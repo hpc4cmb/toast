@@ -3,14 +3,14 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import argparse
-from datetime import datetime
 import os
+from datetime import datetime
 
 import numpy as np
 
-from ..mpi import get_world, Comm
-from ..timing import function_timer, Timer
-from ..utils import Logger, Environment
+from ..mpi import Comm, get_world
+from ..timing import Timer, function_timer
+from ..utils import Environment, Logger
 
 
 def add_dist_args(parser):

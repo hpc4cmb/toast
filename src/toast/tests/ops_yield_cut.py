@@ -7,18 +7,13 @@ import os
 import h5py
 import numpy as np
 import scipy.stats as stats
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
-
 from .. import ops as ops
-
 from ..observation import default_values as defaults
-
-from ._helpers import create_outdir, create_ground_data
+from ..vis import set_matplotlib_backend
+from ._helpers import create_ground_data, create_outdir
+from .mpi import MPITestCase
 
 
 class YieldCutTest(MPITestCase):

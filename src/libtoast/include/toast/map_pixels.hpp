@@ -33,9 +33,9 @@ void global_to_local(size_t nsamp,
                 global2local[
                     static_cast <T> (
                         static_cast <double> (global_pixels[i]) * npix_submap_inv
-                        )
+                    )
                 ]
-                );
+            );
         }
     }
 

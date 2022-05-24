@@ -2,11 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
-
 import numbers
-
-from collections.abc import MutableMapping, Sequence, Mapping
+import sys
+from collections.abc import Mapping, MutableMapping, Sequence
 
 import numpy as np
 
@@ -96,9 +94,7 @@ class View(Sequence):
         self.obj = obj
         self.key = key
         # Compute a list of slices for these intervals
-        self.slices = [
-            slice(x.first, x.last + 1, 1) for x in self.obj.intervals[key]
-        ]
+        self.slices = [slice(x.first, x.last + 1, 1) for x in self.obj.intervals[key]]
         self.detdata = DetDataView(obj, self.slices)
         self.shared = SharedView(obj, self.slices)
 

@@ -2,9 +2,6 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-# from .mpi import MPITestCase
-from toast.tests.mpi import MPITestCase
-
 import glob
 import os
 import shutil
@@ -12,22 +9,25 @@ import shutil
 import healpy as hp
 import numpy as np
 
-from ..timing import gather_timers, GlobalTimers
-from ..timing import dump as dump_timing
-from ..tod import AnalyticNoise, OpSimNoise, Interval, OpCacheCopy, OpCacheInit
+# from .mpi import MPITestCase
+from toast.tests.mpi import MPITestCase
+
+from .. import qarray as qa
 from ..map import DistPixels
+from ..timing import GlobalTimers
+from ..timing import dump as dump_timing
+from ..timing import gather_timers
+from ..tod import AnalyticNoise, Interval, OpCacheCopy, OpCacheInit, OpSimNoise
 from ..todmap import (
-    TODHpixSpiral,
-    OpSimGradient,
-    OpPointingHpix,
     OpMadam,
     OpMapMaker,
+    OpPointingHpix,
+    OpSimGradient,
     OpSimScan,
+    TODHpixSpiral,
 )
-from ..todmap.mapmaker import TemplateMatrix, OffsetTemplate, Signal
-from .. import qarray as qa
-
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
+from ..todmap.mapmaker import OffsetTemplate, Signal, TemplateMatrix
+from ._helpers import boresight_focalplane, create_distdata, create_outdir
 
 
 class OpMapMakerTest(MPITestCase):

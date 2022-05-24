@@ -3,12 +3,14 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
-from .mpi import MPITestCase
-
 import numpy.testing as nt
 
-from ..intervals import interval_dtype, IntervalList
+from ..intervals import IntervalList, interval_dtype
+from .mpi import MPITestCase
+
+# from ..tod.interval import intervals_to_chunklist
+#
+# from ..tod.sim_interval import regular_intervals
 
 
 class IntervalTest(MPITestCase):
@@ -60,7 +62,9 @@ class IntervalTest(MPITestCase):
         stamps = np.arange(100, dtype=np.float64)
         boundaries = [10 * x for x in range(1, 9)]
         ranges = [(x, x + 9) for x in boundaries]
-        check = np.array([(stamps[10], stamps[89], 10, 89)], dtype=interval_dtype).view(np.recarray)
+        check = np.array([(stamps[10], stamps[89], 10, 89)], dtype=interval_dtype).view(
+            np.recarray
+        )
         ival = IntervalList(stamps, samplespans=ranges)
         # print("ival = ", ival)
         ival.simplify()
@@ -82,7 +86,9 @@ class IntervalTest(MPITestCase):
         full = ival | neg
         full.simplify()
         # print("full = ", full)
-        check = np.array([(stamps[0], stamps[-1], 0, 99)], dtype=interval_dtype).view(np.recarray)
+        check = np.array([(stamps[0], stamps[-1], 0, 99)], dtype=interval_dtype).view(
+            np.recarray
+        )
         # print(f"check = {check}")
         self.assertTrue(full[0] == check)
 

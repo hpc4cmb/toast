@@ -12,8 +12,9 @@ This script runs a ground simulation and makes a map.
 import os
 
 if "TOAST_STARTUP_DELAY" in os.environ:
-    import numpy as np
     import time
+
+    import numpy as np
 
     delay = np.float(os.environ["TOAST_STARTUP_DELAY"])
     wait = np.random.rand() * delay
@@ -21,26 +22,22 @@ if "TOAST_STARTUP_DELAY" in os.environ:
     #      flush=True)
     time.sleep(wait)
 
-import copy
-import sys
 import argparse
-import traceback
+import copy
 import pickle
+import sys
+import traceback
 
 import numpy as np
 
-from toast.mpi import get_world, Comm
-
-from toast.dist import distribute_uniform, Data
-
-from toast.utils import Logger, Environment, memreport
-
-from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
-from toast.timing import dump as dump_timing
-
-from toast.todmap import TODGround
-
 from toast import pipeline_tools
+from toast.dist import Data, distribute_uniform
+from toast.mpi import Comm, get_world
+from toast.timing import GlobalTimers, Timer
+from toast.timing import dump as dump_timing
+from toast.timing import function_timer, gather_timers
+from toast.todmap import TODGround
+from toast.utils import Environment, Logger, memreport
 
 # import warnings
 # warnings.filterwarnings('error')

@@ -18,7 +18,7 @@
 
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp declare target
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
 
 typedef struct
 {
@@ -57,10 +57,10 @@ void hpix_init(hpix *hp, int64_t nside)
         ++hp->factor;
     }
 
-    static const int64_t init_jr[12] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
+    int64_t init_jr[12] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
     memcpy(hp->jr, init_jr, sizeof(init_jr));
 
-    static const int64_t init_jp[12] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
+    int64_t init_jp[12] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
     memcpy(hp->jp, init_jp, sizeof(init_jp));
 
     for (uint64_t m = 0; m < 0x100; ++m)
@@ -240,12 +240,15 @@ void pixels_healpix_nest_inner(
     int32_t const *quat_index,
     int32_t const *pixel_index,
     double const *quats,
+    uint8_t const *flags,
     uint8_t *hsub,
     int64_t *pixels,
     int64_t n_pix_submap,
     int64_t isamp,
     int64_t n_samp,
-    int64_t idet)
+    int64_t idet,
+    uint8_t mask,
+    bool use_flags)
 {
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
@@ -262,8 +265,15 @@ void pixels_healpix_nest_inner(
     qa_rotate(&(quats[qoff]), zaxis, dir);
     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
     hpix_zphi2nest(&hp, phi, region, z, rtz, &(pixels[poff]));
-    sub_map = (int64_t)(pixels[poff] / n_pix_submap);
-    hsub[sub_map] = 1;
+    if (use_flags && (flags[isamp] & mask != 0))
+    {
+        pixels[poff] = -1;
+    }
+    else
+    {
+        sub_map = (int64_t)(pixels[poff] / n_pix_submap);
+        hsub[sub_map] = 1;
+    }
 
     return;
 }
@@ -273,12 +283,15 @@ void pixels_healpix_ring_inner(
     int32_t const *quat_index,
     int32_t const *pixel_index,
     double const *quats,
+    uint8_t const *flags,
     uint8_t *hsub,
     int64_t *pixels,
     int64_t n_pix_submap,
     int64_t isamp,
     int64_t n_samp,
-    int64_t idet)
+    int64_t idet,
+    uint8_t mask,
+    bool use_flags)
 {
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
@@ -295,15 +308,22 @@ void pixels_healpix_ring_inner(
     qa_rotate(&(quats[qoff]), zaxis, dir);
     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
     hpix_zphi2ring(&hp, phi, region, z, rtz, &(pixels[poff]));
-    sub_map = (int64_t)(pixels[poff] / n_pix_submap);
-    hsub[sub_map] = 1;
+    if (use_flags && (flags[isamp] & mask != 0))
+    {
+        pixels[poff] = -1;
+    }
+    else
+    {
+        sub_map = (int64_t)(pixels[poff] / n_pix_submap);
+        hsub[sub_map] = 1;
+    }
 
     return;
 }
 
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp end declare target
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
 
 void init_ops_pixels_healpix(py::module &m)
 {
@@ -311,6 +331,8 @@ void init_ops_pixels_healpix(py::module &m)
         "pixels_healpix", [](
                               py::buffer quat_index,
                               py::buffer quats,
+                              py::buffer shared_flags,
+                              uint8_t shared_flag_mask,
                               py::buffer pixel_index,
                               py::buffer pixels,
                               py::buffer intervals,
@@ -352,7 +374,17 @@ void init_ops_pixels_healpix(py::module &m)
 
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
-            bool offload = (! omgr.device_is_host()) && use_accel;
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
+            // Optionally use flags
+            bool use_flags = true;
+            uint8_t * raw_flags = extract_buffer <uint8_t> (
+                shared_flags, "flags", 1, temp_shape, {-1}
+            );
+            if (temp_shape[0] != n_samp) {
+                raw_flags = (uint8_t *)omgr.null;
+                use_flags = false;
+            }
 
             if (offload) {
 #ifdef HAVE_OPENMP_TARGET
@@ -368,12 +400,15 @@ device(dev)                        \
         nest,                      \
         n_view,                    \
         n_det,                     \
-        n_samp)                    \
+        n_samp,                    \
+        shared_flag_mask,          \
+        use_flags)                 \
         map(tofrom                 \
             : raw_hsub)            \
             use_device_ptr(        \
                 raw_pixels,        \
                 raw_quats,         \
+                raw_flags,         \
                 raw_intervals,     \
                 raw_pixel_index,   \
                 raw_quat_index,    \
@@ -396,12 +431,15 @@ device(dev)                        \
                                         raw_quat_index,
                                         raw_pixel_index,
                                         raw_quats,
+                                        raw_flags,
                                         raw_hsub,
                                         raw_pixels,
                                         n_pix_submap,
                                         isamp,
                                         n_samp,
-                                        idet
+                                        idet,
+                                        shared_flag_mask,
+                                        use_flags
                                     );
                                 }
                             }
@@ -421,12 +459,15 @@ device(dev)                        \
                                         raw_quat_index,
                                         raw_pixel_index,
                                         raw_quats,
+                                        raw_flags,
                                         raw_hsub,
                                         raw_pixels,
                                         n_pix_submap,
                                         isamp,
                                         n_samp,
-                                        idet
+                                        idet,
+                                        shared_flag_mask,
+                                        use_flags
                                     );
                                 }
                             }
@@ -434,7 +475,7 @@ device(dev)                        \
                     }
                 }
 
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 hpix hp;
                 hpix_init(&hp, nside);
@@ -452,12 +493,15 @@ device(dev)                        \
                                     raw_quat_index,
                                     raw_pixel_index,
                                     raw_quats,
+                                    raw_flags,
                                     raw_hsub,
                                     raw_pixels,
                                     n_pix_submap,
                                     isamp,
                                     n_samp,
-                                    idet
+                                    idet,
+                                    shared_flag_mask,
+                                    use_flags
                                 );
                             }
                         }
@@ -476,12 +520,15 @@ device(dev)                        \
                                     raw_quat_index,
                                     raw_pixel_index,
                                     raw_quats,
+                                    raw_flags,
                                     raw_hsub,
                                     raw_pixels,
                                     n_pix_submap,
                                     isamp,
                                     n_samp,
-                                    idet
+                                    idet,
+                                    shared_flag_mask,
+                                    use_flags
                                 );
                             }
                         }

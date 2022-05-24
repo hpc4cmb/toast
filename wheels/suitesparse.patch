@@ -1,6 +1,103 @@
-diff -urN SuiteSparse-5.10.1_orig/Makefile SuiteSparse-5.10.1/Makefile
---- SuiteSparse-5.10.1_orig/Makefile	2021-05-18 06:01:16.000000000 -0700
-+++ SuiteSparse-5.10.1/Makefile	2021-09-23 15:11:02.220136483 -0700
+diff -urN SuiteSparse-5.11.0_orig/CHOLMOD/Lib/Makefile SuiteSparse-5.11.0/CHOLMOD/Lib/Makefile
+--- SuiteSparse-5.11.0_orig/CHOLMOD/Lib/Makefile	2022-03-14 16:33:19.000000000 -0700
++++ SuiteSparse-5.11.0/CHOLMOD/Lib/Makefile	2022-03-18 11:51:52.423674362 -0700
+@@ -22,7 +22,7 @@
+ #-------------------------------------------------------------------------------
+ # With the CUDA BLAS:
+ ifneq ($(GPU_CONFIG),)
+-LDLIBS += $(CUDART_LIB) $(CUBLAS_LIB)
++LDLIBS += $(CUBLAS_LIB) $(CUDART_LIB)
+ endif
+ #-------------------------------------------------------------------------------
+ 
+@@ -106,7 +106,7 @@
+ endif
+ 
+ DI = $(CORE) $(CHECK) $(CHOLESKY) $(MATRIXOPS) $(MODIFY) $(SUPERNODAL) \
+-	$(GPU) $(PARTITION) 
++	$(GPU) $(PARTITION)
+ 
+ #-------------------------------------------------------------------------------
+ # CHOLMOD library modules (long, double)
+@@ -526,10 +526,10 @@
+ cholmod_gpu_kernels.o: ../GPU/cholmod_gpu_kernels.cu
+ 	$(NVCC) $(I) $(NVCCFLAGS) -c ../GPU/cholmod_gpu_kernels.cu
+ 
+-cholmod_gpu.o: ../GPU/cholmod_gpu.c 
++cholmod_gpu.o: ../GPU/cholmod_gpu.c
+ 	$(C) -c $(I) $<
+ 
+-cholmod_l_gpu.o: ../GPU/cholmod_gpu.c 
++cholmod_l_gpu.o: ../GPU/cholmod_gpu.c
+ 	$(C) -DDLONG -c $(I) $< -o $@
+ 
+ #-------------------------------------------------------------------------------
+diff -urN SuiteSparse-5.11.0_orig/GraphBLAS/Tcov/Makefile SuiteSparse-5.11.0/GraphBLAS/Tcov/Makefile
+--- SuiteSparse-5.11.0_orig/GraphBLAS/Tcov/Makefile	2022-03-14 16:33:19.000000000 -0700
++++ SuiteSparse-5.11.0/GraphBLAS/Tcov/Makefile	2022-03-18 11:54:28.759551655 -0700
+@@ -21,7 +21,7 @@
+     CFLAGS  = -g -Xclang -fopenmp -std=c11 -fPIC -Wno-pragmas -fno-common
+     LDFLAGS = -Xclang -fopenmp
+ else
+-    CFLAGS  = -g -std=c11 -fopenmp -fexceptions -fPIC -Wno-pragmas
++    CFLAGS  = -g -std=c11 -fopenmp -fPIC -Wno-pragmas
+     LDFLAGS = -fopenmp
+ endif
+ 
+@@ -29,7 +29,7 @@
+ INC = tmp_include/*
+ SRC2 = $(notdir $(wildcard $(SRC)))
+ OBJ = $(SRC2:.c=.o)
+-LIBS = 
++LIBS =
+ CPPFLAGS = -Itmp_include -DGBNCPUFEAT -I../rmm_wrap -DGBCOVER $(RENAME)
+ SO_OPTS = $(LDFLAGS)
+ 
+diff -urN SuiteSparse-5.11.0_orig/KLU/Tcov/Makefile SuiteSparse-5.11.0/KLU/Tcov/Makefile
+--- SuiteSparse-5.11.0_orig/KLU/Tcov/Makefile	2022-03-14 16:33:19.000000000 -0700
++++ SuiteSparse-5.11.0/KLU/Tcov/Makefile	2022-03-18 12:07:52.047308511 -0700
+@@ -18,9 +18,8 @@
+ 
+ # for statement coverage, picky tests
+ CF = -Wall -W -Wshadow -Wmissing-prototypes -Wstrict-prototypes \
+-   	-Wredundant-decls -Wnested-externs -Wdisabled-optimization \
+- 	-ansi -g -ftest-coverage -fprofile-arcs -fexceptions \
+-	-fopenmp
++     -Wredundant-decls -Wnested-externs -Wdisabled-optimization \
++     -ansi -g -ftest-coverage -fprofile-arcs -fopenmp
+ 
+ C = $(CC) $(CF)
+ 
+diff -urN SuiteSparse-5.11.0_orig/Makefile SuiteSparse-5.11.0/Makefile
+--- SuiteSparse-5.11.0_orig/Makefile	2022-03-14 16:33:19.000000000 -0700
++++ SuiteSparse-5.11.0/Makefile	2022-03-18 12:12:39.881994703 -0700
+@@ -63,7 +63,7 @@
+ 	( cd GPUQREngine && $(MAKE) install )
+ endif
+ 	( cd SPQR && $(MAKE) install )
+-	# ( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' install )
++#	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' install )
+ #	( cd PIRO_BAND && $(MAKE) install )
+ #	( cd SKYLINE_SVD && $(MAKE) install )
+ 	( cd SLIP_LU && $(MAKE) install )
+@@ -144,7 +144,7 @@
+ 	( cd GPUQREngine && $(MAKE) library )
+ endif
+ 	( cd SPQR && $(MAKE) library )
+-	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' library )
++#	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' library )
+ 	( cd SLIP_LU && $(MAKE) library )
+ #	( cd PIRO_BAND && $(MAKE) library )
+ #	( cd SKYLINE_SVD && $(MAKE) library )
+@@ -172,7 +172,7 @@
+ 	( cd GPUQREngine && $(MAKE) static )
+ endif
+ 	( cd SPQR && $(MAKE) static )
+-	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' static )
++#	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' static )
+ 	( cd SLIP_LU && $(MAKE) static )
+ #	( cd PIRO_BAND && $(MAKE) static )
+ #	( cd SKYLINE_SVD && $(MAKE) static )
 @@ -282,6 +282,9 @@
  # hardcoded below.
  include/metis.h:
@@ -11,9 +108,9 @@ diff -urN SuiteSparse-5.10.1_orig/Makefile SuiteSparse-5.10.1/Makefile
  	- ( cd metis-5.1.0 && $(MAKE) config shared=1 prefix=$(SUITESPARSE) cc=$(CC) )
  	- ( cd metis-5.1.0 && $(MAKE) )
  	- ( cd metis-5.1.0 && $(MAKE) install )
-diff -urN SuiteSparse-5.10.1_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.10.1/SLIP_LU/Demo/Makefile
---- SuiteSparse-5.10.1_orig/SLIP_LU/Demo/Makefile	2021-05-18 06:01:16.000000000 -0700
-+++ SuiteSparse-5.10.1/SLIP_LU/Demo/Makefile	2021-09-23 15:11:02.220136483 -0700
+diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.11.0/SLIP_LU/Demo/Makefile
+--- SuiteSparse-5.11.0_orig/SLIP_LU/Demo/Makefile	2022-03-14 16:33:19.000000000 -0700
++++ SuiteSparse-5.11.0/SLIP_LU/Demo/Makefile	2022-03-18 12:13:34.269777453 -0700
 @@ -20,7 +20,7 @@
  
  # LDFLAGS = -L../../lib
@@ -23,9 +120,9 @@ diff -urN SuiteSparse-5.10.1_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.10.1/SLIP_
  CS = $(LDLIBS)
  
  
-diff -urN SuiteSparse-5.10.1_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.10.1/SLIP_LU/Lib/Makefile
---- SuiteSparse-5.10.1_orig/SLIP_LU/Lib/Makefile	2021-05-18 06:01:16.000000000 -0700
-+++ SuiteSparse-5.10.1/SLIP_LU/Lib/Makefile	2021-09-23 15:11:02.220136483 -0700
+diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.11.0/SLIP_LU/Lib/Makefile
+--- SuiteSparse-5.11.0_orig/SLIP_LU/Lib/Makefile	2022-03-14 16:33:19.000000000 -0700
++++ SuiteSparse-5.11.0/SLIP_LU/Lib/Makefile	2022-03-18 12:14:22.361591652 -0700
 @@ -20,7 +20,7 @@
  # CFLAGS += -Wall -Wextra -Wpedantic -Werror
  
@@ -35,9 +132,9 @@ diff -urN SuiteSparse-5.10.1_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.10.1/SLIP_L
  
  C = $(CC) $(CF) -I../Include -I../../COLAMD/Include -I../../AMD/Include -I../../SuiteSparse_config
  
-diff -urN SuiteSparse-5.10.1_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.10.1/SLIP_LU/Tcov/Makefile
---- SuiteSparse-5.10.1_orig/SLIP_LU/Tcov/Makefile	2021-05-18 06:01:16.000000000 -0700
-+++ SuiteSparse-5.10.1/SLIP_LU/Tcov/Makefile	2021-09-23 15:11:02.220136483 -0700
+diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.11.0/SLIP_LU/Tcov/Makefile
+--- SuiteSparse-5.11.0_orig/SLIP_LU/Tcov/Makefile	2022-03-14 16:33:19.000000000 -0700
++++ SuiteSparse-5.11.0/SLIP_LU/Tcov/Makefile	2022-03-18 12:15:40.369301459 -0700
 @@ -21,7 +21,7 @@
          -I../../SuiteSparse_config -I../../COLAMD/Include -I../../AMD/Include \
          -DSLIP_GMP_LIST_INIT=2 -DSLIP_LU_TCOV
@@ -47,3 +144,101 @@ diff -urN SuiteSparse-5.10.1_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.10.1/SLIP_
  
  # run all statement coverage tests, and then check for 100% coverage
  run: runtests
+diff -urN SuiteSparse-5.11.0_orig/SuiteSparse_config/SuiteSparse_config.mk SuiteSparse-5.11.0/SuiteSparse_config/SuiteSparse_config.mk
+--- SuiteSparse-5.11.0_orig/SuiteSparse_config/SuiteSparse_config.mk	2022-03-14 16:33:19.000000000 -0700
++++ SuiteSparse-5.11.0/SuiteSparse_config/SuiteSparse_config.mk	2022-03-18 12:21:08.232195832 -0700
+@@ -154,7 +154,7 @@
+ 
+     # The CF macro is used by SuiteSparse Makefiles as a combination of
+     # CFLAGS, CPPFLAGS, TARGET_ARCH, and system-dependent settings.
+-    CF ?= $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(OPTIMIZATION) -fexceptions -fPIC
++    CF ?= $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(OPTIMIZATION) -fPIC
+ 
+     #---------------------------------------------------------------------------
+     # code formatting (for Tcov on Linux only)
+@@ -224,15 +224,51 @@
+     #---------------------------------------------------------------------------
+ 
+     # CUDA is detected automatically, and used if found.  To disable CUDA,
+-    # use CUDA=no
+-    CUDA = auto
++    # use CUDA_ROOT=no
++    CUDA_ROOT ?= auto
++    CUDA_ROOT_INC ?= auto
++    CUDA_ROOT_LIB ?= auto
+ 
+-    ifneq ($(CUDA),no)
++    ifneq ($(CUDA_ROOT),no)
+         CUDA_PATH = $(shell which nvcc 2>/dev/null | sed "s/\/bin\/nvcc//")
++        ifeq ($(CUDA_ROOT_INC),auto)
++            CUDA_PATH_INC = $(CUDA_PATH)/include
++        else
++            CUDA_PATH_INC = $(CUDA_ROOT_INC)
++        endif
++        ifeq ($(CUDA_ROOT_LIB),auto)
++            CUDA_PATH_LIB = $(CUDA_PATH)/lib64
++        else
++            CUDA_PATH_LIB = $(CUDA_ROOT_LIB)
++        endif
+     else
+         CUDA_PATH =
++        CUDA_PATH_INC =
++        CUDA_PATH_LIB =
+     endif
+ 
++    $(info CUDA_PATH = $(CUDA_PATH) CUDA_PATH_INC = $(CUDA_PATH_INC) CUDA_PATH_LIB = $(CUDA_PATH_LIB))
++
++    # Support HPC style install with math libraries in a separate directory.  By
++    # default just point to the same location as CUDA_PATH.
++    CUDA_MATH ?= auto
++    CUDA_MATH_INC ?= auto
++    CUDA_MATH_LIB ?= auto
++    ifeq ($(CUDA_MATH),auto)
++        CUDA_MATH = $(CUDA_PATH)
++        CUDA_MATH_INC = $(CUDA_PATH_INC)
++        CUDA_MATH_LIB = $(CUDA_PATH_LIB)
++    else
++        ifeq ($(CUDA_MATH_INC),auto)
++            CUDA_MATH_INC = $(CUDA_MATH)/include
++        endif
++        ifeq ($(CUDA_MATH_LIB),auto)
++            CUDA_MATH_LIB = $(CUDA_MATH)/lib64
++        endif
++    endif
++
++    $(info CUDA_MATH = $(CUDA_MATH) CUDA_MATH_INC = $(CUDA_MATH_INC) CUDA_MATH_LIB = $(CUDA_MATH_LIB))
++
+     ifeq ($(wildcard $(CUDA_PATH)),)
+         # CUDA is not present
+         CUDA_PATH     =
+@@ -240,7 +276,6 @@
+         GPU_CONFIG    =
+         CUDART_LIB    =
+         CUBLAS_LIB    =
+-        CUDA_INC_PATH =
+         CUDA_INC      =
+         NVCC          = echo
+         NVCCFLAGS     =
+@@ -253,10 +288,9 @@
+         GPU_CONFIG    = -DGPU_BLAS
+         # For example, to compile CHOLMOD for 10 CPU cores when using the GPU:
+         # GPU_CONFIG  = -DGPU_BLAS -DCHOLMOD_OMP_NUM_THREADS=10
+-        CUDART_LIB    = $(CUDA_PATH)/lib64/libcudart.so
+-        CUBLAS_LIB    = $(CUDA_PATH)/lib64/libcublas.so
+-        CUDA_INC_PATH = $(CUDA_PATH)/include/
+-        CUDA_INC      = -I$(CUDA_INC_PATH)
++        CUDART_LIB    = $(CUDA_PATH_LIB)/libcudart.so
++        CUBLAS_LIB    = $(CUDA_MATH_LIB)/libcublas.so
++        CUDA_INC      = -I$(CUDA_PATH_INC) -I$(CUDA_MATH_INC)
+                 MAGMA_INC     = -I/opt/magma-2.4.0/include/
+                 MAGMA_LIB     = -L/opt/magma-2.4.0/lib/ -lmagma
+         NVCC          = $(CUDA_PATH)/bin/nvcc
+@@ -518,7 +552,7 @@
+                     # the compiler.  The latter can be empty if you have METIS
+                     # installed in a place where the compiler can find the
+                     # metis.h include file by itself without any -I option
+-                    # (/usr/local/include/metis.h for example). 
++                    # (/usr/local/include/metis.h for example).
+                     LIB_WITH_PARTITION += $(MY_METIS_LIB)
+                     ifneq (,$(MY_METIS_INC))
+                         I_WITH_PARTITION += -I$(MY_METIS_INC)

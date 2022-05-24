@@ -3,25 +3,19 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-
 from collections import OrderedDict
-
 from datetime import datetime, timezone
 
-import numpy as np
-
 import ephem
-
-from astropy import time as atime
+import numpy as np
 from astropy import coordinates as acoord
+from astropy import time as atime
 from astropy import units as u
-
-from .timing import function_timer
-
-from .healpix import ang2vec
 
 from . import qarray as qa
 from .ops.jax_ops.qarray import mult as qa_mult
+from .healpix import ang2vec
+from .timing import function_timer
 
 
 def to_UTC(t):

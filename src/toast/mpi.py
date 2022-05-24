@@ -5,10 +5,7 @@
 import os
 import time
 
-from ._libtoast import (
-    Logger,
-    Environment,
-)
+from ._libtoast import Environment, Logger
 
 
 use_mpi = None
@@ -45,10 +42,10 @@ if use_mpi is None:
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-# Assign each process to an accelerator device
-from .accelerator import use_accel_jax, use_accel_omp, jax_local_device
-
 from ._libtoast import accel_assign_device
+
+# Assign each process to an accelerator device
+from .accelerator import jax_local_device, use_accel_jax, use_accel_omp
 
 if use_accel_omp or use_accel_jax:
     node_procs = 1
@@ -79,16 +76,16 @@ else:
     # Disabled == True
     accel_assign_device(1, 0, True)
 
-# We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
+# We put other imports *after* the MPI check, since usually the MPI initialization
+# is time sensitive and may timeout the job if it does not happen quickly enough.
 
-import sys
 import itertools
-from contextlib import contextmanager
+import sys
 import traceback
+from contextlib import contextmanager
 
 import numpy as np
-
-from pshmem import MPIShared, MPILock
+from pshmem import MPILock, MPIShared
 
 from ._libtoast import Logger
 

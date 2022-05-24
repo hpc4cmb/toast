@@ -3,19 +3,13 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 import traitlets
-
 from astropy import units as u
 
-from ..utils import Environment, Logger
-
-from ..timing import function_timer, Timer
-
 from ..noise_sim import AnalyticNoise
-
-from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
-
+from ..timing import Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .operator import Operator
 
 

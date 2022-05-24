@@ -8,39 +8,24 @@ import time
 import numpy as np
 import numpy.testing as nt
 
-from ..traits import (
-    trait_docs,
-    Int,
-    Unicode,
-)
-
 from .. import ops
-
-from .mpi import MPITestCase
-
-from .._libtoast import (
-    test_accel_op_buffer,
-    test_accel_op_array,
-)
-
+from .._libtoast import test_accel_op_array, test_accel_op_buffer
 from ..accelerator import (
-    use_accel_jax,
-    use_accel_omp,
-    accel_enabled,
-    accel_data_present,
     accel_data_create,
     accel_data_delete,
+    accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
+    accel_enabled,
+    use_accel_jax,
+    use_accel_omp,
 )
-
 from ..data import Data
-
 from ..observation import default_values as defaults
-
-from ..pixels import PixelDistribution, PixelData
-
-from ._helpers import create_outdir, create_comm, create_satellite_data
+from ..pixels import PixelData, PixelDistribution
+from ..traits import Int, Unicode, trait_docs
+from ._helpers import create_comm, create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 @trait_docs

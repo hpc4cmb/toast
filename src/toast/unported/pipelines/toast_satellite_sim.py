@@ -8,33 +8,26 @@
 This script runs a satellite simulation and makes a map.
 """
 
-import os
-import sys
-import re
 import argparse
+import os
+import pickle
+import re
+import sys
 import traceback
 
-import pickle
-
 import numpy as np
-
 from astropy.io import fits
 
-from toast.mpi import get_world, Comm
-
-from toast.dist import distribute_uniform, Data
-
-from toast.utils import Logger, Environment
-
-from toast.vis import set_backend
-
-from toast.timing import function_timer, GlobalTimers, Timer, gather_timers
-from toast.timing import dump as dump_timing
-
-from toast.tod import regular_intervals, plot_focalplane, OpApplyGain
-from toast.todmap import TODSatellite, slew_precession_axis
-
 from toast import pipeline_tools
+from toast.dist import Data, distribute_uniform
+from toast.mpi import Comm, get_world
+from toast.timing import GlobalTimers, Timer
+from toast.timing import dump as dump_timing
+from toast.timing import function_timer, gather_timers
+from toast.tod import OpApplyGain, plot_focalplane, regular_intervals
+from toast.todmap import TODSatellite, slew_precession_axis
+from toast.utils import Environment, Logger
+from toast.vis import set_backend
 
 
 def parse_arguments(comm, procs):

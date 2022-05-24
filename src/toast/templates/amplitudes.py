@@ -6,27 +6,25 @@ from collections.abc import MutableMapping
 
 import numpy as np
 
+from ..accelerator import (
+    AcceleratorObject,
+    accel_data_create,
+    accel_data_delete,
+    accel_data_present,
+    accel_data_update_device,
+    accel_data_update_host,
+    accel_enabled,
+    use_accel_jax,
+    use_accel_omp,
+)
 from ..mpi import MPI
-
 from ..utils import (
-    Logger,
-    AlignedU8,
     AlignedF32,
     AlignedF64,
     AlignedI32,
+    AlignedU8,
+    Logger,
     dtype_to_aligned,
-)
-
-from ..accelerator import (
-    use_accel_jax,
-    use_accel_omp,
-    accel_enabled,
-    accel_data_present,
-    accel_data_create,
-    accel_data_delete,
-    accel_data_update_device,
-    accel_data_update_host,
-    AcceleratorObject,
 )
 
 if use_accel_jax:
@@ -175,7 +173,7 @@ class Amplitudes(AcceleratorObject):
         if hasattr(self, "local"):
             del self.local
         if hasattr(self, "_raw"):
-            if self.accel_present():
+            if self.accel_exists():
                 self.accel_delete()
             self._raw.clear()
             del self._raw
@@ -273,7 +271,7 @@ class Amplitudes(AcceleratorObject):
         )
         ret.local[:] = self.local
         ret.local_flags[:] = self.local_flags
-        if self.accel_present():
+        if self.accel_exists():
             ret.accel_create()
             ret.accel_update_device()
         return ret

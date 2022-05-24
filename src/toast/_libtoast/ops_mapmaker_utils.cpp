@@ -10,7 +10,7 @@
 
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp declare target
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
 
 void build_noise_weighted_inner(
     int32_t const *pixel_index,
@@ -31,7 +31,9 @@ void build_noise_weighted_inner(
     int64_t nnz,
     uint8_t det_mask,
     uint8_t shared_mask,
-    int64_t n_pix_submap)
+    int64_t n_pix_submap,
+    bool use_shared_flags,
+    bool use_det_flags)
 {
     int32_t w_indx = weight_index[idet];
     int32_t p_indx = pixel_index[idet];
@@ -49,8 +51,16 @@ void build_noise_weighted_inner(
     int64_t local_submap;
     int64_t global_submap;
 
-    uint8_t det_check = det_flags[off_f] & det_mask;
-    uint8_t shared_check = shared_flags[isamp] & shared_mask;
+    uint8_t det_check = 0;
+    if (use_det_flags)
+    {
+        det_check = det_flags[off_f] & det_mask;
+    }
+    uint8_t shared_check = 0;
+    if (use_shared_flags)
+    {
+        shared_check = shared_flags[isamp] & shared_mask;
+    }
 
     if (
         (pixels[off_p] >= 0) &&
@@ -80,7 +90,7 @@ void build_noise_weighted_inner(
 
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp end declare target
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
 
 void init_ops_mapmaker_utils(py::module &m)
 {
@@ -134,16 +144,9 @@ void init_ops_mapmaker_utils(py::module &m)
             int32_t * raw_flag_index = extract_buffer <int32_t> (
                 flag_index, "flag_index", 1, temp_shape, {n_det}
             );
-            uint8_t * raw_det_flags = extract_buffer <uint8_t> (
-                det_flags, "det_flags", 2, temp_shape, {-1, n_samp}
-            );
 
             double * raw_det_scale = extract_buffer <double> (
                 det_scale, "det_scale", 1, temp_shape, {n_det}
-            );
-
-            uint8_t * raw_shared_flags = extract_buffer <uint8_t> (
-                shared_flags, "flags", 1, temp_shape, {n_samp}
             );
 
             Interval * raw_intervals = extract_buffer <Interval> (
@@ -164,9 +167,30 @@ void init_ops_mapmaker_utils(py::module &m)
 
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
-            bool offload = (! omgr.device_is_host()) && use_accel;
+            bool offload = (!omgr.device_is_host()) && use_accel;
 
             int64_t n_zmap = n_local_submap * n_pix_submap * nnz;
+
+            // Optionally use flags
+
+            bool use_shared_flags = true;
+            uint8_t * raw_shared_flags = extract_buffer <uint8_t> (
+                shared_flags, "flags", 1, temp_shape, {-1}
+            );
+            if (temp_shape[0] != n_samp) {
+                raw_shared_flags = (uint8_t *)omgr.null;
+                use_shared_flags = false;
+            }
+
+            bool use_det_flags = true;
+            uint8_t * raw_det_flags = extract_buffer <uint8_t> (
+                det_flags, "det_flags", 2, temp_shape, {-1, -1}
+            );
+            if (temp_shape[1] != n_samp) {
+                raw_det_flags = (uint8_t *)omgr.null;
+                use_det_flags = false;
+            }
+
 
             if (offload) {
 #ifdef HAVE_OPENMP_TARGET
@@ -187,7 +211,9 @@ device(dev)                                   \
         nnz,                                  \
         n_pix_submap,                         \
         det_flag_mask,                        \
-        shared_flag_mask)                     \
+        shared_flag_mask,                     \
+        use_shared_flags,                     \
+        use_det_flags)                        \
         use_device_ptr(                       \
             raw_pixels,                       \
             raw_weights,                      \
@@ -233,14 +259,16 @@ device(dev)                                   \
                                     nnz,
                                     det_flag_mask,
                                     shared_flag_mask,
-                                    n_pix_submap
+                                    n_pix_submap,
+                                    use_shared_flags,
+                                    use_det_flags
                                 );
                             }
                         }
                     }
                 }
 
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
@@ -271,7 +299,9 @@ device(dev)                                   \
                                 nnz,
                                 det_flag_mask,
                                 shared_flag_mask,
-                                n_pix_submap
+                                n_pix_submap,
+                                use_shared_flags,
+                                use_det_flags
                             );
                         }
                     }

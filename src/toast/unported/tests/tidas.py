@@ -2,25 +2,22 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 import shutil
 
 import numpy as np
 import numpy.testing as nt
 
-from .. import qarray as qa
-
-from ..tod import regular_intervals, TODGround
-
-from ._helpers import create_outdir, create_distdata, boresight_focalplane
-
 # This file will only be imported if TIDAS is already available
 import tidas as tds
 from tidas.mpi import MPIVolume
+
+from .. import qarray as qa
+from ..tod import TODGround, regular_intervals
 from ..tod import tidas as tt
 from ..tod import tidas_utils as ttutils
+from ._helpers import boresight_focalplane, create_distdata, create_outdir
+from .mpi import MPITestCase
 
 
 class TidasTest(MPITestCase):

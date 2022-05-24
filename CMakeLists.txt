@@ -54,7 +54,9 @@ if(NOT TOAST_STATIC_DEPS AND NOT $ENV{TOAST_STATIC_DEPS} STREQUAL "")
 endif()
 
 # OpenMP
-find_package(OpenMP)
+if(NOT DISABLE_OPENMP)
+    find_package(OpenMP)
+endif()
 
 if(OpenMP_CXX_FOUND)
     message(STATUS
@@ -77,13 +79,38 @@ if(OpenMP_CXX_FOUND)
             endif()
         endif()
     endif()
+    # Build up the final list of OpenMP flags
+    set(omp_opts "")
     if(USE_OPENMP_TARGET)
         message(STATUS "Enabling support for OpenMP target offload")
+        if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "NVHPC")
+            # We are doing target offload with the NVIDIA compiler
+            # and need to override the flags.
+            list(APPEND omp_opts -mp=gpu)
+        else()
+            list(APPEND omp_opts ${OpenMP_CXX_FLAGS})
+        endif()
+        if(OPENMP_TARGET_FLAGS)
+            # Extra user-specified flags
+            string(REPLACE " " ";" TARGET_FLAGS_LIST "${OPENMP_TARGET_FLAGS}")
+            list(APPEND omp_opts ${TARGET_FLAGS_LIST})
+        endif()
     else()
         message(STATUS
             "OpenMP target offload disabled.  Force on with -DUSE_OPENMP_TARGET=TRUE"
         )
+        list(APPEND omp_opts ${OpenMP_CXX_FLAGS})
+        # Some compilers will forcibly try to offload...
+        if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+            # FIXME:  Only do this for specific gcc versions?  In particular,
+            # older versions don't have this problem.
+            list(APPEND omp_opts -foffload=disable)
+        endif()
     endif()
+    set(OpenMP_CXX_FLAGS ${omp_opts})
+    string(JOIN " " msg_omp_opts ${omp_opts})
+    message(STATUS "Using OpenMP flags:  ${msg_omp_opts}")
+    message(STATUS "Using OpenMP flags (as a list):  ${OpenMP_CXX_FLAGS}")
 endif()
 
 if(TOAST_STATIC_DEPS)

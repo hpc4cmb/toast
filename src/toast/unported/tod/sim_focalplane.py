@@ -511,8 +511,9 @@ def plot_focalplane(
 
     """
     if outfile is not None:
-        import matplotlib
         import warnings
+
+        import matplotlib
 
         # Try to force matplotlib to not use any Xwindows backend.
         warnings.filterwarnings("ignore")

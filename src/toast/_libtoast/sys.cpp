@@ -289,7 +289,7 @@ void init_sys(py::module & m) {
                 toast::Timer ret(
                     t[0].cast <double>(),
                     t[1].cast <size_t>()
-                    );
+                );
                 return ret;
             }));
 

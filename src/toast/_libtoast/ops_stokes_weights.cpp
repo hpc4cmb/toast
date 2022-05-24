@@ -12,7 +12,7 @@
 
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp declare target
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
 
 void stokes_weights_IQU_inner(
     double cal,
@@ -62,7 +62,7 @@ void stokes_weights_IQU_inner(
 
 #ifdef HAVE_OPENMP_TARGET
 #pragma omp end declare target
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
 
 void init_ops_stokes_weights(py::module &m)
 {
@@ -124,7 +124,7 @@ void init_ops_stokes_weights(py::module &m)
 
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
-            bool offload = (! omgr.device_is_host()) && use_accel;
+            bool offload = (!omgr.device_is_host()) && use_accel;
 
             if (offload) {
 #ifdef HAVE_OPENMP_TARGET
@@ -175,7 +175,7 @@ device(dev)                         \
                     }
                 }
 
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
@@ -234,7 +234,7 @@ device(dev)                         \
 
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
-            bool offload = (! omgr.device_is_host()) && use_accel;
+            bool offload = (!omgr.device_is_host()) && use_accel;
 
             if (offload) {
 #ifdef HAVE_OPENMP_TARGET
@@ -269,7 +269,7 @@ device(dev)                         \
                     }
                 }
 
-#endif
+#endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {

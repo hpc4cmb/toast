@@ -4,28 +4,19 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-import healpy as hp
-
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
-from ..vis import set_matplotlib_backend
-
 from .. import ops as ops
-
+from ..noise import Noise
 from ..observation import default_values as defaults
-
-from ..templates import Offset, AmplitudesMap
-
-from ..ops.mapmaker_solve import SolverRHS, SolverLHS
-
+from ..ops.mapmaker_solve import SolverLHS, SolverRHS
+from ..templates import AmplitudesMap, Offset
+from ..vis import set_matplotlib_backend
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class MapmakerSolveTest(MPITestCase):

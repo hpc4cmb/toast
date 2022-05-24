@@ -4,13 +4,10 @@
 
 import numpy as np
 
-from ..timing import function_timer
-
 from ..fft import FFTPlanReal1DStore
-
-from .tod_math import sim_noise_timestream
-
 from ..operator import Operator
+from ..timing import function_timer
+from .tod_math import sim_noise_timestream
 
 
 class OpSimNoise(Operator):

@@ -2,39 +2,24 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
-
+import healpy as hp
 import numpy as np
-
+import traitlets
+from astropy import units as u
 from scipy.constants import degree
 
-import healpy as hp
-
-from astropy import units as u
-
 from .. import qarray as qa
-
-from ..utils import Environment, name_UID, Logger, rate_from_times
-
 from ..dist import distribute_discrete
-
-from ..timing import function_timer, Timer
-
-from ..schedule import SatelliteSchedule
-
+from ..healpix import ang2vec
+from ..instrument import Telescope
 from ..noise_sim import AnalyticNoise
-
-from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
-
 from ..observation import Observation
 from ..observation import default_values as defaults
-
-from ..instrument import Telescope
-
-from ..healpix import ang2vec
-
+from ..schedule import SatelliteSchedule
+from ..timing import Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger, name_UID, rate_from_times
 from .operator import Operator
-
 from .sim_hwp import simulate_hwp_response
 
 from .jax_ops.qarray import mult as qa_mult

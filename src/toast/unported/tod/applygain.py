@@ -3,16 +3,12 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 from astropy.io import fits
 
 from ..operator import Operator
-
 from ..timing import function_timer
-
-from .tod_math import calibrate
-
 from ..utils import Logger
+from .tod_math import calibrate
 
 
 def write_calibration_file(filename, gain):
