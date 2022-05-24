@@ -169,8 +169,12 @@ class DemodulateTest(MPITestCase):
                     max=value + amp,
                     cmap="coolwarm",
                 )
-                print(f"rms = {rms}", flush=True)
-                # assert rms < 1e-3
+                if rms > 1.0e-3:
+                    print(
+                        f"WARNING:  demodulated map RMS = {rms}, which is larger than 1e-3",
+                        flush=True,
+                    )
+                    # self.assertTrue(False)
 
             outfile = os.path.join(self.outdir, "map_comparison.png")
             fig.savefig(outfile)

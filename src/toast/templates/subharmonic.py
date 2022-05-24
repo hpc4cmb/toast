@@ -143,7 +143,7 @@ class SubHarmonic(Template):
                     good = slice(0, view_len, 1)
                     if self.det_flags is not None:
                         flags = views.detdata[self.det_flags][ivw][det]
-                        good = flags & self.det_flag_mask == 0
+                        good = (flags & self.det_flag_mask) == 0
 
                     prec = np.zeros((norder, norder), dtype=np.float64)
                     for row in range(norder):
