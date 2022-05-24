@@ -11,21 +11,21 @@
 #include <accelerator.hpp>
 
 #ifdef HAVE_OPENMP_TARGET
-#pragma omp declare target
+# pragma omp declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
 void stokes_weights_IQU_inner(
     double cal,
-    int32_t const *quat_index,
-    int32_t const *weight_index,
-    double const *quats,
-    double const *hwp,
-    double const *epsilon,
-    double *weights,
+    int32_t const * quat_index,
+    int32_t const * weight_index,
+    double const * quats,
+    double const * hwp,
+    double const * epsilon,
+    double * weights,
     int64_t isamp,
     int64_t n_samp,
-    int64_t idet)
-{
+    int64_t idet
+) {
     const double xaxis[3] = {1.0, 0.0, 0.0};
     const double zaxis[3] = {0.0, 0.0, 1.0};
     double eta = (1.0 - epsilon[idet]) / (1.0 + epsilon[idet]);
@@ -45,8 +45,7 @@ void stokes_weights_IQU_inner(
                orient[2] * (dir[0] * dir[0] + dir[1] * dir[1]);
     double ang = atan2(y, x);
 
-    if (hwp != NULL)
-    {
+    if (hwp != NULL) {
         ang += 2.0 * hwp[isamp];
     }
     ang *= 2.0;
@@ -61,26 +60,25 @@ void stokes_weights_IQU_inner(
 }
 
 #ifdef HAVE_OPENMP_TARGET
-#pragma omp end declare target
+# pragma omp end declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
-void init_ops_stokes_weights(py::module &m)
-{
+void init_ops_stokes_weights(py::module & m) {
     // FIXME:  For now, we are passing in the epsilon array.  Once the full
     // focalplane table is staged to GPU, change this code to use that.
 
     m.def(
         "stokes_weights_IQU", [](
-                                  py::buffer quat_index,
-                                  py::buffer quats,
-                                  py::buffer weight_index,
-                                  py::buffer weights,
-                                  py::buffer hwp,
-                                  py::buffer intervals,
-                                  py::buffer epsilon,
-                                  double cal,
-                                  bool use_accel)
-        {
+            py::buffer quat_index,
+            py::buffer quats,
+            py::buffer weight_index,
+            py::buffer weights,
+            py::buffer hwp,
+            py::buffer intervals,
+            py::buffer epsilon,
+            double cal,
+            bool use_accel
+        ) {
             // NOTE:  Flags are not needed here, since the quaternions
             // have already had bad samples converted to null rotations.
 
@@ -127,32 +125,33 @@ void init_ops_stokes_weights(py::module &m)
             bool offload = (!omgr.device_is_host()) && use_accel;
 
             if (offload) {
-#ifdef HAVE_OPENMP_TARGET
+                #ifdef HAVE_OPENMP_TARGET
 
-#pragma omp target data             \
-device(dev)                         \
-    map(to                          \
-        :                           \
-        raw_weight_index [0:n_det], \
-        raw_quat_index [0:n_det],   \
-        raw_epsilon [0:n_det],      \
-        cal,                        \
-        n_view,                     \
-        n_det,                      \
-        n_samp)                     \
-        use_device_ptr(             \
-            raw_weights,            \
-            raw_quats,              \
-            raw_intervals,          \
-            raw_hwp,                \
-            raw_weight_index,       \
-            raw_quat_index,         \
-            raw_epsilon)
+                # pragma omp target data   \
+                device(dev)                \
+                map(to:                    \
+                raw_weight_index[0:n_det], \
+                raw_quat_index[0:n_det],   \
+                raw_epsilon[0:n_det],      \
+                cal,                       \
+                n_view,                    \
+                n_det,                     \
+                n_samp                     \
+                )                          \
+                use_device_ptr(            \
+                raw_weights,               \
+                raw_quats,                 \
+                raw_intervals,             \
+                raw_hwp,                   \
+                raw_weight_index,          \
+                raw_quat_index,            \
+                raw_epsilon                \
+                )
                 {
-#pragma omp target teams distribute collapse(2)
+                    # pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-#pragma omp parallel for default(shared)
+                            # pragma omp parallel for default(shared)
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
                                 isamp <= raw_intervals[iview].last;
@@ -175,11 +174,11 @@ device(dev)                         \
                     }
                 }
 
-#endif // ifdef HAVE_OPENMP_TARGET
+                #endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-#pragma omp parallel for default(shared)
+                        #pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = raw_intervals[iview].first;
                             isamp <= raw_intervals[iview].last;
@@ -201,16 +200,17 @@ device(dev)                         \
                     }
                 }
             }
-            return; });
+            return;
+        });
 
     m.def(
         "stokes_weights_I", [](
-                                py::buffer weight_index,
-                                py::buffer weights,
-                                py::buffer intervals,
-                                double cal,
-                                bool use_accel)
-        {
+            py::buffer weight_index,
+            py::buffer weights,
+            py::buffer intervals,
+            double cal,
+            bool use_accel
+        ) {
             // NOTE:  Flags are not needed here, since the quaternions
             // have already had bad samples converted to null rotations.
 
@@ -237,25 +237,26 @@ device(dev)                         \
             bool offload = (!omgr.device_is_host()) && use_accel;
 
             if (offload) {
-#ifdef HAVE_OPENMP_TARGET
+                #ifdef HAVE_OPENMP_TARGET
 
-#pragma omp target data             \
-device(dev)                         \
-    map(to                          \
-        :                           \
-        raw_weight_index [0:n_det], \
-        n_view,                     \
-        n_det,                      \
-        n_samp)                     \
-        use_device_ptr(             \
-            raw_weights,            \
-            raw_intervals,          \
-            raw_weight_index)
+                # pragma omp target data   \
+                device(dev)                \
+                map(to:                    \
+                raw_weight_index[0:n_det], \
+                n_view,                    \
+                n_det,                     \
+                n_samp                     \
+                )                          \
+                use_device_ptr(            \
+                raw_weights,               \
+                raw_intervals,             \
+                raw_weight_index           \
+                )
                 {
-#pragma omp target teams distribute collapse(2)
+                    # pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-#pragma omp parallel for default(shared)
+                            # pragma omp parallel for default(shared)
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
                                 isamp <= raw_intervals[iview].last;
@@ -269,11 +270,11 @@ device(dev)                         \
                     }
                 }
 
-#endif // ifdef HAVE_OPENMP_TARGET
+                #endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-#pragma omp parallel for default(shared)
+                        #pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = raw_intervals[iview].first;
                             isamp <= raw_intervals[iview].last;
@@ -286,5 +287,6 @@ device(dev)                         \
                     }
                 }
             }
-            return; });
+            return;
+        });
 }

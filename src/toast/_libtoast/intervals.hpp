@@ -7,8 +7,7 @@
 
 #include <common.hpp>
 
-struct Interval
-{
+struct Interval {
     double start;
     double stop;
     int64_t first;
