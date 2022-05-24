@@ -70,7 +70,7 @@ def pixels_healpix_interval_jax(hpix, quats, flags, hit_submaps, n_pix_submap, n
     TODO would a lax.cond be faster than all those where?
     """
     # display sizes
-    print(f"DEBUG: jit compiling 'pixels_healpix_interval_jax' with n_side:{hpix.nside} n_det:{quats.shape[0]} n_samp_interval:{quats.shape[1]} nest:{nest}")
+    print(f"DEBUG: jit compiling 'pixels_healpix_interval_jax' with n_side:{hpix.nside} n_det:{quats.shape[0]} n_samp_interval:{quats.shape[1]} n_pix_submap:{n_pix_submap} hit_submaps:{hit_submaps.size} nest:{nest}")
     
     # computes the pixels
     pixels = pixels_healpix_inner_jax(hpix, quats, nest)
@@ -352,10 +352,10 @@ void pixels_healpix(
 pixels_healpix = select_implementation(pixels_healpix_compiled,
                                        pixels_healpix_numpy,
                                        pixels_healpix_jax,
-                                       default_implementationType=ImplementationType.JAX)
+                                       default_implementationType=ImplementationType.COMPILED)
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("test_exec");'
 
 # to bench:
 # use scanmap config and check PixelsHealpix._exec field in timing.csv
