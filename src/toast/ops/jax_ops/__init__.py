@@ -1,7 +1,6 @@
 # TODO
 #
 # pixel_healpix
-# noise_weighted
 # template_offset
 #
 # run full tests to checke wether i broke something

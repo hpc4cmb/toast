@@ -14,12 +14,11 @@ from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def build_noise_weighted_inner_jax(zmap, pixel, weights, data, det_flag, det_scale, det_mask, shared_flag, shared_mask):
+def build_noise_weighted_inner_jax(pixel, weights, data, det_flag, det_scale, det_mask, shared_flag, shared_mask):
     """
     The update to be added to zmap.
 
     Args:
-        zmap (array, double): size nnz
         pixel (double)
         weights (array, double): size nnz
         data (double)
@@ -32,15 +31,15 @@ def build_noise_weighted_inner_jax(zmap, pixel, weights, data, det_flag, det_sca
     Returns:
         zmap (array, double): size nnz
     """
-    new_zmap = jnp.where((pixel >= 0) & ((det_flag & det_mask) == 0) & ((shared_flag & shared_mask) == 0), # if
-                         zmap + (data * det_scale * weights), # then
-                         zmap) # else
-    return new_zmap
+    # computes the quantity to add to zmap
+    update = jnp.where((pixel >= 0) & ((det_flag & det_mask) == 0) & ((shared_flag & shared_mask) == 0), # if
+                       data * det_scale * weights, # then
+                       0.) # else
+    return update
 
 # maps over samples and detectors
 build_noise_weighted_inner_jax = jax_xmap(build_noise_weighted_inner_jax, 
-                                         in_axes=[['detectors','samples',...], # zmap
-                                                  ['detectors','samples'], # pixel
+                                         in_axes=[['detectors','samples'], # pixel
                                                   ['detectors','samples',...], # weights
                                                   ['detectors','samples'], # data
                                                   ['detectors','samples'], # det_flag
@@ -50,13 +49,14 @@ build_noise_weighted_inner_jax = jax_xmap(build_noise_weighted_inner_jax,
                                                   [...]], # shared_mask
                                          out_axes=['detectors','samples',...])
 
-def build_noise_weighted_interval_jax(zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask):
+def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask):
     """
     Process a full interval at once.
     NOTE: this function was added for debugging purposes, one could replace it with `build_noise_weighted_inner_jax`
 
     Args:
-        zmap (array, double): size n_det*n_samp_interval*nnz
+        global2local (array, int): size n_global_submap
+        zmap (array, double): size n_local_submap*n_pix_submap*nnz
         pixels (array, double): size n_det*n_samp_interval
         weights (array, double): The flat packed detectors weights for the specified mode (size n_det*n_samp_interval*nnz)
         det_data (array, double): size n_det*n_samp_interval
@@ -71,8 +71,20 @@ def build_noise_weighted_interval_jax(zmap, pixels, weights, det_data, det_flags
     """
     # display sizes
     print(f"DEBUG: jit compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{shared_flags.size} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask}")
-    # does the computation
-    return build_noise_weighted_inner_jax(zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask)
+    
+    # computes the update to add to zmap
+    update = build_noise_weighted_inner_jax(pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask)
+
+    # computes the index in zmap
+    n_pix_submap = zmap.shape[1]
+    npix_submap_inv = 1.0 / n_pix_submap
+    global_submap = (pixels * npix_submap_inv).astype(int)
+    local_submap = global2local[global_submap]
+    isubpix = pixels - global_submap * n_pix_submap
+
+    # updates zmap in place
+    zmap = zmap.at[local_submap, isubpix, :].add(update)
+    return zmap
 
 # jit compiling
 build_noise_weighted_interval_jax = jax.jit(build_noise_weighted_interval_jax, static_argnames=['det_flag_mask','shared_flag_mask'])
@@ -100,28 +112,18 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     Returns:
         None (the result is put in zmap).
     """
-    # precompute the section of zmap that will be worked on
-    n_pix_submap = zmap.shape[1]
-    npix_submap_inv = 1.0 / n_pix_submap
-    pixels_indexed = pixels[pixel_index,:]
-    i_global_submap = (pixels_indexed * npix_submap_inv).astype(int)
-    i_local_submap = global2local[i_global_submap]
-    i_pix_submap = pixels_indexed - i_global_submap * n_pix_submap
-    subzmap = zmap[i_local_submap, i_pix_submap, :]
-
     # we loop over intervals
     for interval in intervals:
         interval_start = interval['first']
         interval_end = interval['last']+1
         # extract interval slices
-        pixels_interval = pixels_indexed[:, interval_start:interval_end]
+        pixels_interval = pixels[pixel_index, interval_start:interval_end]
         weights_interval = weights[weight_index, interval_start:interval_end, :]
         data_interval = det_data[data_index, interval_start:interval_end]
         det_flags_interval = det_flags[flag_index, interval_start:interval_end]
         shared_flags_interval = shared_flags[interval_start:interval_end]
-        subzmap_interval = subzmap[:, interval_start:interval_end, :]
         # process the interval then updates zmap in place
-        subzmap_interval[:] = build_noise_weighted_interval_jax(subzmap_interval, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale, det_flag_mask, shared_flags_interval, shared_flag_mask)
+        zmap[:] = build_noise_weighted_interval_jax(global2local, zmap, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale, det_flag_mask, shared_flags_interval, shared_flag_mask)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -384,7 +386,6 @@ build_noise_weighted = select_implementation(build_noise_weighted_compiled,
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole");'
-# test_sim
 
 # to bench:
 # use scanmap config and check BuildNoiseWeighted field in timing.csv

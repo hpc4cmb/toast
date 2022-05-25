@@ -352,7 +352,7 @@ void pixels_healpix(
 pixels_healpix = select_implementation(pixels_healpix_compiled,
                                        pixels_healpix_numpy,
                                        pixels_healpix_jax,
-                                       default_implementationType=ImplementationType.COMPILED)
+                                       default_implementationType=ImplementationType.JAX)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_ground");  toast.tests.run("ops_sim_satellite");'
