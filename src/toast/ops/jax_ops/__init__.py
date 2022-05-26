@@ -1,7 +1,6 @@
 # TODO
 #
-# pixel_healpix
-# template_offset
+# template_offset: compiled version fails tests
 #
 # run full tests to checke wether i broke something
 #

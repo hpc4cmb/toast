@@ -76,12 +76,12 @@ def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_d
     update = build_noise_weighted_inner_jax(pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask)
 
     # computes the index in zmap
+    # TODO this could be done out of the gpu section to reduce the data sent to the gpu
     n_pix_submap = zmap.shape[1]
     npix_submap_inv = 1.0 / n_pix_submap
     global_submap = (pixels * npix_submap_inv).astype(int)
     local_submap = global2local[global_submap]
     isubpix = pixels - global_submap * n_pix_submap
-
     # updates zmap in place
     zmap = zmap.at[local_submap, isubpix, :].add(update)
     return zmap

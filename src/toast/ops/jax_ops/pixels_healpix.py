@@ -3,6 +3,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from tkinter import Y
 import numpy as np
 
 import jax
@@ -52,7 +53,7 @@ def pixels_healpix_inner_jax(hpix, quats, nest):
 pixels_healpix_inner_jax = jax.vmap(pixels_healpix_inner_jax, in_axes=[None,0,None], out_axes=0) # loop on samples
 pixels_healpix_inner_jax = jax.vmap(pixels_healpix_inner_jax, in_axes=[None,0,None], out_axes=0) # loop on detectors
 
-def pixels_healpix_interval_jax(hpix, quats, flags, hit_submaps, n_pix_submap, nest):
+def pixels_healpix_interval_jax(hpix, quats, flags, flag_mask, hit_submaps, n_pix_submap, nest):
     """
     Process a full interval at once.
     NOTE: this function was added for debugging purposes, one could replace it with `pixels_healpix_inner_jax`
@@ -61,36 +62,36 @@ def pixels_healpix_interval_jax(hpix, quats, flags, hit_submaps, n_pix_submap, n
         hpix (HPIX_JAX): Healpix projection object.
         quats (array, float64): The flat-packed array of detector quaternions (size n_det*n_samp_interval*4).
         flags (optional array, bool): size n_samp_interval (could be None)
+        flag_mask (uint8): integer used to select flags (not necesarely a boolean)
         hit_submaps (array, uint8): The pointing flags (size ???).
         n_pix_submap (array, float64):  
         nest (bool): If True, then use NESTED ordering, else RING.
 
     Returns:
         pixels (array, int64): The detector pixel indices to store the result (size n_det*n_samp_interval).
-    TODO would a lax.cond be faster than all those where?
     """
     # display sizes
-    print(f"DEBUG: jit compiling 'pixels_healpix_interval_jax' with n_side:{hpix.nside} n_det:{quats.shape[0]} n_samp_interval:{quats.shape[1]} n_pix_submap:{n_pix_submap} hit_submaps:{hit_submaps.size} nest:{nest}")
+    print(f"DEBUG: jit compiling 'pixels_healpix_interval_jax' with n_side:{hpix.nside} n_det:{quats.shape[0]} n_samp_interval:{quats.shape[1]} n_pix_submap:{n_pix_submap} hit_submaps:{hit_submaps.size} flag_mask:{flag_mask} nest:{nest}")
     
-    # computes the pixels
+    # computes the pixels and submap
     pixels = pixels_healpix_inner_jax(hpix, quats, nest)
-    
-    # applies the flags
-    if flags is None:
-        n_samp_interval = quats.shape[1]
-        flags = jnp.full(shape=n_samp_interval, fill_value=False)
-    pixels = jnp.where(flags, -1, pixels)
-
-    # updates submap
     sub_map = pixels // n_pix_submap
-    new_hit_submap = jnp.where(flags, hit_submaps[sub_map], 1)
-    hit_submaps = hit_submaps.at[sub_map].set(new_hit_submap)
 
+    # applies the flags
+    if flags is not None:
+        is_flagged = (flags & flag_mask) != 0
+        pixels = jnp.where(is_flagged, -1, pixels)
+        new_hit_submap = jnp.where(is_flagged, hit_submaps[sub_map], 1)
+    else:
+        new_hit_submap = 1
+
+    # updates hit_submaps
+    hit_submaps = hit_submaps.at[sub_map].set(new_hit_submap)
     return (pixels, hit_submaps)
 
 
 # jit compiling
-pixels_healpix_interval_jax = jax.jit(pixels_healpix_interval_jax, static_argnames=['hpix', 'n_pix_submap', 'nest'])
+pixels_healpix_interval_jax = jax.jit(pixels_healpix_interval_jax, static_argnames=['hpix', 'flag_mask', 'n_pix_submap', 'nest'])
 
 def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accell):
     """
@@ -100,7 +101,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         quat_index (array, int): size n_det
         quats (array, float64): The flat-packed array of detector quaternions (size ???*n_samp*4).
         flags (array, uint8): size n_samp (or you shouldn't use flags)
-        flag_mask (uint8)
+        flag_mask (uint8): integer used to select flags (not necesarely a boolean)
         pixel_index (array, int): size n_det
         pixels (array, int64): The detector pixel indices to store the result (size ???*n_samp).
         intervals (array, float64): size n_view
@@ -119,7 +120,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
 
     # should we use flags?
     n_samp = pixels.shape[1]
-    use_flags = flag_mask and (flags.size == n_samp)
+    use_flags = (flag_mask != 0) and (flags.size == n_samp)
 
     # loop on the intervals
     for interval in intervals:
@@ -129,7 +130,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         quats_interval = quats[quat_index, interval_start:interval_end, :]
         flags_interval = flags[interval_start:interval_end] if use_flags else None
         # does the computation and updates pixels and hit_submaps in place
-        new_pixels_interval, new_hit_submaps = pixels_healpix_interval_jax(hpix, quats_interval, flags_interval, hit_submaps, n_pix_submap, nest)
+        new_pixels_interval, new_hit_submaps = pixels_healpix_interval_jax(hpix, quats_interval, flags_interval, flag_mask, hit_submaps, n_pix_submap, nest)
         pixels[pixel_index, interval_start:interval_end] = new_pixels_interval
         hit_submaps[:] = new_hit_submaps
 
@@ -190,11 +191,11 @@ def pixels_healpix_numpy(quat_index, quats, flags, flag_mask, pixel_index, pixel
     # problem size
     n_det = quat_index.size
     n_samp = pixels.shape[1]
-    print(f"DEBUG: running 'pixels_healpix_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{n_samp} nest:{nest}")
+    print(f"DEBUG: running 'pixels_healpix_numpy' with n_view:{intervals.size} flag_mask:{flag_mask} n_det:{n_det} n_samp:{n_samp} nest:{nest}")
 
     # constants
     hpix = healpix.HPIX_NUMPY(nside)
-    use_flags = flag_mask and (flags.size == n_samp)
+    use_flags = (flag_mask != 0) and (flags.size == n_samp)
 
     for idet in range(n_det):
         for interval in intervals:
@@ -203,7 +204,8 @@ def pixels_healpix_numpy(quat_index, quats, flags, flag_mask, pixel_index, pixel
             for isamp in range(interval_start,interval_end):
                 p_index = pixel_index[idet]
                 q_index = quat_index[idet]
-                if use_flags and flags[isamp]:
+                is_flagged = (flags[isamp] & flag_mask) != 0
+                if use_flags and is_flagged:
                     # masked pixel
                     pixels[p_index,isamp] = -1
                 else:
@@ -258,7 +260,7 @@ void pixels_healpix_inner(
         hpix_zphi2ring(&hp, phi, region, z, rtz, &(pixels[poff]));
     }
 
-    if (use_flags && (flags[isamp] & mask != 0)) 
+    if (use_flags && ((flags[isamp] & mask) != 0)) 
     {
         pixels[poff] = -1;
     } 
