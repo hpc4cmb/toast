@@ -14,14 +14,16 @@ from ..._libtoast import template_offset_add_to_signal as template_offset_add_to
 # -------------------------------------------------------------------------------------------------
 # JAX
 
-def template_offset_add_to_signal_jax(step_length, amp_offset, amplitudes, data_index, det_data, intervals, use_accel):
+def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, amplitudes, data_index, det_data, intervals, use_accel):
     """
     Accumulate offset amplitudes to timestream data.
     Each amplitude value is accumulated to `step_length` number of samples.
+    TODO this does not use JAX as there is too little computation
 
     Args:
         step_length (int64):  The minimum number of samples for each offset.
         amp_offset (int)
+        n_amp_views (array, int): size n_view
         amplitudes (array, double): The float64 amplitude values (size n_amp)
         data_index (int)
         det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
@@ -35,20 +37,22 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, amplitudes, data_
     print(f"DEBUG: running 'template_offset_add_to_signal_jax' with n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]}")
     
     # loop over the intervals
-    for interval in intervals:
+    offset = amp_offset
+    for interval, view_offset in zip(intervals, n_amp_views):
         interval_start = interval['first']
         interval_end = interval['last']+1
         # extract interval slices
-        amplitude_index = amp_offset + (np.arange(interval_start,interval_end) // step_length)
+        amplitude_index = offset + (np.arange(interval_start,interval_end) // step_length)
         amplitudes_interval = amplitudes[amplitude_index]
         # does the computation and puts the result in amplitudes
-        # TODO this does not use JAX as there is too little computation
         det_data[data_index, interval_start:interval_end] += amplitudes_interval
+        offset += view_offset
 
-def template_offset_project_signal_jax_old(data_index, det_data, flag_index, flag_data, flag_mask, step_length, amp_offset, amplitudes, intervals, use_accel):
+def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_data, flag_mask, step_length, amp_offset, n_amp_views, amplitudes, intervals, use_accel):
     """
     Accumulate timestream data into offset amplitudes.
     Chunks of `step_length` number of samples are accumulated into the offset amplitudes.
+    TODO this does not use JAX as there is too little computation
 
     Args:
         data_index (int)
@@ -58,6 +62,7 @@ def template_offset_project_signal_jax_old(data_index, det_data, flag_index, fla
         flag_mask (int),
         step_length (int64):  The minimum number of samples for each offset.
         amp_offset (int)
+        n_amp_views (array, int): size n_view
         amplitudes (array, double): The float64 amplitude values (size n_amp)
         intervals (array, Interval): size n_view
         use_accel (bool): should we use the accelerator
@@ -69,60 +74,24 @@ def template_offset_project_signal_jax_old(data_index, det_data, flag_index, fla
     print(f"DEBUG: running 'template_offset_project_signal_jax' data_index:{data_index} flag_data:{flag_data.shape} flag_index:{flag_index} flag_mask:{flag_mask} n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]} n_samp:{det_data.shape[1]} amp_offset:{amp_offset}")
     
     # loop over the intervals
-    for interval in intervals:
-        interval_start = interval['first']
-        interval_end = interval['last']+1
-        # extract interval slices
-        data_interval = det_data[data_index, interval_start:interval_end]
-        amplitude_index = amp_offset + (np.arange(start=interval_start,stop=interval_end) // step_length)
-        # takes detector flags into account
-        if flag_index >= 0:
-            flag_data_interval = flag_data[flag_index, interval_start:interval_end]
-            mask = (flag_data_interval & flag_mask == 0)
-            data_interval *= mask
-        # does the computation and puts the result in amplitudes
-        # TODO this does not use JAX as there is too little computation
-        amplitudes[amplitude_index] += data_interval
-
-def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_data, flag_mask, step_length, amp_offset, amplitudes, intervals, use_accel):
-    """
-    Accumulate timestream data into offset amplitudes.
-    Chunks of `step_length` number of samples are accumulated into the offset amplitudes.
-
-    Args:
-        data_index (int)
-        det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
-        flag_index (int), strictly negative in the absence of a detcetor flag
-        flag_data (array, bool) size n_all_det*n_samp
-        flag_mask (int),
-        step_length (int64):  The minimum number of samples for each offset.
-        amp_offset (int)
-        amplitudes (array, double): The float64 amplitude values (size n_amp)
-        intervals (array, Interval): size n_view
-        use_accel (bool): should we use the accelerator
-
-    Returns:
-        None (the result is put in amplitudes).
-    """
-    # problem size
-    print(f"DEBUG: running 'template_offset_project_signal_jax' data_index:{data_index} flag_data:{flag_data.shape} flag_index:{flag_index} flag_mask:{flag_mask} n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]} n_samp:{det_data.shape[1]} amp_offset:{amp_offset}")
-    
-    # loop over the intervals
-    for interval in intervals:
+    offset = amp_offset
+    for interval, view_offset in zip(intervals, n_amp_views):
         interval_start = interval['first']
         interval_end = interval['last']+1
         det_data_samp = det_data[data_index,interval_start:interval_end]
-        # takes detector flags into account
+        # skip sample if it is flagged
         if flag_index >= 0:
-            mask = (flag_data[flag_index,interval_start:interval_end] & (flag_mask == 0))
-            det_data_samp *= mask
+            flagged = (flag_data[flag_index,interval_start:interval_end] & flag_mask) != 0
+            det_data_samp = np.where(flagged, 0.0, det_data_samp)
         # updates amplitude
-        amp = amp_offset + np.arange(interval_start,interval_end) // step_length
+        amp = offset + np.arange(interval_start,interval_end) // step_length
         amplitudes[amp] += det_data_samp
-
+        offset += view_offset
 
 def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes_out, use_accel):
     """
+    TODO this does not use JAX as there is too little computation
+
     Args:
         offset_var (array, double): size n_amp
         amplitudes_in (array, double): size n_amp
@@ -136,13 +105,12 @@ def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes
     print(f"DEBUG: running 'template_offset_apply_diag_precond_jax' with n_amp:{amplitudes_in.size}")
     
     # runs the computation
-    # TODO this does not use JAX as there is too little computation
     amplitudes_out[:] = amplitudes_in * offset_var
 
 # -------------------------------------------------------------------------------------------------
 # NUMPY
 
-def template_offset_add_to_signal_numpy(step_length, amp_offset, amplitudes, data_index, det_data, intervals, use_accel):
+def template_offset_add_to_signal_numpy(step_length, amp_offset, n_amp_views, amplitudes, data_index, det_data, intervals, use_accel):
     """
     Accumulate offset amplitudes to timestream data.
     Each amplitude value is accumulated to `step_length` number of samples.
@@ -150,6 +118,7 @@ def template_offset_add_to_signal_numpy(step_length, amp_offset, amplitudes, dat
     Args:
         step_length (int64):  The minimum number of samples for each offset.
         amp_offset (int)
+        n_amp_views (array, int): size n_view
         amplitudes (array, double): The float64 amplitude values (size n_amp)
         data_index (int)
         det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
@@ -161,14 +130,16 @@ def template_offset_add_to_signal_numpy(step_length, amp_offset, amplitudes, dat
     """
     print(f"DEBUG: running 'template_offset_add_to_signal_numpy' with n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]}")
 
-    for interval in intervals:
+    offset = amp_offset
+    for interval, view_offset in zip(intervals, n_amp_views):
         interval_start = interval['first']
         interval_end = interval['last']
         for isamp in range(interval_start,interval_end+1):
-            amp = amp_offset + int(isamp / step_length)
+            amp = offset + int(isamp / step_length)
             det_data[data_index,isamp] += amplitudes[amp]
+        offset += view_offset
 
-def template_offset_project_signal_numpy(data_index, det_data, flag_index, flag_data, flag_mask, step_length, amp_offset, amplitudes, intervals, use_accel):
+def template_offset_project_signal_numpy(data_index, det_data, flag_index, flag_data, flag_mask, step_length, amp_offset, n_amp_views, amplitudes, intervals, use_accel):
     """
     Accumulate timestream data into offset amplitudes.
     Chunks of `step_length` number of samples are accumulated into the offset amplitudes.
@@ -181,6 +152,7 @@ def template_offset_project_signal_numpy(data_index, det_data, flag_index, flag_
         flag_mask (int),
         step_length (int64):  The minimum number of samples for each offset.
         amp_offset (int)
+        n_amp_views (array, int): size n_view
         amplitudes (array, double): The float64 amplitude values (size n_amp)
         intervals (array, Interval): size n_view
         use_accel (bool): should we use the accelerator
@@ -190,18 +162,20 @@ def template_offset_project_signal_numpy(data_index, det_data, flag_index, flag_
     """
     print(f"DEBUG: running 'template_offset_project_signal_numpy' data_index:{data_index} flag_data:{flag_data.shape} flag_index:{flag_index} flag_mask:{flag_mask} n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]} n_samp:{det_data.shape[1]} amp_offset:{amp_offset}")
 
-    for interval in intervals:
+    offset = amp_offset
+    for interval, view_offset in zip(intervals, n_amp_views):
         interval_start = interval['first']
         interval_end = interval['last']+1
         for isamp in range(interval_start,interval_end):
             det_data_samp = det_data[data_index,isamp]
-            # takes detector flags into account
+            # skip sample if it is flagged
             if flag_index >= 0:
-                mask = (flag_data[flag_index,isamp] & (flag_mask == 0))
-                det_data_samp *= mask
+                flagged = (flag_data[flag_index,isamp] & flag_mask) != 0
+                if flagged: continue
             # updates amplitude
-            amp = amp_offset + isamp // step_length
+            amp = offset + isamp // step_length
             amplitudes[amp] += det_data_samp
+        offset += view_offset
 
 def template_offset_apply_diag_precond_numpy(offset_var, amplitudes_in, amplitudes_out, use_accel):
     """
@@ -225,6 +199,7 @@ def template_offset_apply_diag_precond_numpy(offset_var, amplitudes_in, amplitud
 void template_offset_add_to_signal"(
     int64_t step_length,
     int64_t amp_offset,
+    py::buffer n_amp_views,
     py::buffer amplitudes,
     int32_t data_index,
     py::buffer det_data,
@@ -243,29 +218,32 @@ void template_offset_add_to_signal"(
     Interval * raw_intervals = extract_buffer <Interval> (intervals, "intervals", 1, temp_shape, {-1});
     int64_t n_view = temp_shape[0];
 
-    double * dev_amplitudes = raw_amplitudes;
-    double * dev_det_data = raw_det_data;
-    Interval * dev_intervals = raw_intervals;
+    int64_t * raw_n_amp_views = extract_buffer <int64_t> (n_amp_views, "n_amp_views", 1, temp_shape, {n_view});
 
+    int64_t offset = amp_offset;
     for (int64_t iview = 0; iview < n_view; iview++) 
     {
-        #pragma omp parallel for
-        for (int64_t isamp = dev_intervals[iview]['first']; isamp <= dev_intervals[iview]['last']; isamp++)
+        for (int64_t isamp = raw_intervals[iview].first; isamp <= raw_intervals[iview].last; isamp++) 
         {
-            int64_t d = data_index * n_samp * isamp;
-            int64_t amp = amp_offset + (int64_t)(isamp / step_length);
-            dev_det_data[d] += dev_amplitudes[amp];
+            int64_t d = data_index * n_samp + isamp;
+            int64_t amp = offset + (int64_t)(isamp / step_length);
+            raw_det_data[d] += raw_amplitudes[amp];
         }
+        offset += raw_n_amp_views[iview];
     }
 }
 
 void template_offset_project_signal(
     int32_t data_index,
     py::buffer det_data,
+    int32_t flag_index,
+    py::buffer flag_data,
+    uint8_t flag_mask,
     int64_t step_length,
     int64_t amp_offset,
+    py::buffer n_amp_views,
     py::buffer amplitudes,
-    py::buffer intervals) 
+    py::buffer intervals)
 {
     // This is used to return the actual shape of each buffer
     std::vector <int64_t> temp_shape(3);
@@ -280,18 +258,47 @@ void template_offset_project_signal(
     Interval * raw_intervals = extract_buffer <Interval> (intervals, "intervals", 1, temp_shape, {-1});
     int64_t n_view = temp_shape[0];
 
+    int64_t * raw_n_amp_views = extract_buffer <int64_t> (n_amp_views, "n_amp_views", 1, temp_shape, {n_view});
+
+    // Optionally use flags
+    bool use_flags = false;
+    uint8_t * raw_det_flags = (uint8_t *)omgr.null;
+    if (flag_index >= 0) 
+    {
+        raw_det_flags = extract_buffer <uint8_t> (flag_data, "flag_data", 2, temp_shape, {-1, n_samp});
+        use_flags = true;
+    }
+
     double * dev_amplitudes = raw_amplitudes;
     double * dev_det_data = raw_det_data;
     Interval * dev_intervals = raw_intervals;
 
+    int64_t offset = amp_offset;
     for (int64_t iview = 0; iview < n_view; iview++) {
         #pragma omp parallel for
         for (int64_t isamp = dev_intervals[iview]['first']; isamp <= dev_intervals[iview]['last']; isamp++)
         {
             int64_t d = data_index * n_samp * isamp;
-            int64_t amp = amp_offset + (int64_t)(isamp / step_length);
-            dev_amplitudes[amp] += dev_det_data[d];
+            int64_t amp = offset + (int64_t)(isamp / step_length);
+
+            double contrib = 0.0;
+            if (use_flags) 
+            {
+                int64_t f = flag_index * n_samp + isamp;
+                uint8_t check = raw_det_flags[f] & flag_mask;
+                if (check == 0) 
+                {
+                    contrib = raw_det_data[d];
+                }
+            } 
+            else 
+            {
+                contrib = raw_det_data[d];
+            }
+            #pragma omp atomic
+            dev_amplitudes[amp] += contrib;
         }
+        offset += raw_n_amp_views[iview];
     }
 }
 
