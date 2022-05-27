@@ -218,12 +218,12 @@ class SimGroundTest(MPITestCase):
         flags2 = data2.obs[0].shared["flags"][:]
 
         good1 = np.logical_and(
-            flags1 & sim_ground.leftright_mask != 0,
-            flags1 & sim_ground.turnaround_mask == 0,
+            (flags1 & sim_ground.leftright_mask) != 0,
+            (flags1 & sim_ground.turnaround_mask) == 0,
         )
         good2 = np.logical_and(
-            flags2 & sim_ground.leftright_mask != 0,
-            flags2 & sim_ground.turnaround_mask == 0,
+            (flags2 & sim_ground.leftright_mask) != 0,
+            (flags2 & sim_ground.turnaround_mask) == 0,
         )
 
         step1 = np.median(np.diff(az1[good1]))

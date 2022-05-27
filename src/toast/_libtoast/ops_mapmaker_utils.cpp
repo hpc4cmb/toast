@@ -24,7 +24,8 @@ void build_noise_weighted_inner(
     int64_t const * pixels,
     double const * weights,
     double const * det_scale,
-    double * zmap,
+    double * zmap_val,
+    int64_t * zoff,
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
@@ -45,7 +46,6 @@ void build_noise_weighted_inner(
     int64_t off_d = d_indx * n_samp + isamp;
     int64_t off_f = f_indx * n_samp + isamp;
     int64_t isubpix;
-    int64_t zoff;
     int64_t off_wt;
     double scaled_data;
     int64_t local_submap;
@@ -71,15 +71,19 @@ void build_noise_weighted_inner(
         local_submap = global2local[global_submap];
 
         isubpix = pixels[off_p] - global_submap * n_pix_submap;
-        zoff = nnz * (local_submap * n_pix_submap + isubpix);
+        (*zoff) = nnz * (local_submap * n_pix_submap + isubpix);
 
         off_wt = nnz * off_w;
 
         scaled_data = data[off_d] * det_scale[idet];
 
         for (int64_t iweight = 0; iweight < nnz; iweight++) {
-            // #pragma omp atomic update
-            zmap[zoff + iweight] += scaled_data * weights[off_wt + iweight];
+            zmap_val[iweight] = scaled_data * weights[off_wt + iweight];
+        }
+    } else {
+        (*zoff) = -1;
+        for (int64_t iweight = 0; iweight < nnz; iweight++) {
+            zmap_val[iweight] = 0.0;
         }
     }
     return;
@@ -187,7 +191,6 @@ void init_ops_mapmaker_utils(py::module & m) {
                 use_det_flags = false;
             }
 
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
@@ -229,13 +232,14 @@ void init_ops_mapmaker_utils(py::module & m) {
                     # pragma omp target teams distribute collapse(2)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            # pragma omp parallel for default(shared) \
-                            reduction(+:raw_zmap[:n_zmap])
+                            # pragma omp parallel for default(shared)
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
                                 isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
+                                double zmap_val[nnz];
+                                int64_t zoff;
                                 build_noise_weighted_inner(
                                     raw_pixel_index,
                                     raw_weight_index,
@@ -248,7 +252,8 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     raw_pixels,
                                     raw_weights,
                                     raw_det_scale,
-                                    raw_zmap,
+                                    zmap_val,
+                                    &zoff,
                                     isamp,
                                     n_samp,
                                     idet,
@@ -259,6 +264,12 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     use_shared_flags,
                                     use_det_flags
                                 );
+                                #pragma omp critical
+                                {
+                                    for (int64_t iw = 0; iw < nnz; iw++) {
+                                        raw_zmap[zoff + iw] += zmap_val[iw];
+                                    }
+                                }
                             }
                         }
                     }
@@ -268,13 +279,14 @@ void init_ops_mapmaker_utils(py::module & m) {
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        #pragma omp parallel for default(shared) \
-                        reduction(+:raw_zmap[:n_zmap])
+                        #pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = raw_intervals[iview].first;
                             isamp <= raw_intervals[iview].last;
                             isamp++
                         ) {
+                            double zmap_val[nnz];
+                            int64_t zoff;
                             build_noise_weighted_inner(
                                 raw_pixel_index,
                                 raw_weight_index,
@@ -287,7 +299,8 @@ void init_ops_mapmaker_utils(py::module & m) {
                                 raw_pixels,
                                 raw_weights,
                                 raw_det_scale,
-                                raw_zmap,
+                                zmap_val,
+                                &zoff,
                                 isamp,
                                 n_samp,
                                 idet,
@@ -298,6 +311,12 @@ void init_ops_mapmaker_utils(py::module & m) {
                                 use_shared_flags,
                                 use_det_flags
                             );
+                            #pragma omp critical
+                            {
+                                for (int64_t iw = 0; iw < nnz; iw++) {
+                                    raw_zmap[zoff + iw] += zmap_val[iw];
+                                }
+                            }
                         }
                     }
                 }

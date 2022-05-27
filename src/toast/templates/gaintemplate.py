@@ -140,7 +140,7 @@ class GainTemplate(Template):
                     good = slice(0, view_len, 1)
                     if self.det_flags is not None:
                         flags = views.detdata[self.det_flags][ivw][det]
-                        good = flags & self.det_flag_mask == 0
+                        good = (flags & self.det_flag_mask) == 0
 
                     prec = np.zeros((norder, norder), dtype=np.float64)
                     T = ob.detdata[self.template_name][det]

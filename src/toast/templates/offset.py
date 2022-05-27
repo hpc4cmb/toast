@@ -710,7 +710,7 @@ class Offset(Template):
             if flag_index[0] >= 0:
                 # We have detector flags
                 ddata = np.array(
-                    (flag_data[flag_index[0]] & flag_mask == 0), dtype=np.float64
+                    ((flag_data[flag_index[0]] & flag_mask) == 0), dtype=np.float64
                 )
                 ddata *= det_data[data_index[0]][samples]
             np.add.at(amplitudes, ampidx, ddata)

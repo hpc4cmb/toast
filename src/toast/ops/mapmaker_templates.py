@@ -536,7 +536,10 @@ class SolveAmplitudes(Operator):
                     starting_flags = np.zeros(view_samples, dtype=np.uint8)
                     if save_shared_flags is not None:
                         starting_flags[:] = np.where(
-                            views.shared[save_shared_flags][vw] & save_shared_flag_mask
+                            (
+                                views.shared[save_shared_flags][vw]
+                                & save_shared_flag_mask
+                            )
                             > 0,
                             1,
                             0,
@@ -545,8 +548,10 @@ class SolveAmplitudes(Operator):
                         views.detdata[self.solver_flags][vw][d, :] = starting_flags
                         if save_det_flags is not None:
                             views.detdata[self.solver_flags][vw][d, :] |= np.where(
-                                views.detdata[save_det_flags][vw][d]
-                                & save_det_flag_mask
+                                (
+                                    views.detdata[save_det_flags][vw][d]
+                                    & save_det_flag_mask
+                                )
                                 > 0,
                                 1,
                                 0,
