@@ -29,9 +29,9 @@ mult_many_many_jax = jax.vmap(mult_one_one_jax, in_axes=(0,0), out_axes=0)
 
 def mult_pure_jax(p_in, q_in):
     # picks the correct impelmentation depending on which input is an array (if any)
-    print(f"DEBUG: jit-compiling 'qarray.mult' for p:{p_in.size} and q:{q_in.size}")
-    p_is_array = (p_in.size > 4)
-    q_is_array = (q_in.size > 4)
+    print(f"DEBUG: jit-compiling 'qarray.mult' for p:{p_in.shape} and q:{q_in.shape}")
+    p_is_array = p_in.ndim > 1
+    q_is_array = q_in.ndim > 1
     if p_is_array and q_is_array:
         return mult_many_many_jax(p_in, q_in)
     if p_is_array:
