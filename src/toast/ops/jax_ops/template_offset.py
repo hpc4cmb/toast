@@ -48,11 +48,43 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, ampl
         det_data[data_index, interval_start:interval_end] += amplitudes_interval
         offset += view_offset
 
+def template_offset_project_signal_inner_jax(det_data_samp, flag_data_samp, flag_mask, step_length, offset, amplitudes, interval_start):
+    """
+    Args:
+        det_data_samp (array, double): The float64 timestream values (size n_samp_interval).
+        flag_data_samp (array, bool): size n_samp_interval or None
+        flag_mask (int),
+        step_length (int64):  The minimum number of samples for each offset.
+        offset (int),
+        amplitudes (array, double): The float64 amplitude values (size n_amp)
+        interval_start (int): the begining of the interval
+
+    Returns:
+        amplitudes (array, double): The float64 amplitude values (size n_amp)
+    """
+    # gets interval information
+    n_samp_interval = det_data_samp.size
+    print(f"DEBUG: jit-compiling 'template_offset_project_signal' n_samp_interval:{n_samp_interval} flag_mask:{flag_mask} step_length:{step_length} n_amp:{amplitudes.size}")
+
+    # skip sample if it is flagged
+    if flag_data_samp is not None:
+        flagged = (flag_data_samp & flag_mask) != 0
+        det_data_samp = jnp.where(flagged, 0.0, det_data_samp)
+
+    # updates amplitude
+    interval_indices = interval_start + jnp.arange(start=0,stop=n_samp_interval)
+    amp = offset + interval_indices // step_length
+    # WARNING: the addition has to be atomic but JAX takes care of that
+    amplitudes = amplitudes.at[amp].add(det_data_samp)
+    return amplitudes
+
+# jit compilation
+template_offset_project_signal_inner_jax = jax.jit(template_offset_project_signal_inner_jax, static_argnames=['flag_mask','step_length'])
+
 def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_data, flag_mask, step_length, amp_offset, n_amp_views, amplitudes, intervals, use_accel):
     """
     Accumulate timestream data into offset amplitudes.
     Chunks of `step_length` number of samples are accumulated into the offset amplitudes.
-    TODO this does not use JAX as there is too little computation
 
     Args:
         data_index (int)
@@ -69,23 +101,16 @@ def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_da
 
     Returns:
         None (the result is put in amplitudes).
-    """
-    # problem size
-    print(f"DEBUG: running 'template_offset_project_signal_jax' data_index:{data_index} flag_data:{flag_data.shape} flag_index:{flag_index} flag_mask:{flag_mask} n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]} n_samp:{det_data.shape[1]} amp_offset:{amp_offset}")
-    
+    """    
     # loop over the intervals
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
         interval_start = interval['first']
         interval_end = interval['last']+1
         det_data_samp = det_data[data_index,interval_start:interval_end]
-        # skip sample if it is flagged
-        if flag_index >= 0:
-            flagged = (flag_data[flag_index,interval_start:interval_end] & flag_mask) != 0
-            det_data_samp = np.where(flagged, 0.0, det_data_samp)
-        # updates amplitude
-        amp = offset + np.arange(interval_start,interval_end) // step_length
-        amplitudes[amp] += det_data_samp
+        flag_samp = flag_data[flag_index,interval_start:interval_end] if flag_index >= 0 else None
+        # updates amplitudes
+        amplitudes[:] = template_offset_project_signal_inner_jax(det_data_samp, flag_samp, flag_mask, step_length, offset, amplitudes, interval_start)
         offset += view_offset
 
 def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes_out, use_accel):
@@ -174,7 +199,7 @@ def template_offset_project_signal_numpy(data_index, det_data, flag_index, flag_
                 if flagged: continue
             # updates amplitude
             amp = offset + isamp // step_length
-            amplitudes[amp] += det_data_samp
+            amplitudes[amp] += det_data_samp # WARNING: this has to be done one at a time to avoid conflicts
         offset += view_offset
 
 def template_offset_apply_diag_precond_numpy(offset_var, amplitudes_in, amplitudes_out, use_accel):
@@ -337,15 +362,15 @@ void template_offset_apply_diag_precond(
 template_offset_add_to_signal = select_implementation(template_offset_add_to_signal_compiled, 
                                                       template_offset_add_to_signal_numpy, 
                                                       template_offset_add_to_signal_jax, 
-                                                      default_implementationType=ImplementationType.COMPILED)
+                                                      default_implementationType=ImplementationType.JAX)
 template_offset_project_signal = select_implementation(template_offset_project_signal_compiled, 
                                                        template_offset_project_signal_numpy, 
                                                        template_offset_project_signal_jax, 
-                                                       default_implementationType=ImplementationType.COMPILED)
+                                                       default_implementationType=ImplementationType.JAX)
 template_offset_apply_diag_precond = select_implementation(template_offset_apply_diag_precond_compiled, 
                                                            template_offset_apply_diag_precond_numpy, 
                                                            template_offset_apply_diag_precond_jax, 
-                                                           default_implementationType=ImplementationType.COMPILED)
+                                                           default_implementationType=ImplementationType.JAX)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker")'

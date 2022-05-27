@@ -1,7 +1,5 @@
 # TODO
 #
-# template_offset: compiled version fails tests
-#
 # run full tests to checke wether i broke something
 #
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
