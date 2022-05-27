@@ -86,7 +86,7 @@ if(OpenMP_CXX_FOUND)
         if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "NVHPC")
             # We are doing target offload with the NVIDIA compiler
             # and need to override the flags.
-            list(APPEND omp_opts -mp=gpu)
+            list(APPEND omp_opts -mp=gpu -cuda -cudalibs)
         else()
             list(APPEND omp_opts ${OpenMP_CXX_FLAGS})
         endif()

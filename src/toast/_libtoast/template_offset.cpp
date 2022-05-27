@@ -191,15 +191,18 @@ void init_template_offset(py::module & m) {
                         ) {
                             int64_t d = data_index * n_samp + isamp;
                             int64_t amp = offset + (int64_t)(isamp / step_length);
+                            double contrib = 0.0;
                             if (use_flags) {
                                 int64_t f = flag_index * n_samp + isamp;
                                 uint8_t check = raw_det_flags[f] & flag_mask;
                                 if (check == 0) {
-                                    raw_amplitudes[amp] += raw_det_data[d];
+                                    contrib = raw_det_data[d];
                                 }
                             } else {
-                                raw_amplitudes[amp] += raw_det_data[d];
+                                contrib = raw_det_data[d];
                             }
+                            #pragma omp atomic
+                            raw_amplitudes[amp] += contrib;
                         }
                         offset += raw_n_amp_views[iview];
                     }
@@ -217,15 +220,18 @@ void init_template_offset(py::module & m) {
                     ) {
                         int64_t d = data_index * n_samp + isamp;
                         int64_t amp = offset + (int64_t)(isamp / step_length);
+                        double contrib = 0.0;
                         if (use_flags) {
                             int64_t f = flag_index * n_samp + isamp;
                             uint8_t check = raw_det_flags[f] & flag_mask;
                             if (check == 0) {
-                                raw_amplitudes[amp] += raw_det_data[d];
+                                contrib = raw_det_data[d];
                             }
                         } else {
-                            raw_amplitudes[amp] += raw_det_data[d];
+                            contrib = raw_det_data[d];
                         }
+                        #pragma omp atomic
+                        raw_amplitudes[amp] += contrib;
                     }
                     offset += raw_n_amp_views[iview];
                 }

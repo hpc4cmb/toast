@@ -620,4 +620,4 @@ class Data(MutableMapping):
             ob.accel_clear()
         for key, val in self._internal.items():
             if isinstance(val, AcceleratorObject):
-                val.accel_clear()
+                val.accel_delete()

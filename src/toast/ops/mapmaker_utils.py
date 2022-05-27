@@ -171,9 +171,9 @@ class BuildHitMap(Operator):
 
                     # Apply the flags if needed
                     if self.det_flags is not None:
-                        local_pix[fview[det] & self.det_flag_mask != 0] = -1
+                        local_pix[(fview[det] & self.det_flag_mask) != 0] = -1
                     if self.shared_flags is not None:
-                        local_pix[shared_fview & self.shared_flag_mask != 0] = -1
+                        local_pix[(shared_fview & self.shared_flag_mask) != 0] = -1
 
                     cov_accum_diag_hits(
                         dist.n_local_submap,
@@ -414,9 +414,9 @@ class BuildInverseCovariance(Operator):
 
                     # Apply the flags if needed
                     if self.det_flags is not None:
-                        local_pix[fview[det] & self.det_flag_mask != 0] = -1
+                        local_pix[(fview[det] & self.det_flag_mask) != 0] = -1
                     if self.shared_flags is not None:
-                        local_pix[shared_fview & self.shared_flag_mask != 0] = -1
+                        local_pix[(shared_fview & self.shared_flag_mask) != 0] = -1
 
                     # Accumulate
                     cov_accum_diag_invnpp(
@@ -783,8 +783,8 @@ class BuildNoiseWeighted(Operator):
             for vw in intr_data:
                 samples = slice(vw.first, vw.last + 1, 1)
                 good = np.logical_and(
-                    (flag_data[fidx][samples] & flag_mask == 0),
-                    (shared_flags[samples] & shared_mask == 0),
+                    ((flag_data[fidx][samples] & flag_mask) == 0),
+                    ((shared_flags[samples] & shared_mask) == 0),
                 )
                 pixel_buffer = pixel_data[pidx][samples]
                 det_buffer = det_data[didx][samples]

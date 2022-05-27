@@ -243,7 +243,7 @@ void pixels_healpix_nest_inner(
     qa_rotate(&(quats[qoff]), zaxis, dir);
     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
     hpix_zphi2nest(&hp, phi, region, z, rtz, &(pixels[poff]));
-    if (use_flags && (flags[isamp] & mask != 0)) {
+    if (use_flags && ((flags[isamp] & mask) != 0)) {
         pixels[poff] = -1;
     } else {
         sub_map = (int64_t)(pixels[poff] / n_pix_submap);
@@ -283,7 +283,7 @@ void pixels_healpix_ring_inner(
     qa_rotate(&(quats[qoff]), zaxis, dir);
     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
     hpix_zphi2ring(&hp, phi, region, z, rtz, &(pixels[poff]));
-    if (use_flags && (flags[isamp] & mask != 0)) {
+    if (use_flags && ((flags[isamp] & mask) != 0)) {
         pixels[poff] = -1;
     } else {
         sub_map = (int64_t)(pixels[poff] / n_pix_submap);

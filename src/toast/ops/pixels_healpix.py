@@ -375,7 +375,7 @@ class PixelsHealpix(Operator):
                     samples = slice(vw.first, vw.last + 1, 1)
                     dir = qa.rotate(quat_data[qidx][samples], zaxis)
                     pix_data[pidx][samples] = self.hpix.vec2nest(dir)
-                    good = flag_data[samples] & flag_mask == 0
+                    good = (flag_data[samples] & flag_mask) == 0
                     bad = np.logical_not(good)
                     sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
                     hit_submaps[sub_maps] = 1
@@ -388,7 +388,7 @@ class PixelsHealpix(Operator):
                     samples = slice(vw.first, vw.last + 1, 1)
                     dir = qa.rotate(quat_data[qidx][samples], zaxis)
                     pix_data[pidx][samples] = self.hpix.vec2ring(dir)
-                    good = flag_data[samples] & flag_mask == 0
+                    good = (flag_data[samples] & flag_mask) == 0
                     bad = np.logical_not(good)
                     sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
                     hit_submaps[sub_maps] = 1
