@@ -118,6 +118,7 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
 def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accell):
     """
     Compute the Stokes weights for the "I" mode.
+    TODO this does not use JAX as there is too little computation
 
     Args:
         weight_index (array, int): The indexes of the weights (size n_det)
@@ -133,12 +134,10 @@ def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accell):
     print(f"DEBUG: running 'stokes_weights_I_jax' with n_view:{intervals.size} n_det:{weight_index.size} n_samp:{weights.shape[1]} n_view:{intervals} cal:{cal}")
     
     # iterate on the intervals
-    indexed_weights = weights[weight_index,:]
     for interval in intervals:
         interval_start = interval['first']
         interval_end = interval['last']+1
-        # TODO this does not use JAX as there is too little computation
-        indexed_weights[interval_start:interval_end] = cal
+        weights[weight_index,interval_start:interval_end] = cal
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
@@ -242,12 +241,10 @@ def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accell):
     n_det = weight_index.size
     print(f"DEBUG: running 'stokes_weights_I_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{weights.shape[1]}")
     
-    #weights[weight_index,:][interval_starts:interval_ends] = cal
-    indexed_weights = weights[weight_index,:]
     for interval in intervals:
         interval_start = interval['first']
         interval_end = interval['last']+1
-        indexed_weights[interval_start:interval_end] = cal
+        weights[weight_index, interval_start:interval_end] = cal
 
 #-------------------------------------------------------------------------------------------------
 # C++
@@ -404,7 +401,7 @@ stokes_weights_IQU = select_implementation(stokes_weights_IQU_compiled,
                                            default_implementationType=ImplementationType.JAX)
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_tod_dipole")'
 
 # to bench:
 # use scanmap config and check StokesWeights._exec field in timing.csv
