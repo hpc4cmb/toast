@@ -169,7 +169,7 @@ void init_ops_mapmaker_utils(py::module & m) {
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
 
-            int64_t n_zmap = n_local_submap * n_pix_submap * nnz;
+            // int64_t n_zmap = n_local_submap * n_pix_submap * nnz;
 
             // Optionally use flags
 
@@ -264,11 +264,9 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     use_shared_flags,
                                     use_det_flags
                                 );
-                                #pragma omp critical
-                                {
-                                    for (int64_t iw = 0; iw < nnz; iw++) {
-                                        raw_zmap[zoff + iw] += zmap_val[iw];
-                                    }
+                                for (int64_t iw = 0; iw < nnz; iw++) {
+                                    #pragma omp atomic
+                                    raw_zmap[zoff + iw] += zmap_val[iw];
                                 }
                             }
                         }
