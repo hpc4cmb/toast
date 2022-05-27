@@ -7,10 +7,8 @@ from collections import OrderedDict
 import numpy as np
 import scipy
 
-from ..data import Data
 from ..mpi import MPI
-from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
-from ..utils import Logger
+from ..traits import Int, Unicode, trait_docs
 from .amplitudes import Amplitudes
 from .template import Template
 

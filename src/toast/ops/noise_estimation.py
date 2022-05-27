@@ -4,9 +4,6 @@
 
 import copy
 import os
-import re
-import warnings
-from time import time
 
 import astropy.io.fits as pf
 import numpy as np
@@ -19,7 +16,6 @@ from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import (
     Bool,
-    Dict,
     Instance,
     Int,
     List,
@@ -28,15 +24,7 @@ from ..traits import (
     Unicode,
     trait_docs,
 )
-from ..utils import (
-    AlignedF64,
-    AlignedU8,
-    Environment,
-    GlobalTimers,
-    Logger,
-    Timer,
-    dtype_to_aligned,
-)
+from ..utils import Logger, Timer
 from .arithmetic import Combine
 from .copy import Copy
 from .delete import Delete

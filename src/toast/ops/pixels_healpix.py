@@ -7,16 +7,12 @@ import traitlets
 
 from .. import qarray as qa
 
-# This is just wrong- will be confusing until cleanup of
-# libtoast / _libtoast...
-from .._libtoast import healpix_pixels, pixels_healpix
 from ..healpix import Pixels
 from ..observation import default_values as defaults
 from ..pixels import PixelDistribution
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Unicode, trait_docs
 from ..utils import Environment, Logger
-from .delete import Delete
 from .operator import Operator
 
 from .jax_ops import pixels_healpix

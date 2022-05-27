@@ -6,11 +6,10 @@ import numpy as np
 import traitlets
 
 from .. import qarray as qa
-from .._libtoast import pointing_detector
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Int, Unicode, trait_docs
-from ..utils import Environment, Logger
+from ..utils import Logger
 from .operator import Operator
 
 from ..ops.jax_ops import pointing_detector

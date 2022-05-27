@@ -11,11 +11,10 @@ from .._libtoast import (
 )
 from ..covariance import covariance_invert
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
+from ..pixels import PixelData
 from ..timing import function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
-from .delete import Delete
 from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution

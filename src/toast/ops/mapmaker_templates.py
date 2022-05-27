@@ -3,28 +3,25 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-from collections import OrderedDict
 
 import numpy as np
 import traitlets
 
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
+from ..pixels import PixelData
 from ..pixels_io import write_healpix_fits, write_healpix_hdf5
 from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, trait_docs
 from ..utils import Logger
 from .arithmetic import Combine
-from .copy import Copy
-from .delete import Delete
 from .mapmaker_solve import SolverLHS, SolverRHS, solve
 from .mapmaker_utils import CovarianceAndHits
 from .memory_counter import MemoryCounter
 from .operator import Operator
 from .pipeline import Pipeline
-from .scan_map import ScanMap, ScanMask
+from .scan_map import ScanMask
 
 
 @trait_docs

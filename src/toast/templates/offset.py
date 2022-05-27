@@ -15,11 +15,10 @@ from ..ops.jax_ops import (
     template_offset_project_signal,
     template_offset_apply_diag_precond,
 )
-from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import AlignedF64, Logger, rate_from_times
 from .amplitudes import Amplitudes
 from .template import Template
