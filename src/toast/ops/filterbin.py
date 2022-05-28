@@ -801,7 +801,7 @@ class FilterBin(Operator):
                 f"is poorly conditioned: "
                 f"rcond = {rcond}.  Using matrix pseudoinverse.",
             )
-            cov = np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
+            cov = np.linalg.pinv(invcov, rcond=1e-10, hermitian=True)
 
         return cov
 
