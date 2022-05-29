@@ -76,7 +76,7 @@ jobs:
       CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.manylinux_image }}
       CIBW_BUILD_VERBOSITY: 3
       CIBW_ENVIRONMENT_LINUX: "TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON TOAST_BUILD_TOAST_STATIC_DEPS=ON"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_BUILD_BLA_VENDOR='Apple' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON TOAST_BUILD_TOAST_STATIC_DEPS=ON"
+      CIBW_ENVIRONMENT_MACOS: "TOAST_BUILD_CMAKE_C_COMPILER=clang TOAST_BUILD_CMAKE_CXX_COMPILER=clang++ TOAST_BUILD_BLA_VENDOR='Apple' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON TOAST_BUILD_TOAST_STATIC_DEPS=ON"
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh ${{ matrix.platform_id }}
       CIBW_BEFORE_TEST: export OMP_NUM_THREADS=2
@@ -108,4 +108,3 @@ jobs:
         with:
           name: wheels
           path: ./wheelhouse/toast*.whl
-

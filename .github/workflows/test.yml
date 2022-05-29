@@ -52,12 +52,14 @@ jobs:
 
       - name: Run Serial Tests
         run: |
-          docker run -e MPI_DISABLE=1 test_runner:py${{ matrix.pyshort }} \
+          docker run -e MPI_DISABLE=1 -e OMP_NUM_THREADS=2 \
+            test_runner:py${{ matrix.pyshort }} \
             python -c 'import toast.tests; toast.tests.run()'
 
       - name: Run MPI Tests
         run: |
-          docker run test_runner:py${{ matrix.pyshort }} \
+          docker run -e OMP_NUM_THREADS=2 \
+            test_runner:py${{ matrix.pyshort }} \
             mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
 
   macos-clang:
@@ -110,7 +112,8 @@ jobs:
 
       - name: Run Serial Tests
         run: |
-          export OMP_NUM_THREADS=2
+          export OMP_NUM_THREADS=1
+          export OPENBLAS_NUM_THREADS=1
           python3 -c 'import toast.tests; toast.tests.run()'
 
   # macos-gcc:
