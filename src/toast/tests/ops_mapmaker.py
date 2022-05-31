@@ -34,6 +34,10 @@ class MapmakerTest(MPITestCase):
             self.obs_per_group = self.total_obs // 2
 
     def test_offset(self):
+        testdir = os.path.join(self.outdir, "offset")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
         # Create a fake satellite data set for testing
 
         data = create_satellite_data(
@@ -122,6 +126,7 @@ class MapmakerTest(MPITestCase):
             write_rcond=False,
             keep_solver_products=True,
             keep_final_products=True,
+            output_dir=testdir,
         )
 
         # Make the map

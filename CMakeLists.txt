@@ -85,8 +85,10 @@ if(OpenMP_CXX_FOUND)
         message(STATUS "Enabling support for OpenMP target offload")
         if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "NVHPC")
             # We are doing target offload with the NVIDIA compiler
-            # and need to override the flags.
-            list(APPEND omp_opts -mp=gpu -cuda -cudalibs)
+            # and need to override the flags. NOTE:  The use of "nordc"
+            # is painful and needed since nvc++ cannot (as of 22.5) build
+            # standalone shared loadable modules.
+            list(APPEND omp_opts -mp=gpu -gpu=nordc -cuda -cudalibs)
         else()
             list(APPEND omp_opts ${OpenMP_CXX_FLAGS})
         endif()

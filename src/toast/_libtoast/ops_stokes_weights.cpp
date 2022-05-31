@@ -14,6 +14,36 @@
 # pragma omp declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
+// FIXME:  this ridiculous code duplication is due to nvc++
+// not supporting loadable device objects in shared libraries.
+// So we must duplicate this across compilation units.
+
+void stokes_weights_qa_rotate(double const * q_in, double const * v_in,
+               double * v_out) {
+    // The input quaternion has already been normalized on the host.
+
+    double xw =  q_in[3] * q_in[0];
+    double yw =  q_in[3] * q_in[1];
+    double zw =  q_in[3] * q_in[2];
+    double x2 = -q_in[0] * q_in[0];
+    double xy =  q_in[0] * q_in[1];
+    double xz =  q_in[0] * q_in[2];
+    double y2 = -q_in[1] * q_in[1];
+    double yz =  q_in[1] * q_in[2];
+    double z2 = -q_in[2] * q_in[2];
+
+    v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] +
+                    (yw + xz) * v_in[2]) + v_in[0];
+
+    v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] +
+                    (yz - xw) * v_in[2]) + v_in[1];
+
+    v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] +
+                    (x2 + y2) * v_in[2]) + v_in[2];
+
+    return;
+}
+
 void stokes_weights_IQU_inner(
     double cal,
     int32_t const * quat_index,
@@ -36,8 +66,8 @@ void stokes_weights_IQU_inner(
     double orient[3];
 
     int64_t off = (q_indx * 4 * n_samp) + 4 * isamp;
-    qa_rotate(&(quats[off]), zaxis, dir);
-    qa_rotate(&(quats[off]), xaxis, orient);
+    stokes_weights_qa_rotate(&(quats[off]), zaxis, dir);
+    stokes_weights_qa_rotate(&(quats[off]), xaxis, orient);
 
     double y = orient[0] * dir[1] - orient[1] * dir[0];
     double x = orient[0] * (-dir[2] * dir[0]) +

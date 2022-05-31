@@ -14,6 +14,22 @@
 # pragma omp declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
+// FIXME:  this ridiculous code duplication is due to nvc++
+// not supporting loadable device objects in shared libraries.
+// So we must duplicate this across compilation units.
+
+void pointing_detector_qa_mult(double const * p, double const * q, double * r) {
+    r[0] =  p[0] * q[3] + p[1] * q[2] -
+           p[2] * q[1] + p[3] * q[0];
+    r[1] = -p[0] * q[2] + p[1] * q[3] +
+           p[2] * q[0] + p[3] * q[1];
+    r[2] =  p[0] * q[1] - p[1] * q[0] +
+           p[2] * q[3] + p[3] * q[2];
+    r[3] = -p[0] * q[0] - p[1] * q[1] -
+           p[2] * q[2] + p[3] * q[3];
+    return;
+}
+
 void pointing_detector_inner(
     int32_t const * q_index,
     uint8_t const * flags,
@@ -43,7 +59,7 @@ void pointing_detector_inner(
         temp_bore[2] = 0.0;
         temp_bore[3] = 1.0;
     }
-    qa_mult(
+    pointing_detector_qa_mult(
         temp_bore,
         &(fp[4 * idet]),
         &(quats[(qidx * 4 * n_samp) + 4 * isamp])
