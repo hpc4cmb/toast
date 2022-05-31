@@ -11,6 +11,10 @@ set -e
 
 arch=$1
 
+# If this arg is set to any value, do not install MPI or atmosphere
+# tools.  This is used when running quick unit tests on every PR.
+quick=$2
+
 # Cross compile option needed for autoconf builds.
 cross=""
 if [ "${arch}" = "macosx_arm64" ]; then
@@ -69,7 +73,7 @@ fi
 # NOTE:  on arm64 we cannot run tests anyway (since we are
 # cross compiling).  So do not attempt to build mpich / mpi4py.
 
-if [ "${arch}" != "macosx_arm64" ]; then
+if [ "${arch}" != "macosx_arm64" ] && [ "x${quick}" = "x" ]; then
     mpich_version=3.4
     mpich_dir=mpich-${mpich_version}
     mpich_pkg=${mpich_dir}.tar.gz
@@ -132,7 +136,7 @@ CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements
 
 # Install mpi4py for running tests (only on x86_64)
 
-if [ "${arch}" != "macosx_arm64" ]; then
+if [ "${arch}" != "macosx_arm64" ] && [ "x${quick}" = "x" ]; then
     echo "mpicc = $(which mpicc)"
     echo "mpicxx = $(which mpicxx)"
     echo "mpirun = $(which mpirun)"
@@ -166,158 +170,160 @@ if [ "x${use_gcc}" = "xyes" ]; then
         && popd >/dev/null 2>&1
 fi
 
-# libgmp
+if [ "x${quick}" = "x" ]; then
+    # libgmp
 
-gmp_version=6.2.1
-gmp_dir=gmp-${gmp_version}
-gmp_pkg=${gmp_dir}.tar.xz
+    gmp_version=6.2.1
+    gmp_dir=gmp-${gmp_version}
+    gmp_pkg=${gmp_dir}.tar.xz
 
-echo "Fetching libgmp"
+    echo "Fetching libgmp"
 
-if [ ! -e ${gmp_pkg} ]; then
-    curl -SL https://ftp.gnu.org/gnu/gmp/${gmp_pkg} -o ${gmp_pkg}
+    if [ ! -e ${gmp_pkg} ]; then
+        curl -SL https://ftp.gnu.org/gnu/gmp/${gmp_pkg} -o ${gmp_pkg}
+    fi
+
+    echo "Building libgmp..."
+
+    rm -rf ${gmp_dir}
+    tar xf ${gmp_pkg} \
+        && pushd ${gmp_dir} >/dev/null 2>&1 \
+        && CC="${CC}" CFLAGS="${CFLAGS}" \
+        && CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" \
+        ./configure ${cross} \
+        --enable-static \
+        --disable-shared \
+        --with-pic \
+        --prefix="${PREFIX}" \
+        && make -j ${MAKEJ} \
+        && make install \
+        && popd >/dev/null 2>&1
+
+    # libmpfr
+
+    mpfr_version=4.1.0
+    mpfr_dir=mpfr-${mpfr_version}
+    mpfr_pkg=${mpfr_dir}.tar.xz
+
+    echo "Fetching libmpfr"
+
+    if [ ! -e ${mpfr_pkg} ]; then
+        curl -SL https://www.mpfr.org/mpfr-current/${mpfr_pkg} -o ${mpfr_pkg}
+    fi
+
+    echo "Building libmpfr..."
+
+    rm -rf ${mpfr_dir}
+    tar xf ${mpfr_pkg} \
+        && pushd ${mpfr_dir} >/dev/null 2>&1 \
+        && CC="${CC}" CFLAGS="${CFLAGS}" \
+        ./configure ${cross} \
+        --enable-static \
+        --disable-shared \
+        --with-pic \
+        --with-gmp="${PREFIX}" \
+        --prefix="${PREFIX}" \
+        && make -j ${MAKEJ} \
+        && make install \
+        && popd >/dev/null 2>&1
+
+    # Install FFTW
+
+    fftw_version=3.3.10
+    fftw_dir=fftw-${fftw_version}
+    fftw_pkg=${fftw_dir}.tar.gz
+
+    echo "Fetching FFTW..."
+
+    if [ ! -e ${fftw_pkg} ]; then
+        curl -SL http://www.fftw.org/${fftw_pkg} -o ${fftw_pkg}
+    fi
+
+    echo "Building FFTW..."
+
+    thread_opt="--enable-threads"
+    if [ "x${use_gcc}" = "xyes" ]; then
+        thread_opt="--enable-openmp"
+    fi
+
+    rm -rf ${fftw_dir}
+    tar xzf ${fftw_pkg} \
+        && pushd ${fftw_dir} >/dev/null 2>&1 \
+        && CC="${CC}" CFLAGS="${CFLAGS}" \
+        ./configure ${cross} ${thread_opt} \
+        --enable-static \
+        --disable-shared \
+        --prefix="${PREFIX}" \
+        && make -j ${MAKEJ} \
+        && make install \
+        && popd >/dev/null 2>&1
+
+    # Install libaatm
+
+    aatm_version=1.0.9
+    aatm_dir=libaatm-${aatm_version}
+    aatm_pkg=${aatm_dir}.tar.gz
+
+    echo "Fetching libaatm..."
+
+    if [ ! -e ${aatm_pkg} ]; then
+        curl -SL "https://github.com/hpc4cmb/libaatm/archive/${aatm_version}.tar.gz" -o "${aatm_pkg}"
+    fi
+
+    echo "Building libaatm..."
+
+    rm -rf ${aatm_dir}
+    tar xzf ${aatm_pkg} \
+        && pushd ${aatm_dir} >/dev/null 2>&1 \
+        && mkdir -p build \
+        && pushd build >/dev/null 2>&1 \
+        && cmake \
+        -DCMAKE_C_COMPILER="${CC}" \
+        -DCMAKE_CXX_COMPILER="${CXX}" \
+        -DCMAKE_C_FLAGS="${CFLAGS}" \
+        -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
+        -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+        .. \
+        && make -j ${MAKEJ} install \
+        && popd >/dev/null 2>&1 \
+        && popd >/dev/null 2>&1
+
+    # Install SuiteSparse
+
+    ssparse_version=5.11.0
+    ssparse_dir=SuiteSparse-${ssparse_version}
+    ssparse_pkg=${ssparse_dir}.tar.gz
+
+    echo "Fetching SuiteSparse..."
+
+    if [ ! -e ${ssparse_pkg} ]; then
+        curl -SL https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/v${ssparse_version}.tar.gz -o ${ssparse_pkg}
+    fi
+
+    echo "Building SuiteSparse..."
+
+    blas_opt="-framework Accelerate"
+    if [ "x${use_gcc}" = "xyes" ]; then
+        blas_opt="-lopenblas -fopenmp -lm"
+    fi
+
+    rm -rf ${ssparse_dir}
+    tar xzf ${ssparse_pkg} \
+        && pushd ${ssparse_dir} >/dev/null 2>&1 \
+        && patch -p1 < "${scriptdir}/suitesparse.patch" \
+        && make library JOBS=${MAKEJ} \
+        CC="${CC}" CXX="${CXX}" \
+        CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
+        GPU_CONFIG="" BLAS="${blas_opt}" \
+        && make static JOBS=${MAKEJ} \
+        CC="${CC}" CXX="${CXX}" \
+        CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
+        GPU_CONFIG="" BLAS="${blas_opt}" \
+        && cp -a ./include/* "${PREFIX}/include/" \
+        && find . -name "*.a" -exec cp -a '{}' "${PREFIX}/lib/" \; \
+        && popd >/dev/null 2>&1
+
+    # This line removed from above, since we are linking to static libs:
+    # && cp -a ./lib/* "${PREFIX}/lib/" \
 fi
-
-echo "Building libgmp..."
-
-rm -rf ${gmp_dir}
-tar xf ${gmp_pkg} \
-    && pushd ${gmp_dir} >/dev/null 2>&1 \
-    && CC="${CC}" CFLAGS="${CFLAGS}" \
-    && CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" \
-    ./configure ${cross} \
-    --enable-static \
-    --disable-shared \
-    --with-pic \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install \
-    && popd >/dev/null 2>&1
-
-# libmpfr
-
-mpfr_version=4.1.0
-mpfr_dir=mpfr-${mpfr_version}
-mpfr_pkg=${mpfr_dir}.tar.xz
-
-echo "Fetching libmpfr"
-
-if [ ! -e ${mpfr_pkg} ]; then
-    curl -SL https://www.mpfr.org/mpfr-current/${mpfr_pkg} -o ${mpfr_pkg}
-fi
-
-echo "Building libmpfr..."
-
-rm -rf ${mpfr_dir}
-tar xf ${mpfr_pkg} \
-    && pushd ${mpfr_dir} >/dev/null 2>&1 \
-    && CC="${CC}" CFLAGS="${CFLAGS}" \
-    ./configure ${cross} \
-    --enable-static \
-    --disable-shared \
-    --with-pic \
-    --with-gmp="${PREFIX}" \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install \
-    && popd >/dev/null 2>&1
-
-# Install FFTW
-
-fftw_version=3.3.10
-fftw_dir=fftw-${fftw_version}
-fftw_pkg=${fftw_dir}.tar.gz
-
-echo "Fetching FFTW..."
-
-if [ ! -e ${fftw_pkg} ]; then
-    curl -SL http://www.fftw.org/${fftw_pkg} -o ${fftw_pkg}
-fi
-
-echo "Building FFTW..."
-
-thread_opt="--enable-threads"
-if [ "x${use_gcc}" = "xyes" ]; then
-    thread_opt="--enable-openmp"
-fi
-
-rm -rf ${fftw_dir}
-tar xzf ${fftw_pkg} \
-    && pushd ${fftw_dir} >/dev/null 2>&1 \
-    && CC="${CC}" CFLAGS="${CFLAGS}" \
-    ./configure ${cross} ${thread_opt} \
-    --enable-static \
-    --disable-shared \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install \
-    && popd >/dev/null 2>&1
-
-# Install libaatm
-
-aatm_version=1.0.9
-aatm_dir=libaatm-${aatm_version}
-aatm_pkg=${aatm_dir}.tar.gz
-
-echo "Fetching libaatm..."
-
-if [ ! -e ${aatm_pkg} ]; then
-    curl -SL "https://github.com/hpc4cmb/libaatm/archive/${aatm_version}.tar.gz" -o "${aatm_pkg}"
-fi
-
-echo "Building libaatm..."
-
-rm -rf ${aatm_dir}
-tar xzf ${aatm_pkg} \
-    && pushd ${aatm_dir} >/dev/null 2>&1 \
-    && mkdir -p build \
-    && pushd build >/dev/null 2>&1 \
-    && cmake \
-    -DCMAKE_C_COMPILER="${CC}" \
-    -DCMAKE_CXX_COMPILER="${CXX}" \
-    -DCMAKE_C_FLAGS="${CFLAGS}" \
-    -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
-    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-    .. \
-    && make -j ${MAKEJ} install \
-    && popd >/dev/null 2>&1 \
-    && popd >/dev/null 2>&1
-
-# Install SuiteSparse
-
-ssparse_version=5.11.0
-ssparse_dir=SuiteSparse-${ssparse_version}
-ssparse_pkg=${ssparse_dir}.tar.gz
-
-echo "Fetching SuiteSparse..."
-
-if [ ! -e ${ssparse_pkg} ]; then
-    curl -SL https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/v${ssparse_version}.tar.gz -o ${ssparse_pkg}
-fi
-
-echo "Building SuiteSparse..."
-
-blas_opt="-framework Accelerate"
-if [ "x${use_gcc}" = "xyes" ]; then
-    blas_opt="-lopenblas -fopenmp -lm"
-fi
-
-rm -rf ${ssparse_dir}
-tar xzf ${ssparse_pkg} \
-    && pushd ${ssparse_dir} >/dev/null 2>&1 \
-    && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && make library JOBS=${MAKEJ} \
-    CC="${CC}" CXX="${CXX}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" BLAS="${blas_opt}" \
-    && make static JOBS=${MAKEJ} \
-    CC="${CC}" CXX="${CXX}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" BLAS="${blas_opt}" \
-    && cp -a ./include/* "${PREFIX}/include/" \
-    && find . -name "*.a" -exec cp -a '{}' "${PREFIX}/lib/" \; \
-    && popd >/dev/null 2>&1
-
-# This line removed from above, since we are linking to static libs:
-# && cp -a ./lib/* "${PREFIX}/lib/" \

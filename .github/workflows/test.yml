@@ -39,11 +39,11 @@ jobs:
       - name: Pull Dependency Image
         run: docker pull hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest
 
-      - name: Compile
+      - name: Install
         run: |
           docker run -v "$(pwd)":/home/toast --name="test_py${{ matrix.pyshort }}" \
             hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest \
-            /home/toast/platforms/install_test_runner.sh
+            /home/toast/platforms/install_test_runner_linux.sh
           docker commit -m "test runner" test_py${{ matrix.pyshort }} \
             test_runner:py${{ matrix.pyshort }}
 
@@ -71,8 +71,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python: "3.8"
-            pyshort: "38"
+          - python: "3.7"
+            pyshort: "37"
           - python: "3.9"
             pyshort: "39"
           # - python: "3.10"
@@ -91,24 +91,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install OS Dependencies
+      - name: Install
         run: |
-          brew update
-          brew install fftw
-
-      - name: Install Python Dependencies
-        run: |
-          python3 -m pip install -r wheels/build_requirements.txt
-          python3 -m pip install ducc0
-
-      - name: Install TOAST
-        run: |
-          export TOAST_BUILD_CMAKE_C_COMPILER=clang
-          export TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
-          export TOAST_BUILD_BLA_VENDOR='Apple'
-          export TOAST_BUILD_DISABLE_OPENMP=1
-          export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
-          python3 -m pip install .
+          /home/toast/platforms/install_test_runner_macos.sh
 
       - name: Run Serial Tests
         run: |
