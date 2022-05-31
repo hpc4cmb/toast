@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import sys
 
 import healpy as hp
 import numpy as np
@@ -143,6 +144,9 @@ class FilterBinTest(MPITestCase):
         return
 
     def test_filterbin_obsmatrix(self):
+        if sys.platform.lower() == "darwin":
+            print(f"WARNING:  Skipping test_filterbin_obsmatrix on MacOS")
+            return
 
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
