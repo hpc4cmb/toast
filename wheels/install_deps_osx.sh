@@ -170,6 +170,37 @@ if [ "x${use_gcc}" = "xyes" ]; then
         && popd >/dev/null 2>&1
 fi
 
+# Install FFTW
+
+fftw_version=3.3.10
+fftw_dir=fftw-${fftw_version}
+fftw_pkg=${fftw_dir}.tar.gz
+
+echo "Fetching FFTW..."
+
+if [ ! -e ${fftw_pkg} ]; then
+    curl -SL http://www.fftw.org/${fftw_pkg} -o ${fftw_pkg}
+fi
+
+echo "Building FFTW..."
+
+thread_opt="--enable-threads"
+if [ "x${use_gcc}" = "xyes" ]; then
+    thread_opt="--enable-openmp"
+fi
+
+rm -rf ${fftw_dir}
+tar xzf ${fftw_pkg} \
+    && pushd ${fftw_dir} >/dev/null 2>&1 \
+    && CC="${CC}" CFLAGS="${CFLAGS}" \
+    ./configure ${cross} ${thread_opt} \
+    --enable-static \
+    --disable-shared \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install \
+    && popd >/dev/null 2>&1
+
 if [ "x${quick}" = "x" ]; then
     # libgmp
 
@@ -222,37 +253,6 @@ if [ "x${quick}" = "x" ]; then
         --disable-shared \
         --with-pic \
         --with-gmp="${PREFIX}" \
-        --prefix="${PREFIX}" \
-        && make -j ${MAKEJ} \
-        && make install \
-        && popd >/dev/null 2>&1
-
-    # Install FFTW
-
-    fftw_version=3.3.10
-    fftw_dir=fftw-${fftw_version}
-    fftw_pkg=${fftw_dir}.tar.gz
-
-    echo "Fetching FFTW..."
-
-    if [ ! -e ${fftw_pkg} ]; then
-        curl -SL http://www.fftw.org/${fftw_pkg} -o ${fftw_pkg}
-    fi
-
-    echo "Building FFTW..."
-
-    thread_opt="--enable-threads"
-    if [ "x${use_gcc}" = "xyes" ]; then
-        thread_opt="--enable-openmp"
-    fi
-
-    rm -rf ${fftw_dir}
-    tar xzf ${fftw_pkg} \
-        && pushd ${fftw_dir} >/dev/null 2>&1 \
-        && CC="${CC}" CFLAGS="${CFLAGS}" \
-        ./configure ${cross} ${thread_opt} \
-        --enable-static \
-        --disable-shared \
         --prefix="${PREFIX}" \
         && make -j ${MAKEJ} \
         && make install \
