@@ -279,6 +279,10 @@ class FilterBinTest(MPITestCase):
         return
 
     def test_filterbin_obsmatrix_pypointing(self):
+        if sys.platform.lower() == "darwin":
+            print(f"WARNING:  Skipping test_filterbin_pypointing on MacOS")
+            return
+
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
@@ -413,6 +417,9 @@ class FilterBinTest(MPITestCase):
         return
 
     def test_filterbin_obsmatrix_flags(self):
+        if sys.platform.lower() == "darwin":
+            print(f"WARNING:  Skipping test_filterbin_obsmatrix_flags on MacOS")
+            return
 
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
