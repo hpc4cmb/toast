@@ -93,7 +93,9 @@ jobs:
 
       - name: Install
         run: |
-          /home/toast/platforms/install_test_runner_macos.sh
+          mkdir build
+          cd build
+          ../platforms/install_test_runner_macos.sh
 
       - name: Run Serial Tests
         run: |
