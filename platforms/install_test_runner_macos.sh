@@ -19,21 +19,15 @@ eval ${toastdir}/wheels/install_deps_osx.sh macosx_x86_64 yes
 
 # Install toast
 
-mkdir build
-pushd build >/dev/null 2>&1
+pushd ${toastdir} >/dev/null 2>&1
 
-cmake \
-    -DCMAKE_C_COMPILER="clang" \
-    -DCMAKE_CXX_COMPILER="clang++" \
-    -DCMAKE_C_FLAGS="-O3 -g -fPIC" \
-    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -std=c++11 -stdlib=libc++" \
-    -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
-    -DDISABLE_OPENMP=1 \
-    -DBLA_VENDOR="Apple" \
-    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DCMAKE_INSTALL_PREFIX=/usr/local \
-    "${toastdir}"
-
-make -j 2 install
+export TOAST_BUILD_CMAKE_C_COMPILER=clang
+export TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
+export TOAST_BUILD_BLA_VENDOR='Apple'
+export TOAST_BUILD_DISABLE_OPENMP=1
+export TOAST_BUILD_CMAKE_CXX_FLAGS="-O2 -g -fPIC"
+export TOAST_BUILD_CMAKE_CXX_FLAGS="-O2 -g -fPIC -std=c++11 -stdlib=libc++"
+export TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
+python3 -m pip -vvv install .
 
 popd >/dev/null 2>&1
