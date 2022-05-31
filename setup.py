@@ -17,8 +17,8 @@ def find_compilers():
     cc = None
     cxx = None
     # If we have mpi4py, then get the MPI compilers that were used to build that.
-    # Then get the serial compilers used by the MPI wrappers.  Otherwise, just the
-    # normal distutils compilers.
+    # Then get the serial compilers used by the MPI wrappers.  Otherwise return
+    # None and later let CMake guess the compilers.
     try:
         from mpi4py import MPI
         import mpi4py
@@ -152,28 +152,46 @@ class CMakeBuild(build_ext):
 
         if cc is not None:
             # Use serial compilers that were used when building MPI
+            print(
+                f"C Compiler:  using serial compiler '{cc}' from installed mpi4py package"
+            )
             cmake_args += ["-DCMAKE_C_COMPILER={}".format(cc)]
         elif "CMAKE_C_COMPILER" in cmake_opts:
             # Get these from the environment
-            cmake_args += [
-                "-DCMAKE_C_COMPILER={}".format(cmake_opts["CMAKE_C_COMPILER"])
-            ]
+            cc = cmake_opts["CMAKE_C_COMPILER"]
+            print(
+                f"C Compiler:  using serial compiler '{cc}' from TOAST_BUILD environment variables"
+            )
+            cmake_args += [f"-DCMAKE_C_COMPILER={cc}"]
             _ = cmake_opts.pop("CMAKE_C_COMPILER")
         else:
             # We just let cmake guess the compilers and hope for the best...
+            print(
+                f"C Compiler:  not specified, will use CMake to discover"
+            )
             pass
 
         if cxx is not None:
             # Use serial compilers that were used when building MPI
+            print(
+                f"C++ Compiler:  using serial compiler '{cxx}' from installed mpi4py package"
+            )
             cmake_args += ["-DCMAKE_CXX_COMPILER={}".format(cxx)]
         elif "CMAKE_CXX_COMPILER" in cmake_opts:
             # Get these from the environment
+            cxx = cmake_opts["CMAKE_CXX_COMPILER"]
+            print(
+                f"C++ Compiler:  using serial compiler '{cxx}' from TOAST_BUILD environment variables"
+            )
             cmake_args += [
-                "-DCMAKE_CXX_COMPILER={}".format(cmake_opts["CMAKE_CXX_COMPILER"])
+                f"-DCMAKE_CXX_COMPILER={cxx}"
             ]
             _ = cmake_opts.pop("CMAKE_CXX_COMPILER")
         else:
             # We just let cmake guess the compilers and hope for the best...
+            print(
+                f"C++ Compiler:  not specified, will use CMake to discover"
+            )
             pass
 
         # Append any other TOAST_BUILD_ options to the cmake args
@@ -194,8 +212,10 @@ class CMakeBuild(build_ext):
         # CMakeLists.txt is in the same directory as this setup.py file
         cmake_list_dir = os.path.abspath(os.path.dirname(__file__))
         print("-" * 10, "Running CMake prepare", "-" * 40)
+        cmake_com = ["cmake", cmake_list_dir] + cmake_args
+        print("\n".join([f"   {x}" for x in cmake_com]))
         subprocess.check_call(
-            ["cmake", cmake_list_dir] + cmake_args, cwd=self.build_temp, env=env
+            cmake_com, cwd=self.build_temp, env=env
         )
 
         print("-" * 10, "Building extensions", "-" * 40)

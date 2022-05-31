@@ -22,6 +22,36 @@
 # pragma omp declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
+// FIXME:  this ridiculous code duplication is due to nvc++
+// not supporting loadable device objects in shared libraries.
+// So we must duplicate this across compilation units.
+
+void pixels_healpix_qa_rotate(double const * q_in, double const * v_in,
+               double * v_out) {
+    // The input quaternion has already been normalized on the host.
+
+    double xw =  q_in[3] * q_in[0];
+    double yw =  q_in[3] * q_in[1];
+    double zw =  q_in[3] * q_in[2];
+    double x2 = -q_in[0] * q_in[0];
+    double xy =  q_in[0] * q_in[1];
+    double xz =  q_in[0] * q_in[2];
+    double y2 = -q_in[1] * q_in[1];
+    double yz =  q_in[1] * q_in[2];
+    double z2 = -q_in[2] * q_in[2];
+
+    v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] +
+                    (yw + xz) * v_in[2]) + v_in[0];
+
+    v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] +
+                    (yz - xw) * v_in[2]) + v_in[1];
+
+    v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] +
+                    (x2 + y2) * v_in[2]) + v_in[2];
+
+    return;
+}
+
 typedef struct {
     int64_t nside;
     int64_t npix;
@@ -240,7 +270,7 @@ void pixels_healpix_nest_inner(
     size_t poff = p_indx * n_samp + isamp;
     int64_t sub_map;
 
-    qa_rotate(&(quats[qoff]), zaxis, dir);
+    pixels_healpix_qa_rotate(&(quats[qoff]), zaxis, dir);
     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
     hpix_zphi2nest(&hp, phi, region, z, rtz, &(pixels[poff]));
     if (use_flags && ((flags[isamp] & mask) != 0)) {
@@ -280,7 +310,7 @@ void pixels_healpix_ring_inner(
     size_t poff = p_indx * n_samp + isamp;
     int64_t sub_map;
 
-    qa_rotate(&(quats[qoff]), zaxis, dir);
+    pixels_healpix_qa_rotate(&(quats[qoff]), zaxis, dir);
     hpix_vec2zphi(&hp, dir, &phi, &region, &z, &rtz);
     hpix_zphi2ring(&hp, phi, region, z, rtz, &(pixels[poff]));
     if (use_flags && ((flags[isamp] & mask) != 0)) {
