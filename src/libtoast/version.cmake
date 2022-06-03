@@ -41,8 +41,11 @@ else()
     set(RELEASE_VERSION "")
 endif()
 
-set(VERSION "const char* GIT_VERSION = \"${GIT_VERSION}\";
-const char* RELEASE_VERSION = \"${RELEASE_VERSION}\";")
+set(VERSION
+    "const char* GIT_VERSION = \"${GIT_VERSION}\";
+    const char* RELEASE_VERSION = \"${RELEASE_VERSION}\";
+    "
+)
 
 if(EXISTS version.cpp)
     file(READ version.cpp VERSION_)

@@ -3,8 +3,8 @@
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
-#ifndef LIBTOAST_COMMON_HPP
-#define LIBTOAST_COMMON_HPP
+#ifndef _LIBTOAST_COMMON_HPP
+#define _LIBTOAST_COMMON_HPP
 
 #include <pybind11/pybind11.h>
 #include <pybind11/operators.h>
@@ -26,6 +26,103 @@
 
 namespace py = pybind11;
 
+
+std::string get_format(std::string const & input);
+
+
+template <typename T>
+T * extract_buffer(
+    py::buffer data,
+    char const * name,
+    size_t assert_dims,
+    std::vector <int64_t> & shape,
+    std::vector <int64_t> assert_shape
+) {
+    // Get buffer info structure
+    auto info = data.request();
+
+    // Extract the format character for the target type
+    std::string target_format = get_format(py::format_descriptor <T>::format());
+
+    // Extract the format for the input buffer
+    std::string buffer_format = get_format(info.format);
+
+    // Verify format string
+    if (buffer_format != target_format) {
+        // On 64bit linux, numpy is internally inconsistent with the
+        // format codes for int64_t and long long:
+        //   https://github.com/numpy/numpy/issues/12264
+        // Here we treat them as equivalent.
+        if (((buffer_format == "q") || (buffer_format == "l"))
+            && ((target_format == "q") || (target_format == "l"))) {
+            // What could possibly go wrong...
+        } else {
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "Object " << name << " has format \"" << buffer_format
+              << "\" instead of \"" << target_format << "\"";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+    }
+
+    // Verify itemsize
+    if (info.itemsize != sizeof(T)) {
+        auto log = toast::Logger::get();
+        std::ostringstream o;
+        o << "Object " << name << " has item size of "
+          << info.itemsize << " instead of " << sizeof(T);
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+
+    // Verify number of dimensions
+    if (info.ndim != assert_dims) {
+        auto log = toast::Logger::get();
+        std::ostringstream o;
+        o << "Object " << name << " has " << info.ndim
+          << " dimensions instead of " << assert_dims;
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+
+    // Get array dimensions
+    for (py::ssize_t d = 0; d < info.ndim; d++) {
+        shape[d] = info.shape[d];
+    }
+
+    // Check strides and verify that memory is contiguous
+    size_t stride = info.itemsize;
+    for (int d = info.ndim - 1; d >= 0; d--) {
+        if (info.strides[d] != stride) {
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "Object " << name
+              << ": python buffers must be contiguous in memory.";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+        stride *= info.shape[d];
+    }
+
+    // If the user wants to verify any of the dimensions, do that
+    for (py::ssize_t d = 0; d < info.ndim; d++) {
+        if (assert_shape[d] >= 0) {
+            // We are checking this dimension
+            if (assert_shape[d] != shape[d]) {
+                auto log = toast::Logger::get();
+                std::ostringstream o;
+                o << "Object " << name << " dimension " << d
+                  << " has length " << shape[d]
+                  << " instead of " << assert_shape[d];
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+        }
+    }
+
+    return static_cast <T *> (info.ptr);
+}
 
 template <typename T>
 std::vector <char> align_format() {
@@ -131,34 +228,5 @@ template <typename C>
 std::unique_ptr <C> aligned_uptr(size_t n) {
     return std::unique_ptr <C> (new C(n));
 }
-
-class FakeMemPool {
-    public:
-
-        static FakeMemPool & get();
-        void * create(void * buffer, size_t nbytes);
-        void remove(void * buffer, size_t nbytes);
-        void * copyin(void * buffer, size_t nbytes);
-        void copyout(void * buffer, size_t nbytes);
-        void update_device(void * buffer, size_t nbytes);
-        void update_self(void * buffer, size_t nbytes);
-
-        // Use int instead of bool to match the acc_is_present API
-        int present(void * buffer, size_t nbytes);
-
-        void * device_ptr(void * buffer);
-
-        void dump();
-
-        ~FakeMemPool();
-
-    private:
-
-        FakeMemPool();
-        std::unordered_map <void *, size_t> mem_size;
-        std::unordered_map <void *, void *> mem;
-};
-
-bool fake_openacc();
 
 #endif // ifndef LIBTOAST_COMMON_HPP

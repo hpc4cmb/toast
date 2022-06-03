@@ -296,7 +296,6 @@ class SimConviqtTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=key,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -421,7 +420,6 @@ class SimConviqtTest(MPITestCase):
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -538,7 +536,6 @@ class SimConviqtTest(MPITestCase):
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,

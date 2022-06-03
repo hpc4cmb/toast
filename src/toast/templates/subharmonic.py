@@ -8,6 +8,7 @@ import numpy as np
 
 from ..data import Data
 from ..mpi import MPI
+from ..observation import default_values as defaults
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
 from .amplitudes import Amplitudes
@@ -38,7 +39,7 @@ class SubHarmonic(Template):
     #    det_flag_mask    : Bit mask for detector solver flags
     #
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     order = Int(1, help="The filter order")
 
@@ -142,7 +143,7 @@ class SubHarmonic(Template):
                     good = slice(0, view_len, 1)
                     if self.det_flags is not None:
                         flags = views.detdata[self.det_flags][ivw][det]
-                        good = flags & self.det_flag_mask != 0
+                        good = (flags & self.det_flag_mask) == 0
 
                     prec = np.zeros((norder, norder), dtype=np.float64)
                     for row in range(norder):

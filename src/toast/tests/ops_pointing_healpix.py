@@ -11,7 +11,7 @@ from .. import ops as ops
 from .. import qarray as qa
 from .._libtoast import healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
-from ..intervals import Interval, IntervalList
+from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
 from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
@@ -218,6 +218,19 @@ class PointingHealpixTest(MPITestCase):
         )
         pixels.apply(data)
 
+        # Also make a copy using a python codepath
+        detpointing.use_python = True
+        detpointing.quats = "pyquat"
+        pixels.use_python = True
+        pixels.quats = "pyquat"
+        pixels.pixels = "pypix"
+        pixels.apply(data)
+
+        for ob in data.obs:
+            np.testing.assert_array_equal(
+                ob.detdata[defaults.pixels], ob.detdata["pypix"]
+            )
+
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
@@ -229,17 +242,40 @@ class PointingHealpixTest(MPITestCase):
         if rank == 0:
             handle.close()
 
-    def test_weights_simple(self):
+    def test_pixweight_pipe(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
         detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            detector_pointing=detpointing,
+        )
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
+        pipe = ops.Pipeline(operators=[pixels, weights])
+        pipe.apply(data)
+
+        # Also make a copy using a python codepath
+        detpointing.use_python = True
+        detpointing.quats = "pyquat"
+        pixels.use_python = True
+        pixels.quats = "pyquat"
+        pixels.pixels = "pypixels"
+        pixels.apply(data)
+        weights.use_python = True
+        weights.quats = "pyquat"
+        weights.weights = "pyweight"
         weights.apply(data)
+
+        for ob in data.obs:
+            np.testing.assert_allclose(
+                ob.detdata[defaults.weights], ob.detdata["pyweight"]
+            )
+            np.testing.assert_equal(ob.detdata[defaults.pixels], ob.detdata["pypixels"])
 
         rank = 0
         if self.comm is not None:
@@ -247,9 +283,7 @@ class PointingHealpixTest(MPITestCase):
 
         handle = None
         if rank == 0:
-            handle = open(
-                os.path.join(self.outdir, "out_test_weights_simple_info"), "w"
-            )
+            handle = open(os.path.join(self.outdir, "out_test_pixweight_pipe"), "w")
         data.info(handle=handle)
         if rank == 0:
             handle.close()
@@ -262,22 +296,12 @@ class PointingHealpixTest(MPITestCase):
         for obs in data.obs:
             times = obs.shared[defaults.times]
             nsample = len(times)
-            intervals1 = [
-                Interval(
-                    start=times[0],
-                    stop=times[-1],
-                    first=0,
-                    last=nsample - 1,
-                )
-            ]
-            intervals2 = [
-                Interval(
-                    start=times[0],
-                    stop=times[nsample // 2],
-                    first=0,
-                    last=nsample // 2,
-                )
-            ]
+            intervals1 = np.array(
+                [(times[0], times[-1], 0, nsample - 1)], dtype=interval_dtype
+            ).view(np.recarray)
+            intervals2 = np.array(
+                [(times[0], times[nsample // 2], 0, nsample // 2)], dtype=interval_dtype
+            ).view(np.recarray)
             obs.intervals[full_intervals] = IntervalList(times, intervals=intervals1)
             obs.intervals[half_intervals] = IntervalList(times, intervals=intervals2)
 
@@ -290,12 +314,13 @@ class PointingHealpixTest(MPITestCase):
         with self.assertRaises(RuntimeError):
             pixels.apply(data)
 
-        detpointing = ops.PointingDetectorSimple(view=full_intervals)
-        pixels = ops.PixelsHealpix(
-            nside=64,
-            detector_pointing=detpointing,
-            view=half_intervals,
-        )
+        # NOTE:  the detector pointing operator has no way of knowing that it is being
+        # called again with a different set of intervals.  It will see the existing
+        # detector pointing object and skip it.  So we delete it first.
+        ops.Delete(detdata=[detpointing.quats, pixels.pixels]).apply(data)
+
+        detpointing.view = full_intervals
+        pixels.view = half_intervals
         pixels.apply(data)
 
     def test_weights_hwpnull(self):

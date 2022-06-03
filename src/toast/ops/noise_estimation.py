@@ -16,7 +16,7 @@ from astropy import units as u
 
 from .. import qarray as qa
 from .._libtoast import filter_poly2D, filter_polynomial, subtract_mean, sum_detectors
-from ..intervals import Interval
+from ..intervals import interval_dtype
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
@@ -392,9 +392,12 @@ class NoiseEstim(Operator):
             fileroot = f"{self.name}_{obs.name}"
 
             if self.view is None:
-                intervals = [
-                    Interval(start=times[0], stop=times[-1], first=0, last=nsample - 1)
-                ]
+                intervals = np.array(
+                    [
+                        (times[0], times[-1], 0, nsample - 1),
+                    ],
+                    dtype=interval_dtype,
+                )
             else:
                 intervals = obs.intervals[self.view]
 
@@ -423,13 +426,13 @@ class NoiseEstim(Operator):
                     continue
                 signal1 = obs.detdata[self.det_data][det1]
                 flags1 = obs.detdata[self.det_flags][det1]
-                flags = flags1 & self.det_flag_mask != 0
+                flags = (flags1 & self.det_flag_mask) != 0
                 signal2 = None
                 flags2 = None
                 if det1 != det2:
                     signal2 = obs.detdata[self.det_data][det2]
                     flags2 = obs.detdata[self.det_flags][det2]
-                    flags[flags2 & self.det_flag_mask != 0] = True
+                    flags[(flags2 & self.det_flag_mask) != 0] = True
                 flags[shared_flags] = True
 
                 if det2key is None:

@@ -362,6 +362,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         position = None
         velocity = None
         boresight = None
+        flags = None
         if ob.comm_col_rank == 0:
             start_time = 0.0 + float(ob.local_index_offset) / rate
             stop_time = start_time + float(ob.n_local_samples - 1) / rate
@@ -404,10 +405,14 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
             # build the normalized quaternion
             boresight = qa.norm(np.concatenate((v, s), axis=1))
 
+            # no flags
+            flags = np.zeros(nsamp, dtype=np.uint8)
+
         ob.shared[defaults.times].set(stamps, offset=(0,), fromrank=0)
         ob.shared[defaults.position].set(position, offset=(0, 0), fromrank=0)
         ob.shared[defaults.velocity].set(velocity, offset=(0, 0), fromrank=0)
         ob.shared[defaults.boresight_radec].set(boresight, offset=(0, 0), fromrank=0)
+        ob.shared[defaults.shared_flags].set(flags, offset=(0,), fromrank=0)
 
         data.obs.append(ob)
     return data

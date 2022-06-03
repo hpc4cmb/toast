@@ -7,8 +7,18 @@ import os
 import numpy as np
 from pshmem.utils import mpi_data_type
 
-from ._libtoast import acc_copyin, acc_copyout, acc_enabled, acc_is_present
 from ._libtoast import global_to_local as libtoast_global_to_local
+from .accelerator import (
+    AcceleratorObject,
+    accel_data_create,
+    accel_data_delete,
+    accel_data_present,
+    accel_data_update_device,
+    accel_data_update_host,
+    accel_enabled,
+    use_accel_jax,
+    use_accel_omp,
+)
 from .dist import distribute_uniform
 from .mpi import MPI
 from .timing import GlobalTimers, Timer, function_timer
@@ -25,6 +35,10 @@ from .utils import (
     AlignedU64,
     Logger,
 )
+
+if use_accel_jax:
+    import jax
+    import jax.numpy as jnp
 
 
 class PixelDistribution(object):
@@ -379,7 +393,7 @@ class PixelDistribution(object):
         return self._alltoallv_info
 
 
-class PixelData(object):
+class PixelData(AcceleratorObject):
     """Distributed map-domain data.
 
     The distribution information is stored in a PixelDistribution instance passed to
@@ -457,6 +471,7 @@ class PixelData(object):
 
         self.raw = self.storage_class.zeros(self._flatshape)
         self.data = self.raw.array().reshape(self._shape)
+        self.data_jax = None
 
         # Allreduce quantities
         self._all_comm_submap = None
@@ -476,6 +491,8 @@ class PixelData(object):
         self.reduce_buf = None
         self._reduce_buf_raw = None
 
+        super().__init__()
+
     def clear(self):
         """Delete the underlying memory.
 
@@ -487,6 +504,8 @@ class PixelData(object):
         if hasattr(self, "data"):
             del self.data
         if hasattr(self, "raw"):
+            if self.accel_exists():
+                self.accel_delete()
             self.raw.clear()
             del self.raw
         if hasattr(self, "receive"):
@@ -549,6 +568,20 @@ class PixelData(object):
             self._n_value, self._dtype, self._dist
         )
         return val
+
+    def __eq__(self, other):
+        if self.distribution != other.distribution:
+            return False
+        if self.dtype.char != other.dtype.char:
+            return False
+        if self.n_value != other.n_value:
+            return False
+        if not np.allclose(self.raw, other.raw):
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def duplicate(self):
         """Create a copy of the data with the same distribution.
@@ -924,42 +957,36 @@ class PixelData(object):
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
 
-    def acc_is_present(self):
-        """Check if the pixel data is present on the accelerator.
+    def _accel_exists(self):
+        if use_accel_omp:
+            return accel_data_present(self.raw)
+        elif use_accel_jax:
+            return accel_data_present(self.data_jax)
+        else:
+            return False
 
-        Returns:
-            (bool):  True if the data is present.
+    def _accel_create(self):
+        if use_accel_omp:
+            accel_data_create(self.raw)
+        elif use_accel_jax:
+            accel_data_create(self.data_jax)
 
-        """
-        if not acc_enabled:
-            return
-        return acc_is_present(self.raw)
+    def _accel_update_device(self):
+        if use_accel_omp:
+            _ = accel_data_update_device(self.raw)
+        elif use_accel_jax:
+            self.data_jax = accel_data_update_device(self.data)
 
-    def acc_copyin(self):
-        """Copy the data to the accelerator.
+    def _accel_update_host(self):
+        if use_accel_omp:
+            _ = accel_data_update_host(self.raw)
+        elif use_accel_jax:
+            self.data[:] = accel_data_update_host(self.data_jax)
+            self.data_jax = None
 
-        This creates the device memory if it does not already exist.
-
-        Returns:
-            None
-
-        """
-        if not acc_enabled:
-            return
-        acc_copyin(self.raw)
-
-    def acc_copyout(self):
-        """Copy the data from the accelerator to the host.
-
-        Returns:
-            None
-
-        """
-        log = Logger.get()
-        if not acc_enabled:
-            return
-        if not acc_is_present(self.raw):
-            msg = f"PixelData raw data is not present on device, cannot copy out"
-            log.error(msg)
-            raise RuntimeError(msg)
-        acc_copyout(self.raw)
+    def _accel_delete(self):
+        if use_accel_omp:
+            accel_data_delete(self.raw)
+        elif use_accel_jax:
+            del self.data_jax
+            self.data_jax = None

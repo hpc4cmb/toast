@@ -12,5 +12,6 @@ cmake \
     -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread" \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+    -DUSE_MKL=TRUE \
     ${opts} \
     ..

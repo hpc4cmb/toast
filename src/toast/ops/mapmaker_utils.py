@@ -5,7 +5,12 @@
 import numpy as np
 import traitlets
 
-from .._libtoast import cov_accum_diag_hits, cov_accum_diag_invnpp, cov_accum_zmap
+from .._libtoast import (
+    build_noise_weighted,
+    cov_accum_diag_hits,
+    cov_accum_diag_invnpp,
+    cov_accum_zmap,
+)
 from ..covariance import covariance_invert
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
@@ -167,9 +172,9 @@ class BuildHitMap(Operator):
 
                     # Apply the flags if needed
                     if self.det_flags is not None:
-                        local_pix[fview[det] & self.det_flag_mask != 0] = -1
+                        local_pix[(fview[det] & self.det_flag_mask) != 0] = -1
                     if self.shared_flags is not None:
-                        local_pix[shared_fview & self.shared_flag_mask != 0] = -1
+                        local_pix[(shared_fview & self.shared_flag_mask) != 0] = -1
 
                     cov_accum_diag_hits(
                         dist.n_local_submap,
@@ -410,9 +415,9 @@ class BuildInverseCovariance(Operator):
 
                     # Apply the flags if needed
                     if self.det_flags is not None:
-                        local_pix[fview[det] & self.det_flag_mask != 0] = -1
+                        local_pix[(fview[det] & self.det_flag_mask) != 0] = -1
                     if self.shared_flags is not None:
-                        local_pix[shared_fview & self.shared_flag_mask != 0] = -1
+                        local_pix[(shared_fview & self.shared_flag_mask) != 0] = -1
 
                     # Accumulate
                     cov_accum_diag_invnpp(
@@ -530,6 +535,8 @@ class BuildNoiseWeighted(Operator):
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
+    use_python = Bool(False, help="If True, use python implementation")
+
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
         check = proposal["value"]
@@ -548,7 +555,7 @@ class BuildNoiseWeighted(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         if self.pixel_dist is None:
@@ -566,9 +573,12 @@ class BuildNoiseWeighted(Operator):
         if self.det_data is None:
             raise RuntimeError("You must set the det_data trait before calling exec()")
 
+        if self.use_python and use_accel:
+            raise RuntimeError("Cannot use accelerator with pure python implementation")
+
         dist = data[self.pixel_dist]
         if data.comm.world_rank == 0:
-            log.debug(
+            log.verbose(
                 "Building noise weighted map with pixel_distribution {}".format(
                     self.pixel_dist
                 )
@@ -605,6 +615,15 @@ class BuildNoiseWeighted(Operator):
             data[self.zmap] = PixelData(dist, np.float64, n_value=weight_nnz)
             zmap = data[self.zmap]
 
+        if use_accel:
+            if not zmap.accel_exists():
+                log.verbose_rank(
+                    f"Operator {self.name} zmap not yet on device, copying in",
+                    comm=data.comm.comm_group,
+                )
+                zmap.accel_create()
+                zmap.accel_update_device()
+
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(selection=detectors)
@@ -621,82 +640,94 @@ class BuildNoiseWeighted(Operator):
 
             noise = ob[self.noise_model]
 
-            # The pixels and weights view for this observation
-            pix = ob.view[self.view].detdata[self.pixels]
-            wts = ob.view[self.view].detdata[self.weights]
-            ddat = ob.view[self.view].detdata[self.det_data]
+            detweights = np.array(
+                [noise.detector_weight(x) for x in dets], dtype=np.float64
+            )
+
+            pix_indx = ob.detdata[self.pixels].indices(dets)
+            weight_indx = ob.detdata[self.weights].indices(dets)
+            data_indx = ob.detdata[self.det_data].indices(dets)
+
+            n_weight_dets = ob.detdata[self.weights].data.shape[0]
+
+            if self.det_flags is not None:
+                flag_indx = ob.detdata[self.det_flags].indices(dets)
+                flag_data = ob.detdata[self.det_flags].data
+            else:
+                flag_indx = np.array([-1], dtype=np.int32)
+                flag_data = np.zeros((1, 1), dtype=np.uint8)
 
             if self.shared_flags is not None:
-                shared_flgs = ob.view[self.view].shared[self.shared_flags]
+                shared_flag_data = ob.shared[self.shared_flags].data
             else:
-                shared_flgs = [None for x in wts]
-            if self.det_flags is not None:
-                flgs = ob.view[self.view].detdata[self.det_flags]
+                shared_flag_data = np.zeros(1, dtype=np.uint8)
+
+            if self.use_python:
+                self._py_build_noise_weighted(
+                    zmap,
+                    pix_indx,
+                    ob.detdata[self.pixels].data,
+                    weight_indx,
+                    ob.detdata[self.weights].data.reshape(
+                        (n_weight_dets, ob.n_local_samples, -1)
+                    ),
+                    data_indx,
+                    ob.detdata[self.det_data].data,
+                    flag_indx,
+                    flag_data,
+                    self.det_flag_mask,
+                    ob.intervals[self.view].data,
+                    shared_flag_data,
+                    self.shared_flag_mask,
+                    detweights,
+                )
             else:
-                flgs = [None for x in wts]
+                build_noise_weighted(
+                    zmap.distribution.global_submap_to_local.array(),
+                    zmap.data.reshape(
+                        (zmap.distribution.n_local_submap, -1, weight_nnz)
+                    ),
+                    pix_indx,
+                    ob.detdata[self.pixels].data,
+                    weight_indx,
+                    ob.detdata[self.weights].data.reshape(
+                        (n_weight_dets, ob.n_local_samples, -1)
+                    ),
+                    data_indx,
+                    ob.detdata[self.det_data].data,
+                    flag_indx,
+                    flag_data,
+                    detweights,
+                    self.det_flag_mask,
+                    ob.intervals[self.view].data,
+                    shared_flag_data,
+                    self.shared_flag_mask,
+                    use_accel,
+                )
 
-            # Process every data view
-            for pview, wview, dview, fview, shared_fview in zip(
-                pix, wts, ddat, flgs, shared_flgs
-            ):
-                for det in dets:
-                    # Data for this detector
-                    ddata = dview[det]
-
-                    # We require that the pointing matrix has the same number of
-                    # non-zero elements for every detector and every observation.
-                    # We check that here.
-
-                    check_nnz = None
-                    if len(wview.detector_shape) == 1:
-                        check_nnz = 1
-                    else:
-                        check_nnz = wview.detector_shape[1]
-                    if check_nnz != weight_nnz:
-                        msg = (
-                            f"observation {ob.name}, detector {det}, pointing "
-                            f"weights {self.weights} has inconsistent number of values"
-                        )
-                        raise RuntimeError(msg)
-
-                    # Get local submap and pixels
-                    local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
-
-                    # Get the detector weight from the noise model.
-                    detweight = noise.detector_weight(det)
-
-                    # Samples with telescope pointing problems are already flagged in
-                    # the pointing operators by setting the pixel numbers to a negative
-                    # value.  Here we optionally apply detector flags to the local
-                    # pixel numbers to flag more samples.
-
-                    # Apply the flags if needed
-                    if self.det_flags is not None:
-                        local_pix[fview[det] & self.det_flag_mask != 0] = -1
-                    if self.shared_flags is not None:
-                        local_pix[shared_fview & self.shared_flag_mask != 0] = -1
-
-                    # Accumulate
-                    cov_accum_zmap(
-                        dist.n_local_submap,
-                        dist.n_pix_submap,
-                        zmap.n_value,
-                        local_sm.astype(np.int64),
-                        local_pix.astype(np.int64),
-                        wview[det].reshape(-1),
-                        detweight,
-                        ddata,
-                        zmap.raw,
-                    )
         return
 
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_acc=False, **kwargs):
         if self.zmap in data:
             # We have called exec() at least once
+            if use_acc:
+                log = Logger.get()
+                log.verbose_rank(
+                    f"Operator {self.name} finalize calling zmap update self",
+                    comm=data.comm.comm_group,
+                )
+                data[self.zmap].accel_update_host()
             if self.sync_type == "alltoallv":
                 data[self.zmap].sync_alltoallv()
             else:
                 data[self.zmap].sync_allreduce()
+            if use_acc:
+                log = Logger.get()
+                log.verbose_rank(
+                    f"Operator {self.name} finalize calling zmap update device",
+                    comm=data.comm.comm_group,
+                )
+                data[self.zmap].accel_update_device()
         return
 
     def _requires(self):
@@ -720,6 +751,59 @@ class BuildNoiseWeighted(Operator):
             "global": [self.zmap],
         }
         return prov
+
+    def _supports_accel(self):
+        return True
+
+    def _py_build_noise_weighted(
+        self,
+        zmap,
+        pixel_indx,
+        pixel_data,
+        weight_indx,
+        weight_data,
+        det_indx,
+        det_data,
+        flag_indx,
+        flag_data,
+        flag_mask,
+        intr_data,
+        shared_flags,
+        shared_mask,
+        det_scale,
+    ):
+        """Internal python implementation for comparison tests."""
+        global2local = zmap.distribution.global_submap_to_local.array()
+        npix_submap = zmap.distribution.n_pix_submap
+        nnz = zmap.n_value
+        for idet in range(len(det_indx)):
+            didx = det_indx[idet]
+            pidx = pixel_indx[idet]
+            widx = weight_indx[idet]
+            fidx = flag_indx[idet]
+            for vw in intr_data:
+                samples = slice(vw.first, vw.last + 1, 1)
+                good = np.logical_and(
+                    ((flag_data[fidx][samples] & flag_mask) == 0),
+                    ((shared_flags[samples] & shared_mask) == 0),
+                )
+                pixel_buffer = pixel_data[pidx][samples]
+                det_buffer = det_data[didx][samples]
+                weight_buffer = weight_data[widx][samples]
+                global_submap = pixel_buffer[good] // npix_submap
+                submap_pix = pixel_buffer[good] - global_submap * npix_submap
+                local_submap = np.array(
+                    [global2local[x] for x in global_submap], dtype=np.int64
+                )
+                tempdata = np.multiply(
+                    weight_buffer[good],
+                    np.multiply(det_scale[idet], det_buffer[good])[:, np.newaxis],
+                )
+                np.add.at(
+                    zmap.data,
+                    (local_submap, submap_pix),
+                    tempdata,
+                )
 
 
 @trait_docs
@@ -943,6 +1027,8 @@ class CovarianceAndHits(Operator):
         ]
 
         pipe_out = accum.apply(data, detectors=detectors)
+        # print("cov and hits:  hits = ", data[self.hits].data)
+        # print("cov and hits:  cov = ", data[self.covariance].data)
 
         # Optionally, store the inverse covariance
         if self.inverse_covariance is not None:

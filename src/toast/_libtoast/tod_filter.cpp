@@ -40,8 +40,8 @@ void sum_detectors(py::array_t <int64_t,
         for (size_t idet = 0; idet < ndet; ++idet) {
             int64_t row = fast_detectors(idet);
             for (size_t sample = sample_start; sample < sample_stop; ++sample) {
-                if (fast_shared_flags(sample) & shared_flag_mask != 0) continue;
-                if (fast_det_flags(row, sample) & det_flag_mask != 0) continue;
+                if ((fast_shared_flags(sample) & shared_flag_mask) != 0) continue;
+                if ((fast_det_flags(row, sample) & det_flag_mask) != 0) continue;
                 fast_sum_data(sample) += fast_det_data(row, sample);
                 fast_hits(sample)++;
             }

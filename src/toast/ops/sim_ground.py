@@ -16,7 +16,7 @@ from ..coordinates import azel_to_radec
 from ..dist import distribute_discrete, distribute_uniform
 from ..healpix import ang2vec
 from ..instrument import Telescope
-from ..intervals import Interval, IntervalList, regular_intervals
+from ..intervals import IntervalList, regular_intervals
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
 from ..observation import default_values as defaults

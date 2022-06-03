@@ -6,6 +6,7 @@ from collections import OrderedDict
 
 import traitlets
 
+from ..accelerator import use_accel_jax, use_accel_omp
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Int, List, Unicode, trait_docs
@@ -72,10 +73,65 @@ class Pipeline(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
+
+        # By default, if the calling code passed use_accel=True, then we assume the
+        # data staging is being handled at a higher level.
+        self._staged_accel = False
+
+        if not use_accel:
+            # The calling code determined that we do not have all the data present to
+            # use the accelerator.  HOWEVER, if our operators support it, we can stage
+            # the data to and from the device.
+            if detectors is None:
+                comp_dets = set(data.all_local_detectors(selection=None))
+            else:
+                comp_dets = set(detectors)
+            if (use_accel_omp or use_accel_jax) and self.supports_accel():
+                # All our operators support it.
+                msg = "Pipeline operators {}".format(
+                    ", ".join([x.name for x in self.operators])
+                )
+                msg += " all support accelerators, data to be staged: "
+                msg += f"{self.requires()}"
+                log.verbose_rank(msg, comm=data.comm.comm_world)
+
+                interm = self._get_intermediate()
+                log.verbose(f"intermediate = {interm}")
+                for ob in data.obs:
+                    for obj in interm["detdata"]:
+                        if obj in ob.detdata and not ob.detdata.accel_exists(obj):
+                            # The data exists on the host from a previous call, but is
+                            # not on the device.  Delete the host copy so that it will
+                            # be re-created consistently.
+                            msg = f"Pipeline intermediate detdata '{obj}' in "
+                            msg += f"observation '{ob.name}' exists on "
+                            msg += f"the host but not the device.  Deleting."
+                            log.verbose_rank(msg, comm=data.comm.comm_group)
+                            del ob.detdata[obj]
+                    for obj in interm["shared"]:
+                        if obj in ob.shared and not ob.shared.accel_exists(obj):
+                            msg = f"Pipeline intermediate shared data '{obj}' in "
+                            msg += f"observation '{ob.name}' exists on "
+                            msg += f"the host but not the device.  Deleting."
+                            log.verbose_rank(msg, comm=data.comm.comm_group)
+                            del ob.shared[obj]
+                    for obj in interm["intervals"]:
+                        if obj in ob.intervals and not ob.intervals.accel_exists(obj):
+                            msg = f"Pipeline intermediate intervals '{obj}' in "
+                            msg += f"observation '{ob.name}' exists on "
+                            msg += f"the host but not the device.  Deleting."
+                            log.verbose_rank(msg, comm=data.comm.comm_group)
+                            del ob.intervals[obj]
+
+                data.accel_create(self.requires())
+                data.accel_update_device(self.requires())
+
+                use_accel = True
+                self._staged_accel = True
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -89,7 +145,7 @@ class Pipeline(Operator):
                     pstr, op.name
                 )
                 log.verbose(msg)
-                op.exec(data, detectors=None)
+                op.exec(data, detectors=None, use_accel=use_accel)
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
             all_local_dets = data.all_local_detectors(selection=detectors)
@@ -102,7 +158,7 @@ class Pipeline(Operator):
                         pstr, op.name
                     )
                     log.verbose(msg)
-                    op.exec(data, detectors=[det])
+                    op.exec(data, detectors=[det], use_accel=use_accel)
         else:
             # We have explicit detector sets
             det_check = set(detectors)
@@ -123,22 +179,36 @@ class Pipeline(Operator):
                         pstr, op.name
                     )
                     log.verbose(msg)
-                    op.exec(data, detectors=selected_set)
+                    op.exec(data, detectors=selected_set, use_accel=use_accel)
 
         return
 
     @function_timer
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_accel=False, **kwargs):
         log = Logger.get()
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
+
+        # FIXME:  We need to clarify in documentation that if using the
+        # accelerator in _finalize() to produce output products, these
+        # outputs should remain on the device so that they can be copied
+        # out at the end automatically.
+
+        if not use_accel and self._staged_accel:
+            use_accel = True
 
         if self.operators is not None:
             for op in self.operators:
                 msg = f"{pstr} Pipeline calling operator '{op.name}' finalize()"
                 log.verbose(msg)
-                result.append(op.finalize(data))
+                result.append(op.finalize(data, use_accel=use_accel))
 
+        # Copy out from accelerator if we did the copy in.
+        if self._staged_accel:
+            prov = self.provides()
+            msg = f"{pstr} Pipeline copying out accel data products: {prov}"
+            log.verbose(msg)
+            data.accel_update_host(self.provides())
         return result
 
     def _requires(self):
@@ -193,9 +263,9 @@ class Pipeline(Operator):
             interm[k] = list(interm[k])
         return interm
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         # This is a logical AND of our operators
         for op in self.operators:
-            if not op.supports_acc():
+            if not op.supports_accel():
                 return False
         return True

@@ -101,9 +101,7 @@ class MapmakerSolveTest(MPITestCase):
         rhs_calc.apply(data)
 
         # Get the output binned map used by the RHS operator.
-        rhs_binned = data[binner.binned]
-
-        bd = data[binner.binned].data
+        rhs_binned = data[binner.binned].duplicate()
 
         # Manual check.  This applies the same operators as the RHS operator, but
         # checks things along the way.  And these lower-level operators are unit
@@ -115,10 +113,9 @@ class MapmakerSolveTest(MPITestCase):
         binner.apply(data)
 
         check_binned = data[binner.binned]
-        bd = data[binner.binned].data
 
         # Verify that the binned map elements agree
-        np.testing.assert_equal(rhs_binned.raw.array(), check_binned.raw.array())
+        np.testing.assert_allclose(rhs_binned.raw.array(), check_binned.raw.array())
 
         # Scan the binned map and subtract from the original detector data.
         pixels.apply(data)
@@ -147,7 +144,7 @@ class MapmakerSolveTest(MPITestCase):
         tmatrix.apply(data)
 
         # Verify that the output amplitudes agree
-        np.testing.assert_equal(
+        np.testing.assert_allclose(
             data["RHS"][tmpl.name].local, data["check_RHS"][tmpl.name].local
         )
 
@@ -207,7 +204,6 @@ class MapmakerSolveTest(MPITestCase):
         )
         weights = ops.StokesWeights(
             mode="I",
-            hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
 
@@ -262,7 +258,7 @@ class MapmakerSolveTest(MPITestCase):
         lhs_calc.apply(data)
 
         # Verify that the output amplitudes agree
-        np.testing.assert_equal(
+        np.testing.assert_allclose(
             data[out_amps][tmpl.name].local,
             data["amplitudes_check"][tmpl.name].local,
         )

@@ -6,6 +6,17 @@ from collections.abc import MutableMapping
 
 import numpy as np
 
+from ..accelerator import (
+    AcceleratorObject,
+    accel_data_create,
+    accel_data_delete,
+    accel_data_present,
+    accel_data_update_device,
+    accel_data_update_host,
+    accel_enabled,
+    use_accel_jax,
+    use_accel_omp,
+)
 from ..mpi import MPI
 from ..utils import (
     AlignedF32,
@@ -16,8 +27,12 @@ from ..utils import (
     dtype_to_aligned,
 )
 
+if use_accel_jax:
+    import jax
+    import jax.numpy as jnp
 
-class Amplitudes(object):
+
+class Amplitudes(AcceleratorObject):
     """Class for distributed template amplitudes.
 
     In the general case, template amplitudes exist as sparse, non-unique values across
@@ -135,6 +150,7 @@ class Amplitudes(object):
                 self._global_last = self._local_indices[-1]
         self._raw = self._storage_class.zeros(self._n_local)
         self.local = self._raw.array()
+        self.local_jax = None
 
         # Support flagging of template amplitudes.  This can be used to flag some
         # amplitudes if too many timestream samples contributing to the amplitude value
@@ -143,6 +159,8 @@ class Amplitudes(object):
         # a bit of memory and use a whole byte per amplitude.
         self._raw_flags = AlignedU8.zeros(self._n_local)
         self.local_flags = self._raw_flags.array()
+        self.local_flags_jax = None
+        super().__init__()
 
     def clear(self):
         """Delete the underlying memory.
@@ -155,6 +173,8 @@ class Amplitudes(object):
         if hasattr(self, "local"):
             del self.local
         if hasattr(self, "_raw"):
+            if self.accel_exists():
+                self.accel_delete()
             self._raw.clear()
             del self._raw
         if hasattr(self, "local_flags"):
@@ -251,6 +271,9 @@ class Amplitudes(object):
         )
         ret.local[:] = self.local
         ret.local_flags[:] = self.local_flags
+        if self.accel_exists():
+            ret.accel_create()
+            ret.accel_update_device()
         return ret
 
     @property
@@ -633,6 +656,52 @@ class Amplitudes(object):
 
         return result
 
+    def _accel_exists(self):
+        if use_accel_omp:
+            return accel_data_present(self._raw) and accel_data_present(self._raw_flags)
+        elif use_accel_jax:
+            return accel_data_present(self.local_jax) and accel_data_present(
+                self.local_flags_jax
+            )
+        else:
+            return False
+
+    def _accel_create(self):
+        if use_accel_omp:
+            accel_data_create(self._raw)
+            accel_data_create(self._raw_flags)
+        elif use_accel_jax:
+            accel_data_create(self.local_jax)
+            accel_data_create(self.local_flags_jax)
+
+    def _accel_update_device(self):
+        if use_accel_omp:
+            _ = accel_data_update_device(self._raw)
+            _ = accel_data_update_device(self._raw_flags)
+        elif use_accel_jax:
+            self.local_jax = accel_data_update_device(self.local)
+            self.local_flags_jax = accel_data_update_device(self.local_flags)
+
+    def _accel_update_host(self):
+        if use_accel_omp:
+            _ = accel_data_update_host(self._raw)
+            _ = accel_data_update_host(self._raw_flags)
+        elif use_accel_jax:
+            self.local[:] = accel_data_update_host(self.local_jax)
+            self.local_flags[:] = accel_data_update_host(self.local_flags_jax)
+            self.local_jax = None
+            self.local_flags_jax = None
+
+    def _accel_delete(self):
+        if use_accel_omp:
+            accel_data_delete(self._raw)
+            accel_data_delete(self._raw_flags)
+        elif use_accel_jax:
+            del self.local_jax
+            del self.local_flags_jax
+            self.local_jax = None
+            self.local_flags_jax = None
+
 
 class AmplitudesMap(MutableMapping):
     """Helper class to provide arithmetic operations on a collection of Amplitudes.
@@ -801,3 +870,113 @@ class AmplitudesMap(MutableMapping):
         for k, v in self._internal.items():
             result += v.dot(other[k])
         return result
+
+    def accel_exists(self):
+        """Check if the amplitude data exists on the accelerator.
+
+        Returns:
+            (bool):  True if the data is present.
+
+        """
+        if not accel_enabled():
+            return False
+        result = 0
+        for k, v in self._internal.items():
+            if v.accel_exists():
+                result += 1
+        if result == 0:
+            return False
+        elif result != len(self._internal):
+            log = Logger.get()
+            msg = f"Only some of the Amplitudes exist on device"
+            log.error(msg)
+            raise RuntimeError(msg)
+        return True
+
+    def accel_in_use(self):
+        """Check if the device data copy is the one currently in use.
+
+        Returns:
+            (bool):  True if the accelerator device copy is being used.
+
+        """
+        if not accel_enabled():
+            return False
+        result = 0
+        for k, v in self._internal.items():
+            if v.accel_in_use():
+                result += 1
+        if result == 0:
+            return False
+        elif result != len(self._internal):
+            log = Logger.get()
+            msg = f"Only some of the Amplitudes are in use on device"
+            log.error(msg)
+            raise RuntimeError(msg)
+        return True
+
+    def accel_used(self, state):
+        """Set the in-use state of the device data copy.
+
+        Setting the state to `True` is only possible if the data exists
+        on the device.
+
+        Args:
+            state (bool):  True if the device copy is in use, else False.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        for k, v in self._internal.items():
+            v.accel_used(state)
+
+    def accel_create(self):
+        """Create the amplitude data on the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        for k, v in self._internal.items():
+            v.accel_create()
+
+    def accel_update_device(self):
+        """Copy the amplitude data to the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        for k, v in self._internal.items():
+            v.accel_update_device()
+
+    def accel_update_host(self):
+        """Copy the amplitude data from the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        for k, v in self._internal.items():
+            v.accel_update_host()
+
+    def accel_delete(self, key):
+        """Delete the amplitude data from the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        for k, v in self._internal.items():
+            v.accel_delete()

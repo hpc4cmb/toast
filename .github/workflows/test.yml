@@ -39,11 +39,11 @@ jobs:
       - name: Pull Dependency Image
         run: docker pull hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest
 
-      - name: Compile
+      - name: Install
         run: |
           docker run -v "$(pwd)":/home/toast --name="test_py${{ matrix.pyshort }}" \
             hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest \
-            /home/toast/platforms/install_test_runner.sh
+            /home/toast/platforms/install_test_runner_linux.sh
           docker commit -m "test runner" test_py${{ matrix.pyshort }} \
             test_runner:py${{ matrix.pyshort }}
 
@@ -52,12 +52,14 @@ jobs:
 
       - name: Run Serial Tests
         run: |
-          docker run -e MPI_DISABLE=1 test_runner:py${{ matrix.pyshort }} \
+          docker run -e MPI_DISABLE=1 -e OMP_NUM_THREADS=2 \
+            test_runner:py${{ matrix.pyshort }} \
             python -c 'import toast.tests; toast.tests.run()'
 
       - name: Run MPI Tests
         run: |
-          docker run test_runner:py${{ matrix.pyshort }} \
+          docker run -e OMP_NUM_THREADS=2 \
+            test_runner:py${{ matrix.pyshort }} \
             mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
 
   macos-clang:
@@ -89,31 +91,20 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install OS Dependencies
+      - name: Install
         run: |
-          brew update
-          brew install fftw
-
-      - name: Install Python Dependencies
-        run: |
-          python3 -m pip install -r wheels/build_requirements.txt
-          python3 -m pip install ducc0
-
-      - name: Install TOAST
-        run: |
-          export TOAST_BUILD_CMAKE_C_COMPILER=clang
-          export TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
-          export TOAST_BUILD_BLA_VENDOR='Apple'
-          export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
-          python3 -m pip install .
+          mkdir build
+          cd build
+          ../platforms/install_test_runner_macos.sh
 
       - name: Run Serial Tests
         run: |
-          export OMP_NUM_THREADS=2
+          export OMP_NUM_THREADS=1
+          export OPENBLAS_NUM_THREADS=1
           python3 -c 'import toast.tests; toast.tests.run()'
 
   # macos-gcc:
-  #   name: MacOS (macports gcc) with Python-${{ matrix.python }}
+  #   name: MacOS (homebrew gcc) with Python-${{ matrix.python }}
   #   runs-on: macos-latest
   #   strategy:
   #     # Ensure that a test continues even if another fails.  Useful for
@@ -121,12 +112,12 @@ jobs:
   #     fail-fast: false
   #     matrix:
   #       include:
-  #         - python: "3.7"
-  #           pyshort: "37"
+  #         # - python: "3.7"
+  #         #   pyshort: "37"
   #         # - python: "3.8"
   #         #   pyshort: "38"
-  #         # - python: "3.9"
-  #         #   pyshort: "39"
+  #         - python: "3.9"
+  #           pyshort: "39"
   #         # - python: "3.10"
   #         #   pyshort: "310"
   #   steps:
@@ -134,34 +125,36 @@ jobs:
   #       uses: styfle/cancel-workflow-action@0.9.1
   #       with:
   #         access_token: ${{ github.token }}
-
+  #
   #     - name: Checkout
   #       uses: actions/checkout@v2
-
+  #
   #     - uses: actions/setup-python@v2
   #       name: Install Python
   #       with:
   #         python-version: ${{ matrix.python }}
-
+  #
   #     - name: Install OS Dependencies
   #       run: |
   #         brew update
-  #         brew install fftw suite-sparse gcc
-
+  #         brew install openblas fftw suite-sparse gcc
+  #
   #     - name: Install Python Dependencies
   #       run: |
-  #         CC="gcc-11" CFLAGS="-O2 -fPIC" \
+  #         CC="gcc-11" CXX="g++-11" CFLAGS="-O2 -fPIC" CXXFLAGS="-O2 -fPIC -std=c++11" \
   #         python3 -m pip install -r wheels/build_requirements.txt
   #         python3 -m pip install ducc0
-
+  #
   #     - name: Install TOAST
   #       run: |
   #         export TOAST_BUILD_CMAKE_C_COMPILER=gcc-11
   #         export TOAST_BUILD_CMAKE_CXX_COMPILER=g++-11
   #         export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC"
   #         export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11"
-  #         python3 -m pip install .
-
+  #         export TOAST_BUILD_BLAS_LIBRARIES="-L/usr/local/opt/openblas/lib -lopenblas"
+  #         export TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
+  #         python3 -m pip -vvv install .
+  #
   #     - name: Run Serial Tests
   #       run: |
   #         export OMP_NUM_THREADS=2
@@ -169,7 +162,6 @@ jobs:
   #         python3 -m pip list
   #         python3 -c 'import numpy; print(numpy.__file__)'
   #         python3 -c 'import toast; print(toast.__file__)'
-  #         otool -L /Users/runner/hostedtoolcache/Python/3.7.12/x64/lib/python3.7/site-packages/toast/_libtoast.cpython*
   #         python3 -c 'import toast'
   #         python3 -c 'import toast; print(toast.__file__)'
   #         python3 -c 'import toast.tests; toast.tests.run()'

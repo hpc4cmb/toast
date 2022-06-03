@@ -176,7 +176,6 @@ class MapmakerBinningTest(MPITestCase):
 
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            det_flags=None,
             covariance=cov_and_hits.covariance,
             det_data=sim_noise.det_data,
             pixel_pointing=pixels,
@@ -220,7 +219,6 @@ class MapmakerBinningTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",

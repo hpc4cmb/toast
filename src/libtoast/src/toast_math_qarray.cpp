@@ -1281,7 +1281,6 @@ void toast::qa_from_position(size_t n, double const * theta,
             size_t qf = 4 * i;
             double qR[4];
             double qD[4];
-            double qtemp[4];
 
             // phi rotation around z-axis
 
