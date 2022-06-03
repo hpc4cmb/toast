@@ -837,7 +837,8 @@ class SolveAmplitudes(Operator):
 
         self.template_matrix.det_flags = save_tmpl_flags
         self.template_matrix.det_flag_mask = save_tmpl_mask
-        self.template_matrix.reset_templates()
+        if not self.mc_mode:
+            self.template_matrix.reset_templates()
 
         memreport.prefix = "End of amplitude solve"
         memreport.apply(data)
