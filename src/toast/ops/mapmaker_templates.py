@@ -154,6 +154,10 @@ class TemplateMatrix(Operator):
                 n_enabled_templates += 1
         return n_enabled_templates
 
+    def reset_templates(self):
+        """Mark templates to be re-initialized on next call to exec()."""
+        self._initialized = False
+
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
@@ -456,6 +460,9 @@ class SolveAmplitudes(Operator):
         save_shared_flag_mask = self.binning.shared_flag_mask
         save_binned = self.binning.binned
         save_covariance = self.binning.covariance
+
+        save_tmpl_flags = self.template_matrix.det_flags
+        save_tmpl_mask = self.template_matrix.det_flag_mask
 
         # Output data products, prefixed with the name of the operator and optionally
         # the MC index.
@@ -827,6 +834,11 @@ class SolveAmplitudes(Operator):
         self.binning.shared_flag_mask = save_shared_flag_mask
         self.binning.binned = save_binned
         self.binning.covariance = save_covariance
+
+        self.template_matrix.det_flags = save_tmpl_flags
+        self.template_matrix.det_flag_mask = save_tmpl_mask
+        if not self.mc_mode:
+            self.template_matrix.reset_templates()
 
         memreport.prefix = "End of amplitude solve"
         memreport.apply(data)

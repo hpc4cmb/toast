@@ -242,6 +242,8 @@ class Fourier2D(Template):
                 else:
                     corr[ihalf + 1 :] = corr[ihalf - 1 :: -1]
                 fcorr = np.fft.rfft(corr)
+                too_small = fcorr < (1.0e-6 * self.correlation_amplitude)
+                fcorr[too_small] = 1.0e-6 * self.correlation_amplitude
                 invcorr = np.fft.irfft(1 / fcorr)
                 self._filters[iob].append(invcorr)
 
@@ -377,4 +379,5 @@ class Fourier2D(Template):
                     )
 
     def _apply_precond(self, amplitudes_in, amplitudes_out):
-        amplitudes_out[:] = amplitudes_in * self._norms
+        amplitudes_out.local[:] = amplitudes_in.local
+        amplitudes_out.local *= self._norms
