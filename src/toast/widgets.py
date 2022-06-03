@@ -54,7 +54,7 @@ class ObservationWidget(object):
         self, title, data, key_name, val_name, height, width_percent=100
     ):
         """Create a 2-column table of values from a dictionary."""
-        keys = list(sorted(data.keys()))
+        keys = list(data.keys())
         keydata = [str(data[x]) for x in keys]
         w_data = go.FigureWidget(
             data=[
@@ -367,11 +367,12 @@ class ObservationWidget(object):
         info = [header]
 
         tele = self.obs.telescope
+        fp = tele.focalplane
         tele_info = {
             "Name": tele.name,
             "UID": tele.uid,
             "Site": tele.site.name,
-            "Focalplane": "fake",
+            "Focalplane": f"{len(fp.detector_data)} detectors at {fp.sample_rate:0.1f}",
         }
         w_tele = self._key_value_table(
             "Telescope", tele_info, "Property", "Value", 300, width_percent=100
