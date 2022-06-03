@@ -595,9 +595,9 @@ def create_fake_beam_alm(
 def fake_flags(
     data,
     shared_name=defaults.shared_flags,
-    shared_val=1,
+    shared_val=defaults.shared_mask_invalid,
     det_name=defaults.det_flags,
-    det_val=1,
+    det_val=defaults.det_mask_invalid,
 ):
     """Create fake flags.
 
@@ -707,9 +707,6 @@ def create_ground_data(
         detset_key="pixel",
         elnod_start=el_nod,
         elnods=el_nods,
-        det_flags="flags",
-        det_data="signal",
-        shared_flags="flags",
         scan_accel_az=3 * u.degree / u.second**2,
     )
     sim_ground.apply(data)

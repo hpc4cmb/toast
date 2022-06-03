@@ -5,7 +5,9 @@
 import numpy as np
 import traitlets
 from astropy import units as u
+from scipy import optimize
 
+from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
@@ -44,6 +46,128 @@ class DefaultNoiseModel(Operator):
             ob[self.noise_model] = ob.telescope.focalplane.noise
 
         return
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        return dict()
+
+    def _provides(self):
+        prov = {"meta": [self.noise_model]}
+        return prov
+
+
+@trait_docs
+class FitNoiseModel(Operator):
+    """Perform a least squares fit to an existing noise model.
+
+    This takes an existing estimated noise model and attempts to fit each
+    spectrum to 1/f parameters.
+
+    If the output model is not specified, then the input is modified in place.
+
+    """
+
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    noise_model = Unicode(
+        "noise_model", help="The observation key containing the input noise model"
+    )
+
+    out_model = Unicode(
+        None, allow_none=True, help="Create a new noise model with this name"
+    )
+
+    f_min = Quantity(1.0e-5 * u.Hz, help="Low-frequency rolloff of model in the fit")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
+
+        if detectors is not None:
+            msg = "FitNoiseModel will fit all detectors- ignoring input detector list"
+            log.warning(msg)
+
+        for ob in data.obs:
+            in_model = ob[self.noise_model]
+            # We will use the best fit parameters from each detector as
+            # the starting guess for the next detector.
+            params = None
+            nse_freqs = dict()
+            nse_psds = dict()
+            nse_indx = dict()
+            for det in ob.local_detectors:
+                freqs = in_model.freq(det)
+                in_psd = in_model.psd(det)
+                fitted, result = self._fit_psd(freqs, in_psd, params)
+                if result.success:
+                    params = result.x
+                nse_freqs[det] = freqs
+                nse_psds[det] = fitted
+                nse_indx[det] = in_model.index(det)
+            new_model = Noise(
+                detectors=ob.local_detectors,
+                freqs=nse_freqs,
+                psds=nse_psds,
+                indices=nse_indx,
+            )
+
+            if self.out_model is None or self.noise_model == self.out_model:
+                # We are replacing the input
+                del ob[self.noise_model]
+                ob[self.noise_model] = new_model
+            else:
+                # We are storing this in a new key
+                ob[self.out_model] = new_model
+        return
+
+    def _evaluate_model(self, freqs, fmin, net, fknee, alpha):
+        ktemp = np.power(fknee, alpha)
+        mtemp = np.power(fmin, alpha)
+        temp = np.power(freqs, alpha)
+        psd = (temp + ktemp) / (temp + mtemp)
+        psd *= net**2
+        return psd
+
+    def _fit_fun(self, x, *args, **kwargs):
+        net = x[0]
+        fknee = x[1]
+        alpha = x[2]
+        freqs = kwargs["freqs"]
+        data = kwargs["data"]
+        fmin = kwargs["fmin"]
+        current = self._evaluate_model(freqs, fmin, net, fknee, alpha)
+        resid = current - data
+        return resid
+
+    def _fit_psd(self, freqs, data, guess=None):
+        psd_unit = data.unit
+        raw_freqs = freqs.to_value(u.Hz)
+        raw_data = data.value
+        raw_fmin = self.f_min.to_value(u.Hz)
+        x_0 = guess
+        if x_0 is None:
+            x_0 = np.array([1.0, 0.1, 1.0])
+        result = optimize.least_squares(
+            self._fit_fun,
+            x_0,
+            kwargs={"freqs": raw_freqs, "data": raw_data, "fmin": raw_fmin},
+        )
+        fit_data = data
+        if result.success:
+            fit_data = (
+                self._evaluate_model(
+                    raw_freqs, raw_fmin, result.x[0], result.x[1], result.x[2]
+                )
+                * psd_unit
+            )
+        return fit_data, result
 
     def _finalize(self, data, **kwargs):
         return

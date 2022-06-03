@@ -14,7 +14,8 @@ from ..instrument_sim import fake_hexagon_focalplane
 from ..io import H5File
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
-from ._helpers import create_outdir
+from .. import ops as ops
+from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
@@ -171,3 +172,25 @@ class InstrumentTest(MPITestCase):
 
         for d in fp.detectors:
             wt = model.detector_weight(d)
+
+    def test_noise_fit(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create a noise model from focalplane detector properties
+        noise_model = ops.DefaultNoiseModel()
+        noise_model.apply(data)
+
+        # Fit the noise model
+        noise_fitter = ops.FitNoiseModel(
+            noise_model=noise_model.noise_model, out_model="fit_noise"
+        )
+        noise_fitter.apply(data)
+
+        for ob in data.obs:
+            in_model = ob[noise_model.noise_model]
+            out_model = ob[noise_fitter.out_model]
+            for det in ob.local_detectors:
+                in_psd = in_model.psd(det)
+                fit_psd = out_model.psd(det)
+                np.testing.assert_array_almost_equal(in_psd.value, fit_psd.value)
