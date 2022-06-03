@@ -28,6 +28,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Set symbol visibility to hidden to be consistent with pybind11
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
+# pybind11 enables IPO by default.  This can cause problems with some
+# compilers.  Remove this if we find a better workaround:
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+
 # Auxiliary files
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
