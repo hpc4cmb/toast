@@ -11,7 +11,8 @@ import traitlets
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io import write_healpix_fits, write_healpix_hdf5
+from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
+from ..pixels_io_wcs import write_wcs_fits
 from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, trait_docs
@@ -785,6 +786,15 @@ class SolveAmplitudes(Operator):
         memreport.prefix = "After solving for amplitudes"
         memreport.apply(data)
 
+        # FIXME:  This I/O technique assumes "known" types of pixel representations.
+        # Instead, we should associate read / write functions to a particular pixel
+        # class.
+
+        is_pix_wcs = hasattr(self.binning.pixel_pointing, "wcs")
+        is_hpix_nest = None
+        if not is_pix_wcs:
+            is_hpix_nest = self.binning.pixel_pointing.nest
+
         write_del = [
             self.solver_hits_name,
             self.solver_cov_name,
@@ -794,25 +804,31 @@ class SolveAmplitudes(Operator):
         ]
         for prod_key in write_del:
             if self.write_solver_products:
-                if self.write_hdf5:
-                    # Non-standard HDF5 output
-                    fname = os.path.join(self.output_dir, "{}.h5".format(prod_key))
-                    write_healpix_hdf5(
-                        data[prod_key],
-                        fname,
-                        nest=self.binning.pixel_pointing.nest,
-                        single_precision=True,
-                        force_serial=self.write_hdf5_serial,
-                    )
-                else:
-                    # Standard FITS output
+                if is_pix_wcs:
                     fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
-                    write_healpix_fits(
-                        data[prod_key],
-                        fname,
-                        nest=self.binning.pixel_pointing.nest,
-                        report_memory=self.report_memory,
-                    )
+                    write_wcs_fits(data[prod_key], fname)
+                else:
+                    if self.write_hdf5:
+                        # Non-standard HDF5 output
+                        fname = os.path.join(self.output_dir, "{}.h5".format(prod_key))
+                        write_healpix_hdf5(
+                            data[prod_key],
+                            fname,
+                            nest=is_hpix_nest,
+                            single_precision=True,
+                            force_serial=self.write_hdf5_serial,
+                        )
+                    else:
+                        # Standard FITS output
+                        fname = os.path.join(
+                            self.output_dir, "{}.fits".format(prod_key)
+                        )
+                        write_healpix_fits(
+                            data[prod_key],
+                            fname,
+                            nest=is_hpix_nest,
+                            report_memory=self.report_memory,
+                        )
             if not self.mc_mode and not self.keep_solver_products:
                 if prod_key in data:
                     data[prod_key].clear()

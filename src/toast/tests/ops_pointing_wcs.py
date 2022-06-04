@@ -12,7 +12,6 @@ from astropy.wcs import WCS
 from .. import ops as ops
 from .. import templates
 from .. import qarray as qa
-from ..intervals import Interval, IntervalList
 from ..observation import default_values as defaults
 from ..observation import Observation
 from ..data import Data
@@ -32,6 +31,8 @@ class PointingWCSTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
+        # For debugging, change this to True
+        self.write_extra = False
 
     def check_hits(self, prefix, pixels):
         wcs = pixels.wcs
@@ -89,26 +90,29 @@ class PointingWCSTest(MPITestCase):
         )
         build_hits.apply(data)
 
-        outfile = os.path.join(self.outdir, f"{prefix}.fits")
-        write_wcs_fits(data[build_hits.hits], outfile)
+        if self.write_extra:
+            outfile = os.path.join(self.outdir, f"{prefix}.fits")
+            write_wcs_fits(data[build_hits.hits], outfile)
 
-        if toastcomm.world_rank == 0:
-            set_matplotlib_backend()
+            if toastcomm.world_rank == 0:
+                set_matplotlib_backend()
 
-            import matplotlib.pyplot as plt
+                import matplotlib.pyplot as plt
 
-            hdu = af.open(outfile)[0]
-            wcs = WCS(hdu.header)
+                hdu = af.open(outfile)[0]
+                wcs = WCS(hdu.header)
 
-            fig = plt.figure(figsize=(8, 8), dpi=100)
-            ax = fig.add_subplot(projection=wcs, slices=("x", "y", 0))
-            # plt.imshow(hdu.data, vmin=-2.e-5, vmax=2.e-4, origin='lower')
-            im = ax.imshow(np.transpose(hdu.data[0, :, :]), vmin=0, vmax=4, cmap="jet")
-            ax.grid(color="white", ls="solid")
-            ax.set_xlabel("Longitude")
-            ax.set_ylabel("Latitude")
-            plt.colorbar(im, orientation="vertical")
-            fig.savefig(os.path.join(self.outdir, f"{prefix}.pdf"), format="pdf")
+                fig = plt.figure(figsize=(8, 8), dpi=100)
+                ax = fig.add_subplot(projection=wcs, slices=("x", "y", 0))
+                # plt.imshow(hdu.data, vmin=-2.e-5, vmax=2.e-4, origin='lower')
+                im = ax.imshow(
+                    np.transpose(hdu.data[0, :, :]), vmin=0, vmax=4, cmap="jet"
+                )
+                ax.grid(color="white", ls="solid")
+                ax.set_xlabel("Longitude")
+                ax.set_ylabel("Latitude")
+                plt.colorbar(im, orientation="vertical")
+                fig.savefig(os.path.join(self.outdir, f"{prefix}.pdf"), format="pdf")
 
         np.testing.assert_array_equal(
             data[build_hits.hits].data,
@@ -244,12 +248,12 @@ class PointingWCSTest(MPITestCase):
             # Create fake polarized sky pixel values locally
             create_fake_sky(data, "pixel_dist", "fake_map")
 
-            # Write it out
-            outfile = os.path.join(self.outdir, f"mapmaking_{proj}_input.fits")
-            write_wcs_fits(data["fake_map"], outfile)
-
-            if rank == 0:
-                self.plot_maps(mapfile=outfile)
+            if self.write_extra:
+                # Write it out
+                outfile = os.path.join(self.outdir, f"mapmaking_{proj}_input.fits")
+                write_wcs_fits(data["fake_map"], outfile)
+                if rank == 0:
+                    self.plot_maps(mapfile=outfile)
 
             # Scan map into timestreams
             scanner = ops.ScanMap(
@@ -319,17 +323,18 @@ class PointingWCSTest(MPITestCase):
             )
             mapper.apply(data)
 
-            # Write outputs manually
-            for prod in ["hits", "map"]:
-                outfile = os.path.join(self.outdir, f"mapmaking_{proj}_{prod}.fits")
-                write_wcs_fits(data[f"{mapper.name}_{prod}"], outfile)
+            if self.write_extra:
+                # Write outputs manually
+                for prod in ["hits", "map"]:
+                    outfile = os.path.join(self.outdir, f"mapmaking_{proj}_{prod}.fits")
+                    write_wcs_fits(data[f"{mapper.name}_{prod}"], outfile)
 
-            if rank == 0:
-                outfile = os.path.join(self.outdir, f"mapmaking_{proj}_hits.fits")
-                self.plot_maps(hitfile=outfile)
+                if rank == 0:
+                    outfile = os.path.join(self.outdir, f"mapmaking_{proj}_hits.fits")
+                    self.plot_maps(hitfile=outfile)
 
-                outfile = os.path.join(self.outdir, f"mapmaking_{proj}_map.fits")
-                self.plot_maps(mapfile=outfile)
+                    outfile = os.path.join(self.outdir, f"mapmaking_{proj}_map.fits")
+                    self.plot_maps(mapfile=outfile)
 
     def fake_source(self, mission_start, ra_start, dec_start, times, deg_per_hour=1.0):
         deg_sec = deg_per_hour / 3600.0
@@ -494,7 +499,7 @@ class PointingWCSTest(MPITestCase):
 
             # Create source motion
             dbgdir = None
-            if proj == "CAR":
+            if proj == "CAR" and self.write_extra:
                 dbgdir = self.outdir
             self.create_source_data(
                 data, proj, resolution, defaults.det_data, dbg_dir=dbgdir
@@ -531,11 +536,12 @@ class PointingWCSTest(MPITestCase):
             # Create fake polarized sky pixel values locally
             create_fake_sky(data, "pixel_dist", "fake_map")
 
-            # Write it out
-            outfile = os.path.join(self.outdir, f"source_{proj}_input.fits")
-            write_wcs_fits(data["fake_map"], outfile)
-            if rank == 0:
-                self.plot_maps(mapfile=outfile)
+            if self.write_extra:
+                # Write it out
+                outfile = os.path.join(self.outdir, f"source_{proj}_input.fits")
+                write_wcs_fits(data["fake_map"], outfile)
+                if rank == 0:
+                    self.plot_maps(mapfile=outfile)
 
             # Scan map into timestreams
             scanner = ops.ScanMap(

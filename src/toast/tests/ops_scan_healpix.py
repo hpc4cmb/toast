@@ -77,7 +77,9 @@ class ScanHealpixTest(MPITestCase):
         for ob in data.obs:
             for det in ob.local_detectors:
                 np.testing.assert_almost_equal(
-                    ob.detdata["test"][det], ob.detdata[defaults.det_data][det]
+                    ob.detdata["test"][det],
+                    ob.detdata[defaults.det_data][det],
+                    decimal=5,
                 )
 
         del data
@@ -132,7 +134,7 @@ class ScanHealpixTest(MPITestCase):
 
         for ob in data.obs:
             for det in ob.local_detectors:
-                np.testing.assert_almost_equal(
+                np.testing.assert_equal(
                     ob.detdata["test_flags"][det], ob.detdata[defaults.det_flags][det]
                 )
 
@@ -188,8 +190,10 @@ class ScanHealpixTest(MPITestCase):
 
         for ob in data.obs:
             for det in ob.local_detectors:
-                np.testing.assert_equal(
-                    ob.detdata["test"][det], ob.detdata[defaults.det_data][det]
+                np.testing.assert_almost_equal(
+                    ob.detdata["test"][det],
+                    ob.detdata[defaults.det_data][det],
+                    decimal=5,
                 )
 
         del data
