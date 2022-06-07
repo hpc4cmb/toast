@@ -5,7 +5,7 @@
 import numpy as np
 import traitlets
 from astropy import units as u
-from scipy import optimize
+from scipy.optimize import Bounds, least_squares
 
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
@@ -101,7 +101,6 @@ class FitNoiseModel(Operator):
             params = None
             nse_freqs = dict()
             nse_psds = dict()
-            nse_indx = dict()
             for det in ob.local_detectors:
                 freqs = in_model.freq(det)
                 in_psd = in_model.psd(det)
@@ -110,9 +109,30 @@ class FitNoiseModel(Operator):
                     params = result.x
                 nse_freqs[det] = freqs
                 nse_psds[det] = fitted
-                nse_indx[det] = in_model.index(det)
+            if ob.comm.comm_group is not None:
+                all_nse_freqs = ob.comm.comm_group.gather(nse_freqs, root=0)
+                all_nse_psds = ob.comm.comm_group.gather(nse_psds, root=0)
+                nse_indx = None
+                if ob.comm.group_rank == 0:
+                    nse_freqs = dict()
+                    nse_psds = dict()
+                    for pval in all_nse_freqs:
+                        nse_freqs.update(pval)
+                    for pval in all_nse_psds:
+                        nse_psds.update(pval)
+                    nse_indx = dict()
+                    for det in in_model.detectors:
+                        nse_indx[det] = in_model.index(det)
+                nse_indx = ob.comm.comm_group.bcast(nse_indx, root=0)
+                nse_freqs = ob.comm.comm_group.bcast(nse_freqs, root=0)
+                nse_psds = ob.comm.comm_group.bcast(nse_psds, root=0)
+            else:
+                nse_indx = dict()
+                for det in in_model.detectors:
+                    nse_indx[det] = in_model.index(det)
+
             new_model = Noise(
-                detectors=ob.local_detectors,
+                detectors=in_model.detectors,
                 freqs=nse_freqs,
                 psds=nse_psds,
                 indices=nse_indx,
@@ -143,7 +163,16 @@ class FitNoiseModel(Operator):
         data = kwargs["data"]
         fmin = kwargs["fmin"]
         current = self._evaluate_model(freqs, fmin, net, fknee, alpha)
-        resid = current - data
+        # We weight the residual so that the high-frequency values specifying
+        # the white noise plateau / NET are more important.  Also the lowest
+        # estimated bin is usually garbage.  We arbitrarily choose a weighting
+        # of:
+        #
+        #  W = f_nyquist - (f_nyquist / (1 + f^2))
+        #
+        weights = np.ones_like(current) * freqs[-1]
+        weights -= freqs[-1] / (1.0 + freqs**2)
+        resid = np.multiply(weights, current - data)
         return resid
 
     def _fit_psd(self, freqs, data, guess=None):
@@ -154,7 +183,7 @@ class FitNoiseModel(Operator):
         x_0 = guess
         if x_0 is None:
             x_0 = np.array([1.0, 0.1, 1.0])
-        result = optimize.least_squares(
+        result = least_squares(
             self._fit_fun,
             x_0,
             kwargs={"freqs": raw_freqs, "data": raw_data, "fmin": raw_fmin},

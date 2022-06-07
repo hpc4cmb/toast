@@ -110,8 +110,10 @@ class NoiseEstimTest(MPITestCase):
         estim.apply(data)
 
         if data.comm.world_rank == 0:
-            import astropy.io.fits as pf
+            set_matplotlib_backend()
+
             import matplotlib.pyplot as plt
+            import astropy.io.fits as pf
 
             obs = data.obs[0]
             det = obs.local_detectors[0]
@@ -138,12 +140,14 @@ class NoiseEstimTest(MPITestCase):
             fname = os.path.join(self.outdir, "psds.png")
             fig.savefig(fname)
 
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
         del data
         return
 
     def test_noise_estim_model(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=100.0 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=100.0 * u.Hz, fknee=0.2 * u.Hz)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -189,24 +193,27 @@ class NoiseEstimTest(MPITestCase):
         def plot_compare(
             fname, true_freq, true_psd, est_freq, est_psd, fit_freq=None, fit_psd=None
         ):
+            set_matplotlib_backend()
+            import matplotlib.pyplot as plt
+
             fig = plt.figure(figsize=[12, 8])
             ax = fig.add_subplot(1, 1, 1)
             ax.loglog(
-                true_freq,
-                true_psd,
+                true_freq.to_value(u.Hz),
+                true_psd.to_value(u.K**2 * u.s),
                 color="black",
                 label="Input",
             )
             ax.loglog(
-                est_freq,
-                est_psd,
+                est_freq.to_value(u.Hz),
+                est_psd.to_value(u.K**2 * u.s),
                 color="red",
                 label="Estimated",
             )
             if fit_freq is not None:
                 ax.loglog(
-                    fit_freq,
-                    fit_psd,
+                    fit_freq.to_value(u.Hz),
+                    fit_psd.to_value(u.K**2 * u.s),
                     color="green",
                     label="Fit to 1/f Model",
                 )
@@ -218,6 +225,11 @@ class NoiseEstimTest(MPITestCase):
                 linestyle="--",
                 color="blue",
             )
+            ax.set_xlim(est_freq[0].to_value(u.Hz), est_freq[-1].to_value(u.Hz))
+            ax.set_ylim(
+                np.amin(est_psd.to_value(u.K**2 * u.s)),
+                1.1 * np.amax(est_psd.to_value(u.K**2 * u.s)),
+            )
             ax.set_xlabel("Frequency [Hz]")
             ax.set_ylabel("PSD [K$^2$ / Hz]")
             ax.legend(loc="best")
@@ -226,8 +238,6 @@ class NoiseEstimTest(MPITestCase):
 
         for ob in data.obs:
             if ob.comm.group_rank == 0:
-                import matplotlib.pyplot as plt
-
                 input_model = ob["noise_model"]
                 estim_model = ob["noise_estimate"]
                 fit_model = ob[noise_fitter.out_model]
@@ -244,6 +254,11 @@ class NoiseEstimTest(MPITestCase):
                         fit_freq=fit_model.freq(det),
                         fit_psd=fit_model.psd(det),
                     )
+            if ob.comm.comm_group is not None:
+                ob.comm.comm_group.barrier()
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
 
         # Verify that the fit NET is close to the input.
         for ob in data.obs:
@@ -257,5 +272,7 @@ class NoiseEstimTest(MPITestCase):
                     decimal=3,
                 )
 
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
         del data
         return
