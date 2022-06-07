@@ -18,6 +18,7 @@ from .. import qarray as qa
 from .._libtoast import filter_poly2D, filter_polynomial, subtract_mean, sum_detectors
 from ..intervals import interval_dtype
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
+from ..noise import Noise
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import (
@@ -122,6 +123,10 @@ class NoiseEstim(Operator):
         defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
     )
 
+    out_model = Unicode(
+        None, allow_none=True, help="Create a new noise model with this name"
+    )
+
     output_dir = Unicode(
         ".",
         help="If specified, write output data products to this directory",
@@ -212,7 +217,7 @@ class NoiseEstim(Operator):
         return
 
     @function_timer
-    def _redistribute(self, data, obs):
+    def _redistribute(self, obs):
         log = Logger.get()
         timer = Timer()
         timer.start()
@@ -236,14 +241,14 @@ class NoiseEstim(Operator):
                 intervals=dup_intervals,
             )
             log.debug_rank(
-                f"{data.comm.group:4} : Duplicated observation in",
+                f"{obs.comm.group:4} : Duplicated observation in",
                 comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
             # Redistribute this temporary observation to be distributed by samples
             temp_obs.redistribute(1, times=self.times, override_sample_sets=None)
             log.debug_rank(
-                f"{data.comm.group:4} : Redistributed observation in",
+                f"{obs.comm.group:4} : Redistributed observation in",
                 comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
@@ -255,7 +260,7 @@ class NoiseEstim(Operator):
         return temp_obs
 
     @function_timer
-    def _re_redistribute(self, data, obs, temp_obs):
+    def _re_redistribute(self, obs, temp_obs):
         log = Logger.get()
         timer = Timer()
         timer.start()
@@ -267,14 +272,14 @@ class NoiseEstim(Operator):
                 override_sample_sets=obs.dist.sample_sets,
             )
             log.debug_rank(
-                f"{data.comm.group:4} : Re-redistributed observation in",
+                f"{temp_obs.comm.group:4} : Re-redistributed observation in",
                 comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
             # Copy data to original observation
             obs.detdata[self.det_data][:] = temp_obs.detdata[self.det_data][:]
             log.debug_rank(
-                f"{data.comm.group:4} : Copied observation data in",
+                f"{temp_obs.comm.group:4} : Copied observation data in",
                 comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
@@ -289,7 +294,7 @@ class NoiseEstim(Operator):
 
         log = Logger.get()
 
-        if self.focalplane_key:
+        if self.focalplane_key is not None:
             if self.pairs is not None:
                 msg = "focalplane_key is not compatible with pairs"
                 raise RuntimeError(msg)
@@ -308,8 +313,6 @@ class NoiseEstim(Operator):
                 output=self.det_data,
             ).apply(data)
             Delete(detdata="temp_signal")
-
-        self.rank = data.comm.world_rank
 
         if self.mapfile is not None:
             if self.pol:
@@ -338,7 +341,7 @@ class NoiseEstim(Operator):
 
         for orig_obs in data.obs:
 
-            obs = self._redistribute(data, orig_obs)
+            obs = self._redistribute(orig_obs)
 
             if self.focalplane_key is not None:
                 # Pick just one detector to represent each key value
@@ -382,24 +385,17 @@ class NoiseEstim(Operator):
             times = np.array(obs.shared[self.times])
             nsample = times.size
 
-            if self.shared_flags is None:
-                shared_flags = np.zeros(times.size, dtype=bool)
-            else:
-                shared_flags = obs.shared[self.shared_flags].data
-                shared_flags = (shared_flags & self.shared_flag_mask) != 0
+            shared_flags = np.zeros(times.size, dtype=bool)
+            if self.shared_flags is not None:
+                shared_flags[:] = (
+                    obs.shared[self.shared_flags].data & self.shared_flag_mask
+                ) != 0
+
             fsample = obs.telescope.focalplane.sample_rate.to_value(u.Hz)
 
             fileroot = f"{self.name}_{obs.name}"
 
-            if self.view is None:
-                intervals = np.array(
-                    [
-                        (times[0], times[-1], 0, nsample - 1),
-                    ],
-                    dtype=interval_dtype,
-                )
-            else:
-                intervals = obs.intervals[self.view]
+            intervals = obs.intervals[self.view].data
 
             # self.highpass_signal(obs, comm, intervals)
 
@@ -415,25 +411,41 @@ class NoiseEstim(Operator):
             for ival1, ival2 in zip(intervals[:-1], intervals[1:]):
                 gap_start = ival1.last + 1
                 gap_stop = max(gap_start + gap_min, ival2.first)
+                if gap_stop >= ival2.last:
+                    msg = f"Gap from samples {ival1.last+1} to {ival2.first}"
+                    msg += " extended through next good data interval.  Use "
+                    msg += "different / no intervals or shorter lagmax."
+                    log.warning(msg)
                 gap_stop_nsum = max(gap_start + gap_min_nsum, ival2.first)
-
                 gapflags[gap_start:gap_stop] = True
                 gapflags_nsum[gap_start:gap_stop_nsum] = True
+
+            # Re-use this flag array
+            flags = np.zeros(times.size, dtype=bool)
+
+            noise_dets = list()
+            noise_freqs = dict()
+            noise_psds = dict()
 
             for det1, det2 in pairs:
                 if det1 not in det_names or det2 not in det_names:
                     # User-specified pair is invalid
                     continue
                 signal1 = obs.detdata[self.det_data][det1]
-                flags1 = obs.detdata[self.det_flags][det1]
-                flags = (flags1 & self.det_flag_mask) != 0
+
+                flags[:] = shared_flags
+                if self.det_flags is not None:
+                    flags[:] |= (
+                        obs.detdata[self.det_flags][det1] & self.det_flag_mask
+                    ) != 0
+
                 signal2 = None
-                flags2 = None
                 if det1 != det2:
                     signal2 = obs.detdata[self.det_data][det2]
-                    flags2 = obs.detdata[self.det_flags][det2]
-                    flags[(flags2 & self.det_flag_mask) != 0] = True
-                flags[shared_flags] = True
+                    if self.det_flags is not None:
+                        flags[:] |= (
+                            obs.detdata[self.det_flags][det2] & self.det_flag_mask
+                        ) != 0
 
                 if det2key is None:
                     det1_name = det1
@@ -442,7 +454,7 @@ class NoiseEstim(Operator):
                     det1_name = det2key[det1]
                     det2_name = det2key[det2]
 
-                self.process_noise_estimate(
+                nse_freqs, nse_psd = self.process_noise_estimate(
                     obs,
                     signal1,
                     signal2,
@@ -456,21 +468,41 @@ class NoiseEstim(Operator):
                     det2_name,
                     intervals,
                 )
+                if obs.comm.group_rank == 0:
+                    det_units = obs.detdata[self.det_data].units
+                    if det_units == u.dimensionless_unscaled:
+                        msg = f"Observation {obs.name}, detector data '{self.det_data}'"
+                        msg += f" has no units.  Assuming Kelvin."
+                        log.warning(msg)
+                        det_units = u.K
+                    psd_unit = det_units**2 * u.second
+                    noise_dets.append(det1)
+                    noise_freqs[det1] = nse_freqs * u.Hz
+                    noise_psds[det1] = nse_psd * psd_unit
 
-            self._re_redistribute(data, orig_obs, obs)
+            self._re_redistribute(orig_obs, obs)
+
+            if self.out_model is not None:
+                # Create a noise model
+                if data.comm.comm_group is not None:
+                    noise_dets = data.comm.comm_group.bcast(noise_dets, root=0)
+                    noise_freqs = data.comm.comm_group.bcast(noise_freqs, root=0)
+                    noise_psds = data.comm.comm_group.bcast(noise_psds, root=0)
+                orig_obs[self.out_model] = Noise(
+                    detectors=noise_dets, freqs=noise_freqs, psds=noise_psds
+                )
 
         return
 
     @function_timer
-    def highpass_signal(self, obs, comm, intervals):
+    def highpass_signal(self, obs, intervals):
         """Suppress the sub-harmonic modes in the TOD by high-pass
         filtering.
         """
         log = Logger.get()
         timer = Timer()
         timer.start()
-        if self.rank == 0:
-            log.info("High-pass-filtering signal")
+        log.debug_rank("High-pass-filtering signal", comm=obs.comm.comm_group)
         for det in obs.local_detectors:
             signal = obs.detdata[self.det_data][det]
             flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
@@ -482,8 +514,7 @@ class NoiseEstim(Operator):
                     sig, flg, self.lagmax, return_flags=False
                 )
                 sig -= trend
-        if self.rank == 0:
-            timer.report_clear("TOD high pass")
+        log.debug_rank("TOD high pass", comm=obs.comm.comm_group, timer=timer)
         return
 
     @function_timer
@@ -567,7 +598,7 @@ class NoiseEstim(Operator):
             else:
                 if np.any(binfreq != binfreq0):
                     msg = "Binned PSD frequencies change"
-                    raise Exception(msg)
+                    raise RuntimeError(msg)
 
             if self.nbin_psd is not None:
                 binpsd = np.zeros(hits.size)
@@ -609,7 +640,7 @@ class NoiseEstim(Operator):
                 i += 1
 
         if nempty > 0:
-            log.info(f"Discarded {nempty} empty or NaN psds")
+            log.debug(f"Discarded {nempty} empty or NaN psds")
 
         # Throw away outlier PSDs by comparing the PSDs in specific bins
 
@@ -654,7 +685,7 @@ class NoiseEstim(Operator):
                         del all_cov[ii]
 
             if nbad > 0:
-                log.info(f"Masked extra {nbad} psds due to outliers.")
+                log.debug(f"Masked extra {nbad} psds due to outliers.")
         return all_psds, all_times, nempty + nbad, all_cov
 
     @function_timer
@@ -718,7 +749,7 @@ class NoiseEstim(Operator):
         with open(fn_out, "wb") as fits_out:
             hdulist.writeto(fits_out, overwrite=True)
 
-        log.info(f"Detector {det1} vs. {det2} PSDs stored in {fn_out}")
+        log.debug(f"Detector {det1} vs. {det2} PSDs stored in {fn_out}")
 
         return
 
@@ -840,6 +871,7 @@ class NoiseEstim(Operator):
         det2,
         local_intervals,
     ):
+        log = Logger.get()
         # High pass filter the signal to avoid aliasing
         # self.highpass(signal1, noise_flags)
         # self.highpass(signal2, noise_flags)
@@ -849,7 +881,6 @@ class NoiseEstim(Operator):
 
         timer = Timer()
         timer.start()
-        comm = obs.comm_row
         stationary_period = self.stationary_period.to_value(u.s)
         if signal2 is None:
             result = autocov_psd(
@@ -859,7 +890,7 @@ class NoiseEstim(Operator):
                 self.lagmax,
                 stationary_period,
                 fsample,
-                comm=comm,
+                comm=obs.comm_row,
                 return_cov=self.save_cov,
             )
         else:
@@ -871,7 +902,7 @@ class NoiseEstim(Operator):
                 self.lagmax,
                 stationary_period,
                 fsample,
-                comm=comm,
+                comm=obs.comm_row,
                 return_cov=self.save_cov,
             )
         if self.save_cov:
@@ -895,11 +926,15 @@ class NoiseEstim(Operator):
                 local_intervals,
                 my_psds1,
                 my_cov1,
-                comm,
+                obs.comm_row,
             )
 
-        if self.rank == 0:
-            timer.report_clear("Compute Correlators and PSDs")
+        log.debug_rank(
+            "Compute Correlators and PSDs",
+            comm=obs.comm.comm_group,
+            rank=0,
+            timer=timer,
+        )
 
         # Now bin the PSDs
 
@@ -909,8 +944,13 @@ class NoiseEstim(Operator):
         my_binned_psds1, my_times1, binfreq10 = self.bin_psds(my_psds1, fmin, fmax)
         if self.nsum > 1:
             my_binned_psds2, _, binfreq20 = self.bin_psds(my_psds2, fmin, fmax)
-        if self.rank == 0:
-            timer.report_clear("Bin PSDs")
+
+        log.debug_rank(
+            "Bin PSDs",
+            comm=obs.comm.comm_group,
+            rank=0,
+            timer=timer,
+        )
 
         # concatenate
 
@@ -940,10 +980,10 @@ class NoiseEstim(Operator):
 
         have_bins = binfreq0 is not None
         have_bins_all = None
-        if comm is None:
+        if obs.comm_row is None:
             have_bins_all = [have_bins]
         else:
-            have_bins_all = comm.allgather(have_bins)
+            have_bins_all = obs.comm_row.allgather(have_bins)
         root = 0
         if np.any(have_bins_all):
             while not have_bins_all[root]:
@@ -952,50 +992,59 @@ class NoiseEstim(Operator):
             msg = "None of the processes have valid PSDs"
             raise RuntimeError(msg)
         binfreq = None
-        if comm is None:
+        if obs.comm_row is None:
             binfreq = binfreq0
         else:
-            binfreq = comm.bcast(binfreq0, root=root)
+            binfreq = obs.comm_row.bcast(binfreq0, root=root)
         if binfreq0 is not None and np.any(binfreq != binfreq0):
             msg = (
-                f"{self.rank:4} : Binned PSD frequencies change. "
+                f"{obs.comm.world_rank:4} : Binned PSD frequencies change. "
                 f"len(binfreq0) = {binfreq0.size}, "
                 f"len(binfreq) = {binfreq.size}, binfreq0={binfreq0}, "
                 f"binfreq = {binfreq}. len(my_psds) = {len(my_psds1)}"
             )
-            raise Exception(msg)
+            raise RuntimeError(msg)
 
         if len(my_times) != len(my_binned_psds):
             msg = (
-                f"ERROR: Process {self.rank} has len(my_times) = {len(my_times)}, "
+                f"ERROR: Process {obs.comm.world_rank} has len(my_times) = "
+                f"{len(my_times)}, "
                 f"len(my_binned_psds) = {len(my_binned_psds)}"
             )
-            raise Exception(msg)
+            raise RuntimeError(msg)
 
         all_times = None
         all_psds = None
-        if comm is None:
+        if obs.comm_row is None:
             all_times = [my_times]
             all_psds = [my_binned_psds]
         else:
-            all_times = comm.gather(my_times, root=0)
-            all_psds = comm.gather(my_binned_psds, root=0)
+            all_times = obs.comm_row.gather(my_times, root=0)
+            all_psds = obs.comm_row.gather(my_binned_psds, root=0)
         all_cov = None
         if self.save_cov:
-            if comm is None:
+            if obs.comm_row is None:
                 all_cov = [my_cov]
             else:
-                all_cov = comm.gather(my_cov, root=0)
-        if self.rank == 0:
-            timer.report_clear("Collect PSDs")
+                all_cov = obs.comm_row.gather(my_cov, root=0)
 
-        if self.rank == 0:
+        log.debug_rank(
+            "Collect PSDs",
+            comm=obs.comm.comm_group,
+            rank=0,
+            timer=timer,
+        )
+
+        final_freqs = None
+        final_psd = None
+        if obs.comm.group_rank == 0:
             if len(all_times) != len(all_psds):
                 msg = (
-                    f"ERROR: Process {self.rank} has len(all_times) = {len(all_times)},"
+                    f"ERROR: Process {obs.comm.world_rank} has len(all_times) = "
+                    f"{len(all_times)},"
                     f" len(all_psds) = {len(all_psds)} before deglitch"
                 )
-                raise Exception(msg)
+                raise RuntimeError(msg)
 
             # De-glitch the binned PSDs and write them to file
             i = 0
@@ -1010,10 +1059,11 @@ class NoiseEstim(Operator):
 
             if len(all_times) != len(all_psds):
                 msg = (
-                    f"ERROR: Process {self.rank} has len(all_times) = {len(all_times)}, "
+                    f"ERROR: Process {obs.comm.world_rank} has len(all_times) = "
+                    f"{len(all_times)}, "
                     f"len(all_psds) = {len(all_psds)} AFTER deglitch"
                 )
-                raise Exception(msg)
+                raise RuntimeError(msg)
 
             all_times = list(np.hstack(all_times))
             all_psds = list(np.hstack(all_psds))
@@ -1023,7 +1073,7 @@ class NoiseEstim(Operator):
             good_psds, good_times, nbad, good_cov = self.discard_outliers(
                 binfreq, all_psds, all_times, all_cov
             )
-            timer.report_clear("Discard outliers")
+            log.debug_rank("Discard outliers", timer=timer)
 
             self.save_psds(
                 binfreq, all_psds, all_times, det1, det2, fsample, fileroot, all_cov
@@ -1040,9 +1090,12 @@ class NoiseEstim(Operator):
                     fileroot + "_good",
                     good_cov,
                 )
-            timer.report_clear("Write PSDs")
 
-        return
+            final_freqs = binfreq
+            final_psd = np.mean(np.array(good_psds), axis=0)
+            log.debug_rank("Write PSDs", timer=timer)
+
+        return final_freqs, final_psd
 
     def _finalize(self, data, **kwargs):
         return
@@ -1070,4 +1123,6 @@ class NoiseEstim(Operator):
             "shared": list(),
             "detdata": list(),
         }
+        if self.out_model is not None:
+            prov["meta"].append(self.out_model)
         return prov

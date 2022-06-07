@@ -101,19 +101,23 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
     return Telescope("test", focalplane=fp, site=site)
 
 
-def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1):
+def create_ground_telescope(
+    group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1, fknee=None
+):
     """Create a fake ground telescope with at least one detector per process."""
     npix = 1
     ring = 1
     while 2 * npix <= group_size * pixel_per_process:
         npix += 6 * ring
         ring += 1
+    if fknee is None:
+        fknee = sample_rate / 2000.0
     fp = fake_hexagon_focalplane(
         n_pix=npix,
         sample_rate=sample_rate,
         psd_fmin=1.0e-5 * u.Hz,
         psd_net=0.05 * u.K * np.sqrt(1 * u.second),
-        psd_fknee=(sample_rate / 2000.0),
+        psd_fknee=fknee,
     )
 
     site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
@@ -595,9 +599,9 @@ def create_fake_beam_alm(
 def fake_flags(
     data,
     shared_name=defaults.shared_flags,
-    shared_val=1,
+    shared_val=defaults.shared_mask_invalid,
     det_name=defaults.det_flags,
-    det_val=1,
+    det_val=defaults.det_mask_invalid,
 ):
     """Create fake flags.
 
@@ -630,6 +634,7 @@ def create_ground_data(
     el_nod=False,
     el_nods=[-1 * u.degree, 1 * u.degree],
     pixel_per_process=1,
+    fknee=None,
 ):
     """Create a data object with a simple ground sim.
 
@@ -653,6 +658,7 @@ def create_ground_data(
         toastcomm.group_size,
         sample_rate=sample_rate,
         pixel_per_process=pixel_per_process,
+        fknee=fknee,
     )
 
     # Create a schedule.
@@ -707,9 +713,6 @@ def create_ground_data(
         detset_key="pixel",
         elnod_start=el_nod,
         elnods=el_nods,
-        det_flags="flags",
-        det_data="signal",
-        shared_flags="flags",
         scan_accel_az=3 * u.degree / u.second**2,
     )
     sim_ground.apply(data)
