@@ -146,7 +146,7 @@ class MapMaker(Operator):
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
 
     write_solver_products = Bool(
-        True, help="If True, write out equivalent solver products."
+        False, help="If True, write out equivalent solver products."
     )
 
     keep_solver_products = Bool(

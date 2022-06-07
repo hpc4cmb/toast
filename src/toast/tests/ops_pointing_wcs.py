@@ -318,6 +318,7 @@ class PointingWCSTest(MPITestCase):
                 write_map=False,
                 write_cov=False,
                 write_rcond=False,
+                output_dir=self.outdir,
                 keep_solver_products=True,
                 keep_final_products=True,
             )
