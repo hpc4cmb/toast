@@ -4,6 +4,7 @@
 
 import os
 
+import astropy.io.fits as af
 import numpy as np
 import pixell
 import pixell.enmap
@@ -246,7 +247,14 @@ def write_wcs_fits(pix, path, comm_bytes=10000000, report_memory=False):
     if rank == 0:
         if os.path.isfile(path):
             os.remove(path)
-        endata.write(path, fmt="fits")
+        # Basic wcs header
+        header = endata.wcs.to_header(relax=True)
+        # Add map dimensions
+        header["NAXIS"] = endata.ndim
+        for i, n in enumerate(endata.shape[::-1]):
+            header[f"NAXIS{i+1}"] = n
+        hdus = af.HDUList([af.PrimaryHDU(endata, header)])
+        hdus.writeto(path)
 
     del endata
     return
