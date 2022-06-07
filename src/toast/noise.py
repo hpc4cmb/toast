@@ -207,7 +207,7 @@ class Noise(object):
                 first = np.searchsorted(freq, rate * 0.2, side="left")
                 last = np.searchsorted(freq, rate * 0.4, side="right")
                 noisevar = np.median(psd[first:last].to_value(u.K**2 * u.second))
-                invvar = 1.0 / noisevar
+                invvar = 1.0 / noisevar / rate.to_value(u.Hz)
                 for det in self._dets_for_keys[k]:
                     self._detweights[det] += mix[det][k] * invvar
         return self._detweights[det]
