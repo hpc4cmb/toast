@@ -69,9 +69,15 @@ def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_d
     Returns:
         zmap (array, double): size n_det*n_samp_interval*nnz
     """
+    # insures that we can vectorise over the det_flags, even when we want to use a single flag
+    single_flag = (det_flags.size == 1)
+    n_samp_interval = shared_flags.size
+    if single_flag:
+        det_flags = jnp.resize(det_flags, (1,n_samp_interval))
+
     # display sizes
-    print(f"DEBUG: jit compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{shared_flags.size} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask}")
-    
+    print(f"DEBUG: jit compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{n_samp_interval} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask} single_flag:{single_flag}")
+
     # computes the update to add to zmap
     update = build_noise_weighted_inner_jax(pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask)
 
@@ -170,7 +176,7 @@ def build_noise_weighted_numpy(global2local, zmap, pixel_index, pixels, weight_i
         data_index (array, int): size n_det
         det_data (array, double): size ???*n_samp
         flag_index (array, int): size n_det
-        det_flags (array, uint8): size ???*n_samp
+        det_flags (array, uint8): size ???*n_samp or 1*1
         det_scale (array, double): size n_det
         det_flag_mask (uint8)
         intervals (array, Interval): The intervals to modify (size n_view)
@@ -183,10 +189,16 @@ def build_noise_weighted_numpy(global2local, zmap, pixel_index, pixels, weight_i
     """
     # problem size
     n_det = data_index.size
+    n_samp = shared_flags.size
     (n_local_submap,n_pix_submap,nnz) = zmap.shape
-    print(f"DEBUG: running 'build_noise_weighted_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{shared_flags.size} n_local_submap:{n_local_submap} n_pix_submap:{n_pix_submap} nnz:{nnz} det_flag_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask}")
+    single_flag = (det_flags.size == 1)
+    print(f"DEBUG: running 'build_noise_weighted_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{n_samp} n_local_submap:{n_local_submap} n_pix_submap:{n_pix_submap} nnz:{nnz} det_flag_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask} single_flag:{single_flag}")
 
     npix_submap_inv = 1.0 / n_pix_submap
+
+    # we have to deal with this as isamp would go out of the array
+    if single_flag:
+        det_flags = np.resize(det_flags, (1,n_samp))
 
     # iterates on detectors and intervals
     for idet in range(n_det):
@@ -385,7 +397,7 @@ build_noise_weighted = select_implementation(build_noise_weighted_compiled,
                                              default_implementationType=ImplementationType.JAX)
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole");'
+# python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole");'
 
 # to bench:
 # use scanmap config and check BuildNoiseWeighted field in timing.csv
