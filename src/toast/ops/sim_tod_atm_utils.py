@@ -2,7 +2,8 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import healpy as hp
+import os
+
 import numpy as np
 import scipy.interpolate
 import traitlets
@@ -108,6 +109,8 @@ class ObserveAtmosphere(Operator):
     )
 
     gain = Float(1.0, help="Scaling applied to the simulated TOD")
+
+    debug_tod = Bool(False, help="If True, dump TOD to pickle files")
 
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
@@ -318,6 +321,20 @@ class ObserveAtmosphere(Operator):
                             t_interp, az_interp, el_interp, atmdata, -1.0
                         )
 
+                        # Dump timestream snapshot
+                        if self.debug_tod:
+                            first = ob.intervals[self.view][vw].first
+                            last = ob.intervals[self.view][vw].last
+                            self._save_tod(
+                                f"post{icur}",
+                                ob,
+                                self.times,
+                                first,
+                                last,
+                                det,
+                                raw=atmdata,
+                            )
+
                         if err != 0:
                             # import pdb
                             # import matplotlib.pyplot as plt
@@ -375,8 +392,23 @@ class ObserveAtmosphere(Operator):
 
                     gt.start("ObserveAtmosphere:  detector accumulate")
 
+                    # Dump timestream snapshot
+                    if self.debug_tod:
+                        first = ob.intervals[self.view][vw].first
+                        last = ob.intervals[self.view][vw].last
+                        self._save_tod(
+                            "precal", ob, self.times, first, last, det, raw=atmdata
+                        )
+
                     # Calibrate the atmospheric fluctuations to appropriate bandpass
                     atmdata *= self.gain * absorption[det]
+
+                    if self.debug_tod:
+                        first = ob.intervals[self.view][vw].first
+                        last = ob.intervals[self.view][vw].last
+                        self._save_tod(
+                            "postcal", ob, self.times, first, last, det, raw=atmdata
+                        )
 
                     # If we are simulating disjoint wind views, we need to suppress
                     # a jump between them
@@ -395,18 +427,53 @@ class ObserveAtmosphere(Operator):
                             # Fade out the beginning
                             atmdata[:nfade] *= np.arange(nfade) / nfade
 
+                    if self.debug_tod:
+                        first = ob.intervals[self.view][vw].first
+                        last = ob.intervals[self.view][vw].last
+                        self._save_tod(
+                            "postfade", ob, self.times, first, last, det, raw=atmdata
+                        )
+
                     # Add polarization.  In our simple model, there is only Q-polarization
                     # and the polarization fraction is constant.
                     pfrac = self.polarization_fraction
                     atmdata *= weights_I + weights_Q * pfrac
 
+                    if self.debug_tod:
+                        first = ob.intervals[self.view][vw].first
+                        last = ob.intervals[self.view][vw].last
+                        self._save_tod(
+                            "postpol", ob, self.times, first, last, det, raw=atmdata
+                        )
+
                     if loading is not None:
                         # Add the elevation-dependent atmospheric loading
                         atmdata += loading[det] / np.sin(el)
 
+                    if self.debug_tod:
+                        first = ob.intervals[self.view][vw].first
+                        last = ob.intervals[self.view][vw].last
+                        self._save_tod(
+                            "postload", ob, self.times, first, last, det, raw=atmdata
+                        )
+
                     # Add contribution to output
-                    views.detdata[self.det_data][vw][det][good] += atmdata
+                    views.detdata[self.det_data][vw][det, good] += atmdata
                     gt.stop("ObserveAtmosphere:  detector accumulate")
+
+                    # Dump timestream snapshot
+                    if self.debug_tod:
+                        first = ob.intervals[self.view][vw].first
+                        last = ob.intervals[self.view][vw].last
+                        self._save_tod(
+                            "final",
+                            ob,
+                            self.times,
+                            first,
+                            last,
+                            det,
+                            detdata=self.det_data,
+                        )
 
             if nbad_tot > 0:
                 frac = nbad_tot / (ngood_tot + nbad_tot) * 100
@@ -443,6 +510,45 @@ class ObserveAtmosphere(Operator):
                 )
 
         return absorption_det, loading_det
+
+    @function_timer
+    def _save_tod(
+        self,
+        prefix,
+        ob,
+        times,
+        first,
+        last,
+        det,
+        raw=None,
+        detdata=None,
+    ):
+        import pickle
+
+        outdir = "snapshots"
+        try:
+            os.makedirs(outdir)
+        except FileExistsError:
+            pass
+
+        timestamps = ob.shared[times].data
+        tmin = int(timestamps[first])
+        tmax = int(timestamps[last])
+        slc = slice(first, last + 1, 1)
+
+        ddata = None
+        if raw is not None:
+            ddata = raw
+        else:
+            ddata = ob.detdata[detdata][det, slc]
+
+        fn = os.path.join(
+            outdir,
+            f"atm_tod_{prefix}_{ob.name}_{det}_t_{tmin}_{tmax}.pck",
+        )
+        with open(fn, "wb") as fout:
+            pickle.dump([det, timestamps[slc], ddata], fout)
+        return
 
     def _finalize(self, data, **kwargs):
         return

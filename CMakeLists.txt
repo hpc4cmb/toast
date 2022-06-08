@@ -28,6 +28,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Set symbol visibility to hidden to be consistent with pybind11
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
+# pybind11 enables IPO by default.  This can cause problems with some
+# compilers.  Remove this if we find a better workaround:
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+
 # Auxiliary files
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
@@ -67,15 +71,17 @@ if(OpenMP_CXX_FOUND)
     # the features we need in the 5.0 spec, but return a supported version less than
     # that.
     if(NOT USE_OPENMP_TARGET)
-        # Check the version reported by the compiler
-        if(OpenMP_CXX_VERSION_MAJOR GREATER_EQUAL 5)
-            set(USE_OPENMP_TARGET TRUE)
-        else()
-            if(OpenMP_CXX_SPEC_DATE GREATER_EQUAL 201811)
-                # This is the spec date for the 5.0 standard
+        if(NOT DISABLE_OPENMP_TARGET)
+            # Check the version reported by the compiler
+            if(OpenMP_CXX_VERSION_MAJOR GREATER_EQUAL 5)
                 set(USE_OPENMP_TARGET TRUE)
             else()
-                set(USE_OPENMP_TARGET FALSE)
+                if(OpenMP_CXX_SPEC_DATE GREATER_EQUAL 201811)
+                    # This is the spec date for the 5.0 standard
+                    set(USE_OPENMP_TARGET TRUE)
+                else()
+                    set(USE_OPENMP_TARGET FALSE)
+                endif()
             endif()
         endif()
     endif()

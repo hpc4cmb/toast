@@ -2,8 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
-from collections.abc import MutableMapping, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -14,18 +13,10 @@ from .accelerator import (
     accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
-    accel_enabled,
     use_accel_jax,
     use_accel_omp,
 )
 from .timing import function_timer
-from .utils import Logger
-
-if use_accel_jax:
-    import jax
-    import jax.numpy as jnp
-
-from .utils import Logger
 
 def build_interval_dtype():
     dtdbl = np.dtype("double")

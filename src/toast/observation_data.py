@@ -2,7 +2,6 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
 from collections.abc import Mapping, MutableMapping
 from typing import NamedTuple
 
@@ -22,19 +21,8 @@ from .accelerator import (
     use_accel_omp,
 )
 from .intervals import IntervalList
-from .mpi import MPI, comm_equal, comm_equivalent
-from .timing import function_timer
+from .mpi import MPI, comm_equivalent
 from .utils import (
-    AlignedF32,
-    AlignedF64,
-    AlignedI8,
-    AlignedI16,
-    AlignedI32,
-    AlignedI64,
-    AlignedU8,
-    AlignedU16,
-    AlignedU32,
-    AlignedU64,
     Logger,
     dtype_to_aligned,
 )

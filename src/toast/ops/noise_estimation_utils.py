@@ -152,7 +152,7 @@ def crosscov_psd(
 
     Compute the sample (cross)covariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
-    are distributed across the communicator as tuples of
+    are distributed across the process grid row communicator as tuples of
     (start_time, stop_time, bin_frequency, bin_value)
 
     Args:

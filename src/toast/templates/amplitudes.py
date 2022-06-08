@@ -361,10 +361,9 @@ class Amplitudes(AcceleratorObject):
 
             if self._full:
                 # Shortcut if we have all global amplitudes locally
-                send_buffer[:] = self.local[comm_offset : comm_offset + n_comm]
-                send_buffer[
-                    self.local_flags[comm_offset : comm_offset + n_comm] != 0
-                ] = 0
+                send_buffer[:n_comm] = self.local[comm_offset : comm_offset + n_comm]
+                bad = self.local_flags[comm_offset : comm_offset + n_comm] != 0
+                send_buffer[:n_comm][bad] = 0
             else:
                 # Need to compute our overlap with the global amplitude range.
                 send_buffer[:] = 0
@@ -453,7 +452,7 @@ class Amplitudes(AcceleratorObject):
 
             if self._full:
                 # Shortcut if we have all global amplitudes locally
-                self.local[comm_offset : comm_offset + n_comm] = recv_buffer
+                self.local[comm_offset : comm_offset + n_comm] = recv_buffer[:n_comm]
             else:
                 if (self._global_last >= comm_offset) and (
                     self._global_first < comm_offset + n_comm

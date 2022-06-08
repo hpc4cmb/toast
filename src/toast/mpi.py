@@ -5,8 +5,7 @@
 import os
 import time
 
-from ._libtoast import Environment, Logger
-
+from ._libtoast import Logger
 
 use_mpi = None
 MPI = None
