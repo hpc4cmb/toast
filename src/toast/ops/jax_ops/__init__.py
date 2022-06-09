@@ -1,5 +1,8 @@
 # TODO
 #
+# to run miniapp:
+# export TOAST_GPU_JAX=true; toast_mini --node_mem_gb 4.0
+#
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
 #   (we could cache that intervals_index at a higher level within toast if the intervals are constant)
 # - try grouping intervals by size and then running with a (intervals_starts,length) input 

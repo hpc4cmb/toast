@@ -365,7 +365,7 @@ class IntervalList(Sequence, AcceleratorObject):
         if use_accel_omp:
             accel_data_create(self.data)
         elif use_accel_jax:
-            accel_data_create(self.jax)
+            self.jax = accel_data_create(self.jax)
 
     def _accel_update_device(self):
         if use_accel_omp:

@@ -8,13 +8,9 @@ from collections.abc import MutableMapping
 
 import numpy as np
 
-from ._libtoast import accel_enabled
-from .accelerator import AcceleratorObject
+from .accelerator import AcceleratorObject, accel_enabled
 from .mpi import Comm
 from .utils import Logger
-
-from ._libtoast import accel_enabled
-
 
 class Data(MutableMapping):
     """Class which represents distributed data
@@ -410,30 +406,41 @@ class Data(MutableMapping):
             None
 
         """
-        if not accel_enabled():
-            return
         log = Logger.get()
+        if not accel_enabled():
+            log.verbose(f"accel_enabled is False, canceling accel_create.")
+            return
+
         for ob in self.obs:
             for key in names["detdata"]:
                 if not ob.detdata.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} detdata accel_create for {key}")
                     ob.detdata.accel_create(key)
+                else:
+                    log.verbose(f"NOT calling ob {ob.name} detdata accel_create for {key} as it is alreaddy on device")
             for key in names["shared"]:
                 if not ob.shared.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} shared accel_create for {key}")
                     ob.shared.accel_create(key)
+                else:
+                    log.verbose(f"NOT calling ob {ob.name} shared accel_create for {key} as it is alreaddy on device")
             for key in names["intervals"]:
                 if not ob.intervals.accel_exists(key):
                     log.verbose(
                         f"Calling ob {ob.name} intervals accel_create for {key}"
                     )
                     ob.intervals.accel_create(key)
+                else:
+                    log.verbose(f"NOT calling ob {ob.name} intervals accel_create for {key} as it is alreaddy on device")
+
         for key in names["global"]:
             val = self._internal[key]
             if isinstance(val, AcceleratorObject):
                 if not val.accel_exists():
                     log.verbose(f"Calling Data accel_create for {key}")
                     val.accel_create()
+                else:
+                    log.verbose(f"NOT calling Data accel_create for {key} as it is alreaddy on device")
 
     def accel_update_device(self, names):
         """Copy a set of data objects to the device.

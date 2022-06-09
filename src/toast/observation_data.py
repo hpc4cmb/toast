@@ -1398,6 +1398,9 @@ class SharedDataManager(MutableMapping):
         log.verbose(f"SharedDataMgr {key} accel_create")
         if use_accel_omp:
             accel_data_create(self._internal[key].shdata._flat)
+        elif use_accel_jax:
+            # FIXME: add device ID here
+            self.jax[key] = jax.device_put(self._internal[key].shdata._flat)
 
     def accel_update_device(self, key):
         """Copy the named shared data to the accelerator.

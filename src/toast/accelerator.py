@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-import time
+import numpy as np
 
 from ._libtoast import Logger
 from ._libtoast import accel_create as omp_accel_create
@@ -31,6 +31,8 @@ if "TOAST_GPU_JAX" in os.environ and os.environ["TOAST_GPU_JAX"] in enable_vals:
     try:
         import jax
         import jax.numpy as jnp
+        # needed to import interval_dtype arrays
+        from .ops.jax_ops.utils.intervals import jax_interval_dtype
 
         use_accel_jax = True
     except Exception:
@@ -110,20 +112,19 @@ def accel_data_create(data):
 
     Using the input data array, create a corresponding device array.  For OpenMP
     target offload, this allocates device memory and adds it to the global map
-    of host to device pointers.  For jax arrays, this is a no-op, since those
-    arrays are mapped and managed elsewhere.
+    of host to device pointers.
 
     Args:
         data (array):  The host array.
 
     Returns:
-        None
+        None for OpenMP target offload and a JAX array for JAX
 
     """
     if use_accel_omp:
         omp_accel_create(data)
     elif use_accel_jax:
-        pass
+        return jnp.asarray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot create")
@@ -147,7 +148,7 @@ def accel_data_update_device(data):
         omp_accel_update_device(data)
         return data
     elif use_accel_jax:
-        return jnp.DeviceArray(data)
+        return jnp.asarray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating device")
@@ -173,12 +174,7 @@ def accel_data_update_host(data):
         omp_accel_update_host(data)
         return data
     elif use_accel_jax:
-        if isinstance(data, jnp.DeviceArray):
-            # Return a numpy array
-            return data.copy()
-        else:
-            # Already on the host
-            return data
+        return jnp.asarray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")
@@ -268,7 +264,8 @@ class AcceleratorObject(object):
         self._accel_used = state
 
     def _accel_create(self):
-        pass
+        msg = f"The _accel_create function was not defined for this class."
+        raise RuntimeError(msg)
 
     def accel_create(self):
         """Create a copy of the data on the accelerator.
@@ -287,7 +284,8 @@ class AcceleratorObject(object):
         self._accel_create()
 
     def _accel_update_device(self):
-        pass
+        msg = f"The _accel_create function was not defined for this class."
+        raise RuntimeError(msg)
 
     def accel_update_device(self):
         """Copy the data to the accelerator.

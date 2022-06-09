@@ -34,7 +34,7 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, ampl
         None (the result is put in det_data).
     """
     # problem size
-    print(f"DEBUG: running 'template_offset_add_to_signal_jax' with n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]}")
+    #print(f"DEBUG: running 'template_offset_add_to_signal_jax' with n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]}")
     
     # loop over the intervals
     offset = amp_offset
@@ -127,7 +127,7 @@ def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes
         None (the result is put in amplitudes_out).
     """
     # problem size
-    print(f"DEBUG: running 'template_offset_apply_diag_precond_jax' with n_amp:{amplitudes_in.size}")
+    #print(f"DEBUG: running 'template_offset_apply_diag_precond_jax' with n_amp:{amplitudes_in.size}")
     
     # runs the computation
     amplitudes_out[:] = amplitudes_in * offset_var
