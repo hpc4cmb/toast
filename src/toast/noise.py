@@ -207,10 +207,16 @@ class Noise(object):
                 # Noise in the middle of the PSD
                 first = np.searchsorted(freq, rate * 0.225, side="left")
                 last = np.searchsorted(freq, rate * 0.275, side="right")
+                if first == last:
+                    first = max(0, first - 1)
+                    last = min(freq.size - 1, last + 1)
                 noisevar_mid = np.median(psd[first:last].to_value(u.K**2 * u.second))
                 # Noise in the end of the PSD
                 first = np.searchsorted(freq, rate * 0.45, side="left")
                 last = np.searchsorted(freq, rate * 0.50, side="right")
+                if first == last:
+                    first = max(0, first - 1)
+                    last = min(freq.size - 1, last + 1)
                 noisevar_end = np.median(psd[first:last].to_value(u.K**2 * u.second))
                 if noisevar_end / noisevar_mid < 0.5:
                     # There is a transfer function roll-off.  Measure the
@@ -222,6 +228,9 @@ class Noise(object):
                     # the noise variance
                     first = np.searchsorted(freq, rate * 0.45, side="left")
                     last = np.searchsorted(freq, rate * 0.50, side="right")
+                if first == last:
+                    first = max(0, first - 1)
+                    last = min(freq.size - 1, last + 1)
                 noisevar = np.median(psd[first:last].to_value(u.K**2 * u.second))
                 invvar = 1.0 / noisevar / rate.to_value(u.Hz)
                 for det in self._dets_for_keys[k]:

@@ -31,7 +31,9 @@ import os
 import pickle
 import sys
 import traceback
+import warnings
 
+import erfa
 import numpy as np
 from astropy import units as u
 
@@ -46,6 +48,9 @@ from toast.mpi import MPI, Comm
 if t3g.available:
     from spt3g import core as c3g
 
+
+warnings.simplefilter("error")
+warnings.simplefilter("ignore", erfa.core.ErfaWarning)
 
 def parse_config(operators, templates, comm):
     """Parse command line arguments and load any config files.

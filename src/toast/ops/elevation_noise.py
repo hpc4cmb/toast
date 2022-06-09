@@ -338,7 +338,7 @@ class ElevationNoise(Operator):
                 net_factors = np.hstack(net_factors)
                 total_factors = np.hstack(total_factors)
                 weight_ratios = np.hstack(weight_ratios)
-        if comm is None or comm.rank == 0:
+        if comm is None or comm.rank == 0 and len(net_factors) > 0:
             net = net_factors
             tot = total_factors
             ratio = np.sqrt(weight_ratios)
