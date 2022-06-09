@@ -256,7 +256,7 @@ class DetectorData(AcceleratorObject):
             self._flatshape = flatshape
             if use_accel_jax and self.accel_exists():
                 # FIXME:  Is there really no way to "clear" a jax array?
-                self._raw_jax = jnp.zeros_like(self._raw_jax)
+                self._raw_jax = jnp.zeros_like(self._raw.array())
                 self._flatdata = self._raw_jax[: self._flatshape]
             else:
                 self._flatdata = self._raw.array()[: self._flatshape]
