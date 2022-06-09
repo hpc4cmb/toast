@@ -295,6 +295,7 @@ class ElevationNoise(Operator):
                 # Scale the PSD
 
                 net_factor = noise_a / np.sin(el) + noise_c
+                self.net_factors.append(net_factor)
 
                 self.net_factors.append(net_factor)
                 self.rates.append(focalplane.sample_rate.to_value(u.Hz))
