@@ -105,6 +105,13 @@ def parse_config(operators, templates, comm):
     )
 
     parser.add_argument(
+        "--fknee",
+        required=False,
+        type=float,
+        help="Override noise model knee frequency [Hz]",
+    )
+
+    parser.add_argument(
         "--pwv_limit",
         required=False,
         type=float,
@@ -155,7 +162,7 @@ def load_instrument_and_schedule(args, comm):
 
     fname_pickle = (
         f"{os.path.basename(args.focalplane)}_"
-        f"thinfp={args.thinfp}_fsample={args.sample_rate}.pck"
+        f"thinfp={args.thinfp}_fsample={args.sample_rate}_fknee={args.fknee}.pck"
     )
     if os.path.isfile(fname_pickle):
         log.info_rank(f"Loading focalplane from {fname_pickle}", comm=comm)
@@ -166,8 +173,12 @@ def load_instrument_and_schedule(args, comm):
         if comm is not None:
             focalplane = comm.bcast(focalplane, root=0)
     else:
+        if args.fknee is None:
+            fknee = None
+        else:
+            fknee = args.fknee * u.Hz
         focalplane = toast.instrument.Focalplane(
-            sample_rate=sample_rate, thinfp=args.thinfp
+            sample_rate=sample_rate, thinfp=args.thinfp, fknee=fknee,
         )
         with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
             focalplane.load_hdf5(f.handle, comm=comm)
