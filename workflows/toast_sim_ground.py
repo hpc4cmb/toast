@@ -110,6 +110,13 @@ def parse_config(operators, templates, comm):
     )
 
     parser.add_argument(
+        "--fknee",
+        required=False,
+        type=float,
+        help="Override noise model knee frequency [Hz]",
+    )
+
+    parser.add_argument(
         "--pwv_limit",
         required=False,
         type=float,
@@ -160,7 +167,7 @@ def load_instrument_and_schedule(args, comm):
 
     fname_pickle = (
         f"{os.path.basename(args.focalplane)}_"
-        f"thinfp={args.thinfp}_fsample={args.sample_rate}.pck"
+        f"thinfp={args.thinfp}_fsample={args.sample_rate}_fknee={args.fknee}.pck"
     )
     if os.path.isfile(fname_pickle):
         log.info_rank(f"Loading focalplane from {fname_pickle}", comm=comm)
