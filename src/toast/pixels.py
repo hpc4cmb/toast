@@ -969,7 +969,7 @@ class PixelData(AcceleratorObject):
         if use_accel_omp:
             accel_data_create(self.raw)
         elif use_accel_jax:
-            accel_data_create(self.data_jax)
+            self.data_jax = accel_data_create(self.data_jax)
 
     def _accel_update_device(self):
         if use_accel_omp:

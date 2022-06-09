@@ -254,7 +254,7 @@ class DetectorData(AcceleratorObject):
             # We can re-use the existing memory
             self._shape = shp
             self._flatshape = flatshape
-            if use_accel_jax and self.accel_present():
+            if use_accel_jax and self.accel_exists():
                 # FIXME:  Is there really no way to "clear" a jax array?
                 self._raw_jax = jnp.zeros_like(self._raw_jax)
                 self._flatdata = self._raw_jax[: self._flatshape]
@@ -435,6 +435,8 @@ class DetectorData(AcceleratorObject):
         return not self.__eq__(other)
 
     def _accel_exists(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_exists")
         if self._raw is None:
             # We have a view
             return False
@@ -447,12 +449,16 @@ class DetectorData(AcceleratorObject):
                 return False
 
     def _accel_create(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_create")
         if use_accel_omp:
             accel_data_create(self._raw)
         elif use_accel_jax:
-            accel_data_create(self._raw_jax)
+            self._raw_jax = accel_data_create(self._raw_jax)
 
     def _accel_update_device(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_update_device")
         if use_accel_omp:
             _ = accel_data_update_device(self._raw)
         elif use_accel_jax:
@@ -461,6 +467,8 @@ class DetectorData(AcceleratorObject):
             self._data = self._flatdata.reshape(self._shape)
 
     def _accel_update_host(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_update_host")
         if use_accel_omp:
             _ = accel_data_update_host(self._raw)
         elif use_accel_jax:
@@ -469,6 +477,8 @@ class DetectorData(AcceleratorObject):
             self._data = self._flatdata.reshape(self._shape)
 
     def _accel_delete(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_delete")
         if use_accel_omp:
             accel_data_delete(self._raw)
         elif use_accel_jax:
@@ -734,7 +744,7 @@ class DetDataManager(MutableMapping):
             return False
         log = Logger.get()
         result = self._internal[key].accel_exists()
-        log.verbose(f"DetDataMgr {key} accel_exists = {result}")
+        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_exists = {result}")
         return result
 
     def accel_in_use(self, key):
@@ -778,7 +788,7 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        log.verbose(f"DetDataMgr {key} accel_create")
+        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_create")
         self._internal[key].accel_create()
 
     def accel_update_device(self, key):
@@ -794,7 +804,7 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        log.verbose(f"DetDataMgr {key} accel_update_device")
+        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_device")
         self._internal[key].accel_update_device()
 
     def accel_update_host(self, key):
@@ -810,7 +820,7 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        log.verbose(f"DetDataMgr {key} accel_update_host")
+        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_host")
         self._internal[key].accel_update_host()
 
     def accel_delete(self, key):
@@ -827,10 +837,10 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         if not self._internal[key].accel_exists():
-            msg = f"Detector data '{key}' is not present on device, cannot delete"
+            msg = f"Detector data '{key}' type = {type(self._internal[key])} is not present on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
-        log.verbose(f"DetDataMgr {key} accel_delete")
+        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete")
         self._internal[key].accel_delete()
 
     def accel_clear(self):
@@ -845,7 +855,7 @@ class DetDataManager(MutableMapping):
         log = Logger.get()
         for key in self._internal:
             if self._internal[key].accel_exists():
-                log.verbose(f"DetDataMgr {key} accel_delete")
+                log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete")
                 self._internal[key].accel_delete()
 
     # Mapping methods

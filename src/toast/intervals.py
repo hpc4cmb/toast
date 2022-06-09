@@ -17,6 +17,10 @@ from .accelerator import (
     use_accel_omp,
 )
 from .timing import function_timer
+from .utils import Logger
+
+import jax.numpy as jnp
+from .ops.jax_ops.utils.intervals import INTERVALS_JAX
 
 def build_interval_dtype():
     dtdbl = np.dtype("double")
@@ -351,35 +355,52 @@ class IntervalList(Sequence, AcceleratorObject):
         )
 
     def _accel_exists(self):
+        log = Logger.get()
+        log.verbose(f"IntervalList _accel_exists")
         if len(self.data) == 0:
             return False
         else:
             if use_accel_omp:
                 return accel_data_present(self.data)
             elif use_accel_jax:
-                return accel_data_present(self.jax)
+                # TODO deals with the user defined dtype
+                #return accel_data_present(self.jax)
+                return isinstance(self.jax, INTERVALS_JAX)
             else:
                 return False
 
     def _accel_create(self):
+        log = Logger.get()
+        log.verbose(f"IntervalList _accel_create")
         if use_accel_omp:
             accel_data_create(self.data)
         elif use_accel_jax:
-            self.jax = accel_data_create(self.jax)
+            # TODO deals with the fact that our dtype is user-defined
+            #self.jax = accel_data_create(self.jax)
+            self.jax = INTERVALS_JAX.empty()
 
     def _accel_update_device(self):
+        log = Logger.get()
+        log.verbose(f"IntervalList _accel_update_device")
         if use_accel_omp:
             _ = accel_data_update_device(self.data)
         elif use_accel_jax:
-            self.jax = accel_data_update_device(self.data)
+            # TODO deals with the fact that our dtype is user-defined
+            #self.jax = accel_data_update_device(self.data)
+            self.jax = INTERVALS_JAX.init(self.data)
 
     def _accel_update_host(self):
+        log = Logger.get()
+        log.verbose(f"IntervalList _accel_update_host")
         if use_accel_omp:
             _ = accel_data_update_host(self.data)
         elif use_accel_jax:
+            # TODO this will likely require a more clever casting
             self.data = accel_data_update_host(self.jax)
 
     def _accel_delete(self):
+        log = Logger.get()
+        log.verbose(f"IntervalList _accel_delete")
         if use_accel_omp:
             accel_data_delete(self.data)
         elif use_accel_jax:

@@ -23,24 +23,25 @@ if "TOAST_GPU_OPENMP" in os.environ and os.environ["TOAST_GPU_OPENMP"] in enable
     else:
         log = Logger.get()
         msg = "TOAST_GPU_OPENMP enabled at runtime, but package was not built "
-        msg += "with OpenMP target offload support.  Disabling."
-        log.warning(msg)
+        msg += "with OpenMP target offload support."
+        log.error(msg)
+        raise RuntimeError(msg)
 
 use_accel_jax = False
 if "TOAST_GPU_JAX" in os.environ and os.environ["TOAST_GPU_JAX"] in enable_vals:
-    try:
+    #try:
         import jax
         import jax.numpy as jnp
-        # needed to import interval_dtype arrays
-        from .ops.jax_ops.utils.intervals import jax_interval_dtype
 
         use_accel_jax = True
-    except Exception:
-        # There could be many possible exceptions...
-        log = Logger.get()
-        msg = "TOAST_GPU_JAX enabled at runtime, but jax is not "
-        msg += "importable.  Disabling."
-        log.warning(msg)
+    # TODO reenable catch-all error?
+    #except Exception:
+    #    # There could be many possible exceptions...
+    #    log = Logger.get()
+    #    msg = "TOAST_GPU_JAX enabled at runtime, but jax is not "
+    #    msg += "importable."
+    #    log.error(msg)
+    #    raise RuntimeError(msg)
 
 if use_accel_omp and use_accel_jax:
     log = Logger.get()
@@ -141,7 +142,7 @@ def accel_data_update_device(data):
         data (array):  The host array.
 
     Returns:
-        (object):  Either the original input (for OpenMP) or a jax array.
+        (object):  Either the original input (for OpenMP) or a new jax array.
 
     """
     if use_accel_omp:
@@ -174,7 +175,7 @@ def accel_data_update_host(data):
         omp_accel_update_host(data)
         return data
     elif use_accel_jax:
-        return jnp.asarray(data)
+        return np.asarray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")

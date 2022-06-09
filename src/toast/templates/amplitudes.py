@@ -670,8 +670,8 @@ class Amplitudes(AcceleratorObject):
             accel_data_create(self._raw)
             accel_data_create(self._raw_flags)
         elif use_accel_jax:
-            accel_data_create(self.local_jax)
-            accel_data_create(self.local_flags_jax)
+            self.local_jax = accel_data_create(self.local_jax)
+            self.local_flags_jax = accel_data_create(self.local_flags_jax)
 
     def _accel_update_device(self):
         if use_accel_omp:

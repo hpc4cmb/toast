@@ -3,6 +3,9 @@
 # to run miniapp:
 # export TOAST_GPU_JAX=true; toast_mini --node_mem_gb 4.0
 #
+# print(f"DEBUGGING: pointing_detector_jax focalplane:{type(focalplane)} quats:{type(quats)}")
+# pointing_detector goes from numpy array to numpy array
+#
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
 #   (we could cache that intervals_index at a higher level within toast if the intervals are constant)
 # - try grouping intervals by size and then running with a (intervals_starts,length) input 
@@ -16,7 +19,7 @@
 #
 # NOTE:
 # the code uses [xmap](https://jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html) 
-# in order to map over named axis for increased redeability
+# in order to map over named axis for increased readability
 # however, one could use several vmap to reproduce this functionality
 
 # enable 64bits precision

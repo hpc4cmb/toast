@@ -76,6 +76,8 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     Returns:
         None (the result is put in quats).
     """
+    #print(f"DEBUGGING: pointing_detector_jax focalplane:{type(focalplane)} quats:{type(quats)}") # TODO
+
     # we loop over intervals
     for interval in intervals:
         interval_start = interval['first']
