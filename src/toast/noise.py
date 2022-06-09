@@ -204,8 +204,24 @@ class Noise(object):
                 freq = self.freq(k)
                 psd = self.psd(k)
                 rate = self.rate(k)
-                first = np.searchsorted(freq, rate * 0.2, side="left")
-                last = np.searchsorted(freq, rate * 0.4, side="right")
+                # Noise in the middle of the PSD
+                first = np.searchsorted(freq, rate * 0.225, side="left")
+                last = np.searchsorted(freq, rate * 0.275, side="right")
+                noisevar_mid = np.median(psd[first:last].to_value(u.K**2 * u.second))
+                # Noise in the end of the PSD
+                first = np.searchsorted(freq, rate * 0.45, side="left")
+                last = np.searchsorted(freq, rate * 0.50, side="right")
+                noisevar_end = np.median(psd[first:last].to_value(u.K**2 * u.second))
+                if noisevar_end / noisevar_mid < 0.5:
+                    # There is a transfer function roll-off.  Measure the
+                    # white noise plateau value
+                    first = np.searchsorted(freq, rate * 0.2, side="left")
+                    last = np.searchsorted(freq, rate * 0.4, side="right")
+                else:
+                    # No significant roll-off.  Use the last PSD bins for
+                    # the noise variance
+                    first = np.searchsorted(freq, rate * 0.45, side="left")
+                    last = np.searchsorted(freq, rate * 0.50, side="right")
                 noisevar = np.median(psd[first:last].to_value(u.K**2 * u.second))
                 invvar = 1.0 / noisevar / rate.to_value(u.Hz)
                 for det in self._dets_for_keys[k]:
