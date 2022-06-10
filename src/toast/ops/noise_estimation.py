@@ -128,7 +128,8 @@ class NoiseEstim(Operator):
     )
 
     output_dir = Unicode(
-        ".",
+        None,
+        allow_none=True,
         help="If specified, write output data products to this directory",
     )
 
@@ -1075,21 +1076,21 @@ class NoiseEstim(Operator):
             )
             log.debug_rank("Discard outliers", timer=timer)
 
-            self.save_psds(
-                binfreq, all_psds, all_times, det1, det2, fsample, fileroot, all_cov
-            )
-
-            if nbad > 0:
+            if self.output_dir is not None:
                 self.save_psds(
-                    binfreq,
-                    good_psds,
-                    good_times,
-                    det1,
-                    det2,
-                    fsample,
-                    fileroot + "_good",
-                    good_cov,
+                    binfreq, all_psds, all_times, det1, det2, fsample, fileroot, all_cov
                 )
+                if nbad > 0:
+                    self.save_psds(
+                        binfreq,
+                        good_psds,
+                        good_times,
+                        det1,
+                        det2,
+                        fsample,
+                        fileroot + "_good",
+                        good_cov,
+                    )
 
             final_freqs = binfreq
             final_psd = np.mean(np.array(good_psds), axis=0)

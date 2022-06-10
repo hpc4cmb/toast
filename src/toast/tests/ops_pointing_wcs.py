@@ -23,6 +23,7 @@ from ._helpers import (
     create_comm,
     create_space_telescope,
     create_fake_sky,
+    create_boresight_telescope,
 )
 from .mpi import MPITestCase
 
@@ -39,10 +40,9 @@ class PointingWCSTest(MPITestCase):
 
         toastcomm = create_comm(self.comm)
         data = Data(toastcomm)
-        tele = create_space_telescope(
+        tele = create_boresight_telescope(
             toastcomm.group_size,
             sample_rate=1.0 * u.Hz,
-            pixel_per_process=1,
         )
 
         # Make some fake boresight pointing
@@ -116,7 +116,7 @@ class PointingWCSTest(MPITestCase):
 
         np.testing.assert_array_equal(
             data[build_hits.hits].data,
-            len(data.obs[0].all_detectors) * np.ones_like(data[build_hits.hits].data),
+            data.comm.ngroups * len(data.obs[0].all_detectors) * np.ones_like(data[build_hits.hits].data),
         )
         del data
 
@@ -144,6 +144,8 @@ class PointingWCSTest(MPITestCase):
                 self.check_hits(
                     f"hits_{proj}_{center[0].value}_{center[1].value}", pixels
                 )
+                if self.comm is not None:
+                    self.comm.barrier()
 
     def plot_maps(self, hitfile=None, mapfile=None):
         figsize = (8, 8)
@@ -203,47 +205,39 @@ class PointingWCSTest(MPITestCase):
         if self.comm is not None:
             rank = self.comm.rank
 
-        # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
-
-        # Simple detector pointing
-        detpointing_radec = ops.PointingDetectorSimple(
-            boresight=defaults.boresight_radec,
-        )
-
-        # Stokes weights
-        weights = ops.StokesWeights(
-            mode="IQU",
-            hwp_angle=defaults.hwp_angle,
-            detector_pointing=detpointing_radec,
-        )
-
-        # Pixelization
-        pixels = ops.PixelsWCS(
-            detector_pointing=detpointing_radec,
-            use_astropy=True,
-        )
-
-        # Operator to reset pointing
-        delete_pointing = ops.Delete(
-            detdata=[detpointing_radec.quats, pixels.pixels, weights.weights]
-        )
-
         # Test several projections
+        resolution = 0.1 * u.degree
 
         for proj in ["CAR", "TAN", "CEA", "MER", "ZEA"]:
-            delete_pointing.apply(data)
-            if "pixel_dist" in data:
-                del data["pixel_dist"]
+            # Create fake observing of a small patch
+            data = create_ground_data(self.comm)
 
-            # Compute pixels and weights
-            pixels.projection = proj
-            pixels.resolution = (0.05 * u.degree, 0.05 * u.degree)
-            pixels.auto_bounds = True
-            pixels.create_dist = "pixel_dist"
-            pixels.apply(data)
+            # Simple detector pointing
+            detpointing_radec = ops.PointingDetectorSimple(
+                boresight=defaults.boresight_radec,
+            )
 
-            weights.apply(data)
+            # Stokes weights
+            weights = ops.StokesWeights(
+                mode="IQU",
+                hwp_angle=defaults.hwp_angle,
+                detector_pointing=detpointing_radec,
+            )
+
+            # Pixelization
+            pixels = ops.PixelsWCS(
+                detector_pointing=detpointing_radec,
+                projection=proj,
+                resolution=(0.05 * u.degree, 0.05 * u.degree),
+                auto_bounds=True,
+                use_astropy=True,
+            )
+
+            pix_dist = ops.BuildPixelDistribution(
+                pixel_dist="pixel_dist",
+                pixel_pointing=pixels,
+            )
+            pix_dist.apply(data)
 
             # Create fake polarized sky pixel values locally
             create_fake_sky(data, "pixel_dist", "fake_map")
@@ -256,21 +250,20 @@ class PointingWCSTest(MPITestCase):
                     self.plot_maps(mapfile=outfile)
 
             # Scan map into timestreams
-            scanner = ops.ScanMap(
-                det_data=defaults.det_data,
-                pixels=pixels.pixels,
-                weights=weights.weights,
-                map_key="fake_map",
+            scanner = ops.Pipeline(
+                operators=[
+                    pixels,
+                    weights,
+                    ops.ScanMap(
+                        det_data=defaults.det_data,
+                        pixels=pixels.pixels,
+                        weights=weights.weights,
+                        map_key="fake_map",
+                    ),
+                ],
+                detsets=["SINGLE"],
             )
             scanner.apply(data)
-
-            # Now clear the pointing and reset things for use with the mapmaking
-            # test later
-            delete_pointing = ops.Delete(
-                detdata=[detpointing_radec.quats, pixels.pixels, weights.weights]
-            )
-            delete_pointing.apply(data)
-            pixels.create_dist = None
 
             # Create an uncorrelated noise model from focalplane detector properties
             default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -301,11 +294,9 @@ class PointingWCSTest(MPITestCase):
             step_seconds = float(int(ob_time / 10.0))
             tmpl = templates.Offset(
                 times=defaults.times,
-                det_flags=None,
                 noise_model=default_model.noise_model,
                 step_time=step_seconds * u.second,
             )
-
             tmatrix = ops.TemplateMatrix(templates=[tmpl])
 
             # Map maker
@@ -348,8 +339,6 @@ class PointingWCSTest(MPITestCase):
     def create_source_data(
         self, data, proj, res, signal_name, deg_per_hour=1.0, dbg_dir=None
     ):
-        # Create fake source position
-
         detpointing = ops.PointingDetectorSimple(
             boresight=defaults.boresight_radec,
             quats="temp_quats",
@@ -365,9 +354,46 @@ class PointingWCSTest(MPITestCase):
             use_astropy=True,
             auto_bounds=True,
         )
-        pixels.create_dist = "source_pixel_dist"
-        pixels.apply(data)
-        pixels.create_dist = None
+
+        pix_dist = ops.BuildPixelDistribution(
+            pixel_dist="source_pixel_dist",
+            pixel_pointing=pixels,
+        )
+        pix_dist.apply(data)
+
+        # Create fake polarized sky pixel values locally
+        create_fake_sky(data, "source_pixel_dist", "fake_map")
+
+        if self.write_extra:
+            # Write it out
+            outfile = os.path.join(self.outdir, f"source_{proj}_input.fits")
+            write_wcs_fits(data["fake_map"], outfile)
+            if data.comm.world_rank == 0:
+                self.plot_maps(mapfile=outfile)
+
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            weights="temp_weights",
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Scan map into timestreams
+        scanner = ops.Pipeline(
+            operators=[
+                pixels,
+                weights,
+                ops.ScanMap(
+                    det_data=signal_name,
+                    pixels=pixels.pixels,
+                    weights=weights.weights,
+                    map_key="fake_map",
+                ),
+            ],
+            detsets=["SINGLE"],
+        )
+        scanner.apply(data)
 
         # Use this overall projection window to determine our source
         # movement.  The source starts at the center of the projection.
@@ -440,16 +466,14 @@ class PointingWCSTest(MPITestCase):
                 )
                 plt.close()
 
-        weights = ops.StokesWeights(
-            mode="I",
-            hwp_angle=None,
-            weights="temp_weights",
-            detector_pointing=detpointing,
-        )
-        weights.apply(data)
-
         default_model = ops.DefaultNoiseModel(noise_model="source_noise_model")
         default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=signal_name
+        )
+        sim_noise.apply(data)
 
         if dbg_dir is not None:
             # Make a binned map of the signal in the non-source-centered projection
@@ -461,11 +485,10 @@ class PointingWCSTest(MPITestCase):
             )
             mapper = ops.MapMaker(
                 name=f"source_{proj}_notrack",
-                det_data=defaults.det_data,
-                det_flags=None,
-                shared_flags=None,
+                det_data=signal_name,
                 solve_rcond_threshold=1e-3,
                 map_rcond_threshold=1e-3,
+                iter_max=10,
                 binning=binner,
                 template_matrix=None,
                 output_dir=dbg_dir,
@@ -498,7 +521,7 @@ class PointingWCSTest(MPITestCase):
             # Create fake observing of a small patch
             data = create_ground_data(self.comm, pixel_per_process=10)
 
-            # Create source motion
+            # Create source motion and simulated detector data.
             dbgdir = None
             if proj == "CAR" and self.write_extra:
                 dbgdir = self.outdir
@@ -528,40 +551,14 @@ class PointingWCSTest(MPITestCase):
                 auto_bounds=True,
             )
 
-            pixels.create_dist = "pixel_dist"
-            pixels.apply(data)
-            pixels.create_dist = None
-
-            weights.apply(data)
-
-            # Create fake polarized sky pixel values locally
-            create_fake_sky(data, "pixel_dist", "fake_map")
-
-            if self.write_extra:
-                # Write it out
-                outfile = os.path.join(self.outdir, f"source_{proj}_input.fits")
-                write_wcs_fits(data["fake_map"], outfile)
-                if rank == 0:
-                    self.plot_maps(mapfile=outfile)
-
-            # Scan map into timestreams
-            scanner = ops.ScanMap(
-                det_data=defaults.det_data,
-                pixels=pixels.pixels,
-                weights=weights.weights,
-                map_key="fake_map",
+            pix_dist = ops.BuildPixelDistribution(
+                pixel_dist="pixel_dist",
+                pixel_pointing=pixels,
             )
-            scanner.apply(data)
+            pix_dist.apply(data)
 
-            # Create an uncorrelated noise model from focalplane detector properties
             default_model = ops.DefaultNoiseModel(noise_model="noise_model")
             default_model.apply(data)
-
-            # Simulate noise and accumulate to signal
-            sim_noise = ops.SimNoise(
-                noise_model=default_model.noise_model, det_data=defaults.det_data
-            )
-            sim_noise.apply(data)
 
             # Set up binning operator for solving
             binner = ops.BinMap(
@@ -592,10 +589,9 @@ class PointingWCSTest(MPITestCase):
             mapper = ops.MapMaker(
                 name=f"source_{proj}",
                 det_data=defaults.det_data,
-                det_flags=None,
-                shared_flags=None,
                 solve_rcond_threshold=1e-3,
                 map_rcond_threshold=1e-3,
+                iter_max=10,
                 binning=binner,
                 template_matrix=tmatrix,
                 output_dir=self.outdir,
@@ -612,5 +608,8 @@ class PointingWCSTest(MPITestCase):
                 self.plot_maps(mapfile=outfile)
                 outfile = os.path.join(self.outdir, f"source_{proj}_binmap.fits")
                 self.plot_maps(mapfile=outfile)
+
+            if data.comm.comm_world is not None:
+                data.comm.comm_world.barrier()
 
             del data

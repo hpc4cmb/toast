@@ -316,6 +316,7 @@ class PixelDistribution(object):
             - The locations in the receive buffer of each submap.
 
         """
+        log = Logger.get()
         if self._alltoallv_info is not None:
             # Already computed
             return self._alltoallv_info
@@ -389,6 +390,17 @@ class PixelDistribution(object):
             recv_displ,
             recv_locations,
         )
+
+        msg_rank = 0
+        if self._comm is not None:
+            msg_rank = self._comm.rank
+        msg = f"alltoallv_info[{msg_rank}]:\n"
+        msg += f"  send_counts={send_counts} "
+        msg += f"send_displ={send_displ}\n"
+        msg += f"  recv_counts={recv_counts} "
+        msg += f"recv_displ={recv_displ} "
+        msg += f"recv_locations={recv_locations}"
+        log.verbose(msg)
 
         return self._alltoallv_info
 
@@ -744,6 +756,17 @@ class PixelData(AcceleratorObject):
             for sm, locs in recv_locations.items():
                 self._recv_locations[sm] = scale * np.array(locs, dtype=np.int32)
 
+            msg_rank = 0
+            if self._dist.comm is not None:
+                msg_rank = self._dist.comm.rank
+            msg = f"setup_alltoallv[{msg_rank}]:\n"
+            msg += f"  send_counts={self._send_counts} "
+            msg += f"send_displ={self._send_displ}\n"
+            msg += f"  recv_counts={self._recv_counts} "
+            msg += f"recv_displ={self._recv_displ} "
+            msg += f"recv_locations={self._recv_locations}"
+            log.verbose(msg)
+
             # Allocate a persistent single-submap buffer
             self._reduce_buf_raw = self.storage_class.zeros(self._n_submap_value)
             self.reduce_buf = self._reduce_buf_raw.array()
@@ -774,6 +797,9 @@ class PixelData(AcceleratorObject):
                         buf_check_fail = True
 
                     # Allocate a persistent receive buffer
+                    msg = f"{msg_rank}:  allocate receive buffer of "
+                    msg += f"{recv_buf_size} elements"
+                    log.verbose(msg)
                     self._receive_raw = self.storage_class.zeros(recv_buf_size)
                     self.receive = self._receive_raw.array()
             except:
@@ -796,6 +822,7 @@ class PixelData(AcceleratorObject):
             None.
 
         """
+        log = Logger.get()
         gt = GlobalTimers.get()
         self.setup_alltoallv()
 

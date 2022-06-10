@@ -5,7 +5,7 @@
 import numpy as np
 import traitlets
 from astropy import units as u
-from scipy.optimize import Bounds, least_squares
+from scipy.optimize import least_squares
 
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
@@ -105,8 +105,12 @@ class FitNoiseModel(Operator):
                 freqs = in_model.freq(det)
                 in_psd = in_model.psd(det)
                 fitted, result = self._fit_psd(freqs, in_psd, params)
-                if result.success:
+                if result.success and len(result.x) == 3:
+                    # This was a good fit
                     params = result.x
+                else:
+                    msg = f"FitNoiseModel observation {ob.name}, det {det} failed.  Params = {result.x}"
+                    log.warning(msg)
                 nse_freqs[det] = freqs
                 nse_psds[det] = fitted
             if ob.comm.comm_group is not None:
@@ -156,12 +160,18 @@ class FitNoiseModel(Operator):
         return psd
 
     def _fit_fun(self, x, *args, **kwargs):
-        net = x[0]
-        fknee = x[1]
-        alpha = x[2]
         freqs = kwargs["freqs"]
         data = kwargs["data"]
         fmin = kwargs["fmin"]
+        if "net" in kwargs:
+            # We are fixing the NET value
+            net = kwargs["net"]
+            fknee = x[0]
+            alpha = x[1]
+        else:
+            net = x[0]
+            fknee = x[1]
+            alpha = x[2]
         current = self._evaluate_model(freqs, fmin, net, fknee, alpha)
         # We weight the residual so that the high-frequency values specifying
         # the white noise plateau / NET are more important.  Also the lowest
@@ -186,6 +196,9 @@ class FitNoiseModel(Operator):
         result = least_squares(
             self._fit_fun,
             x_0,
+            xtol=1.0e-8,
+            gtol=1.0e-8,
+            ftol=1.0e-8,
             kwargs={"freqs": raw_freqs, "data": raw_data, "fmin": raw_fmin},
         )
         fit_data = data
@@ -196,6 +209,31 @@ class FitNoiseModel(Operator):
                 )
                 * psd_unit
             )
+        # else:
+        #     # Try fixing the NET based on the last few elements
+        #     fixed_net = np.sqrt(np.mean(raw_data[-5:]))
+        #     x_0 = np.array([0.1, 1.0])
+        #     result = least_squares(
+        #         self._fit_fun,
+        #         x_0,
+        #         xtol=1.0e-8,
+        #         gtol=1.0e-8,
+        #         ftol=1.0e-8,
+        #         kwargs={
+        #             "freqs": raw_freqs,
+        #             "data": raw_data,
+        #             "fmin": raw_fmin,
+        #             "net": fixed_net,
+        #         },
+        #     )
+        #     if result.success:
+        #         fit_data = (
+        #             self._evaluate_model(
+        #                 raw_freqs, raw_fmin, fixed_net, result.x[0], result.x[1]
+        #             )
+        #             * psd_unit
+        #         )
+
         return fit_data, result
 
     def _finalize(self, data, **kwargs):

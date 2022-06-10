@@ -282,6 +282,7 @@ class PixelsWCS(Operator):
         self.pix_ra = self.wcs_shape[0]
         self.pix_dec = self.wcs_shape[1]
         self._n_pix = self.pix_ra * self.pix_dec
+        dbgrank = MPI.COMM_WORLD.rank
         self._n_pix_submap = self._n_pix // self.submaps
         if self._n_pix_submap * self.submaps < self._n_pix:
             self._n_pix_submap += 1
@@ -317,6 +318,19 @@ class PixelsWCS(Operator):
                 lonmax = max(lonmax, lnmax)
                 latmin = min(latmin, ltmin)
                 latmax = max(latmax, ltmax)
+            if ob.comm.comm_group_rank is not None:
+                # Synchronize between groups
+                if ob.comm.group_rank == 0:
+                    lonmin = ob.comm.comm_group_rank.allreduce(lonmin, op=MPI.MIN)
+                    latmin = ob.comm.comm_group_rank.allreduce(latmin, op=MPI.MIN)
+                    lonmax = ob.comm.comm_group_rank.allreduce(lonmax, op=MPI.MAX)
+                    latmax = ob.comm.comm_group_rank.allreduce(latmax, op=MPI.MAX)
+            # Broadcast result within the group
+            if ob.comm.comm_group is not None:
+                lonmin = ob.comm.comm_group.bcast(lonmin, root=0)
+                lonmax = ob.comm.comm_group.bcast(lonmax, root=0)
+                latmin = ob.comm.comm_group.bcast(latmin, root=0)
+                latmax = ob.comm.comm_group.bcast(latmax, root=0)
             new_bounds = (
                 (lonmax.to(u.degree), latmin.to(u.degree)),
                 (lonmin.to(u.degree), latmax.to(u.degree)),
@@ -494,8 +508,8 @@ class PixelsWCS(Operator):
                 lon.append(phi)
                 lat.append(np.pi / 2 - theta)
             else:
-                lon.append(phi - center_lonlat[:, 0])
-                lat.append((np.pi / 2 - theta) - center_lonlat[:, 1])
+                lon.append(phi - center_lonlat[rank::ntask, 0])
+                lat.append((np.pi / 2 - theta) - center_lonlat[rank::ntask, 1])
         lon = np.unwrap(np.hstack(lon))
         lat = np.hstack(lat)
 
