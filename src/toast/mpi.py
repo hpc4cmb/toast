@@ -409,22 +409,22 @@ class Comm(object):
                 if process_rows == 1:
                     # We can re-use the group communicators as the grid column
                     # communicators
-                    comm_col = self._gcomm
-                    comm_col_node = self._gnodecomm
-                    comm_col_rank_node = self._gnoderankcomm
-                    comm_row = MPI.COMM_SELF
-                    comm_row_node = MPI.COMM_SELF
-                    comm_row_rank_node = MPI.COMM_SELF
-                    cleanup = False
-                elif process_cols == 1:
-                    # We can re-use the group communicators as the grid row
-                    # communicators
                     comm_row = self._gcomm
                     comm_row_node = self._gnodecomm
                     comm_row_rank_node = self._gnoderankcomm
                     comm_col = MPI.COMM_SELF
                     comm_col_node = MPI.COMM_SELF
                     comm_col_rank_node = MPI.COMM_SELF
+                    cleanup = False
+                elif process_cols == 1:
+                    # We can re-use the group communicators as the grid row
+                    # communicators
+                    comm_col = self._gcomm
+                    comm_col_node = self._gnodecomm
+                    comm_col_rank_node = self._gnoderankcomm
+                    comm_row = MPI.COMM_SELF
+                    comm_row_node = MPI.COMM_SELF
+                    comm_row_rank_node = MPI.COMM_SELF
                     cleanup = False
                 else:
                     # We have to create new split communicators
