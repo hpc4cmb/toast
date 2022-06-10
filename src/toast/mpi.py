@@ -228,10 +228,7 @@ class Comm(object):
             self._gcomm = self._wcomm
             self._gnodecomm = self._nodecomm
             self._gnoderankcomm = self._noderankcomm
-            if use_mpi:
-                self._rcomm = MPI.COMM_SELF
-            else:
-                self._rcomm = None
+            self._rcomm = None
         else:
             # We need to split the communicator.  This code is never executed
             # unless MPI is enabled and we have multiple groups.
@@ -412,9 +409,9 @@ class Comm(object):
                     comm_row = self._gcomm
                     comm_row_node = self._gnodecomm
                     comm_row_rank_node = self._gnoderankcomm
-                    comm_col = MPI.COMM_SELF
-                    comm_col_node = MPI.COMM_SELF
-                    comm_col_rank_node = MPI.COMM_SELF
+                    comm_col = None
+                    comm_col_node = None
+                    comm_col_rank_node = None
                     cleanup = False
                 elif process_cols == 1:
                     # We can re-use the group communicators as the grid row
@@ -422,9 +419,9 @@ class Comm(object):
                     comm_col = self._gcomm
                     comm_col_node = self._gnodecomm
                     comm_col_rank_node = self._gnoderankcomm
-                    comm_row = MPI.COMM_SELF
-                    comm_row_node = MPI.COMM_SELF
-                    comm_row_rank_node = MPI.COMM_SELF
+                    comm_row = None
+                    comm_row_node = None
+                    comm_row_rank_node = None
                     cleanup = False
                 else:
                     # We have to create new split communicators
