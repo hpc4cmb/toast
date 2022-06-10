@@ -191,6 +191,7 @@ def load_instrument_and_schedule(args, comm):
         if comm is None or comm.rank == 0:
             pickle.dump(focalplane, open(fname_pickle, "wb"))
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
+    log.info_rank(f"Focalplane: {str(focalplane)}", comm=comm)
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
     log.info_rank(f"After loading focalplane:  {mem}", comm)
 
