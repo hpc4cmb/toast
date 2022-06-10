@@ -115,8 +115,6 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         None (results are stored in pixels and hit_submaps).
         TODO does pixels matter or is it only hit_submaps?
     """
-    # print(f"DEBUGGING: pixels_healpix_jax intervals:{type(intervals)} pixels:{type(pixels)}") # TODO
-
     # initialize hpix for all computations
     hpix = healpix.HPIX_JAX.init(nside)
 

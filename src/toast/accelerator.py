@@ -31,7 +31,9 @@ use_accel_jax = False
 if "TOAST_GPU_JAX" in os.environ and os.environ["TOAST_GPU_JAX"] in enable_vals:
     #try:
         import jax
-        import jax.numpy as jnp
+        #import jax.numpy as jnp
+        # TODO cannot be put here due to curcular reference problems?
+        #from .ops.jax_ops import MutableJaxArray
 
         use_accel_jax = True
     # TODO reenable catch-all error?
@@ -98,7 +100,8 @@ def accel_data_present(data):
     if use_accel_omp:
         return omp_accel_present(data)
     elif use_accel_jax:
-        if isinstance(data, jnp.DeviceArray):
+        from .ops.jax_ops import MutableJaxArray # TODO
+        if isinstance(data, MutableJaxArray):
             return True
         else:
             return False
@@ -125,7 +128,8 @@ def accel_data_create(data):
     if use_accel_omp:
         omp_accel_create(data)
     elif use_accel_jax:
-        return jnp.asarray(data)
+        from .ops.jax_ops import MutableJaxArray # TODO
+        return MutableJaxArray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot create")
@@ -149,7 +153,8 @@ def accel_data_update_device(data):
         omp_accel_update_device(data)
         return data
     elif use_accel_jax:
-        return jnp.asarray(data)
+        from .ops.jax_ops import MutableJaxArray # TODO
+        return MutableJaxArray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating device")
@@ -175,7 +180,7 @@ def accel_data_update_host(data):
         omp_accel_update_host(data)
         return data
     elif use_accel_jax:
-        return np.asarray(data)
+        return data.to_numpy()
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")

@@ -29,7 +29,8 @@ from .utils import (
 
 if use_accel_jax:
     import jax
-    import jax.numpy as jnp
+    #import jax.numpy as jnp
+    from .ops.jax_ops import MutableJaxArray
 
 class DetectorData(AcceleratorObject):
     """Class representing a logical collection of co-sampled detector data.
@@ -93,7 +94,6 @@ class DetectorData(AcceleratorObject):
         self._fullsize = 0
         self._memsize = 0
         self._raw = None
-        self._raw_jax = None
 
         if view_data is None:
             # Allocate the data
@@ -255,13 +255,11 @@ class DetectorData(AcceleratorObject):
             self._shape = shp
             self._flatshape = flatshape
             if use_accel_jax and self.accel_exists():
-                # FIXME:  Is there really no way to "clear" a jax array?
-                self._raw_jax = jnp.zeros_like(self._raw.array())
-                self._flatdata = self._raw_jax[: self._flatshape]
+                self._data = MutableJaxArray.zeros(self._shape)
             else:
                 self._flatdata = self._raw.array()[: self._flatshape]
                 self._flatdata[:] = 0
-            self._data = self._flatdata.reshape(self._shape)
+                self._data = self._flatdata.reshape(self._shape)
             if self.accel_exists():
                 # Should we zero the device memory?
                 pass
@@ -278,6 +276,7 @@ class DetectorData(AcceleratorObject):
         """
         if hasattr(self, "_data"):
             del self._data
+            self._data = None
         if hasattr(self, "_is_view") and not self._is_view:
             if hasattr(self, "_flatdata"):
                 del self._flatdata
@@ -291,9 +290,6 @@ class DetectorData(AcceleratorObject):
                     # since that function also manipulates self._raw.
                     if use_accel_omp:
                         accel_data_delete(self._raw)
-                    elif use_accel_jax:
-                        del self._raw_jax
-                        self._raw_jax = None
                 if self._raw is not None:
                     self._raw.clear()
                 del self._raw
@@ -444,7 +440,7 @@ class DetectorData(AcceleratorObject):
             if use_accel_omp:
                 return accel_data_present(self._raw)
             elif use_accel_jax:
-                return accel_data_present(self._raw_jax)
+                return accel_data_present(self._data)
             else:
                 return False
 
@@ -454,7 +450,7 @@ class DetectorData(AcceleratorObject):
         if use_accel_omp:
             accel_data_create(self._raw)
         elif use_accel_jax:
-            self._raw_jax = accel_data_create(self._raw_jax)
+            self._data = accel_data_create(self._data)
 
     def _accel_update_device(self):
         log = Logger.get()
@@ -462,9 +458,7 @@ class DetectorData(AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_device(self._raw)
         elif use_accel_jax:
-            self._raw_jax = accel_data_update_device(self._raw.array())
-            self._flatdata = self._raw_jax[: self._flatshape]
-            self._data = self._flatdata.reshape(self._shape)
+            self._data = accel_data_update_device(self._data)
 
     def _accel_update_host(self):
         log = Logger.get()
@@ -472,9 +466,8 @@ class DetectorData(AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_host(self._raw)
         elif use_accel_jax:
-            self._raw[:] = accel_data_update_host(self._raw_jax)
-            self._flatdata = self._raw.array()[: self._flatshape]
-            self._data = self._flatdata.reshape(self._shape)
+            # TODO this is called before calling pointing detector causing it to be called on a readonly numpy array
+            self._data = accel_data_update_host(self._data)
 
     def _accel_delete(self):
         log = Logger.get()
@@ -482,8 +475,6 @@ class DetectorData(AcceleratorObject):
         if use_accel_omp:
             accel_data_delete(self._raw)
         elif use_accel_jax:
-            del self._raw_jax
-            self._raw_jax = None
             self._flatdata = self._raw.array()[: self._flatshape]
             self._data = self._flatdata.reshape(self._shape)
 
@@ -1409,8 +1400,7 @@ class SharedDataManager(MutableMapping):
         if use_accel_omp:
             accel_data_create(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            # FIXME: add device ID here
-            self.jax[key] = jax.device_put(self._internal[key].shdata._flat)
+            self.jax[key] = MutableJaxArray(self._internal[key].shdata._flat)
 
     def accel_update_device(self, key):
         """Copy the named shared data to the accelerator.
@@ -1444,8 +1434,7 @@ class SharedDataManager(MutableMapping):
         if use_accel_omp:
             _ = accel_data_update_device(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            # FIXME: add device ID here
-            self.jax[key] = jax.device_put(self._internal[key].shdata._flat)
+            self.jax[key] = MutableJaxArray(self._internal[key].shdata._flat)
 
         self._accel_used[key] = True
 
@@ -1486,7 +1475,7 @@ class SharedDataManager(MutableMapping):
                 rnk = self._internal[key].shdata.comm.rank
             dt = None
             if rnk == 0:
-                dt = self.jax[key].copy()
+                dt = self.jax[key].to_numpy()
             self._internal[key].shdata.set(dt, fromrank=0)
 
         self._accel_used[key] = False

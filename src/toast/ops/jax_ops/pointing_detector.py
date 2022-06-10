@@ -76,7 +76,8 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     Returns:
         None (the result is put in quats).
     """
-    #print(f"DEBUGGING: pointing_detector_jax focalplane:{type(focalplane)} quats:{type(quats)}") # TODO
+    # TODO in at least one case this turns out to be a read-only numpy array!
+    print(f"DEBUGGING: quats:{type(quats)}")
 
     # we loop over intervals
     for interval in intervals:
@@ -110,8 +111,6 @@ def pointing_detector_inner_numpy(flag, boresight, focalplane, mask):
     else:
         quats = focalplane
 
-    return quats
-
 def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accell):
     """
     Args:
@@ -142,6 +141,8 @@ def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals,
                                                                        boresight[isamp,:],
                                                                        focalplane[idet,:],
                                                                        shared_flag_mask)
+
+    return quats
 
 #-------------------------------------------------------------------------------------------------
 # C++

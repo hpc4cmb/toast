@@ -6,5 +6,6 @@ install(FILES
     math_qarray.py
     math_healpix.py
     intervals.py
+    mutableArray.py
     DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops/utils
 )

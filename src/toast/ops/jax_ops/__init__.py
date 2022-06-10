@@ -3,8 +3,8 @@
 # to run miniapp:
 # export TOAST_GPU_JAX=true; toast_mini --node_mem_gb 4.0
 #
-# print(f"DEBUGGING: pointing_detector_jax focalplane:{type(focalplane)} quats:{type(quats)}")
-# pointing_detector goes from numpy array to numpy array
+# fix circular import problem in accelarator.py
+# ImportError: cannot import name 'import_from_name' from partially initialized module 'toast.utils' (most likely due to a circular import)
 #
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
 #   (we could cache that intervals_index at a higher level within toast if the intervals are constant)
@@ -25,6 +25,9 @@
 # enable 64bits precision
 from jax.config import config as jax_config
 jax_config.update("jax_enable_x64", True)
+
+# Jax types
+from .utils import MutableJaxArray
 
 # operators that have been ported to JAX
 from .polyfilter1D import filter_polynomial

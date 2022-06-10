@@ -3,6 +3,8 @@ from enum import Enum
 import jax
 import numpy
 
+from .mutableArray import MutableJaxArray
+
 #------------------------------------------------------------------------------
 # INTERVAL INDEXING
 
