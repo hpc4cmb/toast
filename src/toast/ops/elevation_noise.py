@@ -309,6 +309,7 @@ class ElevationNoise(Operator):
 
                 out_noise.psd(det)[:] *= net_factor**2
                 self.total_factors.append(net_factor)
+                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
 
             self.detector_pointing.view = detector_pointing_view
 
