@@ -282,7 +282,6 @@ class PixelsWCS(Operator):
         self.pix_ra = self.wcs_shape[0]
         self.pix_dec = self.wcs_shape[1]
         self._n_pix = self.pix_ra * self.pix_dec
-        dbgrank = MPI.COMM_WORLD.rank
         self._n_pix_submap = self._n_pix // self.submaps
         if self._n_pix_submap * self.submaps < self._n_pix:
             self._n_pix_submap += 1
