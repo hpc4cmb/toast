@@ -15,8 +15,8 @@ from ..pixels_io_wcs import write_wcs_fits
 from ._helpers import (
     create_fake_mask,
     create_fake_sky,
-    create_outdir,
     create_ground_data,
+    create_outdir,
 )
 from .mpi import MPITestCase
 

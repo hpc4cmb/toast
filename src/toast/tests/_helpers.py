@@ -100,12 +100,13 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
 
+
 def create_boresight_telescope(group_size, sample_rate=10.0 * u.Hz):
     """Create a fake telescope with one boresight detector per process."""
     nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
     n_det = group_size
     det_names = [f"d{x:03d}" for x in range(n_det)]
-    pol_ang = np.array([(2*np.pi*x/n_det) for x in range(n_det)])
+    pol_ang = np.array([(2 * np.pi * x / n_det) for x in range(n_det)])
 
     det_table = QTable(
         [
@@ -120,9 +121,7 @@ def create_boresight_telescope(group_size, sample_rate=10.0 * u.Hz):
             Column(name="psd_net", length=n_det, unit=(u.K * np.sqrt(1.0 * u.second))),
             Column(name="bandcenter", length=n_det, unit=u.GHz),
             Column(name="bandwidth", length=n_det, unit=u.GHz),
-            Column(
-                name="pixel", data=[0 for x in range(n_det)]
-            ),
+            Column(name="pixel", data=[0 for x in range(n_det)]),
         ]
     )
 
@@ -146,6 +145,7 @@ def create_boresight_telescope(group_size, sample_rate=10.0 * u.Hz):
 
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
+
 
 def create_ground_telescope(
     group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1, fknee=None

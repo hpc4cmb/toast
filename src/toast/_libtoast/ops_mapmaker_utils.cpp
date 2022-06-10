@@ -265,7 +265,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     use_det_flags
                                 );
                                 for (int64_t iw = 0; iw < nnz; iw++) {
-                                    #pragma omp atomic
+                                    # pragma omp atomic
                                     raw_zmap[zoff + iw] += zmap_val[iw];
                                 }
                             }

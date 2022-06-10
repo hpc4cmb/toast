@@ -112,8 +112,8 @@ class NoiseEstimTest(MPITestCase):
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
 
-            import matplotlib.pyplot as plt
             import astropy.io.fits as pf
+            import matplotlib.pyplot as plt
 
             obs = data.obs[0]
             det = obs.local_detectors[0]

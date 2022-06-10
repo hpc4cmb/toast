@@ -4,21 +4,21 @@
 
 import warnings
 
-import traitlets
 import numpy as np
-from astropy import units as u
 import pixell
 import pixell.enmap
+import traitlets
+from astropy import units as u
 
+from .. import qarray as qa
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..utils import Environment, Logger
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Tuple
-from ..timing import function_timer
-from .. import qarray as qa
 from ..pixels import PixelDistribution
-from .operator import Operator
+from ..timing import function_timer
+from ..traits import Bool, Instance, Int, Tuple, Unicode, trait_docs
+from ..utils import Environment, Logger
 from .delete import Delete
+from .operator import Operator
 
 
 @trait_docs

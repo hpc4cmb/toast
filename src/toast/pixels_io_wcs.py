@@ -286,14 +286,15 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
     if rank == 0:
         # Load from disk
         endata = pixell.enmap.read_map(path, fmt="fits")
-
-    # Check dimensions
-    enpix = 1
-    for s in endata.shape:
-        enpix *= s
-    tot_pix = dist.n_pix * pix.n_value
-    if tot_pix != enpix:
-        raise RuntimeError(f"Input file has {enpix} pixel values instead of {tot_pix}")
+        # Check dimensions
+        enpix = 1
+        for s in endata.shape:
+            enpix *= s
+        tot_pix = dist.n_pix * pix.n_value
+        if tot_pix != enpix:
+            raise RuntimeError(
+                f"Input file has {enpix} pixel values instead of {tot_pix}"
+            )
 
     n_val_submap = dist.n_pix_submap * pix.n_value
 

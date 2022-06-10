@@ -4,26 +4,26 @@
 
 import os
 
+import astropy.io.fits as af
 import numpy as np
 from astropy import units as u
-import astropy.io.fits as af
 from astropy.wcs import WCS
 
 from .. import ops as ops
-from .. import templates
 from .. import qarray as qa
-from ..observation import default_values as defaults
-from ..observation import Observation
+from .. import templates
 from ..data import Data
+from ..observation import Observation
+from ..observation import default_values as defaults
 from ..pixels_io_wcs import write_wcs_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import (
-    create_outdir,
-    create_ground_data,
-    create_comm,
-    create_space_telescope,
-    create_fake_sky,
     create_boresight_telescope,
+    create_comm,
+    create_fake_sky,
+    create_ground_data,
+    create_outdir,
+    create_space_telescope,
 )
 from .mpi import MPITestCase
 
@@ -116,7 +116,9 @@ class PointingWCSTest(MPITestCase):
 
         np.testing.assert_array_equal(
             data[build_hits.hits].data,
-            data.comm.ngroups * len(data.obs[0].all_detectors) * np.ones_like(data[build_hits.hits].data),
+            data.comm.ngroups
+            * len(data.obs[0].all_detectors)
+            * np.ones_like(data[build_hits.hits].data),
         )
         del data
 
