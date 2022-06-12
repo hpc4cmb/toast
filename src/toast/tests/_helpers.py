@@ -101,6 +101,52 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
     return Telescope("test", focalplane=fp, site=site)
 
 
+def create_boresight_telescope(group_size, sample_rate=10.0 * u.Hz):
+    """Create a fake telescope with one boresight detector per process."""
+    nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
+    n_det = group_size
+    det_names = [f"d{x:03d}" for x in range(n_det)]
+    pol_ang = np.array([(2 * np.pi * x / n_det) for x in range(n_det)])
+
+    det_table = QTable(
+        [
+            Column(name="name", data=det_names),
+            Column(name="quat", data=[nullquat for x in range(n_det)]),
+            Column(name="pol_leakage", length=n_det, unit=None),
+            Column(name="psi_pol", data=pol_ang, unit=u.rad),
+            Column(name="fwhm", length=n_det, unit=u.arcmin),
+            Column(name="psd_fmin", length=n_det, unit=u.Hz),
+            Column(name="psd_fknee", length=n_det, unit=u.Hz),
+            Column(name="psd_alpha", length=n_det, unit=None),
+            Column(name="psd_net", length=n_det, unit=(u.K * np.sqrt(1.0 * u.second))),
+            Column(name="bandcenter", length=n_det, unit=u.GHz),
+            Column(name="bandwidth", length=n_det, unit=u.GHz),
+            Column(name="pixel", data=[0 for x in range(n_det)]),
+        ]
+    )
+
+    fwhm = 5.0 * u.arcmin
+
+    for idet in range(len(det_table)):
+        det_table[idet]["pol_leakage"] = 0.0
+        det_table[idet]["fwhm"] = fwhm
+        det_table[idet]["bandcenter"] = 150.0 * u.GHz
+        det_table[idet]["bandwidth"] = 20.0 * u.GHz
+        det_table[idet]["psd_fmin"] = 1.0e-5 * u.Hz
+        det_table[idet]["psd_fknee"] = 0.05 * u.Hz
+        det_table[idet]["psd_alpha"] = 1.0
+        det_table[idet]["psd_net"] = 100 * (u.K * np.sqrt(1.0 * u.second))
+
+    fp = Focalplane(
+        detector_data=det_table,
+        sample_rate=sample_rate,
+        field_of_view=1.1 * (2 * fwhm),
+    )
+
+    site = SpaceSite("L2")
+    return Telescope("test", focalplane=fp, site=site)
+
+
 def create_ground_telescope(
     group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1, fknee=None
 ):

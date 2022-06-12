@@ -10,11 +10,11 @@ import numpy as np
 import numpy.testing as nt
 from astropy import units as u
 
+from .. import ops as ops
 from ..instrument_sim import fake_hexagon_focalplane
 from ..io import H5File
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
-from .. import ops as ops
 from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
 

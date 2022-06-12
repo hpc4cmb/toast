@@ -201,7 +201,7 @@ void init_template_offset(py::module & m) {
                             } else {
                                 contrib = raw_det_data[d];
                             }
-                            #pragma omp atomic
+                            # pragma omp atomic
                             raw_amplitudes[amp] += contrib;
                         }
                         offset += raw_n_amp_views[iview];

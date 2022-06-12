@@ -7,12 +7,7 @@ import traitlets
 
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import (
-    filename_is_fits,
-    filename_is_hdf5,
-    read_healpix_fits,
-    read_healpix_hdf5,
-)
+from ..pixels_io_wcs import read_wcs_fits
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -23,8 +18,8 @@ from .scan_map import ScanMap, ScanMask
 
 
 @trait_docs
-class ScanHealpixMap(Operator):
-    """Operator which reads a HEALPix format map from disk and scans it to a timestream.
+class ScanWCSMap(Operator):
+    """Operator which reads a WCS format map from disk and scans it to a timestream.
 
     The map file is loaded and distributed among the processes.  For each observation,
     the pointing model is used to expand the pointing and scan the map values into
@@ -36,7 +31,7 @@ class ScanHealpixMap(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    file = Unicode(None, allow_none=True, help="Path to healpix FITS file")
+    file = Unicode(None, allow_none=True, help="Path to FITS file")
 
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for accumulating output"
@@ -146,17 +141,7 @@ class ScanHealpixMap(Operator):
         # timestreams.
         if self.map_name not in data:
             data[self.map_name] = PixelData(dist, dtype=np.float32, n_value=nnz)
-            if filename_is_fits(self.file):
-                read_healpix_fits(
-                    data[self.map_name], self.file, nest=self.pixel_pointing.nest
-                )
-            elif filename_is_hdf5(self.file):
-                read_healpix_hdf5(
-                    data[self.map_name], self.file, nest=self.pixel_pointing.nest
-                )
-            else:
-                msg = f"Could not determine map format (HDF5 or FITS): {self.file}"
-                raise RuntimeError(msg)
+            read_wcs_fits(data[self.map_name], self.file)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.
@@ -210,8 +195,8 @@ class ScanHealpixMap(Operator):
 
 
 @trait_docs
-class ScanHealpixMask(Operator):
-    """Operator which reads a HEALPix format mask from disk and scans it to a timestream.
+class ScanWCSMask(Operator):
+    """Operator which reads a WCS mask from disk and scans it to a timestream.
 
     The mask file is loaded and distributed among the processes.  For each observation,
     the pointing model is used to expand the pointing and scan the mask values into
@@ -223,7 +208,7 @@ class ScanHealpixMask(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    file = Unicode(None, allow_none=True, help="Path to healpix FITS file")
+    file = Unicode(None, allow_none=True, help="Path to FITS file")
 
     det_flags = Unicode(
         defaults.det_flags,
@@ -305,17 +290,7 @@ class ScanHealpixMask(Operator):
         # timestreams.
         if self.mask_name not in data:
             data[self.mask_name] = PixelData(dist, dtype=np.uint8, n_value=1)
-            if filename_is_fits(self.file):
-                read_healpix_fits(
-                    data[self.mask_name], self.file, nest=self.pixel_pointing.nest
-                )
-            elif filename_is_hdf5(self.file):
-                read_healpix_hdf5(
-                    data[self.mask_name], self.file, nest=self.pixel_pointing.nest
-                )
-            else:
-                msg = f"Could not determine mask format (HDF5 or FITS): {self.file}"
-                raise RuntimeError(msg)
+            read_wcs_fits(data[self.mask_name], self.file)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.

@@ -19,7 +19,7 @@
 // So we must duplicate this across compilation units.
 
 void stokes_weights_qa_rotate(double const * q_in, double const * v_in,
-               double * v_out) {
+                              double * v_out) {
     // The input quaternion has already been normalized on the host.
 
     double xw =  q_in[3] * q_in[0];

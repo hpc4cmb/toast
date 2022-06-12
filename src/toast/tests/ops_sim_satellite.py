@@ -17,7 +17,7 @@ from ..instrument import Focalplane, SpaceSite, Telescope
 from ..instrument_sim import fake_hexagon_focalplane
 from ..mpi import MPI, Comm
 from ..observation import default_values as defaults
-from ..pixels_io import write_healpix_fits
+from ..pixels_io_healpix import write_healpix_fits
 from ..schedule_sim_satellite import create_satellite_schedule
 from ..vis import set_matplotlib_backend
 from ._helpers import create_comm, create_outdir

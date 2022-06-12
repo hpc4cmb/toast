@@ -12,7 +12,7 @@ from .. import rng
 from ..covariance import covariance_apply
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io import write_healpix_fits
+from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import (
     create_fake_sky,

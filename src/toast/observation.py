@@ -185,12 +185,13 @@ class Observation(MutableMapping):
             self._uid = name_UID(self._name)
 
         if self._session is None:
-            self._session = Session(
-                name=self._name,
-                uid=self._uid,
-                start=None,
-                end=None,
-            )
+            if self._name is not None:
+                self._session = Session(
+                    name=self._name,
+                    uid=self._uid,
+                    start=None,
+                    end=None,
+                )
         elif not isinstance(self._session, Session):
             raise RuntimeError("session should be a Session instance or None")
 

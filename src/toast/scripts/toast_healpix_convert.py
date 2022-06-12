@@ -18,7 +18,7 @@ import numpy as np
 
 import toast
 from toast.mpi import Comm, get_world
-from toast.pixels_io import (
+from toast.pixels_io_healpix import (
     filename_is_fits,
     filename_is_hdf5,
     read_healpix,

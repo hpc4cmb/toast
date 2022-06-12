@@ -62,11 +62,6 @@ class Reset(Operator):
                 for key in self.detdata:
                     for d in dets:
                         ob.detdata[key][d, :] = 0
-                    print(
-                        "Reset detdata {}, dets {}, result = ".format(key, dets),
-                        ob.detdata[key],
-                        flush=True,
-                    )
             if self.shared is not None:
                 for key in self.shared:
                     scomm = ob.shared[key].nodecomm

@@ -110,7 +110,8 @@ install(FILES
     config.py
     job.py
     pixels.py
-    pixels_io.py
+    pixels_io_healpix.py
+    pixels_io_wcs.py
     covariance.py
     dist.py
     data.py

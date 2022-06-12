@@ -36,6 +36,7 @@ from .noise_weight import NoiseWeight
 from .operator import Operator
 from .pipeline import Pipeline
 from .pixels_healpix import PixelsHealpix
+from .pixels_wcs import PixelsWCS
 from .pointing import BuildPixelDistribution
 from .pointing_detector import PointingDetectorSimple
 from .polyfilter import CommonModeFilter, PolyFilter, PolyFilter2D
@@ -45,6 +46,7 @@ from .save_hdf5 import SaveHDF5
 from .save_spt3g import SaveSpt3g
 from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 from .scan_map import ScanMap, ScanMask, ScanScale
+from .scan_wcs import ScanWCSMap, ScanWCSMask
 from .sim_cosmic_rays import InjectCosmicRays
 from .sim_crosstalk import CrossTalk, MitigateCrossTalk
 from .sim_gaindrifts import GainDrifter

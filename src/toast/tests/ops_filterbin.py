@@ -16,7 +16,7 @@ from .. import ops as ops
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io import read_healpix
+from ..pixels_io_healpix import read_healpix
 from ..vis import set_matplotlib_backend
 from ._helpers import create_fake_sky, create_ground_data, create_outdir, fake_flags
 from .mpi import MPITestCase

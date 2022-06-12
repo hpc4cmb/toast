@@ -22,7 +22,7 @@ from toast import PixelData, PixelDistribution
 from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
 from toast.covariance import covariance_apply, covariance_invert
 from toast.mpi import MPI, Comm, get_world
-from toast.pixels_io import (
+from toast.pixels_io_healpix import (
     filename_is_fits,
     filename_is_hdf5,
     read_healpix,
