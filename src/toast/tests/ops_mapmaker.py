@@ -120,6 +120,8 @@ class MapmakerTest(MPITestCase):
             det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-2,
+            map_rcond_threshold=1.0e-2,
             write_hits=False,
             write_map=False,
             write_cov=False,
