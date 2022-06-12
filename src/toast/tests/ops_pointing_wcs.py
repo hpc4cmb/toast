@@ -230,7 +230,7 @@ class PointingWCSTest(MPITestCase):
             pixels = ops.PixelsWCS(
                 detector_pointing=detpointing_radec,
                 projection=proj,
-                resolution=(0.05 * u.degree, 0.05 * u.degree),
+                resolution=(0.5 * u.degree, 0.5 * u.degree),
                 auto_bounds=True,
                 use_astropy=True,
             )
@@ -307,6 +307,8 @@ class PointingWCSTest(MPITestCase):
                 det_data=defaults.det_data,
                 binning=binner,
                 template_matrix=tmatrix,
+                solve_rcond_threshold=1.0e-2,
+                map_rcond_threshold=1.0e-2,
                 write_hits=False,
                 write_map=False,
                 write_cov=False,
@@ -488,8 +490,8 @@ class PointingWCSTest(MPITestCase):
             mapper = ops.MapMaker(
                 name=f"source_{proj}_notrack",
                 det_data=signal_name,
-                solve_rcond_threshold=1e-3,
-                map_rcond_threshold=1e-3,
+                solve_rcond_threshold=1.0e-2,
+                map_rcond_threshold=1.0e-2,
                 iter_max=10,
                 binning=binner,
                 template_matrix=None,
@@ -517,7 +519,7 @@ class PointingWCSTest(MPITestCase):
             rank = self.comm.rank
 
         # Test several projections
-        resolution = 0.1 * u.degree
+        resolution = 0.5 * u.degree
 
         for proj in ["CAR", "TAN"]:
             # Create fake observing of a small patch
@@ -591,8 +593,8 @@ class PointingWCSTest(MPITestCase):
             mapper = ops.MapMaker(
                 name=f"source_{proj}",
                 det_data=defaults.det_data,
-                solve_rcond_threshold=1e-3,
-                map_rcond_threshold=1e-3,
+                solve_rcond_threshold=1.0e-2,
+                map_rcond_threshold=1.0e-2,
                 iter_max=10,
                 binning=binner,
                 template_matrix=tmatrix,
