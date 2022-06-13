@@ -233,11 +233,17 @@ class CMakeBuild(build_ext):
     def move_output(self, ext):
         extpath = self.get_ext_filename(ext.name)
         build_temp = Path(self.build_temp).resolve()
+        build_lib = Path(self.build_lib).resolve()
         dest_path = Path(self.get_ext_fullpath(ext.name)).resolve()
         source_path = os.path.join(build_temp, "src", extpath)
+        lib_path = os.path.join(build_lib, extpath)
         dest_directory = dest_path.parents[0]
         dest_directory.mkdir(parents=True, exist_ok=True)
         self.copy_file(source_path, dest_path)
+        # Also copy from the temp to the lib directory so that
+        # the --inplace option works
+        os.makedirs(os.path.dirname(lib_path), exist_ok=True)
+        self.copy_file(source_path, lib_path)
 
 
 ext_modules = [CMakeExtension("toast._libtoast")]

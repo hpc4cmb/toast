@@ -67,6 +67,12 @@ tar xzf ${mpich_pkg} \
     && make -j ${MAKEJ} \
     && make install
 
+# Update pip
+pip install --upgrade pip
+
+# Install a couple of base packages that are always required
+pip install -v cmake wheel
+
 # In order to maximize ABI compatibility with numpy, build with the newest numpy
 # version containing the oldest ABI version compatible with the python we are using.
 pyver=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
@@ -83,14 +89,8 @@ if [ ${pyver} == "3.10" ]; then
     numpy_ver="1.22"
 fi
 
-# Update pip
-pip install --upgrade pip
-
-# Install a couple of base packages that are always required
-pip install -v "numpy<${numpy_ver}" cmake wheel
-
 # Install build requirements.
-CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt"
+CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
 
 # Install mpi4py for running tests
 
