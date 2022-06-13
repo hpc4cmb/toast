@@ -178,6 +178,7 @@ class Comm(object):
         self._nodecomm = None
         self._noderankcomm = None
         self._nodeprocs = 1
+        self._noderankprocs = 1
         if self._wcomm is not None:
             self._wrank = self._wcomm.rank
             self._wsize = self._wcomm.size
@@ -185,6 +186,7 @@ class Comm(object):
             self._nodeprocs = self._nodecomm.size
             myworldnode = self._wrank // self._nodeprocs
             self._noderankcomm = self._wcomm.Split(self._nodecomm.rank, myworldnode)
+            self._noderankprocs = self._noderankcomm.size
 
         self._gsize = groupsize
 
@@ -210,12 +212,15 @@ class Comm(object):
             log.error(msg)
             raise RuntimeError(msg)
 
-        if self._gsize > self._nodeprocs and self._gsize % self._nodeprocs != 0:
-            msg = f"Group size of {self._gsize} is not a whole number of "
-            msg += f"nodes (there are {self._nodeprocs} processes per node)"
-            log.error(msg)
-            raise RuntimeError(msg)
-
+        if self._gsize > self._nodeprocs:
+            if self._gsize % self._nodeprocs != 0:
+                msg = f"Group size of {self._gsize} is not a whole number of "
+                msg += f"nodes (there are {self._nodeprocs} processes per node)"
+                log.error(msg)
+                raise RuntimeError(msg)
+            self._gnodes = self._gsize // self._nodeprocs
+        else:
+            self._gnodes = 1
         self._group = self._wrank // self._gsize
         self._grank = self._wrank % self._gsize
         self._cleanup_group_comm = False
@@ -229,6 +234,7 @@ class Comm(object):
             self._gnodecomm = self._nodecomm
             self._gnoderankcomm = self._noderankcomm
             self._rcomm = None
+            self._gnoderankprocs = self._noderankprocs
         else:
             # We need to split the communicator.  This code is never executed
             # unless MPI is enabled and we have multiple groups.
@@ -238,7 +244,25 @@ class Comm(object):
             self._gnodeprocs = self._gnodecomm.size
             mygroupnode = self._grank // self._gnodeprocs
             self._gnoderankcomm = self._gcomm.Split(self._gnodecomm.rank, mygroupnode)
+            self._gnoderankprocs = self._gnoderankcomm.size
             self._cleanup_group_comm = True
+
+        msg = f"Comm on world rank {self._wrank}:\n"
+        msg += f"  world comm = {self._wcomm} with {self._wsize} ranks\n"
+        msg += f"  intra-node comm = {self._nodecomm} ({self._nodeprocs} ranks per node)\n"
+        msg += f"  inter-node rank comm = {self._noderankcomm} ({self._noderankprocs} ranks)\n"
+        msg += f"  in group {self._group + 1} / {self._ngroups} with rank {self._grank}\n"
+        msg += f"  intra-group comm = {self._gcomm} ({self._gsize} ranks)\n"
+        msg += f"  inter-group rank comm = {self._rcomm}\n"
+        msg += f"  intra-node group comm = {self._gnodecomm} ({self._gnodeprocs} ranks per node)\n"
+        msg += f"  inter-node group rank comm = {self._gnoderankcomm} ({self._noderankprocs} ranks)\n"
+        log.verbose(msg)
+
+        if self._gnoderankprocs != self._gnodes:
+            msg = f"Number of group node rank procs ({self._gnoderankprocs}) does "
+            msg += f"not match the number of nodes in a group ({self._gnodes})"
+            log.error(msg)
+            raise RuntimeError(msg)
 
         # Create a cache of row / column communicators for each group.  These can
         # then be re-used for observations with the same grid shapes.
@@ -441,6 +465,15 @@ class Comm(object):
                     col_node = comm_col.rank // col_nodeprocs
                     comm_col_rank_node = comm_col.Split(comm_col_node.rank, col_node)
                     cleanup = True
+
+                msg = f"Comm on world rank {self._wrank} create grid with {process_rows} rows:\n"
+                msg += f"  row comm = {comm_row}\n"
+                msg += f"  node comm = {comm_row_node}\n"
+                msg += f"  node rank comm = {comm_row_rank_node}\n"
+                msg += f"  col comm = {comm_col}\n"
+                msg += f"  node comm = {comm_col_node}\n"
+                msg += f"  node rank comm = {comm_col_rank_node}"
+                log.verbose(msg)
 
                 self._rowcolcomm[process_rows] = {
                     "row": comm_row,
