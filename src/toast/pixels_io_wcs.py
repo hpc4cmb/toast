@@ -9,8 +9,8 @@ import numpy as np
 import pixell
 import pixell.enmap
 
-from .timing import function_timer, Timer
 from .mpi import MPI, use_mpi
+from .timing import Timer, function_timer
 from .utils import Logger, memreport
 
 

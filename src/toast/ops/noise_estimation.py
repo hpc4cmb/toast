@@ -478,8 +478,8 @@ class NoiseEstim(Operator):
                         det_units = u.K
                     psd_unit = det_units**2 * u.second
                     noise_dets.append(det1)
-                    noise_freqs[det1] = nse_freqs * u.Hz
-                    noise_psds[det1] = nse_psd * psd_unit
+                    noise_freqs[det1] = nse_freqs[1:] * u.Hz
+                    noise_psds[det1] = nse_psd[1:] * psd_unit
 
             self._re_redistribute(orig_obs, obs)
 
