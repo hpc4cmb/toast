@@ -320,7 +320,6 @@ class DataTest(MPITestCase):
         for season in range(3):
             sname = f"{season:02d}"
             sel = data.select(obs_session_name=sname)
-            print(f"selecting {sname}")
             self.assertTrue(len(sel.obs) == 2)
             for ob in sel.obs:
                 mat = re.match(r".*-(\d\d)", ob.name)
