@@ -59,8 +59,8 @@ def mult_jax(p_in, q_in):
         out (array_like):  flattened 1D array of float64 values.
     """
     out = mult_pure_jax(p_in, q_in)
-    # converts back to numpy as some functions want to do later modifications in place
-    return np.array(out)
+    # converts back to input type if needed
+    return np.array(out) if isinstance(p_in, np.ndarray) else out
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

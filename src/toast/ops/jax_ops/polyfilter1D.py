@@ -82,25 +82,22 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
 
     Returns:
         None: The signals are updated in place.
-
-    NOTE: port of `filter_polynomial` from compiled code to JAX
     """
     # validate order
     if (order < 0): return
 
-    # converts signal into a numpy array to avoid having to loop over them
+    # converts signals from a list into a numpy array to avoid having to loop over them
     signals = np.array(signals_list).T # n*nsignal
 
     # loop over intervals, this is fine as long as there are only few intervals
-    print(f"DEBUG: nb intervals:{starts.size}")
     for (start,stop) in zip(starts,stops):
         # validates interval
         start = np.maximum(0, start)
-        stop = np.minimum(flags.size - 1, stop)
-        if (stop < start): continue
+        stop = np.minimum(flags.size - 1, stop) + 1
+        if (stop <= start): continue
         # extracts the intervals from flags and signals
-        flags_interval = flags[start:(stop+1)] # scanlen
-        signals_interval = signals[start:(stop+1),:] # scanlen*nsignal        
+        flags_interval = flags[start:stop] # scanlen
+        signals_interval = signals[start:stop,:] # scanlen*nsignal        
         # updates signal interval
         signals_interval[:] = filter_polynomial_interval(flags_interval, signals_interval, order)
 

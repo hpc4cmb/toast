@@ -3,22 +3,28 @@
 # to run miniapp:
 # TOAST_GPU_JAX=true TOAST_LOGLEVEL=DEBUG toast_mini --node_mem_gb 4.0
 #
-# pointing_detector runs in accel false but getting a jaxmutablearray!
-# build_noise_weighted gets pixels with a float datatype whereas they should be int!
+# - build_noise_weighted gets pixels with a float datatype whereas they should be int!
 #
-# fix circular import problem in accelarator.py (currently using a ugly fix)
-# ImportError: cannot import name 'import_from_name' from partially initialized module 'toast.utils' (most likely due to a circular import)
+# - is the jax to array port always readonly?
 #
+# - pointing_detector runs in accel false but getting a jaxmutablearray!
+#
+# - fix circular import problem in accelarator.py (currently using a ugly fix)
+#   ImportError: cannot import name 'import_from_name' from partially initialized module 'toast.utils' (most likely due to a circular import)
+#
+# - try putting some template_offset operations in a jitted section 
+#   (would be done by default if we can turn intervals into an index)
+#
+# - update scan_map to slightly simplify it (cf associated TODO)
+#
+# - get rid of the self.use_python versions
+#
+# Alternative to the loop on interval:
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
 #   (we could cache that intervals_index at a higher level within toast if the intervals are constant)
 # - try grouping intervals by size and then running with a (intervals_starts,length) input 
 #   or take an upper bound on the intervals (starts, end-start+lengthmax), process the array thus constructed then later throw the parts that are not of interest
 #   (only if the previous approach does not deliver)
-# - try putting some template_offset operations in a jitted section 
-#   (would be done by default if we can turn intervals into an index)
-# - update scan_map to slightly simplify it (cf associated TODO)
-#
-# - get rid of the self.use_python versions
 #
 # NOTE:
 # the code uses [xmap](https://jax.readthedocs.io/en/latest/notebooks/xmap_tutorial.html) 
