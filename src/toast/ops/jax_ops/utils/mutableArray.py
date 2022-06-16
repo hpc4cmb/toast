@@ -18,9 +18,9 @@ class MutableJaxArray():
         self.dtype = self.data.dtype
 
     @classmethod
-    def zeros(cls, shape):
+    def zeros(cls, shape, dtype=None):
         """creates an array of zeros"""
-        data = jnp.zeros(shape=shape)
+        data = jnp.zeros(shape=shape, dtype=dtype)
         return cls(data)
 
     def to_numpy(self):

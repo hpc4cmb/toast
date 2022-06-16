@@ -10,7 +10,6 @@ from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import select_implementation, ImplementationType
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
-from ..._libtoast import Logger
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -120,11 +119,6 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     Returns:
         None (the result is put in zmap).
     """
-    # TODO this is not normal and we should error out
-    if (pixels.dtype == np.float):
-        log = Logger.get()
-        log.warning("build_noise_weighted received pixels with float datatype (instead of int!)")
-
     # we loop over intervals
     for interval in intervals:
         interval_start = interval['first']

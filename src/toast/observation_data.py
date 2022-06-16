@@ -255,7 +255,7 @@ class DetectorData(AcceleratorObject):
             self._shape = shp
             self._flatshape = flatshape
             if use_accel_jax and self.accel_exists():
-                self._data = MutableJaxArray.zeros(self._shape)
+                self._data = MutableJaxArray.zeros(self._shape, dtype=dt)
             else:
                 self._flatdata = self._raw.array()[: self._flatshape]
                 self._flatdata[:] = 0

@@ -3,8 +3,6 @@
 # to run miniapp:
 # TOAST_GPU_JAX=true TOAST_LOGLEVEL=DEBUG toast_mini --node_mem_gb 4.0
 #
-# - build_noise_weighted gets pixels with a float datatype whereas they should be int!
-#
 # - is the jax to array port always readonly?
 #
 # - pointing_detector runs in accel false but getting a jaxmutablearray!
