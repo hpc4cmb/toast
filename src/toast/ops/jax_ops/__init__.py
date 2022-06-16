@@ -2,12 +2,11 @@
 #
 # to run miniapp:
 # TOAST_GPU_JAX=true TOAST_LOGLEVEL=DEBUG toast_mini --node_mem_gb 4.0
-#
-# - is the jax to array port always readonly?
+# export TOAST_GPU_JAX=true; timer toast_mini --node_mem_gb 4.0
 #
 # - pointing_detector runs in accel false but getting a jaxmutablearray!
 #
-# - fix circular import problem in accelarator.py (currently using a ugly fix)
+# - fix circular import problem in accelerator.py (currently using a ugly fix)
 #   ImportError: cannot import name 'import_from_name' from partially initialized module 'toast.utils' (most likely due to a circular import)
 #
 # - try putting some template_offset operations in a jitted section 

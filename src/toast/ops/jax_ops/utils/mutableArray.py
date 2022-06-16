@@ -6,6 +6,7 @@ class MutableJaxArray():
     """
     This class encapsulate a jax array to give the illusion of mutability
     simplifying integration within toast
+    It is NOT designed for computation but, rather, as a container
     """
     data: jnp.DeviceArray
     shape: Tuple
@@ -27,15 +28,10 @@ class MutableJaxArray():
         """
         converts the content back to a numpy array
         we purposefully do not overload __array__ to avoid accidental conversions
+
+        WARNING: this function will likely cost you a copy.
         """
-        output = np.asarray(self.data)
-        if not output.flags.writeable:
-            # TODO needed because some array end up read-only
-            print("DEBUGGING: read only")
-            output = np.copy(output)
-        else:
-            print("DEBUGGING: readable") # TODO
-        return output
+        return np.array(self.data)
     
     def __setitem__(self, key, value):
         """replace the inner array in place"""
