@@ -5,10 +5,6 @@
 import numpy as np
 import traitlets
 
-from .._libtoast import (
-    cov_accum_diag_hits,
-    cov_accum_diag_invnpp,
-)
 from ..covariance import covariance_invert
 from ..observation import default_values as defaults
 from ..pixels import PixelData
@@ -19,7 +15,7 @@ from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 
-from .jax_ops import build_noise_weighted
+from .jax_ops import build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
 
 @trait_docs
 class BuildHitMap(Operator):

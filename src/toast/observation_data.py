@@ -466,7 +466,6 @@ class DetectorData(AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_host(self._raw)
         elif use_accel_jax:
-            # TODO this is called before calling pointing detector causing it to be called on a readonly numpy array
             self._data = accel_data_update_host(self._data)
 
     def _accel_delete(self):

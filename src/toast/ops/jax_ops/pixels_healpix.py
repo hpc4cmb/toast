@@ -12,6 +12,7 @@ from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
+from ..._libtoast import Logger
 
 # -------------------------------------------------------------------------------------------------
 # JAX
@@ -115,6 +116,11 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         None (results are stored in pixels and hit_submaps).
         TODO does pixels matter or is it only hit_submaps?
     """
+    # TODO this is not normal and we should error out
+    if (pixels.dtype == np.float):
+        log = Logger.get()
+        log.warning("pixels_healpix received pixels with float datatype (instead of int!)")
+
     # initialize hpix for all computations
     hpix = healpix.HPIX_JAX.init(nside)
 

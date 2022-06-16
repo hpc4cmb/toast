@@ -8,9 +8,10 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import select_implementation, ImplementationType
+from .utils import select_implementation, ImplementationType, MutableJaxArray
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
 from ..._libtoast import pointing_detector as pointing_detector_compiled
+from ..._libtoast import Logger
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -76,8 +77,10 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     Returns:
         None (the result is put in quats).
     """
-    # TODO in at least one case this turns out to be a read-only numpy array!
-    print(f"DEBUGGING: quats:{type(quats)}")
+    # TODO this is not normal and we should error out
+    if isinstance(quats, MutableJaxArray) and (not use_accell):
+        log = Logger.get()
+        log.warning("Running CPU kernel on GPU data!")
 
     # we loop over intervals
     for interval in intervals:

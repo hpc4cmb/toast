@@ -95,18 +95,16 @@ def accel_data_present(data):
         (bool):  True if the data is present on the device.
 
     """
+    log = Logger.get()
+    log.verbose("accel_data_present")
     if data is None:
         return False
-    if use_accel_omp:
+    elif use_accel_omp:
         return omp_accel_present(data)
     elif use_accel_jax:
         from .ops.jax_ops import MutableJaxArray # TODO
-        if isinstance(data, MutableJaxArray):
-            return True
-        else:
-            return False
+        return isinstance(data, MutableJaxArray)
     else:
-        log = Logger.get()
         log.warning("Accelerator support not enabled, data not present")
         return False
 
@@ -116,7 +114,7 @@ def accel_data_create(data):
 
     Using the input data array, create a corresponding device array.  For OpenMP
     target offload, this allocates device memory and adds it to the global map
-    of host to device pointers.
+    of host to device pointers. For jax it just wraps the numpy array
 
     Args:
         data (array):  The host array.
@@ -154,7 +152,8 @@ def accel_data_update_device(data):
         return data
     elif use_accel_jax:
         from .ops.jax_ops import MutableJaxArray # TODO
-        return MutableJaxArray(data)
+        # deals with the fact that the data could already be a jax array        
+        return data if isinstance(data, MutableJaxArray) else MutableJaxArray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating device")

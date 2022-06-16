@@ -188,7 +188,9 @@ class Pipeline(Operator):
         log = Logger.get()
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
-
+        msg = f"{pstr} Pipeline finalize"
+        log.verbose(msg)
+        
         # FIXME:  We need to clarify in documentation that if using the
         # accelerator in _finalize() to produce output products, these
         # outputs should remain on the device so that they can be copied

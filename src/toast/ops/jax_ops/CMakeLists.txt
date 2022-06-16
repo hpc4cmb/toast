@@ -12,6 +12,7 @@ install(FILES
     qarray.py
     pointing_detector.py
     build_noise_weighted.py
+    cov_accum.py
     DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops
 )
 

@@ -1,9 +1,12 @@
 # TODO
 #
 # to run miniapp:
-# export TOAST_GPU_JAX=true; toast_mini --node_mem_gb 4.0
+# TOAST_GPU_JAX=true TOAST_LOGLEVEL=DEBUG toast_mini --node_mem_gb 4.0
 #
-# fix circular import problem in accelarator.py
+# pointing_detector runs in accel false but getting a jaxmutablearray!
+# build_noise_weighted gets pixels with a float datatype whereas they should be int!
+#
+# fix circular import problem in accelarator.py (currently using a ugly fix)
 # ImportError: cannot import name 'import_from_name' from partially initialized module 'toast.utils' (most likely due to a circular import)
 #
 # - try merging intervals into a single indexes vector / mask (utils contains the needed functions) 
@@ -38,3 +41,4 @@ from .stokes_weights import stokes_weights_I, stokes_weights_IQU
 from .template_offset import template_offset_add_to_signal, template_offset_project_signal, template_offset_apply_diag_precond
 from .pointing_detector import pointing_detector
 from .build_noise_weighted import build_noise_weighted
+from .cov_accum import cov_accum_diag_hits, cov_accum_diag_invnpp

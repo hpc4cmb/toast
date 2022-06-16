@@ -10,6 +10,7 @@ from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import select_implementation, ImplementationType
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
+from ..._libtoast import Logger
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -57,7 +58,7 @@ def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_d
     Args:
         global2local (array, int): size n_global_submap
         zmap (array, double): size n_local_submap*n_pix_submap*nnz
-        pixels (array, double): size n_det*n_samp_interval
+        pixels (array, int): size n_det*n_samp_interval
         weights (array, double): The flat packed detectors weights for the specified mode (size n_det*n_samp_interval*nnz)
         det_data (array, double): size n_det*n_samp_interval
         det_flags (array, uint8): size n_det*n_samp_interval
@@ -78,14 +79,15 @@ def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_d
     # display sizes
     print(f"DEBUG: jit compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{n_samp_interval} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask} single_flag:{single_flag}")
 
+    # converts pixels to int to avoid further float computations
+    pixels = pixels.astype(int)
+
     # computes the update to add to zmap
     update = build_noise_weighted_inner_jax(pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask)
 
     # computes the index in zmap
-    # TODO this could be done out of the gpu section to reduce the data sent to the gpu
     n_pix_submap = zmap.shape[1]
-    npix_submap_inv = 1.0 / n_pix_submap
-    global_submap = (pixels * npix_submap_inv).astype(int)
+    global_submap = pixels // n_pix_submap
     local_submap = global2local[global_submap]
     isubpix = pixels - global_submap * n_pix_submap
     # updates zmap in place
@@ -100,8 +102,8 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     Args:
         global2local (array, int): size n_global_submap
         zmap (array, double): size n_local_submap*n_pix_submap*nnz
-        pixel_index (array, double): size n_det
-        pixels (array, double): size ???*n_samp
+        pixel_index (array, int): size n_det
+        pixels (array, int): size ???*n_samp
         weight_index (array, int): The indexes of the weights (size n_det)
         weights (array, double): The flat packed detectors weights for the specified mode (size ???*n_samp*nnz)
         data_index (array, int): size n_det
@@ -118,6 +120,11 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     Returns:
         None (the result is put in zmap).
     """
+    # TODO this is not normal and we should error out
+    if (pixels.dtype == np.float):
+        log = Logger.get()
+        log.warning("build_noise_weighted received pixels with float datatype (instead of int!)")
+
     # we loop over intervals
     for interval in intervals:
         interval_start = interval['first']
@@ -142,7 +149,7 @@ def build_noise_weighted_inner_numpy(global2local, data, det_flag, shared_flag, 
         data (double)
         det_flag (uint8)
         shared_flag (uint8)
-        pixels(double)
+        pixels(int)
         weights (array, double): The flat packed detectors weights for the specified mode (nnz)
         det_scale (double)
         zmap (array, double): size n_local_submap*n_pix_submap*nnz
@@ -169,8 +176,8 @@ def build_noise_weighted_numpy(global2local, zmap, pixel_index, pixels, weight_i
     Args:
         global2local (array, int): size n_global_submap
         zmap (array, double): size n_local_submap*n_pix_submap*nnz
-        pixel_index (array, double): size n_det
-        pixels (array, double): size ???*n_samp
+        pixel_index (array, int): size n_det
+        pixels (array, int): size ???*n_samp
         weight_index (array, int): The indexes of the weights (size n_det)
         weights (array, double): The flat packed detectors weights for the specified mode (size ???*n_samp*nnz)
         data_index (array, int): size n_det
@@ -184,7 +191,8 @@ def build_noise_weighted_numpy(global2local, zmap, pixel_index, pixels, weight_i
         shared_flag_mask (uint8)
         use_accel (Bool): should we use the accelerator?
 
-    Returns:
+    Returns:python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole");'
+
         None (the result is put in zmap).
     """
     # problem size
