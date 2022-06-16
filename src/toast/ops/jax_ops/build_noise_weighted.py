@@ -78,9 +78,6 @@ def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_d
     # display sizes
     print(f"DEBUG: jit compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{n_samp_interval} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask} single_flag:{single_flag}")
 
-    # converts pixels to int to avoid further float computations
-    pixels = pixels.astype(int)
-
     # computes the update to add to zmap
     update = build_noise_weighted_inner_jax(pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask)
 
