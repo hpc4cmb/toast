@@ -72,31 +72,44 @@ def set_JAX_device(process_id):
 #------------------------------------------------------------------------------
 # IMPLEMENTATION SELECTION
 
+from ....accelerator import use_accel_jax, use_accel_omp
+
 class ImplementationType(Enum):
     """Describes the various implementation kind"""
     COMPILED = 1
     NUMPY = 2
     JAX = 3
 
-def select_implementation(f_compiled, f_numpy, f_jax, default_implementationType=ImplementationType.COMPILED):
+default_implementationType=ImplementationType.COMPILED
+"""
+Implementation to be used in the absence of user specified information.
+"""
+
+def select_implementation(f_compiled, f_numpy, f_jax, 
+                          overide_implementationType=None):
     """
-    Returns a transformed function that takes an additional argument to select the implementation
+    Returns one of the function depending on the settings.
+    Set `default_implementationType` if you want one implementation in particular.
+    `default_implementationType` defines the implementation that will be used in the absence of further information.
     """
-    def f_switch(*args, implementationType=default_implementationType):
-        if implementationType == ImplementationType.COMPILED:
-            return f_compiled(*args)
-        if implementationType == ImplementationType.NUMPY:
-            return f_numpy(*args)
-        if implementationType == ImplementationType.JAX:
-            return f_jax(*args)
-    # insures we preserve the name of at least one of the functions
-    if default_implementationType == ImplementationType.COMPILED:
-        f_switch.__name__ = f_compiled.__name__
-    if default_implementationType == ImplementationType.NUMPY:
-        f_switch.__name__ = f_numpy.__name__
-    if default_implementationType == ImplementationType.JAX:
-        f_switch.__name__ = f_jax.__name__
-    return f_switch
+    # picks the implementation to be used
+    implementationType = overide_implementationType
+    if implementationType is None:
+        if use_accel_jax:
+            implementationType = ImplementationType.JAX
+        elif use_accel_omp:
+            implementationType = ImplementationType.COMPILED
+        else:
+            implementationType = default_implementationType
+    # returns the corresponding function
+    if implementationType == ImplementationType.COMPILED:
+        f = f_compiled
+    elif implementationType == ImplementationType.NUMPY:
+        f = f_numpy
+    else: #implementationType == ImplementationType.JAX:
+        f = f_jax
+    print(f"DEBUG: implementation picked:{implementationType} ({f.__name__})")
+    return f
 
 #------------------------------------------------------------------------------
 # TIMING

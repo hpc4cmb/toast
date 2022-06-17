@@ -392,8 +392,7 @@ void build_noise_weighted(
 # lets us play with the various implementations
 build_noise_weighted = select_implementation(build_noise_weighted_compiled, 
                                              build_noise_weighted_numpy, 
-                                             build_noise_weighted_jax, 
-                                             default_implementationType=ImplementationType.JAX)
+                                             build_noise_weighted_jax)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole");'

@@ -361,16 +361,13 @@ void template_offset_apply_diag_precond(
 # lets us play with the various implementations
 template_offset_add_to_signal = select_implementation(template_offset_add_to_signal_compiled, 
                                                       template_offset_add_to_signal_numpy, 
-                                                      template_offset_add_to_signal_jax, 
-                                                      default_implementationType=ImplementationType.JAX)
+                                                      template_offset_add_to_signal_jax)
 template_offset_project_signal = select_implementation(template_offset_project_signal_compiled, 
                                                        template_offset_project_signal_numpy, 
-                                                       template_offset_project_signal_jax, 
-                                                       default_implementationType=ImplementationType.JAX)
+                                                       template_offset_project_signal_jax)
 template_offset_apply_diag_precond = select_implementation(template_offset_apply_diag_precond_compiled, 
                                                            template_offset_apply_diag_precond_numpy, 
-                                                           template_offset_apply_diag_precond_jax, 
-                                                           default_implementationType=ImplementationType.JAX)
+                                                           template_offset_apply_diag_precond_jax)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker")'

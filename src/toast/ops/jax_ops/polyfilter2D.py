@@ -263,8 +263,7 @@ void toast::filter_poly2D_solve(
 # lets us play with the various implementations
 filter_poly2D = select_implementation(filter_poly2D_compiled, 
                                       filter_poly2D_numpy, 
-                                      filter_poly2D_jax, 
-                                      default_implementationType=ImplementationType.JAX)
+                                      filter_poly2D_jax)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 filter_poly2D = get_compile_time(filter_poly2D)

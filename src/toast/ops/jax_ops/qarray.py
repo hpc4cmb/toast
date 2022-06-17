@@ -150,8 +150,7 @@ void toast::qa_mult_one_one(double const * p, double const * q,
 # lets us play with the various implementations
 mult = select_implementation(mult_compiled, 
                              mult_numpy, 
-                             mult_jax, 
-                             default_implementationType=ImplementationType.JAX)
+                             mult_jax)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("qarray");'

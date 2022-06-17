@@ -375,8 +375,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
 # lets us play with the various implementations
 filter_polynomial = select_implementation(filter_polynomial_compiled, 
                                           filter_polynomial_numpy, 
-                                          filter_polynomial_jax, 
-                                          default_implementationType=ImplementationType.JAX)
+                                          filter_polynomial_jax)
 
 # TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
 filter_polynomial = get_compile_time(filter_polynomial)

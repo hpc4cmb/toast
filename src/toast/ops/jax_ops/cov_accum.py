@@ -290,12 +290,10 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
 # lets us play with the various implementations
 cov_accum_diag_hits = select_implementation(cov_accum_diag_hits_compiled, 
                                             cov_accum_diag_hits_numpy, 
-                                            cov_accum_diag_hits_jax, 
-                                            default_implementationType=ImplementationType.JAX)
+                                            cov_accum_diag_hits_jax)
 cov_accum_diag_invnpp = select_implementation(cov_accum_diag_invnpp_compiled, 
                                               cov_accum_diag_invnpp_numpy, 
-                                              cov_accum_diag_invnpp_jax, 
-                                              default_implementationType=ImplementationType.JAX)
+                                              cov_accum_diag_invnpp_jax)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("covariance");'

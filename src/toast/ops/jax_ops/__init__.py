@@ -2,7 +2,7 @@
 #
 # to run miniapp:
 # TOAST_GPU_JAX=true TOAST_LOGLEVEL=DEBUG toast_mini --node_mem_gb 4.0
-# export TOAST_GPU_JAX=true; export JAX_PLATFORM_NAME=gpu; timer toast_mini --node_mem_gb 4.0
+# export TOAST_GPU_JAX=false; export JAX_PLATFORM_NAME=gpu; export OMP_NUM_THREADS=32; timer toast_mini --node_mem_gb 4.0
 #
 # - pointing_detector runs in accel false but getting a jaxmutablearray!
 #
