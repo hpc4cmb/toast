@@ -109,7 +109,7 @@ class PixelsWCS(Operator):
 
     single_precision = Bool(False, help="If True, use 32bit int in output")
 
-    use_astropy = Bool(False, help="If True, use astropy for world to pix conversion")
+    use_astropy = Bool(True, help="If True, use astropy for world to pix conversion")
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
