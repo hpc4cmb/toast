@@ -144,7 +144,7 @@ class ObservationWidget(object):
         if tabindex >= len(self.app.children):
             # Ignore the fake click when the button is created.
             return
-        current_children = list(self.app.children)
+        current = self.app.children
         try:
             # Pre v8 this was private.
             current_titles = {int(x): y for x, y in self.app._titles.items()}
@@ -153,12 +153,12 @@ class ObservationWidget(object):
         new_children = list()
         new_titles = dict()
         for tb in range(0, tabindex):
-            new_children.append(current_children[tb])
+            new_children.append(current[tb])
             new_titles[tb] = current_titles[tb]
-        for tb in range(tabindex + 1, len(self.app.children)):
-            new_children.append(current_children[tb])
+        for tb in range(tabindex + 1, len(current)):
+            new_children.append(current[tb])
             new_titles[tb - 1] = current_titles[tb]
-        del current_children[tabindex]
+        del current
         del self.close_buttons[b]
         for k in list(self.close_buttons.keys()):
             if self.close_buttons[k] > tabindex:

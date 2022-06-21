@@ -346,16 +346,35 @@ class FitNoiseModel(Operator):
         """
         log = Logger.get()
         psd_unit = data.unit
+
+        # We cut the lowest frequency bin value, and any leading negative values,
+        # since these are usually due to poor estimation.
         raw_freqs = freqs.to_value(u.Hz)
         raw_data = data.value
-        raw_fmin = self.f_min.to_value(u.Hz)
-        raw_log_data = np.log(raw_data)
-        net = self._estimate_net(raw_freqs, raw_data)
+        n_skip = 1
+        while raw_data[n_skip] <= 0:
+            n_skip += 1
 
-        midfreq = 0.5 * raw_freqs[-1]
+        input_freqs = raw_freqs[n_skip:]
+        input_data = raw_data[n_skip:]
+        # Force all points to be positive
+        bad = (input_data <= 0)
+        n_bad = np.count_nonzero(bad)
+        if n_bad > 0:
+            log.warning(
+                "Some PSDs have negative values.  Change noise estimation parameters."
+            )
+        input_data[bad] = 1.0e-6
+        input_log_data = np.log(input_data)
+
+        raw_fmin = self.f_min.to_value(u.Hz)
+
+        net = self._estimate_net(input_freqs, input_data)
+
+        midfreq = 0.5 * input_freqs[-1]
         bounds = (
-            [raw_freqs[0] / 2.0, 0.01],
-            [raw_freqs[-1], 10.0],
+            [input_freqs[0] / 2.0, 0.01],
+            [input_freqs[-1], 10.0],
         )
         x_0 = guess
         if x_0 is None:
@@ -370,8 +389,8 @@ class FitNoiseModel(Operator):
             gtol=1.0e-12,
             ftol=1.0e-12,
             kwargs={
-                "freqs": raw_freqs,
-                "logdata": raw_log_data,
+                "freqs": input_freqs,
+                "logdata": input_log_data,
                 "fmin": raw_fmin,
                 "net": net,
             },
