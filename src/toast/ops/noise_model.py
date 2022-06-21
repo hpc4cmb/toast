@@ -358,7 +358,7 @@ class FitNoiseModel(Operator):
         input_freqs = raw_freqs[n_skip:]
         input_data = raw_data[n_skip:]
         # Force all points to be positive
-        bad = (input_data <= 0)
+        bad = input_data <= 0
         n_bad = np.count_nonzero(bad)
         if n_bad > 0:
             log.warning(

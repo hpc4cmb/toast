@@ -249,9 +249,13 @@ class Comm(object):
 
         msg = f"Comm on world rank {self._wrank}:\n"
         msg += f"  world comm = {self._wcomm} with {self._wsize} ranks\n"
-        msg += f"  intra-node comm = {self._nodecomm} ({self._nodeprocs} ranks per node)\n"
+        msg += (
+            f"  intra-node comm = {self._nodecomm} ({self._nodeprocs} ranks per node)\n"
+        )
         msg += f"  inter-node rank comm = {self._noderankcomm} ({self._noderankprocs} ranks)\n"
-        msg += f"  in group {self._group + 1} / {self._ngroups} with rank {self._grank}\n"
+        msg += (
+            f"  in group {self._group + 1} / {self._ngroups} with rank {self._grank}\n"
+        )
         msg += f"  intra-group comm = {self._gcomm} ({self._gsize} ranks)\n"
         msg += f"  inter-group rank comm = {self._rcomm}\n"
         msg += f"  intra-node group comm = {self._gnodecomm} ({self._gnodeprocs} ranks per node)\n"

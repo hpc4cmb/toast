@@ -332,6 +332,10 @@ class PointingWCSTest(MPITestCase):
                     outfile = os.path.join(self.outdir, f"mapmaking_{proj}_map.fits")
                     self.plot_maps(mapfile=outfile)
 
+            if data.comm.comm_world is not None:
+                data.comm.comm_world.barrier()
+            del data
+
     def fake_source(self, mission_start, ra_start, dec_start, times, deg_per_hour=1.0):
         deg_sec = deg_per_hour / 3600.0
         t_start = float(times[0])
