@@ -80,7 +80,7 @@ class ImplementationType(Enum):
     NUMPY = 2
     JAX = 3
 
-default_implementationType=ImplementationType.COMPILED
+default_implementationType=ImplementationType.JAX
 """
 Implementation to be used in the absence of user specified information.
 """
