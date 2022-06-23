@@ -3,8 +3,10 @@
 # to run miniapp:
 # TOAST_GPU_JAX=true TOAST_LOGLEVEL=DEBUG toast_mini --node_mem_gb 4.0
 # export TOAST_GPU_JAX=false; export JAX_PLATFORM_NAME=gpu; export OMP_NUM_THREADS=32; timer toast_mini --node_mem_gb 4.0
+# TOAST_GPU_JAX=false JAX_PLATFORM_NAME=gpu nsys profile --stats=true toast_mini --node_mem_gb 4.0
 #
 # - pointing_detector runs in accel false but getting a jaxmutablearray!
+#   add warning to kernels running on gpu mode but getting only cpu data (input | output) and vice versa (cpu mode but some gpu data)
 #
 # - fix circular import problem in accelerator.py (currently using a ugly fix)
 #   ImportError: cannot import name 'import_from_name' from partially initialized module 'toast.utils' (most likely due to a circular import)

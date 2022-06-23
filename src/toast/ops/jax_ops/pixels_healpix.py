@@ -105,7 +105,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         pixels (array, int64): The detector pixel indices to store the result (size ???*n_samp).
         intervals (array, float64): size n_view
         hit_submaps (array, uint8): The pointing flags (size ???).
-        n_pix_submap (array, float64):  
+        n_pix_submap (int):  
         nside (int): Used to build the healpix projection object.
         nest (bool): If True, then use NESTED ordering, else RING.
         use_accell (bool): should we use the accelerator
@@ -119,6 +119,26 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     # should we use flags?
     n_samp = pixels.shape[1]
     use_flags = (flag_mask != 0) and (flags.size == n_samp)
+
+    # TODO check how much data is on cpu/gpu
+    # inputs
+    input_bytes_gpu = 0
+    input_bytes_cpu = 0
+    for input in [quats, flags, hit_submaps]:
+        if isinstance(input,np.ndarray):
+            input_bytes_cpu += input.nbytes 
+        else:
+            input_bytes_gpu += input.nbytes
+    # outputs
+    output_bytes_gpu = 0
+    output_bytes_cpu = 0
+    for output in [pixels, hit_submaps]:
+        if isinstance(output,np.ndarray):
+            output_bytes_cpu += output.nbytes 
+        else:
+            output_bytes_gpu += output.nbytes
+    # summary
+    print(f"DEBUGGING: pixels_healpix inputs[GPU:{input_bytes_gpu} CPU:{input_bytes_cpu}] outputs[GPU:{output_bytes_gpu} CPU:{output_bytes_cpu}] use_accell:{use_accell}")
 
     # loop on the intervals
     for interval in intervals:

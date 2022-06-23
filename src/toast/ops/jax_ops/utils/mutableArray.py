@@ -11,12 +11,14 @@ class MutableJaxArray():
     data: jnp.DeviceArray
     shape: Tuple
     dtype: np.dtype
+    nbytes: np.int64
 
     def __init__(self, data):
         """encapsulate an array as a jax array"""
         self.data = jnp.asarray(data)
         self.shape = self.data.shape
         self.dtype = self.data.dtype
+        self.nbytes = self.data.nbytes
 
     @classmethod
     def zeros(cls, shape, dtype=None):

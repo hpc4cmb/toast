@@ -221,14 +221,15 @@ class TemplateMatrix(Operator):
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
-                exists = ob.detdata.ensure(self.det_data, detectors=dets)
+                exists = ob.detdata.ensure(self.det_data, detectors=dets, accel=use_accel)
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
                 log.verbose(
                     f"TemplateMatrix {ob.name}:  input host detdata={ob.detdata[self.det_data][:][0:10]}"
                 )
                 if use_accel:
-                    if not exists and not ob.detdata.accel_present(self.det_data):
+                    # TODO since updating this line, the data seem to be zero...
+                    if not ob.detdata.accel_exists(self.det_data):
                         ob.detdata.accel_create(self.det_data)
 
             for d in all_dets:
@@ -278,6 +279,8 @@ class TemplateMatrix(Operator):
             prov["detdata"] = [self.det_data]
         return prov
 
+    def _supports_accel(self):
+        return True
 
 @trait_docs
 class SolveAmplitudes(Operator):
