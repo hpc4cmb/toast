@@ -71,8 +71,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python: "3.7"
-            pyshort: "37"
+          # - python: "3.8"
+          #   pyshort: "38"
           - python: "3.9"
             pyshort: "39"
           # - python: "3.10"

@@ -12,7 +12,8 @@ from .. import ops as ops
 from .. import templates
 from ..accelerator import accel_enabled
 from ..observation import default_values as defaults
-from ..pixels_io import write_healpix_fits
+from ..pixels import PixelData, PixelDistribution
+from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import create_fake_sky, create_outdir, create_satellite_data
 from .mpi import MPITestCase
@@ -116,6 +117,8 @@ class MapmakerTest(MPITestCase):
             det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-1,
+            map_rcond_threshold=1.0e-1,
             write_hits=False,
             write_map=False,
             write_cov=False,

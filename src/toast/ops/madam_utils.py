@@ -4,7 +4,6 @@
 
 import os
 
-import healpy as hp
 import numpy as np
 
 from ..timing import function_timer

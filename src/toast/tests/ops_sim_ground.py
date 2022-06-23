@@ -17,7 +17,7 @@ from ..instrument import Focalplane, GroundSite, Telescope
 from ..instrument_sim import fake_hexagon_focalplane
 from ..mpi import MPI, Comm
 from ..observation import default_values as defaults
-from ..pixels_io import write_healpix_fits
+from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import set_matplotlib_backend

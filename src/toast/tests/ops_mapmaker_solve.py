@@ -4,7 +4,6 @@
 
 import os
 
-import healpy as hp
 import numpy as np
 import numpy.testing as nt
 from astropy import units as u

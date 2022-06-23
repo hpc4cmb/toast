@@ -8,7 +8,7 @@ import healpy as hp
 import numpy as np
 import numpy.testing as nt
 
-from .. import pixels_io as io
+from .. import pixels_io_healpix as io
 from ..pixels import PixelData, PixelDistribution
 from ._helpers import create_outdir
 from .mpi import MPITestCase

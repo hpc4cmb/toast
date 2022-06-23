@@ -681,8 +681,8 @@ def redistribute_shared_data(
                 raise RuntimeError(msg)
 
             # Redistribution send / recv slices
-            send_info = [None for x in range(shobj.comm.size)]
-            recv_info = [None for x in range(shobj.comm.size)]
+            send_info = [None for x in range(old_dist.comm_row_size)]
+            recv_info = [None for x in range(old_dist.comm_row_size)]
 
             if old_dist.comm_row_rank == 0:
                 # We are sending something
@@ -735,8 +735,8 @@ def redistribute_shared_data(
                 raise RuntimeError(msg)
 
             # Redistribution send / recv slices
-            send_info = [None for x in range(shobj.comm.size)]
-            recv_info = [None for x in range(shobj.comm.size)]
+            send_info = [None for x in range(old_dist.comm_col_size)]
+            recv_info = [None for x in range(old_dist.comm_col_size)]
             if old_dist.comm_col_rank == 0:
                 # We are sending something
                 send_info = list()

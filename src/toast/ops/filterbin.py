@@ -22,7 +22,7 @@ from .._libtoast import (
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io import (
+from ..pixels_io_healpix import (
     filename_is_fits,
     filename_is_hdf5,
     read_healpix_fits,

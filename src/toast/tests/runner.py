@@ -41,9 +41,11 @@ from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 from . import ops_memory_counter as test_ops_memory_counter
 from . import ops_noise_estim as test_ops_noise_estim
 from . import ops_pointing_healpix as test_ops_pointing_healpix
+from . import ops_pointing_wcs as test_ops_pointing_wcs
 from . import ops_polyfilter as test_ops_polyfilter
 from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_scan_map as test_ops_scan_map
+from . import ops_scan_wcs as test_ops_scan_wcs
 from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
 from . import ops_sim_crosstalk as test_ops_sim_crosstalk
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
@@ -167,6 +169,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_ground))
         suite.addTest(loader.loadTestsFromModule(test_ops_memory_counter))
         suite.addTest(loader.loadTestsFromModule(test_ops_pointing_healpix))
+        suite.addTest(loader.loadTestsFromModule(test_ops_pointing_wcs))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_noise))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_dipole))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_atm))
@@ -182,6 +185,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_map))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_healpix))
+        suite.addTest(loader.loadTestsFromModule(test_ops_scan_wcs))
         suite.addTest(loader.loadTestsFromModule(test_ops_madam))
         suite.addTest(loader.loadTestsFromModule(test_ops_gainscrambler))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))

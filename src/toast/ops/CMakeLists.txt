@@ -27,6 +27,7 @@ install(FILES
     pointing_detector.py
     scan_map.py
     scan_healpix.py
+    scan_wcs.py
     mapmaker_utils.py
     mapmaker_binning.py
     mapmaker_solve.py
@@ -53,6 +54,7 @@ install(FILES
     demodulation.py
     stokes_weights.py
     pixels_healpix.py
+    pixels_wcs.py
     filterbin.py
     save_hdf5.py
     load_hdf5.py

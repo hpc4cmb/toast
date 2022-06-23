@@ -134,7 +134,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
 
 
 @function_timer
-def collect_submaps(pix, comm_bytes=10000000):
+def collect_healpix_submaps(pix, comm_bytes=10000000):
     # The distribution
     dist = pix.distribution
 
@@ -271,7 +271,7 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
     if dist.comm is not None:
         rank = dist.comm.rank
 
-    fdata, fview = collect_submaps(pix, comm_bytes=comm_bytes)
+    fdata, fview = collect_healpix_submaps(pix, comm_bytes=comm_bytes)
 
     if rank == 0:
         if os.path.isfile(path):
