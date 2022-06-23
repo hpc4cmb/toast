@@ -138,7 +138,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         else:
             output_bytes_gpu += output.nbytes
     # summary
-    print(f"DEBUGGING: pixels_healpix inputs[GPU:{input_bytes_gpu} CPU:{input_bytes_cpu}] outputs[GPU:{output_bytes_gpu} CPU:{output_bytes_cpu}] use_accell:{use_accell}")
+    #print(f"DEBUGGING: pixels_healpix inputs[GPU:{input_bytes_gpu} CPU:{input_bytes_cpu}] outputs[GPU:{output_bytes_gpu} CPU:{output_bytes_cpu}] use_accell:{use_accell}")
 
     # loop on the intervals
     for interval in intervals:
