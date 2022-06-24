@@ -266,8 +266,9 @@ class Pipeline(Operator):
         return interm
 
     def _supports_accel(self):
-        def name_of_op(op): return str(op) # return str(op.__class__).split('.')[-1][:-2]
-
+        """
+        Returns True if all the operators are GPU compatible.
+        """
         for op in self.operators:
             if not op.supports_accel():
                 log = Logger.get()
@@ -278,6 +279,6 @@ class Pipeline(Operator):
 
     def __str__(self):
         """
-        Converts the pipeline into a human-readable string
+        Converts the pipeline into a human-readable string.
         """
         return f"Pipeline{[str(op) for op in self.operators]}"
