@@ -277,3 +277,10 @@ class Operator(TraitConfig):
         if "API" in props:
             del props["API"]
         return props
+    
+    def __str__(self):
+        """
+        Converts the operator into a short human readable string
+        returns only its class name (for example: 'Operator')
+        """
+        return str(self.__class__).split('.')[-1][:-2]

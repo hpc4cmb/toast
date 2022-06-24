@@ -266,11 +266,18 @@ class Pipeline(Operator):
         return interm
 
     def _supports_accel(self):
-        unsupported_ops = [op.__class__ for op in self.operators if not op.supports_accel()]
-        if len(unsupported_ops) > 0: 
-            log = Logger.get()
-            msg = f"Pipeline does not support accel because of {unsupported_ops}"
-            log.debug(msg)
-            return False 
-        else:
-            return True
+        def name_of_op(op): return str(op) # return str(op.__class__).split('.')[-1][:-2]
+
+        for op in self.operators:
+            if not op.supports_accel():
+                log = Logger.get()
+                msg = f"{self} does not support accel because of '{op}'"
+                log.debug(msg)
+                return False
+        return True
+
+    def __str__(self):
+        """
+        Converts the pipeline into a human-readable string
+        """
+        return f"Pipeline{[str(op) for op in self.operators]}"
