@@ -180,3 +180,6 @@ class Copy(Operator):
         if self.intervals is not None:
             prov["intervals"] = [x[1] for x in self.intervals]
         return prov
+
+    def _supports_accel(self):
+        return False

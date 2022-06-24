@@ -5,6 +5,8 @@
 # export TOAST_GPU_JAX=false; export JAX_PLATFORM_NAME=gpu; export OMP_NUM_THREADS=32; timer toast_mini --node_mem_gb 4.0
 # TOAST_GPU_JAX=false JAX_PLATFORM_NAME=gpu nsys profile --stats=true toast_mini --node_mem_gb 4.0
 #
+# TODO: check that the pixel domain data is getting back to the host at the end of build_noise_weighted
+#
 # - pointing_detector runs in accel false but getting a jaxmutablearray!
 #   add warning to kernels running on gpu mode but getting only cpu data (input | output) and vice versa (cpu mode but some gpu data)
 #

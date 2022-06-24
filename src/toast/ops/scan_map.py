@@ -179,6 +179,8 @@ class ScanMap(Operator):
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
 
+    def _supports_accel(self):
+        return False
 
 @trait_docs
 class ScanMask(Operator):
@@ -291,6 +293,8 @@ class ScanMask(Operator):
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
 
+    def _supports_accel(self):
+        return False
 
 @trait_docs
 class ScanScale(Operator):

@@ -170,13 +170,14 @@ class Operator(TraitConfig):
         return prov
 
     def _supports_accel(self):
-        return False
+        print(f"DEBUGGING: default support_accel {self.__class__}") # TODO
+        return True # TODO False
 
     def supports_accel(self):
-        """Query whether the operator supports OpenACC
+        """Query whether the operator supports GPU computing
 
         Returns:
-            (bool):  True if the operator can use OpenACC, else False.
+            (bool):  True if the operator can use GPU computing, else False.
 
         """
         return self._supports_accel()

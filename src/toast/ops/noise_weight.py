@@ -84,3 +84,6 @@ class NoiseWeight(Operator):
 
     def _provides(self):
         return dict()
+
+    def _supports_accel(self):
+        return False

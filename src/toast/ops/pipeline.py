@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 import traitlets
 
-from ..accelerator import use_accel_jax, use_accel_omp
+from ..accelerator import accel_enabled
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Int, List, Unicode, trait_docs
@@ -90,7 +90,7 @@ class Pipeline(Operator):
                 comp_dets = set(data.all_local_detectors(selection=None))
             else:
                 comp_dets = set(detectors)
-            if (use_accel_omp or use_accel_jax) and self.supports_accel():
+            if accel_enabled() and self.supports_accel():
                 # All our operators support it.
                 msg = "Pipeline operators {}".format(
                     ", ".join([x.name for x in self.operators])
@@ -266,8 +266,11 @@ class Pipeline(Operator):
         return interm
 
     def _supports_accel(self):
-        # This is a logical AND of our operators
-        for op in self.operators:
-            if not op.supports_accel():
-                return False
-        return True
+        unsupported_ops = [op.__class__ for op in self.operators if not op.supports_accel()]
+        if len(unsupported_ops) > 0: 
+            log = Logger.get()
+            msg = f"Pipeline does not support accel because of {unsupported_ops}"
+            log.debug(msg)
+            return False 
+        else:
+            return True

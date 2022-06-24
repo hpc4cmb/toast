@@ -192,7 +192,7 @@ class BuildHitMap(Operator):
         req = {
             "global": [self.pixel_dist],
             "shared": list(),
-            "detdata": [self.pixels, self.weights],
+            "detdata": [self.pixels],
             "intervals": list(),
         }
         if self.shared_flags is not None:
@@ -207,6 +207,8 @@ class BuildHitMap(Operator):
         prov = {"global": [self.hits]}
         return prov
 
+    def _supports_accel(self):
+        return False
 
 @trait_docs
 class BuildInverseCovariance(Operator):
@@ -453,6 +455,8 @@ class BuildInverseCovariance(Operator):
         prov = {"global": [self.inverse_covariance]}
         return prov
 
+    def _supports_accel(self):
+        return False
 
 @trait_docs
 class BuildNoiseWeighted(Operator):
