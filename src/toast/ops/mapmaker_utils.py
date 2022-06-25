@@ -680,11 +680,11 @@ class BuildNoiseWeighted(Operator):
                     detweights,
                 )
             else:
+                # uses a separate variable in case the reshaping copies the data
+                zmap_data = zmap.data.reshape( (zmap.distribution.n_local_submap, -1, weight_nnz) )
                 build_noise_weighted(
                     zmap.distribution.global_submap_to_local.array(),
-                    zmap.data.reshape(
-                        (zmap.distribution.n_local_submap, -1, weight_nnz)
-                    ),
+                    zmap_data,
                     pix_indx,
                     ob.detdata[self.pixels].data,
                     weight_indx,
@@ -702,7 +702,7 @@ class BuildNoiseWeighted(Operator):
                     self.shared_flag_mask,
                     use_accel,
                 )
-
+                zmap.data = zmap_data.reshape(zmap.data.shape)
         return
 
     def _finalize(self, data, use_acc=False, **kwargs):

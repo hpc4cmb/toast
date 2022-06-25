@@ -17,6 +17,7 @@ class MutableJaxArray():
         """encapsulate an array as a jax array"""
         self.data = jnp.asarray(data)
         self.shape = self.data.shape
+        self.size = self.data.size
         self.dtype = self.data.dtype
         self.nbytes = self.data.nbytes
 
@@ -44,6 +45,9 @@ class MutableJaxArray():
         return self.data[key]
     
     def reshape(self, shape):
-        """changes the shape of the inner array"""
+        """
+        produces a new array with a different shape
+        WARNING: this will copy the data and *not* propagate modifications to the older array
+        """
         reshaped_data = jnp.reshape(self.data, newshape=shape)
         return MutableJaxArray(reshaped_data)
