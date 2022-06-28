@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import select_implementation, ImplementationType
+from .utils import assert_data_localization, select_implementation, ImplementationType
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -83,24 +83,8 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     Returns:
         None (the result is put in zmap).
     """
-    # TODO check how much data is on cpu/gpu
-    # inputs
-    input_bytes_gpu = 0
-    input_bytes_cpu = 0
-    for input in [global2local, zmap, pixels, weights, det_data, det_flags, det_scale, shared_flags]:
-        if isinstance(input,np.ndarray):
-            input_bytes_cpu += input.nbytes 
-        else:
-            input_bytes_gpu += input.nbytes
-    # outputs
-    output_bytes_gpu = 0
-    output_bytes_cpu = 0
-    if isinstance(zmap,np.ndarray):
-        output_bytes_cpu += zmap.nbytes 
-    else:
-        output_bytes_gpu += zmap.nbytes
-    # summary
-    #print(f"DEBUGGING: build_noise_weighted inputs[GPU:{input_bytes_gpu} CPU:{input_bytes_cpu}] outputs[GPU:{output_bytes_gpu} CPU:{output_bytes_cpu}]")
+    # make sure the data is where we expect it
+    assert_data_localization('build_noise_weighted', use_accel, [global2local, zmap, pixels, weights, det_data, det_flags, det_scale, shared_flags], [zmap])
 
     # TODO zmap (a numpy array) is not updated with JAX but is updated with compiled, why?
 

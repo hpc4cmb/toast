@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
+from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -113,32 +113,15 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     Returns:
         None (results are stored in pixels and hit_submaps).
     """
+    # make sure the data is where we expect it
+    assert_data_localization('pixels_healpix', use_accell, [quats, flags, hit_submaps], [pixels, hit_submaps])
+
     # initialize hpix for all computations
     hpix = healpix.HPIX_JAX.init(nside)
 
     # should we use flags?
     n_samp = pixels.shape[1]
     use_flags = (flag_mask != 0) and (flags.size == n_samp)
-
-    # TODO check how much data is on cpu/gpu
-    # inputs
-    input_bytes_gpu = 0
-    input_bytes_cpu = 0
-    for input in [quats, flags, hit_submaps]:
-        if isinstance(input,np.ndarray):
-            input_bytes_cpu += input.nbytes 
-        else:
-            input_bytes_gpu += input.nbytes
-    # outputs
-    output_bytes_gpu = 0
-    output_bytes_cpu = 0
-    for output in [pixels, hit_submaps]:
-        if isinstance(output,np.ndarray):
-            output_bytes_cpu += output.nbytes 
-        else:
-            output_bytes_gpu += output.nbytes
-    # summary
-    #print(f"DEBUGGING: pixels_healpix inputs[GPU:{input_bytes_gpu} CPU:{input_bytes_cpu}] outputs[GPU:{output_bytes_gpu} CPU:{output_bytes_cpu}] use_accell:{use_accell}")
 
     # loop on the intervals
     for interval in intervals:

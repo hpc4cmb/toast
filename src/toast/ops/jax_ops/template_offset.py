@@ -8,7 +8,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from .utils import ImplementationType, select_implementation
+from .utils import assert_data_localization, ImplementationType, select_implementation
 from ..._libtoast import template_offset_add_to_signal as template_offset_add_to_signal_compiled, template_offset_project_signal as template_offset_project_signal_compiled, template_offset_apply_diag_precond as template_offset_apply_diag_precond_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -101,7 +101,10 @@ def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_da
 
     Returns:
         None (the result is put in amplitudes).
-    """    
+    """
+    # make sure the data is where we expect it
+    assert_data_localization('template_offset_project_signal', use_accel, [det_data, flag_data, amplitudes], [amplitudes])
+
     # loop over the intervals
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
@@ -126,6 +129,9 @@ def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes
     Returns:
         None (the result is put in amplitudes_out).
     """
+    # make sure the data is where we expect it
+    assert_data_localization('template_offset_apply_diag_precond', use_accel, [amplitudes_in, offset_var], [amplitudes_out])
+    
     # problem size
     #print(f"DEBUG: running 'template_offset_apply_diag_precond_jax' with n_amp:{amplitudes_in.size}")
     

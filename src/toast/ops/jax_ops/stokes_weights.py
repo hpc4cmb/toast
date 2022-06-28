@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import select_implementation, ImplementationType
+from .utils import assert_data_localization, select_implementation, ImplementationType
 from .utils import math_qarray as qarray
 from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
 
@@ -103,6 +103,9 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
     Returns:
         None (the result is put in weights).
     """
+    # make sure the data is where we expect it
+    assert_data_localization('stokes_weights_IQU', use_accell, [quats, hwp, epsilon], [weights])
+
     # we loop over intervals
     for interval in intervals:
         interval_start = interval['first']

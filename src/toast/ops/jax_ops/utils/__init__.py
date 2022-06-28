@@ -4,6 +4,7 @@ import jax
 import numpy
 
 from .mutableArray import MutableJaxArray
+from .asserts import assert_data_localization
 
 #------------------------------------------------------------------------------
 # INTERVAL INDEXING
