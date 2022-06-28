@@ -156,6 +156,17 @@ class GroundSite(Site):
         )
         return value
 
+    def __eq__(self, other):
+        if self.name != other.name:
+            return False
+        if self.uid != other.uid:
+            return False
+        if self.earthloc != other.earthloc:
+            return False
+        if self.weather != other.weather:
+            return False
+        return True
+
     def _position_velocity(self, times):
         # Compute data at 10 second intervals and interpolate.  If the timestamps are
         # more coarsely sampled than that, just compute those times directly.

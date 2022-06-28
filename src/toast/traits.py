@@ -89,7 +89,7 @@ def trait_type_to_string(trait):
 def trait_string_to_value(val):
     """Attempt to convert a string to other basic types.
 
-    Trait container support arbitrary objects, but when parsing a config everything
+    Trait containers support arbitrary objects, but when parsing a config everything
     is a string.  This attempts to convert a value to its real type.
 
     Args:
@@ -111,7 +111,7 @@ def trait_string_to_value(val):
     elif val == "":
         return val
     else:
-        # See if we have a Quantity
+        # See if we have a Quantity string representation
         try:
             parts = val.split()
             vstr = parts.pop(0)
@@ -330,13 +330,20 @@ class TraitConfig(HasTraits):
             if tval is not None:
                 retval = dict()
                 for k, v in tval.items():
-                    retval[k], _ = _format_item(conf, v)
+                    vstr, vunit = _format_item(conf, v)
+                    if vunit == "None":
+                        retval[k] = vstr
+                    else:
+                        retval[k] = f"{vstr} {vunit}"
         elif isinstance(trt, List) or isinstance(trt, Set) or isinstance(trt, Tuple):
             if tval is not None:
                 retval = list()
                 for v in tval:
-                    vstr, _ = _format_item(conf, v)
-                    retval.append(vstr)
+                    vstr, vunit = _format_item(conf, v)
+                    if vunit == "None":
+                        retval.append(vstr)
+                    else:
+                        retval.append(f"{vstr} {vunit}")
         elif isinstance(trt, Instance) and not isinstance(tval, TraitConfig):
             # Our trait is some other class not derived from TraitConfig.  This
             # means that we cannot recursively dump it to the config and we also have
@@ -478,33 +485,33 @@ class TraitConfig(HasTraits):
         kw = dict()
         kw["name"] = name
         for k, v in props.items():
-            if v["unit"] == "None":
-                # Normal scalar, no units
-                if v["value"] == "None":
-                    kw[k] = None
-                else:
-                    pyt = string_to_pytype(v["type"])
-                    if pyt is None:
-                        # This is some kind of more complicated class.  We will let the
-                        # constructor choose the default value.
-                        continue
-                    elif v["value"] == "{}" or v["value"] == "()" or v["value"] == "[]":
-                        # Empty container
-                        kw[k] = pyt(v["value"])
-                    elif pyt == dict:
-                        # Convert items
-                        kw[k] = dict()
-                        raw = pyt(v["value"])
-                        for rk, rv in raw.items():
-                            kw[k][rk] = trait_string_to_value(rv)
-                    elif pyt == list or pyt == set or pyt == tuple:
-                        raw = pyt(v["value"])
-                        kw[k] = pyt([trait_string_to_value(x) for x in raw])
-                    else:
-                        # Other scalar
-                        kw[k] = trait_string_to_value(v["value"])
-            else:
-                # We have a Quantity.
+            if v["unit"] != "None":
+                # Scalar Quantity
                 kw[k] = u.Quantity(float(v["value"]) * u.Unit(v["unit"]))
+                continue
+            if v["value"] == "None":
+                # None value
+                kw[k] = None
+                continue
+            pyt = string_to_pytype(v["type"])
+            if pyt is None:
+                # This is some kind of more complicated class.  We will let the
+                # constructor choose the default value.
+                continue
+            if v["value"] == "{}" or v["value"] == "()" or v["value"] == "[]":
+                # Empty container
+                kw[k] = pyt()
+                continue
+            if pyt == list or pyt == set or pyt == tuple:
+                kw[k] = pyt([trait_string_to_value(x) for x in v["value"]])
+                continue
+            if pyt == dict:
+                # Convert items
+                kw[k] = dict()
+                for dk, dv in v["value"].items():
+                    kw[k][dk] = trait_string_to_value(dv)
+                continue
+            # Other scalar
+            kw[k] = trait_string_to_value(v["value"])
         # Instantiate class and return
         return cls(**kw)

@@ -610,7 +610,13 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
                 if isinstance(value, str):
                     val = ast.literal_eval(value)
                 else:
-                    val = value
+                    val = list()
+                    for elem in value:
+                        if isinstance(elem, tuple):
+                            # This is a quantity
+                            val.append(" ".join(elem))
+                        else:
+                            val.append(elem)
             tbl.add(name, val)
         elif typ == "dict":
             val = "None"
@@ -622,7 +628,11 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
                 val = table()
                 subindent = indent + 2
                 for k, v in dval.items():
-                    val.add(k, v)
+                    if isinstance(v, tuple):
+                        # This is a quantity
+                        val.add(k, " ".join(v))
+                    else:
+                        val.add(k, v)
                     val[k].indent(subindent)
             tbl.add(name, val)
         elif typ == "int":
@@ -846,6 +856,9 @@ def create_from_config(conf):
         Return same string if no match, None if matched but nonexistant, or
         the object itself.
         """
+        # print(f"OBJREF get {name}", flush=True)
+        if not isinstance(name, str):
+            return name
         found = name
         mat = ref_pat.match(name)
         if mat is not None:
