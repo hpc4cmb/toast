@@ -62,8 +62,8 @@ jobs:
             test_runner:py${{ matrix.pyshort }} \
             mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
 
-  macos-clang:
-    name: MacOS (clang) with Python-${{ matrix.python }}
+  macos:
+    name: MacOS with Python-${{ matrix.python }}
     runs-on: macos-latest
     strategy:
       # Ensure that a test continues even if another fails.  Useful for
@@ -71,8 +71,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - python: "3.8"
-          #   pyshort: "38"
+          # - python: "3.7"
+          #   pyshort: "37"
           - python: "3.9"
             pyshort: "39"
           # - python: "3.10"
@@ -86,82 +86,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - uses: actions/setup-python@v2
-        name: Install Python
-        with:
-          python-version: ${{ matrix.python }}
+      - name: Setup Conda Base
+        run: |
+          curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-$(uname -m).sh
+          bash miniforge.sh -b -f -p ${HOME}/conda
+          ${HOME}/conda/bin/conda init bash
+      
+      - name: Check Conda Config
+        shell: bash -l {0}
+        run: |
+          conda info
+          conda list
+          conda config --show-sources
+          conda config --show
 
       - name: Install
+        shell: bash -l {0}
         run: |
-          mkdir build
-          cd build
-          ../platforms/install_test_runner_macos.sh
+          conda activate base
+          ./platforms/conda_dev_setup.sh base
+          conda install mpi4py
+          ./platforms/conda_dev.sh base
 
       - name: Run Serial Tests
+        shell: bash -l {0}
         run: |
-          export OMP_NUM_THREADS=1
-          export OPENBLAS_NUM_THREADS=1
+          conda activate base
+          export OMP_NUM_THREADS=2
+          export MPI_DISABLE=1
           python3 -c 'import toast.tests; toast.tests.run()'
+          unset MPI_DISABLE
 
-  # macos-gcc:
-  #   name: MacOS (homebrew gcc) with Python-${{ matrix.python }}
-  #   runs-on: macos-latest
-  #   strategy:
-  #     # Ensure that a test continues even if another fails.  Useful for
-  #     # debugging multiple problems in parallel.
-  #     fail-fast: false
-  #     matrix:
-  #       include:
-  #         # - python: "3.7"
-  #         #   pyshort: "37"
-  #         # - python: "3.8"
-  #         #   pyshort: "38"
-  #         - python: "3.9"
-  #           pyshort: "39"
-  #         # - python: "3.10"
-  #         #   pyshort: "310"
-  #   steps:
-  #     - name: Cancel Previous Runs
-  #       uses: styfle/cancel-workflow-action@0.9.1
-  #       with:
-  #         access_token: ${{ github.token }}
-  #
-  #     - name: Checkout
-  #       uses: actions/checkout@v2
-  #
-  #     - uses: actions/setup-python@v2
-  #       name: Install Python
-  #       with:
-  #         python-version: ${{ matrix.python }}
-  #
-  #     - name: Install OS Dependencies
-  #       run: |
-  #         brew update
-  #         brew install openblas fftw suite-sparse gcc
-  #
-  #     - name: Install Python Dependencies
-  #       run: |
-  #         CC="gcc-11" CXX="g++-11" CFLAGS="-O2 -fPIC" CXXFLAGS="-O2 -fPIC -std=c++11" \
-  #         python3 -m pip install -r wheels/build_requirements.txt
-  #         python3 -m pip install ducc0
-  #
-  #     - name: Install TOAST
-  #       run: |
-  #         export TOAST_BUILD_CMAKE_C_COMPILER=gcc-11
-  #         export TOAST_BUILD_CMAKE_CXX_COMPILER=g++-11
-  #         export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC"
-  #         export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11"
-  #         export TOAST_BUILD_BLAS_LIBRARIES="-L/usr/local/opt/openblas/lib -lopenblas"
-  #         export TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
-  #         python3 -m pip -vvv install .
-  #
-  #     - name: Run Serial Tests
-  #       run: |
-  #         export OMP_NUM_THREADS=2
-  #         which python3
-  #         python3 -m pip list
-  #         python3 -c 'import numpy; print(numpy.__file__)'
-  #         python3 -c 'import toast; print(toast.__file__)'
-  #         python3 -c 'import toast'
-  #         python3 -c 'import toast; print(toast.__file__)'
-  #         python3 -c 'import toast.tests; toast.tests.run()'
+      # - name: Run MPI Tests
+      #   shell: bash -l {0}
+      #   run: |
+      #     conda activate base
+      #     export OMP_NUM_THREADS=2
+      #     mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
