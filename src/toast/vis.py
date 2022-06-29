@@ -67,7 +67,7 @@ def plot_noise_estim(
             net = true_net.to_value(u.K / u.Hz**0.5)
             ax.axhline(
                 net**2,
-                label=f"NET = {net:0.2e} K" + " / $\sqrt{\mathrm{Hz}}$",
+                label=f"NET = {net:0.2e} K" + " / \$\sqrt{\mathrm{Hz}}\$",
                 linestyle="--",
                 color="black",
             )
