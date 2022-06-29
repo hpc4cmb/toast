@@ -483,7 +483,6 @@ class PixelData(AcceleratorObject):
 
         self.raw = self.storage_class.zeros(self._flatshape)
         self.data = self.raw.array().reshape(self._shape)
-        self.data_jax = None
 
         # Allreduce quantities
         self._all_comm_submap = None
@@ -514,7 +513,8 @@ class PixelData(AcceleratorObject):
 
         """
         if hasattr(self, "data"):
-            del self.data
+            # we keep the attribute to avoid errors in _accel_exists
+            self.data = None
         if hasattr(self, "raw"):
             if self.accel_exists():
                 self.accel_delete()
@@ -988,7 +988,7 @@ class PixelData(AcceleratorObject):
         if use_accel_omp:
             return accel_data_present(self.raw)
         elif use_accel_jax:
-            return accel_data_present(self.data_jax)
+            return accel_data_present(self.data)
         else:
             return False
 
@@ -996,24 +996,22 @@ class PixelData(AcceleratorObject):
         if use_accel_omp:
             accel_data_create(self.raw)
         elif use_accel_jax:
-            self.data_jax = accel_data_create(self.data_jax)
+            self.data = accel_data_create(self.data)
 
     def _accel_update_device(self):
         if use_accel_omp:
             _ = accel_data_update_device(self.raw)
         elif use_accel_jax:
-            self.data_jax = accel_data_update_device(self.data)
+            self.data = accel_data_update_device(self.data)
 
     def _accel_update_host(self):
         if use_accel_omp:
             _ = accel_data_update_host(self.raw)
         elif use_accel_jax:
-            self.data[:] = accel_data_update_host(self.data_jax)
-            self.data_jax = None
+            data_CPU = self.raw.array().reshape(self._shape)
+            data_CPU[:] = accel_data_update_host(self.data)
+            self.data = data_CPU
 
     def _accel_delete(self):
         if use_accel_omp:
             accel_data_delete(self.raw)
-        elif use_accel_jax:
-            del self.data_jax
-            self.data_jax = None

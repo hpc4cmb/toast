@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType
+from .utils import assert_data_localization, select_implementation, ImplementationType, MutableJaxArray
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_d
     """
     # display sizes
     n_samp_interval = det_data.shape[1]
-    print(f"DEBUG: jit compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{n_samp_interval} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask} use_flags:{det_flags is not None} use_shared_flags:{shared_flags is not None}")
+    print(f"DEBUG: jit-compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{n_samp_interval} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask} use_flags:{det_flags is not None} use_shared_flags:{shared_flags is not None}")
 
     # computes the update to add to zmap
     det_check = True if (det_flags is None) else ((det_flags & det_flag_mask) == 0)
@@ -86,12 +86,13 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     # make sure the data is where we expect it
     assert_data_localization('build_noise_weighted', use_accel, [global2local, zmap, pixels, weights, det_data, det_flags, det_scale, shared_flags], [zmap])
 
-    # TODO zmap (a numpy array) is not updated with JAX but is updated with compiled, why?
-
     # should we use flags?
     n_samp = pixels.shape[1]
     use_det_flags = (det_flags.shape[1] == n_samp)
     use_shared_flags = (shared_flags.size == n_samp)
+
+    # converts zmap to a jnp array to be reused for the duration of the loop
+    zmap_jnp = zmap.data if isinstance(zmap, MutableJaxArray) else jnp.array(zmap)
 
     # we loop over intervals
     for interval in intervals:
@@ -103,8 +104,11 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
         data_interval = det_data[data_index, interval_start:interval_end]
         det_flags_interval = det_flags[flag_index, interval_start:interval_end] if use_det_flags else None
         shared_flags_interval = shared_flags[interval_start:interval_end] if use_shared_flags else None
-        # process the interval then updates zmap in place
-        zmap[:] = build_noise_weighted_interval_jax(global2local, zmap, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale, det_flag_mask, shared_flags_interval, shared_flag_mask)
+        # process the interval then updates zmap
+        zmap_jnp = build_noise_weighted_interval_jax(global2local, zmap_jnp, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale, det_flag_mask, shared_flags_interval, shared_flag_mask)
+
+    # gets zmap back to its original format
+    zmap[:] = zmap_jnp
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

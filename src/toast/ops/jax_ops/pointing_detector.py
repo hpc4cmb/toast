@@ -56,7 +56,7 @@ def pointing_detector_interval_jax(focalplane, boresight, shared_flags, shared_f
     Returns:
         quats (array, double): size n_det*n_samp_interval*4
     """
-    print(f"DEBUG: jit compiling 'pointing_detector_interval_jax' with n_det:{focalplane.shape[0]} n_samp_interval:{shared_flags.size} mask:{shared_flag_mask}")
+    print(f"DEBUG: jit-compiling 'pointing_detector_interval_jax' with n_det:{focalplane.shape[0]} n_samp_interval:{shared_flags.size} mask:{shared_flag_mask}")
     return pointing_detector_inner_jax(focalplane, boresight, shared_flags, shared_flag_mask)
 
 # jit compiling

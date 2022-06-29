@@ -74,7 +74,7 @@ def stokes_weights_IQU_interval_jax(epsilon, cal, quats, hwp):
     """
     # display sizes
     n_samp_interval = quats.shape[1]
-    print(f"DEBUG: jit compiling 'stokes_weights_IQU_interval_jax' with n_det:{epsilon.size} cal:{cal} n_samp_interval:{n_samp_interval}")
+    print(f"DEBUG: jit-compiling 'stokes_weights_IQU_interval_jax' with n_det:{epsilon.size} cal:{cal} n_samp_interval:{n_samp_interval}")
 
     # insures hwp is a non empty array
     if hwp.size == 0: hwp = jnp.zeros(n_samp_interval)

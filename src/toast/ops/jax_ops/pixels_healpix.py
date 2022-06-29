@@ -70,7 +70,7 @@ def pixels_healpix_interval_jax(hpix, quats, flags, flag_mask, hit_submaps, n_pi
         pixels (array, int64): The detector pixel indices to store the result (size n_det*n_samp_interval).
     """
     # display sizes
-    print(f"DEBUG: jit compiling 'pixels_healpix_interval_jax' with n_side:{hpix.nside} n_det:{quats.shape[0]} n_samp_interval:{quats.shape[1]} n_pix_submap:{n_pix_submap} hit_submaps:{hit_submaps.size} flag_mask:{flag_mask} nest:{nest}")
+    print(f"DEBUG: jit-compiling 'pixels_healpix_interval_jax' with n_side:{hpix.nside} n_det:{quats.shape[0]} n_samp_interval:{quats.shape[1]} n_pix_submap:{n_pix_submap} hit_submaps:{hit_submaps.size} flag_mask:{flag_mask} nest:{nest}")
     
     # computes the pixels and submap
     pixels = pixels_healpix_inner_jax(hpix, quats, nest)
