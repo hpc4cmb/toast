@@ -6,21 +6,23 @@ chapters:
   sections:
   - file: install_user
   - file: install_dev
-  - file: nersc
+  - file: install_nersc
+- file: interactive
+# - file: quickstart
 - file: data_model
+# - file: data_io
 - file: processing_model
-- file: simulation_operators
-  sections:
-  - file: simulation_operators_satellite
-  - file: simulation_operators_ground
-  - file: simulation_operators_sky
-  - file: simulation_operators_instrument
-- file: reduction_operators
-- file: utility_operators
-- file: tutorial
-  sections:
-  - file: tutorial_intro
+- file: pointing
+# - file: simulated_observing
+# - file: simulated_signals
+# - file: preprocessing
+# - file: utilities
+# - file: mapmaking
+#   # sections:
+#   # - file: mapmaking_utilities
+#   # - file: mapmaking_templates
+- file: api
 - file: dev
 - file: benchmark
 - file: changes
-- file: api
+

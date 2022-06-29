@@ -9,7 +9,7 @@ needs.  We try to clarify the different options in the following sections.
 (install:test)=
 ## Testing the Installation
 
-After installation (regardless of how you did that), you can run both the compiled and
+After installation (regardless of method), you can run both the compiled and
 python unit tests.  These tests will create an output directory named
 `toast_test_output` in your current working directory:
 
@@ -21,7 +21,8 @@ If you have installed the `mpi4py` package, then you can also run the unit tests
 MPI enabled.  For example:
 
 ```{code-block} console
-mpirun -np 4 python -c "import toast.tests; toast.tests.run()"
+export OMP_NUM_THREADS=2
+mpirun -np 2 python -c "import toast.tests; toast.tests.run()"
 ```
 
 ```{important}

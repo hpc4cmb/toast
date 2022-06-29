@@ -108,6 +108,7 @@ update the conda tool itself and the other essential packages in base.  If one o
 working environments becomes horribly out of date or broken, just delete it and make a
 new one.
 
+(install:user:anaconda)=
 ### Using Anaconda with conda-forge Packages
 
 If you already have Anaconda python installed, the base conda environment may already be
@@ -135,6 +136,7 @@ conda config --set channel_priority strict
 
 Now skip ahead to the section on [creating an environment](install:user:conda:env).
 
+(install:user:forge)=
 ### Using a Native conda-forge Base
 
 If you are starting from scratch, we recommend using the "miniforge" installer to set up

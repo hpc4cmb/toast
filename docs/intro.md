@@ -72,6 +72,7 @@ If you are a member of one of these projects:
 - Simons Array
 - Simons Observatory
 - CMB-S4
+- TolTEC
 
 Then there are additional software repositories you have access to that contain extra
 TOAST classes and scripts for processing data from your experiment.
