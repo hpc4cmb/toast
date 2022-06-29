@@ -109,8 +109,10 @@ class FitNoiseModel(Operator):
                     # This was a good fit
                     params = result.x
                 else:
-                    msg = f"FitNoiseModel observation {ob.name}, det {det} failed.  Result = {result}"
+                    msg = f"FitNoiseModel observation {ob.name}, det {det} failed."
                     log.warning(msg)
+                    msg = f"  Best Result = {result}"
+                    log.verbose(msg)
                 nse_freqs[det] = freqs
                 nse_psds[det] = fitted
             if ob.comm.comm_group is not None:

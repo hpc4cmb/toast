@@ -177,6 +177,11 @@ class ConfigTest(MPITestCase):
 
         run = create_from_config(loadconf)
 
+        if run.operators.fake != fake:
+            print(
+                f" Trait type round trip failed, {run.operators.fake} != {fake}",
+                flush=True
+            )
         self.assertTrue(run.operators.fake == fake)
 
     def test_config_multi(self):
