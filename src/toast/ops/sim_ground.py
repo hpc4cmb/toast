@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import copy
-import datetime
+from datetime import datetime, timezone, timedelta
 
 import numpy as np
 import traitlets
@@ -14,7 +14,7 @@ from .. import qarray as qa
 from ..coordinates import azel_to_radec
 from ..dist import distribute_discrete, distribute_uniform
 from ..healpix import ang2vec
-from ..instrument import Telescope
+from ..instrument import Telescope, Session
 from ..intervals import IntervalList, regular_intervals
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
@@ -430,6 +430,9 @@ class SimGround(Operator):
         # observation to the next, for simulations there is no need to restart the
         # sampling clock each observation.
 
+        if len(self.schedule.scans) == 0:
+            raise RuntimeError("Schedule has no scans!")
+
         scan_starts = list()
         scan_stops = list()
         scan_offsets = list()
@@ -494,7 +497,7 @@ class SimGround(Operator):
 
             # Time range of the science scans
             start_time = scan.start
-            stop_time = start_time + datetime.timedelta(
+            stop_time = start_time + timedelta(
                 seconds=(float(scan_samples[obindx] - 1) / rate)
             )
 
@@ -723,12 +726,19 @@ class SimGround(Operator):
             )
 
             name = f"{scan.name}-{scan.scan_indx}-{scan.subscan_indx}"
+
+            session = Session(
+                name,
+                start=datetime.fromtimestamp(times[0]).astimezone(timezone.utc),
+                end=datetime.fromtimestamp(times[-1]).astimezone(timezone.utc),
+            )
             ob = Observation(
                 comm,
                 telescope,
                 len(times),
                 name=name,
                 uid=name_UID(name),
+                session=session,
                 detector_sets=detsets,
                 process_rows=det_ranks,
                 sample_sets=sample_sets,

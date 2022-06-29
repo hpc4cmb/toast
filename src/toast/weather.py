@@ -62,6 +62,32 @@ class Weather(object):
         self._west_wind_val = west_wind
         self._south_wind_val = south_wind
 
+    def __eq__(self, other):
+        if self._time_val != other._time_val:
+            return False
+        if self._ice_water_val != other._ice_water_val:
+            return False
+        if self._liquid_water_val != other._liquid_water_val:
+            return False
+        if self._pwv_val != other._pwv_val:
+            return False
+        if self._humidity_val != other._humidity_val:
+            return False
+        if self._surface_pressure_val != other._surface_pressure_val:
+            return False
+        if self._surface_temperature_val != other._surface_temperature_val:
+            return False
+        if self._air_temperature_val != other._air_temperature_val:
+            return False
+        if self._west_wind_val != other._west_wind_val:
+            return False
+        if self._south_wind_val != other._south_wind_val:
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def _time(self):
         if self._time_val is None:
             raise NotImplementedError("Base class _time() called, but has no value")
@@ -442,14 +468,10 @@ class SimWeather(Weather):
         return self._sim_south_wind
 
     def __repr__(self):
-        value = "<SimWeather : '{}', year = {}, month = {}, hour = {}, site UID = {}, realization = {})".format(
-            self._name,
-            self._year,
-            self._month,
-            self._hour,
-            self._site_uid,
-            self._realization,
-        )
+        value = f"<SimWeather : '{self._name}', year = {self._year}, "
+        value += f"month = {self._month}, hour = {self._hour}, "
+        value += f"site UID = {self._site_uid}, realization = {self._realization}, "
+        value += f"median = {self.median_weather})"
         return value
 
     def __eq__(self, other):
@@ -464,6 +486,8 @@ class SimWeather(Weather):
         if self._site_uid != other._site_uid:
             return False
         if self._realization != other._realization:
+            return False
+        if self.median_weather != other.median_weather:
             return False
         return True
 

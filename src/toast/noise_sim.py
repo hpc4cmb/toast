@@ -150,7 +150,7 @@ class AnalyticNoise(Noise):
             # Write the noise model parameters as a dataset
             maxstr = 1 + max([len(x) for x in self._dets])
             adtype = np.dtype(f"a{maxstr}, f8, f8, f8, f8, f8")
-            ds = handle.create_dataset("analytic", len(self._dets), dtype=adtype)
+            ds = handle.create_dataset("analytic", (len(self._dets),), dtype=adtype)
             if rank == 0:
                 packed = np.array(
                     [
