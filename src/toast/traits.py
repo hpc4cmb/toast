@@ -267,8 +267,19 @@ class TraitConfig(HasTraits):
         # types and values.
         for trait_name, trait in self.traits().items():
             trother = other.traits()[trait_name]
-            if trait.get(self) != trother.get(other):
-                return False
+            if isinstance(trait, Set):
+                tset = {x: x for x in trait.get(self)}
+                oset = {x: x for x in trother.get(other)}
+                if tset != oset:
+                    return False
+            elif isinstance(trait, Dict):
+                tdict = dict(trait.get(self))
+                odict = dict(trother.get(other))
+                if tdict != odict:
+                    return False
+            else:
+                if trait.get(self) != trother.get(other):
+                    return False
         return True
 
     def __ne__(self, other):
