@@ -339,8 +339,9 @@ class PixelsHealpix(Operator):
         return req
 
     def _provides(self):
+        # FIXME quats generated are keyed in self.detector_pointing.quats (and not self.quats)
         prov = {
-            "detdata": [self.pixels],
+            "detdata": [self.pixels, self.detector_pointing.quats],
             "global": list(),
         }
         if self.create_dist is not None:

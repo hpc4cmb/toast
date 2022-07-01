@@ -144,8 +144,7 @@ class PointingDetectorSimple(Operator):
                     log.verbose(msg)
                 continue
 
-            # FIXME:  temporary hack until instrument classes are also pre-staged
-            # to GPU
+            # FIXME:  temporary hack until instrument classes are also pre-staged to GPU
             focalplane = ob.telescope.focalplane
             fp_quats = np.zeros((len(dets), 4), dtype=np.float64)
             for idet, d in enumerate(dets):

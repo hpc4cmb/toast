@@ -114,6 +114,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         None (results are stored in pixels and hit_submaps).
     """
     # make sure the data is where we expect it
+    # TODO: quats and pixels are on GPU when use_accel is true, pixel still is when it is false
     assert_data_localization('pixels_healpix', use_accell, [quats, flags, hit_submaps], [pixels, hit_submaps])
 
     # initialize hpix for all computations
@@ -123,6 +124,9 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     n_samp = pixels.shape[1]
     use_flags = (flag_mask != 0) and (flags.size == n_samp)
 
+    # moves hit_submaps to GPU once for all loop iterations
+    hit_submaps_gpu = jnp.array(hit_submaps)
+
     # loop on the intervals
     for interval in intervals:
         interval_start = interval['first']
@@ -131,9 +135,11 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         quats_interval = quats[quat_index, interval_start:interval_end, :]
         flags_interval = flags[interval_start:interval_end] if use_flags else None
         # does the computation and updates pixels and hit_submaps in place
-        new_pixels_interval, new_hit_submaps = pixels_healpix_interval_jax(hpix, quats_interval, flags_interval, flag_mask, hit_submaps, n_pix_submap, nest)
+        new_pixels_interval, hit_submaps_gpu = pixels_healpix_interval_jax(hpix, quats_interval, flags_interval, flag_mask, hit_submaps_gpu, n_pix_submap, nest)
         pixels[pixel_index, interval_start:interval_end] = new_pixels_interval
-        hit_submaps[:] = new_hit_submaps
+
+    # goe back to CPU
+    hit_submaps[:] = hit_submaps_gpu
 
 # -------------------------------------------------------------------------------------------------
 # NUMPY

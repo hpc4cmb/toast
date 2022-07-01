@@ -91,8 +91,10 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     use_det_flags = (det_flags.shape[1] == n_samp)
     use_shared_flags = (shared_flags.size == n_samp)
 
-    # converts zmap to a jnp array to be reused for the duration of the loop
-    zmap_jnp = zmap.data if isinstance(zmap, MutableJaxArray) else jnp.array(zmap)
+    # moves some data to GPU once for all loop iterations
+    zmap_gpu = zmap.data if isinstance(zmap, MutableJaxArray) else jnp.array(zmap)
+    global2local_gpu = jnp.array(global2local)
+    det_scale_gpu = jnp.array(det_scale)
 
     # we loop over intervals
     for interval in intervals:
@@ -105,10 +107,10 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
         det_flags_interval = det_flags[flag_index, interval_start:interval_end] if use_det_flags else None
         shared_flags_interval = shared_flags[interval_start:interval_end] if use_shared_flags else None
         # process the interval then updates zmap
-        zmap_jnp = build_noise_weighted_interval_jax(global2local, zmap_jnp, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale, det_flag_mask, shared_flags_interval, shared_flag_mask)
+        zmap_gpu = build_noise_weighted_interval_jax(global2local_gpu, zmap_gpu, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale_gpu, det_flag_mask, shared_flags_interval, shared_flag_mask)
 
     # gets zmap back to its original format
-    zmap[:] = zmap_jnp
+    zmap[:] = zmap_gpu
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

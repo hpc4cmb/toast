@@ -72,13 +72,16 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
         intervals (array, Interval): The intervals to modify (size n_view)
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
-        use_accell (bool): should weuse the accelerator
+        use_accell (bool): should we use the accelerator
 
     Returns:
         None (the result is put in quats).
     """
     # make sure the data is where we expect it
-    assert_data_localization('pointing_detector', use_accell, [focalplane, boresight, shared_flags], [quats])
+    # TODO assert_data_localization('pointing_detector', use_accell, [focalplane, boresight, shared_flags], [quats])
+
+    # moves focalplane to GPU once for all loop iterations
+    focalplane = jnp.array(focalplane)
 
     # we loop over intervals
     for interval in intervals:

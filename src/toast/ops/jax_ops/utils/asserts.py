@@ -3,7 +3,7 @@ from .mutableArray import MutableJaxArray
 import jax.numpy as jnp
 from ....utils import Logger, Environment
 
-use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (os.environ["TOAST_LOGLEVEL"]=="DEBUG")
+use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (os.environ["TOAST_LOGLEVEL"] in ["DEBUG", "VERBOSE"])
 """
 Assert is used only if `TOAST_LOGLEVEL` is set to `DEBUG`.
 """
@@ -27,10 +27,12 @@ def assert_data_localization(function_name, use_accell, inputs, outputs):
                     msg = f"function '{function_name}' has NO input on GPU but is running with use_accell=True"
                 log = Logger.get()
                 log.warning(msg)
+                #raise RuntimeError("GPU localisation error")
         else:
             # checks that no data is on the GPU
             if gpu_input or gpu_output:
                 msg = f"function '{function_name}' has an input on GPU but is running with use_accell=False"
                 log = Logger.get()
                 log.warning(msg)
+                #raise RuntimeError("GPU localisation error")
 

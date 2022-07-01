@@ -105,16 +105,22 @@ def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_da
     # make sure the data is where we expect it
     assert_data_localization('template_offset_project_signal', use_accel, [det_data, flag_data, amplitudes], [amplitudes])
 
+    # moves amplitudes to GPU once for all loop iterations
+    amplitudes_gpu = jnp.array(amplitudes)
+
     # loop over the intervals
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
         interval_start = interval['first']
         interval_end = interval['last']+1
-        det_data_samp = det_data[data_index,interval_start:interval_end]
-        flag_samp = flag_data[flag_index,interval_start:interval_end] if flag_index >= 0 else None
+        det_data_interval = det_data[data_index,interval_start:interval_end]
+        flags_interval = flag_data[flag_index,interval_start:interval_end] if flag_index >= 0 else None
         # updates amplitudes
-        amplitudes[:] = template_offset_project_signal_inner_jax(det_data_samp, flag_samp, flag_mask, step_length, offset, amplitudes, interval_start)
+        amplitudes_gpu = template_offset_project_signal_inner_jax(det_data_interval, flags_interval, flag_mask, step_length, offset, amplitudes_gpu, interval_start)
         offset += view_offset
+    
+    # gets data back to CPU
+    amplitudes[:] = amplitudes_gpu
 
 def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes_out, use_accel):
     """
