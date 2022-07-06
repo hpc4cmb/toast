@@ -117,7 +117,7 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
         quats_interval = quats[quat_index, interval_start:interval_end, :]
         hwp_interval = hwp[interval_start:interval_end]
         # does the computation and puts the result in weights
-        # needs two steps, otherwise there weights are not modified in place
+        # needs to modify wights directly (rather than a view), otherwise there weights are not modified in place
         new_weights_interval = stokes_weights_IQU_interval_jax(epsilon_gpu, cal, quats_interval, hwp_interval)
         weights[weight_index, interval_start:interval_end, :] = new_weights_interval
 

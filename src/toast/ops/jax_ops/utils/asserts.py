@@ -27,12 +27,12 @@ def assert_data_localization(function_name, use_accell, inputs, outputs):
                     msg = f"function '{function_name}' has NO input on GPU but is running with use_accell=True"
                 log = Logger.get()
                 log.warning(msg)
-                #raise RuntimeError("GPU localisation error")
+                #raise RuntimeError("GPU localisation error") # TODO
         else:
             # checks that no data is on the GPU
             if gpu_input or gpu_output:
                 msg = f"function '{function_name}' has an input on GPU but is running with use_accell=False"
                 log = Logger.get()
                 log.warning(msg)
-                #raise RuntimeError("GPU localisation error")
+                #raise RuntimeError("GPU localisation error") # TODO
 

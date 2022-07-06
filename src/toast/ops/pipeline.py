@@ -275,7 +275,7 @@ class Pipeline(Operator):
                 msg = f"{self} does not support accel because of '{op}'"
                 log.debug(msg)
                 return False
-        print(f"DEBUGGING: {self} supports accel")
+        print(f"DEBUGGING: {self} supports accel") # TODO
         return True
 
     def __str__(self):
