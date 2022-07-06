@@ -1,4 +1,6 @@
 conda-build
+libopenblas=*=*openmp*
+libblas=*=*openblas
 cmake
 psutil
 cython

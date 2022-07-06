@@ -46,7 +46,7 @@ def find_compilers():
         cc = mpicc_com.split()[0]
         cxx = mpicxx_com.split()[0]
 
-    except ImportError:
+    except (ImportError, KeyError):
         pass
 
     return (cc, cxx)
@@ -150,13 +150,7 @@ class CMakeBuild(build_ext):
 
         # Set compilers
 
-        if cc is not None:
-            # Use serial compilers that were used when building MPI
-            print(
-                f"C Compiler:  using serial compiler '{cc}' from installed mpi4py package"
-            )
-            cmake_args += ["-DCMAKE_C_COMPILER={}".format(cc)]
-        elif "CMAKE_C_COMPILER" in cmake_opts:
+        if "CMAKE_C_COMPILER" in cmake_opts:
             # Get these from the environment
             cc = cmake_opts["CMAKE_C_COMPILER"]
             print(
@@ -164,6 +158,12 @@ class CMakeBuild(build_ext):
             )
             cmake_args += [f"-DCMAKE_C_COMPILER={cc}"]
             _ = cmake_opts.pop("CMAKE_C_COMPILER")
+        elif cc is not None:
+            # Use serial compilers that were used when building MPI
+            print(
+                f"C Compiler:  using serial compiler '{cc}' from installed mpi4py package"
+            )
+            cmake_args += ["-DCMAKE_C_COMPILER={}".format(cc)]
         else:
             # We just let cmake guess the compilers and hope for the best...
             print(
@@ -171,13 +171,7 @@ class CMakeBuild(build_ext):
             )
             pass
 
-        if cxx is not None:
-            # Use serial compilers that were used when building MPI
-            print(
-                f"C++ Compiler:  using serial compiler '{cxx}' from installed mpi4py package"
-            )
-            cmake_args += ["-DCMAKE_CXX_COMPILER={}".format(cxx)]
-        elif "CMAKE_CXX_COMPILER" in cmake_opts:
+        if "CMAKE_CXX_COMPILER" in cmake_opts:
             # Get these from the environment
             cxx = cmake_opts["CMAKE_CXX_COMPILER"]
             print(
@@ -187,6 +181,12 @@ class CMakeBuild(build_ext):
                 f"-DCMAKE_CXX_COMPILER={cxx}"
             ]
             _ = cmake_opts.pop("CMAKE_CXX_COMPILER")
+        elif cxx is not None:
+            # Use serial compilers that were used when building MPI
+            print(
+                f"C++ Compiler:  using serial compiler '{cxx}' from installed mpi4py package"
+            )
+            cmake_args += ["-DCMAKE_CXX_COMPILER={}".format(cxx)]
         else:
             # We just let cmake guess the compilers and hope for the best...
             print(

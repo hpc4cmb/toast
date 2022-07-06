@@ -32,7 +32,7 @@ source ${basedir}/etc/profile.d/conda.sh
 conda activate base
 
 pkgfile="${scriptdir}/conda_dev_pkgs.txt"
-pkglist=$(cat "${pkgfile}" | xargs echo)
+pkglist=$(cat "${pkgfile}" | xargs -I % echo -n '"%" ')
 platform=$(python -c 'import sys; print(sys.platform)')
 if [ "${platform}" = "darwin" ]; then
     pkglist="${pkglist} compilers"
@@ -46,20 +46,20 @@ pip_list="pixell"
 
 if [ "x${env_check}" = "x" ]; then
     # Environment does not yet exist.  Create it.
-    echo "Creating new environment \"${envname}\" with packages:  ${pkglist}"
-    conda create --yes -n ${envname} ${pkglist}
+    echo "Creating new environment \"${envname}\""
+    conda create --yes -n ${envname}
     echo "Activating environment \"${envname}\""
     conda activate ${envname}
-    echo "Installing pip packages:  ${piplist}"
-    pip install ${pip_list}
+    echo "Setting default channel in this env to conda-forge"
+    conda config --env --add channels conda-forge
+    conda config --env --set channel_priority strict
 else
     echo "Activating environment \"${envname}\""
     conda activate ${envname}
     conda env list
-    echo "Installing conda packages:  ${pkglist}"
-    conda install --yes --update-all ${pkglist}
-    echo "Installing pip packages:  ${piplist}"
-    pip install ${pip_list}
 fi
-    
 
+echo "Installing conda packages:  ${pkglist}"
+conda install --yes --update-all ${pkglist}
+echo "Installing pip packages:  ${piplist}"
+pip install ${pip_list}
