@@ -2,20 +2,16 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
-
 import numpy as np
+import traitlets
 from astropy import units as u
-from ..timing import function_timer
 
-from ..traits import trait_docs, Int, Float, Unicode, Bool, Quantity, Callable
-
-from ..observation import default_values as defaults
-
-from .operator import Operator
-
-from ..utils import Environment, Logger
 from .. import rng
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Callable, Float, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger
+from .operator import Operator
 from .sim_tod_noise import sim_noise_timestream
 
 

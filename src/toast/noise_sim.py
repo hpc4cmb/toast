@@ -4,17 +4,13 @@
 
 import os
 
+import h5py
 import numpy as np
-
 from astropy import units as u
 
-import h5py
-
 from .noise import Noise
-
-from .utils import hdf5_use_serial
-
 from .timing import function_timer
+from .utils import hdf5_use_serial
 
 
 class AnalyticNoise(Noise):
@@ -154,7 +150,7 @@ class AnalyticNoise(Noise):
             # Write the noise model parameters as a dataset
             maxstr = 1 + max([len(x) for x in self._dets])
             adtype = np.dtype(f"a{maxstr}, f8, f8, f8, f8, f8")
-            ds = handle.create_dataset("analytic", len(self._dets), dtype=adtype)
+            ds = handle.create_dataset("analytic", (len(self._dets),), dtype=adtype)
             if rank == 0:
                 packed = np.array(
                     [

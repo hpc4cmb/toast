@@ -2,21 +2,16 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import h5py
-
 import os
 
+import h5py
+import healpy as hp
 import numpy as np
 
-from .timing import function_timer, Timer
-
-from .mpi import MPI, use_mpi
-
-import healpy as hp
-
-from .utils import Logger, memreport
-
 from .io import have_hdf5_parallel
+from .mpi import MPI, use_mpi
+from .timing import Timer, function_timer
+from .utils import Logger, memreport
 
 
 @function_timer
@@ -139,7 +134,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
 
 
 @function_timer
-def collect_submaps(pix, comm_bytes=10000000):
+def collect_healpix_submaps(pix, comm_bytes=10000000):
     # The distribution
     dist = pix.distribution
 
@@ -276,7 +271,7 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
     if dist.comm is not None:
         rank = dist.comm.rank
 
-    fdata, fview = collect_submaps(pix, comm_bytes=comm_bytes)
+    fdata, fview = collect_healpix_submaps(pix, comm_bytes=comm_bytes)
 
     if rank == 0:
         if os.path.isfile(path):

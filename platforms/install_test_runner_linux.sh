@@ -7,7 +7,7 @@ set -e
 
 # Temporary workaround- update pshmem pip package until upstream container
 # has new release.
-python3 -m pip install --upgrade pshmem
+# python3 -m pip install --upgrade pshmem
 
 # Get the absolute path to the source tree
 pushd $(dirname $(dirname $0)) >/dev/null 2>&1

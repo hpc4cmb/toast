@@ -2,22 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
 import traitlets
 
-import numpy as np
-
-from ..utils import Logger, AlignedF64
-
-from ..traits import trait_docs, Int, Unicode, Bool
-
-from ..timing import function_timer
-
-from ..pixels import PixelDistribution, PixelData
-
+from .._libtoast import scan_map_float32, scan_map_float64
 from ..observation import default_values as defaults
-
-from .._libtoast import scan_map_float64, scan_map_float32
-
+from ..pixels import PixelData, PixelDistribution
+from ..timing import function_timer
+from ..traits import Bool, Int, Unicode, trait_docs
+from ..utils import AlignedF64, Logger
 from .operator import Operator
 
 
@@ -221,7 +214,9 @@ class ScanMask(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     det_flags = Unicode(
-        None, allow_none=True, help="Observation detdata key for flags to set"
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     det_flags_value = Int(
@@ -290,8 +285,8 @@ class ScanMask(Operator):
                     local_sm, local_pix = mask_dist.global_pixel_to_submap(pix)
 
                     # We could move this to compiled code if it is too slow...
-                    masked = mask_data[local_sm, local_pix, 0] & self.mask_bits
-                    dflags[masked != 0] |= self.det_flags_value
+                    masked = (mask_data[local_sm, local_pix, 0] & self.mask_bits) != 0
+                    dflags[masked] |= self.det_flags_value
 
         return
 

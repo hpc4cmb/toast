@@ -21,13 +21,22 @@ TOAST_LOGLEVEL=<value>
 TOAST_FUNCTIME=<value>
     * Any non-empty value will enable python function timers in many parts of the code
 
-TOAST_TOD_BUFFER=<integer>
-    * Number of elements to buffer in code where many intermediate timestream
-      products are created.  Default is 1048576.
+TOAST_GPU_OPENMP=<value>
+    * Values "1", "true", or "yes" will enable runtime-support for OpenMP
+      target offload.
+    * Requires compile-time support for OpenMP 5.x features.
+
+TOAST_GPU_JAX=<value>
+    * Values "1", "true", or "yes" will enable runtime support for jax.
+    * Requires jax to be available / importable.
 
 OMP_NUM_THREADS=<integer>
     * Toast uses OpenMP threading in several places and the concurrency is set by the
       usual environment variable.
+
+OMP_TARGET_OFFLOAD=[MANDATORY | DISABLED | DEFAULT]
+    * If the TOAST_GPU_OPENMP environment variable is set, this standard OpenMP
+      environment variable controls the offload behavior.
 
 MPI_DISABLE=<value>
     * Any non-empty value will disable a try block that looks for mpi4py.  Needed on
@@ -37,14 +46,10 @@ MPI_DISABLE=<value>
 CUDA_MEMPOOL_FRACTION=<float>
     * If compiled with CUDA support (-DUSE_CUDA), create a memory pool that
       pre-allocates this fraction of the device memory allocated to each process.
-      Note that if compiled with -DUSE_OPENACC_MEMPOOL, then OpenACC code will
-      use this memory pool.  If you set this fraction to be very large, then you
-      should enable this option so that regular OpenACC allocations do not
-      exhaust the device memory.
 
 """
-import sys
 import os
+import sys
 
 # Get the package version from the libtoast environment if possible.  If this
 # import fails, it is likely due to the toast package being imported prior to
@@ -71,25 +76,15 @@ except ImportError:
     except:
         raise ImportError("Cannot read RELEASE file")
 
-# Namespace imports
-from .mpi import Comm, get_world
 
-from .timing import Timer, GlobalTimers
-
-from .intervals import Interval
-
-from .observation import Observation
-
+from .config import create_from_config, load_config, parse_config
 from .data import Data
-
-from .config import load_config, parse_config, create_from_config
-
-from .instrument import Telescope, Focalplane, GroundSite, SpaceSite
-
+from .instrument import Focalplane, GroundSite, SpaceSite, Telescope
 from .instrument_sim import fake_hexagon_focalplane
-
-from .weather import Weather
-
-from .pixels import PixelDistribution, PixelData
-
+from .intervals import IntervalList, interval_dtype
 from .job import job_group_size
+from .mpi import Comm, get_world
+from .observation import Observation
+from .pixels import PixelData, PixelDistribution
+from .timing import GlobalTimers, Timer
+from .weather import Weather

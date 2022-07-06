@@ -2,18 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
-import numpy as np
 
 import healpy as hp
+import numpy as np
 
-from ..healpix import ang2vec, vec2ang, Pixels
-
+from ..healpix import Pixels, ang2vec, vec2ang
 from ..rng import random
-
 from ._helpers import create_outdir
+from .mpi import MPITestCase
 
 
 class HealpixTest(MPITestCase):

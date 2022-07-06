@@ -5,20 +5,14 @@
 from collections import OrderedDict
 
 import numpy as np
-
-from ..mpi import MPI
-
-from ..utils import Logger
-
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
+import scipy
 
 from ..data import Data
-
-from .template import Template
-
+from ..mpi import MPI
+from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .amplitudes import Amplitudes
-
-import scipy
+from .template import Template
 
 
 @trait_docs
@@ -146,7 +140,7 @@ class GainTemplate(Template):
                     good = slice(0, view_len, 1)
                     if self.det_flags is not None:
                         flags = views.detdata[self.det_flags][ivw][det]
-                        good = flags & self.det_flag_mask == 0
+                        good = (flags & self.det_flag_mask) == 0
 
                     prec = np.zeros((norder, norder), dtype=np.float64)
                     T = ob.detdata[self.template_name][det]

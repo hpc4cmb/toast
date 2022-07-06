@@ -3,18 +3,15 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-
-from typing import Type
 import re
-import numpy as np
-
-from astropy import units as u
+from typing import Type
 
 import h5py
+import numpy as np
+from astropy import units as u
 
+from .timing import Timer, function_timer
 from .utils import hdf5_use_serial
-
-from .timing import function_timer, Timer
 
 
 class Noise(object):
@@ -249,7 +246,7 @@ class Noise(object):
 
         if hf is not None:
             # This process is participating
-            mds = hf.create_dataset("mixing_matrix", len(mixdata), dtype=mixdtype)
+            mds = hf.create_dataset("mixing_matrix", (len(mixdata),), dtype=mixdtype)
             if rank == 0:
                 # Only one process needs to write
                 packed = np.array(mixdata, dtype=mixdtype)
@@ -314,13 +311,15 @@ class Noise(object):
                     packed[1:] = np.array(psds, dtype=np.float32)
                     pds.write_direct(packed)
                 del pds
-                ids = hf.create_dataset(f"{fhash}_indices", len(psds), dtype=np.int32)
+                ids = hf.create_dataset(
+                    f"{fhash}_indices", (len(psds),), dtype=np.int32
+                )
                 if rank == 0:
                     packed = np.array(indx, dtype=np.int32)
                     ids.write_direct(packed)
                 del ids
                 keytype = np.dtype(f"a{maxstr}")
-                kds = hf.create_dataset(f"{fhash}_keys", len(psds), dtype=keytype)
+                kds = hf.create_dataset(f"{fhash}_keys", (len(psds),), dtype=keytype)
                 if rank == 0:
                     packed = np.array(keys, dtype=keytype)
                     kds.write_direct(packed)

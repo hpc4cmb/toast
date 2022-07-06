@@ -3,14 +3,11 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 from scipy.signal import fftconvolve
 
-from ..mpi import MPI
-
-from ..timing import function_timer
-
 from .._libtoast import fod_autosums, fod_crosssums
+from ..mpi import MPI
+from ..timing import function_timer
 
 
 @function_timer
@@ -155,7 +152,7 @@ def crosscov_psd(
 
     Compute the sample (cross)covariance function and Fourier transform it
     for a power spectral density. The resulting power spectral densities
-    are distributed across the communicator as tuples of
+    are distributed across the process grid row communicator as tuples of
     (start_time, stop_time, bin_frequency, bin_value)
 
     Args:

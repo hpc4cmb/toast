@@ -7,18 +7,13 @@ import os
 import h5py
 import numpy as np
 import scipy.stats as stats
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
-
 from .. import ops as ops
-
 from ..observation import default_values as defaults
-
+from ..vis import set_matplotlib_backend
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class StatisticsTest(MPITestCase):
@@ -43,7 +38,7 @@ class StatisticsTest(MPITestCase):
         sim_noise.apply(data)
 
         # Measure TOD statistics
-        statistics = ops.Statistics(det_flags=None)
+        statistics = ops.Statistics()
         statistics.output_dir = self.outdir
         statistics.apply(data)
 

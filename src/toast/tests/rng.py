@@ -2,13 +2,11 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
-from ..utils import AlignedU64
+import numpy as np
 
 from ..rng import random, random_multi
-
-import numpy as np
+from ..utils import AlignedU64
+from .mpi import MPITestCase
 
 
 class RNGTest(MPITestCase):

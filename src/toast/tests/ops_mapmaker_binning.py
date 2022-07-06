@@ -4,32 +4,21 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-import healpy as hp
-
-from ..mpi import MPI
-
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
-from ..vis import set_matplotlib_backend
-
 from .. import ops as ops
-
-from ..pixels import PixelDistribution, PixelData
-
-from ..pixels_io import write_healpix_fits
-
 from ..covariance import covariance_apply
-
+from ..mpi import MPI
+from ..noise import Noise
 from ..observation import default_values as defaults
-
+from ..pixels import PixelData, PixelDistribution
+from ..pixels_io_healpix import write_healpix_fits
+from ..vis import set_matplotlib_backend
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class MapmakerBinningTest(MPITestCase):
@@ -187,7 +176,6 @@ class MapmakerBinningTest(MPITestCase):
 
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
-            det_flags=None,
             covariance=cov_and_hits.covariance,
             det_data=sim_noise.det_data,
             pixel_pointing=pixels,
@@ -231,7 +219,6 @@ class MapmakerBinningTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",

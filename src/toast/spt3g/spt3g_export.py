@@ -2,32 +2,26 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import os
 import io
-
-import numpy as np
+import os
 
 import h5py
-
+import numpy as np
 from astropy import units as u
 
-from ..utils import Environment, Logger, object_fullname
-
-from ..timing import function_timer
-
-from ..intervals import IntervalList
-
 from ..instrument import GroundSite, SpaceSite
-
+from ..intervals import IntervalList
+from ..timing import function_timer
+from ..utils import Environment, Logger, object_fullname
 from .spt3g_utils import (
     available,
-    to_g3_scalar_type,
+    compress_timestream,
     to_g3_array_type,
     to_g3_map_array_type,
-    to_g3_unit,
-    to_g3_time,
     to_g3_quats,
-    compress_timestream,
+    to_g3_scalar_type,
+    to_g3_time,
+    to_g3_unit,
 )
 
 if available:
@@ -257,6 +251,19 @@ class export_obs_meta(object):
                     else:
                         ob["site_weather_max_pwv"] = c3g.G3Double(site.weather.max_pwv)
                     ob["site_weather_time"] = to_g3_time(site.weather.time.timestamp())
+        session = obs.session
+        if session is not None:
+            ob["session_name"] = c3g.G3String(session.name)
+            ob["session_class"] = c3g.G3String(object_fullname(session.__class__))
+            ob["session_uid"] = c3g.G3Int(session.uid)
+            if session.start is None:
+                ob["session_start"] = c3g.G3String("NONE")
+            else:
+                ob["session_start"] = to_g3_time(session.start.timestamp())
+            if session.end is None:
+                ob["session_end"] = c3g.G3String("NONE")
+            else:
+                ob["session_end"] = to_g3_time(session.end.timestamp())
         m_export = set()
         for m_in, m_out in self._meta_arrays:
             out_type = to_g3_array_type(obs[m_in].dtype)

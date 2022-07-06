@@ -18,18 +18,17 @@ Then it frees the buffers of a given type from all detectors and
 compares the resulting change to what is expected.
 
 """
+import argparse
 import os
 import re
 import sys
-import argparse
 import traceback
-import psutil
 
 import numpy as np
-
-from toast.utils import Logger
+import psutil
 
 from toast.cache import Cache
+from toast.utils import Logger
 
 
 def main():

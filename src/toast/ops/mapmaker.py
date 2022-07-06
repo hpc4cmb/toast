@@ -4,39 +4,25 @@
 
 import os
 
+import numpy as np
 import traitlets
 
-import numpy as np
-
-from ..utils import Logger
-
 from ..mpi import MPI
-
-from ..traits import trait_docs, Int, Unicode, Bool, Float, Instance
-
-from ..timing import function_timer, Timer
-
-from ..pixels import PixelDistribution, PixelData
-
-from ..pixels_io import write_healpix_fits, write_healpix_hdf5
-
 from ..observation import default_values as defaults
-
-from .operator import Operator
-
-from .pipeline import Pipeline
-
-from .delete import Delete
-
+from ..pixels import PixelData, PixelDistribution
+from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
+from ..pixels_io_wcs import write_wcs_fits
+from ..timing import Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .copy import Copy
-
-from .scan_map import ScanMap, ScanMask
-
+from .delete import Delete
+from .mapmaker_templates import ApplyAmplitudes, SolveAmplitudes
 from .mapmaker_utils import CovarianceAndHits
-
-from .mapmaker_templates import SolveAmplitudes, ApplyAmplitudes
-
 from .memory_counter import MemoryCounter
+from .operator import Operator
+from .pipeline import Pipeline
+from .scan_map import ScanMap, ScanMask
 
 
 @trait_docs
@@ -159,6 +145,10 @@ class MapMaker(Operator):
 
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
 
+    write_solver_products = Bool(
+        False, help="If True, write out equivalent solver products."
+    )
+
     keep_solver_products = Bool(
         False, help="If True, keep the map domain solver products in data"
     )
@@ -253,6 +243,10 @@ class MapMaker(Operator):
             binning=self.binning,
             template_matrix=self.template_matrix,
             keep_solver_products=self.keep_solver_products,
+            write_solver_products=self.write_solver_products,
+            write_hdf5=self.write_hdf5,
+            write_hdf5_serial=self.write_hdf5_serial,
+            output_dir=self.output_dir,
             mc_mode=self.mc_mode,
             mc_index=self.mc_index,
             reset_pix_dist=self.reset_pix_dist,
@@ -430,9 +424,14 @@ class MapMaker(Operator):
                 ]
             ).apply(data)
 
-        # FIXME:  This all assumes the pointing operator is an instance of the
-        # PointingHealpix class.  We need to generalize distributed pixel data
-        # formats and associate them with the pointing operator.
+        # FIXME:  This I/O technique assumes "known" types of pixel representations.
+        # Instead, we should associate read / write functions to a particular pixel
+        # class.
+
+        is_pix_wcs = hasattr(map_binning.pixel_pointing, "wcs")
+        is_hpix_nest = None
+        if not is_pix_wcs:
+            is_hpix_nest = map_binning.pixel_pointing.nest
 
         write_del = list()
         write_del.append((self.hits_name, self.write_hits))
@@ -446,25 +445,31 @@ class MapMaker(Operator):
         wtimer.start()
         for prod_key, prod_write in write_del:
             if prod_write:
-                if self.write_hdf5:
-                    # Non-standard HDF5 output
-                    fname = os.path.join(self.output_dir, "{}.h5".format(prod_key))
-                    write_healpix_hdf5(
-                        data[prod_key],
-                        fname,
-                        nest=map_binning.pixel_pointing.nest,
-                        single_precision=True,
-                        force_serial=self.write_hdf5_serial,
-                    )
-                else:
-                    # Standard FITS output
+                if is_pix_wcs:
                     fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
-                    write_healpix_fits(
-                        data[prod_key],
-                        fname,
-                        nest=map_binning.pixel_pointing.nest,
-                        report_memory=self.report_memory,
-                    )
+                    write_wcs_fits(data[prod_key], fname)
+                else:
+                    if self.write_hdf5:
+                        # Non-standard HDF5 output
+                        fname = os.path.join(self.output_dir, "{}.h5".format(prod_key))
+                        write_healpix_hdf5(
+                            data[prod_key],
+                            fname,
+                            nest=is_hpix_nest,
+                            single_precision=True,
+                            force_serial=self.write_hdf5_serial,
+                        )
+                    else:
+                        # Standard FITS output
+                        fname = os.path.join(
+                            self.output_dir, "{}.fits".format(prod_key)
+                        )
+                        write_healpix_fits(
+                            data[prod_key],
+                            fname,
+                            nest=is_hpix_nest,
+                            report_memory=self.report_memory,
+                        )
                 log.info_rank(f"Wrote {fname} in", comm=comm, timer=wtimer)
             if not self.keep_final_products:
                 if prod_key in data:

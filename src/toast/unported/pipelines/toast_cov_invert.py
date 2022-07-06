@@ -6,23 +6,19 @@
 
 """Invert a block diagonal covariance matrix.
 """
+import argparse
 import os
 import re
 import sys
-import argparse
 import traceback
 
+import healpy as hp
 import numpy as np
 
-import healpy as hp
-
-from toast.mpi import get_world
-
-from toast.utils import Logger
-
 from toast.dist import distribute_uniform
-
 from toast.map import DistPixels, covariance_invert
+from toast.mpi import get_world
+from toast.utils import Logger
 
 
 def main():

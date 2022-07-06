@@ -6,20 +6,14 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
-from ..utils import rate_from_times
-
-from ..dist import distribute_uniform
-
 from .. import ops
-
+from ..dist import distribute_uniform
 from ..templates import Amplitudes, AmplitudesMap
-
-from ._helpers import create_outdir, create_comm
+from ..utils import rate_from_times
+from ._helpers import create_comm, create_outdir
+from .mpi import MPITestCase
 
 
 class TemplateTest(MPITestCase):

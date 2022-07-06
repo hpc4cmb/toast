@@ -3,43 +3,27 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-
+import shutil
+import tempfile
 from datetime import datetime
 
-import tempfile
-
-import shutil
-
-import numpy as np
-
 import healpy as hp
-
+import numpy as np
 from astropy import units as u
-
-from ..mpi import Comm
-
-from ..data import Data
-
-from .. import qarray as qa
-
-from ..instrument import Focalplane, Telescope, GroundSite, SpaceSite
-
-from ..instrument_sim import fake_hexagon_focalplane
-
-from ..schedule import GroundSchedule
-
-from ..schedule_sim_satellite import create_satellite_schedule
-
-from ..schedule_sim_ground import run_scheduler
-
-from ..observation import DetectorData, Observation
-from ..observation import default_values as defaults
-
-from ..pixels import PixelData
+from astropy.table import Column, QTable
 
 from .. import ops as ops
-
-from astropy.table import QTable, Column
+from .. import qarray as qa
+from ..data import Data
+from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
+from ..instrument_sim import fake_hexagon_focalplane
+from ..mpi import Comm
+from ..observation import DetectorData, Observation
+from ..observation import default_values as defaults
+from ..pixels import PixelData
+from ..schedule import GroundSchedule
+from ..schedule_sim_ground import run_scheduler
+from ..schedule_sim_satellite import create_satellite_schedule
 
 ZAXIS = np.array([0.0, 0.0, 1.0])
 
@@ -117,19 +101,69 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
     return Telescope("test", focalplane=fp, site=site)
 
 
-def create_ground_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1):
+def create_boresight_telescope(group_size, sample_rate=10.0 * u.Hz):
+    """Create a fake telescope with one boresight detector per process."""
+    nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
+    n_det = group_size
+    det_names = [f"d{x:03d}" for x in range(n_det)]
+    pol_ang = np.array([(2 * np.pi * x / n_det) for x in range(n_det)])
+
+    det_table = QTable(
+        [
+            Column(name="name", data=det_names),
+            Column(name="quat", data=[nullquat for x in range(n_det)]),
+            Column(name="pol_leakage", length=n_det, unit=None),
+            Column(name="psi_pol", data=pol_ang, unit=u.rad),
+            Column(name="fwhm", length=n_det, unit=u.arcmin),
+            Column(name="psd_fmin", length=n_det, unit=u.Hz),
+            Column(name="psd_fknee", length=n_det, unit=u.Hz),
+            Column(name="psd_alpha", length=n_det, unit=None),
+            Column(name="psd_net", length=n_det, unit=(u.K * np.sqrt(1.0 * u.second))),
+            Column(name="bandcenter", length=n_det, unit=u.GHz),
+            Column(name="bandwidth", length=n_det, unit=u.GHz),
+            Column(name="pixel", data=[0 for x in range(n_det)]),
+        ]
+    )
+
+    fwhm = 5.0 * u.arcmin
+
+    for idet in range(len(det_table)):
+        det_table[idet]["pol_leakage"] = 0.0
+        det_table[idet]["fwhm"] = fwhm
+        det_table[idet]["bandcenter"] = 150.0 * u.GHz
+        det_table[idet]["bandwidth"] = 20.0 * u.GHz
+        det_table[idet]["psd_fmin"] = 1.0e-5 * u.Hz
+        det_table[idet]["psd_fknee"] = 0.05 * u.Hz
+        det_table[idet]["psd_alpha"] = 1.0
+        det_table[idet]["psd_net"] = 100 * (u.K * np.sqrt(1.0 * u.second))
+
+    fp = Focalplane(
+        detector_data=det_table,
+        sample_rate=sample_rate,
+        field_of_view=1.1 * (2 * fwhm),
+    )
+
+    site = SpaceSite("L2")
+    return Telescope("test", focalplane=fp, site=site)
+
+
+def create_ground_telescope(
+    group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1, fknee=None
+):
     """Create a fake ground telescope with at least one detector per process."""
     npix = 1
     ring = 1
     while 2 * npix <= group_size * pixel_per_process:
         npix += 6 * ring
         ring += 1
+    if fknee is None:
+        fknee = sample_rate / 2000.0
     fp = fake_hexagon_focalplane(
         n_pix=npix,
         sample_rate=sample_rate,
         psd_fmin=1.0e-5 * u.Hz,
         psd_net=0.05 * u.K * np.sqrt(1 * u.second),
-        psd_fknee=(sample_rate / 2000.0),
+        psd_fknee=fknee,
     )
 
     site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
@@ -170,6 +204,7 @@ def create_satellite_data(
     sample_rate=10.0 * u.Hz,
     obs_time=10.0 * u.minute,
     pixel_per_process=1,
+    hwp_rpm=10.0,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -211,12 +246,16 @@ def create_satellite_data(
 
     # Scan fast enough to cover some sky in a short amount of time.  Reduce the
     # angles to achieve a more compact hit map.
+    if hwp_rpm == 0 or hwp_rpm is None:
+        hwp_angle = None
+    else:
+        hwp_angle = defaults.hwp_angle
     sim_sat = ops.SimSatellite(
         name="sim_sat",
         telescope=tele,
         schedule=sch,
-        hwp_angle=defaults.hwp_angle,
-        hwp_rpm=10.0,
+        hwp_angle=hwp_angle,
+        hwp_rpm=hwp_rpm,
         spin_angle=5.0 * u.degree,
         prec_angle=10.0 * u.degree,
         detset_key="pixel",
@@ -373,6 +412,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         position = None
         velocity = None
         boresight = None
+        flags = None
         if ob.comm_col_rank == 0:
             start_time = 0.0 + float(ob.local_index_offset) / rate
             stop_time = start_time + float(ob.n_local_samples - 1) / rate
@@ -415,10 +455,14 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
             # build the normalized quaternion
             boresight = qa.norm(np.concatenate((v, s), axis=1))
 
+            # no flags
+            flags = np.zeros(nsamp, dtype=np.uint8)
+
         ob.shared[defaults.times].set(stamps, offset=(0,), fromrank=0)
         ob.shared[defaults.position].set(position, offset=(0, 0), fromrank=0)
         ob.shared[defaults.velocity].set(velocity, offset=(0, 0), fromrank=0)
         ob.shared[defaults.boresight_radec].set(boresight, offset=(0, 0), fromrank=0)
+        ob.shared[defaults.shared_flags].set(flags, offset=(0,), fromrank=0)
 
         data.obs.append(ob)
     return data
@@ -523,58 +567,87 @@ def create_fake_beam_alm(
     fwhm_y=10 * u.degree,
     pol=True,
     separate_IQU=False,
+    separate_TP=False,
+    detB_beam=False,
+    normalize_beam=False,
 ):
 
     # pick an nside >= lmax to be sure that the a_lm will be fairly accurate
     nside = 2
     while nside < lmax:
-
         nside *= 2
     npix = 12 * nside**2
     pix = np.arange(npix)
-    vec = hp.pix2vec(nside, pix, nest=False)
-    theta, phi = hp.vec2dir(vec)
-    x = theta * np.cos(phi)
-    y = theta * np.sin(phi)
-    sigma_x = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
+    x, y, z = hp.pix2vec(nside, pix, nest=False)
+    sigma_z = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    beam_map = np.exp(-0.5 * (x**2 / sigma_x**2 + y**2 / sigma_y**2))
-    empty = np.zeros_like(beam_map)
-    if pol and separate_IQU:
-        beam_map_I = np.vstack([beam_map, empty, empty])
-        beam_map_Q = np.vstack([empty, beam_map, empty])
-        beam_map_U = np.vstack([empty, empty, beam_map])
+    beam = np.exp(-((z**2 / 2 / sigma_z**2 + y**2 / 2 / sigma_y**2)))
+    beam[x < 0] = 0
+    beam_map = np.zeros([3, npix])
+    beam_map[0] = beam
+    if detB_beam:
+        # we make sure that the two detectors within the same pair encode
+        # two beams with the  flipped sign in Q   U beams
+        beam_map[1] = -beam
+    else:
+        beam_map[1] = beam
+    blm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
+    hp.rotate_alm(blm, psi=0, theta=-np.pi / 2, phi=0, lmax=lmax, mmax=mmax)
 
+    if normalize_beam:
+        # We make sure that the simulated beams are normalized in the test
+        # for the normalization we follow the convention adopted in Conviqt,
+        # i.e. the monopole term in the map is left unchanged
+        idx = hp.Alm.getidx(lmax=lmax, l=0, m=0)
+        norm = 2 * np.pi * blm[0, idx].real
+
+    else:
+        norm = 1.0
+
+    blm /= norm
+    if separate_IQU:
+        empty = np.zeros_like(beam_map[0])
+        beam_map_I = np.vstack([beam_map[0], empty, empty])
+        beam_map_Q = np.vstack([empty, beam_map[1], empty])
+        beam_map_U = np.vstack([empty, empty, beam_map[1]])
         try:
-            a_lm = [
-                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False),
-                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False),
-                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False),
-            ]
+            blmi00 = (
+                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
+            blm0i0 = (
+                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
+            blm00i = (
+                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, verbose=False, pol=True)
+                / norm
+            )
         except TypeError:
             # older healpy which does not have verbose keyword
-            a_lm = [
-                hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax),
-                hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax),
-                hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax),
-            ]
-    else:
-        if pol:
-            beam_map = np.vstack([beam_map, beam_map, empty])
-        try:
-            a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax, verbose=False)
-        except TypeError:
-            a_lm = hp.map2alm(beam_map, lmax=lmax, mmax=mmax)
+            blmi00 = hp.map2alm(beam_map_I, lmax=lmax, mmax=mmax, pol=True) / norm
+            blm0i0 = hp.map2alm(beam_map_Q, lmax=lmax, mmax=mmax, pol=True) / norm
+            blm00i = hp.map2alm(beam_map_U, lmax=lmax, mmax=mmax, pol=True) / norm
+        for b_lm in blmi00, blm0i0, blm00i:
+            hp.rotate_alm(b_lm, psi=0, theta=-np.pi / 2, phi=0, lmax=lmax, mmax=mmax)
+        return [blmi00, blm0i0, blm00i]
 
-    return a_lm
+    elif separate_TP:
+        blmT = blm[0].copy()
+        blmP = blm.copy()
+        blmP[0] = 0
+
+        return [blmT, blmP]
+    else:
+        return blm
 
 
 def fake_flags(
     data,
     shared_name=defaults.shared_flags,
-    shared_val=1,
+    shared_val=defaults.shared_mask_invalid,
     det_name=defaults.det_flags,
-    det_val=1,
+    det_val=defaults.det_mask_invalid,
 ):
     """Create fake flags.
 
@@ -607,6 +680,7 @@ def create_ground_data(
     el_nod=False,
     el_nods=[-1 * u.degree, 1 * u.degree],
     pixel_per_process=1,
+    fknee=None,
 ):
     """Create a data object with a simple ground sim.
 
@@ -630,6 +704,7 @@ def create_ground_data(
         toastcomm.group_size,
         sample_rate=sample_rate,
         pixel_per_process=pixel_per_process,
+        fknee=fknee,
     )
 
     # Create a schedule.
@@ -684,9 +759,6 @@ def create_ground_data(
         detset_key="pixel",
         elnod_start=el_nod,
         elnods=el_nods,
-        det_flags="flags",
-        det_data="signal",
-        shared_flags="flags",
         scan_accel_az=3 * u.degree / u.second**2,
     )
     sim_ground.apply(data)

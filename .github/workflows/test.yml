@@ -39,11 +39,11 @@ jobs:
       - name: Pull Dependency Image
         run: docker pull hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest
 
-      - name: Compile
+      - name: Install
         run: |
           docker run -v "$(pwd)":/home/toast --name="test_py${{ matrix.pyshort }}" \
             hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest \
-            /home/toast/platforms/install_test_runner.sh
+            /home/toast/platforms/install_test_runner_linux.sh
           docker commit -m "test runner" test_py${{ matrix.pyshort }} \
             test_runner:py${{ matrix.pyshort }}
 
@@ -52,16 +52,18 @@ jobs:
 
       - name: Run Serial Tests
         run: |
-          docker run -e MPI_DISABLE=1 test_runner:py${{ matrix.pyshort }} \
+          docker run -e MPI_DISABLE=1 -e OMP_NUM_THREADS=2 \
+            test_runner:py${{ matrix.pyshort }} \
             python -c 'import toast.tests; toast.tests.run()'
 
       - name: Run MPI Tests
         run: |
-          docker run test_runner:py${{ matrix.pyshort }} \
+          docker run -e OMP_NUM_THREADS=2 \
+            test_runner:py${{ matrix.pyshort }} \
             mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
 
-  macos-clang:
-    name: MacOS (clang) with Python-${{ matrix.python }}
+  macos:
+    name: MacOS with Python-${{ matrix.python }}
     runs-on: macos-latest
     strategy:
       # Ensure that a test continues even if another fails.  Useful for
@@ -69,8 +71,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python: "3.7"
-            pyshort: "37"
+          # - python: "3.7"
+          #   pyshort: "37"
           - python: "3.9"
             pyshort: "39"
           # - python: "3.10"
@@ -84,91 +86,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - uses: actions/setup-python@v2
-        name: Install Python
-        with:
-          python-version: ${{ matrix.python }}
-
-      - name: Install OS Dependencies
+      - name: Setup Conda Base
         run: |
-          brew update
-          brew install fftw
-
-      - name: Install Python Dependencies
+          curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-$(uname -m).sh
+          bash miniforge.sh -b -f -p ${HOME}/conda
+          ${HOME}/conda/bin/conda init bash
+      
+      - name: Check Conda Config
+        shell: bash -l {0}
         run: |
-          python3 -m pip install -r wheels/build_requirements.txt
-          python3 -m pip install ducc0
+          conda info
+          conda list
+          conda config --show-sources
+          conda config --show
 
-      - name: Install TOAST
+      - name: Install
+        shell: bash -l {0}
         run: |
-          export TOAST_BUILD_CMAKE_C_COMPILER=clang
-          export TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
-          export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
-          python3 -m pip install .
+          conda activate base
+          ./platforms/conda_dev_setup.sh base
+          conda install mpi4py
+          ./platforms/conda_dev.sh base
 
       - name: Run Serial Tests
+        shell: bash -l {0}
         run: |
+          conda activate base
           export OMP_NUM_THREADS=2
+          export MPI_DISABLE=1
           python3 -c 'import toast.tests; toast.tests.run()'
+          unset MPI_DISABLE
 
-  # macos-gcc:
-  #   name: MacOS (macports gcc) with Python-${{ matrix.python }}
-  #   runs-on: macos-latest
-  #   strategy:
-  #     # Ensure that a test continues even if another fails.  Useful for
-  #     # debugging multiple problems in parallel.
-  #     fail-fast: false
-  #     matrix:
-  #       include:
-  #         - python: "3.7"
-  #           pyshort: "37"
-  #         # - python: "3.8"
-  #         #   pyshort: "38"
-  #         # - python: "3.9"
-  #         #   pyshort: "39"
-  #         # - python: "3.10"
-  #         #   pyshort: "310"
-  #   steps:
-  #     - name: Cancel Previous Runs
-  #       uses: styfle/cancel-workflow-action@0.9.1
-  #       with:
-  #         access_token: ${{ github.token }}
-
-  #     - name: Checkout
-  #       uses: actions/checkout@v2
-
-  #     - uses: actions/setup-python@v2
-  #       name: Install Python
-  #       with:
-  #         python-version: ${{ matrix.python }}
-
-  #     - name: Install OS Dependencies
-  #       run: |
-  #         brew update
-  #         brew install fftw suite-sparse gcc
-
-  #     - name: Install Python Dependencies
-  #       run: |
-  #         CC="gcc-11" CFLAGS="-O2 -fPIC" \
-  #         python3 -m pip install -r wheels/build_requirements.txt
-  #         python3 -m pip install ducc0
-
-  #     - name: Install TOAST
-  #       run: |
-  #         export TOAST_BUILD_CMAKE_C_COMPILER=gcc-11
-  #         export TOAST_BUILD_CMAKE_CXX_COMPILER=g++-11
-  #         export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC"
-  #         export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -fPIC -std=c++11"
-  #         python3 -m pip install .
-
-  #     - name: Run Serial Tests
-  #       run: |
-  #         export OMP_NUM_THREADS=2
-  #         which python3
-  #         python3 -m pip list
-  #         python3 -c 'import numpy; print(numpy.__file__)'
-  #         python3 -c 'import toast; print(toast.__file__)'
-  #         otool -L /Users/runner/hostedtoolcache/Python/3.7.12/x64/lib/python3.7/site-packages/toast/_libtoast.cpython*
-  #         python3 -c 'import toast'
-  #         python3 -c 'import toast; print(toast.__file__)'
-  #         python3 -c 'import toast.tests; toast.tests.run()'
+      # - name: Run MPI Tests
+      #   shell: bash -l {0}
+      #   run: |
+      #     conda activate base
+      #     export OMP_NUM_THREADS=2
+      #     mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'

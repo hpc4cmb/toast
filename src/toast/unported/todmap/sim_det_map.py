@@ -7,16 +7,13 @@ import os
 import healpy as hp
 import numpy as np
 
+from .. import qarray as qa
+from .._libtoast import scan_map_float32, scan_map_float64
 from ..map import DistPixels
 from ..mpi import MPI
-from ..timing import function_timer, GlobalTimers
-from ..utils import Logger, Environment
-
-from .. import qarray as qa
-
-from .._libtoast import scan_map_float64, scan_map_float32
-
 from ..operator import Operator
+from ..timing import GlobalTimers, function_timer
+from ..utils import Environment, Logger
 
 
 class OpSimGradient(Operator):

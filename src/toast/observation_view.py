@@ -2,11 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
-
 import numbers
-
-from collections.abc import MutableMapping, Sequence, Mapping
+import sys
+from collections.abc import Mapping, MutableMapping, Sequence
 
 import numpy as np
 
@@ -95,14 +93,8 @@ class View(Sequence):
     def __init__(self, obj, key):
         self.obj = obj
         self.key = key
-        if key is None:
-            # The whole observation
-            self.slices = [slice(None)]
-        else:
-            # Compute a list of slices for these intervals
-            self.slices = [
-                slice(x.first, x.last + 1, 1) for x in self.obj.intervals[key]
-            ]
+        # Compute a list of slices for these intervals
+        self.slices = [slice(x.first, x.last + 1, 1) for x in self.obj.intervals[key]]
         self.detdata = DetDataView(obj, self.slices)
         self.shared = SharedView(obj, self.slices)
 
@@ -146,8 +138,9 @@ class ViewManager(MutableMapping):
     def __getitem__(self, key):
         view_name = key
         if view_name is None:
-            # This could be anything, just has to be unique
-            view_name = "ALL_OBSERVATION_SAMPLES"
+            # Make sure the fake internal intervals are created
+            trigger = self.obj.intervals[None]
+            view_name = self.obj.intervals.all_name
         if view_name not in self.obj._views:
             # View does not yet exist, create it.
             if key is not None and key not in self.obj.intervals:

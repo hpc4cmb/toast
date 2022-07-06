@@ -4,29 +4,22 @@
 
 import os
 
+import healpy as hp
 import numpy as np
-
 from astropy import units as u
 
-import healpy as hp
-
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
-
-from .. import qarray as qa
-
 from .. import ops as ops
-
-from ..pixels_io import write_healpix_fits
-
+from .. import qarray as qa
+from ..pixels_io_healpix import write_healpix_fits
+from ..vis import set_matplotlib_backend
 from ._helpers import (
-    create_outdir,
-    create_healpix_ring_satellite,
-    create_satellite_data,
-    create_fake_sky_alm,
     create_fake_beam_alm,
+    create_fake_sky_alm,
+    create_healpix_ring_satellite,
+    create_outdir,
+    create_satellite_data,
 )
+from .mpi import MPITestCase
 
 
 class SimTotalconvolveTest(MPITestCase):
@@ -196,7 +189,6 @@ class SimTotalconvolveTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=totalconvolve_key,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -210,7 +202,6 @@ class SimTotalconvolveTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=conviqt_key,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -276,8 +267,9 @@ class SimTotalconvolveTest(MPITestCase):
                         rtol=1e-3,
                         atol=1e-3,
                     ):
-                        import matplotlib.pyplot as plt
                         import pdb
+
+                        import matplotlib.pyplot as plt
 
                         pdb.set_trace()
                         fail = True
@@ -348,7 +340,6 @@ class SimTotalconvolveTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=key,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,

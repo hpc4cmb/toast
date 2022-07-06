@@ -233,7 +233,7 @@ class Demodulate(Operator):
                 self.det_data, detectors=demod_dets, dtype=np.float64
             )
             exists_flags = demod_obs.detdata.ensure(
-                self.det_flags, detectors=demod_dets, dtype=np.uint
+                self.det_flags, detectors=demod_dets, dtype=np.uint8
             )
 
             self._demodulate_flags(obs, demod_obs, dets, wkernel, offset)

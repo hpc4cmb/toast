@@ -31,6 +31,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/common.cpp
     _libtoast/module.cpp
     _libtoast/sys.cpp
+    _libtoast/intervals.cpp
     _libtoast/math_misc.cpp
     _libtoast/math_sf.cpp
     _libtoast/math_rng.cpp
@@ -48,6 +49,11 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/atm.cpp
     _libtoast/template_offset.cpp
     _libtoast/accelerator.cpp
+    _libtoast/qarray_core.cpp
+    _libtoast/ops_pointing_detector.cpp
+    _libtoast/ops_stokes_weights.cpp
+    _libtoast/ops_pixels_healpix.cpp
+    _libtoast/ops_mapmaker_utils.cpp
 )
 
 # Handle recursion limit on NVC++ / PGI
@@ -58,23 +64,16 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL NVHPC)
     target_compile_options(_libtoast PRIVATE -Wc,--pending_instantiations=0)
 endif()
 
-if(OpenACC_CXX_FOUND)
-    target_compile_definitions(_libtoast PRIVATE HAVE_OPENACC=1)
-endif()
-
-if(USE_OPENACC_MEMPOOL)
-    target_compile_definitions(_libtoast PRIVATE USE_OPENACC_MEMPOOL=1)
-endif()
+target_link_libraries(_libtoast PRIVATE toast)
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")
-    set_target_properties(_libtoast PROPERTIES LINK_FLAGS "${OpenMP_CXX_FLAGS}")
-    set(OMP_LIBS "${OpenMP_CXX_LIBRARIES}")
-else()
-    set(OMP_LIBS "")
+    set_target_properties(_libtoast PROPERTIES LINK_OPTIONS "${OpenMP_CXX_FLAGS}")
+    if(USE_OPENMP_TARGET)
+        target_compile_definitions(_libtoast PRIVATE HAVE_OPENMP_TARGET=1)
+    endif()
+    target_link_libraries(_libtoast PRIVATE "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
-
-target_link_libraries(_libtoast PRIVATE toast "${OMP_LIBS}")
 
 if(AATM_FOUND)
     target_compile_definitions(_libtoast PRIVATE HAVE_AATM=1)
@@ -111,7 +110,8 @@ install(FILES
     config.py
     job.py
     pixels.py
-    pixels_io.py
+    pixels_io_healpix.py
+    pixels_io_wcs.py
     covariance.py
     dist.py
     data.py
@@ -136,6 +136,8 @@ install(FILES
     schedule.py
     schedule_sim_ground.py
     schedule_sim_satellite.py
+    widgets.py
+    accelerator.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )

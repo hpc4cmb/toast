@@ -8,35 +8,27 @@
 This script sets up the input files needed by the toast_benchmark_ground workflow.
 """
 
-import os
-import sys
-import shutil
-
 import argparse
+import os
+import shutil
+import sys
+import warnings
 
 import numpy as np
-
 from astropy import units as u
-
 from erfa import ErfaWarning
 
 import toast
 import toast.ops
-
-from toast.schedule_sim_ground import run_scheduler
-
 from toast.instrument_sim import fake_hexagon_focalplane
-
-from toast.timing import gather_timers, dump, function_timer
-
+from toast.schedule_sim_ground import run_scheduler
 from toast.scripts.benchmarking_utilities import (
-    get_mpi_settings,
     create_input_maps,
-    python_startup_time,
     default_sim_atmosphere,
+    get_mpi_settings,
+    python_startup_time,
 )
-
-import warnings
+from toast.timing import dump, function_timer, gather_timers
 
 warnings.simplefilter("ignore", ErfaWarning)
 

@@ -2,49 +2,29 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
-
-import types
-
 import copy
-
 import numbers
-
-from collections.abc import MutableMapping, Sequence, Mapping
+import sys
+import types
+from collections.abc import Mapping, MutableMapping, Sequence
 
 import numpy as np
-
 from pshmem.utils import mpi_data_type
 
-from .mpi import MPI, comm_equal
-
-from .instrument import Telescope
-
 from .dist import distribute_samples
-
-from .intervals import IntervalList
-
-from .utils import (
-    Logger,
-    name_UID,
-)
-
-from .timing import function_timer
-
+from .instrument import Session, Telescope
+from .intervals import IntervalList, interval_dtype
+from .mpi import MPI, comm_equal
 from .observation_data import (
-    DetectorData,
     DetDataManager,
-    SharedDataManager,
+    DetectorData,
     IntervalsManager,
+    SharedDataManager,
 )
-
-from .observation_view import DetDataView, SharedView, View, ViewManager, ViewInterface
-
-from .observation_dist import (
-    DistDetSamp,
-    redistribute_data,
-)
-
+from .observation_dist import DistDetSamp, redistribute_data
+from .observation_view import DetDataView, SharedView, View, ViewInterface, ViewManager
+from .timing import function_timer
+from .utils import Logger, name_UID
 
 default_values = None
 
@@ -162,6 +142,8 @@ class Observation(MutableMapping):
         name (str):  (Optional) The observation name.
         uid (int):  (Optional) The Unique ID for this observation.  If not specified,
             the UID will be computed from a hash of the name.
+        session (Session):  The observing session that this observation is contained
+            in or None.
         detector_sets (list):  (Optional) List of lists containing detector names.
             These discrete detector sets are used to distribute detectors- a detector
             set will always be within a single row of the process grid.  If None,
@@ -188,6 +170,7 @@ class Observation(MutableMapping):
         n_samples,
         name=None,
         uid=None,
+        session=None,
         detector_sets=None,
         sample_sets=None,
         process_rows=None,
@@ -196,9 +179,21 @@ class Observation(MutableMapping):
         self._telescope = telescope
         self._name = name
         self._uid = uid
+        self._session = session
 
         if self._uid is None and self._name is not None:
             self._uid = name_UID(self._name)
+
+        if self._session is None:
+            if self._name is not None:
+                self._session = Session(
+                    name=self._name,
+                    uid=self._uid,
+                    start=None,
+                    end=None,
+                )
+        elif not isinstance(self._session, Session):
+            raise RuntimeError("session should be a Session instance or None")
 
         self.dist = DistDetSamp(
             n_samples,
@@ -215,7 +210,7 @@ class Observation(MutableMapping):
         # Set up the data managers
         self.detdata = DetDataManager(self.dist)
         self.shared = SharedDataManager(self.dist)
-        self.intervals = IntervalsManager(self.dist)
+        self.intervals = IntervalsManager(self.dist, n_samples)
 
     # Fully clear the observation
 
@@ -248,6 +243,13 @@ class Observation(MutableMapping):
         (int):  The Unique ID for this observation.
         """
         return self._uid
+
+    @property
+    def session(self):
+        """
+        (Session):  The Session instance for this observation.
+        """
+        return self._session
 
     @property
     def comm(self):
@@ -326,8 +328,9 @@ class Observation(MutableMapping):
             return self.local_detectors
         else:
             dets = list()
+            sel_set = set(selection)
             for det in self.local_detectors:
-                if det in selection:
+                if det in sel_set:
                     dets.append(det)
             return dets
 
@@ -430,6 +433,7 @@ class Observation(MutableMapping):
         else:
             val += f"  group has {self.comm.group_size} processes"
         val += f"\n  telescope = {self._telescope.__repr__()}"
+        val += f"\n  session = {self._session.__repr__()}"
         for k, v in self._internal.items():
             val += f"\n  {k} = {v}"
         val += f"\n  {self.n_all_samples} total samples ({self.n_local_samples} local)"
@@ -454,6 +458,9 @@ class Observation(MutableMapping):
         if self.telescope != other.telescope:
             fail = 1
             log.verbose("Obs telescopes not equal")
+        if self.session != other.session:
+            fail = 1
+            log.verbose("Obs sessions not equal")
         if self.dist != other.dist:
             fail = 1
             log.verbose("Obs distributions not equal")
@@ -526,6 +533,7 @@ class Observation(MutableMapping):
             self.n_all_samples,
             name=self.name,
             uid=self.uid,
+            session=self.session,
             detector_sets=self.all_detector_sets,
             sample_sets=self.all_sample_sets,
             process_rows=self.dist.process_rows,
@@ -536,8 +544,13 @@ class Observation(MutableMapping):
         for name, data in self.detdata.items():
             if detdata is None or name in detdata:
                 new_obs.detdata[name] = data
+        copy_shared = list()
+        if times is not None:
+            copy_shared.append(times)
+        if shared is not None:
+            copy_shared.extend(shared)
         for name, data in self.shared.items():
-            if shared is None or name in shared:
+            if shared is None or name in copy_shared:
                 # Create the object on the corresponding communicator in the new obs
                 new_obs.shared.assign_mpishared(name, data, self.shared.comm_type(name))
         for name, data in self.intervals.items():
@@ -566,12 +579,7 @@ class Observation(MutableMapping):
         # to the local total
         for iname, it in self.intervals.items():
             if len(it) > 0:
-                local_mem += len(it) * (
-                    sys.getsizeof(it[0]._start)
-                    + sys.getsizeof(it[0]._stop)
-                    + sys.getsizeof(it[0]._first)
-                    + sys.getsizeof(it[0]._last)
-                )
+                local_mem += len(it) * interval_dtype.itemsize
 
         # Sum the aggregate local memory
         total = None
@@ -665,8 +673,8 @@ class Observation(MutableMapping):
 
     # Accelerator use
 
-    def acc_copyin(self, names):
-        """Copy a set of data objects to the device.
+    def accel_create(self, names):
+        """Create a set of data objects on the device.
 
         This takes a dictionary with the same format as those used by the Operator
         provides() and requires() methods.
@@ -679,12 +687,14 @@ class Observation(MutableMapping):
 
         """
         for key in names["detdata"]:
-            self.detdata.acc_copyin(key)
+            self.detdata.accel_create(key)
         for key in names["shared"]:
-            self.shared.acc_copyin(key)
+            self.shared.accel_create(key)
+        for key in names["intervals"]:
+            self.intervals.accel_create(key)
 
-    def acc_copyout(self, names):
-        """Copy a set of data objects to the host.
+    def accel_update_device(self, names):
+        """Copy data objects to the device.
 
         This takes a dictionary with the same format as those used by the Operator
         provides() and requires() methods.
@@ -697,9 +707,33 @@ class Observation(MutableMapping):
 
         """
         for key in names["detdata"]:
-            if self.detdata.acc_is_present(key):
-                self.detdata.acc_copyout(key)
+            self.detdata.accel_update_device(key)
         for key in names["shared"]:
-            if self.shared.acc_is_present(key):
-                self.shared.acc_copyout(key)
-        # FIXME:  implement intervals too.
+            self.shared.accel_update_device(key)
+        for key in names["intervals"]:
+            self.intervals.accel_update_device(key)
+
+    def accel_update_host(self, names):
+        """Copy data objects from the device.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        for key in names["detdata"]:
+            self.detdata.accel_update_host(key)
+        for key in names["shared"]:
+            self.shared.accel_update_host(key)
+        for key in names["intervals"]:
+            self.intervals.accel_update_host(key)
+
+    def accel_clear(self):
+        self.detdata.accel_clear()
+        self.shared.accel_clear()
+        self.intervals.accel_clear()

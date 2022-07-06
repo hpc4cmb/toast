@@ -2,60 +2,45 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
-import os
-
-import copy
-
-import types
-
 import argparse
-
+import copy
+import os
+import types
 from datetime import datetime
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
-
-from tomlkit import comment, document, nl, table, dumps, loads
-
-from ..utils import Environment, Logger
-
-from ..traits import (
-    trait_docs,
-    Int,
-    Unicode,
-    Float,
-    Bool,
-    Instance,
-    Quantity,
-    Dict,
-    List,
-    Set,
-    Tuple,
-)
-
-from ..config import (
-    load_config,
-    dump_toml,
-    build_config,
-    create_from_config,
-    parse_config,
-)
-
-from ..instrument import Telescope, Focalplane
-
-from ..schedule_sim_satellite import create_satellite_schedule
+from tomlkit import comment, document, dumps, loads, nl, table
 
 from .. import ops
-
-from ..templates import Offset, SubHarmonic
-
+from ..config import (
+    build_config,
+    create_from_config,
+    dump_toml,
+    load_config,
+    parse_config,
+)
 from ..data import Data
-
-from ._helpers import create_outdir, create_comm, create_space_telescope
+from ..instrument import Focalplane, Telescope
+from ..schedule_sim_satellite import create_satellite_schedule
+from ..templates import Offset, SubHarmonic
+from ..traits import (
+    Bool,
+    Dict,
+    Float,
+    Instance,
+    Int,
+    List,
+    Quantity,
+    Set,
+    Tuple,
+    Unicode,
+    trait_docs,
+)
+from ..utils import Environment, Logger
+from ._helpers import create_comm, create_outdir, create_space_telescope
+from .mpi import MPITestCase
 
 
 class FakeClass:
@@ -95,7 +80,10 @@ class ConfigOperator(ops.Operator):
     list_string = List(["foo", "bar", "blat"], help="List string default")
     list_string_empty = List(["", "", ""], help="List string empty")
     list_float = List([1.23, 4.56, 7.89], help="List float default")
-    list_mixed = List([None, True, "", "foo", 1.23, 4.56], help="list mixed")
+    list_quant = List([1.23 * u.meter, 4.56 * u.K], help="List Quantity default")
+    list_mixed = List(
+        [None, True, "", "foo", 1.23, 4.56, 7.89 * u.meter], help="list mixed"
+    )
 
     dict_none = Dict(None, allow_none=True, help="Dict none")
     dict_string = Dict(
@@ -103,8 +91,11 @@ class ConfigOperator(ops.Operator):
     )
     dict_string_empty = Dict({"a": "", "b": "", "c": ""}, help="Dict string empty")
     dict_float = Dict({"a": 1.23, "b": 4.56, "c": 7.89}, help="Dict float default")
+    dict_float = Dict(
+        {"a": 1.23 * u.meter, "b": 4.56 * u.K}, help="Dict Quantity default"
+    )
     dict_mixed = Dict(
-        {"a": None, "b": True, "c": "", "d": 4.56, "e": 7.89},
+        {"a": None, "b": True, "c": "", "d": 4.56, "e": 7.89 * u.meter},
         help="Dict mixed",
     )
 
@@ -112,13 +103,17 @@ class ConfigOperator(ops.Operator):
     set_string = Set({"a", "b", "c"}, help="Set string default")
     set_string_empty = Set({"", "", ""}, help="Set string empty")
     set_float = Set({1.23, 4.56, 7.89}, help="Set float default")
-    set_mixed = Set({None, "", "foo", True, 4.56, 7.89}, help="Set mixed")
+    set_quant = Set({1.23 * u.meter, 4.56 * u.meter}, help="Set Quantity default")
+    set_mixed = Set({None, "", "foo", True, 4.56, 7.89 * u.meter}, help="Set mixed")
 
     tuple_none = Tuple(None, allow_none=True, help="Tuple string default")
     tuple_string = Tuple(["foo", "bar", "blat"], help="Tuple string default")
     tuple_string_empty = Tuple(["", "", ""], help="Tuple string empty")
     tuple_float = Tuple([1.23, 4.56, 7.89], help="Tuple float")
-    tuple_mixed = Tuple([None, True, "", "foo", 4.56, 7.89], help="Tuple mixed")
+    tuple_float = Tuple([1.23 * u.meter, 4.56 * u.meter], help="Tuple Quantity")
+    tuple_mixed = Tuple(
+        [None, True, "", "foo", 4.56, 7.89 * u.meter], help="Tuple mixed"
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -182,6 +177,11 @@ class ConfigTest(MPITestCase):
 
         run = create_from_config(loadconf)
 
+        if run.operators.fake != fake:
+            print(
+                f" Trait type round trip failed, {run.operators.fake} != {fake}",
+                flush=True
+            )
         self.assertTrue(run.operators.fake == fake)
 
     def test_config_multi(self):

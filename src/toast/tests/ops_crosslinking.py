@@ -4,28 +4,19 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-import healpy as hp
-
-from ..mpi import MPI
-
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
-from ..vis import set_matplotlib_backend
-
 from .. import ops as ops
-
-from ..pixels import PixelDistribution, PixelData
-
+from ..mpi import MPI
+from ..noise import Noise
 from ..observation import default_values as defaults
-
+from ..pixels import PixelData, PixelDistribution
+from ..vis import set_matplotlib_backend
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class CrossLinkingTest(MPITestCase):
@@ -52,7 +43,6 @@ class CrossLinkingTest(MPITestCase):
         crosslinking = ops.CrossLinking(
             pixel_pointing=pixelpointing,
             pixel_dist="pixel_dist",
-            det_flags=None,
             output_dir=self.outdir,
         )
         crosslinking.apply(data)

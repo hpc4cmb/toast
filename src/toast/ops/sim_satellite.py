@@ -2,41 +2,24 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import traitlets
-
 import numpy as np
-
+import traitlets
+from astropy import units as u
+from datetime import datetime, timezone, timedelta
 from scipy.constants import degree
 
-import healpy as hp
-
-from astropy import units as u
-
 from .. import qarray as qa
-
-from ..utils import Environment, name_UID, Logger, rate_from_times
-
 from ..dist import distribute_discrete
-
-from ..timing import function_timer, Timer
-
-from ..intervals import Interval
-
-from ..schedule import SatelliteSchedule
-
+from ..healpix import ang2vec
+from ..instrument import Telescope, Session
 from ..noise_sim import AnalyticNoise
-
-from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity
-
 from ..observation import Observation
 from ..observation import default_values as defaults
-
-from ..instrument import Telescope
-
-from ..healpix import ang2vec
-
+from ..schedule import SatelliteSchedule
+from ..timing import Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger, name_UID, rate_from_times
 from .operator import Operator
-
 from .sim_hwp import simulate_hwp_response
 
 
@@ -422,6 +405,9 @@ class SimSatellite(Operator):
         # continuous sampling and find the actual start / stop times for the samples
         # that fall in each scan time range.
 
+        if len(self.schedule.scans) == 0:
+            raise RuntimeError("Schedule has no scans!")
+
         scan_starts = list()
         scan_stops = list()
         scan_offsets = list()
@@ -456,12 +442,22 @@ class SimSatellite(Operator):
         for obindx in range(group_firstobs, group_firstobs + group_numobs):
             scan = self.schedule.scans[obindx]
 
+            ses_start = scan_starts[obindx]
+            ses_end = ses_start + float(scan_samples[obindx] - 1) / rate
+
+            session = Session(
+                f"{scan.name}_{int(ses_start):10d}",
+                start=datetime.fromtimestamp(ses_start).astimezone(timezone.utc),
+                end=datetime.fromtimestamp(ses_end).astimezone(timezone.utc),
+            )
+
             ob = Observation(
                 comm,
                 self.telescope,
                 scan_samples[obindx],
                 name=f"{scan.name}_{int(scan.start.timestamp())}",
                 uid=name_UID(scan.name),
+                session=session,
                 detector_sets=detsets,
                 process_rows=det_ranks,
             )
@@ -497,8 +493,10 @@ class SimSatellite(Operator):
             q_prec = None
 
             if ob.comm_col_rank == 0:
+
                 start_time = scan_starts[obindx] + float(ob.local_index_offset) / rate
                 stop_time = start_time + float(ob.n_local_samples - 1) / rate
+
                 stamps = np.linspace(
                     start_time,
                     stop_time,

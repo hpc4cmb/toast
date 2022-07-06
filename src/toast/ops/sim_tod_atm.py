@@ -2,36 +2,23 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI
-
 import os
 
-import traitlets
-
+import healpy as hp
 import numpy as np
-
+import traitlets
 from astropy import units as u
 
-import healpy as hp
-
-from ..timing import function_timer
-
 from .. import qarray as qa
-
+from ..atm import AtmSim, available_atm, available_utils
 from ..data import Data
-
-from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
-
-from .operator import Operator
-
-from .pipeline import Pipeline
-
-from ..utils import Environment, Logger, Timer
-
-from ..atm import AtmSim, available_utils, available_atm
-
+from ..mpi import MPI
 from ..observation import default_values as defaults
-
+from ..timing import function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger, Timer
+from .operator import Operator
+from .pipeline import Pipeline
 from .sim_tod_atm_utils import ObserveAtmosphere
 
 if available_atm:
@@ -83,10 +70,14 @@ class SimAtmosphere(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional shared flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+    )
 
     det_flags = Unicode(
         defaults.det_flags,
@@ -98,7 +89,9 @@ class SimAtmosphere(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
-    turnaround_interval = Unicode("turnaround", help="Interval name for turnarounds")
+    turnaround_interval = Unicode(
+        "turnaround", allow_none=True, help="Interval name for turnarounds"
+    )
 
     realization = Int(
         0, help="If simulating multiple realizations, the realization index"
@@ -342,6 +335,7 @@ class SimAtmosphere(Operator):
             gain=self.gain,
             polarization_fraction=self.polarization_fraction,
             sample_rate=self.sample_rate,
+            debug_tod=self.debug_tod,
         )
         if self.detector_weights is not None:
             observe_atm.weights_mode = self.detector_weights.mode
@@ -514,9 +508,6 @@ class SimAtmosphere(Operator):
                     counter1 += 1
 
                 ob[atm_sim_key].append(sim_list)
-
-                if self.debug_tod:
-                    self._save_tod(ob, times, istart, nind, ind, comm)
                 tmin = tmax
 
             # Create the wind intervals
@@ -762,31 +753,35 @@ class SimAtmosphere(Operator):
 
         tmax = tmin + wind_time
         if tmax < tmax_tot:
-            # Extend the scan to the next turnaround
             istop = istart
             while istop < len(times) and times[istop] < tmax:
                 istop += 1
-            iturn = 0
-            while iturn < len(obs.intervals[self.turnaround_interval]) - 1 and (
-                times[istop] > obs.intervals[self.turnaround_interval][iturn].stop
-            ):
-                iturn += 1
-            if times[istop] > obs.intervals[self.turnaround_interval][iturn].stop:
-                # We are past the last turnaround.
-                # Extend to the end of the observation.
-                istop = len(times)
-                tmax = tmax_tot
-            else:
-                # Stop time is either before or in the middle of the turnaround.
-                # Extend to the start of the turnaround.
-                while istop < len(times) and (
-                    times[istop] < obs.intervals[self.turnaround_interval][iturn].start
+            # Extend the scan to the next turnaround, if we have them
+            if self.turnaround_interval is not None:
+                iturn = 0
+                while iturn < len(obs.intervals[self.turnaround_interval]) - 1 and (
+                    times[istop] > obs.intervals[self.turnaround_interval][iturn].stop
                 ):
-                    istop += 1
-                if istop < len(times):
-                    tmax = times[istop]
-                else:
+                    iturn += 1
+                if times[istop] > obs.intervals[self.turnaround_interval][iturn].stop:
+                    # We are past the last turnaround.
+                    # Extend to the end of the observation.
+                    istop = len(times)
                     tmax = tmax_tot
+                else:
+                    # Stop time is either before or in the middle of the turnaround.
+                    # Extend to the start of the turnaround.
+                    while istop < len(times) and (
+                        times[istop]
+                        < obs.intervals[self.turnaround_interval][iturn].start
+                    ):
+                        istop += 1
+                    if istop < len(times):
+                        tmax = times[istop]
+                    else:
+                        tmax = tmax_tot
+            else:
+                tmax = times[istop]
         else:
             tmax = tmax_tot
             istop = len(times)
@@ -970,8 +965,9 @@ class SimAtmosphere(Operator):
         from ..vis import set_matplotlib_backend
 
         set_matplotlib_backend()
-        import matplotlib.pyplot as plt
         import pickle
+
+        import matplotlib.pyplot as plt
 
         azmin, azmax, elmin, elmax = scan_range
         azmin = azmin.to_value(u.radian)
@@ -1068,32 +1064,5 @@ class SimAtmosphere(Operator):
                 plt.close()
 
         del my_snapshots
-
-        return
-
-    @function_timer
-    def _save_tod(self, ob, times, istart, nind, ind, comm):
-        import pickle
-
-        rank = 0
-        if comm is not None:
-            rank = comm.rank
-
-        t = times[ind]
-        tmin, tmax = t[0], t[-1]
-        outdir = "snapshots"
-        if rank == 0:
-            try:
-                os.makedirs(outdir)
-            except FileExistsError:
-                pass
-
-        for det in ob.local_detectors:
-            fn = os.path.join(
-                outdir,
-                f"atm_tod_{ob.name}_{det}_t_{int(tmin)}_{int(tmax)}.pck",
-            )
-            with open(fn, "wb") as fout:
-                pickle.dump([det, t, ob.detdata[self.det_data][det, ind]], fout)
 
         return

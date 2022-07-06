@@ -25,18 +25,16 @@ an interactive python session.
 
 """
 
+import argparse
 import os
 import sys
 import traceback
-import argparse
 
 import numpy as np
-
 from astropy import units as u
 
 import toast
 import toast.ops
-
 from toast.mpi import MPI
 
 

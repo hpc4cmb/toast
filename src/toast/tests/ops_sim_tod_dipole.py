@@ -4,25 +4,17 @@
 
 import os
 
+import healpy as hp
 import numpy as np
-
 from astropy import units as u
 
-import healpy as hp
-
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
-
-from .. import qarray as qa
-
 from .. import ops as ops
-
-from ..pixels_io import write_healpix_fits
-
+from .. import qarray as qa
 from ..dipole import dipole
-
-from ._helpers import create_outdir, create_healpix_ring_satellite
+from ..pixels_io_healpix import write_healpix_fits
+from ..vis import set_matplotlib_backend
+from ._helpers import create_healpix_ring_satellite, create_outdir
+from .mpi import MPITestCase
 
 
 class SimDipoleTest(MPITestCase):

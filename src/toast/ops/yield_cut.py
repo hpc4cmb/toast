@@ -4,32 +4,20 @@
 
 from time import time
 
-from ..mpi import MPI
-
-import traitlets
-
 import numpy as np
-
+import traitlets
 from astropy import units as u
 
-import healpy as hp
-
-from ..timing import function_timer
-from .. import rng
-
 from .. import qarray as qa
-
+from .. import rng
+from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
 from ..data import Data
-
-from ..traits import trait_docs, Int, Unicode, Bool, Quantity, Float, Instance
-
-from .operator import Operator
-
-from ..utils import Environment, Logger, Timer, name_UID
-
-from .._libtoast import bin_proj, bin_invcov, add_templates, legendre
-
+from ..mpi import MPI
 from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import Environment, Logger, Timer, name_UID
+from .operator import Operator
 
 
 @trait_docs

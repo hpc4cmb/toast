@@ -5,37 +5,40 @@
 import os
 
 import numpy as np
-
-from .timing import function_timer, Timer, GlobalTimers
-
-from .dist import distribute_uniform
-
-from .mpi import MPI
-
 from pshmem.utils import mpi_data_type
 
+from ._libtoast import global_to_local as libtoast_global_to_local
+from .accelerator import (
+    AcceleratorObject,
+    accel_data_create,
+    accel_data_delete,
+    accel_data_present,
+    accel_data_update_device,
+    accel_data_update_host,
+    accel_enabled,
+    use_accel_jax,
+    use_accel_omp,
+)
+from .dist import distribute_uniform
+from .mpi import MPI
+from .timing import GlobalTimers, Timer, function_timer
 from .utils import (
-    Logger,
-    AlignedI8,
-    AlignedU8,
-    AlignedI16,
-    AlignedU16,
-    AlignedI32,
-    AlignedU32,
-    AlignedI64,
-    AlignedU64,
     AlignedF32,
     AlignedF64,
+    AlignedI8,
+    AlignedI16,
+    AlignedI32,
+    AlignedI64,
+    AlignedU8,
+    AlignedU16,
+    AlignedU32,
+    AlignedU64,
+    Logger,
 )
 
-from ._libtoast import global_to_local as libtoast_global_to_local
-
-from ._libtoast import (
-    acc_enabled,
-    acc_is_present,
-    acc_copyin,
-    acc_copyout,
-)
+if use_accel_jax:
+    import jax
+    import jax.numpy as jnp
 
 
 class PixelDistribution(object):
@@ -313,6 +316,7 @@ class PixelDistribution(object):
             - The locations in the receive buffer of each submap.
 
         """
+        log = Logger.get()
         if self._alltoallv_info is not None:
             # Already computed
             return self._alltoallv_info
@@ -387,10 +391,21 @@ class PixelDistribution(object):
             recv_locations,
         )
 
+        msg_rank = 0
+        if self._comm is not None:
+            msg_rank = self._comm.rank
+        msg = f"alltoallv_info[{msg_rank}]:\n"
+        msg += f"  send_counts={send_counts} "
+        msg += f"send_displ={send_displ}\n"
+        msg += f"  recv_counts={recv_counts} "
+        msg += f"recv_displ={recv_displ} "
+        msg += f"recv_locations={recv_locations}"
+        log.verbose(msg)
+
         return self._alltoallv_info
 
 
-class PixelData(object):
+class PixelData(AcceleratorObject):
     """Distributed map-domain data.
 
     The distribution information is stored in a PixelDistribution instance passed to
@@ -468,6 +483,7 @@ class PixelData(object):
 
         self.raw = self.storage_class.zeros(self._flatshape)
         self.data = self.raw.array().reshape(self._shape)
+        self.data_jax = None
 
         # Allreduce quantities
         self._all_comm_submap = None
@@ -487,6 +503,8 @@ class PixelData(object):
         self.reduce_buf = None
         self._reduce_buf_raw = None
 
+        super().__init__()
+
     def clear(self):
         """Delete the underlying memory.
 
@@ -498,6 +516,8 @@ class PixelData(object):
         if hasattr(self, "data"):
             del self.data
         if hasattr(self, "raw"):
+            if self.accel_exists():
+                self.accel_delete()
             self.raw.clear()
             del self.raw
         if hasattr(self, "receive"):
@@ -560,6 +580,20 @@ class PixelData(object):
             self._n_value, self._dtype, self._dist
         )
         return val
+
+    def __eq__(self, other):
+        if self.distribution != other.distribution:
+            return False
+        if self.dtype.char != other.dtype.char:
+            return False
+        if self.n_value != other.n_value:
+            return False
+        if not np.allclose(self.raw, other.raw):
+            return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def duplicate(self):
         """Create a copy of the data with the same distribution.
@@ -722,6 +756,17 @@ class PixelData(object):
             for sm, locs in recv_locations.items():
                 self._recv_locations[sm] = scale * np.array(locs, dtype=np.int32)
 
+            msg_rank = 0
+            if self._dist.comm is not None:
+                msg_rank = self._dist.comm.rank
+            msg = f"setup_alltoallv[{msg_rank}]:\n"
+            msg += f"  send_counts={self._send_counts} "
+            msg += f"send_displ={self._send_displ}\n"
+            msg += f"  recv_counts={self._recv_counts} "
+            msg += f"recv_displ={self._recv_displ} "
+            msg += f"recv_locations={self._recv_locations}"
+            log.verbose(msg)
+
             # Allocate a persistent single-submap buffer
             self._reduce_buf_raw = self.storage_class.zeros(self._n_submap_value)
             self.reduce_buf = self._reduce_buf_raw.array()
@@ -752,6 +797,9 @@ class PixelData(object):
                         buf_check_fail = True
 
                     # Allocate a persistent receive buffer
+                    msg = f"{msg_rank}:  allocate receive buffer of "
+                    msg += f"{recv_buf_size} elements"
+                    log.verbose(msg)
                     self._receive_raw = self.storage_class.zeros(recv_buf_size)
                     self.receive = self._receive_raw.array()
             except:
@@ -774,6 +822,7 @@ class PixelData(object):
             None.
 
         """
+        log = Logger.get()
         gt = GlobalTimers.get()
         self.setup_alltoallv()
 
@@ -865,11 +914,11 @@ class PixelData(object):
         rank = 0
         if self._dist.comm is not None:
             rank = self._dist.comm.rank
-        comm_submap = self._dist.comm_nsubmap(comm_bytes)
+        comm_submap = self.comm_nsubmap(comm_bytes)
 
         # we make the assumption that FITS binary tables are still stored in
         # blocks of 2880 bytes just like always...
-        dbytes = self._dtype(1).itemsize
+        dbytes = self._dtype.itemsize
         rowbytes = self._n_value * dbytes
         optrows = int(2880 / rowbytes)
 
@@ -896,8 +945,8 @@ class PixelData(object):
             # is this the last block for this communication?
             islast = False
             copyrows = rows
-            if out_off + rows > (comm_submap * self._dist.npix_submap):
-                copyrows = (comm_submap * self._dist.npix_submap) - out_off
+            if out_off + rows > (comm_submap * self._dist.n_pix_submap):
+                copyrows = (comm_submap * self._dist.n_pix_submap) - out_off
                 islast = True
 
             if rank == 0:
@@ -935,42 +984,36 @@ class PixelData(object):
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
 
-    def acc_is_present(self):
-        """Check if the pixel data is present on the accelerator.
+    def _accel_exists(self):
+        if use_accel_omp:
+            return accel_data_present(self.raw)
+        elif use_accel_jax:
+            return accel_data_present(self.data_jax)
+        else:
+            return False
 
-        Returns:
-            (bool):  True if the data is present.
+    def _accel_create(self):
+        if use_accel_omp:
+            accel_data_create(self.raw)
+        elif use_accel_jax:
+            accel_data_create(self.data_jax)
 
-        """
-        if not acc_enabled:
-            return
-        return acc_is_present(self.raw)
+    def _accel_update_device(self):
+        if use_accel_omp:
+            _ = accel_data_update_device(self.raw)
+        elif use_accel_jax:
+            self.data_jax = accel_data_update_device(self.data)
 
-    def acc_copyin(self):
-        """Copy the data to the accelerator.
+    def _accel_update_host(self):
+        if use_accel_omp:
+            _ = accel_data_update_host(self.raw)
+        elif use_accel_jax:
+            self.data[:] = accel_data_update_host(self.data_jax)
+            self.data_jax = None
 
-        This creates the device memory if it does not already exist.
-
-        Returns:
-            None
-
-        """
-        if not acc_enabled:
-            return
-        acc_copyin(self.raw)
-
-    def acc_copyout(self):
-        """Copy the data from the accelerator to the host.
-
-        Returns:
-            None
-
-        """
-        log = Logger.get()
-        if not acc_enabled:
-            return
-        if not acc_is_present(self.raw):
-            msg = f"PixelData raw data is not present on device, cannot copy out"
-            log.error(msg)
-            raise RuntimeError(msg)
-        acc_copyout(self.raw)
+    def _accel_delete(self):
+        if use_accel_omp:
+            accel_data_delete(self.raw)
+        elif use_accel_jax:
+            del self.data_jax
+            self.data_jax = None

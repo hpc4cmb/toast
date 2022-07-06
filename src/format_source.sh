@@ -46,6 +46,14 @@ if [ ${bmajor} -le "21" ]; then
     fi
 fi
 
+isortexe=$(which isort)
+have_isort="yes"
+if [ "x${isortexe}" = "x" ]; then
+    echo "Cannot find the \"isort\" executable.  Is it in your PATH?"
+    echo "Skipping for now."
+    have_isort="no"
+fi
+
 # The uncrustify config file
 uncfg="${base}/uncrustify.cfg"
 
@@ -73,10 +81,17 @@ find "${base}/libtoast" "${base}/toast" \( -name "*.hpp" -or -name "*.cpp" \) \
 # Process directories with python files
 find "${base}/toast" "${base}/../workflows" -name "*.py" -and -not \
     -path '*pybind11/*' -exec ${blkexe} ${blkrun} '{}' + &
+if [ ${have_isort} = "yes" ]; then
+    find "${base}/toast" "${base}/../workflows" -name "*.py" -and -not \
+    -path '*pybind11/*' -exec ${isortexe} --profile black '{}' + &
+fi
 
 # Special case:  process files in the scripts directory which do not
 # have the .py extension
 find "${base}/toast/scripts" -name "toast_*" -exec ${blkexe} ${blkrun} '{}' + &
+if [ ${have_isort} = "yes" ]; then
+    find "${base}/toast/scripts" -name "toast_*" -exec ${isortexe} --profile black '{}' + &
+fi
 
 # Wait for the commands to finish
 wait

@@ -32,11 +32,46 @@ PREFIX=/usr
 # Use yum to install OS packages
 
 yum update -y
-yum -y install xz
-yum -y install mpich-devel mpich-autoload
 
-# Pick up mpich changes
-. /etc/profile
+# Install MPICH with our serial compiler.  Needed to install
+# mpi4py later for testing (MPI is not bundled with the wheel).
+
+mpich_version=3.4
+mpich_dir=mpich-${mpich_version}
+mpich_pkg=${mpich_dir}.tar.gz
+
+echo "Fetching MPICH..."
+
+if [ ! -e ${mpich_pkg} ]; then
+    curl -SL https://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
+fi
+
+echo "Building MPICH..."
+
+rm -rf ${mpich_dir}
+fcopt="--disable-fortran"
+unset F90
+unset F90FLAGS
+tar xzf ${mpich_pkg} \
+    && cd ${mpich_dir} \
+    && CC="${CC}" CXX="${CXX}" FC="${FC}" F77="${FC}" \
+    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
+    FFLAGS="${FCFLAGS}" FCFLAGS="${FCFLAGS}" \
+    MPICH_MPICC_CFLAGS="${CFLAGS}" \
+    MPICH_MPICXX_CXXFLAGS="${CXXFLAGS}" \
+    MPICH_MPIF77_FFLAGS="${FCFLAGS}" \
+    MPICH_MPIFORT_FCFLAGS="${FCFLAGS}" \
+    ./configure ${fcopt} \
+    --with-device=ch3 \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install
+
+# Update pip
+pip install --upgrade pip
+
+# Install a couple of base packages that are always required
+pip install -v cmake wheel
 
 # In order to maximize ABI compatibility with numpy, build with the newest numpy
 # version containing the oldest ABI version compatible with the python we are using.
@@ -54,18 +89,40 @@ if [ ${pyver} == "3.10" ]; then
     numpy_ver="1.22"
 fi
 
-# Update pip
-pip install --upgrade pip
-
-# Install a couple of base packages that are always required
-pip install -v "numpy<${numpy_ver}" cmake wheel
-
 # Install build requirements.
-CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt"
+CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
 
-# Install mpi4py
+# Install mpi4py for running tests
 
+echo "mpicc = $(which mpicc)"
+echo "mpicxx = $(which mpicxx)"
+echo "mpirun = $(which mpirun)"
 pip install mpi4py
+
+# Install Openblas
+
+openblas_version=0.3.20
+openblas_dir=OpenBLAS-${openblas_version}
+openblas_pkg=${openblas_dir}.tar.gz
+
+echo "Fetching OpenBLAS..."
+
+if [ ! -e ${openblas_pkg} ]; then
+    curl -SL https://github.com/xianyi/OpenBLAS/archive/v${openblas_version}.tar.gz -o ${openblas_pkg}
+fi
+
+echo "Building OpenBLAS..."
+
+rm -rf ${openblas_dir}
+tar xzf ${openblas_pkg} \
+    && pushd ${openblas_dir} >/dev/null 2>&1 \
+    && make USE_OPENMP=1 NO_SHARED=1 \
+    MAKE_NB_JOBS=${MAKEJ} \
+    CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
+    COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
+    LDFLAGS="-fopenmp -lm" libs netlib shared \
+    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
+    && popd >/dev/null 2>&1
 
 # libgmp
 
@@ -120,31 +177,6 @@ tar xf ${mpfr_pkg} \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
-    && popd >/dev/null 2>&1
-
-# Install Openblas
-
-openblas_version=0.3.19
-openblas_dir=OpenBLAS-${openblas_version}
-openblas_pkg=${openblas_dir}.tar.gz
-
-echo "Fetching OpenBLAS..."
-
-if [ ! -e ${openblas_pkg} ]; then
-    curl -SL https://github.com/xianyi/OpenBLAS/archive/v${openblas_version}.tar.gz -o ${openblas_pkg}
-fi
-
-echo "Building OpenBLAS..."
-
-rm -rf ${openblas_dir}
-tar xzf ${openblas_pkg} \
-    && pushd ${openblas_dir} >/dev/null 2>&1 \
-    && make USE_OPENMP=1 NO_SHARED=1 \
-    MAKE_NB_JOBS=${MAKEJ} \
-    CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
-    COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
-    LDFLAGS="-fopenmp -lm" libs netlib shared \
-    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
     && popd >/dev/null 2>&1
 
 # Install FFTW
@@ -207,7 +239,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.10.1
+ssparse_version=5.11.0
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 

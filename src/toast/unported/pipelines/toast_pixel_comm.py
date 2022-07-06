@@ -8,42 +8,28 @@
 Distributed map communication tests.
 """
 
+import argparse
 import os
 import sys
-
-import argparse
-
 import traceback
 
+import healpy as hp
 import numpy as np
-
 from astropy import units as u
 
-import healpy as hp
-
 import toast
-
-from toast.mpi import get_world, Comm
-
-from toast.data import Data
-
-from toast.utils import Logger, Environment
-
-from toast.timing import Timer, GlobalTimers, gather_timers
-
-from toast.timing import dump as dump_timing
-
-from toast.config import dump_toml, parse_config, create
-
-from toast.pixels import PixelDistribution, PixelData
-
-from toast.pixels_io import write_healpix_fits
-
 from toast import future_ops as ops
-
-from toast.instrument_sim import fake_hexagon_focalplane
-
+from toast.config import create, dump_toml, parse_config
+from toast.data import Data
 from toast.instrument import Telescope
+from toast.instrument_sim import fake_hexagon_focalplane
+from toast.mpi import Comm, get_world
+from toast.pixels import PixelData, PixelDistribution
+from toast.pixels_io import write_healpix_fits
+from toast.timing import GlobalTimers, Timer
+from toast.timing import dump as dump_timing
+from toast.timing import gather_timers
+from toast.utils import Environment, Logger
 
 
 def main():

@@ -2,16 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi
-
 import os
 
 import healpy as hp
 import numpy as np
 
 from ..cache import Cache
+from ..mpi import MPI, use_mpi
 from ..operator import Operator
-from ..timing import function_timer, Timer
+from ..timing import Timer, function_timer
 from ..utils import Logger, memreport
 
 madam = None

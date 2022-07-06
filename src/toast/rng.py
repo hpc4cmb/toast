@@ -4,22 +4,19 @@
 
 import numpy as np
 
-from .utils import Logger, Environment, AlignedU64, AlignedF64
-
-from .dist import distribute_uniform
-
-from .timing import function_timer
-
 from ._libtoast import (
+    rng_dist_normal,
     rng_dist_uint64,
     rng_dist_uniform_01,
     rng_dist_uniform_11,
-    rng_dist_normal,
+    rng_multi_dist_normal,
     rng_multi_dist_uint64,
     rng_multi_dist_uniform_01,
     rng_multi_dist_uniform_11,
-    rng_multi_dist_normal,
 )
+from .dist import distribute_uniform
+from .timing import function_timer
+from .utils import AlignedF64, AlignedU64, Environment, Logger
 
 
 @function_timer

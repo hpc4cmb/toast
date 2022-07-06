@@ -2,21 +2,16 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from .mpi import MPITestCase
-
 import os
 
+import healpy as hp
 import numpy as np
-
 import numpy.testing as nt
 
-import healpy as hp
-
-from ..pixels import PixelDistribution, PixelData
-
-from .. import pixels_io as io
-
+from .. import pixels_io_healpix as io
+from ..pixels import PixelData, PixelDistribution
 from ._helpers import create_outdir
+from .mpi import MPITestCase
 
 
 class PixelTest(MPITestCase):

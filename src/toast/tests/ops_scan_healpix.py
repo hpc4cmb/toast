@@ -6,25 +6,19 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from .mpi import MPITestCase
-
 from .. import ops as ops
-
 from ..observation import default_values as defaults
-
 from ..pixels import PixelData
-
-from ..pixels_io import write_healpix_fits, write_healpix_hdf5
-
+from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
 from ._helpers import (
+    create_fake_mask,
+    create_fake_sky,
     create_outdir,
     create_satellite_data,
-    create_fake_sky,
-    create_fake_mask,
 )
+from .mpi import MPITestCase
 
 
 class ScanHealpixTest(MPITestCase):
@@ -83,7 +77,9 @@ class ScanHealpixTest(MPITestCase):
         for ob in data.obs:
             for det in ob.local_detectors:
                 np.testing.assert_almost_equal(
-                    ob.detdata["test"][det], ob.detdata[defaults.det_data][det]
+                    ob.detdata["test"][det],
+                    ob.detdata[defaults.det_data][det],
+                    decimal=5,
                 )
 
         del data
@@ -138,7 +134,7 @@ class ScanHealpixTest(MPITestCase):
 
         for ob in data.obs:
             for det in ob.local_detectors:
-                np.testing.assert_almost_equal(
+                np.testing.assert_equal(
                     ob.detdata["test_flags"][det], ob.detdata[defaults.det_flags][det]
                 )
 
@@ -195,7 +191,9 @@ class ScanHealpixTest(MPITestCase):
         for ob in data.obs:
             for det in ob.local_detectors:
                 np.testing.assert_almost_equal(
-                    ob.detdata["test"][det], ob.detdata[defaults.det_data][det]
+                    ob.detdata["test"][det],
+                    ob.detdata[defaults.det_data][det],
+                    decimal=5,
                 )
 
         del data

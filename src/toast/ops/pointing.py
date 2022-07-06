@@ -2,22 +2,16 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
 import traitlets
 
-import numpy as np
-
-from ..utils import Logger
-
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float
-
+from ..observation import default_values as defaults
+from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
-
-from ..pixels import PixelDistribution, PixelData
-
-from .operator import Operator
-
+from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..utils import Logger
 from .delete import Delete
-
+from .operator import Operator
 from .pipeline import Pipeline
 
 
@@ -47,10 +41,14 @@ class BuildPixelDistribution(Operator):
     )
 
     shared_flags = Unicode(
-        None, allow_none=True, help="Observation shared key for telescope flags to use"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
     )
 
-    shared_flag_mask = Int(0, help="Bit mask value for optional telescope flagging")
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+    )
 
     pixel_pointing = Instance(
         klass=Operator,

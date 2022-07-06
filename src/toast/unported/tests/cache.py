@@ -2,17 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import ctypes
 import sys
 
 import numpy as np
 
-import ctypes
-
-from .mpi import MPITestCase
-
 from ..cache import Cache
-
 from ..utils import AlignedF64, memreport
+from .mpi import MPITestCase
 
 
 class CacheTest(MPITestCase):

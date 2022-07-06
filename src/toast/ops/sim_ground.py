@@ -2,67 +2,45 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import datetime
-
 import copy
-
-import traitlets
+from datetime import datetime, timezone, timedelta
 
 import numpy as np
-
+import traitlets
+from astropy import units as u
 from scipy.constants import degree
 
-import healpy as hp
-
-from astropy import units as u
-from toast.weather import SimWeather
-
 from .. import qarray as qa
-
+from ..coordinates import azel_to_radec
+from ..dist import distribute_discrete, distribute_uniform
+from ..healpix import ang2vec
+from ..instrument import Telescope, Session
+from ..intervals import IntervalList, regular_intervals
+from ..noise_sim import AnalyticNoise
+from ..observation import Observation
+from ..observation import default_values as defaults
+from ..schedule import GroundSchedule
+from ..timing import GlobalTimers, Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
 from ..utils import (
     Environment,
-    name_UID,
     Logger,
-    rate_from_times,
     astropy_control,
     memreport,
+    name_UID,
+    rate_from_times,
 )
-
-from ..dist import distribute_uniform, distribute_discrete
-
-from ..timing import function_timer, Timer, GlobalTimers
-
-from ..intervals import Interval, regular_intervals, IntervalList
-
-from ..noise_sim import AnalyticNoise
-
-from ..traits import trait_docs, Int, Unicode, Float, Bool, Instance, Quantity, List
-
-from ..observation import Observation
-
-from ..instrument import Telescope
-
-from ..schedule import GroundSchedule
-
-from ..coordinates import azel_to_radec
-
-from ..healpix import ang2vec
-
-from ..observation import default_values as defaults
-
-from .operator import Operator
-
-from .sim_hwp import simulate_hwp_response
-
+from ..weather import SimWeather
 from .flag_intervals import FlagIntervals
-
+from .operator import Operator
 from .sim_ground_utils import (
-    simulate_elnod,
-    simulate_ces_scan,
     add_solar_intervals,
     oscillate_el,
+    simulate_ces_scan,
+    simulate_elnod,
     step_el,
 )
+from .sim_hwp import simulate_hwp_response
 
 
 @trait_docs
@@ -100,6 +78,11 @@ class SimGround(Operator):
 
     timezone = Int(
         0, help="The (integer) timezone offset in hours from UTC to apply to schedule"
+    )
+
+    randomize_phase = Bool(
+        False,
+        help="If True, the Constant Elevation Scan will begin at a randomized phase.",
     )
 
     scan_rate_az = Quantity(
@@ -447,6 +430,9 @@ class SimGround(Operator):
         # observation to the next, for simulations there is no need to restart the
         # sampling clock each observation.
 
+        if len(self.schedule.scans) == 0:
+            raise RuntimeError("Schedule has no scans!")
+
         scan_starts = list()
         scan_stops = list()
         scan_offsets = list()
@@ -511,7 +497,7 @@ class SimGround(Operator):
 
             # Time range of the science scans
             start_time = scan.start
-            stop_time = start_time + datetime.timedelta(
+            stop_time = start_time + timedelta(
                 seconds=(float(scan_samples[obindx] - 1) / rate)
             )
 
@@ -606,6 +592,7 @@ class SimGround(Operator):
                 scan_min_az,
                 scan_max_az,
                 cosecant_modulation=self.scan_cosecant_modulation,
+                randomize_phase=self.randomize_phase,
             )
 
             # Do any adjustments to the El motion
@@ -739,12 +726,19 @@ class SimGround(Operator):
             )
 
             name = f"{scan.name}-{scan.scan_indx}-{scan.subscan_indx}"
+
+            session = Session(
+                name,
+                start=datetime.fromtimestamp(times[0]).astimezone(timezone.utc),
+                end=datetime.fromtimestamp(times[-1]).astimezone(timezone.utc),
+            )
             ob = Observation(
                 comm,
                 telescope,
                 len(times),
                 name=name,
                 uid=name_UID(name),
+                session=session,
                 detector_sets=detsets,
                 process_rows=det_ranks,
                 sample_sets=sample_sets,

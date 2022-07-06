@@ -7,9 +7,9 @@
 """This script converts HEALPiX maps between FITS and HDF5
 """
 
+import argparse
 import os
 import sys
-import argparse
 import traceback
 
 import h5py
@@ -17,15 +17,14 @@ import healpy as hp
 import numpy as np
 
 import toast
-from toast.mpi import get_world, Comm
-
-from toast.utils import Logger, Environment, Timer
-from toast.pixels_io import (
+from toast.mpi import Comm, get_world
+from toast.pixels_io_healpix import (
     filename_is_fits,
     filename_is_hdf5,
     read_healpix,
     write_healpix,
 )
+from toast.utils import Environment, Logger, Timer
 
 
 def main():

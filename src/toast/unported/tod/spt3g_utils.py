@@ -2,11 +2,11 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
 import os
-import re
-import traceback
 import pickle
+import re
+import sys
+import traceback
 
 import numpy as np
 

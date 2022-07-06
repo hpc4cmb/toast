@@ -10,4 +10,5 @@ pshmem>=0.2.10
 pyyaml
 astropy
 healpy
+pixell
 ephem

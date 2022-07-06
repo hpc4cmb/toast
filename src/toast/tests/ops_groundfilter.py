@@ -6,23 +6,16 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 from astropy.table import Column
 
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
 from .. import ops as ops
-
-from ..vis import set_matplotlib_backend
-
-from ..pixels import PixelDistribution, PixelData
-
+from ..noise import Noise
 from ..observation import default_values as defaults
-
-from ._helpers import create_outdir, create_ground_data, fake_flags
+from ..pixels import PixelData, PixelDistribution
+from ..vis import set_matplotlib_backend
+from ._helpers import create_ground_data, create_outdir, fake_flags
+from .mpi import MPITestCase
 
 
 class GroundFilterTest(MPITestCase):

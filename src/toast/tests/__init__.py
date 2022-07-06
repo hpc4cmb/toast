@@ -6,5 +6,4 @@
 
 # If toast has not yet been imported, make sure we initialize MPI
 from ..mpi import MPI
-
 from .runner import test as run

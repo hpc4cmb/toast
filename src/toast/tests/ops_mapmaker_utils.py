@@ -6,22 +6,15 @@ import os
 
 import numpy as np
 import numpy.testing as nt
-
 from astropy import units as u
 
-from ..mpi import MPI
-
-from .mpi import MPITestCase
-
-from ..noise import Noise
-
 from .. import ops as ops
-
+from ..mpi import MPI
+from ..noise import Noise
 from ..observation import default_values as defaults
-
-from ..pixels import PixelDistribution, PixelData
-
+from ..pixels import PixelData, PixelDistribution
 from ._helpers import create_outdir, create_satellite_data
+from .mpi import MPITestCase
 
 
 class MapmakerUtilsTest(MPITestCase):
@@ -318,14 +311,23 @@ class MapmakerUtilsTest(MPITestCase):
                         if not np.allclose(
                             zmap[stype].data[sm, px],
                             check_zmap.data[sm, px],
+                            atol=1.0e-6,
                         ):
+                            print(
+                                f"zmap({stype})[{sm}, {px}] = {zmap[stype].data[sm, px]}, check = {check_zmap.data[sm, px]}"
+                            )
                             failed = True
                     if zmap_corr[stype].data[sm, px, 0] != 0:
                         if not np.allclose(
                             zmap_corr[stype].data[sm, px],
                             check_zmap_corr.data[sm, px],
+                            atol=1.0e-6,
                         ):
+                            print(
+                                f"zmap_corr({stype})[{sm}, {px}] = {zmap_corr[stype].data[sm, px]}, check = {check_zmap_corr.data[sm, px]}"
+                            )
                             failed = True
+
             if comm is not None:
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)

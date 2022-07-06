@@ -3,13 +3,11 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from collections.abc import MutableMapping
-
 from typing import NamedTuple
 
 import numpy as np
 
 from .mpi import Comm
-
 from .timing import function_timer
 
 

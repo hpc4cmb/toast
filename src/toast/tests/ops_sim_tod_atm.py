@@ -4,29 +4,19 @@
 
 import os
 
+import healpy as hp
 import numpy as np
-
 from astropy import units as u
 
-import healpy as hp
-
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
-
-from .. import qarray as qa
-
 from .. import ops as ops
-
-from ..observation import default_values as defaults
-
-from ..pixels_io import write_healpix_fits
-
-from ..dipole import dipole
-
-from ._helpers import create_outdir, create_ground_data
-
+from .. import qarray as qa
 from ..atm import available_atm, available_utils
+from ..dipole import dipole
+from ..observation import default_values as defaults
+from ..pixels_io_healpix import write_healpix_fits
+from ..vis import set_matplotlib_backend
+from ._helpers import create_ground_data, create_outdir
+from .mpi import MPITestCase
 
 
 class SimAtmTest(MPITestCase):

@@ -2,19 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from ..mpi import MPI, use_mpi
-
 import sys
 import time
 import traceback
-import time
-
 import warnings
-
+from unittest import TestCase, TestResult
 from unittest.signals import registerResult
 
-from unittest import TestCase
-from unittest import TestResult
+from ..mpi import MPI, use_mpi
 
 
 class MPITestCase(TestCase):
@@ -117,7 +112,7 @@ class MPITestResult(TestResult):
         # output and then abort.
         if self.comm is not None:
             time.sleep(5)
-            self.comm.Abort()
+            self.comm.Abort(1)
         return
 
     def addSkip(self, test, reason):
@@ -342,8 +337,5 @@ class MPITestRunner(object):
                 self.stream.flush()
             if self.comm is not None:
                 self.comm.barrier()
-
-        # if not result.allSuccessful():
-        #     self.comm.Abort(1)
 
         return result

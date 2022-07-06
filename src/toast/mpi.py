@@ -5,12 +5,7 @@
 import os
 import time
 
-from ._libtoast import (
-    Logger,
-    Environment,
-    acc_enabled,
-    acc_get_num_devices,
-)
+from ._libtoast import Environment, Logger
 
 use_mpi = None
 MPI = None
@@ -46,55 +41,50 @@ if use_mpi is None:
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-    # FIXME:  The code below assumes that OpenACC only has accelerator devices, not
-    # CPUs.  We should eventually get the device properties for each device and
-    # get just the accelerators (or track all devices by type).
+from ._libtoast import accel_assign_device
 
-    env = Environment.get()
+# Assign each process to an accelerator device
+from .accelerator import jax_local_device, use_accel_jax, use_accel_omp
 
-    # This always returns the number of supported devices, trying first OpenACC,
-    # then CUDA, then returning zero.
-    n_acc_devices = acc_get_num_devices()
-
-    # Assign each process to a device
+if use_accel_omp or use_accel_jax:
+    node_procs = 1
+    node_rank = 0
     if use_mpi:
         # We need to compute which process goes to which device
         nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
         node_procs = nodecomm.size
-        if n_acc_devices > 0:
-            # Devices detected
-            procs_per_device = node_procs // n_acc_devices
-            if procs_per_device * n_acc_devices < node_procs:
-                procs_per_device += 1
-            my_device = nodecomm.rank % n_acc_devices
-            msg = f"node rank {nodecomm.rank} found {n_acc_devices} "
-            msg += f"accelerators, {procs_per_device} procs per device, "
-            msg += f"using device {my_device}"
-            log.verbose(msg)
-            env.set_acc(n_acc_devices, procs_per_device, my_device)
-        else:
-            # No devices detected, we point all processes to the 0th device
-            log.verbose(
-                f"node rank {nodecomm.rank} found {n_acc_devices} accelerators",
-            )
-            env.set_acc(n_acc_devices, node_procs, 0)
+        node_rank = nodecomm.rank
+        accel_assign_device(node_procs, node_rank, False)
         nodecomm.Free()
         del nodecomm
+    if use_accel_omp:
+        accel_assign_device(node_procs, node_rank, False)
     else:
-        # One process- just use the first device.
-        log.verbose(f"get_num_devices found {n_acc_devices} accelerators")
-        env.set_acc(n_acc_devices, 1, 0)
+        import jax
 
-# We put other imports and *after* the MPI check, since usually the MPI initialization # is time sensitive and may timeout the job if it does not happen quickly enough.
+        n_target = len(jax.devices())
+        if n_target == 0:
+            jax_local_device = 0
+        else:
+            proc_per_dev = node_procs // n_target
+            if n_target * proc_per_dev < node_procs:
+                proc_per_dev += 1
+            target_dev = node_rank // proc_per_dev
+            jax_local_device = jax.devices()[target_dev]
+else:
+    # Disabled == True
+    accel_assign_device(1, 0, True)
 
-import sys
+# We put other imports *after* the MPI check, since usually the MPI initialization
+# is time sensitive and may timeout the job if it does not happen quickly enough.
+
 import itertools
-from contextlib import contextmanager
+import sys
 import traceback
+from contextlib import contextmanager
 
 import numpy as np
-
-from pshmem import MPIShared, MPILock
+from pshmem import MPILock, MPIShared
 
 from ._libtoast import Logger
 
@@ -177,7 +167,7 @@ class Comm(object):
                     "argument."
                 )
                 world = None
-            # Special case, MPI available but the user want a serial
+            # Special case, MPI available but the user wants a serial
             # data object
             if world == MPI.COMM_SELF:
                 world = None
@@ -188,6 +178,7 @@ class Comm(object):
         self._nodecomm = None
         self._noderankcomm = None
         self._nodeprocs = 1
+        self._noderankprocs = 1
         if self._wcomm is not None:
             self._wrank = self._wcomm.rank
             self._wsize = self._wcomm.size
@@ -195,6 +186,7 @@ class Comm(object):
             self._nodeprocs = self._nodecomm.size
             myworldnode = self._wrank // self._nodeprocs
             self._noderankcomm = self._wcomm.Split(self._nodecomm.rank, myworldnode)
+            self._noderankprocs = self._noderankcomm.size
 
         self._gsize = groupsize
 
@@ -220,12 +212,15 @@ class Comm(object):
             log.error(msg)
             raise RuntimeError(msg)
 
-        if self._gsize > self._nodeprocs and self._gsize % self._nodeprocs != 0:
-            msg = f"Group size of {self._gsize} is not a whole number of "
-            msg += f"nodes (there are {self._nodeprocs} processes per node)"
-            log.error(msg)
-            raise RuntimeError(msg)
-
+        if self._gsize > self._nodeprocs:
+            if self._gsize % self._nodeprocs != 0:
+                msg = f"Group size of {self._gsize} is not a whole number of "
+                msg += f"nodes (there are {self._nodeprocs} processes per node)"
+                log.error(msg)
+                raise RuntimeError(msg)
+            self._gnodes = self._gsize // self._nodeprocs
+        else:
+            self._gnodes = 1
         self._group = self._wrank // self._gsize
         self._grank = self._wrank % self._gsize
         self._cleanup_group_comm = False
@@ -238,10 +233,8 @@ class Comm(object):
             self._gcomm = self._wcomm
             self._gnodecomm = self._nodecomm
             self._gnoderankcomm = self._noderankcomm
-            if use_mpi:
-                self._rcomm = MPI.COMM_SELF
-            else:
-                self._rcomm = None
+            self._rcomm = None
+            self._gnoderankprocs = self._noderankprocs
         else:
             # We need to split the communicator.  This code is never executed
             # unless MPI is enabled and we have multiple groups.
@@ -251,7 +244,29 @@ class Comm(object):
             self._gnodeprocs = self._gnodecomm.size
             mygroupnode = self._grank // self._gnodeprocs
             self._gnoderankcomm = self._gcomm.Split(self._gnodecomm.rank, mygroupnode)
+            self._gnoderankprocs = self._gnoderankcomm.size
             self._cleanup_group_comm = True
+
+        msg = f"Comm on world rank {self._wrank}:\n"
+        msg += f"  world comm = {self._wcomm} with {self._wsize} ranks\n"
+        msg += (
+            f"  intra-node comm = {self._nodecomm} ({self._nodeprocs} ranks per node)\n"
+        )
+        msg += f"  inter-node rank comm = {self._noderankcomm} ({self._noderankprocs} ranks)\n"
+        msg += (
+            f"  in group {self._group + 1} / {self._ngroups} with rank {self._grank}\n"
+        )
+        msg += f"  intra-group comm = {self._gcomm} ({self._gsize} ranks)\n"
+        msg += f"  inter-group rank comm = {self._rcomm}\n"
+        msg += f"  intra-node group comm = {self._gnodecomm} ({self._gnodeprocs} ranks per node)\n"
+        msg += f"  inter-node group rank comm = {self._gnoderankcomm} ({self._noderankprocs} ranks)\n"
+        log.verbose(msg)
+
+        if self._gnoderankprocs != self._gnodes:
+            msg = f"Number of group node rank procs ({self._gnoderankprocs}) does "
+            msg += f"not match the number of nodes in a group ({self._gnodes})"
+            log.error(msg)
+            raise RuntimeError(msg)
 
         # Create a cache of row / column communicators for each group.  These can
         # then be re-used for observations with the same grid shapes.
@@ -259,16 +274,26 @@ class Comm(object):
 
     def close(self):
         # Explicitly free communicators if needed.
-        # We always need to clean up the node and world node-rank communicators
-        # if they exist
-        if hasattr(self, "_nodecomm") and self._nodecomm is not None:
-            self._nodecomm.Free()
-            del self._nodecomm
-        if hasattr(self, "_noderankcomm") and self._noderankcomm is not None:
-            self._noderankcomm.Free()
-            del self._noderankcomm
+        # Go through the cache of row / column grid communicators and free
+        if hasattr(self, "_rowcolcomm"):
+            for process_rows, comms in self._rowcolcomm.items():
+                if comms["cleanup"]:
+                    # We previously allocated new communicators for this grid.
+                    # Free them now.
+                    for subcomm in [
+                        "row_rank_node",
+                        "row_node",
+                        "col_rank_node",
+                        "col_node",
+                        "row",
+                        "col",
+                    ]:
+                        if comms[subcomm] is not None:
+                            comms[subcomm].Free()
+                            del comms[subcomm]
+            del self._rowcolcomm
         # Optionally delete the group communicators if they were created.
-        if hasattr(self, "_cleanup_split_comm") and self._cleanup_group_comm:
+        if hasattr(self, "_cleanup_group_comm") and self._cleanup_group_comm:
             self._gcomm.Free()
             self._rcomm.Free()
             self._gnodecomm.Free()
@@ -277,23 +302,15 @@ class Comm(object):
             del self._rcomm
             del self._gnodecomm
             del self._gnoderankcomm
-        # Go through the cache of row / column grid communicators and free
-        if hasattr(self, "_rowcolcomm"):
-            for process_rows, comms in self._rowcolcomm.items():
-                if comms["row"] is not None:
-                    comms["row_node"].Free()
-                    del comms["row_node"]
-                    comms["row_rank_node"].Free()
-                    del comms["row_rank_node"]
-                    comms["row"].Free()
-                    del comms["row"]
-                if comms["col"] is not None:
-                    comms["col_node"].Free()
-                    del comms["col_node"]
-                    comms["col_rank_node"].Free()
-                    del comms["col_rank_node"]
-                    comms["col"].Free()
-                    del comms["col"]
+            del self._cleanup_group_comm
+        # We always need to clean up the world node and node-rank communicators
+        # if they exist
+        if hasattr(self, "_noderankcomm") and self._noderankcomm is not None:
+            self._noderankcomm.Free()
+            del self._noderankcomm
+        if hasattr(self, "_nodecomm") and self._nodecomm is not None:
+            self._nodecomm.Free()
+            del self._nodecomm
         return
 
     def __del__(self):
@@ -403,6 +420,7 @@ class Comm(object):
                     "row_rank_node": None,
                     "col_node": None,
                     "col_rank_node": None,
+                    "cleanup": False,
                 }
             else:
                 if self._gcomm.size % process_rows != 0:
@@ -412,30 +430,54 @@ class Comm(object):
                     log.error(msg)
                     raise RuntimeError(msg)
                 process_cols = self._gcomm.size // process_rows
-                col_rank = self._gcomm.rank // process_cols
-                row_rank = self._gcomm.rank % process_cols
 
-                comm_row = None
-                comm_col = None
-                if process_cols == 1:
-                    comm_row = MPI.Comm.Dup(MPI.COMM_SELF)
-                else:
-                    comm_row = self._gcomm.Split(col_rank, row_rank)
                 if process_rows == 1:
-                    comm_col = MPI.Comm.Dup(MPI.COMM_SELF)
+                    # We can re-use the group communicators as the grid column
+                    # communicators
+                    comm_row = self._gcomm
+                    comm_row_node = self._gnodecomm
+                    comm_row_rank_node = self._gnoderankcomm
+                    comm_col = None
+                    comm_col_node = None
+                    comm_col_rank_node = None
+                    cleanup = False
+                elif process_cols == 1:
+                    # We can re-use the group communicators as the grid row
+                    # communicators
+                    comm_col = self._gcomm
+                    comm_col_node = self._gnodecomm
+                    comm_col_rank_node = self._gnoderankcomm
+                    comm_row = None
+                    comm_row_node = None
+                    comm_row_rank_node = None
+                    cleanup = False
                 else:
+                    # We have to create new split communicators
+                    col_rank = self._gcomm.rank // process_cols
+                    row_rank = self._gcomm.rank % process_cols
+                    comm_row = self._gcomm.Split(col_rank, row_rank)
                     comm_col = self._gcomm.Split(row_rank, col_rank)
 
-                # Node and node-rank comms for each row and col.
-                comm_row_node = comm_row.Split_type(MPI.COMM_TYPE_SHARED, 0)
-                row_nodeprocs = comm_row_node.size
-                row_node = comm_row.rank // row_nodeprocs
-                comm_row_rank_node = comm_row.Split(comm_row_node.rank, row_node)
+                    # Node and node-rank comms for each row and col.
+                    comm_row_node = comm_row.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                    row_nodeprocs = comm_row_node.size
+                    row_node = comm_row.rank // row_nodeprocs
+                    comm_row_rank_node = comm_row.Split(comm_row_node.rank, row_node)
 
-                comm_col_node = comm_col.Split_type(MPI.COMM_TYPE_SHARED, 0)
-                col_nodeprocs = comm_col_node.size
-                col_node = comm_col.rank // col_nodeprocs
-                comm_col_rank_node = comm_col.Split(comm_col_node.rank, col_node)
+                    comm_col_node = comm_col.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                    col_nodeprocs = comm_col_node.size
+                    col_node = comm_col.rank // col_nodeprocs
+                    comm_col_rank_node = comm_col.Split(comm_col_node.rank, col_node)
+                    cleanup = True
+
+                msg = f"Comm on world rank {self._wrank} create grid with {process_rows} rows:\n"
+                msg += f"  row comm = {comm_row}\n"
+                msg += f"  node comm = {comm_row_node}\n"
+                msg += f"  node rank comm = {comm_row_rank_node}\n"
+                msg += f"  col comm = {comm_col}\n"
+                msg += f"  node comm = {comm_col_node}\n"
+                msg += f"  node rank comm = {comm_col_rank_node}"
+                log.verbose(msg)
 
                 self._rowcolcomm[process_rows] = {
                     "row": comm_row,
@@ -444,6 +486,7 @@ class Comm(object):
                     "col": comm_col,
                     "col_node": comm_col_node,
                     "col_rank_node": comm_col_rank_node,
+                    "cleanup": cleanup,
                 }
         return self._rowcolcomm[process_rows]
 

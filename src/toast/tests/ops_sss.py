@@ -5,24 +5,15 @@
 import os
 
 import numpy as np
-
 from astropy import units as u
 
-import healpy as hp
-
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
-
-from .. import qarray as qa
-
 from .. import ops as ops
-
+from .. import qarray as qa
 from ..observation import default_values as defaults
-
-from ..pixels_io import write_healpix_fits
-
-from ._helpers import create_outdir, create_ground_data
+from ..pixels_io_healpix import write_healpix_fits
+from ..vis import set_matplotlib_backend
+from ._helpers import create_ground_data, create_outdir
+from .mpi import MPITestCase
 
 
 class SSSTest(MPITestCase):

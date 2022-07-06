@@ -3,12 +3,10 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
-from .mpi import MPITestCase
-
 import numpy.testing as nt
 
-from ..intervals import Interval, IntervalList
+from ..intervals import IntervalList, interval_dtype
+from .mpi import MPITestCase
 
 # from ..tod.interval import intervals_to_chunklist
 #
@@ -28,39 +26,31 @@ class IntervalTest(MPITestCase):
         stamps = np.arange(100, dtype=np.float64)
         timespans = [(10.0 * x + 2.0, 10.0 * x + 5.0) for x in range(10)]
         sampspans = [(10 * x + 2, 10 * x + 5) for x in range(10)]
-        check = [
-            Interval(
-                start=float(10.0 * x + 2),
-                stop=float(10.0 * x + 5),
-                first=(10 * x + 2),
-                last=(10 * x + 5),
-            )
-            for x in range(10)
+        check = np.array(
+            [
+                (float(10.0 * x + 2), float(10.0 * x + 5), (10 * x + 2), (10 * x + 5))
+                for x in range(10)
+            ],
+            dtype=interval_dtype,
+        ).view(np.recarray)
+        check_neg = [
+            (0.0, 1.0, 0, 1),
         ]
-        check_neg = [Interval(start=0.0, stop=1.0, first=0, last=1)]
         check_neg.extend(
             [
-                Interval(
-                    start=float(10.0 * x + 6),
-                    stop=float(10.0 * x + 11),
-                    first=(10 * x + 6),
-                    last=(10 * x + 11),
-                )
+                (float(10.0 * x + 6), float(10.0 * x + 11), (10 * x + 6), (10 * x + 11))
                 for x in range(9)
             ]
         )
-        check_neg.append(Interval(start=96.0, stop=99.0, first=96, last=99))
-        # print("check = ", check)
-        # print("check_neg = ", check_neg)
+        check_neg.append((96.0, 99.0, 96, 99))
+        check_neg = np.array(check_neg, dtype=interval_dtype).view(np.recarray)
 
         itime = IntervalList(stamps, timespans=timespans)
-        # print("itime = ", itime)
 
         for it, chk in zip(itime, check):
             self.assertTrue(it == chk)
 
         isamp = IntervalList(stamps, samplespans=sampspans)
-        # print("isamp = ", isamp)
         for it, chk in zip(isamp, check):
             self.assertTrue(it == chk)
 
@@ -72,72 +62,78 @@ class IntervalTest(MPITestCase):
         stamps = np.arange(100, dtype=np.float64)
         boundaries = [10 * x for x in range(1, 9)]
         ranges = [(x, x + 9) for x in boundaries]
-        check = Interval(first=10, last=89, start=stamps[10], stop=stamps[89])
+        check = np.array([(stamps[10], stamps[89], 10, 89)], dtype=interval_dtype).view(
+            np.recarray
+        )
         ival = IntervalList(stamps, samplespans=ranges)
         # print("ival = ", ival)
         ival.simplify()
         # print("simple ival = ", ival)
-        self.assertTrue(ival[0] == check)
+        self.assertTrue(ival[0] == check[0])
 
     def test_bitwise(self):
         stamps = np.arange(100, dtype=np.float64)
-        raw = [
-            Interval(
-                start=float(10.0 * x + 2),
-                stop=float(10.0 * x + 5),
-                first=(10 * x + 2),
-                last=(10 * x + 5),
-            )
-            for x in range(10)
-        ]
+        raw = np.array(
+            [
+                (float(10.0 * x + 2), float(10.0 * x + 5), (10 * x + 2), (10 * x + 5))
+                for x in range(10)
+            ],
+            dtype=interval_dtype,
+        ).view(np.recarray)
         ival = IntervalList(stamps, intervals=raw)
         neg = ~ival
 
         full = ival | neg
         full.simplify()
         # print("full = ", full)
-        check = Interval(start=stamps[0], stop=stamps[-1], first=0, last=99)
+        check = np.array([(stamps[0], stamps[-1], 0, 99)], dtype=interval_dtype).view(
+            np.recarray
+        )
         # print(f"check = {check}")
         self.assertTrue(full[0] == check)
 
         empty = ival & neg
         # print("empty = ", empty)
 
-        rawshift = [
-            Interval(
-                start=float(10.0 * x + 3),
-                stop=float(10.0 * x + 6),
-                first=(10 * x + 3),
-                last=(10 * x + 6),
-            )
-            for x in range(10)
-        ]
+        rawshift = np.array(
+            [
+                (float(10.0 * x + 3), float(10.0 * x + 6), (10 * x + 3), (10 * x + 6))
+                for x in range(10)
+            ],
+            dtype=interval_dtype,
+        ).view(np.recarray)
         shifted = IntervalList(stamps, intervals=rawshift)
 
         and_check = IntervalList(
             stamps,
-            intervals=[
-                Interval(
-                    start=float(10.0 * x + 3),
-                    stop=float(10.0 * x + 5),
-                    first=(10 * x + 3),
-                    last=(10 * x + 5),
-                )
-                for x in range(10)
-            ],
+            intervals=np.array(
+                [
+                    (
+                        float(10.0 * x + 3),
+                        float(10.0 * x + 5),
+                        (10 * x + 3),
+                        (10 * x + 5),
+                    )
+                    for x in range(10)
+                ],
+                dtype=interval_dtype,
+            ).view(np.recarray),
         )
 
         or_check = IntervalList(
             stamps,
-            intervals=[
-                Interval(
-                    start=float(10.0 * x + 2),
-                    stop=float(10.0 * x + 6),
-                    first=(10 * x + 2),
-                    last=(10 * x + 6),
-                )
-                for x in range(10)
-            ],
+            intervals=np.array(
+                [
+                    (
+                        float(10.0 * x + 2),
+                        float(10.0 * x + 6),
+                        (10 * x + 2),
+                        (10 * x + 6),
+                    )
+                    for x in range(10)
+                ],
+                dtype=interval_dtype,
+            ).view(np.recarray),
         )
 
         test = ival & shifted

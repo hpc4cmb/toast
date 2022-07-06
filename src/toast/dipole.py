@@ -3,17 +3,11 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-
 import scipy.constants as constants
-
 from astropy import units as u
 
-import healpy as hp
-
-from .timing import function_timer
-
 from . import qarray as qa
-
+from .timing import function_timer
 from .utils import array_dot
 
 

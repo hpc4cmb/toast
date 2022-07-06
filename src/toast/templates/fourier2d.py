@@ -5,27 +5,19 @@
 from collections import OrderedDict
 
 import numpy as np
-
 import scipy
 import scipy.signal
-
+import traitlets
 from astropy import units as u
 
-import traitlets
-
-from ..mpi import MPI
-
-from ..utils import Logger, AlignedF64
-
 from .. import qarray as qa
-
-from ..traits import trait_docs, Int, Unicode, Bool, Instance, Float, Quantity
-
 from ..data import Data
-
-from .template import Template
-
+from ..mpi import MPI
+from ..observation import default_values as defaults
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..utils import AlignedF64, Logger
 from .amplitudes import Amplitudes
+from .template import Template
 
 
 @trait_docs
@@ -47,7 +39,7 @@ class Fourier2D(Template):
     #    det_flag_mask    : Bit mask for detector solver flags
     #
 
-    times = Unicode("times", help="Observation shared key for timestamps")
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     correlation_length = Quantity(10.0 * u.second, help="Correlation length in time")
 
@@ -250,6 +242,8 @@ class Fourier2D(Template):
                 else:
                     corr[ihalf + 1 :] = corr[ihalf - 1 :: -1]
                 fcorr = np.fft.rfft(corr)
+                too_small = fcorr < (1.0e-6 * self.correlation_amplitude)
+                fcorr[too_small] = 1.0e-6 * self.correlation_amplitude
                 invcorr = np.fft.irfft(1 / fcorr)
                 self._filters[iob].append(invcorr)
 
@@ -385,4 +379,5 @@ class Fourier2D(Template):
                     )
 
     def _apply_precond(self, amplitudes_in, amplitudes_out):
-        amplitudes_out[:] = amplitudes_in * self._norms
+        amplitudes_out.local[:] = amplitudes_in.local
+        amplitudes_out.local *= self._norms

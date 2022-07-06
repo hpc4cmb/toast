@@ -4,14 +4,12 @@
 
 import datetime
 
+import ephem
 import numpy as np
-
 from astropy import units as u
 
-import ephem
-
-from ..timing import function_timer, Timer
 from ..intervals import IntervalList
+from ..timing import Timer, function_timer
 
 
 @function_timer
@@ -418,6 +416,7 @@ def simulate_ces_scan(
     scan_max_az,
     cosecant_modulation=False,
     nstep=10000,
+    randomize_phase=False,
 ):
     """Simulate a constant elevation scan."""
 
@@ -559,23 +558,21 @@ def simulate_ces_scan(
     # sample rate are enforced and the stop time is adjusted if needed to
     # produce a whole number of samples.
 
-    samples = int((t_stop - t_start) * rate) + 1
-    t_stop = t_start + ((samples - 1) / rate)
-
-    times = np.linspace(
-        t_start,
-        t_stop,
-        num=samples,
-        endpoint=True,
-        dtype=np.float64,
-    )
+    samples = int((t_stop - t_start) * rate)
+    times = t_start + np.arange(samples) / rate
 
     tmin, tmax = tvec[0], tvec[-1]
     tdelta = tmax - tmin
 
+    if randomize_phase:
+        np.random.seed(int(t_start % 2**32))
+        t_off = -tdelta * np.random.rand()
+    else:
+        t_off = 0
+
     # For interpolation, shift the times to zero
     tvec -= tmin
-    t_interp = (times - tmin) % tdelta
+    t_interp = (times - tmin - t_off) % tdelta
 
     az_sample = np.interp(t_interp, tvec, azvec)
     el_sample = np.zeros_like(az_sample) + el
@@ -592,7 +589,6 @@ def simulate_ces_scan(
 
     # Repeat time intervals to cover the timestamps
     n_repeat = 1 + int((times[-1] - tmin) / tdelta)
-    t_off = 0
     for rp in range(n_repeat):
         ival_scan_leftright.append(
             (range_scan_leftright[0] + t_off, range_scan_leftright[1] + t_off)
@@ -632,7 +628,10 @@ def simulate_ces_scan(
         ival_throw_rightleft,
     ]:
         first = tuple(ival[-1])
-        if first[0] < times[0]:
+        if first[1] < times[0]:
+            # Whole interval before the start
+            del ival[0]
+        elif first[0] < times[0]:
             # interval is truncated
             ival[0] = (times[0], first[1])
         last = tuple(ival[-1])

@@ -2,30 +2,24 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
-import types
-import re
 import ast
 import copy
-
+import json
+import re
+import sys
+import types
 from collections import OrderedDict
 from collections.abc import MutableMapping
 
-import json
-
 import numpy as np
-
 import tomlkit
-from tomlkit import comment, document, nl, table, loads, dumps
-
 from astropy import units as u
+from tomlkit import comment, document, dumps, loads, nl, table
 
-from .utils import Environment, Logger
-
-from .instrument import Focalplane, Telescope
 from . import instrument
-
+from .instrument import Focalplane, Telescope
 from .traits import TraitConfig
+from .utils import Environment, Logger
 
 
 def build_config(objects):
@@ -616,7 +610,13 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
                 if isinstance(value, str):
                     val = ast.literal_eval(value)
                 else:
-                    val = value
+                    val = list()
+                    for elem in value:
+                        if isinstance(elem, tuple):
+                            # This is a quantity
+                            val.append(" ".join(elem))
+                        else:
+                            val.append(elem)
             tbl.add(name, val)
         elif typ == "dict":
             val = "None"
@@ -628,7 +628,11 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
                 val = table()
                 subindent = indent + 2
                 for k, v in dval.items():
-                    val.add(k, v)
+                    if isinstance(v, tuple):
+                        # This is a quantity
+                        val.add(k, " ".join(v))
+                    else:
+                        val.add(k, v)
                     val[k].indent(subindent)
             tbl.add(name, val)
         elif typ == "int":
@@ -852,6 +856,9 @@ def create_from_config(conf):
         Return same string if no match, None if matched but nonexistant, or
         the object itself.
         """
+        # print(f"OBJREF get {name}", flush=True)
+        if not isinstance(name, str):
+            return name
         found = name
         mat = ref_pat.match(name)
         if mat is not None:

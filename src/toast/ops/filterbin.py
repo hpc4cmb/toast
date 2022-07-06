@@ -22,13 +22,13 @@ from .._libtoast import (
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io import (
-    read_healpix_fits,
-    write_healpix_fits,
-    read_healpix_hdf5,
-    write_healpix_hdf5,
+from ..pixels_io_healpix import (
     filename_is_fits,
     filename_is_hdf5,
+    read_healpix_fits,
+    read_healpix_hdf5,
+    write_healpix_fits,
+    write_healpix_hdf5,
 )
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
@@ -801,7 +801,7 @@ class FilterBin(Operator):
                 f"is poorly conditioned: "
                 f"rcond = {rcond}.  Using matrix pseudoinverse.",
             )
-            cov = np.linalg.pinv(invcov, rcond=1e-12, hermitian=True)
+            cov = np.linalg.pinv(invcov, rcond=1e-10, hermitian=True)
 
         return cov
 

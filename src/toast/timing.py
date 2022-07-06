@@ -2,23 +2,17 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import csv
+import inspect
 import os
 import re
-
-import inspect
-
-from functools import wraps
-
-import csv
-
 from collections import OrderedDict
+from functools import wraps
 
 import numpy as np
 
-from ._libtoast import Timer, GlobalTimers
-
+from ._libtoast import GlobalTimers, Timer
 from .utils import Environment
-
 
 stack_toast_file_pat = re.compile(r".*(toast.*)\.py")
 

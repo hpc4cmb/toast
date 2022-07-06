@@ -4,28 +4,23 @@
 
 import os
 
-import numpy as np
 import healpy as hp
-from .mpi import MPITestCase
-
-from ..vis import set_matplotlib_backend
+import numpy as np
 
 from .. import ops as ops
 from .. import rng
-
-from ..observation import default_values as defaults
-
-from ..pixels import PixelDistribution, PixelData
-
-from ..pixels_io import write_healpix_fits
-
 from ..covariance import covariance_apply
+from ..observation import default_values as defaults
+from ..pixels import PixelData, PixelDistribution
+from ..pixels_io_healpix import write_healpix_fits
+from ..vis import set_matplotlib_backend
 from ._helpers import (
+    create_fake_sky,
     create_outdir,
     create_satellite_data,
     create_satellite_data_big,
-    create_fake_sky,
 )
+from .mpi import MPITestCase
 
 
 class SimGainTest(MPITestCase):
@@ -120,7 +115,6 @@ class SimGainTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=key,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -201,7 +195,6 @@ class SimGainTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=key,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
@@ -273,7 +266,6 @@ class SimGainTest(MPITestCase):
             pixel_dist="pixel_dist",
             covariance=cov_and_hits.covariance,
             det_data=key,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
