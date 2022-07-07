@@ -8,7 +8,6 @@ import sys
 
 import astropy.coordinates as coord
 import astropy.time as astime
-import h5py
 import numpy as np
 from astropy import units as u
 from astropy.io.misc.hdf5 import read_table_hdf5, write_table_hdf5
