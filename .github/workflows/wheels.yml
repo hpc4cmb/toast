@@ -2,20 +2,20 @@
 name:  Test Binary Wheels
 
 # Uncomment here for testing and comment out schedule below.
-# on:
-#   push:
-#     branches:
-#       - master
-#       - toast3
-#   pull_request:
-#     branches:
-#       - master
-#       - toast3
+on:
+  push:
+    branches:
+      - master
+      - toast3
+  pull_request:
+    branches:
+      - master
+      - toast3
 
 # Uncomment here for production and comment out push / PR above.
-on:
-  schedule:
-    - cron: '0 4 * * *'
+# on:
+#   schedule:
+#     - cron: '0 4 * * *'
 
 jobs:
   build_wheels:
@@ -32,14 +32,14 @@ jobs:
             python: 37
             platform_id: manylinux_x86_64
             manylinux_image: manylinux2014
-          - os: ubuntu-latest
-            python: 38
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux2014
-          - os: ubuntu-latest
-            python: 39
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux2014
+          # - os: ubuntu-latest
+          #   python: 38
+          #   platform_id: manylinux_x86_64
+          #   manylinux_image: manylinux2014
+          # - os: ubuntu-latest
+          #   python: 39
+          #   platform_id: manylinux_x86_64
+          #   manylinux_image: manylinux2014
           - os: ubuntu-latest
             python: 310
             platform_id: manylinux_x86_64
@@ -49,13 +49,12 @@ jobs:
           - os: macos-latest
             python: 37
             platform_id: macosx_x86_64
-          - os: macos-latest
-            python: 38
-            platform_id: macosx_x86_64
-          - os: macos-latest
-            bitness: 64
-            python: 39
-            platform_id: macosx_x86_64
+          # - os: macos-latest
+          #   python: 38
+          #   platform_id: macosx_x86_64
+          # - os: macos-latest
+          #   python: 39
+          #   platform_id: macosx_x86_64
           - os: macos-latest
             python: 310
             platform_id: macosx_x86_64
@@ -76,7 +75,7 @@ jobs:
       CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.manylinux_image }}
       CIBW_BUILD_VERBOSITY: 3
       CIBW_ENVIRONMENT_LINUX: "TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON TOAST_BUILD_TOAST_STATIC_DEPS=ON"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_BUILD_CMAKE_C_COMPILER=clang TOAST_BUILD_CMAKE_CXX_COMPILER=clang++ TOAST_BUILD_CMAKE_C_FLAGS='-O3 -g -fPIC' TOAST_BUILD_CMAKE_CXX_FLAGS='-O3 -g -fPIC -std=c++11 -stdlib=libc++' TOAST_BUILD_DISABLE_OPENMP=1 TOAST_BUILD_BLA_VENDOR='Apple' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON TOAST_BUILD_TOAST_STATIC_DEPS=ON"
+      CIBW_ENVIRONMENT_MACOS: "TOAST_BUILD_CMAKE_C_COMPILER=gcc TOAST_BUILD_CMAKE_CXX_COMPILER=g++ TOAST_BUILD_CMAKE_C_FLAGS='-O3 -g -fPIC' TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm -lgfortran' TOAST_BUILD_CMAKE_CXX_FLAGS='-O3 -g -fPIC -std=c++11' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON TOAST_BUILD_TOAST_STATIC_DEPS=ON"
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh ${{ matrix.platform_id }}
       CIBW_BEFORE_TEST: export OMP_NUM_THREADS=2
@@ -98,7 +97,7 @@ jobs:
 
       - name: Install cibuildwheel
         run: |
-          python -m pip install cibuildwheel==2.5.0
+          python -m pip install cibuildwheel==2.8.0
 
       - name: Build wheel
         run: |

@@ -106,7 +106,7 @@ jobs:
           conda activate base
           ./platforms/conda_dev_setup.sh base
           conda install mpi4py
-          ./platforms/conda_dev.sh base
+          ./platforms/conda.sh base
 
       - name: Run Serial Tests
         shell: bash -l {0}
