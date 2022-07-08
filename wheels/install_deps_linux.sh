@@ -33,39 +33,6 @@ PREFIX=/usr
 
 yum update -y
 
-# Install MPICH with our serial compiler.  Needed to install
-# mpi4py later for testing (MPI is not bundled with the wheel).
-
-mpich_version=3.4
-mpich_dir=mpich-${mpich_version}
-mpich_pkg=${mpich_dir}.tar.gz
-
-echo "Fetching MPICH..."
-
-if [ ! -e ${mpich_pkg} ]; then
-    curl -SL https://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
-fi
-
-echo "Building MPICH..."
-
-rm -rf ${mpich_dir}
-fcopt="--disable-fortran"
-unset F90
-unset F90FLAGS
-tar xzf ${mpich_pkg} \
-    && cd ${mpich_dir} \
-    && CC="${CC}" CXX="${CXX}" FC="${FC}" F77="${FC}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
-    FFLAGS="${FCFLAGS}" FCFLAGS="${FCFLAGS}" \
-    MPICH_MPICC_CFLAGS="${CFLAGS}" \
-    MPICH_MPICXX_CXXFLAGS="${CXXFLAGS}" \
-    MPICH_MPIF77_FFLAGS="${FCFLAGS}" \
-    MPICH_MPIFORT_FCFLAGS="${FCFLAGS}" \
-    ./configure ${fcopt} \
-    --with-device=ch3 \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install
 
 # Update pip
 pip install --upgrade pip
@@ -91,13 +58,6 @@ fi
 
 # Install build requirements.
 CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
-
-# Install mpi4py for running tests
-
-echo "mpicc = $(which mpicc)"
-echo "mpicxx = $(which mpicxx)"
-echo "mpirun = $(which mpirun)"
-pip install mpi4py
 
 # Install Openblas
 
@@ -239,7 +199,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.11.0
+ssparse_version=5.12.0
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
@@ -255,17 +215,61 @@ rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
     && pushd ${ssparse_dir} >/dev/null 2>&1 \
     && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && make library JOBS=${MAKEJ} \
-    CC="${CC}" CXX="${CXX}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -fopenmp -lm" \
     && make static JOBS=${MAKEJ} \
     CC="${CC}" CXX="${CXX}" \
     CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
     GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -fopenmp -lm" \
+    LAPACK="-lopenblas -fopenmp -lm" \
+    && make install \
+    CC="${CC}" CXX="${CXX}" \
+    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
+    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -fopenmp -lm" \
+    LAPACK="-lopenblas -fopenmp -lm" \
     && cp -a ./include/* "${PREFIX}/include/" \
     && find . -name "*.a" -exec cp -a '{}' "${PREFIX}/lib/" \; \
     && popd >/dev/null 2>&1
 
 # This line removed from above, since we are linking to static libs:
 # && cp -a ./lib/* "${PREFIX}/lib/" \
+
+# MPI for testing.  Although we do not bundle MPI with toast, we need
+# to install it in order to run mpi-enabled tests on the produced
+# wheel.
+
+mpich_version=3.4
+mpich_dir=mpich-${mpich_version}
+mpich_pkg=${mpich_dir}.tar.gz
+
+echo "Fetching MPICH..."
+
+if [ ! -e ${mpich_pkg} ]; then
+    curl -SL https://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
+fi
+
+echo "Building MPICH..."
+
+rm -rf ${mpich_dir}
+fcopt="--disable-fortran"
+unset F90
+unset F90FLAGS
+tar xzf ${mpich_pkg} \
+    && cd ${mpich_dir} \
+    && CC="${CC}" CXX="${CXX}" FC="${FC}" F77="${FC}" \
+    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
+    FFLAGS="${FCFLAGS}" FCFLAGS="${FCFLAGS}" \
+    MPICH_MPICC_CFLAGS="${CFLAGS}" \
+    MPICH_MPICXX_CXXFLAGS="${CXXFLAGS}" \
+    MPICH_MPIF77_FFLAGS="${FCFLAGS}" \
+    MPICH_MPIFORT_FCFLAGS="${FCFLAGS}" \
+    ./configure ${fcopt} \
+    --with-device=ch3 \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install
+
+# Install mpi4py for running tests
+
+echo "mpicc = $(which mpicc)"
+echo "mpicxx = $(which mpicxx)"
+echo "mpirun = $(which mpirun)"
+pip install mpi4py

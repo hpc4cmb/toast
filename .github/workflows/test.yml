@@ -9,7 +9,7 @@ on:
   pull_request:
     branches:
       - master
-      - toast3
+      #- toast3
 
 jobs:
   linux:
@@ -91,7 +91,7 @@ jobs:
           curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-$(uname -m).sh
           bash miniforge.sh -b -f -p ${HOME}/conda
           ${HOME}/conda/bin/conda init bash
-      
+
       - name: Check Conda Config
         shell: bash -l {0}
         run: |

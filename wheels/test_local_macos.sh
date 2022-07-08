@@ -42,13 +42,10 @@ echo "Using homebrew installation in ${brew_root}"
 # Export compiler information
 export CC=clang
 export CXX=clang++
-export FC=
 export CFLAGS="-O3 -fPIC"
-export FCFLAGS="-O3 -fPIC"
 export CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
 
 # Install most dependencies with homebrew, including python-3.9
-eval ${brew_com} install mpich
 eval ${brew_com} install python3
 
 # Add this homebrew python to our path
@@ -73,17 +70,35 @@ else
 fi
 
 # Install our dependencies
-eval "${topdir}/wheels/install_deps_osx.sh"
+eval "${topdir}/wheels/install_deps_osx.sh" "macosx_x86_64" "${venv_path}"
 
-# Look for our dependencies in /usr/local
-export LD_LIBRARY_PATH="/usr/local/lib"
-export DYLD_LIBRARY_PATH="/usr/local/lib"
-export CPATH="/usr/local/include"
-export TOAST_BUILD_CMAKE_LIBRARY_PATH="/usr/local/lib"
+python3 -m pip install delocate
+
+# Look for our dependencies in the virtualenv
+export LD_LIBRARY_PATH="${venv_path}/lib"
+export DYLD_LIBRARY_PATH="${venv_path}/lib"
+export CPATH="${venv_path}/include"
+
+# Set up toast build options
+export TOAST_BUILD_CMAKE_C_COMPILER="${CC}"
+export TOAST_BUILD_CMAKE_CXX_COMPILER="${CXX}"
+export TOAST_BUILD_DISABLE_OPENMP=1
+export TOAST_BUILD_CMAKE_C_FLAGS="${CFLAGS} -I${venv_path}/include"
+export TOAST_BUILD_BLAS_LIBRARIES="${venv_path}/lib/libopenblas.dylib"
+export TOAST_BUILD_LAPACK_LIBRARIES="${venv_path}/lib/libopenblas.dylib"
+export TOAST_BUILD_CMAKE_CXX_FLAGS="${CXXFLAGS} -I${venv_path}/include"
+export TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
+export TOAST_BUILD_AATM_ROOT="${venv_path}"
+export TOAST_BUILD_FFTW_ROOT="${venv_path}"
+export TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS="${venv_path}/include"
+export TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS="${venv_path}/lib"
+export TOAST_BUILD_CMAKE_LIBRARY_PATH="${venv_path}/lib"
 
 # Now build a wheel
+pushd "${topdir}" >/dev/null 2>&1
 python3 setup.py clean
-python3 -m pip wheel ${topdir} --wheel-dir=build/temp_wheels --no-deps -vvv
+python3 -m pip wheel --wheel-dir=build/temp_wheels --no-deps -vvv .
+popd >/dev/null 2>&1
 
 # The file
 input_wheel=$(ls ${topdir}/build/temp_wheels/*.whl)
@@ -97,5 +112,4 @@ delocate-listdeps ${input_wheel} \
 python3 -m pip install ${topdir}/${wheel_file}
 
 # Run tests
-export OMP_NUM_THREADS=2
 python3 -c 'import toast.tests; toast.tests.run()'

@@ -1,6 +1,6 @@
-diff -urN SuiteSparse-5.11.0_orig/CHOLMOD/Lib/Makefile SuiteSparse-5.11.0/CHOLMOD/Lib/Makefile
---- SuiteSparse-5.11.0_orig/CHOLMOD/Lib/Makefile	2022-03-14 16:33:19.000000000 -0700
-+++ SuiteSparse-5.11.0/CHOLMOD/Lib/Makefile	2022-03-18 11:51:52.423674362 -0700
+diff -urN SuiteSparse-5.12.0_orig/CHOLMOD/Lib/Makefile SuiteSparse-5.12.0/CHOLMOD/Lib/Makefile
+--- SuiteSparse-5.12.0_orig/CHOLMOD/Lib/Makefile	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/CHOLMOD/Lib/Makefile	2022-07-08 10:45:13.000000000 -0700
 @@ -22,7 +22,7 @@
  #-------------------------------------------------------------------------------
  # With the CUDA BLAS:
@@ -32,9 +32,9 @@ diff -urN SuiteSparse-5.11.0_orig/CHOLMOD/Lib/Makefile SuiteSparse-5.11.0/CHOLMO
  	$(C) -DDLONG -c $(I) $< -o $@
  
  #-------------------------------------------------------------------------------
-diff -urN SuiteSparse-5.11.0_orig/GraphBLAS/Tcov/Makefile SuiteSparse-5.11.0/GraphBLAS/Tcov/Makefile
---- SuiteSparse-5.11.0_orig/GraphBLAS/Tcov/Makefile	2022-03-14 16:33:19.000000000 -0700
-+++ SuiteSparse-5.11.0/GraphBLAS/Tcov/Makefile	2022-03-18 11:54:28.759551655 -0700
+diff -urN SuiteSparse-5.12.0_orig/GraphBLAS/Tcov/Makefile SuiteSparse-5.12.0/GraphBLAS/Tcov/Makefile
+--- SuiteSparse-5.12.0_orig/GraphBLAS/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/GraphBLAS/Tcov/Makefile	2022-07-08 10:45:13.000000000 -0700
 @@ -21,7 +21,7 @@
      CFLAGS  = -g -Xclang -fopenmp -std=c11 -fPIC -Wno-pragmas -fno-common
      LDFLAGS = -Xclang -fopenmp
@@ -53,9 +53,9 @@ diff -urN SuiteSparse-5.11.0_orig/GraphBLAS/Tcov/Makefile SuiteSparse-5.11.0/Gra
  CPPFLAGS = -Itmp_include -DGBNCPUFEAT -I../rmm_wrap -DGBCOVER $(RENAME)
  SO_OPTS = $(LDFLAGS)
  
-diff -urN SuiteSparse-5.11.0_orig/KLU/Tcov/Makefile SuiteSparse-5.11.0/KLU/Tcov/Makefile
---- SuiteSparse-5.11.0_orig/KLU/Tcov/Makefile	2022-03-14 16:33:19.000000000 -0700
-+++ SuiteSparse-5.11.0/KLU/Tcov/Makefile	2022-03-18 12:07:52.047308511 -0700
+diff -urN SuiteSparse-5.12.0_orig/KLU/Tcov/Makefile SuiteSparse-5.12.0/KLU/Tcov/Makefile
+--- SuiteSparse-5.12.0_orig/KLU/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/KLU/Tcov/Makefile	2022-07-08 10:45:13.000000000 -0700
 @@ -18,9 +18,8 @@
  
  # for statement coverage, picky tests
@@ -68,9 +68,18 @@ diff -urN SuiteSparse-5.11.0_orig/KLU/Tcov/Makefile SuiteSparse-5.11.0/KLU/Tcov/
  
  C = $(CC) $(CF)
  
-diff -urN SuiteSparse-5.11.0_orig/Makefile SuiteSparse-5.11.0/Makefile
---- SuiteSparse-5.11.0_orig/Makefile	2022-03-14 16:33:19.000000000 -0700
-+++ SuiteSparse-5.11.0/Makefile	2022-03-18 12:12:39.881994703 -0700
+diff -urN SuiteSparse-5.12.0_orig/Makefile SuiteSparse-5.12.0/Makefile
+--- SuiteSparse-5.12.0_orig/Makefile	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/Makefile	2022-07-08 10:46:49.000000000 -0700
+@@ -16,7 +16,7 @@
+ # installs all libraries SuiteSparse/lib.
+ go: metis
+ 	( cd SuiteSparse_config && $(MAKE) )
+-	( cd Mongoose && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' )
++	# ( cd Mongoose && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' )
+ 	( cd AMD && $(MAKE) )
+ 	( cd BTF && $(MAKE) )
+ 	( cd CAMD && $(MAKE) )
 @@ -63,7 +63,7 @@
  	( cd GPUQREngine && $(MAKE) install )
  endif
@@ -80,6 +89,15 @@ diff -urN SuiteSparse-5.11.0_orig/Makefile SuiteSparse-5.11.0/Makefile
  #	( cd PIRO_BAND && $(MAKE) install )
  #	( cd SKYLINE_SVD && $(MAKE) install )
  	( cd SLIP_LU && $(MAKE) install )
+@@ -126,7 +126,7 @@
+ # the static library
+ library: metis
+ 	( cd SuiteSparse_config && $(MAKE) )
+-	( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' library )
++	# ( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' library )
+ 	( cd AMD && $(MAKE) library )
+ 	( cd BTF && $(MAKE) library )
+ 	( cd CAMD && $(MAKE) library )
 @@ -144,7 +144,7 @@
  	( cd GPUQREngine && $(MAKE) library )
  endif
@@ -89,6 +107,15 @@ diff -urN SuiteSparse-5.11.0_orig/Makefile SuiteSparse-5.11.0/Makefile
  	( cd SLIP_LU && $(MAKE) library )
  #	( cd PIRO_BAND && $(MAKE) library )
  #	( cd SKYLINE_SVD && $(MAKE) library )
+@@ -154,7 +154,7 @@
+ # both the dynamic and static libraries.
+ static: metis
+ 	( cd SuiteSparse_config && $(MAKE) static )
+-	( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' static )
++	# ( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' static )
+ 	( cd AMD && $(MAKE) static )
+ 	( cd BTF && $(MAKE) static )
+ 	( cd CAMD && $(MAKE) static )
 @@ -172,7 +172,7 @@
  	( cd GPUQREngine && $(MAKE) static )
  endif
@@ -108,9 +135,14 @@ diff -urN SuiteSparse-5.11.0_orig/Makefile SuiteSparse-5.11.0/Makefile
  	- ( cd metis-5.1.0 && $(MAKE) config shared=1 prefix=$(SUITESPARSE) cc=$(CC) )
  	- ( cd metis-5.1.0 && $(MAKE) )
  	- ( cd metis-5.1.0 && $(MAKE) install )
-diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.11.0/SLIP_LU/Demo/Makefile
---- SuiteSparse-5.11.0_orig/SLIP_LU/Demo/Makefile	2022-03-14 16:33:19.000000000 -0700
-+++ SuiteSparse-5.11.0/SLIP_LU/Demo/Makefile	2022-03-18 12:13:34.269777453 -0700
+@@ -314,4 +317,3 @@
+ # compile and install Mongoose
+ moninstall: mon
+ 	( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' install )
+-
+diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.12.0/SLIP_LU/Demo/Makefile
+--- SuiteSparse-5.12.0_orig/SLIP_LU/Demo/Makefile	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/SLIP_LU/Demo/Makefile	2022-07-08 10:45:13.000000000 -0700
 @@ -20,7 +20,7 @@
  
  # LDFLAGS = -L../../lib
@@ -120,9 +152,9 @@ diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.11.0/SLIP_
  CS = $(LDLIBS)
  
  
-diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.11.0/SLIP_LU/Lib/Makefile
---- SuiteSparse-5.11.0_orig/SLIP_LU/Lib/Makefile	2022-03-14 16:33:19.000000000 -0700
-+++ SuiteSparse-5.11.0/SLIP_LU/Lib/Makefile	2022-03-18 12:14:22.361591652 -0700
+diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.12.0/SLIP_LU/Lib/Makefile
+--- SuiteSparse-5.12.0_orig/SLIP_LU/Lib/Makefile	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/SLIP_LU/Lib/Makefile	2022-07-08 10:45:13.000000000 -0700
 @@ -20,7 +20,7 @@
  # CFLAGS += -Wall -Wextra -Wpedantic -Werror
  
@@ -132,9 +164,9 @@ diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.11.0/SLIP_L
  
  C = $(CC) $(CF) -I../Include -I../../COLAMD/Include -I../../AMD/Include -I../../SuiteSparse_config
  
-diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.11.0/SLIP_LU/Tcov/Makefile
---- SuiteSparse-5.11.0_orig/SLIP_LU/Tcov/Makefile	2022-03-14 16:33:19.000000000 -0700
-+++ SuiteSparse-5.11.0/SLIP_LU/Tcov/Makefile	2022-03-18 12:15:40.369301459 -0700
+diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.12.0/SLIP_LU/Tcov/Makefile
+--- SuiteSparse-5.12.0_orig/SLIP_LU/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/SLIP_LU/Tcov/Makefile	2022-07-08 10:45:13.000000000 -0700
 @@ -21,7 +21,7 @@
          -I../../SuiteSparse_config -I../../COLAMD/Include -I../../AMD/Include \
          -DSLIP_GMP_LIST_INIT=2 -DSLIP_LU_TCOV
@@ -144,9 +176,9 @@ diff -urN SuiteSparse-5.11.0_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.11.0/SLIP_
  
  # run all statement coverage tests, and then check for 100% coverage
  run: runtests
-diff -urN SuiteSparse-5.11.0_orig/SuiteSparse_config/SuiteSparse_config.mk SuiteSparse-5.11.0/SuiteSparse_config/SuiteSparse_config.mk
---- SuiteSparse-5.11.0_orig/SuiteSparse_config/SuiteSparse_config.mk	2022-03-14 16:33:19.000000000 -0700
-+++ SuiteSparse-5.11.0/SuiteSparse_config/SuiteSparse_config.mk	2022-03-18 12:21:08.232195832 -0700
+diff -urN SuiteSparse-5.12.0_orig/SuiteSparse_config/SuiteSparse_config.mk SuiteSparse-5.12.0/SuiteSparse_config/SuiteSparse_config.mk
+--- SuiteSparse-5.12.0_orig/SuiteSparse_config/SuiteSparse_config.mk	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/SuiteSparse_config/SuiteSparse_config.mk	2022-07-08 10:45:13.000000000 -0700
 @@ -154,7 +154,7 @@
  
      # The CF macro is used by SuiteSparse Makefiles as a combination of
@@ -184,8 +216,8 @@ diff -urN SuiteSparse-5.11.0_orig/SuiteSparse_config/SuiteSparse_config.mk Suite
          CUDA_PATH =
 +        CUDA_PATH_INC =
 +        CUDA_PATH_LIB =
-     endif
- 
++    endif
++
 +    $(info CUDA_PATH = $(CUDA_PATH) CUDA_PATH_INC = $(CUDA_PATH_INC) CUDA_PATH_LIB = $(CUDA_PATH_LIB))
 +
 +    # Support HPC style install with math libraries in a separate directory.  By
@@ -204,8 +236,8 @@ diff -urN SuiteSparse-5.11.0_orig/SuiteSparse_config/SuiteSparse_config.mk Suite
 +        ifeq ($(CUDA_MATH_LIB),auto)
 +            CUDA_MATH_LIB = $(CUDA_MATH)/lib64
 +        endif
-+    endif
-+
+     endif
+ 
 +    $(info CUDA_MATH = $(CUDA_MATH) CUDA_MATH_INC = $(CUDA_MATH_INC) CUDA_MATH_LIB = $(CUDA_MATH_LIB))
 +
      ifeq ($(wildcard $(CUDA_PATH)),)
@@ -233,7 +265,37 @@ diff -urN SuiteSparse-5.11.0_orig/SuiteSparse_config/SuiteSparse_config.mk Suite
                  MAGMA_INC     = -I/opt/magma-2.4.0/include/
                  MAGMA_LIB     = -L/opt/magma-2.4.0/lib/ -lmagma
          NVCC          = $(CUDA_PATH)/bin/nvcc
-@@ -518,7 +552,7 @@
+@@ -357,15 +391,20 @@
+     #---------------------------------------------------------------------------
+ 
+     ifeq ($(UNAME), Darwin)
+-        # To compile on the Mac, you must install Xcode.  Then do this at the
+-        # command line in the Terminal, before doing 'make':
+-        # xcode-select --install
+-        CF += -fno-common
+-        BLAS ?= -framework Accelerate
+-        LAPACK ?= -framework Accelerate
+-        # OpenMP is not yet supported by default in clang
+-        CFOPENMP =
+-        LDLIBS += -rpath $(INSTALL_LIB)
++        ifeq ($(DARWIN_GCC), 1)
++            # We are building with gcc on mac
++            LDLIBS += -Wl,-rpath,$(INSTALL_LIB)
++        else
++            # To compile on the Mac, you must install Xcode.  Then do this at the
++            # command line in the Terminal, before doing 'make':
++            # xcode-select --install
++            CF += -fno-common
++            BLAS ?= -framework Accelerate
++            LAPACK ?= -framework Accelerate
++            # OpenMP is not yet supported by default in clang
++            CFOPENMP =
++            LDLIBS += -rpath $(INSTALL_LIB)
++        endif
+     endif
+ 
+     #---------------------------------------------------------------------------
+@@ -518,7 +557,7 @@
                      # the compiler.  The latter can be empty if you have METIS
                      # installed in a place where the compiler can find the
                      # metis.h include file by itself without any -I option
@@ -242,3 +304,8 @@ diff -urN SuiteSparse-5.11.0_orig/SuiteSparse_config/SuiteSparse_config.mk Suite
                      LIB_WITH_PARTITION += $(MY_METIS_LIB)
                      ifneq (,$(MY_METIS_INC))
                          I_WITH_PARTITION += -I$(MY_METIS_INC)
+@@ -617,4 +656,3 @@
+ ifeq ($(TCOV),yes)
+ 	@echo 'TCOV=yes, for extensive testing only (gcc, g++, vanilla BLAS)'
+ endif
+-
