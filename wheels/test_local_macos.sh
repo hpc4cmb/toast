@@ -70,7 +70,7 @@ else
 fi
 
 # Install our dependencies
-eval "${topdir}/wheels/install_deps_osx.sh" "macosx_x86_64" "${venv_path}"
+#eval "${topdir}/wheels/install_deps_osx.sh" "macosx_x86_64" "${venv_path}"
 
 python3 -m pip install delocate
 
@@ -96,6 +96,7 @@ export TOAST_BUILD_CMAKE_LIBRARY_PATH="${venv_path}/lib"
 
 # Now build a wheel
 pushd "${topdir}" >/dev/null 2>&1
+rm -rf build/temp_wheels/*.whl
 python3 setup.py clean
 python3 -m pip wheel --wheel-dir=build/temp_wheels --no-deps -vvv .
 popd >/dev/null 2>&1

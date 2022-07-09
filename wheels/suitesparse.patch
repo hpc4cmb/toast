@@ -1,6 +1,6 @@
 diff -urN SuiteSparse-5.12.0_orig/CHOLMOD/Lib/Makefile SuiteSparse-5.12.0/CHOLMOD/Lib/Makefile
 --- SuiteSparse-5.12.0_orig/CHOLMOD/Lib/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/CHOLMOD/Lib/Makefile	2022-07-08 10:45:13.000000000 -0700
++++ SuiteSparse-5.12.0/CHOLMOD/Lib/Makefile	2022-07-09 13:55:06.000000000 -0700
 @@ -22,7 +22,7 @@
  #-------------------------------------------------------------------------------
  # With the CUDA BLAS:
@@ -34,7 +34,7 @@ diff -urN SuiteSparse-5.12.0_orig/CHOLMOD/Lib/Makefile SuiteSparse-5.12.0/CHOLMO
  #-------------------------------------------------------------------------------
 diff -urN SuiteSparse-5.12.0_orig/GraphBLAS/Tcov/Makefile SuiteSparse-5.12.0/GraphBLAS/Tcov/Makefile
 --- SuiteSparse-5.12.0_orig/GraphBLAS/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/GraphBLAS/Tcov/Makefile	2022-07-08 10:45:13.000000000 -0700
++++ SuiteSparse-5.12.0/GraphBLAS/Tcov/Makefile	2022-07-09 13:55:06.000000000 -0700
 @@ -21,7 +21,7 @@
      CFLAGS  = -g -Xclang -fopenmp -std=c11 -fPIC -Wno-pragmas -fno-common
      LDFLAGS = -Xclang -fopenmp
@@ -55,7 +55,7 @@ diff -urN SuiteSparse-5.12.0_orig/GraphBLAS/Tcov/Makefile SuiteSparse-5.12.0/Gra
  
 diff -urN SuiteSparse-5.12.0_orig/KLU/Tcov/Makefile SuiteSparse-5.12.0/KLU/Tcov/Makefile
 --- SuiteSparse-5.12.0_orig/KLU/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/KLU/Tcov/Makefile	2022-07-08 10:45:13.000000000 -0700
++++ SuiteSparse-5.12.0/KLU/Tcov/Makefile	2022-07-09 13:55:06.000000000 -0700
 @@ -18,9 +18,8 @@
  
  # for statement coverage, picky tests
@@ -70,7 +70,7 @@ diff -urN SuiteSparse-5.12.0_orig/KLU/Tcov/Makefile SuiteSparse-5.12.0/KLU/Tcov/
  
 diff -urN SuiteSparse-5.12.0_orig/Makefile SuiteSparse-5.12.0/Makefile
 --- SuiteSparse-5.12.0_orig/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/Makefile	2022-07-08 10:46:49.000000000 -0700
++++ SuiteSparse-5.12.0/Makefile	2022-07-09 13:56:24.000000000 -0700
 @@ -16,7 +16,7 @@
  # installs all libraries SuiteSparse/lib.
  go: metis
@@ -89,6 +89,24 @@ diff -urN SuiteSparse-5.12.0_orig/Makefile SuiteSparse-5.12.0/Makefile
  #	( cd PIRO_BAND && $(MAKE) install )
  #	( cd SKYLINE_SVD && $(MAKE) install )
  	( cd SLIP_LU && $(MAKE) install )
+@@ -79,7 +79,7 @@
+ 	- $(CP) lib/libmetis.* $(INSTALL_LIB)
+ 	- $(CP) metis-5.1.0/manual/manual.pdf $(INSTALL_DOC)/METIS_manual.pdf
+ 	- $(CP) metis-5.1.0/README.txt $(INSTALL_DOC)/METIS_README.txt
+-        # the following is needed only on the Mac, so *.dylib is hardcoded:
++	# the following is needed only on the Mac, so *.dylib is hardcoded:
+ 	$(SO_INSTALL_NAME) $(INSTALL_LIB)/libmetis.dylib $(INSTALL_LIB)/libmetis.dylib
+ 	- $(CP) include/metis.h $(INSTALL_INCLUDE)
+ 	chmod 755 $(INSTALL_LIB)/libmetis.*
+@@ -114,7 +114,7 @@
+ #	( cd PIRO_BAND && $(MAKE) uninstall )
+ #	( cd SKYLINE_SVD && $(MAKE) uninstall )
+ ifeq (,$(MY_METIS_LIB))
+-        # uninstall METIS, which came from SuiteSparse/metis-5.1.0
++	# uninstall METIS, which came from SuiteSparse/metis-5.1.0
+ 	$(RM) $(INSTALL_LIB)/libmetis.*
+ 	$(RM) $(INSTALL_INCLUDE)/metis.h
+ 	$(RM) $(INSTALL_DOC)/METIS_manual.pdf
 @@ -126,7 +126,7 @@
  # the static library
  library: metis
@@ -142,7 +160,7 @@ diff -urN SuiteSparse-5.12.0_orig/Makefile SuiteSparse-5.12.0/Makefile
 -
 diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.12.0/SLIP_LU/Demo/Makefile
 --- SuiteSparse-5.12.0_orig/SLIP_LU/Demo/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/SLIP_LU/Demo/Makefile	2022-07-08 10:45:13.000000000 -0700
++++ SuiteSparse-5.12.0/SLIP_LU/Demo/Makefile	2022-07-09 13:55:06.000000000 -0700
 @@ -20,7 +20,7 @@
  
  # LDFLAGS = -L../../lib
@@ -154,7 +172,7 @@ diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.12.0/SLIP_
  
 diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.12.0/SLIP_LU/Lib/Makefile
 --- SuiteSparse-5.12.0_orig/SLIP_LU/Lib/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/SLIP_LU/Lib/Makefile	2022-07-08 10:45:13.000000000 -0700
++++ SuiteSparse-5.12.0/SLIP_LU/Lib/Makefile	2022-07-09 13:55:06.000000000 -0700
 @@ -20,7 +20,7 @@
  # CFLAGS += -Wall -Wextra -Wpedantic -Werror
  
@@ -166,7 +184,7 @@ diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.12.0/SLIP_L
  
 diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.12.0/SLIP_LU/Tcov/Makefile
 --- SuiteSparse-5.12.0_orig/SLIP_LU/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/SLIP_LU/Tcov/Makefile	2022-07-08 10:45:13.000000000 -0700
++++ SuiteSparse-5.12.0/SLIP_LU/Tcov/Makefile	2022-07-09 13:55:06.000000000 -0700
 @@ -21,7 +21,7 @@
          -I../../SuiteSparse_config -I../../COLAMD/Include -I../../AMD/Include \
          -DSLIP_GMP_LIST_INIT=2 -DSLIP_LU_TCOV
@@ -178,7 +196,7 @@ diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.12.0/SLIP_
  run: runtests
 diff -urN SuiteSparse-5.12.0_orig/SuiteSparse_config/SuiteSparse_config.mk SuiteSparse-5.12.0/SuiteSparse_config/SuiteSparse_config.mk
 --- SuiteSparse-5.12.0_orig/SuiteSparse_config/SuiteSparse_config.mk	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/SuiteSparse_config/SuiteSparse_config.mk	2022-07-08 10:45:13.000000000 -0700
++++ SuiteSparse-5.12.0/SuiteSparse_config/SuiteSparse_config.mk	2022-07-09 13:59:10.000000000 -0700
 @@ -154,7 +154,7 @@
  
      # The CF macro is used by SuiteSparse Makefiles as a combination of
@@ -309,3 +327,15 @@ diff -urN SuiteSparse-5.12.0_orig/SuiteSparse_config/SuiteSparse_config.mk Suite
  	@echo 'TCOV=yes, for extensive testing only (gcc, g++, vanilla BLAS)'
  endif
 -
+diff -urN SuiteSparse-5.12.0_orig/metis-5.1.0/Makefile SuiteSparse-5.12.0/metis-5.1.0/Makefile
+--- SuiteSparse-5.12.0_orig/metis-5.1.0/Makefile	2022-04-10 13:44:14.000000000 -0700
++++ SuiteSparse-5.12.0/metis-5.1.0/Makefile	2022-07-09 13:59:42.000000000 -0700
+@@ -19,7 +19,7 @@
+ BUILDDIR = build/$(systype)-$(cputype)
+ 
+ # Process configuration options.
+-CONFIG_FLAGS = 
++CONFIG_FLAGS =
+ ifeq ($(gklib_path), not-set)
+     gklib_path = GKlib
+ endif
