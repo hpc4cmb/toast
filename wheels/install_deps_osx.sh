@@ -206,6 +206,7 @@ tar xzf ${aatm_pkg} \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     .. \
     && make -j ${MAKEJ} install \
+    && popd >/dev/null 2>&1 \
     && popd >/dev/null 2>&1
 
 # Install SuiteSparse
