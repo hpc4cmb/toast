@@ -226,10 +226,6 @@ fi
 
 echo "Building MPICH..."
 
-rm -rf ${mpich_dir}
-fcopt="--disable-fortran"
-unset F90
-unset F90FLAGS
 tar xzf ${mpich_pkg} \
     && cd ${mpich_dir} \
     && CC="${CC}" CXX="${CXX}" FC="${FC}" F77="${FC}" \
@@ -239,7 +235,7 @@ tar xzf ${mpich_pkg} \
     MPICH_MPICXX_CXXFLAGS="${CXXFLAGS}" \
     MPICH_MPIF77_FFLAGS="${FCFLAGS}" \
     MPICH_MPIFORT_FCFLAGS="${FCFLAGS}" \
-    ./configure ${fcopt} \
+    ./configure --disable-fortran \
     --with-device=ch3 \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
@@ -250,4 +246,4 @@ tar xzf ${mpich_pkg} \
 echo "mpicc = $(which mpicc)"
 echo "mpicxx = $(which mpicxx)"
 echo "mpirun = $(which mpirun)"
-pip install mpi4py
+python3 -m pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py

@@ -280,5 +280,5 @@ if [ "${arch}" != "macosx_arm64" ]; then
     echo "mpicc = $(which mpicc)"
     echo "mpicxx = $(which mpicxx)"
     echo "mpirun = $(which mpirun)"
-    pip install mpi4py
+    python3 -m pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
 fi
