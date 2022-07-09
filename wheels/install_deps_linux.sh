@@ -33,7 +33,6 @@ PREFIX=/usr
 
 yum update -y
 
-
 # Update pip
 pip install --upgrade pip
 
@@ -59,30 +58,18 @@ fi
 # Install build requirements.
 CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
 
-# Install Openblas
+# Install openblas from the multilib package- the same one numpy uses.
 
-openblas_version=0.3.20
-openblas_dir=OpenBLAS-${openblas_version}
-openblas_pkg=${openblas_dir}.tar.gz
-
-echo "Fetching OpenBLAS..."
+openblas_pkg="openblas-v0.3.20-manylinux2014_x86_64.tar.gz"
+openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.20/download/${openblas_pkg}"
 
 if [ ! -e ${openblas_pkg} ]; then
-    curl -SL https://github.com/xianyi/OpenBLAS/archive/v${openblas_version}.tar.gz -o ${openblas_pkg}
+    echo "Fetching OpenBLAS..."
+    curl -SL ${openblas_url} -o ${openblas_pkg}
 fi
 
-echo "Building OpenBLAS..."
-
-rm -rf ${openblas_dir}
-tar xzf ${openblas_pkg} \
-    && pushd ${openblas_dir} >/dev/null 2>&1 \
-    && make USE_OPENMP=1 NO_SHARED=1 \
-    MAKE_NB_JOBS=${MAKEJ} \
-    CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
-    COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
-    LDFLAGS="-fopenmp -lm" libs netlib shared \
-    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
-    && popd >/dev/null 2>&1
+echo "Extracting OpenBLAS"
+tar -x -z -v -C "${PREFIX}" --strip-components 2 -f ${openblas_pkg}
 
 # libgmp
 
@@ -103,8 +90,6 @@ tar xf ${gmp_pkg} \
     && pushd ${gmp_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
-    --enable-static \
-    --disable-shared \
     --with-pic \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
@@ -130,8 +115,6 @@ tar xf ${mpfr_pkg} \
     && pushd ${mpfr_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
-    --enable-static \
-    --disable-shared \
     --with-pic \
     --with-gmp="${PREFIX}" \
     --prefix="${PREFIX}" \
@@ -158,9 +141,9 @@ tar xzf ${fftw_pkg} \
     && pushd ${fftw_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
+    --disable-fortran \
     --enable-openmp \
-    --enable-static \
-    --disable-shared \
+    --enable-shared \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
@@ -215,22 +198,17 @@ rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
     && pushd ${ssparse_dir} >/dev/null 2>&1 \
     && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && make static JOBS=${MAKEJ} \
+    && make library JOBS=${MAKEJ} \
     CC="${CC}" CXX="${CXX}" \
     CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -fopenmp -lm" \
-    LAPACK="-lopenblas -fopenmp -lm" \
-    && make install \
+    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -lm" \
+    LAPACK="-lopenblas -lm" \
+    && make install INSTALL="${PREFIX}" \
     CC="${CC}" CXX="${CXX}" \
     CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -fopenmp -lm" \
-    LAPACK="-lopenblas -fopenmp -lm" \
-    && cp -a ./include/* "${PREFIX}/include/" \
-    && find . -name "*.a" -exec cp -a '{}' "${PREFIX}/lib/" \; \
+    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -lm" \
+    LAPACK="-lopenblas -lm" \
     && popd >/dev/null 2>&1
-
-# This line removed from above, since we are linking to static libs:
-# && cp -a ./lib/* "${PREFIX}/lib/" \
 
 # MPI for testing.  Although we do not bundle MPI with toast, we need
 # to install it in order to run mpi-enabled tests on the produced
