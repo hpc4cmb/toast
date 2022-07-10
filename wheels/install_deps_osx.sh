@@ -230,7 +230,7 @@ rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
     && pushd ${ssparse_dir} >/dev/null 2>&1 \
     && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && make library JOBS=${MAKEJ} \
+    && make library JOBS=${MAKEJ} INSTALL="${PREFIX}" \
     CC="${CC}" CXX="${CXX}" \
     CFLAGS="${CFLAGS} -I${PREFIX}/include" \
     CXXFLAGS="${CXXFLAGS} -I${PREFIX}/include" AUTOCC=no \

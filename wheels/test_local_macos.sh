@@ -70,7 +70,7 @@ else
 fi
 
 # Install our dependencies
-#eval "${topdir}/wheels/install_deps_osx.sh" "macosx_x86_64" "${venv_path}"
+eval "${topdir}/wheels/install_deps_osx.sh" "macosx_x86_64" "${venv_path}"
 
 python3 -m pip install delocate
 

@@ -198,7 +198,7 @@ rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
     && pushd ${ssparse_dir} >/dev/null 2>&1 \
     && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && make library JOBS=${MAKEJ} \
+    && make library JOBS=${MAKEJ} INSTALL="${PREFIX}" \
     CC="${CC}" CXX="${CXX}" \
     CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
     GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -lm" \
