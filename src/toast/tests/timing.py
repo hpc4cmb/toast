@@ -65,7 +65,7 @@ class TimingTest(MPITestCase):
     def test_global(self):
         incr = 200
         dincr = float(incr) / 1000.0
-        prec = 2
+        prec = 1
         gt = GlobalTimers.get()
         tnames = ["timer1", "timer2", "timer3"]
         for nm in tnames:

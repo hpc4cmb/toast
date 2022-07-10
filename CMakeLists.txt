@@ -150,7 +150,7 @@ if(MKL_FOUND)
 else()
     if(CUDAToolkit_FOUND)
         # This provides FFT support
-	message(STATUS "Using CUDA FFT")
+        message(STATUS "Using CUDA FFT")
     else()
         # Search for FFTW instead
         find_package(FFTW)
