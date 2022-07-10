@@ -9,7 +9,7 @@ on:
   pull_request:
     branches:
       - master
-      #- toast3
+      - toast3
 
 jobs:
   linux:
