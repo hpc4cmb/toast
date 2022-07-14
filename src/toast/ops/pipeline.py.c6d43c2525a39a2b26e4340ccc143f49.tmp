@@ -245,8 +245,8 @@ class Pipeline(Operator):
             for k in keys:
                 if k in oprov:
                     prov[k] |= set(oprov[k])
-                # FIXME the following lines look like a copy-paste bug
-                #       an intermediate operator requiring something does not mean that it won't be provided to others anyway
+                # TODO the following lines look like a copy-paste bug
+                #      an intermediate operator requiring something does not mean that it won't be provided to others anyway
                 # if k in oreq:
                 #     prov[k] -= set(oreq[k])
         for k in keys:

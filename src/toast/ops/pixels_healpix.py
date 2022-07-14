@@ -203,7 +203,6 @@ class PixelsHealpix(Operator):
                         raise RuntimeError(msg)
 
             # Create (or re-use) output data for the pixels.
-
             if self.single_precision:
                 exists = ob.detdata.ensure(
                     self.pixels,
