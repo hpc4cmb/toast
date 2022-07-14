@@ -197,23 +197,23 @@ class Pipeline(Operator):
 
         # Copy out from accelerator if we did the copy in.
         if self._staged_accel:
-            # copy out the outputs
+            # copy out the outputs to the CPU
             prov = self.provides()
             msg = f"{pstr} {self} copying out accel data outputs: {prov}"
             log.verbose(msg)
             data.accel_update_host(prov)
-            # TODO copy out the intermediates
-            #      this is needed as, otherwise, they will get reused by other pipelines despite still being on gpu
+            # deletes the intermediates from the GPU
+            # otherwise, they will get REused by other pipelines despite still being on GPU
             interm = self._get_intermediate()
-            msg = f"{pstr} {self} copying out accel data intermediate outputs: {interm}"
+            msg = f"{pstr} {self} deleting accel data intermediate outputs: {interm}"
             log.verbose(msg)
-            data.accel_update_host(interm)
-            # TODO copy out the inputs
-            #      this is needed as, otherwise, they will get reused by other pipelines despite still being on gpu
+            data.accel_delete(interm)
+            # deletes the inputs
+            # otherwise, they will get REused by other pipelines despite still being on GPU
             req = self.requires()
-            msg = f"{pstr} {self} copying out accel data inputs: {req}"
+            msg = f"{pstr} {self} deleting accel data inputs: {req}"
             log.verbose(msg)
-            data.accel_update_host(req)
+            data.accel_delete(req)
         return result
 
     def _requires(self):
