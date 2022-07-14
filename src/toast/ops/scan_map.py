@@ -290,6 +290,7 @@ class ScanMask(Operator):
         return req
 
     def _provides(self):
+        # TODO shouldn't self.det_flags be in provide rather than require since it can be created here?
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
 

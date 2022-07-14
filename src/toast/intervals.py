@@ -385,8 +385,7 @@ class IntervalList(Sequence, AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_device(self.data)
         elif use_accel_jax:
-            # TODO deals with the fact that our dtype is user-defined
-            #self.jax = accel_data_update_device(self.data)
+            # deals with the fact that our dtype is user-defined
             self.jax = INTERVALS_JAX.init(self.data)
 
     def _accel_update_host(self):
@@ -395,8 +394,8 @@ class IntervalList(Sequence, AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_host(self.data)
         elif use_accel_jax:
-            # TODO this will likely require a more clever casting
-            self.data = accel_data_update_host(self.jax)
+            # this moves the data back into self.data
+            self.jax.to_numpy(self.data)
 
     def _accel_delete(self):
         log = Logger.get()

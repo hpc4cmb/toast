@@ -114,7 +114,6 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         None (results are stored in pixels and hit_submaps).
     """
     # make sure the data is where we expect it
-    # TODO: quats and pixels are on GPU when use_accel is true, pixel still is when it is false
     assert_data_localization('pixels_healpix', use_accell, [quats, flags, hit_submaps], [pixels, hit_submaps])
 
     # initialize hpix for all computations

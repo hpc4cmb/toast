@@ -92,21 +92,17 @@ class Pipeline(Operator):
                 comp_dets = set(detectors)
             if accel_enabled() and self.supports_accel():
                 # All our operators support it.
-                msg = "Pipeline operators {}".format(
-                    ", ".join([x.name for x in self.operators])
-                )
-                msg += " all support accelerators, data to be staged: "
-                msg += f"{self.requires()}"
+                msg = f"{self} fully supports accelerators, data to be staged: {self.requires()}"
                 log.verbose_rank(msg, comm=data.comm.comm_world)
 
                 interm = self._get_intermediate()
                 log.verbose(f"intermediate = {interm}")
                 for ob in data.obs:
+                    # Deals with data existing on the host from a previous call, but 
+                    # not on the device.  Delete the host copy so that it will
+                    # be re-created consistently.
                     for obj in interm["detdata"]:
                         if obj in ob.detdata and not ob.detdata.accel_exists(obj):
-                            # The data exists on the host from a previous call, but is
-                            # not on the device.  Delete the host copy so that it will
-                            # be re-created consistently.
                             msg = f"Pipeline intermediate detdata '{obj}' in "
                             msg += f"observation '{ob.name}' exists on "
                             msg += f"the host but not the device.  Deleting."
@@ -135,15 +131,13 @@ class Pipeline(Operator):
 
         if len(data.obs) == 0:
             # No observations for this group
-            msg = f"Pipeline data, group {data.comm.group} has no observations."
+            msg = f"{self} data, group {data.comm.group} has no observations."
             log.verbose_rank(msg, comm=data.comm.comm_group)
 
         if len(self.detector_sets) == 1 and self.detector_sets[0] == "ALL":
             # Run the operators with all detectors at once
             for op in self.operators:
-                msg = "{} Pipeline calling operator '{}' exec() with ALL dets".format(
-                    pstr, op.name
-                )
+                msg = f"{pstr} {self} calling operator '{op.name}' exec() with ALL dets"
                 log.verbose(msg)
                 op.exec(data, detectors=None, use_accel=use_accel)
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
@@ -151,12 +145,10 @@ class Pipeline(Operator):
             all_local_dets = data.all_local_detectors(selection=detectors)
             # Run operators one detector at a time
             for det in all_local_dets:
-                msg = "{} Pipeline SINGLE detector {}".format(pstr, det)
+                msg = f"{pstr} {self} SINGLE detector {det}"
                 log.verbose(msg)
                 for op in self.operators:
-                    msg = "{} Pipeline   calling operator '{}' exec()".format(
-                        pstr, op.name
-                    )
+                    msg = f"{pstr} {self} calling operator '{op.name}' exec()"
                     log.verbose(msg)
                     op.exec(data, detectors=[det], use_accel=use_accel)
         else:
@@ -172,12 +164,10 @@ class Pipeline(Operator):
                 if len(selected_set) == 0:
                     # Nothing in this detector set is being used, skip it
                     continue
-                msg = "{} Pipeline detector set {}".format(pstr, selected_set)
+                msg = f"{pstr} {self} detector set {selected_set}"
                 log.verbose(msg)
                 for op in self.operators:
-                    msg = "{} Pipeline   calling operator '{}' exec()".format(
-                        pstr, op.name
-                    )
+                    msg = f"{pstr} {self} calling operator '{op.name}' exec()"
                     log.verbose(msg)
                     op.exec(data, detectors=selected_set, use_accel=use_accel)
 
@@ -188,7 +178,7 @@ class Pipeline(Operator):
         log = Logger.get()
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
-        msg = f"{pstr} Pipeline finalize"
+        msg = f"{pstr} {self} finalize"
         log.verbose(msg)
         
         # FIXME:  We need to clarify in documentation that if using the
@@ -201,21 +191,35 @@ class Pipeline(Operator):
 
         if self.operators is not None:
             for op in self.operators:
-                msg = f"{pstr} Pipeline calling operator '{op.name}' finalize()"
+                msg = f"{pstr} {self} calling operator '{op.name}' finalize()"
                 log.verbose(msg)
                 result.append(op.finalize(data, use_accel=use_accel))
 
         # Copy out from accelerator if we did the copy in.
         if self._staged_accel:
+            # copy out the outputs
             prov = self.provides()
-            msg = f"{pstr} Pipeline copying out accel data products: {prov}"
+            msg = f"{pstr} {self} copying out accel data outputs: {prov}"
             log.verbose(msg)
-            data.accel_update_host(self.provides())
+            data.accel_update_host(prov)
+            # TODO copy out the intermediates
+            #      this is needed as, otherwise, they will get reused by other pipelines despite still being on gpu
+            interm = self._get_intermediate()
+            msg = f"{pstr} {self} copying out accel data intermediate outputs: {interm}"
+            log.verbose(msg)
+            data.accel_update_host(interm)
+            # TODO copy out the inputs
+            #      this is needed as, otherwise, they will get reused by other pipelines despite still being on gpu
+            req = self.requires()
+            msg = f"{pstr} {self} copying out accel data inputs: {req}"
+            log.verbose(msg)
+            data.accel_update_host(req)
         return result
 
     def _requires(self):
-        # Work through the operator list in reverse order and prune intermediate
-        # products.
+        # Work through the operator list in reverse order
+        # and prune intermediate products 
+        # (that will be provided by a previous operator).
         if self.operators is None:
             return dict()
         keys = ["global", "meta", "detdata", "shared", "intervals"]
@@ -234,34 +238,38 @@ class Pipeline(Operator):
         return req
 
     def _provides(self):
-        # Work through the operator list and prune intermediate products.
+        # Work through the operator list
+        # and prune intermediate products 
+        # (that are be provided to an intermediate operator).
+        # FIXME could a final result also be used by an intermediate operator?
         if self.operators is None:
             return dict()
         keys = ["global", "meta", "detdata", "shared", "intervals"]
         prov = {x: set() for x in keys}
         for op in self.operators:
-            # oreq = op.requires()
+            oreq = op.requires()
             oprov = op.provides()
             for k in keys:
                 if k in oprov:
                     prov[k] |= set(oprov[k])
-                # FIXME the following lines look like a copy-paste bug
-                #       an intermediate operator requiring something does not mean that it won't be provided to others anyway
-                # if k in oreq:
-                #     prov[k] -= set(oreq[k])
+                if k in oreq:
+                    prov[k] -= set(oreq[k])
         for k in keys:
             prov[k] = list(prov[k])
         return prov
 
     def _get_intermediate(self):
         keys = ["global", "meta", "detdata", "shared", "intervals"]
+        # full provide minus intermediate
         prov = self.provides()
+        # full provide
         interm = {x: set() for x in keys}
         for op in self.operators:
             oprov = op.provides()
             for k in keys:
                 if k in oprov:
                     interm[k] |= set(oprov[k])
+        # deduce intermediate by subtraction
         for k in keys:
             interm[k] -= set(prov[k])
             interm[k] = list(interm[k])
@@ -277,7 +285,7 @@ class Pipeline(Operator):
                 msg = f"{self} does not support accel because of '{op}'"
                 log.debug(msg)
                 return False
-        print(f"DEBUGGING: {self} supports accel") # TODO
+        #print(f"DEBUGGING: {self} supports accel")
         return True
 
     def __str__(self):

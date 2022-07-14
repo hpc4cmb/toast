@@ -1399,7 +1399,7 @@ class SharedDataManager(MutableMapping):
         if use_accel_omp:
             accel_data_create(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            self.jax[key] = MutableJaxArray(self._internal[key].shdata._flat)
+            self.jax[key] = MutableJaxArray(self._internal[key].shdata)
 
     def accel_update_device(self, key):
         """Copy the named shared data to the accelerator.
@@ -1433,7 +1433,7 @@ class SharedDataManager(MutableMapping):
         if use_accel_omp:
             _ = accel_data_update_device(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            self.jax[key] = MutableJaxArray(self._internal[key].shdata._flat)
+            self.jax[key] = MutableJaxArray(self._internal[key].shdata)
 
         self._accel_used[key] = True
 

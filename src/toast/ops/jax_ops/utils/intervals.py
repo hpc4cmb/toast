@@ -28,3 +28,10 @@ class INTERVALS_JAX(NamedTuple):
         firsts = jnp.empty(shape=0)
         lasts = jnp.empty(shape=0)
         return cls(starts, stops, firsts, lasts)
+    
+    def to_numpy(self, output_buffer):
+        """copies data back into the given buffer"""
+        output_buffer.start[:] = self.starts
+        output_buffer.stop[:] = self.stops
+        output_buffer.first[:] = self.firsts
+        output_buffer.last[:] = self.lasts
