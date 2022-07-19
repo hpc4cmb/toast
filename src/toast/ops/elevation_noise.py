@@ -239,6 +239,10 @@ class ElevationNoise(Operator):
                         views.shared[self.detector_pointing.shared_flags][vw]
                     )
                     flags &= self.detector_pointing.shared_flag_mask
+                    # If there are no valid samples, ignore detector flags and
+                    # *hope* that we can still get an approximate elevation
+                    if np.all(flags != 0):
+                        flags = None
                 view_flags.append(flags)
 
             for det in dets:
