@@ -14,11 +14,38 @@ from ..._libtoast import template_offset_add_to_signal as template_offset_add_to
 # -------------------------------------------------------------------------------------------------
 # JAX
 
+def template_offset_add_to_signal_inner_jax(step_length, offset, amplitudes, det_data, interval_start, n_samp_interval):
+    """
+    Args:
+        step_length (int64):  The minimum number of samples for each offset.
+        offset (int)
+        amplitudes (array, double): The float64 amplitude values (size n_amp)
+        det_data (array, double): The float64 timestream values (size n_samp).
+        interval_start (int): number of elements in the interval
+        n_samp_interval (int): size of the interval
+
+    Returns:
+        det_data (array, double)
+    """
+    # problem size
+    print(f"DEBUG: jit-compiling 'template_offset_add_to_signal' with step_length:{step_length} n_amp:{amplitudes.size} n_samp:{det_data.size} n_samp_interval:{n_samp_interval}")
+    
+    # computes the indices
+    interval_indices = interval_start + jnp.arange(start=0,stop=n_samp_interval)
+    amplitude_indices = offset + interval_indices // step_length
+
+    # does the computation and puts the result in amplitudes
+    amplitudes_interval = amplitudes[amplitude_indices]
+    det_data = det_data.at[interval_indices].add(amplitudes_interval)
+    return det_data
+
+# jit compilation
+template_offset_add_to_signal_inner_jax = jax.jit(template_offset_add_to_signal_inner_jax, static_argnames=['step_length', 'n_samp_interval'])
+
 def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, amplitudes, data_index, det_data, intervals, use_accel):
     """
     Accumulate offset amplitudes to timestream data.
     Each amplitude value is accumulated to `step_length` number of samples.
-    TODO this does not use JAX as there is too little computation
 
     Args:
         step_length (int64):  The minimum number of samples for each offset.
@@ -33,20 +60,24 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, ampl
     Returns:
         None (the result is put in det_data).
     """
-    # problem size
-    #print(f"DEBUG: running 'template_offset_add_to_signal_jax' with n_view:{intervals.size} n_amp:{amplitudes.size} n_all_det:{det_data.shape[0]}")
-    
+    # make sure the data is where we expect it
+    assert_data_localization('template_offset_add_to_signal', use_accel, [amplitudes, det_data], [det_data])
+
+    # moves det_data[index,:] to GPU once for all loop iterations
+    det_data_index_gpu = jnp.array(det_data[data_index, :])
+
     # loop over the intervals
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
         interval_start = interval['first']
         interval_end = interval['last']+1
-        # extract interval slices
-        amplitude_index = offset + (np.arange(interval_start,interval_end) // step_length)
-        amplitudes_interval = amplitudes[amplitude_index]
-        # does the computation and puts the result in amplitudes
-        det_data[data_index, interval_start:interval_end] += amplitudes_interval
+        # does the computation and puts the result in det_data
+        n_samp_interval = interval_end - interval_start
+        det_data_index_gpu = template_offset_add_to_signal_inner_jax(step_length, offset, amplitudes, det_data_index_gpu, interval_start, n_samp_interval)
         offset += view_offset
+
+    # gets data back to CPU
+    det_data[data_index, :] = det_data_index_gpu
 
 def template_offset_project_signal_inner_jax(det_data_samp, flag_data_samp, flag_mask, step_length, offset, amplitudes, interval_start):
     """

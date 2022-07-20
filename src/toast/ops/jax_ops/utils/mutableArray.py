@@ -1,6 +1,8 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 from typing import Tuple
+from pshmem import MPIShared
 
 class MutableJaxArray():
     """
@@ -15,7 +17,11 @@ class MutableJaxArray():
 
     def __init__(self, data):
         """encapsulate an array as a jax array"""
-        self.data = jnp.asarray(data)
+        # makes sure we are dealing with a device_put compatible input
+        if isinstance(data, MPIShared):
+            data = jnp.array(data)
+
+        self.data = jax.device_put(data)
         self.shape = self.data.shape
         self.size = self.data.size
         self.dtype = self.data.dtype
@@ -34,7 +40,7 @@ class MutableJaxArray():
 
         WARNING: this function will likely cost you a copy.
         """
-        return np.array(self.data)
+        return jax.device_get(self.data)
     
     def __setitem__(self, key, value):
         """replace the inner array in place"""

@@ -85,7 +85,7 @@ def stokes_weights_IQU_interval_jax(epsilon, cal, quats, hwp):
 # jit compiling
 stokes_weights_IQU_interval_jax = jax.jit(stokes_weights_IQU_interval_jax, static_argnames=['cal'])
 
-def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accell):
+def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel):
     """
     Compute the Stokes weights for the "IQU" mode.
 
@@ -98,13 +98,13 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
         intervals (array, Interval): The intervals to modify (size n_view)
         epsilon (array, float):  The cross polar response (size n_det).
         cal (float):  A constant to apply to the pointing weights.
-        use_accell (bool): should we use the accelerator
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in weights).
     """
     # make sure the data is where we expect it
-    assert_data_localization('stokes_weights_IQU', use_accell, [quats, hwp, epsilon], [weights])
+    assert_data_localization('stokes_weights_IQU', use_accel, [quats, hwp, epsilon], [weights])
 
     # moves epsilon to GPU once for all loop iterations
     epsilon_gpu = jnp.array(epsilon)
@@ -121,7 +121,7 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
         new_weights_interval = stokes_weights_IQU_interval_jax(epsilon_gpu, cal, quats_interval, hwp_interval)
         weights[weight_index, interval_start:interval_end, :] = new_weights_interval
 
-def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accell):
+def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     """
     Compute the Stokes weights for the "I" mode.
     TODO this does not use JAX as there is too little computation
@@ -131,7 +131,7 @@ def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accell):
         weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp)
         intervals (array, Interval): The intervals to modify (size n_view)
         cal (float):  A constant to apply to the pointing weights.
-        use_accell (bool): should we use the accelerator
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in weights).
@@ -187,7 +187,7 @@ def stokes_weights_IQU_inner_numpy(eps, cal, pin, hwpang, weights):
     weights[1] = np.cos(detang) * eta * cal
     weights[2] = np.sin(detang) * eta * cal
 
-def stokes_weights_IQU_numpy(quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accell):
+def stokes_weights_IQU_numpy(quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel):
     """
     Compute the Stokes weights for the "IQU" mode.
 
@@ -200,7 +200,7 @@ def stokes_weights_IQU_numpy(quat_index, quats, weight_index, weights, hwp, inte
         intervals (array, Interval): The intervals to modify (size n_view)
         epsilon (array, float):  The cross polar response (size n_det).
         cal (float):  A constant to apply to the pointing weights.
-        use_accell (bool): should we use the accelerator
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in weights).
@@ -229,7 +229,7 @@ def stokes_weights_IQU_numpy(quat_index, quats, weight_index, weights, hwp, inte
                     hwp[isamp],
                     weights[w_index,isamp,:])
 
-def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accell):
+def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel):
     """
     Compute the Stokes weights for the "I" mode.
 
@@ -238,7 +238,7 @@ def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accell):
         weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp)
         intervals (array, Interval): The intervals to modify (size n_view)
         cal (float):  A constant to apply to the pointing weights.
-        use_accell (bool): should we use the accelerator
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in weights).

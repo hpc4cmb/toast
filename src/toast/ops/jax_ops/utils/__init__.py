@@ -112,6 +112,45 @@ def select_implementation(f_compiled, f_numpy, f_jax,
     print(f"DEBUG: implementation picked:{implementationType} ({f.__name__})")
     return f
 
+def is_accel_function(f):
+    """
+    Returns true if one of the inputs of a funciton is called use_accel
+    """
+    # https://stackoverflow.com/a/40363565/6422174
+    args_names = f.__code__.co_varnames[:f.__code__.co_argcount]
+    return ('use_accel' in args_names)
+
+def select_implementation(f_compiled, f_numpy, f_jax, 
+                          overide_implementationType=None):
+    """
+    Returns a function that will default to f_compiled for all functions 
+    except the ones having `use_accel` as one of their arguments 
+    In which case, uses one of the function depending on the settings.
+    Set `default_implementationType` if you want one implementation in particular.
+    `default_implementationType` defines the implementation that will be used in the absence of further information.
+    """
+    # defaults to f_compiled if the function has no accel input
+    if not is_accel_function(f_jax):
+        return f_compiled
+    # picks the implementation type to be used on GPU
+    implementationType = overide_implementationType
+    if implementationType is None:
+        if use_accel_jax:
+            implementationType = ImplementationType.JAX
+        elif use_accel_omp:
+            implementationType = ImplementationType.COMPILED
+        else:
+            implementationType = default_implementationType
+    # gets the corresponding function
+    if implementationType == ImplementationType.COMPILED:
+        f_accel = f_compiled
+    elif implementationType == ImplementationType.NUMPY:
+        f_accel = f_numpy
+    else: #implementationType == ImplementationType.JAX:
+        f_accel = f_jax
+    print(f"DEBUG: implementation picked in case of use_accel:{implementationType} ({f_accel.__name__})")
+    return f_accel
+
 #------------------------------------------------------------------------------
 # TIMING
 

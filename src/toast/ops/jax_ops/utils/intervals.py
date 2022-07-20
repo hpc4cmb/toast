@@ -1,3 +1,4 @@
+import jax
 import numpy as np
 import jax.numpy as jnp
 from typing import NamedTuple
@@ -15,10 +16,10 @@ class INTERVALS_JAX(NamedTuple):
 
     @classmethod
     def init(cls, data):
-        starts = data.start
-        stops = data.stop
-        firsts = data.first
-        lasts = data.last
+        starts = jax.device_put(data.start)
+        stops = jax.device_put(data.stop)
+        firsts = jax.device_put(data.first)
+        lasts = jax.device_put(data.last)
         return cls(starts, stops, firsts, lasts)
     
     @classmethod

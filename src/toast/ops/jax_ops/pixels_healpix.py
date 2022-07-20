@@ -92,7 +92,7 @@ def pixels_healpix_interval_jax(hpix, quats, flags, flag_mask, hit_submaps, n_pi
 # jit compiling
 pixels_healpix_interval_jax = jax.jit(pixels_healpix_interval_jax, static_argnames=['hpix', 'flag_mask', 'n_pix_submap', 'nest'])
 
-def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accell):
+def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accel):
     """
     Compute the healpix pixel indices for the detectors.
 
@@ -108,13 +108,13 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
         n_pix_submap (int):  
         nside (int): Used to build the healpix projection object.
         nest (bool): If True, then use NESTED ordering, else RING.
-        use_accell (bool): should we use the accelerator
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (results are stored in pixels and hit_submaps).
     """
     # make sure the data is where we expect it
-    assert_data_localization('pixels_healpix', use_accell, [quats, flags, hit_submaps], [pixels, hit_submaps])
+    assert_data_localization('pixels_healpix', use_accel, [quats, flags, hit_submaps], [pixels, hit_submaps])
 
     # initialize hpix for all computations
     hpix = healpix.HPIX_JAX.init(nside)
@@ -173,7 +173,7 @@ def pixels_healpix_inner_numpy(hpix, quats, nest):
 
     return pixel
 
-def pixels_healpix_numpy(quat_index, quats, flags, flag_mask, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accell):
+def pixels_healpix_numpy(quat_index, quats, flags, flag_mask, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accel):
     """
     Compute the healpix pixel indices for the detectors.
 
@@ -189,7 +189,7 @@ def pixels_healpix_numpy(quat_index, quats, flags, flag_mask, pixel_index, pixel
         n_pix_submap (array, float64):  
         nside (int): Used to build the healpix projection object.
         nest (bool): If True, then use NESTED ordering, else RING.
-        use_accell (bool): should we use the accelerator
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (results are stored in pixels and hit_submaps).

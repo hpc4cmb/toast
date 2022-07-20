@@ -62,7 +62,7 @@ def pointing_detector_interval_jax(focalplane, boresight, shared_flags, shared_f
 # jit compiling
 pointing_detector_interval_jax = jax.jit(pointing_detector_interval_jax, static_argnames='shared_flag_mask')
 
-def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accell):
+def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accel):
     """
     Args:
         focalplane (array, double): size n_det*4
@@ -72,13 +72,13 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
         intervals (array, Interval): The intervals to modify (size n_view)
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
-        use_accell (bool): should we use the accelerator
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in quats).
     """
     # make sure the data is where we expect it
-    # TODO assert_data_localization('pointing_detector', use_accell, [focalplane, boresight, shared_flags], [quats])
+    # TODO assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
 
     # moves focalplane to GPU once for all loop iterations
     focalplane = jnp.array(focalplane)
@@ -115,7 +115,7 @@ def pointing_detector_inner_numpy(flag, boresight, focalplane, mask):
     else:
         quats = focalplane
 
-def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accell):
+def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accel):
     """
     Args:
         focalplane (array, double): size n_det*4
@@ -125,7 +125,7 @@ def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals,
         intervals (array, Interval): The intervals to modify (size n_view)
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
-        use_accell (bool): should weuse the accelerator
+        use_accel (bool): should weuse the accelerator
 
     Returns:
         None (the result is put in quats).
