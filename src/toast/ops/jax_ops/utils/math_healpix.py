@@ -14,6 +14,11 @@ MACHINE_EPSILON = np.finfo(np.float).eps
 # -------------------------------------------------------------------------------------------------
 # JAX
 
+precomputed_HPIx_JAX = dict()
+"""
+Stored precomputed HPIX_JAX for faster computations
+"""
+
 class HPIX_JAX(NamedTuple):
     """
     Encapsulate the information from a hpix structure in a JAX compatible way
@@ -38,6 +43,10 @@ class HPIX_JAX(NamedTuple):
 
     @classmethod
     def init(cls, nside):
+        # return precomputed result if possible
+        if nside in precomputed_HPIx_JAX:
+            return precomputed_HPIx_JAX[nside]
+
         ncap = 2 * (nside * nside - nside)
         npix = 12 * nside * nside
         dnside = float(nside)
@@ -63,7 +72,10 @@ class HPIX_JAX(NamedTuple):
                     ((m & 0x8) << 6) | ((m & 0x10) >> 2) | ((m & 0x20) << 5) | \
                     ((m & 0x40) >> 3) | ((m & 0x80) << 4)
         
-        return cls(nside,npix,ncap,dnside,twonside,fournside,nsideplusone,nsideminusone,halfnside,tqnside,factor,jr,jq,utab,ctab)
+        # stores result for later retrieval
+        result = cls(nside,npix,ncap,dnside,twonside,fournside,nsideplusone,nsideminusone,halfnside,tqnside,factor,jr,jq,utab,ctab)
+        precomputed_HPIx_JAX[nside] = result
+        return result
 
     def xy2pix(self, x, y):
         return self.utab[x & 0xff] \

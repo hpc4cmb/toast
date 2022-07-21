@@ -8,9 +8,6 @@
 # - fix circular import problem in accelerator.py (currently using a ugly fix)
 #   ImportError: cannot import name 'import_from_name' from partially initialized module 'toast.utils' (most likely due to a circular import)
 #
-# - try putting some template_offset operations in a jitted section 
-#   (would be done by default if we can turn intervals into an index)
-#
 # - update scan_map to slightly simplify it (cf associated TODO)
 #
 # - get rid of the self.use_python versions (we have the numpy ones for test purposes)

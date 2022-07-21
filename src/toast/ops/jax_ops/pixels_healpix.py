@@ -117,6 +117,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     assert_data_localization('pixels_healpix', use_accel, [quats, flags, hit_submaps], [pixels, hit_submaps])
 
     # initialize hpix for all computations
+    # TODO how much time does this take?
     hpix = healpix.HPIX_JAX.init(nside)
 
     # should we use flags?

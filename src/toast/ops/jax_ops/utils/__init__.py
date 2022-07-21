@@ -3,6 +3,8 @@ from enum import Enum
 import jax
 import numpy
 
+from ....timing import function_timer
+
 from .mutableArray import MutableJaxArray
 from .asserts import assert_data_localization
 
@@ -148,8 +150,10 @@ def select_implementation(f_compiled, f_numpy, f_jax,
         f_accel = f_numpy
     else: #implementationType == ImplementationType.JAX:
         f_accel = f_jax
+    # wraps the function in a ufnciton timer
+    f = function_timer(f_accel)
     print(f"DEBUG: implementation picked in case of use_accel:{implementationType} ({f_accel.__name__})")
-    return f_accel
+    return f
 
 #------------------------------------------------------------------------------
 # TIMING

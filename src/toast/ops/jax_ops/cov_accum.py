@@ -58,8 +58,6 @@ def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits):
     if type(hits) == AlignedI64: hits = hits.array()
     hits[:] = cov_accum_diag_hits_inner_jax(nsubpix, submap, subpix, hits)
 
-#-----
-
 def cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap, subpix, weights, scale, invnpp):
     """
     Args:
