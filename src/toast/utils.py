@@ -670,7 +670,7 @@ def have_hdf5_parallel():
             with h5py.File(tempfile, "w", driver="mpio", comm=MPI.COMM_SELF) as f:
                 # Yay!
                 hdf5_is_parallel = True
-    except (ValueError, AssertionError) as e:
+    except (ValueError, AssertionError, AttributeError) as e:
         # Nope...
         hdf5_is_parallel = False
     return hdf5_is_parallel
