@@ -498,6 +498,7 @@ class FilterBin(Operator):
             template_covariance = None
 
             for idet, det in enumerate(dets):
+                t1 = time()
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:   Processing detector "
