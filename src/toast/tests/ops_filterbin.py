@@ -149,7 +149,7 @@ class FilterBinTest(MPITestCase):
             return
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, pixel_per_process=4)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
