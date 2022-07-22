@@ -943,9 +943,9 @@ class FilterBin(Operator):
                     log.debug(
                         f"{self.group:4} : FilterBin:     Caching to {fname_cache}*",
                     )
-                np.save(fname_cache + ".data", local_obs_matrix)
-                np.save(fname_cache + ".indices", local_obs_matrix)
-                np.save(fname_cache + ".indptr", local_obs_matrix)
+                np.save(fname_cache + ".data", local_obs_matrix.data)
+                np.save(fname_cache + ".indices", local_obs_matrix.indices)
+                np.save(fname_cache + ".indptr", local_obs_matrix.indptr)
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:     cached in {time() - t1:.2f} s",
