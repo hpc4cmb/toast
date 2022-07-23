@@ -38,7 +38,7 @@ def pointing_detector_inner_jax(focalplane, boresight, flag, mask):
 pointing_detector_inner_jax = jax_xmap(pointing_detector_inner_jax, 
                                        in_axes=[['detectors',...], # focalplane
                                                 ['samples',...], # boresight
-                                                ['samples'], # samples
+                                                ['samples'], # flags
                                                 [...]], # mask
                                        out_axes=['detectors','samples',...])
 
@@ -78,10 +78,12 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
         None (the result is put in quats).
     """
     # make sure the data is where we expect it
-    # TODO assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
+    # TODO input data is not on GPU for no but this should be solved later when a fixit is implemented
+    # assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
 
     # moves focalplane to GPU once for all loop iterations
-    focalplane = jnp.array(focalplane)
+    #TODO focalplane = jnp.array(focalplane)
+    focalplane = jax.device_put(focalplane)
 
     # we loop over intervals
     for interval in intervals:

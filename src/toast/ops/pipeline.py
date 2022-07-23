@@ -94,40 +94,13 @@ class Pipeline(Operator):
                 # All our operators support it.
                 msg = f"{self} fully supports accelerators, data to be staged: {self.requires()}"
                 log.verbose_rank(msg, comm=data.comm.comm_world)
-
-                interm = self._get_intermediate()
-                log.verbose(f"intermediate = {interm}")
-                for ob in data.obs:
-                    # Deals with data existing on the host from a previous call, but 
-                    # not on the device.  Delete the host copy so that it will
-                    # be re-created consistently.
-                    for obj in interm["detdata"]:
-                        if obj in ob.detdata and not ob.detdata.accel_exists(obj):
-                            msg = f"Pipeline intermediate detdata '{obj}' in "
-                            msg += f"observation '{ob.name}' exists on "
-                            msg += f"the host but not the device.  Deleting."
-                            log.verbose_rank(msg, comm=data.comm.comm_group)
-                            del ob.detdata[obj]
-                    for obj in interm["shared"]:
-                        if obj in ob.shared and not ob.shared.accel_exists(obj):
-                            msg = f"Pipeline intermediate shared data '{obj}' in "
-                            msg += f"observation '{ob.name}' exists on "
-                            msg += f"the host but not the device.  Deleting."
-                            log.verbose_rank(msg, comm=data.comm.comm_group)
-                            del ob.shared[obj]
-                    for obj in interm["intervals"]:
-                        if obj in ob.intervals and not ob.intervals.accel_exists(obj):
-                            msg = f"Pipeline intermediate intervals '{obj}' in "
-                            msg += f"observation '{ob.name}' exists on "
-                            msg += f"the host but not the device.  Deleting."
-                            log.verbose_rank(msg, comm=data.comm.comm_group)
-                            del ob.intervals[obj]
-
-                data.accel_create(self.requires())
-                data.accel_update_device(self.requires())
-
                 use_accel = True
-                self._staged_accel = True
+
+            # those functions are out of the previoustest to appear on the profile independently of the value of use_accel
+            # deletes leftover intermediate values
+            self._delete_intermediates(data, use_accel)
+            # send the requirements to the device
+            self._stage_requirements_to_device(data, use_accel)
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -172,6 +145,49 @@ class Pipeline(Operator):
                     op.exec(data, detectors=selected_set, use_accel=use_accel)
 
         return
+
+    @function_timer
+    def _delete_intermediates(self, data, use_accel):
+        """
+        Deals with data existing on the host from a previous call, but 
+        not on the device.  Delete the host copy so that it will
+        be re-created consistently.
+        """
+        if use_accel:
+            log = Logger.get()
+            interm = self._get_intermediate()
+            log.verbose(f"intermediate = {interm}")
+            for ob in data.obs:
+                for obj in interm["detdata"]:
+                    if obj in ob.detdata and not ob.detdata.accel_exists(obj):
+                        msg = f"Pipeline intermediate detdata '{obj}' in "
+                        msg += f"observation '{ob.name}' exists on "
+                        msg += f"the host but not the device.  Deleting."
+                        log.verbose_rank(msg, comm=data.comm.comm_group)
+                        del ob.detdata[obj]
+                for obj in interm["shared"]:
+                    if obj in ob.shared and not ob.shared.accel_exists(obj):
+                        msg = f"Pipeline intermediate shared data '{obj}' in "
+                        msg += f"observation '{ob.name}' exists on "
+                        msg += f"the host but not the device.  Deleting."
+                        log.verbose_rank(msg, comm=data.comm.comm_group)
+                        del ob.shared[obj]
+                for obj in interm["intervals"]:
+                    if obj in ob.intervals and not ob.intervals.accel_exists(obj):
+                        msg = f"Pipeline intermediate intervals '{obj}' in "
+                        msg += f"observation '{ob.name}' exists on "
+                        msg += f"the host but not the device.  Deleting."
+                        log.verbose_rank(msg, comm=data.comm.comm_group)
+                        del ob.intervals[obj]
+
+    @function_timer
+    def _stage_requirements_to_device(self, data, use_accel):
+        """move required data to the device"""
+        if use_accel:
+            requires = self.requires()
+            data.accel_create(requires)
+            data.accel_update_device(requires)
+            self._staged_accel = True
 
     @function_timer
     def _finalize(self, data, use_accel=False, **kwargs):

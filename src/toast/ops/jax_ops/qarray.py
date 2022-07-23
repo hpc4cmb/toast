@@ -12,15 +12,44 @@ from ...qarray import mult as mult_compiled
 #-------------------------------------------------------------------------------------------------
 # JAX
 
+# def mult_one_one_jax(p, q):
+#    """
+#    compose two quaternions
+#
+#    NOTE: this version uses an explicit shuffling of the coordinates
+#    """
+#    r0 =  p[0] * q[3] + p[1] * q[2] - p[2] * q[1] + p[3] * q[0]
+#    r1 = -p[0] * q[2] + p[1] * q[3] + p[2] * q[0] + p[3] * q[1]
+#    r2 =  p[0] * q[1] - p[1] * q[0] + p[2] * q[3] + p[3] * q[2]
+#    r3 = -p[0] * q[0] - p[1] * q[1] - p[2] * q[2] + p[3] * q[3]
+#    return jnp.array([r0,r1,r2,r3])
+
 def mult_one_one_jax(p, q):
     """
     compose two quaternions
+
+    NOTE: this version use a tensor product to keep computation to matrix products
     """
-    r0 =  p[0] * q[3] + p[1] * q[2] - p[2] * q[1] + p[3] * q[0]
-    r1 = -p[0] * q[2] + p[1] * q[3] + p[2] * q[0] + p[3] * q[1]
-    r2 =  p[0] * q[1] - p[1] * q[0] + p[2] * q[3] + p[3] * q[2]
-    r3 = -p[0] * q[0] - p[1] * q[1] - p[2] * q[2] + p[3] * q[3]
-    return jnp.array([r0,r1,r2,r3])
+    # reshuffles q into a matrix
+    mat = jnp.array([[[ 0, 0, 0,-1], # row1
+                      [ 0, 0, 1, 0],
+                      [ 0,-1, 0, 0],
+                      [ 1, 0, 0, 0]],
+                      [[ 0, 0,-1, 0], # row2
+                      [ 0, 0, 0,-1],
+                      [ 1, 0, 0, 0],
+                      [ 0, 1, 0, 0]],
+                      [[ 0,1, 0, 0], # row3
+                      [-1, 0, 0, 0],
+                      [ 0, 0, 0,-1],
+                      [ 0, 0, 1, 0]],
+                      [[1, 0, 0, 0], # row4
+                      [ 0,1, 0, 0],
+                      [ 0, 0,1, 0],
+                      [ 0, 0, 0, 1]]]) 
+    qMat = jnp.dot(q,mat)
+    # multiplies p with the reshuffled q
+    return jnp.dot(p, qMat)
 
 # loops on either or both of the inputs
 mult_one_many_jax = jax.vmap(mult_one_one_jax, in_axes=(None,0), out_axes=0)
