@@ -112,9 +112,11 @@ class Demodulate(Operator):
         help="Observation key containing the noise model",
     )
 
-    wkernel = Int(None, allow_none=True, help="kernel size of filter")
+    wkernel = Int(None, allow_none=True, help="Override automatic filter kernel size")
 
-    fmax = Quantity(None, allow_none=True, help="Maximum frequency for lowpass")
+    fmax = Quantity(
+        None, allow_none=True, help="Override automatic lowpass cut-off frequency"
+    )
 
     nskip = Int(3, help="Downsampling factor")
 
