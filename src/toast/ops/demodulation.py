@@ -183,6 +183,8 @@ class Demodulate(Operator):
         if self.do_2f:
             self.prefixes.extend(["demod2r", "demod2i"])
 
+        timer = Timer()
+        timer.start()
         for obs in demodulate_obs:
             dets = obs.select_local_detectors(detectors)
 
@@ -244,6 +246,19 @@ class Demodulate(Operator):
             self._demodulate_intervals(obs, demod_obs)
 
             self.demod_data.obs.append(demod_obs)
+
+            if self.purge:
+                if self.shared_flags is not None:
+                    del obs.shared[self.shared_flags]
+                del obs.detdata[self.det_data]
+                if self.det_flags is not None:
+                    del obs.detdata[self.det_flags]
+                if self.noise_model is not None:
+                    del obs[self.noise_model]
+
+            log.debug_rank(
+                "Demodulated observation in", comm=data.comm.comm_group, timer=timer
+            )
 
         return
 
@@ -432,9 +447,6 @@ class Demodulate(Operator):
                 det_data[f"demod2r_{det}"] = lowpass(signal * signal_demod2r)
                 det_data[f"demod2i_{det}"] = lowpass(signal * signal_demod2i)
 
-        if self.purge:
-            del obs.det_data[self.det_data]
-
         return
 
     @function_timer
@@ -446,8 +458,6 @@ class Demodulate(Operator):
         demod_obs.shared[self.shared_flags].set(
             demod_shared_flags, offset=(0,), fromrank=0
         )
-        if self.purge:
-            del obs.shared[self.shared_flags]
 
         for det in dets:
             flags = obs.detdata[self.det_flags][det]
@@ -456,8 +466,6 @@ class Demodulate(Operator):
             for prefix in self.prefixes:
                 demod_det = f"{prefix}_{det}"
                 demod_obs.detdata[self.det_flags][demod_det] = demod_flags
-        if self.purge:
-            del obs.detdata[self.det_flags]
         return
 
     @function_timer
@@ -571,8 +579,6 @@ class Demodulate(Operator):
             psds=demod_psds,
             indices=demod_indices,
         )
-        if self.purge:
-            del obs[self._noise]
         return
 
     def _finalize(self, data, **kwargs):
@@ -665,6 +671,7 @@ class StokesWeightsDemod(Operator):
                 else:
                     # 2f, systematics only
                     weights[det] = np.column_stack([zeros, zeros, zeros])
+        return
 
     def _finalize(self, data, **kwargs):
         return
