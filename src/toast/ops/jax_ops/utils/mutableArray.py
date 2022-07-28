@@ -17,11 +17,21 @@ class MutableJaxArray():
 
     def __init__(self, data):
         """encapsulate an array as a jax array"""
-        # makes sure we are dealing with a device_put compatible input
-        if isinstance(data, MPIShared):
-            data = jnp.array(data)
+        # gets the data into jax
+        if isinstance(data, jax.numpy.ndarray):
+            # already a jax array, does nothing to avoid useless copying
+            self.data = data
+        elif isinstance(data, MPIShared):
+            # not numpy compatible enough for device_put
+            # NOTE: get inner numpy field, raw numpy conversion is very expensive
+            data = data.data
+            self.data = jax.device_put(data)
+        else:
+            # converts to jax while insuring we send data to GPU
+            # NOTE: device_put is faster than jnp.array, especially on CPU
+            self.data = jax.device_put(data)
 
-        self.data = jax.device_put(data)
+        # gets basic information on the data
         self.shape = self.data.shape
         self.size = self.data.size
         self.dtype = self.data.dtype
