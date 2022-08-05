@@ -48,7 +48,9 @@ def template_offset_add_to_signal_inner_jax(step_length, amplitudes, data):
     return data
 
 # jit compilation
-template_offset_add_to_signal_inner_jax = jax.jit(template_offset_add_to_signal_inner_jax, static_argnames=['step_length'], donate_argnums=[2])
+template_offset_add_to_signal_inner_jax = jax.jit(template_offset_add_to_signal_inner_jax, 
+                                                  static_argnames=['step_length'], 
+                                                  donate_argnums=[2])
 
 def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, amplitudes, data_index, det_data, intervals, use_accel):
     """
@@ -70,8 +72,6 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, ampl
     """
     # make sure the data is where we expect it
     assert_data_localization('template_offset_add_to_signal', use_accel, [amplitudes, det_data], [det_data])
-
-    # TODO 15.17s slower (total) than omp version in bench
 
     # loop over the intervals
     offset = amp_offset

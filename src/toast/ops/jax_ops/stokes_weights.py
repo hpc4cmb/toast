@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType
+from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
 from .utils import math_qarray as qarray
 from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
 
@@ -107,7 +107,7 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
     assert_data_localization('stokes_weights_IQU', use_accel, [quats, hwp, epsilon], [weights])
 
     # moves epsilon to GPU once for all loop iterations
-    epsilon_gpu = jnp.array(epsilon)
+    epsilon_gpu = optional_put_device(epsilon)
 
     # we loop over intervals
     for interval in intervals:

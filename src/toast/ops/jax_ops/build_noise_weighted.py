@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, MutableJaxArray
+from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -93,9 +93,9 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     use_shared_flags = (shared_flags.size == n_samp)
 
     # moves some data to GPU once for all loop iterations
-    zmap_gpu = zmap.data if isinstance(zmap, MutableJaxArray) else jax.device_put(zmap)
-    global2local_gpu = jax.device_put(global2local)
-    det_scale_gpu = jax.device_put(det_scale)
+    zmap_gpu = optional_put_device(zmap)
+    global2local_gpu = optional_put_device(global2local)
+    det_scale_gpu = optional_put_device(det_scale)
 
     # we loop over intervals
     for interval in intervals:

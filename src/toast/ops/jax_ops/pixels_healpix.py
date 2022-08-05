@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
+from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix, optional_put_device
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -126,8 +126,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     use_flags = (flag_mask != 0) and (flags.size == n_samp)
 
     # moves hit_submaps to GPU once for all loop iterations
-    # TODO do NOT do that if we are dealing with GPU data or running on CPU
-    hit_submaps_gpu = jax.device_put(hit_submaps)
+    hit_submaps_gpu = optional_put_device(hit_submaps)
 
     # loop on the intervals
     for interval in intervals:

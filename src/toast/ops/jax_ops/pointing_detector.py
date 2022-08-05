@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, MutableJaxArray
+from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
 from ..._libtoast import pointing_detector as pointing_detector_compiled
 from ..._libtoast import Logger
@@ -81,10 +81,8 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     # TODO input data is not on GPU for no but this should be solved later when a fixit is implemented
     # assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
 
-    # TODO 32.28s slower (total) than omp version in bench
-
     # moves focalplane to GPU once for all loop iterations
-    focalplane = jax.device_put(focalplane)
+    focalplane = optional_put_device(focalplane)
 
     # we loop over intervals
     for interval in intervals:

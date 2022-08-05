@@ -99,7 +99,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         flags_interval = flags[start:stop] # scanlen
         signals_interval = signals[start:stop,:] # scanlen*nsignal        
         # updates signal interval
-        signals_interval[:] = filter_polynomial_interval(flags_interval, signals_interval, order)
+        signals[start:stop,:] = filter_polynomial_interval(flags_interval, signals_interval, order)
 
     # puts new signals back into the list
     for isignal, signal in enumerate(signals_list):

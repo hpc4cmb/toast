@@ -44,12 +44,17 @@ devices_available = jax.devices()
 print(f"DEBUG: JAX devices:{devices_available}")
 
 # the device used by JAX on this process
-# TODO this is currently not used
 my_device = devices_available[0]
 """
     The device that JAX operators should be using
     Use the function `set_JAX_device` to set this value to something else than the first device
     Use like this in your JAX code: `jax.device_put(data, device=my_device)`
+"""
+
+# whether we are running on CPU
+use_cpu = my_device.platform == "cpu"
+"""
+    Are we using the CPU?
 """
 
 def set_JAX_device(process_id):
@@ -71,6 +76,22 @@ def set_JAX_device(process_id):
     global my_device
     my_device = devices_available[device_id]
     print(f"DEBUG: JAX uses device number {device_id} ({my_device})")
+
+def optional_put_device(data):
+    """
+    Moves data to device if:
+    - the data is on CPU
+    - we are not using JAX on CPU
+    """
+    if isinstance(data, MutableJaxArray):
+        # already on GPU, get internal buffer
+        return data.data
+    elif isinstance(data, jax.numpy.ndarray) or use_cpu:
+        # already on GPU or no GPU used
+        return data
+    else:
+        # moves data to the GPU
+        return jax.device_put(data)
 
 #------------------------------------------------------------------------------
 # IMPLEMENTATION SELECTION

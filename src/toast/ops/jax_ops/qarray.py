@@ -89,7 +89,7 @@ def mult_jax(p_in, q_in):
     """
     out = mult_pure_jax(p_in, q_in)
     # converts back to input type if needed
-    return np.array(out) if isinstance(p_in, np.ndarray) else out
+    return jax.device_get(out) if isinstance(p_in, np.ndarray) else out
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
