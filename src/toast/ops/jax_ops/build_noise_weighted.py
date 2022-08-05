@@ -17,7 +17,6 @@ from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask):
     """
     Process a full interval at once.
-    NOTE: this function was added for debugging purposes, one could replace it with `build_noise_weighted_inner_jax`
 
     Args:
         global2local (array, int): size n_global_submap
@@ -58,7 +57,9 @@ def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_d
     return zmap
 
 # jit compiling
-build_noise_weighted_interval_jax = jax.jit(build_noise_weighted_interval_jax, static_argnames=['det_flag_mask','shared_flag_mask'])
+build_noise_weighted_interval_jax = jax.jit(build_noise_weighted_interval_jax, 
+                                            static_argnames=['det_flag_mask','shared_flag_mask'],
+                                            donate_argnums=[1])
 
 def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, intervals, shared_flags, shared_flag_mask, use_accel):
     """
@@ -92,9 +93,9 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     use_shared_flags = (shared_flags.size == n_samp)
 
     # moves some data to GPU once for all loop iterations
-    zmap_gpu = zmap.data if isinstance(zmap, MutableJaxArray) else jnp.array(zmap)
-    global2local_gpu = jnp.array(global2local)
-    det_scale_gpu = jnp.array(det_scale)
+    zmap_gpu = zmap.data if isinstance(zmap, MutableJaxArray) else jax.device_put(zmap)
+    global2local_gpu = jax.device_put(global2local)
+    det_scale_gpu = jax.device_put(det_scale)
 
     # we loop over intervals
     for interval in intervals:

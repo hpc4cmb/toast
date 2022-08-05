@@ -36,7 +36,9 @@ def cov_accum_diag_hits_inner_jax(nsubpix, submap, subpix, hits):
     return hits.ravel()
 
 # jit compiling
-cov_accum_diag_hits_inner_jax = jax.jit(cov_accum_diag_hits_inner_jax, static_argnames=['nsubpix'])
+cov_accum_diag_hits_inner_jax = jax.jit(cov_accum_diag_hits_inner_jax, 
+                                        static_argnames=['nsubpix'],
+                                        donate_argnums=[3])
 
 def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits):
     """
@@ -104,7 +106,9 @@ def cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap, subpix, weights, scale
     return invnpp.ravel()
 
 # jit compiling
-cov_accum_diag_invnpp_inner_jax = jax.jit(cov_accum_diag_invnpp_inner_jax, static_argnames=['nsubpix','nnz'])
+cov_accum_diag_invnpp_inner_jax = jax.jit(cov_accum_diag_invnpp_inner_jax, 
+                                          static_argnames=['nsubpix','nnz'],
+                                          donate_argnums=[6])
 
 def cov_accum_diag_invnpp_jax(nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp):
     """

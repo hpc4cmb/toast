@@ -151,7 +151,6 @@ class MutableJaxArray():
         """
         produces a new array with a different shape
         WARNING: this will copy the data and *not* propagate modifications to the older array
-        TODO: would it be sensible to do this operation in place, reusing the underlying buffer?
         """
         reshaped_data = jnp.reshape(self.data, newshape=shape)
         return MutableJaxArray(reshaped_data)

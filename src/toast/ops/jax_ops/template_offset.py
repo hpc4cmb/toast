@@ -48,7 +48,7 @@ def template_offset_add_to_signal_inner_jax(step_length, amplitudes, data):
     return data
 
 # jit compilation
-template_offset_add_to_signal_inner_jax = jax.jit(template_offset_add_to_signal_inner_jax, static_argnames=['step_length'])
+template_offset_add_to_signal_inner_jax = jax.jit(template_offset_add_to_signal_inner_jax, static_argnames=['step_length'], donate_argnums=[2])
 
 def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, amplitudes, data_index, det_data, intervals, use_accel):
     """
@@ -129,7 +129,9 @@ def template_offset_project_signal_inner_jax(data, flags, flag_mask, step_length
     return amplitudes
 
 # jit compilation
-template_offset_project_signal_inner_jax = jax.jit(template_offset_project_signal_inner_jax, static_argnames=['flag_mask','step_length'])
+template_offset_project_signal_inner_jax = jax.jit(template_offset_project_signal_inner_jax, 
+                                                   static_argnames=['flag_mask','step_length'],
+                                                   donate_argnums=[4])
 
 def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_data, flag_mask, step_length, amp_offset, n_amp_views, amplitudes, intervals, use_accel):
     """

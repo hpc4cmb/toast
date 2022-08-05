@@ -90,7 +90,9 @@ def pixels_healpix_interval_jax(hpix, quats, flags, flag_mask, hit_submaps, n_pi
 
 
 # jit compiling
-pixels_healpix_interval_jax = jax.jit(pixels_healpix_interval_jax, static_argnames=['hpix', 'flag_mask', 'n_pix_submap', 'nest'])
+pixels_healpix_interval_jax = jax.jit(pixels_healpix_interval_jax, 
+                                      static_argnames=['hpix', 'flag_mask', 'n_pix_submap', 'nest'],
+                                      donate_argnums=[4])
 
 def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels, intervals, hit_submaps, n_pix_submap, nside, nest, use_accel):
     """
@@ -117,7 +119,6 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     assert_data_localization('pixels_healpix', use_accel, [quats, flags, hit_submaps], [pixels, hit_submaps])
 
     # initialize hpix for all computations
-    # TODO how much time does this take?
     hpix = healpix.HPIX_JAX.init(nside)
 
     # should we use flags?
@@ -125,7 +126,8 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     use_flags = (flag_mask != 0) and (flags.size == n_samp)
 
     # moves hit_submaps to GPU once for all loop iterations
-    hit_submaps_gpu = jnp.array(hit_submaps)
+    # TODO do NOT do that if we are dealing with GPU data or running on CPU
+    hit_submaps_gpu = jax.device_put(hit_submaps)
 
     # loop on the intervals
     for interval in intervals:
