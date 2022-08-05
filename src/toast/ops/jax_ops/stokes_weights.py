@@ -8,8 +8,8 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
-from .utils import math_qarray as qarray
+from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device, math_qarray as qarray
+from .utils.mutableArray import reorder_by_index_jitted, MutableJaxArray
 from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -93,7 +93,7 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
         quat_index (array, int): size n_det
         quats (array, double): size ???*n_samp*4
         weight_index (array, int): The indexes of the weights (size n_det)
-        weights (array, float64): The flat packed detectors weights for the specified mode (size ???*n_samp*3)
+        weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp*3)
         hwp (array, float64):  The HWP angles (size n_samp).
         intervals (array, Interval): The intervals to modify (size n_view)
         epsilon (array, float):  The cross polar response (size n_det).
@@ -109,17 +109,30 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
     # moves epsilon to GPU once for all loop iterations
     epsilon_gpu = optional_put_device(epsilon)
 
+    # does the indexing once and for all
+    if isinstance(quats, MutableJaxArray):
+        quats = quats.data[quat_index,:,:]
+    else:
+        quats = quats[quat_index,:,:]
+
     # we loop over intervals
     for interval in intervals:
         interval_start = interval['first']
         interval_end = interval['last']+1
         # extract interval slices
-        quats_interval = quats[quat_index, interval_start:interval_end, :]
+        quats_interval = quats[:, interval_start:interval_end, :]
         hwp_interval = hwp[interval_start:interval_end]
         # does the computation and puts the result in weights
         # needs to modify wights directly (rather than a view), otherwise there weights are not modified in place
         new_weights_interval = stokes_weights_IQU_interval_jax(epsilon_gpu, cal, quats_interval, hwp_interval)
-        weights[weight_index, interval_start:interval_end, :] = new_weights_interval
+        weights[:, interval_start:interval_end, :] = new_weights_interval  # NOTE: we ignore weight_index and will shuffle once later
+    
+    # reshuffles outputs according to weight_index
+    if isinstance(weights, MutableJaxArray):
+        # NOTE: one could omit this line but it might lead to avoidable data copying
+        weights.data = reorder_by_index_jitted(weights.data, weight_index)
+    else:
+        weights[:,:,:] = reorder_by_index_jitted(weights[:,:,:], weight_index)
 
 def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     """

@@ -8,6 +8,8 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
+from toast.ops.jax_ops.utils.mutableArray import MutableJaxArray
+
 from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
@@ -111,7 +113,10 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
         zmap_gpu = build_noise_weighted_interval_jax(global2local_gpu, zmap_gpu, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale_gpu, det_flag_mask, shared_flags_interval, shared_flag_mask)
 
     # gets zmap back to its original format
-    zmap[:] = zmap_gpu
+    if isinstance(zmap, MutableJaxArray):
+        zmap.data = zmap_gpu
+    else:
+        zmap[:] = zmap_gpu
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

@@ -9,6 +9,7 @@ import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
+from .utils.mutableArray import reorder_by_index_jitted, MutableJaxArray
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
 from ..._libtoast import pointing_detector as pointing_detector_compiled
 from ..._libtoast import Logger
@@ -68,7 +69,7 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
         focalplane (array, double): size n_det*4
         boresight (array, double): size n_samp*4
         quat_index (array, int): size n_det
-        quats (array, double): size ???*n_samp*4
+        quats (array, double): size n_det*n_samp*4
         intervals (array, Interval): The intervals to modify (size n_view)
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
@@ -93,7 +94,14 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
         shared_flags_interval = shared_flags[interval_start:interval_end]
         # process the interval then updates quats in place
         new_quats_interval = pointing_detector_interval_jax(focalplane, boresight_interval, shared_flags_interval, shared_flag_mask)
-        quats[quat_index, interval_start:interval_end, :] = new_quats_interval
+        quats[:, interval_start:interval_end, :] = new_quats_interval # NOTE: we ignore quat_index and will shuffle once later
+
+    # reshuffles outputs according to quat_index
+    if isinstance(quats, MutableJaxArray):
+        # NOTE: one could omit this line but it might lead to avoidable data copying
+        quats.data = reorder_by_index_jitted(quats.data, quat_index)
+    else:
+        quats[:,:,:] = reorder_by_index_jitted(quats[:,:,:], quat_index)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
