@@ -9,8 +9,7 @@ from pshmem import MPIShared
 
 def to_start_inner(key):
     """
-    converts a slice into its begining
-    returns everything else untouched
+    converts a slice or integer index into its start
     """
     if isinstance(key, slice):
         return 0 if (key.start is None) else key.start
@@ -24,20 +23,56 @@ def to_start(key):
     NOTE: this cannot be jitted
     """
     if isinstance(key, tuple):
-        # ensures the key is a tuple
-        return (to_start_inner(key),)
-    else:
         # iterates on all elements of a tuple
         return tuple(to_start_inner(k) for k in key)
+    else:
+        # ensures the key is a tuple
+        return (to_start_inner(key),)
+
+def to_size_inner(key,fullsize):
+    """
+    converts a slice or integer index into its size
+    """
+    if isinstance(key, slice):
+        start = 0 if (key.start is None) else key.start
+        stop = fullsize if (key.stop is None) else key.stop
+        return stop - start
+    else:
+        return 1
+
+def to_size(key,shape):
+    """
+    Converts an array index into its sizes
+    and ensures that the output is a tuple
+    NOTE: this cannot be jitted
+    """
+    if isinstance(key, tuple):
+        # iterates on all elements of a tuple
+        return tuple(to_size_inner(k,s) for (k,s) in zip(key,shape))
+    else:
+        # ensures the key is a tuple
+        size = shape[0]
+        return (to_size_inner(key,size),)
+
+#-----
 
 def update_in_place(data, value, start):
     """
-    Performs data[key] = value
+    Performs data[key] = value where key is deduced from start and value.shape
     jit-compiled with buffer donation to ensure that the operation is done in place
-    NOTE: as this function is jitted, you don't want to call it with a wide variety of sizes
+    NOTE: as this function is jitted, you don't want to call it with different sizes every time
     """
     return jax.lax.dynamic_update_slice(data, value, start)
 update_in_place = jax.jit(fun=update_in_place, donate_argnums=[0])
+
+def get_jitted(data, start, size):
+    """
+    Returns data[key] where key is deduced from start and value.shape
+    jit-compiled for improved performance
+    NOTE: as this function is jitted, you don't want to call it with different sizes every time
+    """
+    return jax.lax.dynamic_slice(data, start, size)
+get_jitted = jax.jit(fun=get_jitted, static_argnames=['size'])
 
 #----------------------------------------------------------------------------------------
 # Mutable array
@@ -95,20 +130,28 @@ class MutableJaxArray():
         return jax.device_get(self.data)
     
     def __setitem__(self, key, value):
-        """updates the inner array in place"""
+        """
+        updates the inner array in place
+        """
         #self.data = self.data.at[key].set(value)
         start = to_start(key)
         self.data = update_in_place(self.data, value, start)
 
     def __getitem__(self, key):
-        """access the inner array"""
-        return self.data[key]
+        """
+        access the inner array
+        NOTE: surprisingly, this benefits from jitting
+        """
+        #return self.data[key]
+        start = to_start(key)
+        size = to_size(key, self.shape)
+        return get_jitted(self.data, start, size)
     
     def reshape(self, shape):
         """
         produces a new array with a different shape
         WARNING: this will copy the data and *not* propagate modifications to the older array
-        TODO: would it be sensible to do this operation in place?
+        TODO: would it be sensible to do this operation in place, reusing the underlying buffer?
         """
         reshaped_data = jnp.reshape(self.data, newshape=shape)
         return MutableJaxArray(reshaped_data)
