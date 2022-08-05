@@ -7,17 +7,28 @@ from pshmem import MPIShared
 #----------------------------------------------------------------------------------------
 # In-place operations
 
-def to_start(key):
+def to_start_inner(key):
     """
-    Recurcively converts an array index into its starting positions
-    NOTE: this cannot be jitted
+    converts a slice into its begining
+    returns everything else untouched
     """
     if isinstance(key, slice):
         return 0 if (key.start is None) else key.start
-    elif isinstance(key, tuple):
-        return tuple(to_start(k) for k in key)
     else:
         return key
+
+def to_start(key):
+    """
+    Converts an array index into its starting positions
+    and ensures that the output is a tuple
+    NOTE: this cannot be jitted
+    """
+    if isinstance(key, tuple):
+        # ensures the key is a tuple
+        return (to_start_inner(key),)
+    else:
+        # iterates on all elements of a tuple
+        return tuple(to_start_inner(k) for k in key)
 
 def update_in_place(data, value, start):
     """
