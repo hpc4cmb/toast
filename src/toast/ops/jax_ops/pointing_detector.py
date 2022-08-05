@@ -81,8 +81,9 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     # TODO input data is not on GPU for no but this should be solved later when a fixit is implemented
     # assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
 
+    # TODO 32.28s slower (total) than omp version in bench
+
     # moves focalplane to GPU once for all loop iterations
-    #TODO focalplane = jnp.array(focalplane)
     focalplane = jax.device_put(focalplane)
 
     # we loop over intervals

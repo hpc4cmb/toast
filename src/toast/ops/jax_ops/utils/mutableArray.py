@@ -4,6 +4,33 @@ import numpy as np
 from typing import Tuple
 from pshmem import MPIShared
 
+#----------------------------------------------------------------------------------------
+# In-place operations
+
+def to_start(key):
+    """
+    Recurcively converts an array index into its starting positions
+    NOTE: this cannot be jitted
+    """
+    if isinstance(key, slice):
+        return 0 if (key.start is None) else key.start
+    elif isinstance(key, tuple):
+        return tuple(to_start(k) for k in key)
+    else:
+        return key
+
+def update_in_place(data, value, start):
+    """
+    Performs data[key] = value
+    jit-compiled with buffer donation to ensure that the operation is done in place
+    NOTE: as this function is jitted, you don't want to call it with a wide variety of sizes
+    """
+    return jax.lax.dynamic_update_slice(data, value, start)
+update_in_place = jax.jit(fun=update_in_place, donate_argnums=[0])
+
+#----------------------------------------------------------------------------------------
+# Mutable array
+
 class MutableJaxArray():
     """
     This class encapsulate a jax array to give the illusion of mutability
@@ -57,8 +84,10 @@ class MutableJaxArray():
         return jax.device_get(self.data)
     
     def __setitem__(self, key, value):
-        """replace the inner array in place"""
-        self.data = self.data.at[key].set(value)
+        """updates the inner array in place"""
+        #self.data = self.data.at[key].set(value)
+        start = to_start(key)
+        self.data = update_in_place(self.data, value, start)
 
     def __getitem__(self, key):
         """access the inner array"""
@@ -68,6 +97,7 @@ class MutableJaxArray():
         """
         produces a new array with a different shape
         WARNING: this will copy the data and *not* propagate modifications to the older array
+        TODO: would it be sensible to do this operation in place?
         """
         reshaped_data = jnp.reshape(self.data, newshape=shape)
         return MutableJaxArray(reshaped_data)
