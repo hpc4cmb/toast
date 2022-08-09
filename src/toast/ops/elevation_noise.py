@@ -334,11 +334,11 @@ class ElevationNoise(Operator):
         weights_out = np.array(self.weights_out)
         rates = np.array(self.rates)
         if comm is not None:
-            net_factors = comm.gather(self.net_factors)
-            total_factors = comm.gather(self.total_factors)
-            weights_in = comm.gather(self.weights_in)
-            weights_out = comm.gather(self.weights_out)
-            rates = comm.gather(self.rates)
+            net_factors = comm.gather(net_factors)
+            total_factors = comm.gather(total_factors)
+            weights_in = comm.gather(weights_in)
+            weights_out = comm.gather(weights_out)
+            rates = comm.gather(rates)
             if comm.rank == 0:
                 net_factors = np.hstack(net_factors)
                 total_factors = np.hstack(total_factors)
