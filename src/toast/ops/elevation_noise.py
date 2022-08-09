@@ -330,8 +330,8 @@ class ElevationNoise(Operator):
         comm = data.comm.comm_world
         net_factors = np.array(self.net_factors)
         total_factors = np.array(self.total_factors)
-        weighsts_in = np.array(self.weights_in)
-        weighsts_out = np.array(self.weights_out)
+        weights_in = np.array(self.weights_in)
+        weights_out = np.array(self.weights_out)
         rates = np.array(self.rates)
         if comm is not None:
             net_factors = comm.gather(self.net_factors)
