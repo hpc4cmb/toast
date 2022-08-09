@@ -309,7 +309,6 @@ class ElevationNoise(Operator):
 
                 out_noise.psd(det)[:] *= net_factor**2
                 self.total_factors.append(net_factor)
-                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
 
             self.detector_pointing.view = detector_pointing_view
 
@@ -318,6 +317,7 @@ class ElevationNoise(Operator):
             for det in dets:
                 self.weights_in.append(noise.detector_weight(det))
                 self.weights_out.append(out_noise.detector_weight(det))
+                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
 
             if self.out_model is None or self.noise_model == self.out_model:
                 # We are replacing the input
