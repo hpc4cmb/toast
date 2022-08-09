@@ -51,4 +51,7 @@ export TOAST_BUILD_LAPACK_LIBRARIES="${LIBDIR}/liblapack.${shext}"
 export TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include"
 export TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}"
 
+# Ensure that stale build products are removed
+rm -rf "${topdir}/build"
+
 pip install -vvv .
