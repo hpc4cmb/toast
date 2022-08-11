@@ -295,7 +295,9 @@ class ElevationNoise(Operator):
                 # Scale the PSD
 
                 net_factor = noise_a / np.sin(el) + noise_c
+
                 self.net_factors.append(net_factor)
+                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
 
                 self.net_factors.append(net_factor)
                 self.rates.append(focalplane.sample_rate.to_value(u.Hz))
@@ -317,7 +319,6 @@ class ElevationNoise(Operator):
             for det in dets:
                 self.weights_in.append(noise.detector_weight(det))
                 self.weights_out.append(out_noise.detector_weight(det))
-                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
 
             if self.out_model is None or self.noise_model == self.out_model:
                 # We are replacing the input
