@@ -295,7 +295,9 @@ class ElevationNoise(Operator):
                 # Scale the PSD
 
                 net_factor = noise_a / np.sin(el) + noise_c
+
                 self.net_factors.append(net_factor)
+                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
 
                 if modulate_pwv:
                     pwv = obs.telescope.site.weather.pwv.to_value(u.mm)
@@ -314,7 +316,6 @@ class ElevationNoise(Operator):
             for det in dets:
                 self.weights_in.append(noise.detector_weight(det))
                 self.weights_out.append(out_noise.detector_weight(det))
-                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
 
             if self.out_model is None or self.noise_model == self.out_model:
                 # We are replacing the input
@@ -345,7 +346,7 @@ class ElevationNoise(Operator):
                 weights_in = np.hstack(weights_in)
                 weights_out = np.hstack(weights_out)
                 rates = np.hstack(rates)
-        if comm is None or comm.rank == 0 and len(net_factors) > 0:
+        if (comm is None or comm.rank == 0) and len(net_factors) > 0:
             net = net_factors
             tot = total_factors
             net1 = np.sqrt(1 / weights_in / rates) * 1e6
