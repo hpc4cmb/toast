@@ -125,6 +125,48 @@ void init_tod_filter(py::module & m) {
             None.
     )");
 
+    m.def("fourier",
+          [](py::buffer angle, py::buffer templates, size_t start_order,
+             size_t stop_order) {
+              pybuffer_check_1D <double> (angle);
+              py::buffer_info info_angle = angle.request();
+              py::buffer_info info_templates = templates.request();
+
+              size_t nsample = info_angle.size;
+              size_t ntemplate = info_templates.size / nsample;
+              if (ntemplate != 2 * (stop_order - start_order)) {
+                  auto log = toast::Logger::get();
+                  std::ostringstream o;
+                  o << "Size of templates does not match angle, and order";
+                  log.error(o.str().c_str());
+                  throw std::runtime_error(o.str().c_str());
+              }
+
+              const double * pangle = reinterpret_cast <double *> (info_angle.ptr);
+              double * ptemplates = reinterpret_cast <double *> (info_templates.ptr);
+
+# pragma omp parallel for schedule(static, 1)
+	      for (auto order = start_order; order < stop_order; ++order) {
+		size_t offset = 2 * (order - start_order) * nsample;
+		for (size_t i=0; i < nsample; ++i) {
+		  ptemplates[offset++] = cos(order * pangle[i]);
+		}
+		for (size_t i=0; i < nsample; ++i) {
+		  ptemplates[offset++] = sin(order * pangle[i]);
+		}
+	      }
+
+              return;
+          }, py::arg("angle"), py::arg("templates"), py::arg("start_order"),
+          py::arg(
+              "stop_order"),
+          R"(
+        Populate an array of Fourier templates at angle [radians]
+        Args:
+        Returns:
+            None.
+    )");
+
     m.def("chebyshev",
           [](py::buffer x, py::buffer templates, size_t start_order,
              size_t stop_order) {
