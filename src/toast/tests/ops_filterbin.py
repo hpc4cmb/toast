@@ -88,6 +88,7 @@ class FilterBinTest(MPITestCase):
             shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
             binning=binning,
+            hwp_filter_order=4,
             ground_filter_order=5,
             split_ground_template=True,
             poly_filter_order=2,
