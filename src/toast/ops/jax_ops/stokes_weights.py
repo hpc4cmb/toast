@@ -109,30 +109,17 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
     # moves epsilon to GPU once for all loop iterations
     epsilon_gpu = optional_put_device(epsilon)
 
-    # does the indexing once and for all
-    if isinstance(quats, MutableJaxArray):
-        quats = quats.data[quat_index,:,:]
-    else:
-        quats = quats[quat_index,:,:]
-
     # we loop over intervals
     for interval in intervals:
         interval_start = interval['first']
         interval_end = interval['last']+1
         # extract interval slices
-        quats_interval = quats[:, interval_start:interval_end, :]
+        quats_interval = quats[quat_index, interval_start:interval_end, :]
         hwp_interval = hwp[interval_start:interval_end]
         # does the computation and puts the result in weights
         # needs to modify wights directly (rather than a view), otherwise there weights are not modified in place
         new_weights_interval = stokes_weights_IQU_interval_jax(epsilon_gpu, cal, quats_interval, hwp_interval)
-        weights[:, interval_start:interval_end, :] = new_weights_interval  # NOTE: we ignore weight_index and will shuffle once later
-    
-    # reshuffles outputs according to weight_index
-    if isinstance(weights, MutableJaxArray):
-        # NOTE: one could omit this line but it might lead to avoidable data copying
-        weights.data = reorder_by_index_jitted(weights.data, weight_index)
-    else:
-        weights[:,:,:] = reorder_by_index_jitted(weights[:,:,:], weight_index)
+        weights[weight_index, interval_start:interval_end, :] = new_weights_interval
 
 def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     """
@@ -156,7 +143,7 @@ def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     for interval in intervals:
         interval_start = interval['first']
         interval_end = interval['last']+1
-        weights[weight_index,interval_start:interval_end] = cal
+        weights[weight_index, interval_start:interval_end] = cal
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

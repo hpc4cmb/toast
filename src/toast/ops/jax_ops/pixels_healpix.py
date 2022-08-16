@@ -56,7 +56,6 @@ pixels_healpix_inner_jax = jax.vmap(pixels_healpix_inner_jax, in_axes=[None,0,No
 def pixels_healpix_interval_jax(hpix, quats, flags, flag_mask, hit_submaps, n_pix_submap, nest):
     """
     Process a full interval at once.
-    NOTE: this function was added for debugging purposes, one could replace it with `pixels_healpix_inner_jax`
 
     Args:
         hpix (HPIX_JAX): Healpix projection object.
@@ -128,29 +127,16 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     # moves hit_submaps to GPU once for all loop iterations
     hit_submaps_gpu = optional_put_device(hit_submaps)
 
-    # does the indexing once and for all
-    if isinstance(quats, MutableJaxArray):
-        quats = quats.data[quat_index,:,:]
-    else:
-        quats = quats[quat_index,:,:]
-
     # loop on the intervals
     for interval in intervals:
         interval_start = interval['first']
         interval_end = interval['last']+1
         # extract interval slices
-        quats_interval = quats[:, interval_start:interval_end, :]
+        quats_interval = quats[quat_index, interval_start:interval_end, :]
         flags_interval = flags[interval_start:interval_end] if use_flags else None
         # does the computation and updates pixels and hit_submaps in place
         new_pixels_interval, hit_submaps_gpu = pixels_healpix_interval_jax(hpix, quats_interval, flags_interval, flag_mask, hit_submaps_gpu, n_pix_submap, nest)
-        pixels[:, interval_start:interval_end] = new_pixels_interval # NOTE: we ignore pixel_index and will shuffle once later
-
-    # reshuffles outputs according to pixel_index
-    if isinstance(pixels, MutableJaxArray):
-        # NOTE: one could omit this line but it might lead to avoidable data copying
-        pixels.data = reorder_by_index_jitted(pixels.data, pixel_index)
-    else:
-        pixels[:,:] = reorder_by_index_jitted(pixels[:,:], pixel_index)
+        pixels[pixel_index, interval_start:interval_end] = new_pixels_interval
 
     # goe back to CPU
     hit_submaps[:] = hit_submaps_gpu

@@ -4,127 +4,6 @@ import numpy as np
 from typing import Tuple
 from pshmem import MPIShared
 
-#----------------------------------------------------------------------------------------
-# In-place operations
-
-def to_start_inner(key):
-    """
-    converts a slice or integer index into its start
-    """
-    if isinstance(key, slice):
-        return 0 if (key.start is None) else key.start
-    elif isinstance(key, np.ndarray):
-        raise RuntimeError("to_start_inner: you cannot used this function with array indices, please use a workaround.")
-    else:
-        # NOTE: casts to int to avoid an int32 vs int64 discrepency with the slice
-        return int(key)
-
-def to_start(key, shape):
-    """
-    Converts an array index into its starting positions
-    and ensures that the output is a tuple of the same size as the shape
-    NOTE: this cannot be jitted
-    """
-    # ensures the key is a tuple
-    if not isinstance(key, tuple): 
-        key = (key,)
-
-    # builds the output
-    # if shape has more elements than key, we will default to 0 for those elements
-    output = [0] * len(shape)
-    for i,k in enumerate(key):
-        output[i] = to_start_inner(k)
-    
-    # converts back to a tuple
-    return tuple(output)
-
-def to_size_inner(key,fullsize):
-    """
-    converts a slice or integer index into its size
-    """
-    if isinstance(key, slice):
-        start = 0 if (key.start is None) else key.start
-        stop = fullsize if (key.stop is None) else key.stop
-        return stop - start
-    else:
-        return 1
-
-def to_start_size(key,shape):
-    """
-    Converts an array index into its starts, sizes
-    and ensures that the output is a tuple of the same size as the shape
-    NOTE: this cannot be jitted
-    """
-    # ensures the key is a tuple
-    if not isinstance(key, tuple): 
-        key = (key,)
-
-    # builds the output
-    # if shape has more elements than key, we will default to:
-    # - shape elements for size
-    # - 0 elements for start
-    output_start = [0] * len(shape)
-    output_size = list(shape)
-    for i,k in enumerate(key):
-        fullsize = shape[i]
-        output_start[i] = to_start_inner(k)
-        output_size[i] = to_size_inner(k,fullsize)
-    
-    # converts back to a tuple
-    output_start = tuple(output_start)
-    output_size = tuple(output_size)
-    return output_start, output_size
-
-#-----
-
-def update_in_place(data, value, start):
-    """
-    Performs data[key] = value where key is deduced from start and value.shape
-    jit-compiled with buffer donation to ensure that the operation is done in place
-    NOTE: as this function is jitted, you don't want to call it with different sizes every time
-    WARNING: this function will fail if one of the arguments is an array
-    """
-    print(f"DEBUG: jit-compiling 'update_in_place' for data:{data.shape} value:{value.shape}")
-    # insures that value has the same rank as data
-    nb_missing_dims = data.ndim - value.ndim
-    expanded_shape = (1,) * nb_missing_dims + value.shape
-    value = jnp.reshape(value, expanded_shape)
-    # insures that value has the same type as data
-    value = value.astype(data.dtype)
-    # does the inplace update
-    return jax.lax.dynamic_update_slice(data, value, start)
-update_in_place = jax.jit(fun=update_in_place, donate_argnums=[0])
-
-def get_jitted(data, start, size):
-    """
-    Returns data[key] where key is deduced from start and value.shape
-    jit-compiled for improved performance
-    NOTE: as this function is jitted, you don't want to call it with different sizes every time
-    WARNING: this function will fail if one of the arguments is an array
-    """
-    print(f"DEBUG: jit-compiling 'get_jitted' for data:{data.shape} size:{size}")
-    return jax.lax.dynamic_slice(data, start, size)
-get_jitted = jax.jit(fun=get_jitted, static_argnames=['size'])
-
-def reorder_by_index_jitted(data, indices):
-    """
-    Computes data[indices,:,:] = data, returns data
-    jit-compiled with buffer donation to ensure that the operation is done in place
-    """
-    print(f"DEBUG: jit-compiling 'reorder_by_index_jitted' for data:{data.shape}")
-    if data.ndim == 1:
-        return data.at[indices].set(data)
-    elif data.ndim == 2:
-        return data.at[indices,:].set(data)
-    elif data.ndim == 3:
-        return data.at[indices,:,:].set(data)
-    else:
-        raise RuntimeError("reorder_by_index_jitted: function needs updating for data with more than 3 dimensions.")
-reorder_by_index_jitted = jax.jit(fun=reorder_by_index_jitted, donate_argnums=[0])
-
-#----------------------------------------------------------------------------------------
-# Mutable array
-
 class MutableJaxArray():
     """
     This class encapsulate a jax array to give the illusion of mutability
@@ -181,20 +60,18 @@ class MutableJaxArray():
         """
         updates the inner array in place
         """
-        #self.data = self.data.at[key].set(value)
-        start = to_start(key, self.shape)
-        self.data = update_in_place(self.data, value, start)
+        if key == slice(None):
+            # optimises the [:] case
+            self.data = value
+        else:
+            self.data = self.data.at[key].set(value)
 
     def __getitem__(self, key):
         """
         access the inner array
-        NOTE: surprisingly, this benefits from jitting
         """
         return self.data[key]
-        # TODO the alternative is faster but causes an out-of-memory error somewhere...
-        #start, size = to_start_size(key, self.shape)
-        #return get_jitted(self.data, start, size)
-    
+
     def reshape(self, shape):
         """
         produces a new array with a different shape

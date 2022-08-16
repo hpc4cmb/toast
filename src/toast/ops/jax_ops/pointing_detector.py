@@ -94,14 +94,7 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
         shared_flags_interval = shared_flags[interval_start:interval_end]
         # process the interval then updates quats in place
         new_quats_interval = pointing_detector_interval_jax(focalplane, boresight_interval, shared_flags_interval, shared_flag_mask)
-        quats[:, interval_start:interval_end, :] = new_quats_interval # NOTE: we ignore quat_index and will shuffle once later
-
-    # reshuffles outputs according to quat_index
-    if isinstance(quats, MutableJaxArray):
-        # NOTE: one could omit this line but it might lead to avoidable data copying
-        quats.data = reorder_by_index_jitted(quats.data, quat_index)
-    else:
-        quats[:,:,:] = reorder_by_index_jitted(quats[:,:,:], quat_index)
+        quats[quat_index, interval_start:interval_end, :] = new_quats_interval
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

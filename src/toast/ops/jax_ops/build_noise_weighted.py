@@ -69,13 +69,13 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
         global2local (array, int): size n_global_submap
         zmap (array, double): size n_local_submap*n_pix_submap*nnz
         pixel_index (array, int): size n_det
-        pixels (array, int): size ???*n_samp
+        pixels (array, int): size n_det*n_samp
         weight_index (array, int): The indexes of the weights (size n_det)
-        weights (array, double): The flat packed detectors weights for the specified mode (size ???*n_samp*nnz)
+        weights (array, double): The flat packed detectors weights for the specified mode (size n_det*n_samp*nnz)
         data_index (array, int): size n_det
-        det_data (array, double): size ???*n_samp
+        det_data (array, double): size n_det*n_samp
         flag_index (array, int): size n_det
-        det_flags (array, uint8): size ???*n_samp
+        det_flags (array, uint8): size n_det*n_samp
         det_scale (array, double): size n_det
         det_flag_mask (uint8)
         intervals (array, Interval): The intervals to modify (size n_view)
@@ -113,10 +113,7 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
         zmap_gpu = build_noise_weighted_interval_jax(global2local_gpu, zmap_gpu, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale_gpu, det_flag_mask, shared_flags_interval, shared_flag_mask)
 
     # gets zmap back to its original format
-    if isinstance(zmap, MutableJaxArray):
-        zmap.data = zmap_gpu
-    else:
-        zmap[:] = zmap_gpu
+    zmap[:] = zmap_gpu
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY
