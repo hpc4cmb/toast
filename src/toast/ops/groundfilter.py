@@ -62,7 +62,7 @@ class GroundFilter(Operator):
 
     det_data = Unicode(
         defaults.det_data,
-        help="Observation detdata key for accumulating atmosphere timestreams",
+        help="Observation detdata key",
     )
 
     view = Unicode(

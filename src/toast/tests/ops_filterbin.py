@@ -149,7 +149,7 @@ class FilterBinTest(MPITestCase):
             return
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, pixel_per_process=4)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -274,146 +274,7 @@ class FilterBinTest(MPITestCase):
                 print(f"rms1 = {rms1}, rms2 = {rms2}, rms2/rms1 = {rms2 / rms1}")
                 if rms2 > 1e-5 * rms1:
                     print(f"rms2 = {rms2}, rms1 = {rms1}")
-                    print("WARNING:  Fix and re-enable filterbin unit tests")
-                # assert rms2 < 1e-5 * rms1
-        return
-
-    def test_filterbin_obsmatrix_pypointing(self):
-        if sys.platform.lower() == "darwin":
-            print(f"WARNING:  Skipping test_filterbin_pypointing on MacOS")
-            return
-
-        # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
-
-        # Create some detector pointing matrices
-        detpointing = ops.PointingDetectorSimple(use_python=True)
-        pixels = ops.PixelsHealpix(
-            nside=self.nside,
-            create_dist="pixel_dist",
-            detector_pointing=detpointing,
-            use_python=True,
-        )
-        pixels.apply(data)
-
-        weights = ops.StokesWeights(
-            mode="IQU",
-            hwp_angle=defaults.hwp_angle,
-            detector_pointing=detpointing,
-            use_python=True,
-        )
-        weights.apply(data)
-
-        # Create an uncorrelated noise model from focalplane detector properties
-        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
-        default_model.apply(data)
-
-        input_map_file = os.path.join(self.outdir, "input_map.fits")
-        if not os.path.exists(input_map_file):
-            if data.comm.world_rank == 0:
-                lmax = 3 * self.nside
-                cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
-                fwhm = np.radians(10)
-                input_map = hp.synfast(
-                    cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False
-                )
-                if pixels.nest:
-                    input_map = hp.reorder(input_map, r2n=True)
-                hp.write_map(input_map_file, input_map, nest=pixels.nest)
-
-        if data.comm.comm_world is not None:
-            data.comm.comm_world.Barrier()
-
-        # Scan map into timestreams
-        scan_hpix = ops.ScanHealpixMap(
-            file=input_map_file,
-            det_data=defaults.det_data,
-            pixel_pointing=pixels,
-            stokes_weights=weights,
-        )
-        scan_hpix.apply(data)
-
-        # Configure and apply the filterbin operator
-        binning = ops.BinMap(
-            pixel_dist="pixel_dist",
-            covariance="covariance",
-            det_data=defaults.det_data,
-            pixel_pointing=pixels,
-            stokes_weights=weights,
-            noise_model=default_model.noise_model,
-            sync_type="allreduce",
-            shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
-            det_flags=defaults.det_flags,
-            det_flag_mask=255,
-        )
-
-        filterbin = ops.FilterBin(
-            name="filterbin_pypointing",
-            det_data=defaults.det_data,
-            det_flags=defaults.det_flags,
-            det_flag_mask=255,
-            shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
-            binning=binning,
-            ground_filter_order=5,
-            split_ground_template=True,
-            poly_filter_order=2,
-            output_dir=self.outdir,
-            write_obs_matrix=True,
-        )
-        filterbin.apply(data)
-
-        if data.comm.world_rank == 0:
-            import matplotlib.pyplot as plt
-
-            rot = [42, -42]
-            reso = 4
-            fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
-            nest = pixels.nest
-
-            rootname = os.path.join(self.outdir, f"{filterbin.name}_obs_matrix")
-            fname_matrix = ops.combine_observation_matrix(rootname)
-
-            obs_matrix = scipy.sparse.load_npz(fname_matrix)
-
-            input_map = hp.read_map(input_map_file, None, nest=nest)
-
-            fname_filtered = os.path.join(
-                self.outdir, f"{filterbin.name}_filtered_map.fits"
-            )
-            filtered = hp.read_map(fname_filtered, None, nest=nest)
-
-            test_map = obs_matrix.dot(input_map.ravel()).reshape([3, -1])
-
-            good = filtered[0] != 0
-
-            nrow, ncol = 2, 2
-            args = {"rot": rot, "reso": reso, "cmap": cmap, "nest": nest}
-
-            diffmap = test_map - filtered
-            diffmap[filtered == 0] = hp.UNSEEN
-            filtered[filtered == 0] = hp.UNSEEN
-            test_map[test_map == 0] = hp.UNSEEN
-            hp.gnomview(filtered[0], sub=[nrow, ncol, 1], title="Filtered map", **args)
-            hp.gnomview(
-                test_map[0], sub=[nrow, ncol, 2], title="Input x obs.matrix", **args
-            )
-            hp.gnomview(input_map[0], sub=[nrow, ncol, 3], title="Input map", **args)
-            hp.gnomview(diffmap[0], sub=[nrow, ncol, 4], title="Difference", **args)
-            fname = os.path.join(self.outdir, "obs_matrix_test.png")
-            fig.savefig(fname)
-
-            for i in range(3):
-                rms1 = np.std(filtered[i][good])
-                rms2 = np.std((filtered - test_map)[i][good])
-                print(
-                    f"pypoint rms1 = {rms1}, rms2 = {rms2}, rms2/rms1 = {rms2 / rms1}"
-                )
-                if rms2 > 1e-5 * rms1:
-                    print("WARNING:  Fix and re-enable filterbin unit tests")
-                # assert rms2 < 1e-5 * rms1
+                assert rms2 < 1e-5 * rms1
         return
 
     def test_filterbin_obsmatrix_flags(self):
@@ -566,8 +427,7 @@ class FilterBinTest(MPITestCase):
                 rms2 = np.std((filtered - test_map)[i][good])
                 if rms2 > 1e-5 * rms1:
                     print(f"rms2 = {rms2}, rms1 = {rms1}")
-                    print("WARNING:  Fix and re-enable filterbin unit tests")
-                # assert rms2 < 1e-5 * rms1
+                assert rms2 < 1e-5 * rms1
 
         return
 
@@ -742,7 +602,6 @@ class FilterBinTest(MPITestCase):
                     rms2 = np.std((filtered - test_map)[i][good])
                     if rms2 > 1e-5 * rms1:
                         print(f"rms2 = {rms2}, rms1 = {rms1}")
-                        print("WARNING:  Fix and re-enable filterbin unit tests")
-                    # assert rms2 < 1e-5 * rms1
+                    assert rms2 < 1e-5 * rms1
 
         return

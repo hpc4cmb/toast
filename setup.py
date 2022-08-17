@@ -307,6 +307,7 @@ conf["entry_points"] = {
         "toast_healpix_coadd = toast.scripts.toast_healpix_coadd:main",
         "toast_hdf5_to_spt3g = toast.scripts.toast_hdf5_to_spt3g:main",
         "toast_timing_plot = toast.scripts.toast_timing_plot:main",
+        "toast_obsmatrix_combine = toast.scripts.toast_obsmatrix_combine:main",
     ]
 }
 conf["cmdclass"] = {"build_ext": CMakeBuild}

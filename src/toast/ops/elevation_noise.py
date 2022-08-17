@@ -139,6 +139,11 @@ class ElevationNoise(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.net_factors = []
+        self.total_factors = []
+        self.weights_in = []
+        self.weights_out = []
+        self.rates = []
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -291,6 +296,9 @@ class ElevationNoise(Operator):
 
                 net_factor = noise_a / np.sin(el) + noise_c
 
+                self.net_factors.append(net_factor)
+                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
+
                 if modulate_pwv:
                     pwv = obs.telescope.site.weather.pwv.to_value(u.mm)
                     net_factor *= pwv_a0 + pwv_a1 * pwv + pwv_a2 * pwv**2
@@ -299,10 +307,15 @@ class ElevationNoise(Operator):
                     net_factor *= self.extra_factor
 
                 out_noise.psd(det)[:] *= net_factor**2
+                self.total_factors.append(net_factor)
 
             self.detector_pointing.view = detector_pointing_view
 
             # Store the new noise model in the observation.
+
+            for det in dets:
+                self.weights_in.append(noise.detector_weight(det))
+                self.weights_out.append(out_noise.detector_weight(det))
 
             if self.out_model is None or self.noise_model == self.out_model:
                 # We are replacing the input
@@ -314,6 +327,46 @@ class ElevationNoise(Operator):
         return
 
     def _finalize(self, data, **kwargs):
+        log = Logger.get()
+        comm = data.comm.comm_world
+        net_factors = np.array(self.net_factors)
+        total_factors = np.array(self.total_factors)
+        weights_in = np.array(self.weights_in)
+        weights_out = np.array(self.weights_out)
+        rates = np.array(self.rates)
+        if comm is not None:
+            net_factors = comm.gather(net_factors)
+            total_factors = comm.gather(total_factors)
+            weights_in = comm.gather(weights_in)
+            weights_out = comm.gather(weights_out)
+            rates = comm.gather(rates)
+            if comm.rank == 0:
+                net_factors = np.hstack(net_factors)
+                total_factors = np.hstack(total_factors)
+                weights_in = np.hstack(weights_in)
+                weights_out = np.hstack(weights_out)
+                rates = np.hstack(rates)
+        if (comm is None or comm.rank == 0) and len(net_factors) > 0:
+            net = net_factors
+            tot = total_factors
+            net1 = np.sqrt(1 / weights_in / rates) * 1e6
+            net2 = np.sqrt(1 / weights_out / rates) * 1e6
+            log.info_rank(
+                f"Elevation noise: \n"
+                f"  NET_factor: \n"
+                f"     min = {np.amin(net):8.3f},    max = {np.amax(net):8.3f}\n"
+                f"    mean = {np.mean(net):8.3f}, median = {np.median(net):8.3f}\n"
+                f"  TOTAL factor: \n"
+                f"     min = {np.amin(tot):8.3f},    max = {np.amax(tot):8.3f}\n"
+                f"    mean = {np.mean(tot):8.3f}, median = {np.median(tot):8.3f}\n"
+                f"  NET_in [uK root(s)]: \n"
+                f"     min = {np.amin(net1):8.1f},    max = {np.amax(net1):8.1f}\n"
+                f"    mean = {np.mean(net1):8.1f}, median = {np.median(net1):8.1f}\n"
+                f"  NET_out: [uK root(s)]\n"
+                f"     min = {np.amin(net2):8.1f},    max = {np.amax(net2):8.1f}\n"
+                f"    mean = {np.mean(net2):8.1f}, median = {np.median(net2):8.1f}\n",
+                comm=comm,
+            )
         return
 
     def _requires(self):

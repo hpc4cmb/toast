@@ -1244,6 +1244,7 @@ def scan_patch(
             els,
             rising,
             tstop,
+            to_cross,
         )
         if has_extent:
             scan_started = True
@@ -1507,7 +1508,7 @@ def current_extent_pole(
 
 @function_timer
 def current_extent(
-    azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els, rising, t
+        azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els, rising, t, to_cross
 ):
     """Get the azimuthal extent of the patch along elevation el.
 
@@ -1519,6 +1520,9 @@ def current_extent(
     azs_cross = []
     for i in range(len(corners)):
         j = (i + 1) % len(corners)
+        if not to_cross[i] and not to_cross[j]:
+            # Both of the corners already crossed the elevation line
+            continue
         for el0 in [el - fp_radius, el, el + fp_radius]:
             if (els[i] - el0) * (els[j] - el0) < 0:
                 # The corners are on opposite sides of the elevation line
@@ -1528,6 +1532,10 @@ def current_extent(
                 el2 = els[j] - el0
                 az2 = unwind_angle(az1, az2)
                 az_cross = (az1 + el1 * (az2 - az1) / (el1 - el2)) % (2 * np.pi)
+                if rising and az_cross > np.pi:
+                    continue
+                if not rising and az_cross < np.pi:
+                    continue
                 azs_cross.append(az_cross)
             if fp_radius == 0:
                 break
@@ -2192,8 +2200,10 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
-                last_successful,
-                last_el,
+                # Pole scheduling does not (yet) implement
+                # elevation change penalty
+                # last_successful,
+                # last_el,
             )
         else:
             success, t, el = attempt_scan(
@@ -2864,7 +2874,6 @@ def add_side(corner1, corner2, corners_temp, coordconv):
     Add one side of a rectangle with enough interpolation points.
     """
     step = np.radians(1)
-    corners_temp.append(ephem.Equatorial(corner1))
     lon1 = corner1.ra
     lon2 = corner2.ra
     lat1 = corner1.dec
@@ -2887,6 +2896,7 @@ def add_side(corner1, corner2, corners_temp, coordconv):
             corners_temp.append(ephem.Equatorial(coordconv(lon, lat, epoch="2000")))
     else:
         raise RuntimeError("add_side: both latitude and longitude change")
+    corners_temp.append(ephem.Equatorial(corner2))
     return
 
 
