@@ -142,11 +142,12 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     # make sure the data is where we expect it
     assert_data_localization('pixels_healpix', use_accel, [quats, flags, hit_submaps], [pixels, hit_submaps])
 
-    # runs the computation
+    # prepares inputs
     intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
     quats_input = MutableJaxArray.to_array(quats)
-    #hit_submaps_input = MutableJaxArray.to_array(hit_submaps)
     pixels_input = MutableJaxArray.to_array(pixels)
+
+    # runs computation
     new_pixels, new_hit_submaps = pixels_healpix_interval_jax(quat_index, quats_input, flags, flag_mask, pixel_index, pixels_input, hit_submaps, n_pix_submap, nside, nest,
                                                               intervals.first, intervals.last, intervals_max_length)
     
