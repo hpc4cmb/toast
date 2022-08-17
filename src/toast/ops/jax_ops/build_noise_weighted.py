@@ -17,52 +17,83 @@ from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 #-------------------------------------------------------------------------------------------------
 # JAX
 
-def build_noise_weighted_interval_jax(global2local, zmap, pixels, weights, det_data, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask):
+def build_noise_weighted_interval_jax(global2local, zmap, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask,
+                                      interval_starts, interval_ends, intervals_max_length):
     """
-    Process a full interval at once.
+    Process all the intervals as a block.
 
     Args:
         global2local (array, int): size n_global_submap
         zmap (array, double): size n_local_submap*n_pix_submap*nnz
-        pixels (array, int): size n_det*n_samp_interval
-        weights (array, double): The flat packed detectors weights for the specified mode (size n_det*n_samp_interval*nnz)
-        det_data (array, double): size n_det*n_samp_interval
-        det_flags (array, uint8): size n_det*n_samp_interval or None
+        pixel_index (array, int): size n_det
+        pixels (array, int): size n_det*n_samp
+        weight_index (array, int): The indexes of the weights (size n_det)
+        weights (array, double): The flat packed detectors weights for the specified mode (size n_det*n_samp*nnz)
+        data_index (array, int): size n_det
+        det_data (array, double): size n_det*n_samp
+        flag_index (array, int): size n_det
+        det_flags (array, uint8): size n_det*n_samp
         det_scale (array, double): size n_det
         det_flag_mask (uint8)
-        shared_flags (array, uint8): size n_samp_interval or None
+        shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
+        interval_starts (array, int): size n_view
+        interval_ends (array, int): size n_view
+        intervals_max_length (int): maximum length of an interval
 
     Returns:
-        zmap (array, double): size n_det*n_samp_interval*nnz
+        zmap
     """
-    # display sizes
-    n_samp_interval = det_data.shape[1]
-    print(f"DEBUG: jit-compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} n_samp_interval:{n_samp_interval} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask} use_flags:{det_flags is not None} use_shared_flags:{shared_flags is not None}")
+    # should we use flags?
+    n_samp = pixels.shape[1]
+    use_det_flags = (det_flags.shape[1] == n_samp)
+    use_shared_flags = (shared_flags.size == n_samp)
+    print(f"DEBUG: jit-compiling 'build_noise_weighted_interval_jax' with zmap_shape:{zmap.shape} n_det:{det_scale.size} intervals_max_length:{intervals_max_length} det_mask:{det_flag_mask} shared_flag_mask:{shared_flag_mask} use_flags:{det_flags is not None} use_shared_flags:{shared_flags is not None}")
+
+    # extract interval slices
+    intervals = JaxIntervals(interval_starts, interval_ends+1, intervals_max_length) # end+1 as the interval is inclusive
+    pixels_interval = JaxIntervals.get(pixels, (pixel_index,intervals)) # pixels[pixel_index,intervals]
+    weights_interval = JaxIntervals.get(weights, (weight_index,intervals,ALL)) # weights[weight_index,intervals,:]
+    data_interval = JaxIntervals.get(det_data, (data_index,intervals)) # det_data[data_index,intervals]
+
+    # setup det check
+    if use_det_flags:
+        det_flags_interval = JaxIntervals.get(det_flags, (flag_index,intervals)) # det_flags[flag_index,intervals]
+        det_check = ((det_flags_interval & det_flag_mask) == 0)
+    else:
+        det_check = True
+    # setup shared check
+    if use_shared_flags:
+        shared_flags_interval = JaxIntervals.get(shared_flags, intervals) # shared_flags[intervals]
+        shared_check = ((shared_flags_interval & shared_flag_mask) == 0)
+    else:
+        shared_check = True
+    # mask to identify valid samples
+    valid_samples = (pixels_interval >= 0) & det_check & shared_check
 
     # computes the update to add to zmap
-    det_check = True if (det_flags is None) else ((det_flags & det_flag_mask) == 0)
-    shared_check = True if (shared_flags is None) else ((shared_flags & shared_flag_mask) == 0)
-    valid_samples = (pixels >= 0) & det_check & shared_check
-    scaled_data = det_data * det_scale[:,jnp.newaxis]
-    update = jnp.where(valid_samples[:,:,jnp.newaxis], # if
-                       weights * scaled_data[:,:,jnp.newaxis], # then
+    scaled_data = data_interval * det_scale[:,jnp.newaxis,jnp.newaxis]
+    update = jnp.where(valid_samples[:,:,:,jnp.newaxis], # if
+                       weights_interval * scaled_data[:,:,:,jnp.newaxis], # then
                        0.) # else
 
     # computes the index in zmap
     n_pix_submap = zmap.shape[1]
-    global_submap = pixels // n_pix_submap
+    global_submap = pixels_interval // n_pix_submap
     local_submap = global2local[global_submap]
-    isubpix = pixels - global_submap * n_pix_submap
+    isubpix = pixels_interval - global_submap * n_pix_submap
 
-    # updates zmap in place
-    zmap = zmap.at[local_submap, isubpix, :].add(update)
+    # masks padded value before applying the update
+    update_masked = jnp.where(intervals.mask[jnp.newaxis,:,:,jnp.newaxis], zmap[local_submap, isubpix, :], update)
+
+    # updates zmap and returns
+    zmap = zmap.at[local_submap, isubpix, :].add(update_masked)
     return zmap
 
 # jit compiling
 build_noise_weighted_interval_jax = jax.jit(build_noise_weighted_interval_jax, 
-                                            static_argnames=['det_flag_mask','shared_flag_mask'],
-                                            donate_argnums=[1])
+                                            static_argnames=['det_flag_mask', 'shared_flag_mask', 'intervals_max_length'],
+                                            donate_argnums=[1]) # donate zmap
 
 def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, intervals, shared_flags, shared_flag_mask, use_accel):
     """
@@ -90,31 +121,20 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     # make sure the data is where we expect it
     assert_data_localization('build_noise_weighted', use_accel, [global2local, zmap, pixels, weights, det_data, det_flags, det_scale, shared_flags], [zmap])
 
-    # should we use flags?
-    n_samp = pixels.shape[1]
-    use_det_flags = (det_flags.shape[1] == n_samp)
-    use_shared_flags = (shared_flags.size == n_samp)
+    # prepares inputs
+    intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    zmap_input = MutableJaxArray.to_array(zmap)
+    global2local = MutableJaxArray.to_array(global2local)
+    pixels = MutableJaxArray.to_array(pixels)
+    weights = MutableJaxArray.to_array(weights)
+    det_data = MutableJaxArray.to_array(det_data)
+    det_flags = MutableJaxArray.to_array(det_flags)
+    det_scale = MutableJaxArray.to_array(det_scale)
+    shared_flags = MutableJaxArray.to_array(shared_flags)
 
-    # moves some data to GPU once for all loop iterations
-    zmap_gpu = optional_put_device(zmap)
-    global2local_gpu = optional_put_device(global2local)
-    det_scale_gpu = optional_put_device(det_scale)
-
-    # we loop over intervals
-    for interval in intervals:
-        interval_start = interval['first']
-        interval_end = interval['last']+1
-        # extract interval slices
-        pixels_interval = pixels[pixel_index, interval_start:interval_end]
-        weights_interval = weights[weight_index, interval_start:interval_end, :]
-        data_interval = det_data[data_index, interval_start:interval_end]
-        det_flags_interval = det_flags[flag_index, interval_start:interval_end] if use_det_flags else None
-        shared_flags_interval = shared_flags[interval_start:interval_end] if use_shared_flags else None
-        # process the interval then updates zmap
-        zmap_gpu = build_noise_weighted_interval_jax(global2local_gpu, zmap_gpu, pixels_interval, weights_interval, data_interval, det_flags_interval, det_scale_gpu, det_flag_mask, shared_flags_interval, shared_flag_mask)
-
-    # gets zmap back to its original format
-    zmap[:] = zmap_gpu
+    # runs computation
+    zmap[:] = build_noise_weighted_interval_jax(global2local, zmap_input, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask,
+                                                intervals.first, intervals.last, intervals_max_length)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

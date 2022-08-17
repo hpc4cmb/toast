@@ -151,7 +151,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     new_pixels, new_hit_submaps = pixels_healpix_interval_jax(quat_index, quats_input, flags, flag_mask, pixel_index, pixels_input, hit_submaps, n_pix_submap, nside, nest,
                                                               intervals.first, intervals.last, intervals_max_length)
     
-    # modifies output buffres in place
+    # modifies output buffers in place
     pixels[:] = new_pixels
     hit_submaps[:] = new_hit_submaps
 
