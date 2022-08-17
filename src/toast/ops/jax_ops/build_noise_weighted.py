@@ -11,6 +11,7 @@ from jax.experimental.maps import xmap as jax_xmap
 from toast.ops.jax_ops.utils.mutableArray import MutableJaxArray
 
 from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
+from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
 #-------------------------------------------------------------------------------------------------

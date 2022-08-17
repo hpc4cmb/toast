@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 
 from .utils import assert_data_localization, ImplementationType, select_implementation
+from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import template_offset_add_to_signal as template_offset_add_to_signal_compiled, template_offset_project_signal as template_offset_project_signal_compiled, template_offset_apply_diag_precond as template_offset_apply_diag_precond_compiled
 
 # -------------------------------------------------------------------------------------------------

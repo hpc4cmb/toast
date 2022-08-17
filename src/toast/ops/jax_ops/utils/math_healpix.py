@@ -147,7 +147,7 @@ def zphi2ring_jax(hpix, phi, region, z, rtz):
 
     # NOTE: this is very slightly faster than a jnp.where here
     # then branch
-    def then_branch(hpix, tt, rtz, z):
+    def then_branch(tt, rtz, z):
         temp1 = hpix.halfnside + hpix.dnside * tt
         temp2 = hpix.tqnside * z
 
@@ -163,7 +163,7 @@ def zphi2ring_jax(hpix, phi, region, z, rtz):
         pix = hpix.ncap + ((ir - 1) * hpix.fournside + ip)
         return pix
     # else branch
-    def else_branch(hpix, tt, rtz, z):
+    def else_branch(tt, rtz, z):
         tp = tt - jnp.floor(tt)
 
         temp1 = hpix.dnside * rtz
@@ -180,7 +180,7 @@ def zphi2ring_jax(hpix, phi, region, z, rtz):
         pix = jnp.where(region > 0, pix_pos, pix_neg)
         return pix
     # test
-    pix = jax.lax.cond(jnp.abs(region) == 1, then_branch, else_branch, hpix, tt, rtz, z)
+    pix = jax.lax.cond(jnp.abs(region) == 1, then_branch, else_branch, tt, rtz, z)
 
     return pix
 

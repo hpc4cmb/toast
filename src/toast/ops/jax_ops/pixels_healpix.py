@@ -83,8 +83,8 @@ def pixels_healpix_interval_jax(quat_index, quats, flags, flag_mask, pixel_index
     use_flags = (flag_mask != 0) and (flags.size == n_samp)
     print(f"DEBUG: jit-compiling 'pixels_healpix_interval_jax' with n_side:{nside} n_det:{quats.shape[0]} n_pix_submap:{n_pix_submap} hit_submaps:{hit_submaps.size} flag_mask:{flag_mask} nest:{nest} intervals_max_length:{intervals_max_length} use_flags:{use_flags}")
     
-    # used to extract interval slices (end+1 as the interval is inclusive)
-    intervals = JaxIntervals(interval_starts, interval_ends+1, intervals_max_length)
+    # used to extract interval slices
+    intervals = JaxIntervals(interval_starts, interval_ends+1, intervals_max_length) # end+1 as the interval is inclusive
 
     # computes the pixels and submap
     hpix = healpix.HPIX_JAX(nside)

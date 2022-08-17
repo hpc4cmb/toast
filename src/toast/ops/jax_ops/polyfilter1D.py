@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 
 from .utils import get_compile_time, select_implementation, ImplementationType
+from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import filter_polynomial as filter_polynomial_compiled
 
 #-------------------------------------------------------------------------------------------------

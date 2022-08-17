@@ -10,6 +10,7 @@ from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device, math_qarray as qarray
 from .utils.mutableArray import MutableJaxArray
+from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -54,36 +55,56 @@ def stokes_weights_IQU_inner_jax(eps, cal, pin, hwpang):
 stokes_weights_IQU_inner_jax = jax_xmap(stokes_weights_IQU_inner_jax, 
                                         in_axes=[['detectors'], # epsilon
                                                  [...], # cal
-                                                 ['detectors','samples',...], # quats
-                                                 ['samples']], # hwp
-                                        out_axes=['detectors','samples',...])
+                                                 ['detectors','intervals','interval_size',...], # quats
+                                                 ['intervals','interval_size']], # hwp
+                                        out_axes=['detectors','intervals','interval_size',...])
 
-def stokes_weights_IQU_interval_jax(epsilon, cal, quats, hwp):
+def stokes_weights_IQU_interval_jax(quat_index, quats, weight_index, weights, hwp, epsilon, cal,
+                                    interval_starts, interval_ends, intervals_max_length):
     """
-    Process a full interval at once.
-    NOTE: this function was added for debugging purposes, one could replace it with `stokes_weights_IQU_inner_jax`
+    Process all the intervals as a block.
 
     Args:
+        quat_index (array, int): size n_det
+        quats (array, double): size ???*n_samp*4
+        weight_index (array, int): The indexes of the weights (size n_det)
+        weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp*3)
+        hwp (array, float64):  The HWP angles (size n_samp).
         epsilon (array, float):  The cross polar response (size n_det).
         cal (float):  A constant to apply to the pointing weights.
-        quats (array, double): size n_det*n_samp_interval*4
-        hwp (array, float64):  The HWP angles (size n_samp_interval).
+        interval_starts (array, int): size n_view
+        interval_ends (array, int): size n_view
+        intervals_max_length (int): maximum length of an interval
 
     Returns:
-        weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp_interval*3)
+        weights
     """
     # display sizes
-    n_samp_interval = quats.shape[1]
-    print(f"DEBUG: jit-compiling 'stokes_weights_IQU_interval_jax' with n_det:{epsilon.size} cal:{cal} n_samp_interval:{n_samp_interval}")
+    nb_intervals = interval_starts.size
+    print(f"DEBUG: jit-compiling 'stokes_weights_IQU_interval_jax' with n_det:{epsilon.size} cal:{cal} nb_intervals:{nb_intervals} intervals_max_length:{intervals_max_length}")
+
+    # extract interval slices
+    intervals = JaxIntervals(interval_starts, interval_ends+1, intervals_max_length) # end+1 as the interval is inclusive
+    quats_interval = JaxIntervals.get(quats, (quat_index,intervals,ALL)) # quats[quat_index,intervals,:]
 
     # insures hwp is a non empty array
-    if hwp.size == 0: hwp = jnp.zeros(n_samp_interval)
+    if hwp.size == 0: 
+        hwp_interval = jnp.zeros((nb_intervals,intervals_max_length))
+    else:
+        hwp_interval = JaxIntervals.get(hwp, intervals) # hwp[intervals]
 
     # does the computation
-    return stokes_weights_IQU_inner_jax(epsilon, cal, quats, hwp)
+    new_weights_interval = stokes_weights_IQU_inner_jax(epsilon, cal, quats_interval, hwp_interval)
+
+    # updates results and returns
+    # weights[weight_index,intervals,:] = new_weights_interval
+    weights = JaxIntervals.set(weights, (weight_index,intervals,ALL), new_weights_interval)
+    return weights
 
 # jit compiling
-stokes_weights_IQU_interval_jax = jax.jit(stokes_weights_IQU_interval_jax, static_argnames=['cal'])
+stokes_weights_IQU_interval_jax = jax.jit(stokes_weights_IQU_interval_jax, 
+                                          static_argnames=['cal', 'intervals_max_length'],
+                                          donate_argnums=[3]) # donates weights
 
 def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel):
     """
@@ -106,20 +127,15 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
     # make sure the data is where we expect it
     assert_data_localization('stokes_weights_IQU', use_accel, [quats, hwp, epsilon], [weights])
 
-    # moves epsilon to GPU once for all loop iterations
-    epsilon_gpu = optional_put_device(epsilon)
+    # prepares inputs
+    intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    quats_input = MutableJaxArray.to_array(quats)
+    hwp_input = MutableJaxArray.to_array(hwp)
+    weights_input = MutableJaxArray.to_array(weights)
 
-    # we loop over intervals
-    for interval in intervals:
-        interval_start = interval['first']
-        interval_end = interval['last']+1
-        # extract interval slices
-        quats_interval = quats[quat_index, interval_start:interval_end, :]
-        hwp_interval = hwp[interval_start:interval_end]
-        # does the computation and puts the result in weights
-        # needs to modify wights directly (rather than a view), otherwise there weights are not modified in place
-        new_weights_interval = stokes_weights_IQU_interval_jax(epsilon_gpu, cal, quats_interval, hwp_interval)
-        weights[weight_index, interval_start:interval_end, :] = new_weights_interval
+    # runs computation
+    weights[:] = stokes_weights_IQU_interval_jax(quat_index, quats_input, weight_index, weights_input, hwp_input, epsilon, cal,
+                                                 intervals.first, intervals.last, intervals_max_length)
 
 def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     """
