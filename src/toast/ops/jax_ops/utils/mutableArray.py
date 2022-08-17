@@ -47,6 +47,11 @@ class MutableJaxArray():
         data = jnp.zeros(shape=shape, dtype=dtype)
         return cls(data)
 
+    @classmethod
+    def to_array(cls, input):
+        """casts a MutableJaxArray into an array, preserves the type of all inputs"""
+        return input.data if isinstance(input, MutableJaxArray) else input
+
     def to_numpy(self):
         """
         converts the content back to a numpy array

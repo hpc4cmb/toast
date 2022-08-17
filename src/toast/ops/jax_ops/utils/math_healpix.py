@@ -2,11 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from typing import NamedTuple
 import jax
 import numpy as np
 import jax.numpy as jnp
-from typing import NamedTuple
 
 TWOINVPI = 0.63661977236758134308
 MACHINE_EPSILON = np.finfo(np.float).eps
@@ -14,68 +12,39 @@ MACHINE_EPSILON = np.finfo(np.float).eps
 # -------------------------------------------------------------------------------------------------
 # JAX
 
-precomputed_HPIx_JAX = dict()
-"""
-Stored precomputed HPIX_JAX for faster computations
-"""
-
-class HPIX_JAX(NamedTuple):
+class HPIX_JAX:
     """
-    Encapsulate the information from a hpix structure in a JAX compatible way
-    This class can be converted into a pytree (as it inherits from NamedTuple)
-    and has an efficient hash that lets it be cached
+    JAX compatible HPIX structure
+    This class has an efficient hash that lets it be cached
     """
-    nside: np.int64
-    npix: np.int64
-    ncap: np.int64
-    dnside: np.double
-    twonside: np.int64
-    fournside: np.int64
-    nsideplusone: np.int64
-    nsideminusone: np.int64
-    halfnside: np.double
-    tqnside: np.double
-    factor: np.int64
-    jr: np.array
-    jq: np.array
-    utab: np.array
-    ctab: np.array
 
-    @classmethod
-    def init(cls, nside):
-        # return precomputed result if possible
-        if nside in precomputed_HPIx_JAX:
-            return precomputed_HPIx_JAX[nside]
-
-        ncap = 2 * (nside * nside - nside)
-        npix = 12 * nside * nside
-        dnside = float(nside)
-        twonside = 2 * nside
-        fournside = 4 * nside
-        nsideplusone = nside + 1
-        nsideminusone = nside - 1
-        halfnside = 0.5 * (dnside)
-        tqnside = 0.75 * (dnside)
+    def __init__(self, nside):
+        self.nside = nside
+        self.ncap = 2 * (nside * nside - nside)
+        self.npix = 12 * nside * nside
+        self.dnside = float(nside)
+        self.twonside = 2 * nside
+        self.fournside = 4 * nside
+        self.nsideplusone = nside + 1
+        self.nsideminusone = nside - 1
+        self.halfnside = 0.5 * self.dnside
+        self.tqnside = 0.75 * self.dnside
 
         factor = 0
         while (nside != (1 << factor)):
             factor += 1
+        self.factor = factor
 
-        jr = jnp.array([2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4])
-        jq = jnp.array([1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7])
+        self.jr = jnp.array([2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4])
+        self.jq = jnp.array([1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7])
 
         m = jnp.arange(start=0, stop=0x100)
-        utab = (m & 0x1) | ((m & 0x2) << 1) | ((m & 0x4) << 2) | \
+        self.utab = (m & 0x1) | ((m & 0x2) << 1) | ((m & 0x4) << 2) | \
                     ((m & 0x8) << 3) | ((m & 0x10) << 4) | ((m & 0x20) << 5) | \
                     ((m & 0x40) << 6) | ((m & 0x80) << 7)
-        ctab = (m & 0x1) | ((m & 0x2) << 7) | ((m & 0x4) >> 1) | \
+        self.ctab = (m & 0x1) | ((m & 0x2) << 7) | ((m & 0x4) >> 1) | \
                     ((m & 0x8) << 6) | ((m & 0x10) >> 2) | ((m & 0x20) << 5) | \
                     ((m & 0x40) >> 3) | ((m & 0x80) << 4)
-        
-        # stores result for later retrieval
-        result = cls(nside,npix,ncap,dnside,twonside,fournside,nsideplusone,nsideminusone,halfnside,tqnside,factor,jr,jq,utab,ctab)
-        precomputed_HPIx_JAX[nside] = result
-        return result
 
     def xy2pix(self, x, y):
         return self.utab[x & 0xff] \
@@ -117,7 +86,7 @@ def zphi2nest_jax(hpix, phi, region, z, rtz):
 
     # NOTE: this is very slightly faster than a jnp.where here
     # then branch
-    def then_branch(hpix, tt, rtz, z):
+    def then_branch(tt, rtz, z):
         temp1 = hpix.halfnside + hpix.dnside * tt
         temp2 = hpix.tqnside * z
 
@@ -135,7 +104,7 @@ def zphi2nest_jax(hpix, phi, region, z, rtz):
         y = hpix.nsideminusone - (jp & hpix.nsideminusone)
         return (face, x, y)
     # else branch
-    def else_branch(hpix, tt, rtz, z):
+    def else_branch(tt, rtz, z):
         ntt = jnp.int64(tt)
 
         tp = tt - jnp.double(ntt)
@@ -153,7 +122,7 @@ def zphi2nest_jax(hpix, phi, region, z, rtz):
         y = jnp.where(z >= 0, hpix.nsideminusone - jp, jm)
         return (face, x, y)
     # test
-    (face, x, y) = jax.lax.cond(jnp.abs(region) == 1, then_branch, else_branch, hpix, tt, rtz, z)
+    (face, x, y) = jax.lax.cond(jnp.abs(region) == 1, then_branch, else_branch, tt, rtz, z)
 
     sipf = hpix.xy2pix(x, y)
     pix = jnp.int64(sipf) + (face << (2 * hpix.factor))

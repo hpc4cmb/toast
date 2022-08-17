@@ -6,7 +6,6 @@ import numpy as np
 
 import jax
 import jax.numpy as jnp
-from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import select_implementation, ImplementationType
 from ..._libtoast import cov_accum_diag_hits as cov_accum_diag_hits_compiled, cov_accum_diag_invnpp as cov_accum_diag_invnpp_compiled
