@@ -47,6 +47,8 @@ pointing_detector_inner_jax = jax_xmap(pointing_detector_inner_jax,
 def pointing_detector_interval_jax(focalplane, boresight, quat_index, quats, shared_flags, shared_flag_mask,
                                    interval_starts, interval_ends, intervals_max_length):
     """
+    Process all the intervals as a block.
+
     Args:
         focalplane (array, double): size n_det*4
         boresight (array, double): size n_samp*4
@@ -98,9 +100,12 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     # TODO input data is not on GPU for no but this should be solved later when a fixit is implemented
     # assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
 
-    # runs computation
+    # prepares inputs
     intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
-    quats[:] = pointing_detector_interval_jax(focalplane, boresight, quat_index, quats, shared_flags, shared_flag_mask,
+    quats_input = MutableJaxArray.to_array(quats)
+
+    # runs computation
+    quats[:] = pointing_detector_interval_jax(focalplane, boresight, quat_index, quats_input, shared_flags, shared_flag_mask,
                                               intervals.first, intervals.last, intervals_max_length)
 
 #-------------------------------------------------------------------------------------------------
