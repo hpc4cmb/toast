@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
-from .utils.mutableArray import reorder_by_index_jitted, MutableJaxArray
+from .utils.mutableArray import MutableJaxArray
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
 from ..._libtoast import pointing_detector as pointing_detector_compiled
 from ..._libtoast import Logger

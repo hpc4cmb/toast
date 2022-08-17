@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device, math_qarray as qarray
-from .utils.mutableArray import reorder_by_index_jitted, MutableJaxArray
+from .utils.mutableArray import MutableJaxArray
 from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
 
 #-------------------------------------------------------------------------------------------------

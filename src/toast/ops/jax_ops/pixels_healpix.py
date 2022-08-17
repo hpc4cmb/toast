@@ -10,7 +10,7 @@ import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix, optional_put_device
-from .utils.mutableArray import MutableJaxArray, reorder_by_index_jitted
+from .utils.mutableArray import MutableJaxArray
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
 
 # -------------------------------------------------------------------------------------------------
