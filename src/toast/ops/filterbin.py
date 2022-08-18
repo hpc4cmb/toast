@@ -195,7 +195,7 @@ def combine_observation_matrix(rootname):
     scipy.sparse.save_npz(rootname, obs_matrix)
     log.info_rank(f"Wrote in", timer=timer, comm=None)
 
-    log.info_rank(f"All done in", timer=timer, comm=None)
+    log.info_rank(f"All done in", timer=timer0, comm=None)
 
     return f"{rootname}.npz"
 
