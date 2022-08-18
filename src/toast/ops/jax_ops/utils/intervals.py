@@ -84,7 +84,7 @@ class JaxIntervals:
                 # adds a trailing dimension to the mask (as there are subsequent dimenssions)
                 mask = jnp.expand_dims(mask, axis=-1)
             # adds two trailing dimensions to arrays, one per interval dimenssion
-            if isinstance(key, jnp.ndarray) or isinstance(key, np.ndarray):
+            if (isinstance(key, jnp.ndarray) or isinstance(key, np.ndarray)) and (key.ndim > 0):
                 return key[:, jnp.newaxis, jnp.newaxis]
             return key
         key = tuple(fix_key(k) for k in key)
