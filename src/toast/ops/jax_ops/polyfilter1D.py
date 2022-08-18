@@ -91,6 +91,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     signals = np.array(signals_list).T # n*nsignal
 
     # loop over intervals, this is fine as long as there are only few intervals
+    # TODO port to JaxIntervals, could be done with vmap and setting padding of flags_interval to 1
     for (start,stop) in zip(starts,stops):
         # validates interval
         start = np.maximum(0, start)
