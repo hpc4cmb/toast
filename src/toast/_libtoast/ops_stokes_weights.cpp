@@ -112,6 +112,10 @@ void init_ops_stokes_weights(py::module & m) {
             // NOTE:  Flags are not needed here, since the quaternions
             // have already had bad samples converted to null rotations.
 
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -150,12 +154,13 @@ void init_ops_stokes_weights(py::module & m) {
                 epsilon, "epsilon", 1, temp_shape, {n_det}
             );
 
-            auto & omgr = OmpManager::get();
-            int dev = omgr.get_device();
-            bool offload = (!omgr.device_is_host()) && use_accel;
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
+
+                double * dev_quats = omgr.device_ptr(raw_quats);
+                double * dev_weights = omgr.device_ptr(raw_weights);
+                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                double * dev_hwp = omgr.device_ptr(raw_hwp);
 
                 # pragma omp target data   \
                 device(dev)                \
@@ -169,32 +174,34 @@ void init_ops_stokes_weights(py::module & m) {
                 n_samp                     \
                 )                          \
                 use_device_ptr(            \
-                raw_weights,               \
-                raw_quats,                 \
-                raw_intervals,             \
-                raw_hwp,                   \
                 raw_weight_index,          \
                 raw_quat_index,            \
                 raw_epsilon                \
                 )
                 {
-                    # pragma omp target teams distribute collapse(2)
+                    # pragma omp target teams distribute collapse(2) \
+                        is_device_ptr( \
+                            dev_weights, \
+                            dev_quats, \
+                            dev_hwp, \
+                            dev_intervals \
+                        )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = raw_intervals[iview].first;
-                                isamp <= raw_intervals[iview].last;
+                                int64_t isamp = dev_intervals[iview].first;
+                                isamp <= dev_intervals[iview].last;
                                 isamp++
                             ) {
                                 stokes_weights_IQU_inner(
                                     cal,
                                     raw_quat_index,
                                     raw_weight_index,
-                                    raw_quats,
-                                    raw_hwp,
+                                    dev_quats,
+                                    dev_hwp,
                                     raw_epsilon,
-                                    raw_weights,
+                                    dev_weights,
                                     isamp,
                                     n_samp,
                                     idet
@@ -244,6 +251,10 @@ void init_ops_stokes_weights(py::module & m) {
             // NOTE:  Flags are not needed here, since the quaternions
             // have already had bad samples converted to null rotations.
 
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -262,12 +273,11 @@ void init_ops_stokes_weights(py::module & m) {
             );
             int64_t n_view = temp_shape[0];
 
-            auto & omgr = OmpManager::get();
-            int dev = omgr.get_device();
-            bool offload = (!omgr.device_is_host()) && use_accel;
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
+
+                double * dev_weights = omgr.device_ptr(raw_weights);
+                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
 
                 # pragma omp target data   \
                 device(dev)                \
@@ -278,23 +288,25 @@ void init_ops_stokes_weights(py::module & m) {
                 n_samp                     \
                 )                          \
                 use_device_ptr(            \
-                raw_weights,               \
-                raw_intervals,             \
                 raw_weight_index           \
                 )
                 {
-                    # pragma omp target teams distribute collapse(2)
+                    # pragma omp target teams distribute collapse(2) \
+                        is_device_ptr( \
+                            dev_weights, \
+                            dev_intervals \
+                        )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = raw_intervals[iview].first;
-                                isamp <= raw_intervals[iview].last;
+                                int64_t isamp = dev_intervals[iview].first;
+                                isamp <= dev_intervals[iview].last;
                                 isamp++
                             ) {
                                 int32_t w_indx = raw_weight_index[idet];
                                 int64_t off = (w_indx * n_samp) + isamp;
-                                raw_weights[off] = cal;
+                                dev_weights[off] = cal;
                             }
                         }
                     }

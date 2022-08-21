@@ -343,6 +343,10 @@ void init_ops_pixels_healpix(py::module & m) {
             bool nest,
             bool use_accel
         ) {
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -373,10 +377,6 @@ void init_ops_pixels_healpix(py::module & m) {
                 hit_submaps, "hit_submaps", 1, temp_shape, {-1}
             );
 
-            auto & omgr = OmpManager::get();
-            int dev = omgr.get_device();
-            bool offload = (!omgr.device_is_host()) && use_accel;
-
             // Optionally use flags
             bool use_flags = true;
             uint8_t * raw_flags = extract_buffer <uint8_t> (
@@ -389,6 +389,11 @@ void init_ops_pixels_healpix(py::module & m) {
 
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
+
+                double * dev_quats = omgr.device_ptr(raw_quats);
+                int64_t * dev_pixels = omgr.device_ptr(raw_pixels);
+                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                uint8_t * dev_shared_flags = omgr.device_ptr(raw_shared_flags);
 
                 # pragma omp target data  \
                 device(dev)               \
@@ -406,10 +411,6 @@ void init_ops_pixels_healpix(py::module & m) {
                 )                         \
                 map(tofrom: raw_hsub)     \
                 use_device_ptr(           \
-                raw_pixels,               \
-                raw_quats,                \
-                raw_flags,                \
-                raw_intervals,            \
                 raw_pixel_index,          \
                 raw_quat_index,           \
                 raw_hsub                  \
@@ -418,23 +419,29 @@ void init_ops_pixels_healpix(py::module & m) {
                     hpix hp;
                     hpix_init(&hp, nside);
                     if (nest) {
-                        # pragma omp target teams distribute collapse(2)
+                        # pragma omp target teams distribute collapse(2) \
+                            is_device_ptr( \
+                                dev_pixels, \
+                                dev_quats, \
+                                dev_flags, \
+                                dev_intervals \
+                            )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 # pragma omp parallel for default(shared)
                                 for (
-                                    int64_t isamp = raw_intervals[iview].first;
-                                    isamp <= raw_intervals[iview].last;
+                                    int64_t isamp = dev_intervals[iview].first;
+                                    isamp <= dev_intervals[iview].last;
                                     isamp++
                                 ) {
                                     pixels_healpix_nest_inner(
                                         hp,
                                         raw_quat_index,
                                         raw_pixel_index,
-                                        raw_quats,
-                                        raw_flags,
+                                        dev_quats,
+                                        dev_flags,
                                         raw_hsub,
-                                        raw_pixels,
+                                        dev_pixels,
                                         n_pix_submap,
                                         isamp,
                                         n_samp,
@@ -446,23 +453,29 @@ void init_ops_pixels_healpix(py::module & m) {
                             }
                         }
                     } else {
-                        # pragma omp target teams distribute collapse(2)
+                        # pragma omp target teams distribute collapse(2) \
+                            is_device_ptr( \
+                                dev_pixels, \
+                                dev_quats, \
+                                dev_flags, \
+                                dev_intervals \
+                            )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 # pragma omp parallel for default(shared)
                                 for (
-                                    int64_t isamp = raw_intervals[iview].first;
-                                    isamp <= raw_intervals[iview].last;
+                                    int64_t isamp = dev_intervals[iview].first;
+                                    isamp <= dev_intervals[iview].last;
                                     isamp++
                                 ) {
                                     pixels_healpix_ring_inner(
                                         hp,
                                         raw_quat_index,
                                         raw_pixel_index,
-                                        raw_quats,
-                                        raw_flags,
+                                        dev_quats,
+                                        dev_flags,
                                         raw_hsub,
-                                        raw_pixels,
+                                        dev_pixels,
                                         n_pix_submap,
                                         isamp,
                                         n_samp,
