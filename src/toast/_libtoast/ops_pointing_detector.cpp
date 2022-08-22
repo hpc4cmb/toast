@@ -133,7 +133,7 @@ void init_ops_pointing_detector(py::module & m) {
                 double * dev_quats = omgr.device_ptr(raw_quats);
                 double * dev_boresight = omgr.device_ptr(raw_boresight);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
-                uint8_t * dev_shared_flags = omgr.device_ptr(raw_shared_flags);
+                uint8_t * dev_flags = omgr.device_ptr(raw_flags);
 
                 # pragma omp target data   \
                 device(dev)                \

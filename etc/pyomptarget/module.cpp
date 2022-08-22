@@ -298,7 +298,9 @@ PYBIND11_MODULE(pyomptarget, m) {
             py::buffer intervals,
             py::buffer shared_flags
         ) {
-            int target = omp_get_num_devices() - 1;
+            int ndev = omp_get_num_devices();
+            std::cout << "OMP found " << ndev << " available target offload devices" << std::endl;
+            int target = ndev - 1;
             int host = omp_get_initial_device();
             int defdev = omp_get_default_device();
             std::cout << "OMP initial host device = " << host << std::endl;

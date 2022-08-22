@@ -288,15 +288,18 @@ void init_template_offset(py::module & m) {
                 n_amp                    \
                 )
                 {
-                    # pragma omp parallel for default(shared) \
+                    # pragma omp target \
                         is_device_ptr( \
                             dev_amp_in,              \
                             dev_amp_out,             \
                             dev_offset_var           \
                         )
-                    for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                        dev_amp_out[iamp] = dev_amp_in[iamp];
-                        dev_amp_out[iamp] *= dev_offset_var[iamp];
+                    {
+                        # pragma omp parallel for default(shared)
+                        for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+                            dev_amp_out[iamp] = dev_amp_in[iamp];
+                            dev_amp_out[iamp] *= dev_offset_var[iamp];
+                        }
                     }
                 }
 

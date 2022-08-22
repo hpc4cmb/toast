@@ -236,7 +236,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                             dev_det_flags,                       \
                             dev_intervals,                       \
                             dev_shared_flags,                    \
-                            dev_zmap, \
+                            dev_zmap \
                         )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {

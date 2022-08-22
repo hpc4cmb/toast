@@ -1,6 +1,7 @@
 
 import os
 import sys
+import time
 
 sys.path.append(os.getcwd())
 import pyomptarget
@@ -32,7 +33,7 @@ def build_interval_dtype():
 def main():
     interval_dtype = build_interval_dtype()
     ndet = 2
-    nsamp = 100
+    nsamp = 1000000
 
     focalplane = np.tile(
         np.array(
@@ -65,6 +66,8 @@ def main():
     quats = np.zeros((ndet, nsamp, 4), dtype=np.float64)
 
     mem = pyomptarget.stage_data(boresight, quats, intervals, shared_flags)
+
+    # time.sleep(5)
 
     pyomptarget.pointing_detector(
         mem,

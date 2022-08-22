@@ -393,7 +393,7 @@ void init_ops_pixels_healpix(py::module & m) {
                 double * dev_quats = omgr.device_ptr(raw_quats);
                 int64_t * dev_pixels = omgr.device_ptr(raw_pixels);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
-                uint8_t * dev_shared_flags = omgr.device_ptr(raw_shared_flags);
+                uint8_t * dev_flags = omgr.device_ptr(raw_flags);
 
                 # pragma omp target data  \
                 device(dev)               \

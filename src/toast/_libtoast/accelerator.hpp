@@ -42,7 +42,7 @@ class OmpManager {
         void * null;
 
         template <typename T>
-        T * OmpManager::device_ptr(T * buffer) const {
+        T * device_ptr(T * buffer) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             // If the device is the host device, return
@@ -59,7 +59,7 @@ class OmpManager {
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
-            return static_cast <typename T *> (mem_.at(vbuffer));
+            return static_cast <T *> (mem_.at(vbuffer));
             #else // ifdef HAVE_OPENMP_TARGET
             o << "OmpManager:  OpenMP target support disabled";
             log.error(o.str().c_str());
