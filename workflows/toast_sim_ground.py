@@ -172,12 +172,8 @@ def load_instrument_and_schedule(args, comm):
         if comm is not None:
             focalplane = comm.bcast(focalplane, root=0)
     else:
-        if args.fknee is None:
-            fknee = None
-        else:
-            fknee = args.fknee * u.Hz
         focalplane = toast.instrument.Focalplane(
-            sample_rate=sample_rate, thinfp=args.thinfp, fknee=fknee
+            sample_rate=sample_rate, thinfp=args.thinfp,
         )
         with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
             focalplane.load_hdf5(f.handle, comm=comm)
