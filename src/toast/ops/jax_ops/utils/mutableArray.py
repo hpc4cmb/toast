@@ -33,7 +33,7 @@ class MutableJaxArray():
         else:
             # errors-out on non numpy arrays 
             # so that we can make sure we are using the most efficient convertion available
-            raise RuntimeError(f"Passed a {type(data)} to MutableJaxArray. Please find the best way to convert it to a Numpy array.")
+            raise RuntimeError(f"Passed a {type(data)} to MutableJaxArray. Please find the best way to convert it to a Numpy array and update the function.")
 
         # gets basic information on the data
         self.shape = self.data.shape
@@ -41,16 +41,25 @@ class MutableJaxArray():
         self.dtype = self.data.dtype
         self.nbytes = self.data.nbytes
 
-    @classmethod
-    def zeros(cls, shape, dtype=None):
+    def zeros(shape, dtype=None):
         """creates an array of zeros"""
         data = jnp.zeros(shape=shape, dtype=dtype)
-        return cls(data)
+        return MutableJaxArray(data)
 
-    @classmethod
-    def to_array(cls, input):
-        """casts a MutableJaxArray into an array, preserves the type of all inputs"""
-        return input.data if isinstance(input, MutableJaxArray) else input
+    def to_array(input):
+        """
+        casts array types and, in particular, MutableJaxArray and MPIShared, to JAX-compatible array types
+        """
+        if isinstance(input, MutableJaxArray) or isinstance(input, MPIShared):
+            # those types need to be cast into their inner data
+            return input.data
+        elif isinstance(input, np.ndarray) or isinstance(input, jax.numpy.ndarray):
+            # those types can be feed to JAX raw with no error or performance problems
+            return input
+        else:
+            # errors-out on other datatypes
+            # so that we can make sure we are using the most efficient convertion available
+            raise RuntimeError(f"Passed a {type(input)} to MutableJaxArray.to_array. Please find the best way to convert it to a Numpy array and update the function.")
 
     def to_numpy(self):
         """
