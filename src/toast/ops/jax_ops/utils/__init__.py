@@ -6,35 +6,6 @@ import numpy
 from ....timing import function_timer
 
 from .mutableArray import MutableJaxArray
-from .asserts import assert_data_localization
-
-#------------------------------------------------------------------------------
-# INTERVAL INDEXING
-
-def make_interval_mask(size, intervals):
-    """
-    Creates a mask of the given size
-    the mask will select data in the union of the intervals
-    NOTE: indexes presents in several intervals will be covered only once
-    """
-    mask = numpy.full(shape=size, fill_value=False)
-    for interval in intervals:
-        interval_start = interval['first']
-        interval_end = interval['last']+1
-        mask[interval_start:interval_end] = True
-    return mask
-
-def make_interval_indexes(intervals):
-    """
-    Creates an array of indexes that is quivalent to the concatenation of the given intervals
-    """
-    result = []
-    for interval in intervals:
-        interval_start = interval['first']
-        interval_end = interval['last']+1
-        interval_indexes = numpy.arange(start=interval_start, stop=interval_end)
-        result.append(interval_indexes)
-    return numpy.concatenate(result)
 
 #------------------------------------------------------------------------------
 # GPU SELECTIONS
@@ -76,22 +47,6 @@ def set_JAX_device(process_id):
     global my_device
     my_device = devices_available[device_id]
     print(f"DEBUG: JAX uses device number {device_id} ({my_device})")
-
-def optional_put_device(data):
-    """
-    Moves data to device if:
-    - the data is on CPU
-    - we are not using JAX on CPU
-    """
-    if isinstance(data, MutableJaxArray):
-        # already on GPU, get internal buffer
-        return data.data
-    elif isinstance(data, jax.numpy.ndarray) or use_cpu:
-        # already on GPU or no GPU used
-        return data
-    else:
-        # moves data to the GPU
-        return jax.device_put(data)
 
 #------------------------------------------------------------------------------
 # IMPLEMENTATION SELECTION
@@ -201,59 +156,3 @@ def get_compile_time(f):
     # insures we preserve the name of the function
     f_timed.__name__ = f.__name__
     return f_timed
-
-#------------------------------------------------------------------------------
-# PMAP
-
-# used so that CPUs can be detected as devices by pmap
-# import os
-# os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=64'
-
-def get_divisor_device_number(nb_devices, axis_size):
-    """
-    finds a size such that it is lower or equal to nb_device but divides axis_size
-    """
-    result = nb_devices
-    while axis_size % result != 0:
-        result -= 1
-    return result
-
-def reshape_for_pmap(data, nb_devices):
-    """
-    reshapes data so that its leading axis has one element per device
-    """
-    divisor_nb_device = get_divisor_device_number(nb_devices, data.shape[0])
-    print(f"DEBUG: 'parallel_vmap' uses {divisor_nb_device} devices.")
-    new_shape = (divisor_nb_device, -1) + tuple(data.shape[1:])
-    return data.reshape(new_shape)
-
-def reshape_from_pmap(data):
-    """
-    reshape data so that its leading axis is not one element per device anymore
-    """
-    new_shape = data.shape[0] * data.shape[1], *data.shape[2:]
-    return data.reshape(new_shape)
-
-def parallel_vmap(f, in_axes, out_axes=0):
-    """
-    Takes a function and applies pmap on top of vmap on it to parallelize it explicitely accros cpus/gpus
-    reshaping inputs and output so that they are split across devices in a pmap friendly way
-    NOTE: 
-    - we suppose that there is a single output (not a tuple of outputs)
-    - this function will use the largest number of devices that is a multiple of the batch dimenssion (maybe not all devices)
-    TODO: does this function work and brings any improvements?
-    """
-    # reshapes data if it has an axis to be modified
-    nb_devices = jax.device_count()
-    def conditional_reshape(axes,input):
-        if axes == 0: return reshape_for_pmap(input, nb_devices)
-        if axes == None: return input
-        else: raise Exception("'parallel_vmap' cannot be applied on axis other than 0!") 
-    # function that reshapes data, call pmap then reshapes data back
-    def f_pmap(*args):
-        reshaped_inputs = (conditional_reshape(axes,input) for (axes,input) in zip(in_axes,args))
-        f_vmap = jax.vmap(f, in_axes=in_axes, out_axes=out_axes)
-        f_jitted = jax.jit(f_vmap) # jits here as jit(pmap) is often a bad thing
-        reshaped_output = jax.pmap(f_jitted, in_axes=in_axes, out_axes=out_axes)(*reshaped_inputs)
-        return reshape_from_pmap(reshaped_output)
-    return f_pmap

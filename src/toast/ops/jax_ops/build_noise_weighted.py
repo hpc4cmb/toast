@@ -10,7 +10,7 @@ from jax.experimental.maps import xmap as jax_xmap
 
 from toast.ops.jax_ops.utils.mutableArray import MutableJaxArray
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
+from .utils import assert_data_localization, select_implementation, ImplementationType
 from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
@@ -127,8 +127,11 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     global2local = MutableJaxArray.to_array(global2local)
     pixels = MutableJaxArray.to_array(pixels)
     weights = MutableJaxArray.to_array(weights)
+    weight_index = MutableJaxArray.to_array(weight_index)
     det_data = MutableJaxArray.to_array(det_data)
+    data_index = MutableJaxArray.to_array(data_index)
     det_flags = MutableJaxArray.to_array(det_flags)
+    flag_index = MutableJaxArray.to_array(flag_index)
     det_scale = MutableJaxArray.to_array(det_scale)
     shared_flags = MutableJaxArray.to_array(shared_flags)
 

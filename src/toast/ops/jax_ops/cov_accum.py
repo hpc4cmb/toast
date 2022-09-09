@@ -9,7 +9,7 @@ import jax.numpy as jnp
 
 from .utils import select_implementation, ImplementationType
 from ..._libtoast import cov_accum_diag_hits as cov_accum_diag_hits_compiled, cov_accum_diag_invnpp as cov_accum_diag_invnpp_compiled
-from ...utils import AlignedI64, AlignedF64
+from .utils.mutableArray import MutableJaxArray
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -55,9 +55,10 @@ def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits):
     Returns:
         None (result is put in hits).
     """
-    # converts hits to numpy array to make ingestion by JAX possible
-    if type(hits) == AlignedI64: hits = hits.array()
-    hits[:] = cov_accum_diag_hits_inner_jax(nsubpix, submap, subpix, hits)
+    submap_input = MutableJaxArray.to_array(submap)
+    subpix_input = MutableJaxArray.to_array(subpix)
+    hits_input = MutableJaxArray.to_array(hits)
+    hits[:] = cov_accum_diag_hits_inner_jax(nsubpix, submap_input, subpix_input, hits_input)
 
 def cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap, subpix, weights, scale, invnpp):
     """
@@ -133,9 +134,11 @@ def cov_accum_diag_invnpp_jax(nsub, nsubpix, nnz, submap, subpix, weights, scale
     Returns:
         None (stores the result in invnpp).
     """
-    # converts invnpp to numpy array to make ingestion by JAX possible
-    if type(invnpp) == AlignedF64: invnpp = invnpp.array()
-    invnpp[:] = cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap, subpix, weights, scale, invnpp)
+    submap_input = MutableJaxArray.to_array(submap)
+    subpix_input = MutableJaxArray.to_array(subpix)
+    weights_input = MutableJaxArray.to_array(weights)
+    invnpp_input = MutableJaxArray.to_array(invnpp)
+    invnpp[:] = cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap_input, subpix_input, weights_input, scale, invnpp_input)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

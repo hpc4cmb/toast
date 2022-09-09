@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device, math_qarray as qarray
+from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray
 from .utils.mutableArray import MutableJaxArray
 from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
@@ -129,12 +129,15 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
 
     # prepares inputs
     intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    quat_index_input = MutableJaxArray.to_array(quat_index)
     quats_input = MutableJaxArray.to_array(quats)
-    hwp_input = MutableJaxArray.to_array(hwp)
+    weight_index_input = MutableJaxArray.to_array(weight_index)
     weights_input = MutableJaxArray.to_array(weights)
+    hwp_input = MutableJaxArray.to_array(hwp)
+    epsilon_input = MutableJaxArray.to_array(epsilon)
 
     # runs computation
-    weights[:] = stokes_weights_IQU_interval_jax(quat_index, quats_input, weight_index, weights_input, hwp_input, epsilon, cal,
+    weights[:] = stokes_weights_IQU_interval_jax(quat_index_input, quats_input, weight_index_input, weights_input, hwp_input, epsilon_input, cal,
                                                  intervals.first, intervals.last, intervals_max_length)
 
 def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):

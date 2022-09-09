@@ -8,12 +8,11 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, optional_put_device
+from .utils import assert_data_localization, select_implementation, ImplementationType
 from .utils.mutableArray import MutableJaxArray
 from .utils.intervals import JaxIntervals, ALL
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
 from ..._libtoast import pointing_detector as pointing_detector_compiled
-from ..._libtoast import Logger
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -102,10 +101,14 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
 
     # prepares inputs
     intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    focalplane_input = MutableJaxArray.to_array(focalplane)
+    boresight_input = MutableJaxArray.to_array(boresight)
+    quat_index_input = MutableJaxArray.to_array(quat_index)
     quats_input = MutableJaxArray.to_array(quats)
+    shared_flags_input = MutableJaxArray.to_array(shared_flags)
 
     # runs computation
-    quats[:] = pointing_detector_interval_jax(focalplane, boresight, quat_index, quats_input, shared_flags, shared_flag_mask,
+    quats[:] = pointing_detector_interval_jax(focalplane_input, boresight_input, quat_index_input, quats_input, shared_flags_input, shared_flag_mask,
                                               intervals.first, intervals.last, intervals_max_length)
 
 #-------------------------------------------------------------------------------------------------

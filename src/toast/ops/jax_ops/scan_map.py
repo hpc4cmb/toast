@@ -8,8 +8,8 @@ import jax
 import jax.numpy as jnp
 
 from .utils import select_implementation, ImplementationType
+from .utils import MutableJaxArray
 from ..._libtoast import scan_map_float64 as scan_map_float64_compiled, scan_map_float32 as scan_map_float32_compiled
-from ...utils import AlignedF64
 
 #-------------------------------------------------------------------------------------------------
 # JAX
@@ -58,11 +58,14 @@ def scan_map_jax(mapdata, nmap, submap, subpix, weights, tod):
     """
     # gets number of pixels in each submap
     npix_submap = mapdata.distribution.n_pix_submap
-    # converts mapdata to a numpy array that can be injested by JAX
+    # converts inputs to arrays that can be injested by JAX
     mapdata = mapdata.raw
-    if type(mapdata) == AlignedF64: mapdata = mapdata.array()
+    mapdata_input = MutableJaxArray.to_array(mapdata)
+    submap_input = MutableJaxArray.to_array(submap)
+    subpix_input = MutableJaxArray.to_array(subpix)
+    weights_input = MutableJaxArray.to_array(weights)
     # runs computations
-    tod[:] = scan_map_jitted(mapdata, npix_submap, nmap, submap, subpix, weights)
+    tod[:] = scan_map_jitted(mapdata_input, npix_submap, nmap, submap_input, subpix_input, weights_input)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

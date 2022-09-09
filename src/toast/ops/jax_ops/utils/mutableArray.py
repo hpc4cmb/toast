@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 from typing import Tuple
 from pshmem import MPIShared
+from ....utils import AlignedI64, AlignedF64
 
 class MutableJaxArray():
     """
@@ -18,22 +19,8 @@ class MutableJaxArray():
     def __init__(self, data):
         """encapsulate an array as a jax array"""
         # gets the data into jax
-        if isinstance(data, np.ndarray):
-            # converts to jax while insuring we send data to GPU
-            # NOTE: device_put is faster than jnp.array, especially on CPU
-            self.data = jax.device_put(data)
-        elif isinstance(data, jax.numpy.ndarray):
-            # already a jax array, does nothing to avoid useless copying
-            self.data = data
-        elif isinstance(data, MPIShared):
-            # not numpy compatible enough for device_put
-            # NOTE: get inner numpy field, raw numpy conversion is very expensive
-            data = data.data
-            self.data = jax.device_put(data)
-        else:
-            # errors-out on non numpy arrays 
-            # so that we can make sure we are using the most efficient convertion available
-            raise RuntimeError(f"Passed a {type(data)} to MutableJaxArray. Please find the best way to convert it to a Numpy array and update the function.")
+        data = MutableJaxArray.to_array(data)
+        self.data = jax.device_put(data)
 
         # gets basic information on the data
         self.shape = self.data.shape
@@ -48,11 +35,14 @@ class MutableJaxArray():
 
     def to_array(input):
         """
-        casts array types and, in particular, MutableJaxArray and MPIShared, to JAX-compatible array types
+        Casts all array types used in TOAST to JAX-compatible array types
         """
         if isinstance(input, MutableJaxArray) or isinstance(input, MPIShared):
             # those types need to be cast into their inner data
             return input.data
+        elif isinstance(input, AlignedI64) or isinstance(input, AlignedF64):
+            # NOTE: get inner array field, raw numpy conversion is very expensive
+            return input.array()
         elif isinstance(input, np.ndarray) or isinstance(input, jax.numpy.ndarray):
             # those types can be feed to JAX raw with no error or performance problems
             return input

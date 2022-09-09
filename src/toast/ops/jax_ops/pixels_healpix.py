@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix, optional_put_device
+from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
 from .utils.mutableArray import MutableJaxArray
 from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
@@ -144,11 +144,15 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
 
     # prepares inputs
     intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    quat_index_input = MutableJaxArray.to_array(quat_index)
     quats_input = MutableJaxArray.to_array(quats)
+    flags_input = MutableJaxArray.to_array(flags)
+    pixel_index_input = MutableJaxArray.to_array(pixel_index)
     pixels_input = MutableJaxArray.to_array(pixels)
+    hit_submaps_input = MutableJaxArray.to_array(hit_submaps)
 
     # runs computation
-    new_pixels, new_hit_submaps = pixels_healpix_interval_jax(quat_index, quats_input, flags, flag_mask, pixel_index, pixels_input, hit_submaps, n_pix_submap, nside, nest,
+    new_pixels, new_hit_submaps = pixels_healpix_interval_jax(quat_index_input, quats_input, flags_input, flag_mask, pixel_index_input, pixels_input, hit_submaps_input, n_pix_submap, nside, nest,
                                                               intervals.first, intervals.last, intervals_max_length)
     
     # modifies output buffers in place

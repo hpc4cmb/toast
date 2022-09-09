@@ -9,6 +9,7 @@ import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import get_compile_time, select_implementation, ImplementationType
+from .utils.mutableArray import MutableJaxArray
 from ..._libtoast import filter_poly2D as filter_poly2D_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -94,7 +95,11 @@ def filter_poly2D_jax(det_groups, templates, signals, masks, coeff):
     """
     # does computation with JAX function and assign result to coeffs
     ngroup = coeff.shape[1]
-    coeff[:] = filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks)
+    det_groups_input = MutableJaxArray.to_array(det_groups)
+    templates_input = MutableJaxArray.to_array(templates)
+    signals_input = MutableJaxArray.to_array(signals)
+    masks_input = MutableJaxArray.to_array(masks)
+    coeff[:] = filter_poly2D_coeffs(ngroup, det_groups_input, templates_input, signals_input, masks_input)
 
 #-------------------------------------------------------------------------------------------------
 # NUMPY

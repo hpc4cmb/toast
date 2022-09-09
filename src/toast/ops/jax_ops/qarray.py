@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 
 from .utils import ImplementationType, select_implementation
+from .utils import MutableJaxArray
 from ...qarray import mult as mult_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -87,8 +88,11 @@ def mult_jax(p_in, q_in):
     Returns:
         out (array_like):  flattened 1D array of float64 values.
     """
-    out = mult_pure_jax(p_in, q_in)
-    # converts back to input type if needed
+    # casts the data to arrays and performs the computation
+    p_in_input = MutableJaxArray.to_array(p_in)
+    q_in_input = MutableJaxArray.to_array(q_in)
+    out = mult_pure_jax(p_in_input, q_in_input)
+    # converts to a numpy type if the input was a numpy type
     return jax.device_get(out) if isinstance(p_in, np.ndarray) else out
 
 #-------------------------------------------------------------------------------------------------
