@@ -207,7 +207,7 @@ class Offset(Template):
         # based on the noise weight of the detector and the number of flagged samples.
 
         # Boolean flags
-        self._amp_flags = np.zeros(self._n_local, dtype=np.bool)
+        self._amp_flags = np.zeros(self._n_local, dtype=bool)
 
         # Here we track the variance of the offsets based on the detector noise weights
         # and the number of unflagged / good samples per offset.
