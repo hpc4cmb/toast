@@ -8,7 +8,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from .utils import assert_data_localization, ImplementationType, select_implementation, MutableJaxArray
+from .utils import assert_data_localization, dataMovementTracker, ImplementationType, select_implementation, MutableJaxArray
 from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import template_offset_add_to_signal as template_offset_add_to_signal_compiled, template_offset_project_signal as template_offset_project_signal_compiled, template_offset_apply_diag_precond as template_offset_apply_diag_precond_compiled
 
@@ -109,6 +109,9 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, ampl
     offsets_start = offsets + intervals.first // step_length
     offsets_end = offsets + intervals.last // step_length
     offsets_max_length = np.max(1 + offsets_end - offsets_start)
+
+    # track data movement
+    dataMovementTracker.add("template_offset_add_to_signal", use_accel, [amplitudes, det_data_input, intervals.first, intervals.last, offsets_start, offsets_end], [det_data])
 
     # run computation
     det_data[:] = template_offset_add_to_signal_intervals_jax(step_length, amplitudes, data_index, det_data_input,
@@ -225,6 +228,9 @@ def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_da
     offsets_end = offsets + intervals.last // step_length
     offsets_max_length = np.max(1 + offsets_end - offsets_start)
 
+    # track data movement
+    dataMovementTracker.add("template_offset_project_signal", use_accel, [det_data, flag_data, amplitudes_input, intervals.first, intervals.last, offsets_start, offsets_end], [amplitudes])
+
     # run computation
     amplitudes[:] = template_offset_project_signal_intervals_jax(data_index, det_data, use_flag, flag_index, flag_data, flag_mask, step_length, amplitudes_input,
                                                                  intervals.first, intervals.last, intervals_max_length,
@@ -249,6 +255,9 @@ def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes
     # problem size
     #print(f"DEBUG: running 'template_offset_apply_diag_precond_jax' with n_amp:{amplitudes_in.size}")
     
+    # track data movement
+    dataMovementTracker.add("template_offset_apply_diag_precond", use_accel, [amplitudes_in, offset_var], [amplitudes_out])
+
     # runs the computation
     amplitudes_out[:] = amplitudes_in * offset_var
 

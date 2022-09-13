@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
+from .utils import assert_data_localization, dataMovementTracker, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
 from .utils.mutableArray import MutableJaxArray
 from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
@@ -150,6 +150,9 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     pixel_index_input = MutableJaxArray.to_array(pixel_index)
     pixels_input = MutableJaxArray.to_array(pixels)
     hit_submaps_input = MutableJaxArray.to_array(hit_submaps)
+
+    # track data movement
+    dataMovementTracker.add("pixels_healpix", use_accel, [quat_index_input, quats_input, flags_input, pixel_index_input, pixels_input, hit_submaps_input, intervals.first, intervals.last], [pixels, hit_submaps])
 
     # runs computation
     new_pixels, new_hit_submaps = pixels_healpix_interval_jax(quat_index_input, quats_input, flags_input, flag_mask, pixel_index_input, pixels_input, hit_submaps_input, n_pix_submap, nside, nest,

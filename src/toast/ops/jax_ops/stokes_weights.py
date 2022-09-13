@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType, math_qarray as qarray
+from .utils import assert_data_localization, dataMovementTracker, select_implementation, ImplementationType, math_qarray as qarray
 from .utils.mutableArray import MutableJaxArray
 from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
@@ -135,6 +135,9 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
     weights_input = MutableJaxArray.to_array(weights)
     hwp_input = MutableJaxArray.to_array(hwp)
     epsilon_input = MutableJaxArray.to_array(epsilon)
+
+    # track data movement
+    dataMovementTracker.add("stokes_weights_IQU", use_accel, [quat_index_input, quats_input, weight_index_input, weights_input, hwp_input, epsilon_input, intervals.first, intervals.last], [weights])
 
     # runs computation
     weights[:] = stokes_weights_IQU_interval_jax(quat_index_input, quats_input, weight_index_input, weights_input, hwp_input, epsilon_input, cal,

@@ -30,7 +30,7 @@ from toast.scripts.benchmarking_utilities import (
     select_case,
 )
 from toast.timing import dump, function_timer, gather_timers
-
+from toast.ops.jax_ops.utils import dataMovementTracker
 
 def parse_arguments():
     """
@@ -257,7 +257,6 @@ def main():
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # Dump all the timing information
-
     timer.stop()
     timer.clear()
     timer.start()
@@ -269,6 +268,9 @@ def main():
         timer.report("toast_mini (gathering and dumping timing info)")
     else:
         timer.stop()
+    
+    # display information on GPU data movement
+    print(dataMovementTracker)
 
 
 if __name__ == "__main__":

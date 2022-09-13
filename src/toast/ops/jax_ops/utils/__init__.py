@@ -6,7 +6,7 @@ import numpy
 from ....timing import function_timer
 
 from .mutableArray import MutableJaxArray
-from .asserts import assert_data_localization
+from .data_localization import assert_data_localization, dataMovementTracker
 
 #------------------------------------------------------------------------------
 # GPU SELECTIONS

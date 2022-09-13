@@ -10,7 +10,7 @@ from jax.experimental.maps import xmap as jax_xmap
 
 from toast.ops.jax_ops.utils.mutableArray import MutableJaxArray
 
-from .utils import assert_data_localization, select_implementation, ImplementationType
+from .utils import assert_data_localization, dataMovementTracker, select_implementation, ImplementationType
 from .utils.intervals import JaxIntervals, ALL
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
@@ -126,6 +126,7 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     zmap_input = MutableJaxArray.to_array(zmap)
     global2local = MutableJaxArray.to_array(global2local)
     pixels = MutableJaxArray.to_array(pixels)
+    pixel_index = MutableJaxArray.to_array(pixel_index)
     weights = MutableJaxArray.to_array(weights)
     weight_index = MutableJaxArray.to_array(weight_index)
     det_data = MutableJaxArray.to_array(det_data)
@@ -134,6 +135,9 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     flag_index = MutableJaxArray.to_array(flag_index)
     det_scale = MutableJaxArray.to_array(det_scale)
     shared_flags = MutableJaxArray.to_array(shared_flags)
+
+    # track data movement
+    dataMovementTracker.add("build_noise_weighted", use_accel, [global2local, zmap_input, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, shared_flags, intervals.first, intervals.last], [zmap])
 
     # runs computation
     zmap[:] = build_noise_weighted_interval_jax(global2local, zmap_input, pixel_index, pixels, weight_index, weights, data_index, det_data, flag_index, det_flags, det_scale, det_flag_mask, shared_flags, shared_flag_mask,

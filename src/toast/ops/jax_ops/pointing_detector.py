@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, select_implementation, ImplementationType
+from .utils import assert_data_localization, dataMovementTracker, select_implementation, ImplementationType
 from .utils.mutableArray import MutableJaxArray
 from .utils.intervals import JaxIntervals, ALL
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
@@ -106,6 +106,9 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     quat_index_input = MutableJaxArray.to_array(quat_index)
     quats_input = MutableJaxArray.to_array(quats)
     shared_flags_input = MutableJaxArray.to_array(shared_flags)
+
+    # track data movement
+    dataMovementTracker.add("pointing_detector", use_accel, [focalplane_input, boresight_input, quat_index_input, quats_input, shared_flags_input, intervals.first, intervals.last], [quats])
 
     # runs computation
     quats[:] = pointing_detector_interval_jax(focalplane_input, boresight_input, quat_index_input, quats_input, shared_flags_input, shared_flag_mask,
