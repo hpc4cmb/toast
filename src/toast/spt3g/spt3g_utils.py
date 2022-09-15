@@ -95,8 +95,9 @@ def to_g3_map_array_type(dt):
 def to_g3_unit(aunit):
     """Convert astropy unit to G3 timestream unit.
 
-    We convert our input units to SI base units (no milli-, micro-, etc prefix).
-    We also return the scale factor needed to transform to this unit.
+    We convert our input units to SPT-3G base units.
+    We also return the scale factor needed to transform to this unit,
+    defined as the ratio between definitions of the fundmental SI units.
 
     Args:
         aunit (astropy.unit):  The input unit.
