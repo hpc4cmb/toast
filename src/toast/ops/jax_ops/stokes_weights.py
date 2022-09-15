@@ -51,7 +51,7 @@ def stokes_weights_IQU_inner_jax(eps, cal, pin, hwpang):
     weights = jnp.array([cal, jnp.cos(detang) * eta * cal, jnp.sin(detang) * eta * cal])
     return weights
 
-# maps over samples and detectors
+# maps over samples, intervals and detectors
 stokes_weights_IQU_inner_jax = jax_xmap(stokes_weights_IQU_inner_jax, 
                                         in_axes=[['detectors'], # epsilon
                                                  [...], # cal
