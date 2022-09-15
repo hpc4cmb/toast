@@ -60,7 +60,7 @@ class ScanMap(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Check that the detector data is set
@@ -101,7 +101,7 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            ob.detdata.ensure(self.det_data, detectors=dets)
+            ob.detdata.ensure(self.det_data, detectors=dets, accel=use_accel)
 
             intervals = ob.intervals[self.view].data
             det_data = ob.detdata[self.det_data].data
@@ -119,7 +119,7 @@ class ScanMap(Operator):
                      weights, weight_indx,
                      intervals, map_dist, 
                      self.zero, self.subtract, 
-                     use_accel=False)
+                     use_accel=use_accel)
 
         return
 

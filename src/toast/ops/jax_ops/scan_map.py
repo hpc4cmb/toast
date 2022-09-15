@@ -480,5 +480,3 @@ scan_map = select_implementation(scan_map_compiled,
 # use scanmap config and check ScanHealpixMap._exec field in timing.csv
 # (or the full sky computation field in the shell output)
 # one problem: this includes call to other operators
-
-# 6 make use of use_accel in the operator
