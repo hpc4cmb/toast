@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 from astropy import units as u
+from scipy.spatial.transform import Rotation
 
 from ..utils import Environment, Logger
 
@@ -330,6 +331,28 @@ def to_g3_time(input):
         return c3g.G3VectorTime([c3g.G3Time(x * 1e8) for x in input])
 
 
+from_3g_rotation = Rotation.from_rotvec([0, np.pi/2., 0])
+
+
+def from_g3_quat(q: c3g.quat):
+    """Convert a single SPT-3G quaternion to TOAST conventions.
+
+    This reorders the components, and rotates from the boresight being aligned
+    with the x-axis to the z-axis being so aligned.
+	TODO: Is such a rotation appropriate for all quaternions being imported?
+
+	Args:
+	    q (spt3g.core.quat): An SPT-3G quaternion
+
+	Returns:
+	    (array): A TOAST quaternion
+    """
+    # roll components from standard order to scipy order,
+    # then perform the rotation to change coordinate systems
+    r = Rotation.from_quat([q.b, q.c, q.d, q.a])
+    return (r * from_3g_rotation).as_quat()
+
+
 def from_g3_quats(input):
     """Convert Spt3G quaternions into TOAST format.
 
@@ -343,10 +366,33 @@ def from_g3_quats(input):
 
     """
     if isinstance(input, c3g.G3VectorQuat):
-        return np.array([np.array([x.b, x.c, x.d, x.a]) for x in input])
+        return np.array([from_g3_quat(x) for x in input])
     else:
         # Assume it is a scalar
-        return np.array([input.b, input.c, input.d, input.a])
+        return from_g3_quat(input)
+
+
+to_3g_rotation = Rotation.from_rotvec([0, -np.pi/2., 0])
+
+
+def to_g3_quat(q):
+	"""Convert a single TOAST quaternion to SPT-3G conventions.
+
+	This corrects storage order, and rotates from the z-axis being aligned with
+	the boresight to the x-axis being so aligned.
+	TODO: Is such a rotation appropriate for all quaternions being exported?
+
+	Args:
+	    q (array): A TOAST quaternion
+
+	Returns:
+	    (spt3g.core.quat): An SPT-3G quaternion
+	"""
+	# first, perform rotation while in TOAST format, then convert back to an
+	# explicit quaternion to roll components to standard order
+	r = Rotation.from_quat(q)
+	q = (r * to_3g_rotation).as_quat()
+	return c3g.quat(q[3], q[0], q[1], q[2])
 
 
 def to_g3_quats(input):
@@ -363,10 +409,10 @@ def to_g3_quats(input):
     """
     if len(input.shape) == 2:
         # Array of values
-        return c3g.G3VectorQuat([c3g.quat(x[3], x[0], x[1], x[2]) for x in input])
+        return c3g.G3VectorQuat([to_g3_quat(q) for q in input])
     else:
         # One value
-        return c3g.quat(input[3], input[0], input[1], input[2])
+        return to_g3_quat(input)
 
 
 # Callable that just builds a list of frames
