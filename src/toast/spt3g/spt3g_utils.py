@@ -111,47 +111,47 @@ def to_g3_unit(aunit):
         scale = 1.0 * aunit
         # Try to convert the units to the various types of quantities
         try:
-            scale = scale.to(u.volt)
+            scale = scale.to(u.volt)*c3g.G3Units.volt
             return (c3g.G3TimestreamUnits.Voltage, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.watt)
+            scale = scale.to(u.watt)*c3g.G3Units.watt
             return (c3g.G3TimestreamUnits.Power, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.ohm)
+            scale = scale.to(u.ohm)*(c3g.G3Units.volt/c3g.G3Units.amp)
             return (c3g.G3TimestreamUnits.Resistance, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.ampere)
+            scale = scale.to(u.ampere)*c3g.G3Units.ampere
             return (c3g.G3TimestreamUnits.Current, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.meter)
+            scale = scale.to(u.meter)*c3g.G3Units.meter
             return (c3g.G3TimestreamUnits.Distance, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.pascal)
+            scale = scale.to(u.bar)*c3g.G3Units.bar
             return (c3g.G3TimestreamUnits.Pressure, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.radian)
+            scale = scale.to(u.radian)*c3g.G3Units.radian
             return (c3g.G3TimestreamUnits.Angle, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.Jy)
+            scale = scale.to(u.Jy)*c3g.G3Units.Jy
             return (c3g.G3TimestreamUnits.FluxDensity, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.Kelvin)
+            scale = scale.to(u.Kelvin)*c3g.G3Units.kelvin
             return (c3g.G3TimestreamUnits.Tcmb, scale.value)
         except Exception:
             pass
