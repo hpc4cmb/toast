@@ -417,6 +417,9 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
     ops.save_hdf5.apply(data)
     log.info_rank("Saved HDF5 data in", comm=world_comm, timer=timer)
 
+    mem = toast.utils.memreport(msg="(whole node)", comm=world_comm, silent=True)
+    log.info_rank(f"After simulating:  {mem}", world_comm)
+
     return data
 
 
