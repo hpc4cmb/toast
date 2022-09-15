@@ -162,7 +162,7 @@ def to_g3_unit(aunit):
 def from_g3_unit(gunit):
     """Convert G3 timestream unit to astropy.
 
-    This function assumes that the quantities are in SI units.
+    This function assumes that the quantities are in SPT-3G units.
 
     Args:
         gunit (G3TimestreamUnit):  The input units.
@@ -174,23 +174,23 @@ def from_g3_unit(gunit):
     if gunit == c3g.G3TimestreamUnits.Counts:
         return u.dimensionless_unscaled
     elif gunit == c3g.G3TimestreamUnits.Voltage:
-        return u.volt
+        return u.def_unit('SPT_Voltage', u.volt/c3g.G3Units.volt)
     elif gunit == c3g.G3TimestreamUnits.Power:
-        return u.watt
+        return u.def_unit('SPT_Power', u.watt/c3g.G3Units.watt)
     elif gunit == c3g.G3TimestreamUnits.Resistance:
-        return u.ohm
+        return u.def_unit('SPT_Resistance', u.ohm/(c3g.G3Units.volt/c3g.G3Units.amp))
     elif gunit == c3g.G3TimestreamUnits.Current:
-        return u.ampere
+        return u.def_unit('SPT_Current', u.ampere/c3g.G3Units.ampere)
     elif gunit == c3g.G3TimestreamUnits.Distance:
-        return u.meter
+        return u.def_unit('SPT_Distance', u.meter/c3g.G3Units.meter)
     elif gunit == c3g.G3TimestreamUnits.Pressure:
-        return u.pascal
+        return u.def_unit('SPT_Pressure', u.bar/c3g.G3Units.bar)
     elif gunit == c3g.G3TimestreamUnits.Angle:
-        return u.radian
+        return u.def_unit('SPT_Angle', u.radian/c3g.G3Units.radian)
     elif gunit == c3g.G3TimestreamUnits.FluxDensity:
-        return u.Jy
+        return u.def_unit('SPT_FluxDensity', u.Jy/c3g.G3Units.Jy)
     elif gunit == c3g.G3TimestreamUnits.Tcmb:
-        return u.Kelvin
+        return u.def_unit('SPT_Tcmb', u.Kelvin/c3g.G3Units.kelvin)
     else:
         return u.dimensionless_unscaled
 
