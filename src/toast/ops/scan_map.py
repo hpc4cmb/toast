@@ -101,60 +101,25 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            ob.detdata.ensure(self.det_data, detectors=dets)
 
-            views = ob.view[self.view]
-            for ivw, vw in enumerate(views):
-                view_samples = None
-                if vw.start is None:
-                    # This is a view of the whole obs
-                    view_samples = ob.n_local_samples
-                else:
-                    view_samples = vw.stop - vw.start
-
-                # Temporary array, re-used for all detectors
-                maptod_raw = AlignedF64.zeros(view_samples)
-                maptod = maptod_raw.array()
-
-                for det in dets:
-                    # The pixels, weights, and data.
-                    pix = views.detdata[self.pixels][ivw][det]
-                    if self.weights is None:
-                        wts = np.ones(pix.size, dtype=np.float64)
-                    else:
-                        wts = views.detdata[self.weights][ivw][det]
-                    ddata = views.detdata[self.det_data][ivw][det]
-
-                    # Get local submap and pixels
-                    local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
-
-                    # We support projecting from either float64 or float32 maps.
-
-                    maptod[:] = 0.0
-
-                    scan_map(map_data, 
-                             map_data.n_value, 
-                             local_sm.astype(np.int64), 
-                             local_pix.astype(np.int64), 
-                             wts.astype(np.float64), 
-                             maptod)
-
-                    # zero-out if needed
-                    if self.zero:
-                        ddata[:] = 0.0
-
-                    # Add or subtract.  Note that the map scanned timestream will have
-                    # zeros anywhere that the pointing is bad, but those samples (and
-                    # any other detector flags) should be handled at other steps of the
-                    # processing.
-                    if self.subtract:
-                        ddata[:] -= maptod
-                    else:
-                        ddata[:] += maptod
-
-                del maptod
-                maptod_raw.clear()
-                del maptod_raw
+            intervals = ob.intervals[self.view].data
+            det_data = ob.detdata[self.det_data].data
+            det_data_indx = ob.detdata[self.det_data].indices(dets)
+            pixels = ob.detdata[self.pixels].data
+            pixels_indx = ob.detdata[self.pixels].indices(dets)
+            if self.weights is None:
+                weights, weight_indx = None, None
+            else:
+                weights = ob.detdata[self.weights].data
+                weight_indx = ob.detdata[self.weights].indices(dets)
+            scan_map(map_data, map_data.n_value,
+                     det_data, det_data_indx,
+                     pixels, pixels_indx,
+                     weights, weight_indx,
+                     intervals, map_dist, 
+                     self.zero, self.subtract, 
+                     use_accel=False)
 
         return
 
@@ -180,7 +145,7 @@ class ScanMap(Operator):
         return prov
 
     def _supports_accel(self):
-        return False
+        return True
 
 @trait_docs
 class ScanMask(Operator):
@@ -370,46 +335,18 @@ class ScanScale(Operator):
                 log.error(msg)
                 raise RuntimeError(msg)
 
-            views = ob.view[self.view]
-            for ivw, vw in enumerate(views):
-                view_samples = None
-                if vw.start is None:
-                    # This is a view of the whole obs
-                    view_samples = ob.n_local_samples
-                else:
-                    view_samples = vw.stop - vw.start
-
-                # Temporary array, re-used for all detectors
-                maptod_raw = AlignedF64.zeros(view_samples)
-                maptod = maptod_raw.array()
-
-                for det in dets:
-                    # The pixels, weights, and data.
-                    pix = views.detdata[self.pixels][ivw][det]
-                    ddata = views.detdata[self.det_data][ivw][det]
-
-                    # Get local submap and pixels
-                    local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
-
-                    # We support projecting from either float64 or float32 maps.  We
-                    # use a shortcut here by passing the original timestream values
-                    # as the pointing "weights", so that the output is equal to the
-                    # pixel values times the original timestream.
-
-                    maptod[:] = 0.0
-
-                    scan_map(map_data, 
-                             1, 
-                             local_sm.astype(np.int64), 
-                             local_pix.astype(np.int64), 
-                             ddata.astype(np.float64), 
-                             maptod)
-
-                    ddata[:] = maptod
-
-                del maptod
-                maptod_raw.clear()
-                del maptod_raw
+            intervals = ob.intervals[self.view].data
+            det_data = ob.detdata[self.det_data].data
+            det_data_indx = ob.detdata[self.det_data].indices(dets)
+            pixels = ob.detdata[self.pixels].data
+            pixels_indx = ob.detdata[self.pixels].indices(dets)
+            scan_map(map_data, 1,
+                     det_data, det_data_indx,
+                     pixels, pixels_indx,
+                     det_data, det_data_indx,
+                     intervals, map_dist, 
+                     should_zero=True, should_subtract=False,
+                     use_accel=False)
 
         return
 
