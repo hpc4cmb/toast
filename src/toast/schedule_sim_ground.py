@@ -2222,8 +2222,6 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 fout_fmt,
                 ods,
                 boresight_angle,
-                last_successful,
-                last_el,
             )
 
         if args.operational_days and len(ods) > args.operational_days:
