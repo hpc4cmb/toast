@@ -147,22 +147,46 @@ def scan_map_jax(mapdata, nmap,
 #-------------------------------------------------------------------------------------------------
 # NUMPY
 
-def scan_map_interval_numpy(mapdata, submap, subpix, weights, det_data, should_zero, should_subtract):
+def global_to_local_numpy(global_pixels, npix_submap, global2local):
+    """
+    Convert global pixel indices to local submaps and pixels within the submap.
+
+    Args:
+        global_pixels (array):  The global pixel indices (size nsamples).
+        npix_submap (int):  The number of pixels in each submap.
+        global2local (array, int64):  The local submap for each global submap.
+
+    Returns:
+        (tuple of array):  The (local submap, pixel within submap) for each global pixel (each of size nsamples).
+
+    NOTE: map_dist.global_pixel_to_submap(pixels) => global_to_local_numpy(pixels, map_dist._n_pix_submap, map_dist._glob2loc)
+    """
+    local_submaps = np.where(global_pixels < 0, -1, global_pixels % npix_submap)
+    local_pixels = np.where(global_pixels < 0, -1, global2local[global_pixels // npix_submap])
+    return (local_submaps, local_pixels)
+
+def scan_map_interval_numpy(mapdata, npix_submap, global2local, 
+                            pixels, weights, det_data, 
+                            should_zero, should_subtract):
     """
     Applies scan_map to a given interval.
 
     Args:
-        mapdata (array, ?):  The local piece of the map (size nsamp*nmap).
-        submap (array, int64):  For each time domain sample, the submap index within the local map (i.e. including only submap)
-        subpix (array, int64):  For each time domain sample, the pixel index within the submap.
+        mapdata (array, ?):  The local piece of the map (size ?*nsample*nmap).
+        npix_submap (int):  The number of pixels in each submap.
+        global2local (array, int64):  The local submap for each global submap.
+        pixels (array, int): pixels (size nsample)
         weights (array, float64):  The pointing matrix weights (size: nsample*nmap).
-        det_data (array, float64):  The timestream on which to accumulate the map values.
+        det_data (array, float64):  The timestream on which to accumulate the map values (size nsample).
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
 
     Returns:
         det_data
     """
+    # Get local submap and pixels
+    submap, subpix = global_to_local_numpy(pixels, npix_submap, global2local)
+
     # uses only samples with valid indices
     valid_samples = (subpix >= 0) & (submap >= 0)
     valid_weights = weights[valid_samples,:]
@@ -206,7 +230,7 @@ def scan_map_numpy(mapdata, nmap,
         weights (optional array, float64): The flat packed detectors weights for the specified mode (size ???*n_samp*3)
         weight_index (optional array, int): The indexes of the weights (size n_det)
         intervals (array, Interval): The intervals to modify (size n_view)
-        map_dist (PixelDistribution):
+        map_dist (PixelDistribution): encapsulate information to translate the pixel mapping
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
         use_accel (bool): should we use an accelerator
@@ -218,9 +242,12 @@ def scan_map_numpy(mapdata, nmap,
 
     # gets number of pixels in each submap
     npix_submap = mapdata.distribution.n_pix_submap
-    # turns mapdata into a numpy array of shape nsamp*nmap
+    # turns mapdata into a numpy array of shape ?*nsamp*nmap
     mapdata = mapdata.raw.array()
     mapdata = np.reshape(mapdata, newshape=(-1,npix_submap,nmap))
+    # extracts pixel distribution information
+    npix_submap = map_dist._n_pix_submap
+    global2local = map_dist._glob2loc
 
     # iterates on detectors and intervals
     n_det = det_data_index.size
@@ -235,11 +262,9 @@ def scan_map_numpy(mapdata, nmap,
             pixels_interval = pixels[p_index, interval_start:interval_end]
             weights_interval = np.ones_like(pixels_interval) if (weight_index is None) else weights[w_index, interval_start:interval_end, :]
             det_data_interval = det_data[d_index, interval_start:interval_end]
-            # Get local submap and pixels
-            local_submap, local_pixels = map_dist.global_pixel_to_submap(pixels_interval)
-            # Process the interval
-            new_det_data_interval = scan_map_interval_numpy(mapdata, local_submap, local_pixels, 
-                                                            weights_interval, det_data_interval,
+            # process the interval
+            new_det_data_interval = scan_map_interval_numpy(mapdata, npix_submap, global2local,
+                                                            pixels_interval, weights_interval, det_data_interval,
                                                             should_zero, should_subtract)
             det_data[d_index, interval_start:interval_end] = new_det_data_interval
 
@@ -279,7 +304,7 @@ def scan_map_compiled(mapdata, nmap,
 
     NOTE: Wraps implementations of scan_map to factor the datatype handling
     TODO: push the triple loop into the C++
-    TODO: implement target offload version of the code
+    TODO: implement target offload version of the code and remove the RuntimeError
     """
     # raise an error as the C++ implementation does not implement target_offload yet
     if use_accel: raise RuntimeError("scan_map_compiled: there is no GPU-accelerated C++ backend yet.")
@@ -328,6 +353,37 @@ def scan_map_compiled(mapdata, nmap,
 
 """
 template <typename T>
+void global_to_local(size_t nsamp,
+                     T const * global_pixels,
+                     size_t npix_submap,
+                     int64_t const * global2local,
+                     T * local_submaps,
+                     T * local_pixels) 
+{
+    double npix_submap_inv = 1.0 / static_cast <double> (npix_submap);
+
+    // Note:  there is not much work in this loop, so it might benefit from
+    // omp simd instead.  However, that would only be enabled if the input
+    // memory buffers were aligned.  That could be ensured with care in the
+    // calling code.  To be revisited if this code is ever the bottleneck.
+
+    #pragma omp parallel for default(shared) schedule(static)
+    for (size_t i = 0; i < nsamp; ++i) 
+    {
+        if (global_pixels[i] < 0) 
+        {
+            local_submaps[i] = -1;
+            local_pixels[i] = -1;
+        } 
+        else 
+        {
+            local_pixels[i] = global_pixels[i] % npix_submap;
+            local_submaps[i] = static_cast <T> (global2local[ static_cast <T> (static_cast <double> (global_pixels[i]) * npix_submap_inv)]);
+        }
+    }
+}
+
+template <typename T>
 void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weights,
                     int64_t nmap, int64_t * subpix, T const * map, double * tod,
                     int64_t nsamp) {
@@ -372,5 +428,4 @@ scan_map = select_implementation(scan_map_compiled,
 # (or the full sky computation field in the shell output)
 # one problem: this includes call to other operators
 
-# 3 make sure we run the verison we ask for
-# 6 use_accel
+# 6 make use of use_accel in the operator
