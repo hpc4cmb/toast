@@ -13,6 +13,7 @@ from ..instrument import GroundSite, SpaceSite
 from ..intervals import IntervalList
 from ..timing import function_timer
 from ..utils import Environment, Logger, object_fullname
+from .. import qarray as qa
 from .spt3g_utils import (
     available,
     compress_timestream,
@@ -26,6 +27,7 @@ from .spt3g_utils import (
 
 if available:
     from spt3g import core as c3g
+    from spt3g import calibration as spt_cal
 
 
 @function_timer
@@ -61,6 +63,29 @@ def export_shared(obs, name, view_name=None, view_index=0, g3t=None):
         return to_g3_quats(sview)
     else:
         return g3t(sview.flatten().tolist())
+
+
+def export_focalplane(fplane):
+	out_props = spt_cal.BolometerPropertiesMap()
+	zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+	for idx,det_name in enumerate(fplane.keys()):
+		bolo = spt_cal.BolometerProperties()
+
+		dir = fplane.detector_data["quat"][idx]
+		rdir = qa.rotate(dir, zaxis).flatten()
+		ang = np.arctan2(rdir[1], rdir[0])
+
+		mag = np.arccos(rdir[2]) * c3g.G3Units.rad
+
+		bolo.physical_name = det_name  # is this a 'physical' name?
+		bolo.x_offset = mag * np.cos(ang)
+		bolo.y_offset = mag * np.sin(ang)
+		bolo.band = (fplane.detector_data["bandcenter"][idx] / u.GHz).value * c3g.G3Units.GHz
+		bolo.pol_angle = (fplane.detector_data["pol_angle"][idx] / u.rad).value * c3g.G3Units.rad
+		bolo.pol_efficiency = fplane.detector_data["pol_efficiency"][idx]
+
+		out_props[det_name] = bolo
+	return out_props
 
 
 @function_timer
@@ -290,6 +315,9 @@ class export_obs_meta(object):
         # Construct calibration frame
         cal = c3g.G3Frame(c3g.G3FrameType.Calibration)
 
+        # Output focal plane using proper SPT structure
+        cal["BolometerProperties"] = export_focalplane(obs.telescope.focalplane)
+
         # Serialize focalplane to HDF5 bytes and write to frame.
         byte_writer = io.BytesIO()
         with h5py.File(byte_writer, "w") as f:
@@ -302,8 +330,12 @@ class export_obs_meta(object):
             byte_writer = io.BytesIO()
             with h5py.File(byte_writer, "w") as f:
                 obs[m_in].save_hdf5(f, comm=None, force_serial=True)
+            if m_out in cal:
+                del cal[m_out]
             cal[m_out] = c3g.G3VectorUnsignedChar(byte_writer.getvalue())
             del byte_writer
+            if f"{m_out}_class" in cal:
+                del cal[f"{m_out}_class"]
             cal[f"{m_out}_class"] = c3g.G3String(object_fullname(obs[m_in].__class__))
 
         return ob, cal
