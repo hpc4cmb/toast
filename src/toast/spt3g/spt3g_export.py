@@ -389,6 +389,7 @@ class export_obs_data(object):
         frame_intervals=None,
         shared_names=list(),
         det_names=list(),
+        split_interval_names=list(),
         interval_names=list(),
         compress=False,
     ):
@@ -396,6 +397,7 @@ class export_obs_data(object):
         self._frame_intervals = frame_intervals
         self._shared_names = shared_names
         self._det_names = det_names
+        self._split_interval_names = split_interval_names
         self._interval_names = interval_names
         self._compress = compress
 
@@ -408,26 +410,63 @@ class export_obs_data(object):
         log = Logger.get()
         frame_intervals = self._frame_intervals
         if frame_intervals is None:
-            # We are using the sample set distribution for our frame boundaries.
             frame_intervals = "frames"
             timespans = list()
-            offset = 0
-            n_frames = 0
-            first_set = obs.dist.samp_sets[obs.comm.group_rank].offset
-            n_set = obs.dist.samp_sets[obs.comm.group_rank].n_elem
-            for sset in range(first_set, first_set + n_set):
-                for chunk in obs.dist.sample_sets[sset]:
-                    timespans.append(
-                        (
-                            obs.shared[self._timestamp_names[0]][offset],
-                            obs.shared[self._timestamp_names[0]][offset + chunk - 1],
+
+            if len(self._split_interval_names) > 0:
+                # Split up data into frames by types of interval, as is normal for observations.
+                # There may be several types of intervals listed in _interval_names,
+                # and we need to pull them out in order
+                # So, treat each obs.intervals[ivl_key] as a queue of intervals,
+                # and cycle through them pulling out the first from each queue
+                # to add to the list of frame intervals
+                def earlier(i1, i2):
+                    if i2 is None:
+                        return True
+                    return i1.start < i2.start
+                queue_indices = [0] * len(self._split_interval_names)
+                done = False
+                while not done:
+                    done = True
+                    next = None
+                    nextIdx = -1
+                    idx = 0
+                    for ivl_key in self._split_interval_names:
+                        if queue_indices[idx] < len(obs.intervals[ivl_key]):
+                            done = False  # if any queue has at least one more interval, we must continue
+                            if earlier(obs.intervals[ivl_key][queue_indices[idx]], next):
+                                next = obs.intervals[ivl_key][queue_indices[idx]]
+                                nextIdx = idx
+                        idx += 1
+                    if not done:
+                        timespans.append(
+                            (
+                                obs.intervals[self._split_interval_names[nextIdx]][queue_indices[nextIdx]].start,
+                                obs.intervals[self._split_interval_names[nextIdx]][queue_indices[nextIdx]].stop,
+                            )
                         )
-                    )
-                    n_frames += 1
-                    offset += chunk
-            obs.intervals.create_col(
-                frame_intervals, timespans, obs.shared[self._timestamp_names[0]]
-            )
+                        queue_indices[nextIdx] += 1
+                obs.intervals.create_col(frame_intervals, timespans, obs.shared[self._timestamp_names[0]])
+            else:
+                # Divide data into frames arbitrarily, which may be unsuitable for further processing
+                # We are using the sample set distribution for our frame boundaries.
+                offset = 0
+                n_frames = 0
+                first_set = obs.dist.samp_sets[obs.comm.group_rank].offset
+                n_set = obs.dist.samp_sets[obs.comm.group_rank].n_elem
+                for sset in range(first_set, first_set + n_set):
+                    for chunk in obs.dist.sample_sets[sset]:
+                        timespans.append(
+                            (
+                                obs.shared[self._timestamp_names[0]][offset],
+                                obs.shared[self._timestamp_names[0]][offset + chunk - 1],
+                            )
+                        )
+                        n_frames += 1
+                        offset += chunk
+                obs.intervals.create_col(
+                    frame_intervals, timespans, obs.shared[self._timestamp_names[0]]
+                )
 
         output = list()
         frame_view = obs.view[frame_intervals]
@@ -488,7 +527,7 @@ class export_obs_data(object):
             if len(self._interval_names) > 0:
                 tview = obs.view[frame_intervals].shared[self._timestamp_names[0]][ivw]
                 iframe = IntervalList(
-                    obs.shared[self._timestamp_names[0]],
+                    np.array(obs.shared[self._timestamp_names[0]]),
                     timespans=[(tview[0], tview[-1])],
                 )
                 for ivl_key, ivl_val in self._interval_names:
@@ -497,6 +536,11 @@ class export_obs_data(object):
                         ivl_key,
                         iframe,
                     )
+                    # Tag frames which contain a period of turning the telescope around
+                    # This may not work usefully if the frame splitting was not based on
+                    # suitable intervals
+                    if ivl_val == "intervals_turnaround" and len(frame[ivl_val])>0:
+                        frame["Turnaround"] = c3g.G3Bool(True)
             output.append(frame)
         # Delete our temporary frame interval if we created it
         if self._frame_intervals is None:
