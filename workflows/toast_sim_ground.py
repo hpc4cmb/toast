@@ -628,23 +628,24 @@ def dump_spt3g(job, args, data):
         det_names=[
             (
                 ops.sim_noise.det_data,
-                ops.sim_noise.det_data,
+                "CalTimestreams",
                 c3g.G3TimestreamMap,
             ),
             # ("flags", "detector_flags", c3g.G3TimestreamMap),
         ],
-        interval_names=[
-            (ops.sim_ground.scan_leftright_interval, "intervals_scan_leftright"),
-            (ops.sim_ground.turn_leftright_interval, "intervals_turn_leftright"),
-            (ops.sim_ground.scan_rightleft_interval, "intervals_scan_rightleft"),
-            (ops.sim_ground.turn_rightleft_interval, "intervals_turn_rightleft"),
-            (ops.sim_ground.elnod_interval, "intervals_elnod"),
-            (ops.sim_ground.scanning_interval, "intervals_scanning"),
-            (ops.sim_ground.turnaround_interval, "intervals_turnaround"),
-            (ops.sim_ground.sun_up_interval, "intervals_sun_up"),
-            (ops.sim_ground.sun_close_interval, "intervals_sun_close"),
+        # split data into frames where it is covered by these intervals
+        split_interval_names=[
+            ops.sim_ground.scan_leftright_interval,
+            ops.sim_ground.turn_leftright_interval,
+            ops.sim_ground.scan_rightleft_interval,
+            ops.sim_ground.turn_rightleft_interval,
+            ops.sim_ground.elnod_interval
         ],
-        compress=True,
+        # export information about these intervals into frames
+        interval_names=[
+            (ops.sim_ground.turnaround_interval, "intervals_turnaround"),
+        ],
+        compress=False, # Compression must be off for data to be intelligible to spt3g_software
     )
     exporter = t3g.export_obs(
         meta_export=meta_exporter,
