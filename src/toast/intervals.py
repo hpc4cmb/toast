@@ -262,17 +262,38 @@ class IntervalList(Sequence, AcceleratorObject):
         result = list()
         curself = 0
         curother = 0
+        lenself = len(self.data)
+        lenother = len(other)
+
+        # Find the first entry in ivals whose last is not smaller than val,
+        # searching within the range of indices [ileft,iright)
+        def lbound(ivals, val, ileft, iright):
+            # represents the width of the remaining interval
+            count = iright-ileft
+            while count>0:
+                i = ileft + count//2
+                if ivals[i].last < val:
+                    ileft = i+1
+                    count -= 1 + count//2
+                else:
+                    count = count//2
+            return ileft
 
         # Walk both sequences, building up the intersection.
-        while (curself < len(self.data)) and (curother < len(other)):
+        while (curself < lenself) and (curother < lenother):
             low = max(self.data[curself].first, other[curother].first)
             high = min(self.data[curself].last, other[curother].last)
             if low <= high:
                 result.append((self.timestamps[low], self.timestamps[high], low, high))
-            if self.data[curself].last < other[curother].last:
-                curself += 1
+                if self.data[curself].last < other[curother].last:
+                    curself += 1
+                else:
+                    curother += 1
             else:
-                curother += 1
+                if self.data[curself].last < other[curother].last:
+                    curself = lbound(self.data, other[curother].first, curself, lenself)
+                else:
+                    curother = lbound(other, self.data[curself].first, curother, lenother)
 
         return IntervalList(
             self.timestamps,
