@@ -1508,7 +1508,7 @@ def current_extent_pole(
 
 @function_timer
 def current_extent(
-        azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els, rising, t, to_cross
+    azmins, azmaxs, aztimes, corners, fp_radius, el, azs, els, rising, t, to_cross
 ):
     """Get the azimuthal extent of the patch along elevation el.
 
