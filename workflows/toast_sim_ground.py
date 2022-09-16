@@ -274,6 +274,9 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
     ops.mem_count.prefix = "After Scan Simulation"
     ops.mem_count.apply(data)
 
+    mem = toast.utils.memreport(msg="(whole node)", comm=world_comm, silent=True)
+    log.info_rank(f"After simulating boresight:  {mem}", world_comm)
+
     if args.pwv_limit is not None:
         iobs = 0
         ngood = 0
@@ -286,13 +289,19 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
             else:
                 nbad += 1
                 del data.obs[iobs]
+                if len(data.obs) == 0:
+                    msg = (
+                        f"PWV limit = {args.pwv_limit} mm rejected all "
+                        f"{nbad} observations assigned to this process"
+                    )
+                    raise RuntimeError(msg)
         if toast_comm is not None:
             nbad = toast_comm.comm_group_rank.allreduce(nbad)
             ngood = toast_comm.comm_group_rank.allreduce(ngood)
         log.info_rank(
             f"  Discarded {nbad} / {ngood + nbad} observations "
-            f"with PWV > {args.pwv_limit} mm",
-            comm=world_comm,
+            f"with PWV > {args.pwv_limit} mm in",
+            comm=world_comm, timer=timer,
         )
 
     # Construct a "perfect" noise model just from the focalplane parameters
@@ -418,7 +427,7 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
     log.info_rank("Saved HDF5 data in", comm=world_comm, timer=timer)
 
     mem = toast.utils.memreport(msg="(whole node)", comm=world_comm, silent=True)
-    log.info_rank(f"After simulating:  {mem}", world_comm)
+    log.info_rank(f"After simulating TOD:  {mem}", world_comm)
 
     return data
 
