@@ -41,7 +41,7 @@ class NoiseWeight(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         for ob in data.obs:
@@ -66,6 +66,7 @@ class NoiseWeight(Operator):
                     detweight = noise.detector_weight(d)
 
                     # Apply
+                    # TODO this might crash and burn when ran on GPU with JAX, we will see...
                     vw[d] *= detweight
         return
 
@@ -86,4 +87,4 @@ class NoiseWeight(Operator):
         return dict()
 
     def _supports_accel(self):
-        return False
+        return True

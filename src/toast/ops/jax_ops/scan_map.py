@@ -27,8 +27,9 @@ def global_to_local_jax(global_pixels, npix_submap, global2local):
     Returns:
         (tuple of array):  The (local submap, pixel within submap) for each global pixel (each of size nsamples).
     """
-    local_submaps = jnp.where(global_pixels < 0, -1, global_pixels % npix_submap)
-    local_pixels = jnp.where(global_pixels < 0, -1, global2local[global_pixels // npix_submap])
+    quotient, remainder = jnp.divmod(global_pixels, npix_submap)
+    local_pixels = jnp.where(global_pixels < 0, -1, remainder)
+    local_submaps = jnp.where(global_pixels < 0, -1, global2local[quotient])
     return (local_submaps, local_pixels)
 
 def scan_map_inner_jax(mapdata, npix_submap, global2local, 
@@ -67,16 +68,19 @@ def scan_map_inner_jax(mapdata, npix_submap, global2local,
     return (det_data - update) if should_subtract else (det_data + update)
 
 # maps over intervals and detectors
-scan_map_inner_jax = jax_xmap(scan_map_inner_jax, 
-                              in_axes=[[...], # mapdata
-                                       [...], # npix_submap
-                                       [...], # global2local
-                                       ['detectors','intervals',...], # pixels
-                                       ['detectors','intervals',...], # weights
-                                       ['detectors','intervals',...], # det_data
-                                       [...], # should_zero
-                                       [...]], # should_subtract
-                              out_axes=['detectors','intervals',...])
+#scan_map_inner_jax = jax_xmap(scan_map_inner_jax, 
+#                              in_axes=[[...], # mapdata
+#                                       [...], # npix_submap
+#                                       [...], # global2local
+#                                       ['detectors','intervals',...], # pixels
+#                                       ['detectors','intervals',...], # weights
+#                                       ['detectors','intervals',...], # det_data
+#                                       [...], # should_zero
+#                                       [...]], # should_subtract
+#                              out_axes=['detectors','intervals',...])
+# TODO xmap is commented out for now due to a [bug with static argnum](https://github.com/google/jax/issues/10741)
+scan_map_inner_jax = jax.vmap(scan_map_inner_jax, in_axes=[None,None,None,0,0,0,None,None], out_axes=0) # loop on intervals
+scan_map_inner_jax = jax.vmap(scan_map_inner_jax, in_axes=[None,None,None,0,0,0,None,None], out_axes=0) # loop on detectors
 
 def scan_map_interval_jax(mapdata,
                           nmap, npix_submap, global2local,
@@ -210,15 +214,16 @@ def global_to_local_numpy(global_pixels, npix_submap, global2local):
         global2local (array, int64):  The local submap for each global submap.
 
     Returns:
-        (tuple of array):  The (local submap, pixel within submap) for each global pixel (each of size nsamples).
+        (tuple of array):  The (local submap, local pixels within submap) for each global pixel (each of size nsamples).
 
     NOTE: map_dist.global_pixel_to_submap(pixels) => global_to_local_numpy(pixels, map_dist._n_pix_submap, map_dist._glob2loc)
     """
-    local_submaps = np.where(global_pixels < 0, -1, global_pixels % npix_submap)
-    local_pixels = np.where(global_pixels < 0, -1, global2local[global_pixels // npix_submap])
+    quotient, remainder = np.divmod(global_pixels, npix_submap)
+    local_pixels = np.where(global_pixels < 0, -1, remainder)
+    local_submaps = np.where(global_pixels < 0, -1, global2local[quotient])
     return (local_submaps, local_pixels)
 
-def scan_map_interval_numpy(mapdata, npix_submap, global2local, 
+def scan_map_interval_numpy(mapdata, npix_submap, global2local,
                             pixels, weights, det_data, 
                             should_zero, should_subtract):
     """
@@ -294,10 +299,8 @@ def scan_map_numpy(mapdata, nmap,
     print(f"DEBUG: Running scan_map_numpy!")
 
     # extracts pixel distribution information
-    # TODO remove assert if it is True, otherwise use second version for reshaping
-    assert(map_dist._n_pix_submap == mapdata.distribution.n_pix_submap)
     npix_submap = map_dist._n_pix_submap
-    global2local = map_dist._glob2loc
+    global2local = map_dist._glob2loc.array()
     # turns mapdata into a numpy array of shape ?*npix_submap*nmap
     mapdata = mapdata.raw.array()
     mapdata = np.reshape(mapdata, newshape=(-1,npix_submap,nmap))
@@ -471,7 +474,7 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 scan_map = select_implementation(scan_map_compiled, 
                                  scan_map_numpy, 
                                  scan_map_jax,
-                                 overide_implementationType=ImplementationType.NUMPY)
+                                 overide_implementationType=ImplementationType.JAX)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_scan_map")'

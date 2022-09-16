@@ -90,7 +90,7 @@ class Copy(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
         for ob in data.obs:
             if self.meta is not None:
@@ -148,6 +148,7 @@ class Copy(Operator):
                             sample_shape=sample_shape,
                             dtype=ob.detdata[in_key].dtype,
                             detectors=dets,
+                            use_accel=use_accel,
                         )
                     # Copy detector data
                     for d in dets:
@@ -182,4 +183,4 @@ class Copy(Operator):
         return prov
 
     def _supports_accel(self):
-        return False
+        return True
