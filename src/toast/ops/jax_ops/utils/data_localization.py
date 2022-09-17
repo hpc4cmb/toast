@@ -1,5 +1,5 @@
+import os, sys
 from collections import defaultdict
-import os
 from .mutableArray import MutableJaxArray
 import jax.numpy as jnp
 from ....utils import Logger
@@ -43,6 +43,15 @@ def assert_data_localization(function_name, use_accel, inputs, outputs):
 #----------------------------------------------------------------------------------------
 # TRACKER
 
+def bytes_of_input(input):
+    """
+    Returns the size of an input in bytes.
+    """
+    if isinstance(input, list):
+        return sys.getsizeof(input)
+    else:
+        return input.nbytes
+
 class DataMovement:
     """data structure used to track data movement to and from the GPU for a particular function"""
 
@@ -57,7 +66,7 @@ class DataMovement:
         self.nb_calls += 1
         # inputs
         for input in inputs:
-            bytes = input.nbytes
+            bytes = bytes_of_input(input)
             self.input_bytes += bytes 
             if not isinstance(input, jnp.ndarray):
                 self.input_to_gpu_bytes += bytes

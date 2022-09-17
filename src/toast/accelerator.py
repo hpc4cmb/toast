@@ -85,8 +85,8 @@ def accel_data_present(data):
     """Check if data is present on the device.
 
     For OpenMP target offload, this checks if the input data has an entry in the
-    global map of host to device pointers.  For jax, this tests if the input array
-    is a jax array.
+    global map of host to device pointers.  
+    For jax, this tests if the input array is a jax array.
 
     Args:
         data (array):  The data to test.
@@ -273,7 +273,7 @@ class AcceleratorObject(object):
         raise RuntimeError(msg)
 
     def accel_create(self):
-        """Create a copy of the data on the accelerator.
+        """Create a (potentially uninitialized) copy of the data on the accelerator.
 
         Returns:
             None

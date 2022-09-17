@@ -197,22 +197,25 @@ class TemplateMatrix(Operator):
 
         if self.transpose:
             if self.amplitudes not in data:
-                # The output template amplitudes do not yet exist.  Create these with
-                # all zero values.
+                # The output template amplitudes do not yet exist.  
+                # Create these with all zero values.
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
                 if use_accel:
                     data[self.amplitudes].accel_create()
+            elif use_accel and (not data[self.amplitudes].accel_exists()):
+                # deals with the case where amplitudes are already in data but NOT in accel
+                # FIXME this happens in pipeline ['TemplateMatrix', 'PixelsHealpix', 'StokesWeights', 'ScanMap', 'NoiseWeight', 'TemplateMatrix']
+                data[self.amplitudes].accel_create()
+                data[self.amplitudes].accel_update_device()
             for d in all_dets:
                 for tmpl in self.templates:
                     log.verbose(f"TemplateMatrix {d} project_signal {tmpl.name}")
                     tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
         else:
             if self.amplitudes not in data:
-                msg = "Template amplitudes '{}' do not exist in data".format(
-                    self.amplitudes
-                )
+                msg = f"Template amplitudes '{self.amplitudes}' do not exist in data"
                 log.error(msg)
                 raise RuntimeError(msg)
             # Ensure that our output detector data exists in each observation
@@ -229,7 +232,6 @@ class TemplateMatrix(Operator):
                     f"TemplateMatrix {ob.name}:  input host detdata={ob.detdata[self.det_data][:][0:10]}"
                 )
                 if use_accel:
-                    # TODO since updating this line, the data seem to be zero...
                     if not ob.detdata.accel_exists(self.det_data):
                         ob.detdata.accel_create(self.det_data)
 

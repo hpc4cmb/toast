@@ -473,8 +473,7 @@ void scan_local_map(int64_t const * submap, int64_t subnpix, double const * weig
 # lets us play with the various implementations
 scan_map = select_implementation(scan_map_compiled, 
                                  scan_map_numpy, 
-                                 scan_map_jax,
-                                 overide_implementationType=ImplementationType.JAX)
+                                 scan_map_jax)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_scan_map")'

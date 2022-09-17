@@ -659,9 +659,7 @@ class Amplitudes(AcceleratorObject):
         if use_accel_omp:
             return accel_data_present(self._raw) and accel_data_present(self._raw_flags)
         elif use_accel_jax:
-            return accel_data_present(self.local_jax) and accel_data_present(
-                self.local_flags_jax
-            )
+            return accel_data_present(self.local_jax) and accel_data_present(self.local_flags_jax)
         else:
             return False
 
@@ -670,8 +668,8 @@ class Amplitudes(AcceleratorObject):
             accel_data_create(self._raw)
             accel_data_create(self._raw_flags)
         elif use_accel_jax:
-            self.local_jax = accel_data_create(self.local_jax)
-            self.local_flags_jax = accel_data_create(self.local_flags_jax)
+            self.local_jax = accel_data_create(self.local)
+            self.local_flags_jax = accel_data_create(self.local_flags)
 
     def _accel_update_device(self):
         if use_accel_omp:
@@ -688,8 +686,6 @@ class Amplitudes(AcceleratorObject):
         elif use_accel_jax:
             self.local[:] = accel_data_update_host(self.local_jax)
             self.local_flags[:] = accel_data_update_host(self.local_flags_jax)
-            self.local_jax = None
-            self.local_flags_jax = None
 
     def _accel_delete(self):
         if use_accel_omp:

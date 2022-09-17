@@ -10,6 +10,7 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
+from .jax_ops import noise_weight
 
 
 @trait_docs
@@ -58,16 +59,19 @@ class NoiseWeight(Operator):
                 )
                 raise RuntimeError(msg)
 
+            # If our output detector data does not yet exist, create it
+            ob.detdata.ensure(self.det_data, detectors=dets, accel=use_accel)
+
+            # computes the noise for each detector
             noise = ob[self.noise_model]
+            detector_weights = [noise.detector_weight(detector) for detector in dets]
 
-            for vw in ob.view[self.view].detdata[self.det_data]:
-                for d in dets:
-                    # Get the detector weight from the noise model.
-                    detweight = noise.detector_weight(d)
+            # multiplies detectors by their respective noise
+            intervals = ob.intervals[self.view].data
+            det_data = ob.detdata[self.det_data].data
+            det_data_indx = ob.detdata[self.det_data].indices(dets)
+            noise_weight(det_data, det_data_indx, intervals, detector_weights, use_accel)
 
-                    # Apply
-                    # TODO this might crash and burn when ran on GPU with JAX, we will see...
-                    vw[d] *= detweight
         return
 
     def _finalize(self, data, **kwargs):

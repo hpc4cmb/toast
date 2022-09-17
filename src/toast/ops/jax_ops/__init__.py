@@ -34,3 +34,4 @@ from .template_offset import template_offset_add_to_signal, template_offset_proj
 from .pointing_detector import pointing_detector
 from .build_noise_weighted import build_noise_weighted
 from .cov_accum import cov_accum_diag_hits, cov_accum_diag_invnpp
+from .noise_weight import noise_weight
