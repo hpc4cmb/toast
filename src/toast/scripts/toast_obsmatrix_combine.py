@@ -45,7 +45,9 @@ def main():
     if rank == 0:
         fname_matrix = combine_observation_matrix(args.rootname)
 
-    log.info_rank(f"Wrote combined matrix to {fname_matrix} in", timer=timer0, comm=comm)
+    log.info_rank(
+        f"Wrote combined matrix to {fname_matrix} in", timer=timer0, comm=comm
+    )
 
     return
 

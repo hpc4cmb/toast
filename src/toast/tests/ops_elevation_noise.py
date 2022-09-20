@@ -42,6 +42,8 @@ class ElevationNoiseTest(MPITestCase):
             noise_model=default_model.noise_model,
             out_model="el_weighted",
             detector_pointing=detpointing_azel,
+            noise_a=0.3,
+            noise_c=0.7,
         )
         el_model.apply(data)
 
@@ -71,6 +73,8 @@ class ElevationNoiseTest(MPITestCase):
             noise_model=default_model.noise_model,
             out_model=None,
             detector_pointing=detpointing_azel,
+            noise_a=0.3,
+            noise_c=0.7,
         )
         el_model.apply(data)
 

@@ -180,7 +180,7 @@ class ConfigTest(MPITestCase):
         if run.operators.fake != fake:
             print(
                 f" Trait type round trip failed, {run.operators.fake} != {fake}",
-                flush=True
+                flush=True,
             )
         self.assertTrue(run.operators.fake == fake)
 
