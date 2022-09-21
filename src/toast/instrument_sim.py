@@ -242,9 +242,7 @@ def hex_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=0):
     pixdiam = angdiameter / (2 * nrings - 1)
 
     # number of digits for pixel indexing
-    ndigit = 1
-    if test > 0:
-        ndigit = int(np.log10(np.abs(test))) + 1
+    ndigit = int(np.log10(npos)) + 1
     nameformat = "{{}}{{:0{}d}}{{}}".format(ndigit)
 
     # compute positions of all detectors
@@ -470,13 +468,7 @@ def rhombus_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=
     pixdiam = angwidth.to_value(u.radian) / dim
 
     # number of digits for pixel indexing
-
-    ndigit = 0
-    test = npos
-    while test > 0:
-        test = test // 10
-        ndigit += 1
-
+    ndigit = int(np.log10(npos)) + 1
     nameformat = "{{}}{{:0{}d}}{{}}".format(ndigit)
 
     # compute positions of all detectors
