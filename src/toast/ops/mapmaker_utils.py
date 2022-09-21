@@ -12,6 +12,7 @@ from .._libtoast import (
     cov_accum_zmap,
 )
 from ..covariance import covariance_invert
+from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
@@ -709,9 +710,9 @@ class BuildNoiseWeighted(Operator):
 
     def _finalize(self, data, use_acc=False, **kwargs):
         if self.zmap in data:
+            log = Logger.get()
             # We have called exec() at least once
             if use_acc:
-                log = Logger.get()
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update self",
                     comm=data.comm.comm_group,
@@ -722,12 +723,28 @@ class BuildNoiseWeighted(Operator):
             else:
                 data[self.zmap].sync_allreduce()
             if use_acc:
-                log = Logger.get()
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update device",
                     comm=data.comm.comm_group,
                 )
                 data[self.zmap].accel_update_device()
+
+            zmap_good = data[self.zmap].data[:, :, 0] != 0.0
+            zmap_min = np.zeros((data[self.zmap].n_value), dtype=np.float64)
+            zmap_max = np.zeros((data[self.zmap].n_value), dtype=np.float64)
+            if np.count_nonzero(zmap_good) > 0:
+                zmap_min[:] = np.amin(data[self.zmap].data[zmap_good, :], axis=0)
+                zmap_max[:] = np.amax(data[self.zmap].data[zmap_good, :], axis=0)
+            all_zmap_min = np.zeros_like(zmap_min)
+            all_zmap_max = np.zeros_like(zmap_max)
+            if data.comm.comm_world is not None:
+                data.comm.comm_world.Reduce(zmap_min, all_zmap_min, op=MPI.MIN, root=0)
+                data.comm.comm_world.Reduce(zmap_max, all_zmap_max, op=MPI.MAX, root=0)
+            if data.comm.world_rank == 0:
+                msg = f"  Noise-weighted map pixel value range:\n"
+                for m in range(data[self.zmap].n_value):
+                    msg += f"    map {m} {zmap_min[m]:1.3e} ... {zmap_max[m]:1.3e}"
+                log.debug(msg)
         return
 
     def _requires(self):
@@ -1046,6 +1063,20 @@ class CovarianceAndHits(Operator):
             rcond=rcond,
             use_alltoallv=(self.sync_type == "alltoallv"),
         )
+
+        rcond_good = rcond.data[:, :, 0] > 0.0
+        rcond_min = 0.0
+        rcond_max = 0.0
+        if np.count_nonzero(rcond_good) > 0:
+            rcond_min = np.amin(rcond.data[rcond_good, 0])
+            rcond_max = np.amax(rcond.data[rcond_good, 0])
+        if data.comm.comm_world is not None:
+            rcond_min = data.comm.comm_world.reduce(rcond_min, root=0, op=MPI.MIN)
+            rcond_max = data.comm.comm_world.reduce(rcond_max, root=0, op=MPI.MAX)
+        if data.comm.world_rank == 0:
+            msg = f"  Pixel covariance condition number range = "
+            msg += f"{rcond_min:1.3e} ... {rcond_max:1.3e}"
+            log.debug(msg)
 
         # Store rcond
         data[self.rcond] = rcond

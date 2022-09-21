@@ -121,6 +121,7 @@ install(FILES
     intervals.py
     instrument.py
     instrument_sim.py
+    instrument_coords.py
     coordinates.py
     noise.py
     atm.py

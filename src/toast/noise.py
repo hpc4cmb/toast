@@ -256,8 +256,10 @@ class Noise(object):
         # string length used for the keys.
 
         rank = 0
+        nproc = 1
         if comm is not None:
             rank = comm.rank
+            nproc = comm.size
 
         mixdata = list()
         maxstr = 0
@@ -302,8 +304,10 @@ class Noise(object):
         if comm is not None:
             psd_group = comm.bcast(psd_group)
 
-        # Organize the PSD information in groups according to the frequency arrays
+        # Organize the PSD information in groups according to the frequency arrays.
+        # Also verify that all PSD units match.
         psd_sets = dict()
+        psd_units = None
         for k in self.keys:
             freq = self.freq(k)
             fhash = psd_group[k]
@@ -314,9 +318,20 @@ class Noise(object):
                     "psds": list(),
                     "keys": list(),
                 }
+            if psd_units is None:
+                psd_units = self.psd(k).unit
+            else:
+                if psd_units != self.psd(k).unit:
+                    raise RuntimeError(
+                        "All PSD units in a Noise object must be the same"
+                    )
             psd_sets[fhash]["psds"].append(self.psd(k))
             psd_sets[fhash]["indices"].append(self.index(k))
             psd_sets[fhash]["keys"].append(k)
+
+        # Add an attribute for the units
+        if hf is not None:
+            hf.attrs["psd_units"] = str(psd_units)
 
         # Create a dataset for each set of PSDs.  Also create separate datasets
         # for the name and index of each PSD.
@@ -373,6 +388,13 @@ class Noise(object):
     @function_timer
     def _load_base_hdf5(self, hf, comm):
         """Read internal data from an open HDF5 group"""
+
+        rank = 0
+        nproc = 1
+        if comm is not None:
+            rank = comm.rank
+            nproc = comm.size
+
         self._freqs = dict()
         self._psds = dict()
         self._rates = dict()
@@ -391,16 +413,27 @@ class Noise(object):
             # detector names
             dets = set()
             keys = set()
+            self._keys_for_dets = dict()
+            self._dets_for_keys = dict()
             for det, key, val in hf["mixing_matrix"]:
                 det = det.decode("utf-8")
                 key = key.decode("utf-8")
                 dets.add(det)
                 keys.add(key)
+                if det not in self._keys_for_dets:
+                    self._keys_for_dets[det] = list()
+                if key not in self._dets_for_keys:
+                    self._dets_for_keys[key] = list()
                 if det not in self._mixmatrix:
                     self._mixmatrix[det] = dict()
                 self._mixmatrix[det][key] = val
+                self._keys_for_dets[det].append(key)
+                self._dets_for_keys[key].append(det)
             self._keys = list(sorted(keys))
             self._dets = list(sorted(dets))
+
+            # Get the units
+            psd_units = u.Unit(hf.attrs["psd_units"])
 
             for dsname in hf.keys():
                 if indx_pat.match(dsname) is not None:
@@ -432,7 +465,7 @@ class Noise(object):
                     self._rates[key] = rate * u.Hz
                     self._indices[key] = indx
                     self._freqs[key] = u.Quantity(freq, u.Hz)
-                    self._psds[key] = u.Quantity(psdrow, u.K**2 * u.second)
+                    self._psds[key] = u.Quantity(psdrow, psd_units)
                 del pds
 
         # Broadcast the results
@@ -444,6 +477,8 @@ class Noise(object):
             self._psds = comm.bcast(self._psds, root=0)
             self._indices = comm.bcast(self._indices, root=0)
             self._mixmatrix = comm.bcast(self._mixmatrix, root=0)
+            self._keys_for_dets = comm.bcast(self._keys_for_dets, root=0)
+            self._dets_for_keys = comm.bcast(self._dets_for_keys, root=0)
 
     def _load_hdf5(self, handle, comm, **kwargs):
         """Internal method which can be overridden by derived classes."""
@@ -460,7 +495,7 @@ class Noise(object):
 
         """
         if (comm is None) or (comm.rank == 0):
-            # The rank zero process should always be writing
+            # The rank zero process should always be reading
             if handle is None:
                 raise RuntimeError("HDF5 group is not open on the root process")
         self._load_hdf5(handle, comm, **kwargs)
