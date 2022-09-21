@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This configures toast using cmake directly (not pip), but uses the
+# conda compilers and other dependencies provided by conda.  It is
+# useful for building toast in parallel repeatedly for debugging
+# in situations where clean un-install is not a concern.
+
 set -e
 
 if [ "x${CONDA_PREFIX}" = "x" ]; then
@@ -35,22 +40,19 @@ if [[ ${CONDA_TOOLCHAIN_HOST} =~ .*darwin.* ]]; then
     shext="dylib"
 fi
 
-export TOAST_BUILD_CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-export TOAST_BUILD_CMAKE_PLATFORM_FLAGS=${CMAKE_PLATFORM_FLAGS}
-export TOAST_BUILD_CMAKE_C_COMPILER="${CC}"
-export TOAST_BUILD_CMAKE_CXX_COMPILER="${CXX}"
-export TOAST_BUILD_CMAKE_C_FLAGS="-O3 -g -fPIC"
-export TOAST_BUILD_CMAKE_CXX_FLAGS="-O3 -g -fPIC"
-export TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=1
-export TOAST_BUILD_CMAKE_INSTALL_PREFIX="${PREFIX}"
-export TOAST_BUILD_CMAKE_PREFIX_PATH="${PREFIX}"
-export TOAST_BUILD_FFTW_ROOT="${PREFIX}"
-export TOAST_BUILD_AATM_ROOT="${PREFIX}"
-export TOAST_BUILD_BLAS_LIBRARIES="${LIBDIR}/libblas.${shext}"
-export TOAST_BUILD_LAPACK_LIBRARIES="${LIBDIR}/liblapack.${shext}"
-export TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include"
-export TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}"
-
-python setup.py build_ext --inplace
-
-conda develop "${topdir}/src"
+cmake \
+    -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" ${CMAKE_PLATFORM_FLAGS} \
+    -DCMAKE_C_COMPILER="${CC}" \
+    -DCMAKE_CXX_COMPILER="${CXX}" \
+    -DCMAKE_C_FLAGS="-O3 -g -fPIC" \
+    -DCMAKE_CXX_FLAGS="-O3 -g -fPIC" \
+    -DCMAKE_VERBOSE_MAKEFILE=1 \
+    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+    -DCMAKE_PREFIX_PATH="${PREFIX}" \
+    -DFFTW_ROOT="${PREFIX}" \
+    -DAATM_ROOT="${PREFIX}" \
+    -DBLAS_LIBRARIES="${LIBDIR}/libblas.${shext}" \
+    -DLAPACK_LIBRARIES="${LIBDIR}/liblapack.${shext}" \
+    -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \
+    -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
+    ..

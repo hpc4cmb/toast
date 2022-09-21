@@ -111,13 +111,15 @@ def load_hdf5_shared(obs, hgrp, fields, log_prefix, parallel):
             # Note:  we could use a scatterv here instead of broadcasting the whole
             # thing, if this ever becomes worth the additional book-keeping.
             data = None
-            if comm_type == "row" and obs.comm.comm_row_rank == 0:
+            if comm_type == "row" and obs.comm_row_rank == 0:
                 # Distribute to the other rank zeros of the process rows
-                full_data = obs.comm.comm_col.bcast(full_data, root=0)
+                if obs.comm_col is not None:
+                    full_data = obs.comm_col.bcast(full_data, root=0)
                 data = np.array(full_data[slc], dtype=obs.shared[field].dtype)
-            elif comm_type == "column" and obs.comm.comm_col_rank == 0:
+            elif comm_type == "column" and obs.comm_col_rank == 0:
                 # Distribute to the other rank zeros of the process columns
-                full_data = obs.comm.comm_row.bcast(full_data, root=0)
+                if obs.comm_row is not None:
+                    full_data = obs.comm_row.bcast(full_data, root=0)
                 data = np.array(full_data[slc], dtype=obs.shared[field].dtype)
             del full_data
 
@@ -171,6 +173,9 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
         if fields is not None and field not in fields:
             continue
         ds = None
+        units = None
+        full_shape = None
+        dtype = None
         if hgrp is not None:
             ds = hgrp[field]
             full_shape = ds.shape
@@ -343,6 +348,14 @@ def load_hdf5(
         timer=timer,
     )
 
+    telescope = None
+    obs_samples = None
+    obs_name = None
+    obs_uid = None
+    session = None
+    obs_det_sets = None
+    obs_sample_sets = None
+
     if hgroup is not None:
         # Data format version check
         file_version = int(hgroup.attrs["toast_format_version"])
@@ -456,21 +469,29 @@ def load_hdf5(
         timer=timer,
     )
 
-    obs = None
-    if hgroup is not None:
-        # Create the observation
-        obs = Observation(
-            comm,
-            telescope,
-            obs_samples,
-            name=obs_name,
-            uid=obs_uid,
-            session=session,
-            detector_sets=obs_det_sets,
-            sample_sets=obs_sample_sets,
-            process_rows=process_rows,
-        )
+    # Broadcast the observation properties if needed
+    if not parallel and nproc > 1:
+        telescope = comm.comm_group.bcast(telescope, root=0)
+        obs_samples = comm.comm_group.bcast(obs_samples, root=0)
+        obs_name = comm.comm_group.bcast(obs_name, root=0)
+        obs_uid = comm.comm_group.bcast(obs_uid, root=0)
+        session = comm.comm_group.bcast(session, root=0)
+        obs_det_sets = comm.comm_group.bcast(obs_det_sets, root=0)
+        obs_sample_sets = comm.comm_group.bcast(obs_sample_sets, root=0)
 
+    # Create the observation
+    obs = Observation(
+        comm,
+        telescope,
+        obs_samples,
+        name=obs_name,
+        uid=obs_uid,
+        session=session,
+        detector_sets=obs_det_sets,
+        sample_sets=obs_sample_sets,
+        process_rows=process_rows,
+    )
+    if hgroup is not None:
         # Load other metadata
         meta_group = hgroup["metadata"]
         for obj_name in meta_group.keys():
@@ -523,9 +544,9 @@ def load_hdf5(
         timer=timer,
     )
 
-    # Broadcast the observation if needed
+    # Broadcast the observation metadata if needed
     if not parallel and nproc > 1:
-        obs = comm.comm_group.bcast(obs, root=0)
+        obs._internal = comm.comm_group.bcast(obs._internal, root=0)
 
     # Load shared data
 

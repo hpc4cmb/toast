@@ -302,7 +302,7 @@ class PixelsWCS(Operator):
         if self.auto_bounds and not self._done_auto:
             # Pass through the boresight pointing for every observation and build
             # the maximum extent of the detector field of view.
-            lonmax = 0 * u.radian
+            lonmax = -2 * np.pi * u.radian
             lonmin = 2 * np.pi * u.radian
             latmax = (-np.pi / 2) * u.radian
             latmin = (np.pi / 2) * u.radian
@@ -334,11 +334,15 @@ class PixelsWCS(Operator):
                 (lonmax.to(u.degree), latmin.to(u.degree)),
                 (lonmin.to(u.degree), latmax.to(u.degree)),
             )
+            # print(
+            #     f"WCS auto now set to lon: {lonmin.to(u.degree)} .. {lonmax.to(u.degree)}, lat: {latmin.to(u.degree)} .. {latmax.to(u.degree)}"
+            # )
             log.verbose(f"PixelsWCS auto_bounds set to {new_bounds}")
             self.bounds = new_bounds
             self._done_auto = True
 
         if self._local_submaps is None and self.create_dist is not None:
+            # print("WCS reset _local_submaps to zeros")
             self._local_submaps = np.zeros(self.submaps, dtype=np.bool)
 
         # Expand detector pointing
@@ -414,9 +418,14 @@ class PixelsWCS(Operator):
             flags = None
             if self.detector_pointing.shared_flags is not None:
                 flags = np.array(ob.shared[self.detector_pointing.shared_flags])
+                fvals, fcounts = np.unique(flags, return_counts=True)
+                # print(f"WCS flag counts = {fvals}, {fcounts}")
                 flags &= self.detector_pointing.shared_flag_mask
                 n_good = np.sum(flags == 0)
                 n_bad = np.sum(flags != 0)
+                # print(
+                #     f"WCS flag mask {int(self.detector_pointing.shared_flag_mask)} has {n_good} good and {n_bad} bad samples"
+                # )
 
             center_lonlat = None
             if self.center_offset is not None:
@@ -427,34 +436,35 @@ class PixelsWCS(Operator):
                 for vslice in view_slices:
                     # Timestream of detector quaternions
                     quats = ob.detdata[quats_name][det][vslice]
+                    # print(f"WCS det {det}, quats = {quats}")
+
                     view_samples = len(quats)
-
-                    # print(f"det {det} quats = {quats}")
-                    theta, phi = qa.to_position(quats)
-                    # print(f"det {det} rad theta, phi = {theta}, {phi}")
-
+                    theta, phi, _ = qa.to_iso_angles(quats)
+                    # print(f"WCS det {det}, theta rad = {theta}, phi rad = {phi}")
                     to_deg = 180.0 / np.pi
                     theta *= to_deg
                     phi *= to_deg
-                    # print(f"det {det} deg theta, phi = {theta}, {phi}")
+
+                    # print(f"WCS det {det}, theta deg = {theta}, phi deg = {phi}")
 
                     world_in = np.column_stack([phi, 90.0 - theta])
+                    # print(f"WCS det {det}, world_in = {world_in}")
 
                     if center_lonlat is not None:
-                        # print(f"orig = {world_in}")
-                        # print(f"center_lonlat = {center_lonlat}")
                         world_in[:, 0] -= center_lonlat[vslice, 0]
                         world_in[:, 1] -= center_lonlat[vslice, 1]
-                        # print(f"final = {world_in}")
 
-                    # print(f"det {det} world_in = {world_in}")
+                    # print(f"WCS det {det}, world_in after center = {world_in}")
+
                     rdpix = self.wcs.wcs_world2pix(world_in, 0)
+                    # print(
+                    #     f"WCS det {det}, {view_samples} samps, {np.count_nonzero(rdpix >= 0)} pix >= 0, {np.count_nonzero(rdpix > 0)} pix > 0"
+                    # )
                     if flags is not None:
                         # Set bad pointing to pixel -1
                         bad_pointing = flags[vslice] != 0
                         rdpix[bad_pointing] = -1
                     rdpix = np.array(np.around(rdpix), dtype=np.int64)
-                    # print(f"det {det} rdpix = {rdpix}")
 
                     ob.detdata[self.pixels][det][vslice] = (
                         rdpix[:, 0] * self.pix_dec + rdpix[:, 1]
@@ -462,8 +472,6 @@ class PixelsWCS(Operator):
 
                     if self.create_dist is not None:
                         good = ob.detdata[self.pixels][det][vslice] >= 0
-                        # print(f"det {det} has {np.sum(good)} good pixels")
-                        # print((ob.detdata[self.pixels][det][vslice])[good])
                         self._local_submaps[
                             (ob.detdata[self.pixels][det][vslice])[good]
                             // self._n_pix_submap
@@ -475,6 +483,13 @@ class PixelsWCS(Operator):
         # extract this into a more general helper routine somewhere.
         fov = obs.telescope.focalplane.field_of_view
         fp_radius = 0.5 * fov.to_value(u.radian)
+
+        # Get the flags if needed.  Use the same flags as
+        # detector pointing.
+        flags = None
+        if self.detector_pointing.shared_flags is not None:
+            flags = np.array(obs.shared[self.detector_pointing.shared_flags])
+            flags &= self.detector_pointing.shared_flag_mask
 
         # work in parallel
         rank = obs.comm.group_rank
@@ -501,14 +516,21 @@ class PixelsWCS(Operator):
         lon = []
         lat = []
         quats = obs.shared[self.detector_pointing.boresight][rank::ntask].copy()
+        rank_good = slice(None)
+        if self.detector_pointing.shared_flags is not None:
+            rank_good = flags[rank::ntask] == 0
+
         for idet, detquat in enumerate(detquats):
-            theta, phi = qa.to_position(qa.mult(quats, detquat))
+            theta, phi, _ = qa.to_iso_angles(qa.mult(quats, detquat))
             if center_lonlat is None:
-                lon.append(phi)
-                lat.append(np.pi / 2 - theta)
+                lon.append(phi[rank_good])
+                lat.append(np.pi / 2 - theta[rank_good])
             else:
-                lon.append(phi - center_lonlat[rank::ntask, 0])
-                lat.append((np.pi / 2 - theta) - center_lonlat[rank::ntask, 1])
+                lon.append(phi[rank_good] - center_lonlat[rank::ntask, 0][rank_good])
+                lat.append(
+                    (np.pi / 2 - theta[rank_good])
+                    - center_lonlat[rank::ntask, 1][rank_good]
+                )
         lon = np.unwrap(np.hstack(lon))
         lat = np.hstack(lat)
 
@@ -551,7 +573,6 @@ class PixelsWCS(Operator):
                     self._local_submaps == 1
                 ]
 
-            # print(f"create WCS pixdist {self._n_pix}, {self.submaps}, {submaps}")
             data[self.create_dist] = PixelDistribution(
                 n_pix=self._n_pix,
                 n_submap=self.submaps,

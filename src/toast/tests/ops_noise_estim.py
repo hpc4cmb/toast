@@ -29,6 +29,52 @@ from .mpi import MPITestCase
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
+def plot_noise_estim_compare(
+    fname, net, true_freq, true_psd, est_freq, est_psd, fit_freq=None, fit_psd=None
+):
+    set_matplotlib_backend()
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure(figsize=[12, 8])
+    ax = fig.add_subplot(1, 1, 1)
+    ax.loglog(
+        true_freq.to_value(u.Hz),
+        true_psd.to_value(u.K**2 * u.s),
+        color="black",
+        label="Input",
+    )
+    ax.loglog(
+        est_freq.to_value(u.Hz),
+        est_psd.to_value(u.K**2 * u.s),
+        color="red",
+        label="Estimated",
+    )
+    if fit_freq is not None:
+        ax.loglog(
+            fit_freq.to_value(u.Hz),
+            fit_psd.to_value(u.K**2 * u.s),
+            color="green",
+            label="Fit to 1/f Model",
+        )
+    net = net.to_value(u.K / u.Hz**0.5)
+    ax.axhline(
+        net**2,
+        label=f"NET = {net:.3f} K" + " / $\sqrt{\mathrm{Hz}}$",
+        linestyle="--",
+        color="blue",
+    )
+    ax.set_xlim(est_freq[0].to_value(u.Hz), est_freq[-1].to_value(u.Hz))
+    ax.set_ylim(
+        np.amin(est_psd.to_value(u.K**2 * u.s)),
+        1.1 * np.amax(est_psd.to_value(u.K**2 * u.s)),
+    )
+    ax.set_xlabel("Frequency [Hz]")
+    ax.set_ylabel("PSD [K$^2$ / Hz]")
+    ax.legend(loc="best")
+    fig.savefig(fname)
+    plt.close()
+
+
 class NoiseEstimTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -448,52 +494,6 @@ class NoiseEstimTest(MPITestCase):
         )
         noise_fitter.apply(data)
 
-        def plot_compare(
-            fname, true_freq, true_psd, est_freq, est_psd, fit_freq=None, fit_psd=None
-        ):
-            set_matplotlib_backend()
-            import matplotlib.pyplot as plt
-
-            fig = plt.figure(figsize=[12, 8])
-            ax = fig.add_subplot(1, 1, 1)
-            ax.loglog(
-                true_freq.to_value(u.Hz),
-                true_psd.to_value(u.K**2 * u.s),
-                color="black",
-                label="Input",
-            )
-            ax.loglog(
-                est_freq.to_value(u.Hz),
-                est_psd.to_value(u.K**2 * u.s),
-                color="red",
-                label="Estimated",
-            )
-            if fit_freq is not None:
-                ax.loglog(
-                    fit_freq.to_value(u.Hz),
-                    fit_psd.to_value(u.K**2 * u.s),
-                    color="green",
-                    label="Fit to 1/f Model",
-                )
-            net = ob.telescope.focalplane[det]["psd_net"]
-            net = net.to_value(u.K / u.Hz**0.5)
-            ax.axhline(
-                net**2,
-                label=f"NET = {net:.3f} K" + " / $\sqrt{\mathrm{Hz}}$",
-                linestyle="--",
-                color="blue",
-            )
-            ax.set_xlim(est_freq[0].to_value(u.Hz), est_freq[-1].to_value(u.Hz))
-            ax.set_ylim(
-                np.amin(est_psd.to_value(u.K**2 * u.s)),
-                1.1 * np.amax(est_psd.to_value(u.K**2 * u.s)),
-            )
-            ax.set_xlabel("Frequency [Hz]")
-            ax.set_ylabel("PSD [K$^2$ / Hz]")
-            ax.legend(loc="best")
-            fig.savefig(fname)
-            plt.close()
-
         for ob in data.obs:
             if ob.comm.group_rank == 0:
                 input_model = ob["noise_model"]
@@ -503,8 +503,9 @@ class NoiseEstimTest(MPITestCase):
                     fname = os.path.join(
                         self.outdir, f"estimate_model_{ob.name}_{det}.pdf"
                     )
-                    plot_compare(
+                    plot_noise_estim_compare(
                         fname,
+                        input_model.NET(det),
                         input_model.freq(det),
                         input_model.psd(det),
                         estim_model.freq(det),
