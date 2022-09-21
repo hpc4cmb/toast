@@ -225,7 +225,7 @@ class ObserveAtmosphere(Operator):
 
                     # Convert Az/El quaternion of the detector back into
                     # angles from the simulation.
-                    theta, phi, _ = qa.to_iso(azel_quat)
+                    theta, phi, _ = qa.to_iso_angles(azel_quat)
 
                     # Stokes weights for observing polarized atmosphere
                     if self.weights is None:

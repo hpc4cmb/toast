@@ -730,8 +730,11 @@ class BuildNoiseWeighted(Operator):
                 data[self.zmap].accel_update_device()
 
             zmap_good = data[self.zmap].data[:, :, 0] != 0.0
-            zmap_min = np.amin(data[self.zmap].data[zmap_good, :], axis=0)
-            zmap_max = np.amax(data[self.zmap].data[zmap_good, :], axis=0)
+            zmap_min = np.zeros((data[self.zmap].n_value), dtype=np.float64)
+            zmap_max = np.zeros((data[self.zmap].n_value), dtype=np.float64)
+            if np.count_nonzero(zmap_good) > 0:
+                zmap_min[:] = np.amin(data[self.zmap].data[zmap_good, :], axis=0)
+                zmap_max[:] = np.amax(data[self.zmap].data[zmap_good, :], axis=0)
             all_zmap_min = np.zeros_like(zmap_min)
             all_zmap_max = np.zeros_like(zmap_max)
             if data.comm.comm_world is not None:
@@ -1062,8 +1065,11 @@ class CovarianceAndHits(Operator):
         )
 
         rcond_good = rcond.data[:, :, 0] > 0.0
-        rcond_min = np.amin(rcond.data[rcond_good, 0])
-        rcond_max = np.amax(rcond.data[rcond_good, 0])
+        rcond_min = 0.0
+        rcond_max = 0.0
+        if np.count_nonzero(rcond_good) > 0:
+            rcond_min = np.amin(rcond.data[rcond_good, 0])
+            rcond_max = np.amax(rcond.data[rcond_good, 0])
         if data.comm.comm_world is not None:
             rcond_min = data.comm.comm_world.reduce(rcond_min, root=0, op=MPI.MIN)
             rcond_max = data.comm.comm_world.reduce(rcond_max, root=0, op=MPI.MAX)

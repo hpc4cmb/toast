@@ -437,7 +437,7 @@ class SimConviqt(Operator):
                     if verbose:
                         timer.report_clear(f"initialize flags for detector {det}")
 
-                theta, phi, psi = qa.to_iso(quats)
+                theta, phi, psi = qa.to_iso_angles(quats)
                 # Polarization angle in the Pxx basis
                 psi_pol = self._get_psi_pol(focalplane, det)
                 if self.dxx:

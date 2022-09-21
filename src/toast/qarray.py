@@ -414,7 +414,7 @@ def from_vectors(v1, v2):
         return out.array().reshape((-1, 4))
 
 
-def from_iso(theta, phi, psi):
+def from_iso_angles(theta, phi, psi):
     """Create quaternions from ISO theta, phi, psi spherical coordinates.
 
     The input angles describe the ZYZ rotations used to build the quaternion.
@@ -447,7 +447,7 @@ def from_iso(theta, phi, psi):
         return out.array().reshape((-1, 4))
 
 
-def from_lonlat(lon, lat, psi):
+def from_lonlat_angles(lon, lat, psi):
     """Create quaternions from longitude, latitude, and psi spherical coordinates.
 
     Args:
@@ -480,7 +480,7 @@ def from_lonlat(lon, lat, psi):
         return out.array().reshape((-1, 4))
 
 
-def to_iso(q):
+def to_iso_angles(q):
     """Convert quaternions to ISO theta, phi, psi spherical coordinates.
 
     Args:
@@ -504,7 +504,7 @@ def to_iso(q):
     return (theta.array(), phi.array(), psi.array())
 
 
-def to_lonlat(q):
+def to_lonlat_angles(q):
     """Convert quaternions to longitude, latitude, and psi spherical coordinates.
 
     Args:
@@ -549,7 +549,9 @@ def from_angles(theta, phi, pa, IAU=False):
 
     """
     log = Logger.get()
-    log.warning("from_angles() is deprecated, Use from_iso() or from_lonlat() instead")
+    log.warning(
+        "from_angles() is deprecated, Use from_iso_angles() or from_lonlat_angles() instead"
+    )
     thetain = ensure_buffer_f64(theta)
     phiin = ensure_buffer_f64(phi)
     pain = ensure_buffer_f64(pa)
@@ -586,7 +588,9 @@ def to_angles(q, IAU=False):
 
     """
     log = Logger.get()
-    log.warning("to_angles() is deprecated, Use to_iso() or to_lonlat() instead")
+    log.warning(
+        "to_angles() is deprecated, Use to_iso_angles() or to_lonlat_angles() instead"
+    )
     qin = ensure_buffer_f64(q)
     lq = len(qin) // 4
     theta = AlignedF64(lq)
@@ -617,7 +621,7 @@ def from_position(theta, phi):
     """
     log = Logger.get()
     log.warning(
-        "from_position() is deprecated, Use from_iso() or from_lonlat() instead"
+        "from_position() is deprecated, Use from_iso_angles() or from_lonlat_angles() instead"
     )
     thetain = ensure_buffer_f64(theta)
     phiin = ensure_buffer_f64(phi)
@@ -647,7 +651,9 @@ def to_position(q):
 
     """
     log = Logger.get()
-    log.warning("to_position() is deprecated, Use to_iso() or to_lonlat() instead")
+    log.warning(
+        "to_position() is deprecated, Use to_iso_angles() or to_lonlat_angles() instead"
+    )
     qin = ensure_buffer_f64(q)
     lq = len(qin) // 4
     theta = AlignedF64(lq)

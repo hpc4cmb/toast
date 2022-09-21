@@ -439,7 +439,7 @@ class PixelsWCS(Operator):
                     # print(f"WCS det {det}, quats = {quats}")
 
                     view_samples = len(quats)
-                    theta, phi, _ = qa.to_iso(quats)
+                    theta, phi, _ = qa.to_iso_angles(quats)
                     # print(f"WCS det {det}, theta rad = {theta}, phi rad = {phi}")
                     to_deg = 180.0 / np.pi
                     theta *= to_deg
@@ -521,7 +521,7 @@ class PixelsWCS(Operator):
             rank_good = flags[rank::ntask] == 0
 
         for idet, detquat in enumerate(detquats):
-            theta, phi, _ = qa.to_iso(qa.mult(quats, detquat))
+            theta, phi, _ = qa.to_iso_angles(qa.mult(quats, detquat))
             if center_lonlat is None:
                 lon.append(phi[rank_good])
                 lat.append(np.pi / 2 - theta[rank_good])

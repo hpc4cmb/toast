@@ -201,7 +201,7 @@ class SimScanSynchronousSignal(Operator):
                 quats = obs.detdata[self.detector_pointing.quats][det]
 
             # Convert Az/El quaternion of the detector into angles
-            theta, phi, _ = qa.to_iso(quats)
+            theta, phi, _ = qa.to_iso_angles(quats)
 
             signal = obs.detdata[self.det_data][det]
 

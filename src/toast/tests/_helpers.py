@@ -778,7 +778,7 @@ def plot_projected_quats(outfile, qbore=None, qdet=None, valid=slice(None), scal
     qbang = None
     if qbore is not None:
         qbang = np.zeros((3, qbore.shape[0]), dtype=np.float64)
-        qbang[0], qbang[1], qbang[2] = qa.to_lonlat(qbore)
+        qbang[0], qbang[1], qbang[2] = qa.to_lonlat_angles(qbore)
         qbang[0] *= 180.0 / np.pi
         qbang[1] *= 180.0 / np.pi
         lon_min = np.amin(qbang[0])
@@ -790,7 +790,7 @@ def plot_projected_quats(outfile, qbore=None, qdet=None, valid=slice(None), scal
     if qdet is not None:
         qdang = np.zeros((qdet.shape[0], 3, qdet.shape[1]), dtype=np.float64)
         for det in range(qdet.shape[0]):
-            qdang[det, 0], qdang[det, 1], qdang[det, 2] = qa.to_lonlat(qdet[det])
+            qdang[det, 0], qdang[det, 1], qdang[det, 2] = qa.to_lonlat_angles(qdet[det])
             qdang[det, 0] *= 180.0 / np.pi
             qdang[det, 1] *= 180.0 / np.pi
         lon_min = np.amin(qdang[:, 0])

@@ -89,7 +89,7 @@ class QarrayTest(MPITestCase):
         phi = (10.0 / (2.0 * np.pi)) * np.arange(nsamp, dtype=np.float64)
         pa = np.zeros(nsamp, dtype=np.float64)
 
-        quats = qa.from_iso(theta, phi, pa)
+        quats = qa.from_iso_angles(theta, phi, pa)
 
         check = np.zeros((nsamp, 3), dtype=np.float64)
         for i in range(nsamp):
@@ -374,13 +374,13 @@ class QarrayTest(MPITestCase):
             np.array([-1.0, 0.0, 0.0]),
         ]
         for theta, phi, psi, vz, vx in zip(all_theta, all_phi, all_psi, all_z, all_x):
-            quat = qa.from_iso(theta, phi, psi)
+            quat = qa.from_iso_angles(theta, phi, psi)
             zrot = qa.rotate(quat, zaxis)
             xrot = qa.rotate(quat, xaxis)
             # print(f"{(zrot, xrot)} {(vz, vx)}")
             self.check_zx((zrot, xrot), (vz, vx))
 
-            check_theta, check_phi, check_psi = qa.to_iso(quat)
+            check_theta, check_phi, check_psi = qa.to_iso_angles(quat)
             # print(f"  {(check_theta, check_phi, check_psi)} {(theta, phi, psi)}")
             self.check_iso((check_theta, check_phi, check_psi), (theta, phi, psi))
 
@@ -402,12 +402,12 @@ class QarrayTest(MPITestCase):
                     phi[toff + poff + k] = j * 2.0 * np.pi / float(nphi)
                     psi[toff + poff + k] = k * 2.0 * np.pi / float(npsi)
         # print(f"Input {np.transpose((theta, phi, psi))}")
-        quat = qa.from_iso(theta, phi, psi)
+        quat = qa.from_iso_angles(theta, phi, psi)
         dir = qa.rotate(quat, np.tile(zaxis, n).reshape((n, 3)))
         orient = qa.rotate(quat, np.tile(xaxis, n).reshape((n, 3)))
         # print(f"Vec {np.transpose((dir, orient), axes=(1, 0, 2))}")
 
-        check_theta, check_phi, check_psi = qa.to_iso(quat)
+        check_theta, check_phi, check_psi = qa.to_iso_angles(quat)
         # print(f"Check {np.transpose((check_theta, check_phi, check_psi))}")
         self.check_iso((check_theta, check_phi, check_psi), (theta, phi, psi))
 
@@ -429,8 +429,8 @@ class QarrayTest(MPITestCase):
         psi *= np.pi / 180.0
         theta = np.zeros_like(psi)
         phi = np.zeros_like(psi)
-        quat = qa.from_iso(theta, phi, psi)
-        check_theta, check_phi, check_psi = qa.to_iso(quat)
+        quat = qa.from_iso_angles(theta, phi, psi)
+        check_theta, check_phi, check_psi = qa.to_iso_angles(quat)
         self.check_iso((check_theta, check_phi, check_psi), (theta, phi, psi))
 
     def test_depths(self):
@@ -483,12 +483,12 @@ class QarrayTest(MPITestCase):
         np.testing.assert_equal(ret2[0].shape, (1, 3))
         np.testing.assert_equal(np.shape(ret2[1]), (1,))
 
-        np.testing.assert_equal(np.shape(qa.from_iso(0, 0, 0)), (4,))
-        np.testing.assert_equal(np.shape(qa.from_iso([0], 0, 0)), (1, 4))
-        np.testing.assert_equal(np.shape(qa.from_iso([0], [0], [0])), (1, 4))
+        np.testing.assert_equal(np.shape(qa.from_iso_angles(0, 0, 0)), (4,))
+        np.testing.assert_equal(np.shape(qa.from_iso_angles([0], 0, 0)), (1, 4))
+        np.testing.assert_equal(np.shape(qa.from_iso_angles([0], [0], [0])), (1, 4))
 
-        ret1 = qa.to_iso(self.q1)
-        ret2 = qa.to_iso(np.atleast_2d(self.q1))
+        ret1 = qa.to_iso_angles(self.q1)
+        ret2 = qa.to_iso_angles(np.atleast_2d(self.q1))
         np.testing.assert_equal(np.shape(ret1[0]), ())
         np.testing.assert_equal(np.shape(ret1[1]), ())
         np.testing.assert_equal(np.shape(ret1[2]), ())

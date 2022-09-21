@@ -830,7 +830,9 @@ class SimGround(Operator):
                 # measured clockwise and the longitude counter-clockwise.  We define
                 # the focalplane coordinate X-axis to be pointed in the direction
                 # of decreasing elevation.
-                bore_azel = qa.from_lonlat(-(az_data), el_data, np.zeros_like(el_data))
+                bore_azel = qa.from_lonlat_angles(
+                    -(az_data), el_data, np.zeros_like(el_data)
+                )
 
                 if scan.boresight_angle.to_value(u.radian) != 0:
                     zaxis = np.array([0, 0, 1.0])

@@ -64,7 +64,7 @@ class PointingWCSTest(MPITestCase):
         phi = np.array(coord[:, 0], dtype=np.float64)
         half_pi = np.pi / 2
         theta = np.array(half_pi - coord[:, 1], dtype=np.float64)
-        bore = qa.from_iso(theta, phi, np.zeros_like(theta))
+        bore = qa.from_iso_angles(theta, phi, np.zeros_like(theta))
 
         nsamp = npix_ra * npix_dec
         data.obs.append(Observation(toastcomm, tele, n_samples=nsamp))
@@ -440,7 +440,7 @@ class PointingWCSTest(MPITestCase):
             zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
             sphi = ob.shared["source"].data[:, 0] * np.pi / 180.0
             stheta = (90.0 - ob.shared["source"].data[:, 1]) * np.pi / 180.0
-            spos = qa.from_iso(stheta, sphi, np.zeros_like(stheta))
+            spos = qa.from_iso_angles(stheta, sphi, np.zeros_like(stheta))
             sdir = qa.rotate(spos, zaxis)
             for det in ob.local_detectors:
                 fwhm = 2 * ob.telescope.focalplane[det]["fwhm"].to_value(u.arcmin)

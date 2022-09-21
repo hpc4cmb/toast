@@ -111,7 +111,7 @@ def xieta_to_quat(xi, eta, gamma):
 
     """
     theta, phi, psi = xieta_to_iso(xi, eta, gamma)
-    return qa.from_iso(theta, phi, psi)
+    return qa.from_iso_angles(theta, phi, psi)
 
 
 def quat_to_xieta(quats):
@@ -127,5 +127,5 @@ def quat_to_xieta(quats):
         (tuple):  Tuple of xi, eta, gamma values in radians
 
     """
-    theta, phi, psi = qa.to_iso(quats)
+    theta, phi, psi = qa.to_iso_angles(quats)
     return iso_to_xieta(theta, phi, psi)
