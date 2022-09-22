@@ -143,6 +143,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
     assert_data_localization('pixels_healpix', use_accel, [quats, flags, hit_submaps], [pixels, hit_submaps])
 
     # prepares inputs
+    if intervals.size == 0: return # deals with a corner case in tests
     intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
     quat_index_input = MutableJaxArray.to_array(quat_index)
     quats_input = MutableJaxArray.to_array(quats)
@@ -384,7 +385,7 @@ pixels_healpix = select_implementation(pixels_healpix_compiled,
                                        pixels_healpix_jax)
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_ground");  toast.tests.run("ops_sim_satellite");'
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix", "ops_sim_ground", "ops_sim_satellite", "ops_demodulate");'
 
 # to bench:
 # use scanmap config and check PixelsHealpix._exec field in timing.csv

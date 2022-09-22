@@ -83,3 +83,9 @@ class MutableJaxArray():
         """
         reshaped_data = jnp.reshape(self.data, newshape=shape)
         return MutableJaxArray(reshaped_data)
+    
+    def __str__(self):
+        """
+        returns a string representation of the content of the array
+        """
+        return self.data.__str__()

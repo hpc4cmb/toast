@@ -246,10 +246,10 @@ class TemplateMatrix(Operator):
             # Synchronize the result
             if use_accel:
                 data[self.amplitudes].accel_update_host()
+                data[self.amplitudes].accel_delete(None)
             for tmpl in self.templates:
                 data[self.amplitudes][tmpl.name].sync()
-            if use_accel:
-                data[self.amplitudes].accel_update_device()
+            # TODO do we synchronise back to device?
         # Set the internal initialization to False, so that we are ready to process
         # completely new data sets.
         return

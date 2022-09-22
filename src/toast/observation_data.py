@@ -29,7 +29,6 @@ from .utils import (
 
 if use_accel_jax:
     import jax
-    #import jax.numpy as jnp
     from .ops.jax_ops import MutableJaxArray
 
 class DetectorData(AcceleratorObject):

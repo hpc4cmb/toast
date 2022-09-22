@@ -150,7 +150,6 @@ class Amplitudes(AcceleratorObject):
                 self._global_last = self._local_indices[-1]
         self._raw = self._storage_class.zeros(self._n_local)
         self.local = self._raw.array()
-        self.local_jax = None
 
         # Support flagging of template amplitudes.  This can be used to flag some
         # amplitudes if too many timestream samples contributing to the amplitude value
@@ -159,7 +158,6 @@ class Amplitudes(AcceleratorObject):
         # a bit of memory and use a whole byte per amplitude.
         self._raw_flags = AlignedU8.zeros(self._n_local)
         self.local_flags = self._raw_flags.array()
-        self.local_flags_jax = None
         super().__init__()
 
     def clear(self):
@@ -171,14 +169,14 @@ class Amplitudes(AcceleratorObject):
 
         """
         if hasattr(self, "local"):
-            del self.local
+            self.local = None
         if hasattr(self, "_raw"):
             if self.accel_exists():
                 self.accel_delete()
             self._raw.clear()
             del self._raw
         if hasattr(self, "local_flags"):
-            del self.local_flags
+            self.local_flags = None
         if hasattr(self, "_raw_flags"):
             self._raw_flags.clear()
             del self._raw_flags
@@ -659,7 +657,7 @@ class Amplitudes(AcceleratorObject):
         if use_accel_omp:
             return accel_data_present(self._raw) and accel_data_present(self._raw_flags)
         elif use_accel_jax:
-            return accel_data_present(self.local_jax) and accel_data_present(self.local_flags_jax)
+            return accel_data_present(self.local) and accel_data_present(self.local_flags)
         else:
             return False
 
@@ -668,35 +666,41 @@ class Amplitudes(AcceleratorObject):
             accel_data_create(self._raw)
             accel_data_create(self._raw_flags)
         elif use_accel_jax:
-            self.local_jax = accel_data_create(self.local)
-            self.local_flags_jax = accel_data_create(self.local_flags)
+            self.local = accel_data_create(self.local)
+            self.local_flags = accel_data_create(self.local_flags)
 
     def _accel_update_device(self):
         if use_accel_omp:
             _ = accel_data_update_device(self._raw)
             _ = accel_data_update_device(self._raw_flags)
         elif use_accel_jax:
-            self.local_jax = accel_data_update_device(self.local)
-            self.local_flags_jax = accel_data_update_device(self.local_flags)
+            # updates local
+            local_host = self._raw.array()
+            self.local = accel_data_update_device(local_host)
+            # updates local_flags
+            local_flags_host = self._raw_flags.array()
+            self.local_flags = accel_data_update_device(local_flags_host)
 
     def _accel_update_host(self):
         if use_accel_omp:
             _ = accel_data_update_host(self._raw)
             _ = accel_data_update_host(self._raw_flags)
         elif use_accel_jax:
-            self.local[:] = accel_data_update_host(self.local_jax)
-            self.local_flags[:] = accel_data_update_host(self.local_flags_jax)
+            # WARNING: while this updates the host, it does not make it accesible
+            # updates local
+            local_host = self._raw.array()
+            local_host[:] = accel_data_update_host(self.local)
+            # updates flags
+            local_flags_host = self._raw_flags.array()
+            local_flags_host[:] = accel_data_update_host(self.local_flags)
 
     def _accel_delete(self):
         if use_accel_omp:
             accel_data_delete(self._raw)
             accel_data_delete(self._raw_flags)
         elif use_accel_jax:
-            del self.local_jax
-            del self.local_flags_jax
-            self.local_jax = None
-            self.local_flags_jax = None
-
+            self.local = self._raw.array()
+            self.local_flags = self._raw_flags.array()
 
 class AmplitudesMap(MutableMapping):
     """Helper class to provide arithmetic operations on a collection of Amplitudes.

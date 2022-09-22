@@ -255,8 +255,12 @@ def template_offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes
     # problem size
     #print(f"DEBUG: running 'template_offset_apply_diag_precond_jax' with n_amp:{amplitudes_in.size}")
     
+    # cast the data if needed
+    offset_var = MutableJaxArray.to_array(offset_var)
+    amplitudes_in = MutableJaxArray.to_array(amplitudes_in)
+
     # track data movement
-    dataMovementTracker.add("template_offset_apply_diag_precond", use_accel, [amplitudes_in, offset_var], [amplitudes_out])
+    dataMovementTracker.add("template_offset_apply_diag_precond", use_accel, [offset_var, amplitudes_in], [amplitudes_out])
 
     # runs the computation
     amplitudes_out[:] = amplitudes_in * offset_var

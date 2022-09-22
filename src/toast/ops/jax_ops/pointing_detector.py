@@ -100,6 +100,7 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     # assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
 
     # prepares inputs
+    if intervals.size == 0: return # deals with a corner case in tests
     intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
     focalplane_input = MutableJaxArray.to_array(focalplane)
     boresight_input = MutableJaxArray.to_array(boresight)
@@ -267,7 +268,7 @@ pointing_detector = select_implementation(pointing_detector_compiled,
                                           pointing_detector_jax)
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix")'
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix", "ops_demodulate")'
 
 # to bench:
 # use scanmap config and check PixelsHealpix._exec (TODO check) field in timing.csv

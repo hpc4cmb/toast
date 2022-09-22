@@ -599,9 +599,7 @@ class Offset(Template):
     def _apply_precond(self, amplitudes_in, amplitudes_out):
         if self.use_noise_prior:
             if self.use_accel:
-                raise NotImplementedError(
-                    "offset template precond on accelerator not implemented"
-                )
+                raise NotImplementedError("offset template precond on accelerator not implemented")
             # Our design matrix includes a term with the inverse offset covariance.
             # This means that our preconditioner should include this term as well.
             for det in self._all_dets:

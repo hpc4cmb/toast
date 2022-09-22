@@ -122,6 +122,7 @@ def build_noise_weighted_jax(global2local, zmap, pixel_index, pixels, weight_ind
     assert_data_localization('build_noise_weighted', use_accel, [global2local, zmap, pixels, weights, det_data, det_flags, det_scale, shared_flags], [zmap])
 
     # prepares inputs
+    if intervals.size == 0: return # deals with a corner case in tests
     intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
     zmap_input = MutableJaxArray.to_array(zmap)
     global2local = MutableJaxArray.to_array(global2local)
@@ -443,7 +444,7 @@ build_noise_weighted = select_implementation(build_noise_weighted_compiled,
                                              build_noise_weighted_jax)
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole");'
+# python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt", "ops_mapmaker_utils", "ops_mapmaker_binning", "ops_sim_tod_dipole", "ops_demodulate");'
 
 # to bench:
 # use scanmap config and check BuildNoiseWeighted field in timing.csv

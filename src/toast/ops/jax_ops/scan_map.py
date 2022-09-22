@@ -124,6 +124,8 @@ def scan_map_interval_jax(mapdata,
     det_data_interval = JaxIntervals.get(det_data, (det_data_index,intervals)) # det_data[det_data_index, intervals]
     if weight_index is None:
         weights_interval = jnp.ones_like(pixels_interval)
+    elif weights.ndim == 2:
+        weights_interval = JaxIntervals.get(weights, (weight_index,intervals)) # weights[weight_index, intervals]
     else:
         weights_interval = JaxIntervals.get(weights, (weight_index,intervals,ALL)) # weights[weight_index, intervals, :]
 
@@ -200,7 +202,7 @@ def scan_map_jax(mapdata, nmap,
     det_data[:] = scan_map_interval_jax(mapdata, nmap, npix_submap, global2local, 
                                         det_data_input, det_data_index, pixels, pixels_index, weights, weight_index,
                                         intervals.first, intervals.last, intervals_max_length, should_zero, should_subtract)
-
+    
 #-------------------------------------------------------------------------------------------------
 # NUMPY
 
@@ -247,7 +249,7 @@ def scan_map_interval_numpy(mapdata, npix_submap, global2local,
 
     # uses only samples with valid indices
     valid_samples = (subpix >= 0) & (submap >= 0)
-    valid_weights = weights[valid_samples,:]
+    valid_weights = weights[valid_samples]
     valid_submap = submap[valid_samples]
     valid_subpix = subpix[valid_samples]
     valid_mapdata = mapdata[valid_submap,valid_subpix,:]
@@ -316,7 +318,7 @@ def scan_map_numpy(mapdata, nmap,
             interval_end = interval['last']+1
             # gets interval data
             pixels_interval = pixels[p_index, interval_start:interval_end]
-            weights_interval = np.ones_like(pixels_interval) if (weight_index is None) else weights[w_index, interval_start:interval_end, :]
+            weights_interval = np.ones_like(pixels_interval) if (weight_index is None) else weights[w_index, interval_start:interval_end]
             det_data_interval = det_data[d_index, interval_start:interval_end]
             # process the interval
             new_det_data_interval = scan_map_interval_numpy(mapdata, npix_submap, global2local,
@@ -385,7 +387,7 @@ def scan_map_compiled(mapdata, nmap,
                 weights_interval = np.ones_like(pixels_interval)
             else:
                 w_index = weight_index[idet]
-                weights_interval = weights[w_index, interval_start:interval_end, :]
+                weights_interval = weights[w_index, interval_start:interval_end]
 
             # Get local submap and pixels
             local_submap, local_pixels = map_dist.global_pixel_to_submap(pixels_interval)
@@ -476,7 +478,7 @@ scan_map = select_implementation(scan_map_compiled,
                                  scan_map_jax)
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_scan_map")'
+# python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve", "ops_scan_map")'
 
 # to bench:
 # use scanmap config and check ScanHealpixMap._exec field in timing.csv
