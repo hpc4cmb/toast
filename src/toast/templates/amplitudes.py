@@ -158,6 +158,7 @@ class Amplitudes(AcceleratorObject):
         # a bit of memory and use a whole byte per amplitude.
         self._raw_flags = AlignedU8.zeros(self._n_local)
         self.local_flags = self._raw_flags.array()
+
         super().__init__()
 
     def clear(self):
@@ -674,35 +675,35 @@ class Amplitudes(AcceleratorObject):
             _ = accel_data_update_device(self._raw)
             _ = accel_data_update_device(self._raw_flags)
         elif use_accel_jax:
-            # updates local
-            local_host = self._raw.array()
-            self.local = accel_data_update_device(local_host)
-            # updates local_flags
-            local_flags_host = self._raw_flags.array()
-            self.local_flags = accel_data_update_device(local_flags_host)
+            self.local = accel_data_update_device(self.local)
+            self.local_flags = accel_data_update_device(self.local_flags)
 
     def _accel_update_host(self):
         if use_accel_omp:
             _ = accel_data_update_host(self._raw)
             _ = accel_data_update_host(self._raw_flags)
         elif use_accel_jax:
-            # WARNING: while this updates the host, it does not make it accesible
             # updates local
             local_host = self._raw.array()
             local_host[:] = accel_data_update_host(self.local)
+            self.local = local_host
             # updates flags
             local_flags_host = self._raw_flags.array()
             local_flags_host[:] = accel_data_update_host(self.local_flags)
+            self.local_flags = local_flags_host
 
     def _accel_delete(self):
         if use_accel_omp:
             accel_data_delete(self._raw)
             accel_data_delete(self._raw_flags)
         elif use_accel_jax:
-            self.local = self._raw.array()
-            self.local_flags = self._raw_flags.array()
+            pass
+        else:
+            log = Logger.get()
+            log.warning("Accelerator support not enabled, cannot delete device data")
 
-class AmplitudesMap(MutableMapping):
+
+class AmplitudesMap(MutableMapping,AcceleratorObject):
     """Helper class to provide arithmetic operations on a collection of Amplitudes.
 
     This simply provides syntactic sugar to reduce duplicated code when working with
@@ -937,7 +938,6 @@ class AmplitudesMap(MutableMapping):
 
         Returns:
             None
-
         """
         if not accel_enabled():
             return
@@ -949,7 +949,6 @@ class AmplitudesMap(MutableMapping):
 
         Returns:
             None
-
         """
         if not accel_enabled():
             return
@@ -961,19 +960,17 @@ class AmplitudesMap(MutableMapping):
 
         Returns:
             None
-
         """
         if not accel_enabled():
             return
         for k, v in self._internal.items():
             v.accel_update_host()
 
-    def accel_delete(self, key):
+    def accel_delete(self):
         """Delete the amplitude data from the accelerator.
 
         Returns:
             None
-
         """
         if not accel_enabled():
             return

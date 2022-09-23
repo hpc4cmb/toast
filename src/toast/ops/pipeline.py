@@ -207,7 +207,6 @@ class Pipeline(Operator):
 
         if self.operators is not None:
             for op in self.operators:
-                msg = f"{pstr} {self} calling operator '{op.name}' finalize()"
                 log.verbose(msg)
                 result.append(op.finalize(data, use_accel=use_accel))
 

@@ -59,9 +59,6 @@ class NoiseWeight(Operator):
                 )
                 raise RuntimeError(msg)
 
-            # If our output detector data does not yet exist, create it
-            ob.detdata.ensure(self.det_data, detectors=dets, accel=use_accel)
-
             # computes the noise for each detector
             noise = ob[self.noise_model]
             detector_weights = [noise.detector_weight(detector) for detector in dets]

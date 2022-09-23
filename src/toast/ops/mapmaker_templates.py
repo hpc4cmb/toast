@@ -24,6 +24,8 @@ from .operator import Operator
 from .pipeline import Pipeline
 from .scan_map import ScanMask
 
+# TODO
+from ..accelerator import use_accel_jax
 
 @trait_docs
 class TemplateMatrix(Operator):
@@ -204,9 +206,13 @@ class TemplateMatrix(Operator):
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
                 if use_accel:
                     data[self.amplitudes].accel_create()
+                    # FIXME: That data movement is required to insure that the systems knows data is on gpu not host
+                    #        otherwise a test fail when using the gpu flag
+                    data[self.amplitudes].accel_update_device()
             elif use_accel and (not data[self.amplitudes].accel_exists()):
                 # deals with the case where amplitudes are already in data but NOT in accel
                 # FIXME this happens in pipeline ['TemplateMatrix', 'PixelsHealpix', 'StokesWeights', 'ScanMap', 'NoiseWeight', 'TemplateMatrix']
+                log.warning(f"TemplateMatrix: use_accel=True but amplitudes ('{self.amplitudes}') are on CPU.")
                 data[self.amplitudes].accel_create()
                 data[self.amplitudes].accel_update_device()
             for d in all_dets:
@@ -243,13 +249,15 @@ class TemplateMatrix(Operator):
 
     def _finalize(self, data, use_accel=False, **kwargs):
         if self.transpose:
-            # Synchronize the result
+            # move amplitudes to host as sync is CPU only
             if use_accel:
                 data[self.amplitudes].accel_update_host()
-                data[self.amplitudes].accel_delete(None)
+            # Synchronize the result
             for tmpl in self.templates:
                 data[self.amplitudes][tmpl.name].sync()
-            # TODO do we synchronise back to device?
+            # move amplitudes back to GPU as it is NOT finalize's job to move data to host
+            if use_accel:
+                data[self.amplitudes].accel_update_device()
         # Set the internal initialization to False, so that we are ready to process
         # completely new data sets.
         return
