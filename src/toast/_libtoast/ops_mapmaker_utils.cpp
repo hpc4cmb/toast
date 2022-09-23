@@ -113,6 +113,10 @@ void init_ops_mapmaker_utils(py::module & m) {
             uint8_t shared_flag_mask,
             bool use_accel
         ) {
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -165,12 +169,6 @@ void init_ops_mapmaker_utils(py::module & m) {
             int64_t n_local_submap = temp_shape[0];
             int64_t n_pix_submap = temp_shape[1];
 
-            auto & omgr = OmpManager::get();
-            int dev = omgr.get_device();
-            bool offload = (!omgr.device_is_host()) && use_accel;
-
-            // int64_t n_zmap = n_local_submap * n_pix_submap * nnz;
-
             // Optionally use flags
 
             bool use_shared_flags = true;
@@ -194,6 +192,14 @@ void init_ops_mapmaker_utils(py::module & m) {
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
+                int64_t * dev_pixels = omgr.device_ptr(raw_pixels);
+                double * dev_weights = omgr.device_ptr(raw_weights);
+                double * dev_det_data = omgr.device_ptr(raw_det_data);
+                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                double * dev_zmap = omgr.device_ptr(raw_zmap);
+                uint8_t * dev_shared_flags = omgr.device_ptr(raw_shared_flags);
+                uint8_t * dev_det_flags = omgr.device_ptr(raw_det_flags);
+
                 # pragma omp target data             \
                 device(dev)                          \
                 map(to:                              \
@@ -214,13 +220,6 @@ void init_ops_mapmaker_utils(py::module & m) {
                 use_det_flags                        \
                 )                                    \
                 use_device_ptr(                      \
-                raw_pixels,                          \
-                raw_weights,                         \
-                raw_det_data,                        \
-                raw_det_flags,                       \
-                raw_intervals,                       \
-                raw_shared_flags,                    \
-                raw_zmap,                            \
                 raw_weight_index,                    \
                 raw_pixel_index,                     \
                 raw_flag_index,                      \
@@ -229,13 +228,22 @@ void init_ops_mapmaker_utils(py::module & m) {
                 raw_global2local                     \
                 )
                 {
-                    # pragma omp target teams distribute collapse(2)
+                    # pragma omp target teams distribute collapse(2) \
+                        is_device_ptr( \
+                            dev_pixels,                          \
+                            dev_weights,                         \
+                            dev_det_data,                        \
+                            dev_det_flags,                       \
+                            dev_intervals,                       \
+                            dev_shared_flags,                    \
+                            dev_zmap \
+                        )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = raw_intervals[iview].first;
-                                isamp <= raw_intervals[iview].last;
+                                int64_t isamp = dev_intervals[iview].first;
+                                isamp <= dev_intervals[iview].last;
                                 isamp++
                             ) {
                                 double zmap_val[nnz];
@@ -246,11 +254,11 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     raw_flag_index,
                                     raw_data_index,
                                     raw_global2local,
-                                    raw_det_data,
-                                    raw_det_flags,
-                                    raw_shared_flags,
-                                    raw_pixels,
-                                    raw_weights,
+                                    dev_det_data,
+                                    dev_det_flags,
+                                    dev_shared_flags,
+                                    dev_pixels,
+                                    dev_weights,
                                     raw_det_scale,
                                     zmap_val,
                                     &zoff,
@@ -266,7 +274,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                                 );
                                 for (int64_t iw = 0; iw < nnz; iw++) {
                                     # pragma omp atomic
-                                    raw_zmap[zoff + iw] += zmap_val[iw];
+                                    dev_zmap[zoff + iw] += zmap_val[iw];
                                 }
                             }
                         }
