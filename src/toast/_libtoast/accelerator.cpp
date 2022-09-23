@@ -352,38 +352,6 @@ int OmpManager::present(void * buffer, size_t nbytes) {
     #endif // ifdef HAVE_OPENMP_TARGET
 }
 
-void * OmpManager::device_ptr(void * buffer) {
-    auto log = toast::Logger::get();
-    std::ostringstream o;
-
-    // If the device is the host device, return
-    if (device_is_host()) {
-        return buffer;
-    }
-
-    #ifdef HAVE_OPENMP_TARGET
-
-    size_t n = mem_.count(buffer);
-    if (n == 0) {
-        o.str("");
-        o << "OmpManager:  host ptr " << buffer
-          << " is not present- cannot get device pointer";
-        log.error(o.str().c_str());
-        throw std::runtime_error(o.str().c_str());
-    }
-    return mem_.at(buffer);
-
-    #else // ifdef HAVE_OPENMP_TARGET
-
-    o << "OmpManager:  OpenMP target support disabled";
-    log.error(o.str().c_str());
-    throw std::runtime_error(o.str().c_str());
-
-    return NULL;
-
-    #endif // ifdef HAVE_OPENMP_TARGET
-}
-
 void OmpManager::dump() {
     #ifdef HAVE_OPENMP_TARGET
     for (auto & p : mem_size_) {
