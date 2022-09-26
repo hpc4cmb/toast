@@ -442,10 +442,6 @@ class Focalplane(object):
         field_of_view=None,
         sample_rate=None,
         thinfp=None,
-        fmin=None,
-        fknee=None,
-        alpha=None,
-        NET=None,
     ):
         self.detector_data = detector_data
         self.field_of_view = field_of_view
@@ -458,8 +454,6 @@ class Focalplane(object):
     @function_timer
     def _initialize(self):
         log = Logger.get()
-
-        self.detector_data = self.detector_data.copy()
 
         if self.thinfp is not None:
             # Pick only every `thinfp` pixel on the focal plane
