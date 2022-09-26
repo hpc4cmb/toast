@@ -430,10 +430,6 @@ class Focalplane(object):
             etc.  Will be calculated from the detector offsets by default.
         sample_rate (Quantity):  The common (nominal) sample rate for all detectors.
         thinfp (int):  Only sample the detectors in the file.
-        fmin (float):  Override noise model fmin.
-        fknee (float):  Override noise model fknee.
-        alpha (float):  Override noise model alpha.
-        NET (float):  Override noise model NET.
 
     """
 
@@ -454,10 +450,6 @@ class Focalplane(object):
         self.detector_data = detector_data
         self.field_of_view = field_of_view
         self.sample_rate = sample_rate
-        self.fmin = fmin
-        self.fknee = fknee
-        self.alpha = alpha
-        self.NET = NET
         self.thinfp = thinfp
         if detector_data is not None and len(detector_data) > 0:
             # We have some dets
@@ -468,18 +460,6 @@ class Focalplane(object):
         log = Logger.get()
 
         self.detector_data = self.detector_data.copy()
-        if self.fmin is not None:
-            self.detector_data["psd_fmin"] = self.fmin
-        if self.fknee is not None:
-            self.detector_data["psd_fknee"] = self.fknee
-            # Noise simulation has a requirement fmin < fknee
-            bad = self.detector_data["psd_fknee"] <= self.detector_data["psd_fmin"]
-            self.detector_data["psd_fmin"][bad] \
-                = self.detector_data["psd_fknee"][bad] / 10
-        if self.alpha is not None:
-            self.detector_data["psd_alpha"] = self.alpha
-        if self.NET is not None:
-            self.detector_data["psd_net"] = self.NET
 
         if self.thinfp is not None:
             # Pick only every `thinfp` pixel on the focal plane
