@@ -299,9 +299,6 @@ class ElevationNoise(Operator):
                 self.net_factors.append(net_factor)
                 self.rates.append(focalplane.sample_rate.to_value(u.Hz))
 
-                self.net_factors.append(net_factor)
-                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
-
                 if modulate_pwv:
                     pwv = obs.telescope.site.weather.pwv.to_value(u.mm)
                     net_factor *= pwv_a0 + pwv_a1 * pwv + pwv_a2 * pwv**2
