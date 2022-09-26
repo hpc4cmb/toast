@@ -824,17 +824,15 @@ class Madam(Operator):
 
         if not self._cached:
             # We do not have the pointing yet.
-            storage, _ = dtype_to_aligned(madam.PIXEL_TYPE)
-            self._madam_pixels_raw = storage.zeros(nsamp * len(all_dets))
-            self._madam_pixels = self._madam_pixels_raw.array()
-
-            stage_local(
+            self._madam_pixels_raw, self._madam_pixels = stage_in_turns(
                 data,
+                nodecomm,
+                n_copy_groups,
                 nsamp,
                 self.view,
                 all_dets,
                 self.pixel_pointing.pixels,
-                self._madam_pixels,
+                madam.PIXEL_TYPE,
                 interval_starts,
                 1,
                 1,
@@ -842,21 +840,18 @@ class Madam(Operator):
                 self.shared_flag_mask,
                 self.det_flags,
                 self.det_flag_mask,
-                do_purge=True,
                 operator=self.pixel_pointing,
             )
 
-            storage, _ = dtype_to_aligned(madam.WEIGHT_TYPE)
-            self._madam_pixweights_raw = storage.zeros(nsamp * len(all_dets) * nnz)
-            self._madam_pixweights = self._madam_pixweights_raw.array()
-
-            stage_local(
+            self._madam_pixweights_raw, self._madam_pixweights = stage_in_turns(
                 data,
+                nodecomm,
+                n_copy_groups,
                 nsamp,
                 self.view,
                 all_dets,
                 self.stokes_weights.weights,
-                self._madam_pixweights,
+                madam.WEIGHT_TYPE,
                 interval_starts,
                 nnz,
                 nnz_stride,
@@ -864,7 +859,6 @@ class Madam(Operator):
                 None,
                 None,
                 None,
-                do_purge=True,
                 operator=self.stokes_weights,
             )
 

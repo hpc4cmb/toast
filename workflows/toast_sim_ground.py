@@ -330,6 +330,9 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
     ops.mem_count.prefix = "After elevation noise model"
     ops.mem_count.apply(data)
 
+    mem = toast.utils.memreport(msg="(whole node)", comm=world_comm, silent=True)
+    log.info_rank(f"After elevation noise model:  {mem}", world_comm)
+
     # Set up the pointing.  Each pointing matrix operator requires a detector pointing
     # operator, and each binning operator requires a pointing matrix operator.
     ops.pixels_radec.detector_pointing = ops.det_pointing_radec

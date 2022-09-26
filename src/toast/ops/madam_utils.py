@@ -26,6 +26,7 @@ def log_time_memory(
         if data.comm.world_rank == 0:
             msg = "{} {}: {:0.1f} s".format(prefix, timer_msg, timer.seconds())
             log.debug(msg)
+        timer.clear()
 
     if mem_msg is not None:
         # Dump toast memory use
