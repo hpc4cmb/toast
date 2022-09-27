@@ -14,7 +14,13 @@ from .. import qarray as qa
 from ..noise import Noise
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
-from ._helpers import create_fake_sky, create_outdir, create_satellite_data, fake_flags
+from ._helpers import (
+    create_fake_sky,
+    create_outdir,
+    create_satellite_data,
+    fake_flags,
+    close_data,
+)
 from .mpi import MPITestCase
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
@@ -106,8 +112,7 @@ class TimeConstantTest(MPITestCase):
                 rms = np.std(signal0 - signal) / np.std(signal0)
                 assert rms < 1e-4
 
-        del data
-        return
+        close_data(data)
 
     def test_time_constant_error(self):
 
@@ -151,5 +156,4 @@ class TimeConstantTest(MPITestCase):
                 assert rms < 1e-2
                 assert rms > 1e-8
 
-        del data
-        return
+        close_data(data)

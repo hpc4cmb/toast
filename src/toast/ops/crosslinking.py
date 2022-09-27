@@ -6,12 +6,12 @@ import os
 
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from .. import qarray as qa
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
@@ -26,7 +26,7 @@ from .pointing import BuildPixelDistribution
 
 class UniformNoise:
     def detector_weight(self, det):
-        return 1.0
+        return 1.0 / (u.K**2)
 
 
 @trait_docs
@@ -108,7 +108,7 @@ class CrossLinking(Operator):
         """Evaluate the special pointing matrix"""
 
         obs = obs_data.obs[0]
-        exists_signal = obs.detdata.ensure(self.signal, detectors=[det])
+        exists_signal = obs.detdata.ensure(self.signal, detectors=[det], units=u.K)
         exists_weights = obs.detdata.ensure(
             self.weights, sample_shape=(3,), detectors=[det]
         )

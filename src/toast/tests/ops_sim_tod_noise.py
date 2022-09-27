@@ -13,7 +13,7 @@ from .. import rng as rng
 from ..noise import Noise
 from ..ops.sim_tod_noise import sim_noise_timestream
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -251,9 +251,7 @@ class SimNoiseTest(MPITestCase):
                     plt.savefig(savefile)
                     plt.close()
 
-        # For some reason not deleting here (and relying on garbage collection) causes
-        # a hang in the case of multiple groups.  Removed after this is understood.
-        del data
+        close_data(data)
 
     def test_sim_mc(self):
         # Create a fake satellite data set for testing.  We explicitly generate
@@ -502,7 +500,7 @@ class SimNoiseTest(MPITestCase):
             if nse.fknee(det).to_value(u.Hz) < 0.1:
                 self.assertTrue(overfrac < 0.1)
 
-        del data
+        close_data(data)
 
     def test_sim_correlated(self):
         # Create a fake satellite data set for testing
@@ -560,4 +558,4 @@ class SimNoiseTest(MPITestCase):
                 total[:] += tod
 
         # np.testing.assert_almost_equal(np.std(total), 0)
-        del data
+        close_data(data)

@@ -14,7 +14,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir
+from ._helpers import create_ground_data, create_outdir, close_data
 from .mpi import MPITestCase
 
 
@@ -79,5 +79,4 @@ class PerturbHWPTest(MPITestCase):
 
         assert rms > 1e-6, "HWP angle does not change enough when perturbed"
 
-        del data
-        return
+        close_data(data)

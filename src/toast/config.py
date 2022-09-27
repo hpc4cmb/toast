@@ -83,7 +83,7 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                 # This is not a user-configurable parameter.
                 # print("  skipping")
                 continue
-            if info["type"] not in ["bool", "int", "float", "str", "Quantity"]:
+            if info["type"] not in ["bool", "int", "float", "str", "Quantity", "Unit"]:
                 # This is not something that we can get from parsing commandline
                 # options.  Skip it.
                 # print("  no type- skipping")
@@ -116,14 +116,16 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                     # General bool option
                     option = "--{}{}{}{}".format(prefix, obj, separator, name)
                     act = "store_true"
+                    dflt = False
                     if info["value"] == "True":
                         act = "store_false"
+                        dflt = True
                         option = "--{}{}{}no_{}".format(prefix, obj, separator, name)
                     # print("  add bool argument {}".format(option))
                     parser.add_argument(
                         option,
                         required=False,
-                        default=info["value"],
+                        default=dflt,
                         action=act,
                         help=info["help"],
                         dest="{}{}{}{}".format(prefix, obj, separator, name),
@@ -145,13 +147,20 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                     typ = str
                     if info["value"] != "None":
                         default = info["value"]
+                elif info["type"] == "Unit":
+                    typ = u.Unit
+                    # The "value" for a Unit is always "unit"
+                    if info["unit"] != "None":
+                        default = u.Unit(info["unit"])
                 elif info["type"] == "Quantity":
                     typ = u.Quantity
                     if info["value"] != "None":
                         default = u.Quantity(
                             "{} {}".format(info["value"], info["unit"])
                         )
-                # print("  add argument {}".format(option))
+                # print(
+                #     f"  add_argument: {option}, type={typ}, default={default}({type(default)})"
+                # )
                 parser.add_argument(
                     option,
                     required=False,
@@ -209,6 +218,7 @@ def args_update_config(args, conf, useropts, section, prefix="", separator="\.")
                 raise RuntimeError(msg)
             parent = parent[p]
 
+    # print("PARSER = ", args)
     for arg, val in vars(args).items():
         obj_mat = obj_pat.match(arg)
         if obj_mat is not None:
@@ -222,35 +232,77 @@ def args_update_config(args, conf, useropts, section, prefix="", separator="\.")
                 # The actual trait name is "enabled"
                 optname = "enabled"
 
-            if val is None:
-                val = "None"
-            elif parent[name][optname]["type"] == "bool":
+            # For each option, convert the parsed value and compare with
+            # the default config value.  If it differs, and the user
+            # actively set this option, then change it.
+
+            if parent[name][optname]["type"] == "bool":
                 if isinstance(val, bool):
                     # Convert to str
                     if val:
                         val = "True"
                     else:
                         val = "False"
+                elif val is None:
+                    val = "None"
                 else:
-                    # This is already a string...
+                    raise ValueError(f"value '{val}' is not bool or None")
+                if (val != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = val
+            elif parent[name][optname]["type"] == "Unit":
+                # print(f"Parsing Unit:  {val} ({type(val)})")
+                if isinstance(val, u.UnitBase):
+                    unit = str(val)
+                elif val is None:
+                    unit = "None"
+                else:
+                    raise ValueError(f"value '{val}' is not a Unit or None")
+                # print(f"Parsing Unit:  --> {unit}")
+                if (unit != parent[name][optname]["unit"]) and (
+                    name in user and optname in user[name]
+                ):
+                    # print(f"Parsing Unit:  --> assign")
+                    parent[name][optname]["unit"] = unit
+                else:
+                    # print(
+                    #     f"Parsing Unit:  --> fail ({unit} != {parent[name][optname]['unit']}) and ({name} in {user} and {optname} in {user[name]})"
+                    # )
                     pass
+            elif parent[name][optname]["type"] == "Quantity":
+                # print(f"Parsing Quantity:  {val} ({type(val)})")
+                if isinstance(val, u.Quantity):
+                    value = f"{val.value:0.14e}"
+                    unit = str(val.unit)
+                elif val is None:
+                    value = "None"
+                    unit = parent[name][optname]["unit"]
+                else:
+                    raise ValueError(f"value '{val}' is not a Quantity or None")
+                if (
+                    val != parent[name][optname]["value"]
+                    or unit != parent[name][optname]["unit"]
+                ) and (name in user and optname in user[name]):
+                    parent[name][optname]["value"] = val
+                    parent[name][optname]["unit"] = unit
+            elif parent[name][optname]["type"] == "float":
+                if val is None:
+                    val = "None"
+                else:
+                    val = f"{val:0.14e}"
+                if (val != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = val
             else:
-                # print(f"Checking option {name}.{optname} unit")
-                # print(f"  parent[{name}] = {parent[name]}")
-                if parent[name][optname]["unit"] != "None":
-                    # This option is a quantity
-                    val = "{:0.14e}".format(
-                        val.to_value(u.Unit(parent[name][optname]["unit"]))
-                    )
-                elif parent[name][optname]["type"] == "float":
-                    val = "{:0.14e}".format(val)
+                if val is None:
+                    val = "None"
                 else:
                     val = str(val)
-            if val != parent[name][optname]["value"]:
-                # The argparse value is different than the input config value.
-                # Only update the value if it was actually specified by the user.
-                if name in user and optname in user[name]:
-                    # The user did set this
+                if (val != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
                     parent[name][optname]["value"] = val
             delattr(remain, arg)
     return remain
@@ -481,18 +533,31 @@ def _load_toml_traits(tbl):
             else:
                 # print("    Not empty or None")
                 result[k] = OrderedDict()
-                # Is this string actually a Quantity?  We try to convert the first
-                # element of the string to a float and the remainder to a Unit.
+                # Is this string actually a Quantity or Unit?
                 try:
                     parts = tbl[k].split()
                     vstr = parts.pop(0)
                     ustr = " ".join(parts)
-                    v = float(vstr)
-                    unit = u.Unit(ustr)
-                    result[k]["value"] = "{:0.14e}".format(v)
-                    result[k]["type"] = "Quantity"
-                    result[k]["unit"] = str(unit)
-                    # print(f"  found trait Quantity '{tbl[k]}'")
+                    if vstr == "unit":
+                        # this is a Unit
+                        result[k]["value"] = "unit"
+                        result[k]["type"] = "Unit"
+                        if ustr == "None":
+                            result[k]["unit"] = "None"
+                        else:
+                            result[k]["unit"] = str(u.Unit(ustr))
+                        # print(f"  found trait Unit '{tbl[k]}'")
+                    elif ustr == "":
+                        raise ValueError("No units, just a string")
+                    else:
+                        result[k]["type"] = "Quantity"
+                        if vstr == "None":
+                            result[k]["value"] = "None"
+                        else:
+                            v = float(vstr)
+                            result[k]["value"] = f"{v:0.14e}"
+                        result[k]["unit"] = str(u.Unit(ustr))
+                        # print(f"  found trait Quantity '{tbl[k]}'")
                 except Exception as e:
                     # print("      failed... just a string")
                     # Just a regular string
@@ -602,8 +667,13 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
         if typ == "Quantity":
             qval = "None"
             if value != "None":
-                qval = "{} {}".format(value, unit)
+                qval = f"{value} {unit}"
             tbl.add(name, qval)
+        elif typ == "Unit":
+            uval = "unit None"
+            if unit != "None":
+                uval = f"unit {unit}"
+            tbl.add(name, uval)
         elif typ in ["list", "set", "tuple"]:
             val = "None"
             if value != "None":
@@ -613,7 +683,7 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
                     val = list()
                     for elem in value:
                         if isinstance(elem, tuple):
-                            # This is a quantity
+                            # This is a quantity / unit
                             val.append(" ".join(elem))
                         else:
                             val.append(elem)
@@ -645,8 +715,11 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
             if value != "None":
                 val = float(value)
             tbl.add(name, val)
+        elif typ == "callable":
+            # Just add None
+            tbl.add(name, "None")
         else:
-            # Just leave the string representation.
+            # This must be a custom class or a str
             tbl.add(name, value)
         if help is not None:
             tbl[name].comment(help)

@@ -14,7 +14,7 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir, fake_flags
+from ._helpers import create_ground_data, create_outdir, fake_flags, close_data
 from .mpi import MPITestCase
 
 
@@ -77,8 +77,7 @@ class GroundFilterTest(MPITestCase):
                 check_rms = np.std(ob.detdata[defaults.det_data][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
-        data.clear()
-        del data
+        close_data(data)
 
     def test_groundfilter_split(self):
 
@@ -136,5 +135,4 @@ class GroundFilterTest(MPITestCase):
                 check_rms = np.std(ob.detdata[defaults.det_data][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
-        data.clear()
-        del data
+        close_data(data)

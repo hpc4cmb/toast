@@ -21,7 +21,17 @@ from ..observation import Observation
 from ..observation import default_values as defaults
 from ..schedule import GroundSchedule
 from ..timing import GlobalTimers, Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
+from ..traits import (
+    Bool,
+    Float,
+    Instance,
+    Int,
+    List,
+    Quantity,
+    Unit,
+    Unicode,
+    trait_docs,
+)
 from ..utils import (
     Environment,
     Logger,
@@ -158,6 +168,8 @@ class SimGround(Operator):
         allow_none=True,
         help="Observation detdata key to initialize",
     )
+
+    det_data_units = Unit(u.K, help="Desired units of detector data")
 
     det_flags = Unicode(
         defaults.det_flags,
@@ -796,7 +808,10 @@ class SimGround(Operator):
 
             if self.det_data is not None:
                 exists_data = ob.detdata.ensure(
-                    self.det_data, dtype=np.float64, detectors=dets
+                    self.det_data,
+                    dtype=np.float64,
+                    detectors=dets,
+                    units=self.det_data_units,
                 )
 
             if self.det_flags is not None:

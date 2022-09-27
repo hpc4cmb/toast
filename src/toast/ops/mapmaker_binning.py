@@ -2,14 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from astropy import units as u
 import numpy as np
 import traitlets
 
 from ..covariance import covariance_apply
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .delete import Delete
 from .mapmaker_utils import BuildHitMap, BuildInverseCovariance, BuildNoiseWeighted
@@ -54,6 +54,8 @@ class BinMap(Operator):
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for the timestream data"
     )
+
+    det_data_units = Unit(u.K, help="Desired timestream units")
 
     det_flags = Unicode(
         defaults.det_flags,
@@ -172,6 +174,13 @@ class BinMap(Operator):
 
         cov = data[self.covariance]
 
+        # Check that covariance has consistent units
+        if cov.units != (self.det_data_units**2).decompose():
+            msg = f"Covariance '{self.covariance}' units {cov.units} do not"
+            msg += f" equal det_data units ({self.det_data_units}) squared."
+            log.error(msg)
+            raise RuntimeError(msg)
+
         # Check that the detector data is set
         if self.det_data is None:
             raise RuntimeError("You must set the det_data trait before calling exec()")
@@ -201,6 +210,7 @@ class BinMap(Operator):
                 log.error(msg)
                 raise RuntimeError(msg)
             data[self.binned].raw[:] = 0
+            data[self.binned].update_units(1.0 / self.det_data_units)
 
         # Noise weighted map.  We output this to the final binned map location,
         # since we will multiply by the covariance in-place.
@@ -213,6 +223,7 @@ class BinMap(Operator):
             weights=self.stokes_weights.weights,
             noise_model=self.noise_model,
             det_data=self.det_data,
+            det_data_units=self.det_data_units,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,

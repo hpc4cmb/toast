@@ -71,11 +71,11 @@ void init_template_offset(py::module & m) {
                 {
                     int64_t offset = amp_offset;
                     # pragma omp target teams distribute firstprivate(offset) \
-                        is_device_ptr( \
-                            dev_amplitudes, \
-                            dev_det_data, \
-                            dev_intervals \
-                        )
+                    is_device_ptr(                                            \
+                    dev_amplitudes,                                           \
+                    dev_det_data,                                             \
+                    dev_intervals                                             \
+                    )
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         # pragma omp parallel for default(shared)
                         for (
@@ -185,12 +185,12 @@ void init_template_offset(py::module & m) {
                 {
                     int64_t offset = amp_offset;
                     # pragma omp target teams distribute firstprivate(offset) \
-                        is_device_ptr( \
-                            dev_amplitudes, \
-                            dev_det_data, \
-                            dev_det_flags, \
-                            dev_intervals \
-                        )
+                    is_device_ptr(                                            \
+                    dev_amplitudes,                                           \
+                    dev_det_data,                                             \
+                    dev_det_flags,                                            \
+                    dev_intervals                                             \
+                    )
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         # pragma omp parallel for default(shared)
                         for (
@@ -289,11 +289,11 @@ void init_template_offset(py::module & m) {
                 )
                 {
                     # pragma omp target \
-                        is_device_ptr( \
-                            dev_amp_in,              \
-                            dev_amp_out,             \
-                            dev_offset_var           \
-                        )
+                    is_device_ptr(      \
+                    dev_amp_in,         \
+                    dev_amp_out,        \
+                    dev_offset_var      \
+                    )
                     {
                         # pragma omp parallel for default(shared)
                         for (int64_t iamp = 0; iamp < n_amp; iamp++) {

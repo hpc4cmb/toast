@@ -420,12 +420,12 @@ void init_ops_pixels_healpix(py::module & m) {
                     hpix_init(&hp, nside);
                     if (nest) {
                         # pragma omp target teams distribute collapse(2) \
-                            is_device_ptr( \
-                                dev_pixels, \
-                                dev_quats, \
-                                dev_flags, \
-                                dev_intervals \
-                            )
+                        is_device_ptr(                                   \
+                        dev_pixels,                                      \
+                        dev_quats,                                       \
+                        dev_flags,                                       \
+                        dev_intervals                                    \
+                        )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 # pragma omp parallel for default(shared)
@@ -454,12 +454,12 @@ void init_ops_pixels_healpix(py::module & m) {
                         }
                     } else {
                         # pragma omp target teams distribute collapse(2) \
-                            is_device_ptr( \
-                                dev_pixels, \
-                                dev_quats, \
-                                dev_flags, \
-                                dev_intervals \
-                            )
+                        is_device_ptr(                                   \
+                        dev_pixels,                                      \
+                        dev_quats,                                       \
+                        dev_flags,                                       \
+                        dev_intervals                                    \
+                        )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 # pragma omp parallel for default(shared)

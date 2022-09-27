@@ -120,24 +120,26 @@ class Copy(Operator):
                 for in_key, out_key in self.detdata:
                     if out_key in ob.detdata:
                         # The key exists- verify that dimensions / dtype match
-                        if ob.detdata[out_key].dtype != ob.detdata[in_key].dtype:
-                            msg = "Cannot copy to existing detdata key {} with different dtype".format(
-                                out_key
-                            )
+                        in_dtype = ob.detdata[in_key].dtype
+                        out_dtype = ob.detdata[out_key].dtype
+                        if out_dtype != in_dtype:
+                            msg = f"Cannot copy to existing detdata key {out_key}"
+                            msg += f" with different dtype ({out_dtype}) != {in_dtype}"
                             log.error(msg)
                             raise RuntimeError(msg)
-                        if (
-                            ob.detdata[out_key].detector_shape
-                            != ob.detdata[in_key].detector_shape
-                        ):
-                            msg = "Cannot copy to existing detdata key {} with different detector shape".format(
-                                out_key
-                            )
+                        in_shape = ob.detdata[in_key].detector_shape
+                        out_shape = ob.detdata[out_key].detector_shape
+                        if out_shape != in_shape:
+                            msg = f"Cannot copy to existing detdata key {out_key}"
+                            msg += f" with different detector shape ({out_shape})"
+                            msg += f" != {in_shape}"
                             log.error(msg)
                             raise RuntimeError(msg)
                         if ob.detdata[out_key].detectors != dets:
                             # The output has a different set of detectors.  Reallocate.
                             ob.detdata[out_key].change_detectors(dets)
+                        # Copy units
+                        ob.detdata[out_key].update_units(ob.detdata[in_key].units)
                     else:
                         sample_shape = None
                         shp = ob.detdata[in_key].detector_shape
@@ -148,6 +150,7 @@ class Copy(Operator):
                             sample_shape=sample_shape,
                             dtype=ob.detdata[in_key].dtype,
                             detectors=dets,
+                            units=ob.detdata[in_key].units,
                         )
                     # Copy detector data
                     for d in dets:

@@ -2,13 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from astropy import units as u
 import numpy as np
 import traitlets
 
 from ..data import Data
 from ..observation import default_values as defaults
 from ..timing import function_timer_stackskip
-from ..traits import Bool, Instance, Int, TraitConfig, Unicode
+from ..traits import Bool, Instance, Int, TraitConfig, Unit, Unicode
 from ..utils import Logger
 
 
@@ -46,6 +47,8 @@ class Template(TraitConfig):
         allow_none=True,
         help="Observation detdata key for the timestream data",
     )
+
+    det_data_units = Unit(u.K, help="Desired units of detector data")
 
     det_flags = Unicode(
         defaults.det_flags,

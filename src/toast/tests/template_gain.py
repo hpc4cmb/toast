@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import ops
 from ..templates import GainTemplate
 from ..utils import rate_from_times
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -21,7 +21,7 @@ class TemplateGainTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
         np.random.seed(123456)
 
-    def test_offset(self):
+    def test_gainfit(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
@@ -42,16 +42,19 @@ class TemplateGainTest(MPITestCase):
         )
 
         # Generate timestreams
-        key = "signal"
-        sim_dipole = ops.SimDipole(det_data=key, mode="solar", coord="G")
-        sim_dipole.apply(data)
-        key_template = "template"
-        sim_dipole = ops.SimDipole(det_data="template", mode="solar", coord="G")
-        sim_dipole.apply(data)
+        signal = "signal"
+        template = "template"
+
+        # Generate fake detector signal
+        dipole = ops.SimDipole(det_data=signal, mode="solar", coord="G")
+        dipole.apply(data)
+
+        # Generate perfect time domain templates
+        dipole.det_data = template
+        dipole.apply(data)
 
         # Set up binning operator for solving
         binner = ops.BinMap(
-            pixel_dist="pixel_dist",
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=noise_model.noise_model,
@@ -59,16 +62,16 @@ class TemplateGainTest(MPITestCase):
 
         # set up a gain fluctuation template
         tmpl = GainTemplate(
-            det_data=key,
-            noise_model=noise_model.noise_model,
-            template_name=key_template,
+            noise_model=None,
+            # noise_model=noise_model.noise_model,
+            template_name=template,
             order=1,
         )
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
 
         # Solve for template amplitudes
         calibration = ops.Calibrate(
-            det_data="signal",
+            det_data=signal,
             result="calibrated",
             binning=binner,
             template_matrix=tmatrix,
@@ -81,5 +84,4 @@ class TemplateGainTest(MPITestCase):
                     ob.detdata["calibrated"][det], np.ones(ob.n_local_samples)
                 )
 
-        del data
-        return
+        close_data(data)

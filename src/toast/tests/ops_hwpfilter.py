@@ -14,7 +14,7 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir, fake_flags
+from ._helpers import create_ground_data, create_outdir, fake_flags, close_data
 from .mpi import MPITestCase
 
 
@@ -53,9 +53,13 @@ class HWPFilterTest(MPITestCase):
                 good = flags == 0
                 # Add HWP-synchronous signal to the data
                 order = 4
-                rms_noise[ob.name][det] = np.std(ob.detdata[defaults.det_data][det][good])
+                rms_noise[ob.name][det] = np.std(
+                    ob.detdata[defaults.det_data][det][good]
+                )
                 ob.detdata[defaults.det_data][det] += np.cos(order * hwp_angle)
-                rms_hwpss[ob.name][det] = np.std(ob.detdata[defaults.det_data][det][good])
+                rms_hwpss[ob.name][det] = np.std(
+                    ob.detdata[defaults.det_data][det][good]
+                )
 
         # Filter
 
@@ -79,5 +83,4 @@ class HWPFilterTest(MPITestCase):
                 # )
                 self.assertTrue(check_rms <= rms_noise[ob.name][det])
 
-        data.clear()
-        del data
+        close_data(data)

@@ -12,7 +12,7 @@ from .. import ops
 from ..observation import default_values as defaults
 from ..templates import Offset
 from ..utils import rate_from_times
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -88,8 +88,7 @@ class TemplateOffsetTest(MPITestCase):
                         np.sum(ob.detdata[defaults.det_data][det, slc]), 1.0 * sz
                     )
 
-        del data
-        return
+        close_data(data)
 
     def test_compare(self):
         # Create a fake satellite data set for testing
@@ -157,5 +156,4 @@ class TemplateOffsetTest(MPITestCase):
         # Verify
         np.testing.assert_allclose(amps.local, pyamps.local)
 
-        del data
-        return
+        close_data(data)

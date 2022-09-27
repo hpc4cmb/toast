@@ -4,6 +4,7 @@
 
 import os
 
+from astropy import units as u
 import healpy as hp
 import numpy as np
 import numpy.testing as nt
@@ -60,7 +61,10 @@ class PixelTest(MPITestCase):
         return dist
 
     def _make_pixdata(self, dist, dtype, nnz):
-        pdata = PixelData(dist, dtype, n_value=nnz)
+        units = u.dimensionless_unscaled
+        if dtype == np.float64 or dtype == np.float32:
+            units = u.K
+        pdata = PixelData(dist, dtype, n_value=nnz, units=units)
         gl = list()
         for sm in pdata.distribution.local_submaps:
             for px in range(dist.n_pix_submap):
@@ -181,7 +185,12 @@ class PixelTest(MPITestCase):
                             ),
                         )
                         hp.write_map(
-                            serialfile, fdata, fits_IDL=False, nest=True, overwrite=True
+                            serialfile,
+                            fdata,
+                            dtype=fdata[0].dtype,
+                            fits_IDL=False,
+                            nest=True,
+                            overwrite=True,
                         )
                         loaded = hp.read_map(serialfile, nest=True, field=None)
                         for lc, sm in enumerate(pdata.distribution.local_submaps):

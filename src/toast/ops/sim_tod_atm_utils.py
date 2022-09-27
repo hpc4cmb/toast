@@ -14,7 +14,7 @@ from .. import qarray as qa
 from ..atm import AtmSim
 from ..observation import default_values as defaults
 from ..timing import GlobalTimers, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 
@@ -33,6 +33,8 @@ class ObserveAtmosphere(Operator):
         defaults.det_data,
         help="Observation detdata key for accumulating dipole timestreams",
     )
+
+    det_data_units = Unit(u.K, help="Desired units of detector data")
 
     quats_azel = Unicode(
         defaults.quats_azel,
@@ -142,6 +144,10 @@ class ObserveAtmosphere(Operator):
 
         gt.start("ObserveAtmosphere:  total")
 
+        # Unit conversion from ATM timestream (K) to det data units
+        scale = 1.0 * u.K
+        scale = scale.to_value(self.det_data_units)
+
         comm = data.comm.comm_group
         group = data.comm.group
         rank = data.comm.group_rank
@@ -158,7 +164,9 @@ class ObserveAtmosphere(Operator):
             absorption, loading = self._get_absorption_and_loading(ob, dets)
 
             # Make sure detector data output exists
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data, detectors=dets, units=self.det_data_units
+            )
 
             # Prefix for logging
             log_prefix = f"{group} : {ob.name}"
@@ -458,7 +466,7 @@ class ObserveAtmosphere(Operator):
                         )
 
                     # Add contribution to output
-                    views.detdata[self.det_data][vw][det, good] += atmdata
+                    views.detdata[self.det_data][vw][det, good] += scale * atmdata
                     gt.stop("ObserveAtmosphere:  detector accumulate")
 
                     # Dump timestream snapshot

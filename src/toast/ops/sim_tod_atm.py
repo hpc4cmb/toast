@@ -15,7 +15,7 @@ from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger, Timer
 from .operator import Operator
 from .pipeline import Pipeline
@@ -47,6 +47,8 @@ class SimAtmosphere(Operator):
         defaults.det_data,
         help="Observation detdata key for accumulating atmosphere timestreams",
     )
+
+    det_data_units = Unit(u.K, help="Desired units of detector data")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
@@ -326,6 +328,7 @@ class SimAtmosphere(Operator):
             shared_flag_mask=shared_flag_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
+            det_data_units=self.det_data_units,
             wind_view=wind_intervals,
             fade_time=self.fade_time,
             sim=atm_sim_key,
@@ -370,7 +373,11 @@ class SimAtmosphere(Operator):
             weather = site.weather
 
             # Make sure detector data output exists
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data,
+                detectors=dets,
+                units=self.det_data_units,
+            )
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own

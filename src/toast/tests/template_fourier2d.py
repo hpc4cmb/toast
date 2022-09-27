@@ -12,7 +12,7 @@ from .. import ops
 from ..observation import default_values as defaults
 from ..templates import Fourier2D
 from ..utils import rate_from_times
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -63,5 +63,4 @@ class TemplateFourier2DTest(MPITestCase):
         # Verify
         # FIXME...
 
-        del data
-        return
+        close_data(data)

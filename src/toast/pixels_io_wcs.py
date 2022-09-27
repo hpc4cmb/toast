@@ -8,6 +8,7 @@ import astropy.io.fits as af
 import numpy as np
 import pixell
 import pixell.enmap
+from astropy import units as u
 
 from .mpi import MPI, use_mpi
 from .timing import Timer, function_timer
@@ -75,7 +76,7 @@ def submap_to_enmap(dist, submap, sdata, endata):
             ]
 
 
-def enmap_to_submap(dist, endata, submap, sdata):
+def enmap_to_submap(dist, endata, submap, sdata, scale=1.0):
     """Helper function to fill our data from pixell format
 
     This takes a single submap of data with flat pixels x n_values and fills
@@ -86,6 +87,7 @@ def enmap_to_submap(dist, endata, submap, sdata):
         endata (ndmap):  The pixell array
         submap (int):  The global submap index
         sdata (array):  The data for a single submap
+        scale (float):  Scale factor.
 
     Returns:
         None
@@ -121,9 +123,9 @@ def enmap_to_submap(dist, endata, submap, sdata):
             #     f"sdata[{sbuf_offset}:{sbuf_offset+n_copy}, {ival}] = endata[{ival}, {col}, {row_offset}:{row_offset+n_copy}]",
             #     flush=True,
             # )
-            sdata[sbuf_offset : sbuf_offset + n_copy, ival] = endata[
-                ival, col, row_offset : row_offset + n_copy
-            ]
+            sdata[sbuf_offset : sbuf_offset + n_copy, ival] = (
+                scale * endata[ival, col, row_offset : row_offset + n_copy]
+            )
 
 
 @function_timer
@@ -253,6 +255,8 @@ def write_wcs_fits(pix, path, comm_bytes=10000000, report_memory=False):
         header["NAXIS"] = endata.ndim
         for i, n in enumerate(endata.shape[::-1]):
             header[f"NAXIS{i+1}"] = n
+        # Add units
+        header["BUNIT"] = str(pix.units)
         hdus = af.HDUList([af.PrimaryHDU(endata, header)])
         hdus.writeto(path)
 
@@ -277,13 +281,33 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
         None
 
     """
+    log = Logger.get()
     dist = pix.distribution
     rank = 0
     if dist.comm is not None:
         rank = dist.comm.rank
 
     endata = None
+    fscale = 1.0
     if rank == 0:
+        # Separately read the units, since there is no way to get at this
+        # information through pixell.
+        with af.open(path, mode="readonly") as hdul:
+            if "BUNIT" in hdul[0].header:
+                if hdul[0].header["BUNIT"] == "":
+                    funits = u.dimensionless_unscaled
+                else:
+                    funits = u.Unit(hdul[0].header["BUNIT"])
+            else:
+                msg = f"Pixel data in {path} does not have BUNIT key.  "
+                msg += f"Assuming {pix.units}."
+                log.warning(msg)
+                funits = pix.units
+            if funits != pix.units:
+                scale = 1.0 * funits
+                scale.to(pix.units)
+                fscale = scale.value
+
         # Load from disk
         endata = pixell.enmap.read_map(path, fmt="fits")
         # Check dimensions
@@ -303,9 +327,10 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
         for sm in range(dist.n_submap):
             if sm in dist.local_submaps:
                 loc = dist.global_submap_to_local[sm]
-                enmap_to_submap(dist, endata, sm, pix.data[loc])
+                enmap_to_submap(dist, endata, sm, pix.data[loc], scale=fscale)
     else:
         # One reader broadcasts
+        fscale = dist.comm.bcast(fscale, root=0)
         comm_submap = pix.comm_nsubmap(comm_bytes)
 
         buf = np.zeros(comm_submap * n_val_submap, dtype=pix.dtype)
@@ -318,7 +343,9 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
             if rank == 0:
                 # Fill the bcast buffer
                 for c in range(ncomm):
-                    enmap_to_submap(dist, endata, (submap_off + c), view[c])
+                    enmap_to_submap(
+                        dist, endata, (submap_off + c), view[c], scale=fscale
+                    )
             # Broadcast
             dist.comm.Bcast(buf, root=0)
             # Copy these submaps into local data

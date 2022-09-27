@@ -23,6 +23,7 @@ from ._helpers import (
     create_outdir,
     create_satellite_data,
     fake_flags,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -444,10 +445,7 @@ class NoiseEstimTest(MPITestCase):
             fname = os.path.join(self.outdir, "psds.png")
             fig.savefig(fname)
 
-        if data.comm.comm_world is not None:
-            data.comm.comm_world.barrier()
-        del data
-        return
+        close_data(data)
 
     def test_noise_estim_model(self):
         # Create a fake ground data set for testing
@@ -531,7 +529,4 @@ class NoiseEstimTest(MPITestCase):
                     decimal=3,
                 )
 
-        if data.comm.comm_world is not None:
-            data.comm.comm_world.barrier()
-        del data
-        return
+        close_data(data)

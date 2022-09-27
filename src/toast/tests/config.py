@@ -33,13 +33,14 @@ from ..traits import (
     Int,
     List,
     Quantity,
+    Unit,
     Set,
     Tuple,
     Unicode,
     trait_docs,
 )
 from ..utils import Environment, Logger
-from ._helpers import create_comm, create_outdir, create_space_telescope
+from ._helpers import create_comm, create_outdir, create_space_telescope, close_data
 from .mpi import MPITestCase
 
 
@@ -71,6 +72,9 @@ class ConfigOperator(ops.Operator):
 
     quantity_default = Quantity(1.2345 * u.second, help="Quantity default")
     quantity_none = Quantity(None, allow_none=True, help="Quantity none")
+
+    unit_default = Unit(u.meter / u.second, help="Unit default")
+    unit_none = Unit(None, allow_none=True, help="Unit none")
 
     # NOTE:  Our config system does not currently support Instance traits
     # with allow_none=False.
@@ -284,10 +288,13 @@ class ConfigTest(MPITestCase):
 
     def test_run(self):
         testops = self.create_operators()
+        conf_pipe = dict()
+        for op_name, op in testops.items():
+            conf_pipe = op.get_config(input=conf_pipe)
 
         pipe = ops.Pipeline(name="sim_pipe")
         pipe.operators = [y for x, y in testops.items()]
-        conf_pipe = pipe.get_config()
+        conf_pipe = pipe.get_config(input=conf_pipe)
 
         conf_file = os.path.join(self.outdir, "run_conf.toml")
         if self.toastcomm.world_rank == 0:
@@ -309,3 +316,5 @@ class ConfigTest(MPITestCase):
         run.operators.sim_satellite.schedule = sch
 
         run.operators.sim_pipe.apply(data)
+
+        close_data(data)

@@ -19,6 +19,7 @@ from ._helpers import (
     create_outdir,
     create_satellite_data,
     create_satellite_data_big,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -73,8 +74,7 @@ class SimGainTest(MPITestCase):
                 np.testing.assert_almost_equal(
                     gf1, gf2, decimal=np.log10(drifter.sigma_drift) - 1
                 )
-        data.clear()
-        del data
+        close_data(data)
 
     def test_thermal_drift(self):
         # Create a fake satellite data set for testing
@@ -153,8 +153,7 @@ class SimGainTest(MPITestCase):
             ) / drifter.focalplane_Tbath
 
             assert np.log10(rel_res.std()) <= np.log10(dT)
-        data.clear()
-        del data
+        close_data(data)
 
     def test_slow_drift(self):
         # Create a fake satellite data set for testing
@@ -224,8 +223,7 @@ class SimGainTest(MPITestCase):
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
-        data.clear()
-        del data
+        close_data(data)
 
     def test_slow_drift_commonmode(self):
         # Create a fake satellite data set for testing
@@ -295,8 +293,7 @@ class SimGainTest(MPITestCase):
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
             assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
-        data.clear()
-        del data
+        close_data(data)
 
     def test_responsivity_function(self):
         # Create a fake satellite data set for testing
@@ -319,5 +316,4 @@ class SimGainTest(MPITestCase):
             responsivity_function=responsivity,
         )
         drifter.apply(data)
-        data.clear()
-        del data
+        close_data(data)

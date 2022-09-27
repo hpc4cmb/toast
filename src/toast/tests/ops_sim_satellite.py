@@ -20,7 +20,7 @@ from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..schedule_sim_satellite import create_satellite_schedule
 from ..vis import set_matplotlib_backend
-from ._helpers import create_comm, create_outdir, plot_projected_quats
+from ._helpers import create_comm, create_outdir, plot_projected_quats, close_data
 from .mpi import MPITestCase
 
 
@@ -120,6 +120,7 @@ class SimSatelliteTest(MPITestCase):
             hp.mollview(hits, xsize=1600, nest=True)
             plt.savefig(outfile)
             plt.close()
+        close_data(data)
 
     def test_precession(self):
         # Test that the precession axis computed for a SpaceSite (anti-sun direction)

@@ -13,7 +13,7 @@ from .. import ops as ops
 from ..covariance import covariance_apply, covariance_invert, covariance_multiply
 from ..mpi import MPI
 from ..pixels import PixelData, PixelDistribution
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -62,7 +62,7 @@ class CovarianceTest(MPITestCase):
         build_invnpp.apply(data)
         invnpp = data[build_invnpp.inverse_covariance]
 
-        del data
+        close_data(data)
         return invnpp
 
     def print_cov(self, mat):

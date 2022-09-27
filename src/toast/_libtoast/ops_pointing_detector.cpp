@@ -89,6 +89,7 @@ void init_ops_pointing_detector(py::module & m) {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
+
             // What if quats has more dets than we are considering in quat_index?
 
             // This is used to return the actual shape of each buffer
@@ -152,12 +153,12 @@ void init_ops_pointing_detector(py::module & m) {
                 )
                 {
                     # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr( \
-                            dev_boresight, \
-                            dev_quats, \
-                            dev_flags, \
-                            dev_intervals \
-                        )
+                    is_device_ptr(                                   \
+                    dev_boresight,                                   \
+                    dev_quats,                                       \
+                    dev_flags,                                       \
+                    dev_intervals                                    \
+                    )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel for default(shared)

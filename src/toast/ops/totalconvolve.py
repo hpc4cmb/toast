@@ -14,7 +14,17 @@ from .. import qarray as qa
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Dict, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import (
+    Bool,
+    Dict,
+    Float,
+    Instance,
+    Int,
+    Quantity,
+    Unit,
+    Unicode,
+    trait_docs,
+)
 from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
 from .operator import Operator
 
@@ -81,6 +91,8 @@ class SimTotalconvolve(Operator):
         allow_none=False,
         help="Observation detdata key for accumulating convolved timestreams",
     )
+
+    det_data_units = Unit(u.K, help="Desired units of detector data")
 
     calibrate = Bool(
         True,
@@ -314,7 +326,9 @@ class SimTotalconvolve(Operator):
             for det in obs_dets:
                 my_dets.add(det)
             # Make sure detector data output exists
-            exists = obs.detdata.ensure(self.det_data, detectors=detectors)
+            exists = obs.detdata.ensure(
+                self.det_data, detectors=detectors, units=self.det_data_units
+            )
         if use_mpi:
             all_dets = self.comm.gather(my_dets, root=0)
             if self.comm.rank == 0:

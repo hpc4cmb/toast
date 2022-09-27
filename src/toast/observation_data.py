@@ -221,6 +221,24 @@ class DetectorData(AcceleratorObject):
     def flatdata(self):
         return self._flatdata
 
+    def unit_conversion(self, target):
+        """Get the multiplicative factor to convert data to the target units.
+
+        Args:
+            target (Unit):  The target units.
+
+        Returns:
+            (float):  The conversion factor.
+
+        """
+        scale = 1.0 * self._units
+        scale.to(target)
+        return scale.value
+
+    def update_units(self, new_units):
+        """Update the detector data units."""
+        self._units = new_units
+
     def change_detectors(self, detectors):
         """Modify the list of detectors.
 
@@ -668,12 +686,6 @@ class DetDataManager(MutableMapping):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
-            if units != self._internal[name].units:
-                msg = "Detector data '{}' already exists with units {}.".format(
-                    name, self._internal[name].units
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
             # Ok, we can re-use this.  Are the detectors already included in the data?
             internal_dets = set(self._internal[name].detectors)
             for test_det in detectors:
@@ -682,6 +694,9 @@ class DetDataManager(MutableMapping):
                     existing = False
                     realloced = self._internal[name].change_detectors(detectors)
                     break
+            if units != self._internal[name].units:
+                # We are changing units
+                self._internal[name].update_units(units)
         else:
             # Create the data object
             existing = False
@@ -868,7 +883,7 @@ class DetDataManager(MutableMapping):
 
     def __setitem__(self, key, value):
         if isinstance(value, DetectorData):
-            # We have an input detector data object.  Verify dimensions
+            # We have an input detector data object.  Verify properties.
             for d in value.detectors:
                 if d not in self.detectors:
                     msg = "detector '{}' not in this observation".format(d)
@@ -884,10 +899,14 @@ class DetDataManager(MutableMapping):
                     sample_shape=value.detector_shape[1:],
                     dtype=value.dtype,
                     detectors=value.detectors,
+                    units=value.units,
                 )
             else:
                 if value.detector_shape != self._internal[key].detector_shape:
                     msg = "Assignment value has wrong detector shape"
+                    raise ValueError(msg)
+                if value.units != self._internal[key].units:
+                    msg = "Assignment value has wrong units"
                     raise ValueError(msg)
             for d in value.detectors:
                 self._internal[key][d] = value[d]
@@ -895,14 +914,28 @@ class DetDataManager(MutableMapping):
             # This is a dictionary of detector arrays
             sample_shape = None
             dtype = None
+            dunits = None
             for d, ddata in value.items():
                 if d not in self.detectors:
                     msg = "detector '{}' not in this observation".format(d)
                     raise ValueError(msg)
                 if ddata.shape[0] != self.samples:
-                    msg = "Assigment dictionary detector {d} has {ddata.shape[0]} "
+                    msg = f"Assigment dictionary detector {d} has {ddata.shape[0]} "
                     msg += f"samples instead of {self.samples} in the observation"
                     raise ValueError(msg)
+
+                # Check consistent units
+                cur_units = u.dimensionless_unscaled
+                if isinstance(ddata, u.Quantity):
+                    cur_units = ddata.unit
+                if dunits is None:
+                    dunits = cur_units
+                else:
+                    if dunits != cur_units:
+                        msg = f"Assignment dictionary detector {d} has "
+                        msg += f"units '{cur_units}' instead of '{dunits}'"
+                        raise ValueError(msg)
+                # Check sample shape
                 if sample_shape is None:
                     sample_shape = ddata.shape[1:]
                     dtype = ddata.dtype
@@ -919,15 +952,22 @@ class DetDataManager(MutableMapping):
                     sample_shape=sample_shape,
                     dtype=dtype,
                     detectors=sorted(value.keys()),
+                    units=dunits,
                 )
             else:
                 if (self.samples,) + sample_shape != self._internal[key].detector_shape:
                     msg = "Assignment value has wrong detector shape"
                     raise ValueError(msg)
             for d, ddata in value.items():
-                self._internal[key][d] = ddata
+                if isinstance(value, u.Quantity):
+                    self._internal[key][d] = ddata.value
+                else:
+                    self._internal[key][d] = ddata
         else:
             # This must be just an array- verify the dimensions
+            val_units = u.dimensionless_unscaled
+            if isinstance(value, u.Quantity):
+                val_units = value.unit
             shp = value.shape
             if shp[0] == self.samples:
                 # This is a single detector array, being assigned to all detectors
@@ -940,6 +980,7 @@ class DetDataManager(MutableMapping):
                         sample_shape=sample_shape,
                         dtype=value.dtype,
                         detectors=self.detectors,
+                        units=val_units,
                     )
                 else:
                     fullshape = (self.samples,)
@@ -948,8 +989,15 @@ class DetDataManager(MutableMapping):
                     if fullshape != self._internal[key].detector_shape:
                         msg = "Assignment value has wrong detector shape"
                         raise ValueError(msg)
-                for d in self.detectors:
-                    self._internal[key][d] = value
+                    if val_units != self._internal[key].units:
+                        msg = "Assignment value has wrong units"
+                        raise ValueError(msg)
+                if isinstance(value, u.Quantity):
+                    for d in self.detectors:
+                        self._internal[key][d] = value.value
+                else:
+                    for d in self.detectors:
+                        self._internal[key][d] = value
             elif shp[0] == len(self.detectors):
                 # Full sized array
                 if shp[1] != self.samples:
@@ -964,6 +1012,7 @@ class DetDataManager(MutableMapping):
                         sample_shape=sample_shape,
                         dtype=value.dtype,
                         detectors=self.detectors,
+                        units=val_units,
                     )
                 else:
                     fullshape = (self.samples,)
@@ -972,7 +1021,13 @@ class DetDataManager(MutableMapping):
                     if fullshape != self._internal[key].detector_shape:
                         msg = "Assignment value has wrong detector shape"
                         raise ValueError(msg)
-                self._internal[key][:] = value
+                    if val_units != self._internal[key].units:
+                        msg = "Assignment value has wrong units"
+                        raise ValueError(msg)
+                if isinstance(value, u.Quantity):
+                    self._internal[key][:] = value.value
+                else:
+                    self._internal[key][:] = value
             else:
                 # Incompatible
                 msg = "Assignment of detector data from an array only supports full "

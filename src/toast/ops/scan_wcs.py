@@ -4,12 +4,13 @@
 
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_wcs import read_wcs_fits
 from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator
 from .pipeline import Pipeline
@@ -36,6 +37,8 @@ class ScanWCSMap(Operator):
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for accumulating output"
     )
+
+    det_data_units = Unit(u.K, help="Desired units of detector data")
 
     subtract = Bool(
         False, help="If True, subtract the map timestream instead of accumulating"
@@ -140,7 +143,9 @@ class ScanWCSMap(Operator):
         # to having higher precision to simulated map signal that is projected into
         # timestreams.
         if self.map_name not in data:
-            data[self.map_name] = PixelData(dist, dtype=np.float32, n_value=nnz)
+            data[self.map_name] = PixelData(
+                dist, dtype=np.float32, n_value=nnz, units=self.det_data_units
+            )
             read_wcs_fits(data[self.map_name], self.file)
 
         # The pipeline below will run one detector at a time in case we are computing
@@ -153,12 +158,15 @@ class ScanWCSMap(Operator):
                 # Nothing to do for this observation
                 continue
             # If our output detector data does not yet exist, create it
-            exists_data = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists_data = ob.detdata.ensure(
+                self.det_data, detectors=dets, units=self.det_data_units
+            )
 
         # Configure the low-level map scanning operator
 
         scanner = ScanMap(
             det_data=self.det_data,
+            det_data_units=self.det_data_units,
             pixels=self.pixel_pointing.pixels,
             weights=self.stokes_weights.weights,
             map_key=self.map_name,

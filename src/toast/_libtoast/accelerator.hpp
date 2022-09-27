@@ -45,6 +45,7 @@ class OmpManager {
         T * device_ptr(T * buffer) {
             auto log = toast::Logger::get();
             std::ostringstream o;
+
             // If the device is the host device, return
             if (device_is_host()) {
                 return buffer;
@@ -55,16 +56,18 @@ class OmpManager {
             if (n == 0) {
                 o.str("");
                 o << "OmpManager:  host ptr " << buffer
-                << " is not present- cannot get device pointer";
+                  << " is not present- cannot get device pointer";
                 log.error(o.str().c_str());
                 throw std::runtime_error(o.str().c_str());
             }
             return static_cast <T *> (mem_.at(vbuffer));
+
             #else // ifdef HAVE_OPENMP_TARGET
             o << "OmpManager:  OpenMP target support disabled";
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
             return NULL;
+
             #endif // ifdef HAVE_OPENMP_TARGET
         }
 

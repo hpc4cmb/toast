@@ -86,34 +86,47 @@ class Combine(Operator):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
-            if (self.result != self.first) and (self.result != self.second):
-                # We are creating a new field for the output
+
+            if self.result == self.first:
+                result_units = ob.detdata[self.first].units
+                scale_first = 1.0
+                scale_second = ob.detdata[self.second].unit_conversion(result_units)
+            elif self.result == self.second:
+                result_units = ob.detdata[self.second].units
+                scale_first = ob.detdata[self.first].unit_conversion(result_units)
+                scale_second = 1.0
+            else:
+                # We are creating a new field for the output.  Use units of first field.
+                result_units = ob.detdata[self.first].units
+                scale_first = 1.0
+                scale_second = ob.detdata[self.second].unit_conversion(result_units)
                 exists = ob.detdata.ensure(
                     self.result,
                     sample_shape=ob.detdata[self.first].detector_shape[1:],
                     dtype=ob.detdata[self.first].dtype,
                     detectors=ob.detdata[self.first].detectors,
+                    units=result_units,
                 )
             if self.op == "add":
                 for d in dets:
                     ob.detdata[self.result][d, :] = (
-                        ob.detdata[self.first][d, :] + ob.detdata[self.second][d, :]
-                    )
+                        scale_first * ob.detdata[self.first][d, :]
+                    ) + (scale_second * ob.detdata[self.second][d, :])
             elif self.op == "subtract":
                 for d in dets:
                     ob.detdata[self.result][d, :] = (
-                        ob.detdata[self.first][d, :] - ob.detdata[self.second][d, :]
-                    )
+                        scale_first * ob.detdata[self.first][d, :]
+                    ) - (scale_second * ob.detdata[self.second][d, :])
             elif self.op == "multiply":
                 for d in dets:
                     ob.detdata[self.result][d, :] = (
-                        ob.detdata[self.first][d, :] * ob.detdata[self.second][d, :]
-                    )
+                        scale_first * ob.detdata[self.first][d, :]
+                    ) * (scale_second * ob.detdata[self.second][d, :])
             elif self.op == "divide":
                 for d in dets:
                     ob.detdata[self.result][d, :] = (
-                        ob.detdata[self.first][d, :] / ob.detdata[self.second][d, :]
-                    )
+                        scale_first * ob.detdata[self.first][d, :]
+                    ) / (scale_second * ob.detdata[self.second][d, :])
 
     def _finalize(self, data, **kwargs):
         return None

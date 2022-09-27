@@ -87,6 +87,9 @@ class Amplitudes(AcceleratorObject):
         dtype=np.float64,
         use_group=False,
     ):
+        # print(
+        #     f"Amplitudes({comm.world_rank}, n_global={n_global}, n_local={n_local}, lc_ind={local_indices}, lc_rng={local_ranges}, dt={dtype}, use_group={use_group}"
+        # )
         self._comm = comm
         self._n_global = n_global
         self._n_local = n_local
@@ -108,19 +111,22 @@ class Amplitudes(AcceleratorObject):
             self._global_last = self._n_local - 1
         else:
             if (self._local_indices is None) and (self._local_ranges is None):
-                check = None
                 rank = 0
                 if self._mpicomm is not None:
-                    check = self._mpicomm.allgather(self._n_local)
+                    all_n_local = self._mpicomm.gather(self._n_local, root=0)
                     rank = self._mpicomm.rank
+                    if rank == 0:
+                        all_n_local = np.array(all_n_local, dtype=np.int64)
+                        if np.sum(all_n_local) != self._n_global:
+                            msg = "Total amplitudes on all processes does "
+                            msg += "not equal n_global"
+                            raise RuntimeError(msg)
+                    all_n_local = self._mpicomm.bcast(all_n_local, root=0)
                 else:
-                    check = [self._n_local]
-                if np.sum(check) != self._n_global:
-                    msg = "Total amplitudes on all processes does not equal n_global"
-                    raise RuntimeError(msg)
+                    all_n_local = np.array([self._n_local], dtype=np.int64)
                 self._global_first = 0
                 for i in range(rank):
-                    self._global_first += check[i]
+                    self._global_first += all_n_local[i]
                 self._global_last = self._global_first + self._n_local - 1
             elif self._local_ranges is not None:
                 # local data is specified by ranges

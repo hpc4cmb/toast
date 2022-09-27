@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import ops as ops
 from ..data import Data
 from ..mpi import MPI
-from ._helpers import create_ground_data, create_outdir
+from ._helpers import create_ground_data, create_outdir, close_data
 from .mpi import MPITestCase
 
 
@@ -51,6 +51,8 @@ class ElevationNoiseTest(MPITestCase):
         sim_noise = ops.SimNoise(noise_model=el_model.out_model)
         sim_noise.apply(data)
 
+        close_data(data)
+
     def test_replace(self):
         rank = 0
         if self.comm is not None:
@@ -81,3 +83,5 @@ class ElevationNoiseTest(MPITestCase):
         # Simulate noise and accumulate to signal
         sim_noise = ops.SimNoise(noise_model=el_model.noise_model)
         sim_noise.apply(data)
+
+        close_data(data)

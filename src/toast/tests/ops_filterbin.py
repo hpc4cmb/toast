@@ -18,7 +18,13 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import read_healpix
 from ..vis import set_matplotlib_backend
-from ._helpers import create_fake_sky, create_ground_data, create_outdir, fake_flags
+from ._helpers import (
+    create_fake_sky,
+    create_ground_data,
+    create_outdir,
+    fake_flags,
+    close_data,
+)
 from .mpi import MPITestCase
 
 
@@ -58,10 +64,9 @@ class FilterBinTest(MPITestCase):
 
         # Add a strong gradient that should be filtered out completely
         for obs in data.obs:
-            times = obs.shared[defaults.times]
+            grad = np.arange(obs.n_local_samples)
             for det in obs.local_detectors:
-                obs.detdata[defaults.det_data] += times.data
-                obs.detdata[defaults.det_data][:] = times.data
+                obs.detdata[defaults.det_data][det] += grad
 
         # Make fake flags
         fake_flags(data)
@@ -140,9 +145,12 @@ class FilterBinTest(MPITestCase):
 
             fname = os.path.join(self.outdir, "filter_test.png")
             fig.savefig(fname)
+            check = rms2 < 1e-4 * rms1
+            if not check:
+                print(f"rms2 = {rms2}, rms1 = {rms1}")
+            self.assertTrue(check)
 
-            assert rms2 < 1e-6 * rms1
-        return
+        close_data(data)
 
     def test_filterbin_obsmatrix(self):
         if sys.platform.lower() == "darwin":
@@ -276,7 +284,7 @@ class FilterBinTest(MPITestCase):
                 if rms2 > 1e-5 * rms1:
                     print(f"rms2 = {rms2}, rms1 = {rms1}")
                 assert rms2 < 1e-5 * rms1
-        return
+        close_data(data)
 
     def test_filterbin_obsmatrix_flags(self):
         if sys.platform.lower() == "darwin":
@@ -430,7 +438,7 @@ class FilterBinTest(MPITestCase):
                     print(f"rms2 = {rms2}, rms1 = {rms1}")
                 assert rms2 < 1e-5 * rms1
 
-        return
+        close_data(data)
 
     def test_filterbin_obsmatrix_cached(self):
         if sys.platform.lower() == "darwin":
@@ -605,4 +613,4 @@ class FilterBinTest(MPITestCase):
                         print(f"rms2 = {rms2}, rms1 = {rms1}")
                     assert rms2 < 1e-5 * rms1
 
-        return
+        close_data(data)

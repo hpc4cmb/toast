@@ -12,7 +12,7 @@ from .._libtoast import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
 from ..fft import FFTPlanReal1DStore
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Int, Unit, Unicode, trait_docs
 from ..utils import AlignedF64, Logger, rate_from_times
 from .operator import Operator
 
@@ -217,9 +217,7 @@ class SimNoise(Operator):
         help="Observation detdata key for accumulating noise timestreams",
     )
 
-    det_data_units = Quantity(
-        None, allow_none=True, help="Desired output units of the timestream"
-    )
+    det_data_units = Unit(u.K, help="Desired units of detector data")
 
     serial = Bool(True, help="Use legacy serial implementation instead of batched")
 
@@ -277,7 +275,9 @@ class SimNoise(Operator):
             # detectors within the observation...
 
             # Make sure correct output exists
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data, detectors=dets, units=self.det_data_units
+            )
 
             # Get the sample rate from the data.  We also have nominal sample rates
             # from the noise model and also from the focalplane.  Perhaps we should add
@@ -290,12 +290,8 @@ class SimNoise(Operator):
                 # Original serial implementation (for testing / comparison)
                 for key in nse.all_keys_for_dets(dets):
                     # Output units
-                    sim_units = None
                     psd_units = nse.psd(key).unit
-                    if self.det_data_units is not None:
-                        sim_units = self.det_data_units**2 * u.second
-                    else:
-                        sim_units = psd_units
+                    sim_units = self.det_data_units**2 * u.second
 
                     # Simulate the noise matching this key
                     nsedata = sim_noise_timestream(
@@ -358,12 +354,8 @@ class SimNoise(Operator):
                 psdbuf = AlignedF64(len(freq_zero) * len(strmindices))
                 psds = psdbuf.array().reshape((len(strmindices), len(freq_zero)))
                 for ikey, key in enumerate(strm_names):
-                    sim_units = None
                     psd_units = nse.psd(key).unit
-                    if self.det_data_units is not None:
-                        sim_units = self.det_data_units**2 * u.second
-                    else:
-                        sim_units = psd_units
+                    sim_units = self.det_data_units**2 * u.second
                     psds[ikey][:] = nse.psd(key).to_value(sim_units)
 
                 noisebuf = AlignedF64(ob.n_local_samples * len(strmindices))
