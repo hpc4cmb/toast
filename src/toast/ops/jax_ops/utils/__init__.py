@@ -99,6 +99,18 @@ def is_accel_function(f):
     args_names = f.__code__.co_varnames[:f.__code__.co_argcount]
     return ('use_accel' in args_names)
 
+def runtime_select_implementation(f_accel, f_host):
+    """
+    decides at runtime on whether to use the gpu version of a function or its cpu variant
+    depending on the use_accel input
+    """
+    def f(*args, use_accel=False):
+        if use_accel:
+            return f_accel(*args)
+        else:
+            return f_host(*args)
+    return f
+
 def select_implementation(f_compiled, f_numpy, f_jax, 
                           overide_implementationType=None):
     """
@@ -127,7 +139,35 @@ def select_implementation(f_compiled, f_numpy, f_jax,
         f_accel = f_numpy
     else: #implementationType == ImplementationType.JAX:
         f_accel = f_jax
-    # wraps the function in a ufnciton timer
+    # wrap the funciton to use the compiled version on cpu
+    f = runtime_select_implementation(f_accel, f_compiled)
+    # wraps the function in a function timer
+    f = function_timer(f)
+    print(f"DEBUG: implementation picked in case of use_accel:{implementationType} ({f_accel.__name__})")
+    return f
+
+def select_implementation(f_compiled, f_numpy, f_jax, 
+                          overide_implementationType=None):
+    # defaults to f_compiled if the function has no accel input
+    if not is_accel_function(f_jax):
+        return f_compiled
+    # picks the implementation type to be used on GPU
+    implementationType = overide_implementationType
+    if implementationType is None:
+        if use_accel_jax:
+            implementationType = ImplementationType.JAX
+        elif use_accel_omp:
+            implementationType = ImplementationType.COMPILED
+        else:
+            implementationType = default_implementationType
+    # gets the corresponding function
+    if implementationType == ImplementationType.COMPILED:
+        f_accel = f_compiled
+    elif implementationType == ImplementationType.NUMPY:
+        f_accel = f_numpy
+    else: #implementationType == ImplementationType.JAX:
+        f_accel = f_jax
+    # wraps the function in a fucntion timer
     f = function_timer(f_accel)
     print(f"DEBUG: implementation picked in case of use_accel:{implementationType} ({f_accel.__name__})")
     return f
