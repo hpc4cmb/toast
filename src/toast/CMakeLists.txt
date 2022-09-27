@@ -68,7 +68,6 @@ target_link_libraries(_libtoast PRIVATE toast)
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")
-    set_target_properties(_libtoast PROPERTIES LINK_OPTIONS "${OpenMP_CXX_FLAGS}")
     if(USE_OPENMP_TARGET)
         target_compile_definitions(_libtoast PRIVATE HAVE_OPENMP_TARGET=1)
     endif()
@@ -90,6 +89,10 @@ if(CUDAToolkit_FOUND AND NOT CUDA_DISABLED)
     target_include_directories(_libtoast PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
     target_include_directories(_libtoast PRIVATE "${CUDAToolkit_MATH_INCLUDE_DIRS}")
 endif()
+
+target_link_options(_libtoast PRIVATE
+    ${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS} ${OpenMP_CXX_FLAGS}
+)
 
 # Include path to the toast headers
 target_include_directories(_libtoast BEFORE PRIVATE

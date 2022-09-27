@@ -204,10 +204,35 @@ class Noise(object):
                 freq = self.freq(k)
                 psd = self.psd(k)
                 rate = self.rate(k)
-                first = np.searchsorted(freq, rate * 0.2, side="left")
-                last = np.searchsorted(freq, rate * 0.4, side="right")
+                # Noise in the middle of the PSD
+                first = np.searchsorted(freq, rate * 0.225, side="left")
+                last = np.searchsorted(freq, rate * 0.275, side="right")
+                if first == last:
+                    first = max(0, first - 1)
+                    last = min(freq.size - 1, last + 1)
+                noisevar_mid = np.median(psd[first:last].to_value(u.K**2 * u.second))
+                # Noise in the end of the PSD
+                first = np.searchsorted(freq, rate * 0.45, side="left")
+                last = np.searchsorted(freq, rate * 0.50, side="right")
+                if first == last:
+                    first = max(0, first - 1)
+                    last = min(freq.size - 1, last + 1)
+                noisevar_end = np.median(psd[first:last].to_value(u.K**2 * u.second))
+                if noisevar_end / noisevar_mid < 0.5:
+                    # There is a transfer function roll-off.  Measure the
+                    # white noise plateau value
+                    first = np.searchsorted(freq, rate * 0.2, side="left")
+                    last = np.searchsorted(freq, rate * 0.4, side="right")
+                else:
+                    # No significant roll-off.  Use the last PSD bins for
+                    # the noise variance
+                    first = np.searchsorted(freq, rate * 0.45, side="left")
+                    last = np.searchsorted(freq, rate * 0.50, side="right")
+                if first == last:
+                    first = max(0, first - 1)
+                    last = min(freq.size - 1, last + 1)
                 noisevar = np.median(psd[first:last].to_value(u.K**2 * u.second))
-                invvar = 1.0 / noisevar
+                invvar = 1.0 / noisevar / rate.to_value(u.Hz)
                 for det in self._dets_for_keys[k]:
                     self._detweights[det] += mix[det][k] * invvar
         return self._detweights[det]
@@ -246,7 +271,7 @@ class Noise(object):
 
         if hf is not None:
             # This process is participating
-            mds = hf.create_dataset("mixing_matrix", len(mixdata), dtype=mixdtype)
+            mds = hf.create_dataset("mixing_matrix", (len(mixdata),), dtype=mixdtype)
             if rank == 0:
                 # Only one process needs to write
                 packed = np.array(mixdata, dtype=mixdtype)
@@ -311,13 +336,15 @@ class Noise(object):
                     packed[1:] = np.array(psds, dtype=np.float32)
                     pds.write_direct(packed)
                 del pds
-                ids = hf.create_dataset(f"{fhash}_indices", len(psds), dtype=np.int32)
+                ids = hf.create_dataset(
+                    f"{fhash}_indices", (len(psds),), dtype=np.int32
+                )
                 if rank == 0:
                     packed = np.array(indx, dtype=np.int32)
                     ids.write_direct(packed)
                 del ids
                 keytype = np.dtype(f"a{maxstr}")
-                kds = hf.create_dataset(f"{fhash}_keys", len(psds), dtype=keytype)
+                kds = hf.create_dataset(f"{fhash}_keys", (len(psds),), dtype=keytype)
                 if rank == 0:
                     packed = np.array(keys, dtype=keytype)
                     kds.write_direct(packed)

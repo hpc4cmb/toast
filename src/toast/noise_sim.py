@@ -135,7 +135,8 @@ class AnalyticNoise(Noise):
         return self._NET[det]
 
     def _detector_weight(self, det):
-        return 1.0 / (self._NET[det] ** 2).to_value(u.K**2 * u.second)
+        return 1.0 / (self._NET[det] ** 2).to_value(u.K**2 * u.second) \
+            / self._rate[det].to_value(u.Hz)
 
     def _save_hdf5(self, handle, comm, **kwargs):
         """Internal method which can be overridden by derived classes."""
@@ -150,7 +151,7 @@ class AnalyticNoise(Noise):
             # Write the noise model parameters as a dataset
             maxstr = 1 + max([len(x) for x in self._dets])
             adtype = np.dtype(f"a{maxstr}, f8, f8, f8, f8, f8")
-            ds = handle.create_dataset("analytic", len(self._dets), dtype=adtype)
+            ds = handle.create_dataset("analytic", (len(self._dets),), dtype=adtype)
             if rank == 0:
                 packed = np.array(
                     [

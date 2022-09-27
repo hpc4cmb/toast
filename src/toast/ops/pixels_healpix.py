@@ -255,13 +255,10 @@ class PixelsHealpix(Operator):
                     ob.detdata.accel_create(self.pixels)
 
             # Get the flags if needed.  Use the same flags as
-            # detector pointing.
-            flags = None
+            # detector pointing.  Use empty array in absence of flags
+            flags = np.array([], dtype=np.uint8)
             if self.detector_pointing.shared_flags is not None:
                 flags = np.array(ob.shared[self.detector_pointing.shared_flags])
-                # n_good = np.sum(flags == 0)
-                # n_bad = np.sum(flags != 0)
-                # print(f"Flags using mask {self.detector_pointing.shared_flag_mask}, {n_good} good, {n_bad} bad")
 
             if self.use_python:
                 self._py_pixels_healpix(

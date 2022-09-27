@@ -438,6 +438,11 @@ class FilterBin(Operator):
         if self.maskfile is not None:
             raise RuntimeError("Filtering mask not yet implemented")
 
+        log.debug_rank(
+            f"FilterBin:  Running with self.cache_dir = {self.cache_dir}",
+            comm=data.comm.comm_world,
+        )
+
         self._initialize_comm(data)
 
         # Filter data
@@ -498,6 +503,7 @@ class FilterBin(Operator):
             template_covariance = None
 
             for idet, det in enumerate(dets):
+                t1 = time()
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:   Processing detector "
@@ -892,6 +898,11 @@ class FilterBin(Operator):
                     t1 = time()
             except:
                 local_obs_matrix = None
+        else:
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin:     cache_dir = {self.cache_dir}"
+                )
 
         if local_obs_matrix is None:
             templates = templates.T.copy()
@@ -942,14 +953,19 @@ class FilterBin(Operator):
                     log.debug(
                         f"{self.group:4} : FilterBin:     Caching to {fname_cache}*",
                     )
-                np.save(fname_cache + ".data", local_obs_matrix)
-                np.save(fname_cache + ".indices", local_obs_matrix)
-                np.save(fname_cache + ".indptr", local_obs_matrix)
+                np.save(fname_cache + ".data", local_obs_matrix.data)
+                np.save(fname_cache + ".indices", local_obs_matrix.indices)
+                np.save(fname_cache + ".indptr", local_obs_matrix.indptr)
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:     cached in {time() - t1:.2f} s",
                     )
                     t1 = time()
+            else:
+                if self.grank == 0:
+                    log.debug(
+                        f"{self.group:4} : FilterBin:     NOT caching detector matrix",
+                    )
 
         if self.grank == 0:
             log.debug(f"{self.group:4} : FilterBin:     Adding to global")

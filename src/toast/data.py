@@ -250,9 +250,9 @@ class Data(MutableMapping):
         elif obs_session_name:
             # Splitting by (non-unique) session name
             for iob, ob in enumerate(self.obs):
-                if ob.session is None:
+                if ob.session is None or ob.session.name is None:
                     if require_full:
-                        msg = f"require_full is True, but observation {iob} has no session"
+                        msg = f"require_full is True, but observation {iob} has no session name"
                         log.error_rank(msg, comm=group_comm)
                         raise RuntimeError(msg)
                 else:

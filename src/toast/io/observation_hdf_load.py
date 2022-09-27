@@ -2,10 +2,10 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import datetime
 import json
 import os
 import re
+from datetime import datetime, timezone
 
 import h5py
 import numpy as np
@@ -394,16 +394,17 @@ def load_hdf5(
                 weather_max_pwv = None
                 if inst_group.attrs["site_weather_max_pwv"] != "NONE":
                     weather_max_pwv = float(inst_group.attrs["site_weather_max_pwv"])
-                weather_time = datetime.datetime.fromtimestamp(
-                    float(inst_group.attrs["site_weather_time"])
+                weather_time = datetime.fromtimestamp(
+                    float(inst_group.attrs["site_weather_time"]), tz=timezone.utc
                 )
+                weather_median = bool(inst_group.attrs["site_weather_median"])
                 weather = SimWeather(
                     time=weather_time,
                     name=weather_name,
                     site_uid=site_uid,
                     realization=weather_realization,
                     max_pwv=weather_max_pwv,
-                    median_weather=False,
+                    median_weather=weather_median,
                 )
             site = site_class(
                 site_name,
@@ -424,17 +425,17 @@ def load_hdf5(
             if str(session_start) == "NONE":
                 session_start = None
             else:
-                session_start = datetime.datetime.fromtimestamp(
+                session_start = datetime.fromtimestamp(
                     float(inst_group.attrs["session_start"]),
-                    tz=datetime.timezone.utc,
+                    tz=timezone.utc,
                 )
             session_end = inst_group.attrs["session_end"]
             if str(session_end) == "NONE":
                 session_end = None
             else:
-                session_end = datetime.datetime.fromtimestamp(
+                session_end = datetime.fromtimestamp(
                     float(inst_group.attrs["session_end"]),
-                    tz=datetime.timezone.utc,
+                    tz=timezone.utc,
                 )
             session_class = import_from_name(str(inst_group.attrs["session_class"]))
             session = session_class(

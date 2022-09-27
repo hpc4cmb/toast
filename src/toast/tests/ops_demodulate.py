@@ -107,7 +107,7 @@ class DemodulateTest(MPITestCase):
 
         # Demodulate
 
-        demod = ops.Demodulate(stokes_weights=weights)
+        demod = ops.Demodulate(stokes_weights=weights, purge=True)
         demod_data = demod.apply(data)
 
         # ops.Delete(detdata=[defaults.weights]).apply(demod_data)

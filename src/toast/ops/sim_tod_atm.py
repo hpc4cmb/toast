@@ -322,7 +322,7 @@ class SimAtmosphere(Operator):
         observe_atm = ObserveAtmosphere(
             times=self.times,
             det_data=self.det_data,
-            quats=self.detector_pointing.quats,
+            quats_azel=self.detector_pointing.quats,
             view=temporary_view,
             shared_flags=shared_flags,
             shared_flag_mask=shared_flag_mask,

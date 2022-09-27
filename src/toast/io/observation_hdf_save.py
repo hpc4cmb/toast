@@ -501,6 +501,9 @@ def save_hdf5(
                     inst_group.attrs[
                         "site_weather_time"
                     ] = site.weather.time.timestamp()
+                    inst_group.attrs[
+                        "site_weather_median"
+                    ] = site.weather.median_weather
         session = obs.session
         if session is not None:
             inst_group.attrs["session_name"] = session.name

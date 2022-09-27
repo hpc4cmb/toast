@@ -33,39 +33,11 @@ PREFIX=/usr
 
 yum update -y
 
-# Install MPICH with our serial compiler.  Needed to install
-# mpi4py later for testing (MPI is not bundled with the wheel).
+# Update pip
+pip install --upgrade pip
 
-mpich_version=3.4
-mpich_dir=mpich-${mpich_version}
-mpich_pkg=${mpich_dir}.tar.gz
-
-echo "Fetching MPICH..."
-
-if [ ! -e ${mpich_pkg} ]; then
-    curl -SL https://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
-fi
-
-echo "Building MPICH..."
-
-rm -rf ${mpich_dir}
-fcopt="--disable-fortran"
-unset F90
-unset F90FLAGS
-tar xzf ${mpich_pkg} \
-    && cd ${mpich_dir} \
-    && CC="${CC}" CXX="${CXX}" FC="${FC}" F77="${FC}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
-    FFLAGS="${FCFLAGS}" FCFLAGS="${FCFLAGS}" \
-    MPICH_MPICC_CFLAGS="${CFLAGS}" \
-    MPICH_MPICXX_CXXFLAGS="${CXXFLAGS}" \
-    MPICH_MPIF77_FFLAGS="${FCFLAGS}" \
-    MPICH_MPIFORT_FCFLAGS="${FCFLAGS}" \
-    ./configure ${fcopt} \
-    --with-device=ch3 \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install
+# Install a couple of base packages that are always required
+pip install -v cmake wheel
 
 # In order to maximize ABI compatibility with numpy, build with the newest numpy
 # version containing the oldest ABI version compatible with the python we are using.
@@ -83,46 +55,21 @@ if [ ${pyver} == "3.10" ]; then
     numpy_ver="1.22"
 fi
 
-# Update pip
-pip install --upgrade pip
-
-# Install a couple of base packages that are always required
-pip install -v "numpy<${numpy_ver}" cmake wheel
-
 # Install build requirements.
-CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt"
+CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
 
-# Install mpi4py for running tests
+# Install openblas from the multilib package- the same one numpy uses.
 
-echo "mpicc = $(which mpicc)"
-echo "mpicxx = $(which mpicxx)"
-echo "mpirun = $(which mpirun)"
-pip install mpi4py
-
-# Install Openblas
-
-openblas_version=0.3.20
-openblas_dir=OpenBLAS-${openblas_version}
-openblas_pkg=${openblas_dir}.tar.gz
-
-echo "Fetching OpenBLAS..."
+openblas_pkg="openblas-v0.3.20-manylinux2014_x86_64.tar.gz"
+openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.20/download/${openblas_pkg}"
 
 if [ ! -e ${openblas_pkg} ]; then
-    curl -SL https://github.com/xianyi/OpenBLAS/archive/v${openblas_version}.tar.gz -o ${openblas_pkg}
+    echo "Fetching OpenBLAS..."
+    curl -SL ${openblas_url} -o ${openblas_pkg}
 fi
 
-echo "Building OpenBLAS..."
-
-rm -rf ${openblas_dir}
-tar xzf ${openblas_pkg} \
-    && pushd ${openblas_dir} >/dev/null 2>&1 \
-    && make USE_OPENMP=1 NO_SHARED=1 \
-    MAKE_NB_JOBS=${MAKEJ} \
-    CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
-    COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
-    LDFLAGS="-fopenmp -lm" libs netlib shared \
-    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
-    && popd >/dev/null 2>&1
+echo "Extracting OpenBLAS"
+tar -x -z -v -C "${PREFIX}" --strip-components 2 -f ${openblas_pkg}
 
 # libgmp
 
@@ -143,8 +90,6 @@ tar xf ${gmp_pkg} \
     && pushd ${gmp_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
-    --enable-static \
-    --disable-shared \
     --with-pic \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
@@ -170,8 +115,6 @@ tar xf ${mpfr_pkg} \
     && pushd ${mpfr_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
-    --enable-static \
-    --disable-shared \
     --with-pic \
     --with-gmp="${PREFIX}" \
     --prefix="${PREFIX}" \
@@ -198,9 +141,9 @@ tar xzf ${fftw_pkg} \
     && pushd ${fftw_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
+    --disable-fortran \
     --enable-openmp \
-    --enable-static \
-    --disable-shared \
+    --enable-shared \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
@@ -239,7 +182,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.11.0
+ssparse_version=5.12.0
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
@@ -255,17 +198,52 @@ rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
     && pushd ${ssparse_dir} >/dev/null 2>&1 \
     && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && make library JOBS=${MAKEJ} \
+    && make library JOBS=${MAKEJ} INSTALL="${PREFIX}" \
     CC="${CC}" CXX="${CXX}" \
     CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -fopenmp -lm" \
-    && make static JOBS=${MAKEJ} \
+    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -lm" \
+    LAPACK="-lopenblas -lm" \
+    && make install INSTALL="${PREFIX}" \
     CC="${CC}" CXX="${CXX}" \
     CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -fopenmp -lm" \
-    && cp -a ./include/* "${PREFIX}/include/" \
-    && find . -name "*.a" -exec cp -a '{}' "${PREFIX}/lib/" \; \
+    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -lm" \
+    LAPACK="-lopenblas -lm" \
     && popd >/dev/null 2>&1
 
-# This line removed from above, since we are linking to static libs:
-# && cp -a ./lib/* "${PREFIX}/lib/" \
+# MPI for testing.  Although we do not bundle MPI with toast, we need
+# to install it in order to run mpi-enabled tests on the produced
+# wheel.
+
+mpich_version=3.4
+mpich_dir=mpich-${mpich_version}
+mpich_pkg=${mpich_dir}.tar.gz
+
+echo "Fetching MPICH..."
+
+if [ ! -e ${mpich_pkg} ]; then
+    curl -SL https://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
+fi
+
+echo "Building MPICH..."
+
+tar xzf ${mpich_pkg} \
+    && cd ${mpich_dir} \
+    && CC="${CC}" CXX="${CXX}" FC="${FC}" F77="${FC}" \
+    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
+    FFLAGS="${FCFLAGS}" FCFLAGS="${FCFLAGS}" \
+    MPICH_MPICC_CFLAGS="${CFLAGS}" \
+    MPICH_MPICXX_CXXFLAGS="${CXXFLAGS}" \
+    MPICH_MPIF77_FFLAGS="${FCFLAGS}" \
+    MPICH_MPIFORT_FCFLAGS="${FCFLAGS}" \
+    ./configure --disable-fortran \
+    --with-device=ch3 \
+    --prefix="${PREFIX}" \
+    && make -j ${MAKEJ} \
+    && make install
+
+# Install mpi4py for running tests
+
+echo "mpicc = $(which mpicc)"
+echo "mpicxx = $(which mpicxx)"
+echo "mpirun = $(which mpirun)"
+python3 -m pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py

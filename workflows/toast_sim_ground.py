@@ -31,7 +31,9 @@ import os
 import pickle
 import sys
 import traceback
+import warnings
 
+import erfa
 import numpy as np
 from astropy import units as u
 
@@ -46,6 +48,9 @@ from toast.mpi import MPI, Comm
 if t3g.available:
     from spt3g import core as c3g
 
+
+warnings.simplefilter("error")
+warnings.simplefilter("ignore", erfa.core.ErfaWarning)
 
 def parse_config(operators, templates, comm):
     """Parse command line arguments and load any config files.
@@ -105,6 +110,14 @@ def parse_config(operators, templates, comm):
     )
 
     parser.add_argument(
+        "--pwv_limit",
+        required=False,
+        type=float,
+        help="If set, discard observations with simulated PWV "
+        "higher than the limit [mm]",
+    )
+
+    parser.add_argument(
         "--telescope",
         required=False,
         help="Override telescope name read from the schedule file",
@@ -152,21 +165,24 @@ def load_instrument_and_schedule(args, comm):
     if os.path.isfile(fname_pickle):
         log.info_rank(f"Loading focalplane from {fname_pickle}", comm=comm)
         if comm is None or comm.rank == 0:
-            focalplane = pickle.load(open(fname_pickle, "rb"))
+            with open(fname_pickle, "rb") as handle:
+                focalplane = pickle.load(handle)
         else:
             focalplane = None
         if comm is not None:
             focalplane = comm.bcast(focalplane, root=0)
     else:
         focalplane = toast.instrument.Focalplane(
-            sample_rate=sample_rate, thinfp=args.thinfp
+            sample_rate=sample_rate, thinfp=args.thinfp,
         )
         with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
             focalplane.load_hdf5(f.handle, comm=comm)
         log.info_rank(f"Saving focalplane to {fname_pickle}", comm=comm)
         if comm is None or comm.rank == 0:
-            pickle.dump(focalplane, open(fname_pickle, "wb"))
+            with open(fname_pickle, "wb") as handle:
+                pickle.dump(focalplane, handle)
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
+    log.info_rank(f"Focalplane: {str(focalplane)}", comm=comm)
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
     log.info_rank(f"After loading focalplane:  {mem}", comm)
 
@@ -225,7 +241,7 @@ def job_create(config, jobargs, telescope, schedule, comm):
     return job, group_size, full_pointing
 
 
-def simulate_data(job, toast_comm, telescope, schedule):
+def simulate_data(args, job, toast_comm, telescope, schedule):
     log = toast.utils.Logger.get()
     ops = job.operators
     tmpls = job.templates
@@ -257,6 +273,27 @@ def simulate_data(job, toast_comm, telescope, schedule):
 
     ops.mem_count.prefix = "After Scan Simulation"
     ops.mem_count.apply(data)
+
+    if args.pwv_limit is not None:
+        iobs = 0
+        ngood = 0
+        nbad = 0
+        while iobs < len(data.obs):
+            pwv = data.obs[iobs].telescope.site.weather.pwv.to_value(u.mm)
+            if pwv <= args.pwv_limit:
+                ngood += 1
+                iobs += 1
+            else:
+                nbad += 1
+                del data.obs[iobs]
+        if toast_comm is not None:
+            nbad = toast_comm.comm_group_rank.allreduce(nbad)
+            ngood = toast_comm.comm_group_rank.allreduce(ngood)
+        log.info_rank(
+            f"  Discarded {nbad} / {ngood + nbad} observations "
+            f"with PWV > {args.pwv_limit} mm",
+            comm=world_comm,
+        )
 
     # Construct a "perfect" noise model just from the focalplane parameters
 
@@ -720,7 +757,7 @@ def main():
     toast_comm = toast.Comm(world=comm, groupsize=group_size)
 
     # Create simulated data
-    data = simulate_data(job, toast_comm, telescope, schedule)
+    data = simulate_data(args, job, toast_comm, telescope, schedule)
 
     # Handle special case of caching the atmosphere simulations.  In this
     # case, we are not simulating timestreams or doing data reductions.

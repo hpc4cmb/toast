@@ -14,6 +14,7 @@ set(ENTRY_POINTS
     toast_healpix_coadd.py
     toast_hdf5_to_spt3g.py
     toast_mini.py
+    toast_obsmatrix_combine.py
 )
 
 foreach(pyscript ${ENTRY_POINTS})

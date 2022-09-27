@@ -71,12 +71,6 @@ target_include_directories(toast BEFORE PUBLIC
 
 target_link_libraries(toast gtest)
 
-if(OpenMP_CXX_FOUND)
-    target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
-    set_target_properties(toast PROPERTIES LINK_OPTIONS "${OpenMP_CXX_FLAGS}")
-    target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
-endif(OpenMP_CXX_FOUND)
-
 if(AATM_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_AATM=1)
     target_include_directories(toast PUBLIC "${AATM_INCLUDE_DIRS}")
@@ -136,12 +130,14 @@ endif(FFTW_FOUND)
 if(LAPACK_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
     target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-    set_target_properties(toast PROPERTIES LINK_OPTIONS
-        "${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}"
-    )
     target_link_libraries(toast "${LAPACK_LIBRARIES}")
     target_link_libraries(toast "${BLAS_LIBRARIES}")
 endif(LAPACK_FOUND)
+
+if(OpenMP_CXX_FOUND)
+    target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
+    target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
+endif(OpenMP_CXX_FOUND)
 
 # CUDA
 
@@ -174,7 +170,6 @@ add_executable(toast_test
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(toast_test PRIVATE "${OpenMP_CXX_FLAGS}")
-    set_target_properties(toast_test PROPERTIES LINK_OPTIONS "${OpenMP_CXX_FLAGS}")
 endif(OpenMP_CXX_FOUND)
 
 target_include_directories(toast_test BEFORE PRIVATE
@@ -184,6 +179,10 @@ target_include_directories(toast_test BEFORE PRIVATE
 )
 
 target_link_libraries(toast_test toast)
+
+target_link_options(toast_test PRIVATE
+    ${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS} ${OpenMP_CXX_FLAGS}
+)
 
 install(TARGETS toast_test DESTINATION ${CMAKE_INSTALL_BINDIR})
 
