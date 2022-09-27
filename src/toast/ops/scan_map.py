@@ -145,7 +145,8 @@ class ScanMap(Operator):
         return prov
 
     def _supports_accel(self):
-        return True
+        # TODO set this to true once pipelining bugs are fixed
+        return False 
 
 @trait_docs
 class ScanMask(Operator):

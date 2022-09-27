@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import assert_data_localization, dataMovementTracker, MutableJaxArray, select_implementation, ImplementationType
-from .utils.intervals import JaxIntervals, ALL
+from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL 
 from ..._libtoast import scan_map_float64 as scan_map_interval_float64_compiled, scan_map_float32 as scan_map_interval_float32_compiled
 
 #-------------------------------------------------------------------------------------------------
@@ -185,7 +185,7 @@ def scan_map_jax(mapdata, nmap,
     assert_data_localization('scan_map', use_accel, [mapdata, global2local, det_data, det_data_index, pixels, pixels_index, weights, weight_index], [det_data])
 
     # prepares inputs
-    intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     mapdata = MutableJaxArray.to_array(mapdata)
     global2local = MutableJaxArray.to_array(global2local)
     det_data_input = MutableJaxArray.to_array(det_data)

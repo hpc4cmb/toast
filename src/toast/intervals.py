@@ -115,7 +115,6 @@ class IntervalList(Sequence, AcceleratorObject):
         else:
             # No data yet
             self.data = np.zeros(0, dtype=interval_dtype).view(np.recarray)
-        self.jax = None
         # This is for the AcceleratorObject mixin class
         self._accel_used = False
 
@@ -359,15 +358,13 @@ class IntervalList(Sequence, AcceleratorObject):
         log.verbose(f"IntervalList _accel_exists")
         if len(self.data) == 0:
             return False
+        elif use_accel_omp:
+            return accel_data_present(self.data)
+        elif use_accel_jax:
+            # specialised for the INTERVALS_JAX dtype
+            return isinstance(self.data, INTERVALS_JAX)
         else:
-            if use_accel_omp:
-                return accel_data_present(self.data)
-            elif use_accel_jax:
-                # TODO deals with the user defined dtype
-                #return accel_data_present(self.jax)
-                return isinstance(self.jax, INTERVALS_JAX)
-            else:
-                return False
+            return False
 
     def _accel_create(self):
         log = Logger.get()
@@ -375,9 +372,8 @@ class IntervalList(Sequence, AcceleratorObject):
         if use_accel_omp:
             accel_data_create(self.data)
         elif use_accel_jax:
-            # TODO deals with the fact that our dtype is user-defined
-            #self.jax = accel_data_create(self.jax)
-            self.jax = INTERVALS_JAX.empty()
+            # specialised for the INTERVALS_JAX dtype
+            self.data = INTERVALS_JAX(self.data)
 
     def _accel_update_device(self):
         log = Logger.get()
@@ -385,8 +381,8 @@ class IntervalList(Sequence, AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_device(self.data)
         elif use_accel_jax:
-            # deals with the fact that our dtype is user-defined
-            self.jax = INTERVALS_JAX.init(self.data)
+            # specialised for the INTERVALS_JAX dtype
+            self.data = INTERVALS_JAX(self.data)
 
     def _accel_update_host(self):
         log = Logger.get()
@@ -394,18 +390,20 @@ class IntervalList(Sequence, AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_host(self.data)
         elif use_accel_jax:
-            # this moves the data back into self.data
-            self.jax.to_numpy(self.data)
+            # specialised for the INTERVALS_JAX dtype
+            # this moves the data back into a numpy array
+            self.data = self.data.to_numpy()
 
     def _accel_delete(self):
         log = Logger.get()
         log.verbose(f"IntervalList _accel_delete")
         if use_accel_omp:
             accel_data_delete(self.data)
-        elif use_accel_jax:
-            del self.jax
-            self.jax = None
-
+        elif use_accel_jax and self._accel_exists():
+            # insures data has been properly reset
+            # if we observe that its type is still a GPU type
+            # does NOT move data back from GPU
+            self.data = self.data.numpy_buffer
 
 @function_timer
 def regular_intervals(n, start, first, rate, duration, gap):

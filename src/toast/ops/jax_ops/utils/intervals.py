@@ -1,44 +1,54 @@
 import jax
 import numpy as np
 import jax.numpy as jnp
-from typing import NamedTuple
+# TODO we need to clean up the two very similar interval type names
 
 #------------------------------------------------------------------------------
 # Numpy to JAX intervals
 
-class INTERVALS_JAX(NamedTuple):
+class INTERVALS_JAX:
     """
-    Encapsulate the information from an array of intervals in a JAX compatible way
-    Using a struct of arrays rather than an array of structs.
-    This class can be converted into a pytree (as it inherits from NamedTuple)
+    Encapsulate the information from an array of structures into a structure of array
+    each of the inner arrays is converted into a JAX array
     """
-    starts: np.float64
-    stops: np.float64
-    firsts: np.longlong
-    lasts: np.longlong
 
-    @classmethod
-    def init(cls, data):
-        starts = jax.device_put(data.start)
-        stops = jax.device_put(data.stop)
-        firsts = jax.device_put(data.first)
-        lasts = jax.device_put(data.last)
-        return cls(starts, stops, firsts, lasts)
+    def __init__(self, data):
+        # otherwise
+        self.size = data.size
+        self.intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(data)
+        self.start = jax.device_put(data.start)
+        self.stop = jax.device_put(data.stop)
+        self.first = jax.device_put(data.first)
+        self.last = jax.device_put(data.last)
+        # sets Numpy buffer aside in case we want to return it
+        # TODO we could just alocate a new buffer later
+        self.numpy_buffer = data.numpy_buffer if isinstance(data, INTERVALS_JAX) else data
     
-    @classmethod
-    def empty(cls):
-        starts = jnp.empty(shape=0)
-        stops = jnp.empty(shape=0)
-        firsts = jnp.empty(shape=0)
-        lasts = jnp.empty(shape=0)
-        return cls(starts, stops, firsts, lasts)
+    def compute_max_intervals_length(intervals):
+        """
+        given an array of intervals, returns the maximum interval length
+        this function will use a precomputed values when using an INTERVALS_JAX
+        """
+        if isinstance(intervals, INTERVALS_JAX):
+            return intervals.intervals_max_length
+        else:
+            # end+1 as TOAST intervals are inclusive
+            return np.max(1 + intervals.last - intervals.first)
+
+    def to_numpy(self):
+        """copies data back into the original buffer and returns it"""
+        self.numpy_buffer.start[:] = self.starts
+        self.numpy_buffer.stop[:] = self.stops
+        self.numpy_buffer.first[:] = self.firsts
+        self.numpy_buffer.last[:] = self.lasts
+        return self.numpy_buffer
     
-    def to_numpy(self, output_buffer):
-        """copies data back into the given buffer"""
-        output_buffer.start[:] = self.starts
-        output_buffer.stop[:] = self.stops
-        output_buffer.first[:] = self.firsts
-        output_buffer.last[:] = self.lasts
+    def __iter__(self):
+        # NOTE: this is only correct if intervals are write only
+        return iter(self.numpy_buffer)
+
+    def __len__(self):
+        return self.size
 
 #------------------------------------------------------------------------------
 # Irregular intervals

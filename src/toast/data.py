@@ -426,9 +426,7 @@ class Data(MutableMapping):
                     log.verbose(f"NOT calling ob {ob.name} shared accel_create for '{key}' as it is alreaddy on device")
             for key in names["intervals"]:
                 if not ob.intervals.accel_exists(key):
-                    log.verbose(
-                        f"Calling ob {ob.name} intervals accel_create for '{key}'"
-                    )
+                    log.verbose(f"Calling ob {ob.name} intervals accel_create for '{key}'")
                     ob.intervals.accel_create(key)
                 else:
                     log.verbose(f"NOT calling ob {ob.name} intervals accel_create for '{key}' as it is alreaddy on device")

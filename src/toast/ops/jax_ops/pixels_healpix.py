@@ -11,7 +11,7 @@ from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import assert_data_localization, dataMovementTracker, select_implementation, ImplementationType, math_qarray as qarray, math_healpix as healpix
 from .utils.mutableArray import MutableJaxArray
-from .utils.intervals import JaxIntervals, ALL
+from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -144,7 +144,7 @@ def pixels_healpix_jax(quat_index, quats, flags, flag_mask, pixel_index, pixels,
 
     # prepares inputs
     if intervals.size == 0: return # deals with a corner case in tests
-    intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     quat_index_input = MutableJaxArray.to_array(quat_index)
     quats_input = MutableJaxArray.to_array(quats)
     flags_input = MutableJaxArray.to_array(flags)

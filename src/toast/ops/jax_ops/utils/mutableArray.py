@@ -89,3 +89,6 @@ class MutableJaxArray():
         returns a string representation of the content of the array
         """
         return self.data.__str__()
+
+    def __eq__(self, other):
+        raise RuntimeError("MutableJaxArray: tried an equality test on a MutableJaxArray. This container is not designed for computations, you likely have a data movement bug somewhere in your program.")

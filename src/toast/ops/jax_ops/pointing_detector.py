@@ -10,7 +10,7 @@ from jax.experimental.maps import xmap as jax_xmap
 
 from .utils import assert_data_localization, dataMovementTracker, select_implementation, ImplementationType
 from .utils.mutableArray import MutableJaxArray
-from .utils.intervals import JaxIntervals, ALL
+from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
 from ..._libtoast import pointing_detector as pointing_detector_compiled
 
@@ -101,7 +101,7 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
 
     # prepares inputs
     if intervals.size == 0: return # deals with a corner case in tests
-    intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     focalplane_input = MutableJaxArray.to_array(focalplane)
     boresight_input = MutableJaxArray.to_array(boresight)
     quat_index_input = MutableJaxArray.to_array(quat_index)

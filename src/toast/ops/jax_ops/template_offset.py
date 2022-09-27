@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 
 from .utils import assert_data_localization, dataMovementTracker, ImplementationType, select_implementation, MutableJaxArray
-from .utils.intervals import JaxIntervals, ALL
+from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from ..._libtoast import template_offset_add_to_signal as template_offset_add_to_signal_compiled, template_offset_project_signal as template_offset_project_signal_compiled, template_offset_apply_diag_precond as template_offset_apply_diag_precond_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, ampl
     assert_data_localization('template_offset_add_to_signal', use_accel, [amplitudes, det_data], [det_data])
 
     # prepare inputs
-    intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     det_data_input = MutableJaxArray.to_array(det_data)
     amplitudes = MutableJaxArray.to_array(amplitudes)
 
@@ -108,7 +108,7 @@ def template_offset_add_to_signal_jax(step_length, amp_offset, n_amp_views, ampl
     # prepare offsets intervals
     offsets_start = offsets + intervals.first // step_length
     offsets_end = offsets + intervals.last // step_length
-    offsets_max_length = np.max(1 + offsets_end - offsets_start)
+    offsets_max_length = int(np.max(1 + offsets_end - offsets_start))
 
     # track data movement
     dataMovementTracker.add("template_offset_add_to_signal", use_accel, [amplitudes, det_data_input, intervals.first, intervals.last, offsets_start, offsets_end], [det_data])
@@ -212,7 +212,7 @@ def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_da
     assert_data_localization('template_offset_project_signal', use_accel, [det_data, flag_data, amplitudes], [amplitudes])
 
     # prepare inputs
-    intervals_max_length = np.max(1 + intervals.last - intervals.first) # end+1 as the interval is inclusive
+    intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     use_flag = flag_index >= 0
     det_data = MutableJaxArray.to_array(det_data)
     flag_data = MutableJaxArray.to_array(flag_data)
@@ -226,7 +226,7 @@ def template_offset_project_signal_jax(data_index, det_data, flag_index, flag_da
     # prepare offsets intervals
     offsets_start = offsets + intervals.first // step_length
     offsets_end = offsets + intervals.last // step_length
-    offsets_max_length = np.max(1 + offsets_end - offsets_start)
+    offsets_max_length = int(np.max(1 + offsets_end - offsets_start))
 
     # track data movement
     dataMovementTracker.add("template_offset_project_signal", use_accel, [det_data, flag_data, amplitudes_input, intervals.first, intervals.last, offsets_start, offsets_end], [amplitudes])

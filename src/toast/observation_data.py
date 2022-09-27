@@ -477,7 +477,7 @@ class DetectorData(AcceleratorObject):
             self._data = self._flatdata.reshape(self._shape)
 
 
-class DetDataManager(MutableMapping):
+class DetDataManager(MutableMapping, AcceleratorObject):
     """Class used to manage DetectorData objects in an Observation.
 
     New objects can be created several ways.  The "create()" method:
@@ -1031,7 +1031,7 @@ class SharedDataType(NamedTuple):
     type: str
 
 
-class SharedDataManager(MutableMapping):
+class SharedDataManager(MutableMapping, AcceleratorObject):
     """Class used to manage shared data objects in an Observation.
 
     New objects can be created with the "create_*()" methods:
@@ -1760,7 +1760,7 @@ class SharedDataManager(MutableMapping):
         return val
 
 
-class IntervalsManager(MutableMapping):
+class IntervalsManager(MutableMapping, AcceleratorObject):
     """Class for creating and storing interval lists in an observation.
 
     Named lists of intervals are accessed by dictionary style syntax ([] brackets).

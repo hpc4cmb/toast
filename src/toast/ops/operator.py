@@ -170,7 +170,6 @@ class Operator(TraitConfig):
         return prov
 
     def _supports_accel(self):
-        print(f"DEBUGGING: default support_accel {self.__class__}") # TODO
         return True # TODO False
 
     def supports_accel(self):
@@ -214,11 +213,9 @@ class Operator(TraitConfig):
                     msg = f"{self.name}:  obs {ob.name}, intervals {key} is on device"
                 log.verbose(msg)
         if all_present:
-            log.verbose(f"{self.name}:  obs {ob.name} all required inputs on device")
+            log.verbose(f"{self.name}:  all required inputs on device")
         else:
-            log.verbose(
-                f"{self.name}:  obs {ob.name} some required inputs not on device"
-            )
+            log.verbose(f"{self.name}:  some required inputs not on device")
         return all_present
 
     @classmethod

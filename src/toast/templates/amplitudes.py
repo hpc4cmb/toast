@@ -696,11 +696,12 @@ class Amplitudes(AcceleratorObject):
         if use_accel_omp:
             accel_data_delete(self._raw)
             accel_data_delete(self._raw_flags)
-        elif use_accel_jax:
-            pass
-        else:
-            log = Logger.get()
-            log.warning("Accelerator support not enabled, cannot delete device data")
+        elif use_accel_jax and self._accel_exists():
+            # insures local and local_flags have been properly reset
+            # if we observe that their types are still GPU types
+            # does NOT move data back from GPU
+            self.local = self._raw.array()
+            self.local_flags = self._raw_flags.array()
 
 
 class AmplitudesMap(MutableMapping,AcceleratorObject):
@@ -868,6 +869,7 @@ class AmplitudesMap(MutableMapping,AcceleratorObject):
         self._check_other(other)
         result = 0.0
         for k, v in self._internal.items():
+            d = v.dot(other[k])
             result += v.dot(other[k])
         return result
 
