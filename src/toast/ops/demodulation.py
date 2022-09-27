@@ -73,6 +73,10 @@ class Demodulate(Operator):
 
     hwp_angle = Unicode(defaults.hwp_angle, help="Observation shared key for HWP angle")
 
+    azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
+
+    elevation = Unicode(defaults.elevation, help="Observation shared key for Elevation")
+
     boresight = Unicode(
         defaults.boresight_radec, help="Observation shared key for boresight"
     )
@@ -217,6 +221,11 @@ class Demodulate(Operator):
                 process_rows=demod_process_rows,
                 sample_sets=demod_sample_sets,
             )
+            for key, value in obs.items():
+                if key == "noise_model":
+                    # Will be generated later
+                    continue
+                demod_obs[key] = value
 
             # Allocate storage
 
@@ -232,6 +241,8 @@ class Demodulate(Operator):
             demod_obs.shared.create_column(
                 self.shared_flags, (n_local,), dtype=np.uint8
             )
+
+            self._demodulate_shared_data(obs, demod_obs)
 
             exists_data = demod_obs.detdata.ensure(
                 self.det_data, detectors=demod_dets, dtype=np.float64
@@ -326,6 +337,25 @@ class Demodulate(Operator):
         return times
 
     @function_timer
+    def _demodulate_shared_data(self, obs, demod_obs):
+        """Downsample shared data"""
+        n_local = demod_obs.n_local_samples
+        for key in self.azimuth, self.elevation:
+            if key is None:
+                continue
+            values = obs.shared[key].data.copy()
+            if self.nskip != 1:
+                offset = obs.local_index_offset
+                values = np.array(values[offset % self.nskip :: self.nskip])
+            demod_obs.shared.create_column(key, (n_local,))
+            demod_obs.shared[key].set(
+                values,
+                offset=(0,),
+                fromrank=0,
+            )
+        return
+
+    @function_timer
     def _demodulate_detsets(self, obs):
         """Lump all derived detectors into detector sets"""
         detsets = obs.all_detector_sets
@@ -374,6 +404,8 @@ class Demodulate(Operator):
         for name, ivals in obs.intervals.items():
             timespans = [[ival.start, ival.stop] for ival in ivals]
             demod_obs.intervals[name] = IntervalList(times, timespans=timespans)
+        # The full data interval is corrupt (empty) and needs to be reset
+        del demod_obs.intervals[None]
         return
 
     @function_timer

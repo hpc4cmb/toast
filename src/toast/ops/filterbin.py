@@ -281,7 +281,7 @@ class FilterBin(Operator):
     )
 
     hwp_filter_order = Int(
-        8,
+        None,
         allow_none=True,
         help="Order of HWP-synchronous signal filter.",
     )
@@ -671,6 +671,10 @@ class FilterBin(Operator):
         if self.hwp_filter_order is None:
             return
 
+        if self.hwp_angle not in obs.shared:
+            msg = f"Cannot apply HWP filtering at order = {self.hwp_filter_order}: " \
+                f"no HWP angle found under key = '{self.hwp_angle}'"
+            raise RuntimeError(msg)
         hwp_angle = obs.shared[self.hwp_angle].data
         shared_flags = np.array(obs.shared[self.shared_flags])
 
