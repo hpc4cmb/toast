@@ -17,6 +17,7 @@ from .pointing import BuildPixelDistribution
 
 from .jax_ops import build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
 
+
 @trait_docs
 class BuildHitMap(Operator):
     """Operator which builds a hitmap.
@@ -209,6 +210,7 @@ class BuildHitMap(Operator):
 
     def _supports_accel(self):
         return False
+
 
 @trait_docs
 class BuildInverseCovariance(Operator):
@@ -458,6 +460,7 @@ class BuildInverseCovariance(Operator):
     def _supports_accel(self):
         return False
 
+
 @trait_docs
 class BuildNoiseWeighted(Operator):
     """Operator which builds a noise-weighted map.
@@ -681,7 +684,9 @@ class BuildNoiseWeighted(Operator):
                 )
             else:
                 # uses a separate variable in case the reshaping copies the data
-                zmap_data = zmap.data.reshape( (zmap.distribution.n_local_submap, -1, weight_nnz) )
+                zmap_data = zmap.data.reshape(
+                    (zmap.distribution.n_local_submap, -1, weight_nnz)
+                )
                 build_noise_weighted(
                     zmap.distribution.global_submap_to_local.array(),
                     zmap_data,

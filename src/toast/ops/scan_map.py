@@ -113,13 +113,21 @@ class ScanMap(Operator):
             else:
                 weights = ob.detdata[self.weights].data
                 weight_indx = ob.detdata[self.weights].indices(dets)
-            scan_map(map_data, map_data.n_value,
-                     det_data, det_data_indx,
-                     pixels, pixels_indx,
-                     weights, weight_indx,
-                     intervals, map_dist, 
-                     self.zero, self.subtract, 
-                     use_accel=use_accel)
+            scan_map(
+                map_data,
+                map_data.n_value,
+                det_data,
+                det_data_indx,
+                pixels,
+                pixels_indx,
+                weights,
+                weight_indx,
+                intervals,
+                map_dist,
+                self.zero,
+                self.subtract,
+                use_accel=use_accel,
+            )
 
         return
 
@@ -146,7 +154,8 @@ class ScanMap(Operator):
 
     def _supports_accel(self):
         # TODO set this to true once pipelining bugs are fixed
-        return False 
+        return False
+
 
 @trait_docs
 class ScanMask(Operator):
@@ -263,6 +272,7 @@ class ScanMask(Operator):
     def _supports_accel(self):
         return False
 
+
 @trait_docs
 class ScanScale(Operator):
     """Operator which uses the pointing matrix to apply pixel weights to timestreams.
@@ -341,13 +351,21 @@ class ScanScale(Operator):
             det_data_indx = ob.detdata[self.det_data].indices(dets)
             pixels = ob.detdata[self.pixels].data
             pixels_indx = ob.detdata[self.pixels].indices(dets)
-            scan_map(map_data, 1,
-                     det_data, det_data_indx,
-                     pixels, pixels_indx,
-                     det_data, det_data_indx,
-                     intervals, map_dist, 
-                     should_zero=True, should_subtract=False,
-                     use_accel=False)
+            scan_map(
+                map_data,
+                1,
+                det_data,
+                det_data_indx,
+                pixels,
+                pixels_indx,
+                det_data,
+                det_data_indx,
+                intervals,
+                map_dist,
+                should_zero=True,
+                should_subtract=False,
+                use_accel=False,
+            )
 
         return
 

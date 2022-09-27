@@ -29,6 +29,7 @@ if available_utils:
 
 from .jax_ops.qarray import mult as qa_mult
 
+
 @trait_docs
 class SimAtmosphere(Operator):
     """Operator which generates atmosphere timestreams for detectors.

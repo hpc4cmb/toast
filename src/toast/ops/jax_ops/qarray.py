@@ -10,7 +10,7 @@ from .utils import ImplementationType, select_implementation
 from .utils import MutableJaxArray
 from ...qarray import mult as mult_compiled
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # JAX
 
 # def mult_one_one_jax(p, q):
@@ -25,6 +25,7 @@ from ...qarray import mult as mult_compiled
 #    r3 = -p[0] * q[0] - p[1] * q[1] - p[2] * q[2] + p[3] * q[3]
 #    return jnp.array([r0,r1,r2,r3])
 
+
 def mult_one_one_jax(p, q):
     """
     compose two quaternions
@@ -32,30 +33,24 @@ def mult_one_one_jax(p, q):
     NOTE: this version use a tensor product to keep computation to matrix products
     """
     # reshuffles q into a matrix
-    mat = jnp.array([[[ 0, 0, 0,-1], # row1
-                      [ 0, 0, 1, 0],
-                      [ 0,-1, 0, 0],
-                      [ 1, 0, 0, 0]],
-                      [[ 0, 0,-1, 0], # row2
-                      [ 0, 0, 0,-1],
-                      [ 1, 0, 0, 0],
-                      [ 0, 1, 0, 0]],
-                      [[ 0,1, 0, 0], # row3
-                      [-1, 0, 0, 0],
-                      [ 0, 0, 0,-1],
-                      [ 0, 0, 1, 0]],
-                      [[1, 0, 0, 0], # row4
-                      [ 0,1, 0, 0],
-                      [ 0, 0,1, 0],
-                      [ 0, 0, 0, 1]]]) 
-    qMat = jnp.dot(q,mat)
+    mat = jnp.array(
+        [
+            [[0, 0, 0, -1], [0, 0, 1, 0], [0, -1, 0, 0], [1, 0, 0, 0]],  # row1
+            [[0, 0, -1, 0], [0, 0, 0, -1], [1, 0, 0, 0], [0, 1, 0, 0]],  # row2
+            [[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, -1], [0, 0, 1, 0]],  # row3
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],  # row4
+        ]
+    )
+    qMat = jnp.dot(q, mat)
     # multiplies p with the reshuffled q
     return jnp.dot(p, qMat)
 
+
 # loops on either or both of the inputs
-mult_one_many_jax = jax.vmap(mult_one_one_jax, in_axes=(None,0), out_axes=0)
-mult_many_one_jax = jax.vmap(mult_one_one_jax, in_axes=(0,None), out_axes=0)
-mult_many_many_jax = jax.vmap(mult_one_one_jax, in_axes=(0,0), out_axes=0)
+mult_one_many_jax = jax.vmap(mult_one_one_jax, in_axes=(None, 0), out_axes=0)
+mult_many_one_jax = jax.vmap(mult_one_one_jax, in_axes=(0, None), out_axes=0)
+mult_many_many_jax = jax.vmap(mult_one_one_jax, in_axes=(0, 0), out_axes=0)
+
 
 def mult_pure_jax(p_in, q_in):
     # picks the correct impelmentation depending on which input is an array (if any)
@@ -70,8 +65,10 @@ def mult_pure_jax(p_in, q_in):
         return mult_one_many_jax(p_in, q_in)
     return mult_one_one_jax(p_in, q_in)
 
+
 # jit compiles the jax function
 mult_pure_jax = jax.jit(mult_pure_jax)
+
 
 def mult_jax(p_in, q_in):
     """
@@ -95,44 +92,50 @@ def mult_jax(p_in, q_in):
     # converts to a numpy type if the input was a numpy type
     return jax.device_get(out) if isinstance(p_in, np.ndarray) else out
 
-#-------------------------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------------------------
 # NUMPY
+
 
 def mult_one_one_numpy(p, q):
     """
     compose two quaternions
     """
     r = np.empty(4)
-    r[0] =  p[0] * q[3] + p[1] * q[2] - p[2] * q[1] + p[3] * q[0]
+    r[0] = p[0] * q[3] + p[1] * q[2] - p[2] * q[1] + p[3] * q[0]
     r[1] = -p[0] * q[2] + p[1] * q[3] + p[2] * q[0] + p[3] * q[1]
-    r[2] =  p[0] * q[1] - p[1] * q[0] + p[2] * q[3] + p[3] * q[2]
+    r[2] = p[0] * q[1] - p[1] * q[0] + p[2] * q[3] + p[3] * q[2]
     r[3] = -p[0] * q[0] - p[1] * q[1] - p[2] * q[2] + p[3] * q[3]
     return r
 
+
 def mult_one_many_numpy(p, q_arr):
-    q_arr = np.reshape(q_arr, newshape=(-1,4))
+    q_arr = np.reshape(q_arr, newshape=(-1, 4))
     out = np.empty_like(q_arr)
     nb_quaternions = q_arr.shape[0]
     for i in range(nb_quaternions):
-        out[i:] = mult_one_one_numpy(p, q_arr[i,:])
+        out[i:] = mult_one_one_numpy(p, q_arr[i, :])
     return out
 
+
 def mult_many_one_numpy(p_arr, q):
-    p_arr = np.reshape(p_arr, newshape=(-1,4))
+    p_arr = np.reshape(p_arr, newshape=(-1, 4))
     out = np.empty_like(p_arr)
     nb_quaternions = p_arr.shape[0]
     for i in range(nb_quaternions):
-        out[i:] = mult_one_one_numpy(p_arr[i,:], q)
+        out[i:] = mult_one_one_numpy(p_arr[i, :], q)
     return out
 
+
 def mult_many_many_numpy(p_arr, q_arr):
-    p_arr = np.reshape(p_arr, newshape=(-1,4))
-    q_arr = np.reshape(q_arr, newshape=(-1,4))
+    p_arr = np.reshape(p_arr, newshape=(-1, 4))
+    q_arr = np.reshape(q_arr, newshape=(-1, 4))
     out = np.empty_like(q_arr)
     nb_quaternions = q_arr.shape[0]
     for i in range(nb_quaternions):
-        out[i:] = mult_one_one_numpy(p_arr[i,:], q_arr[i,:])
+        out[i:] = mult_one_one_numpy(p_arr[i, :], q_arr[i, :])
     return out
+
 
 def mult_numpy(p_in, q_in):
     """
@@ -150,9 +153,9 @@ def mult_numpy(p_in, q_in):
         out (array_like):  flattened 1D array of float64 values.
     """
     # picks the correct implementation depending on which input is an array (if any)
-    #print(f"DEBUG: running 'mult_numpy' for p:{p_in.size} and q:{q_in.size}")
-    p_is_array = (p_in.size > 4)
-    q_is_array = (q_in.size > 4)
+    # print(f"DEBUG: running 'mult_numpy' for p:{p_in.size} and q:{q_in.size}")
+    p_is_array = p_in.size > 4
+    q_is_array = q_in.size > 4
     if p_is_array and q_is_array:
         return mult_many_many_numpy(p_in, q_in)
     if p_is_array:
@@ -160,8 +163,9 @@ def mult_numpy(p_in, q_in):
     if q_is_array:
         return mult_one_many_numpy(p_in, q_in)
     return mult_one_one_numpy(p_in, q_in)
-    
-#-------------------------------------------------------------------------------------------------
+
+
+# -------------------------------------------------------------------------------------------------
 # C++
 
 """
@@ -177,13 +181,11 @@ void toast::qa_mult_one_one(double const * p, double const * q,
 }
 """
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-mult = select_implementation(mult_compiled, 
-                             mult_numpy, 
-                             mult_jax)
+mult = select_implementation(mult_compiled, mult_numpy, mult_jax)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("qarray");'

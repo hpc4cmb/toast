@@ -18,6 +18,7 @@ from .mpi import MPITestCase
 
 from ..ops.jax_ops.qarray import mult as qa_mult
 
+
 class PointingHealpixTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -25,7 +26,7 @@ class PointingHealpixTest(MPITestCase):
 
     def test_pointing_matrix_healpix2(self):
         nside = 64
-        npix = 12 * nside ** 2
+        npix = 12 * nside**2
         hpix = HealpixPixels(64)
         nest = True
         phivec = np.radians(

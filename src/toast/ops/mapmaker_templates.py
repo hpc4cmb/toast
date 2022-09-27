@@ -27,6 +27,7 @@ from .scan_map import ScanMask
 # TODO
 from ..accelerator import use_accel_jax
 
+
 @trait_docs
 class TemplateMatrix(Operator):
     """Operator for projecting or accumulating template amplitudes."""
@@ -199,7 +200,7 @@ class TemplateMatrix(Operator):
 
         if self.transpose:
             if self.amplitudes not in data:
-                # The output template amplitudes do not yet exist.  
+                # The output template amplitudes do not yet exist.
                 # Create these with all zero values.
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
@@ -212,7 +213,9 @@ class TemplateMatrix(Operator):
             elif use_accel and (not data[self.amplitudes].accel_exists()):
                 # deals with the case where amplitudes are already in data but NOT in accel
                 # FIXME this happens in pipeline ['TemplateMatrix', 'PixelsHealpix', 'StokesWeights', 'ScanMap', 'NoiseWeight', 'TemplateMatrix']
-                log.warning(f"TemplateMatrix: use_accel=True but amplitudes ('{self.amplitudes}') are on CPU.")
+                log.warning(
+                    f"TemplateMatrix: use_accel=True but amplitudes ('{self.amplitudes}') are on CPU."
+                )
                 data[self.amplitudes].accel_create()
                 data[self.amplitudes].accel_update_device()
             for d in all_dets:
@@ -231,7 +234,9 @@ class TemplateMatrix(Operator):
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
-                exists = ob.detdata.ensure(self.det_data, detectors=dets, accel=use_accel)
+                exists = ob.detdata.ensure(
+                    self.det_data, detectors=dets, accel=use_accel
+                )
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
                 log.verbose(
@@ -275,7 +280,7 @@ class TemplateMatrix(Operator):
         if self.transpose:
             req["detdata"].append(self.det_data)
             # TODO no such attribute
-            #if self.shared_flags is not None:
+            # if self.shared_flags is not None:
             #    req["shared"].append(self.shared_flags)
             if self.det_flags is not None:
                 req["detdata"].append(self.det_flags)
@@ -293,6 +298,7 @@ class TemplateMatrix(Operator):
 
     def _supports_accel(self):
         return True
+
 
 @trait_docs
 class SolveAmplitudes(Operator):

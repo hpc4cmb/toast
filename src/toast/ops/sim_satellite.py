@@ -23,6 +23,7 @@ from .sim_hwp import simulate_hwp_response
 
 from .jax_ops.qarray import mult as qa_mult
 
+
 @function_timer
 def satellite_scanning(
     ob,

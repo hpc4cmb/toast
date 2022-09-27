@@ -12,6 +12,7 @@ from .accelerator import AcceleratorObject, accel_enabled
 from .mpi import Comm
 from .utils import Logger
 
+
 class Data(MutableMapping):
     """Class which represents distributed data
 
@@ -414,22 +415,32 @@ class Data(MutableMapping):
         for ob in self.obs:
             for key in names["detdata"]:
                 if not ob.detdata.accel_exists(key):
-                    log.verbose(f"Calling ob {ob.name} detdata accel_create for '{key}'")
+                    log.verbose(
+                        f"Calling ob {ob.name} detdata accel_create for '{key}'"
+                    )
                     ob.detdata.accel_create(key)
                 else:
-                    log.verbose(f"NOT calling ob {ob.name} detdata accel_create for '{key}' as it is alreaddy on device")
+                    log.verbose(
+                        f"NOT calling ob {ob.name} detdata accel_create for '{key}' as it is alreaddy on device"
+                    )
             for key in names["shared"]:
                 if not ob.shared.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} shared accel_create for '{key}'")
                     ob.shared.accel_create(key)
                 else:
-                    log.verbose(f"NOT calling ob {ob.name} shared accel_create for '{key}' as it is alreaddy on device")
+                    log.verbose(
+                        f"NOT calling ob {ob.name} shared accel_create for '{key}' as it is alreaddy on device"
+                    )
             for key in names["intervals"]:
                 if not ob.intervals.accel_exists(key):
-                    log.verbose(f"Calling ob {ob.name} intervals accel_create for '{key}'")
+                    log.verbose(
+                        f"Calling ob {ob.name} intervals accel_create for '{key}'"
+                    )
                     ob.intervals.accel_create(key)
                 else:
-                    log.verbose(f"NOT calling ob {ob.name} intervals accel_create for '{key}' as it is alreaddy on device")
+                    log.verbose(
+                        f"NOT calling ob {ob.name} intervals accel_create for '{key}' as it is alreaddy on device"
+                    )
 
         for key in names["global"]:
             val = self._internal[key]
@@ -438,9 +449,13 @@ class Data(MutableMapping):
                     log.verbose(f"Calling Data accel_create for '{key}'")
                     val.accel_create()
                 else:
-                    log.verbose(f"NOT calling Data accel_create for '{key}' as it is alreaddy on device")
+                    log.verbose(
+                        f"NOT calling Data accel_create for '{key}' as it is alreaddy on device"
+                    )
             else:
-                log.verbose(f"Did not apply Data accel_create to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject")
+                log.verbose(
+                    f"Did not apply Data accel_create to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                )
 
     def accel_update_device(self, names):
         """Copy a set of data objects to the device.
@@ -465,7 +480,9 @@ class Data(MutableMapping):
                     msg += "device data in use"
                     log.verbose(msg)
                 else:
-                    log.verbose(f"Calling ob {ob.name} detdata update_device for '{key}'")
+                    log.verbose(
+                        f"Calling ob {ob.name} detdata update_device for '{key}'"
+                    )
                     ob.detdata.accel_update_device(key)
             for key in names["shared"]:
                 if ob.shared.accel_in_use(key):
@@ -473,7 +490,9 @@ class Data(MutableMapping):
                     msg += "device data in use"
                     log.verbose(msg)
                 else:
-                    log.verbose(f"Calling ob {ob.name} shared update_device for '{key}'")
+                    log.verbose(
+                        f"Calling ob {ob.name} shared update_device for '{key}'"
+                    )
                     ob.shared.accel_update_device(key)
             for key in names["intervals"]:
                 if ob.intervals.accel_in_use(key):
@@ -496,7 +515,9 @@ class Data(MutableMapping):
                     log.verbose(f"Calling Data update_device for '{key}'")
                     val.accel_update_device()
             else:
-                log.verbose(f"Did not apply Data accel_update_device to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject")
+                log.verbose(
+                    f"Did not apply Data accel_update_device to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                )
 
     def accel_update_host(self, names):
         """Copy a set of data objects to the host.
@@ -572,8 +593,9 @@ class Data(MutableMapping):
                     log.verbose(f"Calling Data update_host for '{key}'")
                     val.accel_update_host()
             else:
-                log.verbose(f"Did not apply Data accel_update_host to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject")
-
+                log.verbose(
+                    f"Did not apply Data accel_update_host to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                )
 
     def accel_delete(self, names):
         """Delete a specific set of device objects
@@ -594,7 +616,9 @@ class Data(MutableMapping):
         for ob in self.obs:
             for key in names["detdata"]:
                 if ob.detdata.accel_exists(key):
-                    log.verbose(f"Calling ob {ob.name} detdata accel_delete for '{key}'")
+                    log.verbose(
+                        f"Calling ob {ob.name} detdata accel_delete for '{key}'"
+                    )
                     ob.detdata.accel_delete(key)
                 else:
                     log.verbose(
@@ -624,8 +648,9 @@ class Data(MutableMapping):
                 log.verbose(f"Calling Data accel_delete for '{key}'")
                 val.accel_delete()
             else:
-                log.verbose(f"Did not apply Data accel_delete to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject")
-
+                log.verbose(
+                    f"Did not apply Data accel_delete to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                )
 
     def accel_clear(self):
         """Delete all accelerator data."""
@@ -638,4 +663,6 @@ class Data(MutableMapping):
             if isinstance(val, AcceleratorObject):
                 val.accel_delete()
             else:
-                log.verbose(f"Did not apply Data accel_clear to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject")
+                log.verbose(
+                    f"Did not apply Data accel_clear to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                )

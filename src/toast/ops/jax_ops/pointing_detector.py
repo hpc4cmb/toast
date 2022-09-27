@@ -8,14 +8,20 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, dataMovementTracker, select_implementation, ImplementationType
+from .utils import (
+    assert_data_localization,
+    dataMovementTracker,
+    select_implementation,
+    ImplementationType,
+)
 from .utils.mutableArray import MutableJaxArray
 from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
 from ..._libtoast import pointing_detector as pointing_detector_compiled
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # JAX
+
 
 def pointing_detector_inner_jax(focalplane, boresight, flag, mask):
     """
@@ -29,22 +35,37 @@ def pointing_detector_inner_jax(focalplane, boresight, flag, mask):
 
     Returns:
         quats (array, double): size 4
-    """ 
-    quats = jnp.where((flag & mask) == 0, # if
-                      qa_mult_jax(boresight, focalplane), # then
-                      focalplane) # else
+    """
+    quats = jnp.where(
+        (flag & mask) == 0, qa_mult_jax(boresight, focalplane), focalplane  # if  # then
+    )  # else
     return quats
 
-# maps over intervals and detectors
-pointing_detector_inner_jax = jax_xmap(pointing_detector_inner_jax, 
-                                       in_axes=[['detectors',...], # focalplane
-                                                ['intervals','interval_size',...], # boresight
-                                                ['intervals','interval_size'], # flags
-                                                [...]], # mask
-                                       out_axes=['detectors','intervals','interval_size',...])
 
-def pointing_detector_interval_jax(focalplane, boresight, quat_index, quats, shared_flags, shared_flag_mask,
-                                   interval_starts, interval_ends, intervals_max_length):
+# maps over intervals and detectors
+pointing_detector_inner_jax = jax_xmap(
+    pointing_detector_inner_jax,
+    in_axes=[
+        ["detectors", ...],  # focalplane
+        ["intervals", "interval_size", ...],  # boresight
+        ["intervals", "interval_size"],  # flags
+        [...],
+    ],  # mask
+    out_axes=["detectors", "intervals", "interval_size", ...],
+)
+
+
+def pointing_detector_interval_jax(
+    focalplane,
+    boresight,
+    quat_index,
+    quats,
+    shared_flags,
+    shared_flag_mask,
+    interval_starts,
+    interval_ends,
+    intervals_max_length,
+):
     """
     Process all the intervals as a block.
 
@@ -63,24 +84,49 @@ def pointing_detector_interval_jax(focalplane, boresight, quat_index, quats, sha
         quats
     """
     # display sizes
-    print(f"DEBUG: jit-compiling 'pointing_detector_interval_jax' with n_det:{focalplane.shape[0]} n_samp_interval:{shared_flags.size} mask:{shared_flag_mask}")
+    print(
+        f"DEBUG: jit-compiling 'pointing_detector_interval_jax' with n_det:{focalplane.shape[0]} n_samp_interval:{shared_flags.size} mask:{shared_flag_mask}"
+    )
 
     # extract interval slices
-    intervals = JaxIntervals(interval_starts, interval_ends+1, intervals_max_length) # end+1 as the interval is inclusive
-    boresight_interval = JaxIntervals.get(boresight, (intervals,ALL)) # boresight[intervals,:]
-    shared_flags_interval = JaxIntervals.get(shared_flags, intervals) # shared_flags[intervals]
-    
+    intervals = JaxIntervals(
+        interval_starts, interval_ends + 1, intervals_max_length
+    )  # end+1 as the interval is inclusive
+    boresight_interval = JaxIntervals.get(
+        boresight, (intervals, ALL)
+    )  # boresight[intervals,:]
+    shared_flags_interval = JaxIntervals.get(
+        shared_flags, intervals
+    )  # shared_flags[intervals]
+
     # process the interval then updates quats in place
-    new_quats_interval = pointing_detector_inner_jax(focalplane, boresight_interval, shared_flags_interval, shared_flag_mask)
-    quats = JaxIntervals.set(quats, (quat_index,intervals,ALL), new_quats_interval) # quats[quat_index,intervals,:] = new_quats_interval
+    new_quats_interval = pointing_detector_inner_jax(
+        focalplane, boresight_interval, shared_flags_interval, shared_flag_mask
+    )
+    quats = JaxIntervals.set(
+        quats, (quat_index, intervals, ALL), new_quats_interval
+    )  # quats[quat_index,intervals,:] = new_quats_interval
     return quats
 
-# jit compiling
-pointing_detector_interval_jax = jax.jit(pointing_detector_interval_jax, 
-                                         static_argnames=['shared_flag_mask','intervals_max_length'],
-                                         donate_argnums=[3]) # donates quats
 
-def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accel):
+# jit compiling
+pointing_detector_interval_jax = jax.jit(
+    pointing_detector_interval_jax,
+    static_argnames=["shared_flag_mask", "intervals_max_length"],
+    donate_argnums=[3],
+)  # donates quats
+
+
+def pointing_detector_jax(
+    focalplane,
+    boresight,
+    quat_index,
+    quats,
+    intervals,
+    shared_flags,
+    shared_flag_mask,
+    use_accel,
+):
     """
     Args:
         focalplane (array, double): size n_det*4
@@ -100,7 +146,8 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     # assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
 
     # prepares inputs
-    if intervals.size == 0: return # deals with a corner case in tests
+    if intervals.size == 0:
+        return  # deals with a corner case in tests
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     focalplane_input = MutableJaxArray.to_array(focalplane)
     boresight_input = MutableJaxArray.to_array(boresight)
@@ -109,14 +156,38 @@ def pointing_detector_jax(focalplane, boresight, quat_index, quats, intervals, s
     shared_flags_input = MutableJaxArray.to_array(shared_flags)
 
     # track data movement
-    dataMovementTracker.add("pointing_detector", use_accel, [focalplane_input, boresight_input, quat_index_input, quats_input, shared_flags_input, intervals.first, intervals.last], [quats])
+    dataMovementTracker.add(
+        "pointing_detector",
+        use_accel,
+        [
+            focalplane_input,
+            boresight_input,
+            quat_index_input,
+            quats_input,
+            shared_flags_input,
+            intervals.first,
+            intervals.last,
+        ],
+        [quats],
+    )
 
     # runs computation
-    quats[:] = pointing_detector_interval_jax(focalplane_input, boresight_input, quat_index_input, quats_input, shared_flags_input, shared_flag_mask,
-                                              intervals.first, intervals.last, intervals_max_length)
+    quats[:] = pointing_detector_interval_jax(
+        focalplane_input,
+        boresight_input,
+        quat_index_input,
+        quats_input,
+        shared_flags_input,
+        shared_flag_mask,
+        intervals.first,
+        intervals.last,
+        intervals_max_length,
+    )
 
-#-------------------------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------------------------
 # NUMPY
+
 
 def pointing_detector_inner_numpy(flag, boresight, focalplane, mask):
     """
@@ -130,13 +201,23 @@ def pointing_detector_inner_numpy(flag, boresight, focalplane, mask):
 
     Returns:
         quats (array, double): size 4
-    """ 
-    if ((flag & mask) == 0):
+    """
+    if (flag & mask) == 0:
         quats = qa_mult_numpy(boresight, focalplane)
     else:
         quats = focalplane
 
-def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals, shared_flags, shared_flag_mask, use_accel):
+
+def pointing_detector_numpy(
+    focalplane,
+    boresight,
+    quat_index,
+    quats,
+    intervals,
+    shared_flags,
+    shared_flag_mask,
+    use_accel,
+):
     """
     Args:
         focalplane (array, double): size n_det*4
@@ -152,24 +233,29 @@ def pointing_detector_numpy(focalplane, boresight, quat_index, quats, intervals,
         None (the result is put in quats).
     """
     # input sizes
-    n_det = quat_index.size    
-    print(f"DEBUG: running 'pointing_detector_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{shared_flags.size}")
+    n_det = quat_index.size
+    print(
+        f"DEBUG: running 'pointing_detector_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{shared_flags.size}"
+    )
 
     # iterates on all detectors and all intervals
     for idet in range(n_det):
         for interval in intervals:
-            interval_start = interval['first']
-            interval_end = interval['last']+1
-            for isamp in range(interval_start,interval_end):
+            interval_start = interval["first"]
+            interval_end = interval["last"] + 1
+            for isamp in range(interval_start, interval_end):
                 q_index = quat_index[idet]
-                quats[q_index,isamp,:] = pointing_detector_inner_numpy(shared_flags[isamp],
-                                                                       boresight[isamp,:],
-                                                                       focalplane[idet,:],
-                                                                       shared_flag_mask)
+                quats[q_index, isamp, :] = pointing_detector_inner_numpy(
+                    shared_flags[isamp],
+                    boresight[isamp, :],
+                    focalplane[idet, :],
+                    shared_flag_mask,
+                )
 
     return quats
 
-#-------------------------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------------------------
 # C++
 
 """
@@ -259,13 +345,13 @@ void pointing_detector(
 }
 """
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-pointing_detector = select_implementation(pointing_detector_compiled, 
-                                          pointing_detector_numpy, 
-                                          pointing_detector_jax)
+pointing_detector = select_implementation(
+    pointing_detector_compiled, pointing_detector_numpy, pointing_detector_jax
+)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix", "ops_demodulate")'

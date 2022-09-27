@@ -31,6 +31,7 @@ if use_accel_jax:
     import jax
     from .ops.jax_ops import MutableJaxArray
 
+
 class DetectorData(AcceleratorObject):
     """Class representing a logical collection of co-sampled detector data.
 
@@ -733,7 +734,9 @@ class DetDataManager(MutableMapping, AcceleratorObject):
             return False
         log = Logger.get()
         result = self._internal[key].accel_exists()
-        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_exists = {result}")
+        log.verbose(
+            f"DetDataMgr {key} type = {type(self._internal[key])} accel_exists = {result}"
+        )
         return result
 
     def accel_in_use(self, key):
@@ -793,7 +796,9 @@ class DetDataManager(MutableMapping, AcceleratorObject):
         if not accel_enabled():
             return
         log = Logger.get()
-        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_device")
+        log.verbose(
+            f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_device"
+        )
         self._internal[key].accel_update_device()
 
     def accel_update_host(self, key):
@@ -809,7 +814,9 @@ class DetDataManager(MutableMapping, AcceleratorObject):
         if not accel_enabled():
             return
         log = Logger.get()
-        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_host")
+        log.verbose(
+            f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_host"
+        )
         self._internal[key].accel_update_host()
 
     def accel_delete(self, key):
@@ -844,7 +851,9 @@ class DetDataManager(MutableMapping, AcceleratorObject):
         log = Logger.get()
         for key in self._internal:
             if self._internal[key].accel_exists():
-                log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete")
+                log.verbose(
+                    f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete"
+                )
                 self._internal[key].accel_delete()
 
     # Mapping methods

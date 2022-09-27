@@ -5,12 +5,14 @@ from typing import Tuple
 from pshmem import MPIShared
 from ....utils import AlignedI64, AlignedF64
 
-class MutableJaxArray():
+
+class MutableJaxArray:
     """
     This class encapsulate a jax array to give the illusion of mutability
     simplifying integration within toast
     It is NOT designed for computation but, rather, as a container
     """
+
     data: jnp.DeviceArray
     shape: Tuple
     dtype: np.dtype
@@ -49,7 +51,9 @@ class MutableJaxArray():
         else:
             # errors-out on other datatypes
             # so that we can make sure we are using the most efficient convertion available
-            raise RuntimeError(f"Passed a {type(input)} to MutableJaxArray.to_array. Please find the best way to convert it to a Numpy array and update the function.")
+            raise RuntimeError(
+                f"Passed a {type(input)} to MutableJaxArray.to_array. Please find the best way to convert it to a Numpy array and update the function."
+            )
 
     def to_numpy(self):
         """
@@ -59,7 +63,7 @@ class MutableJaxArray():
         WARNING: this function will likely cost you a copy.
         """
         return jax.device_get(self.data)
-    
+
     def __setitem__(self, key, value):
         """
         updates the inner array in place
@@ -83,7 +87,7 @@ class MutableJaxArray():
         """
         reshaped_data = jnp.reshape(self.data, newshape=shape)
         return MutableJaxArray(reshaped_data)
-    
+
     def __str__(self):
         """
         returns a string representation of the content of the array
@@ -91,4 +95,6 @@ class MutableJaxArray():
         return self.data.__str__()
 
     def __eq__(self, other):
-        raise RuntimeError("MutableJaxArray: tried an equality test on a MutableJaxArray. This container is not designed for computations, you likely have a data movement bug somewhere in your program.")
+        raise RuntimeError(
+            "MutableJaxArray: tried an equality test on a MutableJaxArray. This container is not designed for computations, you likely have a data movement bug somewhere in your program."
+        )

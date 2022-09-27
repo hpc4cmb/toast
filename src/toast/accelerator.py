@@ -29,21 +29,22 @@ if "TOAST_GPU_OPENMP" in os.environ and os.environ["TOAST_GPU_OPENMP"] in enable
 
 use_accel_jax = False
 if "TOAST_GPU_JAX" in os.environ and os.environ["TOAST_GPU_JAX"] in enable_vals:
-    #try:
-        import jax
-        #import jax.numpy as jnp
-        # TODO cannot be put here due to curcular reference problems?
-        #from .ops.jax_ops import MutableJaxArray
+    # try:
+    import jax
 
-        use_accel_jax = True
-    # TODO reenable catch-all error?
-    #except Exception:
-    #    # There could be many possible exceptions...
-    #    log = Logger.get()
-    #    msg = "TOAST_GPU_JAX enabled at runtime, but jax is not "
-    #    msg += "importable."
-    #    log.error(msg)
-    #    raise RuntimeError(msg)
+    # import jax.numpy as jnp
+    # TODO cannot be put here due to curcular reference problems?
+    # from .ops.jax_ops import MutableJaxArray
+
+    use_accel_jax = True
+# TODO reenable catch-all error?
+# except Exception:
+#    # There could be many possible exceptions...
+#    log = Logger.get()
+#    msg = "TOAST_GPU_JAX enabled at runtime, but jax is not "
+#    msg += "importable."
+#    log.error(msg)
+#    raise RuntimeError(msg)
 
 if use_accel_omp and use_accel_jax:
     log = Logger.get()
@@ -85,7 +86,7 @@ def accel_data_present(data):
     """Check if data is present on the device.
 
     For OpenMP target offload, this checks if the input data has an entry in the
-    global map of host to device pointers.  
+    global map of host to device pointers.
     For jax, this tests if the input array is a jax array.
 
     Args:
@@ -102,7 +103,8 @@ def accel_data_present(data):
     elif use_accel_omp:
         return omp_accel_present(data)
     elif use_accel_jax:
-        from .ops.jax_ops import MutableJaxArray # TODO
+        from .ops.jax_ops import MutableJaxArray  # TODO
+
         return isinstance(data, MutableJaxArray)
     else:
         log.warning("Accelerator support not enabled, data not present")
@@ -126,7 +128,8 @@ def accel_data_create(data):
     if use_accel_omp:
         omp_accel_create(data)
     elif use_accel_jax:
-        from .ops.jax_ops import MutableJaxArray # TODO
+        from .ops.jax_ops import MutableJaxArray  # TODO
+
         return MutableJaxArray(data)
     else:
         log = Logger.get()
@@ -151,8 +154,9 @@ def accel_data_update_device(data):
         omp_accel_update_device(data)
         return data
     elif use_accel_jax:
-        from .ops.jax_ops import MutableJaxArray # TODO
-        # deals with the fact that the data could already be a jax array        
+        from .ops.jax_ops import MutableJaxArray  # TODO
+
+        # deals with the fact that the data could already be a jax array
         return data if isinstance(data, MutableJaxArray) else MutableJaxArray(data)
     else:
         log = Logger.get()

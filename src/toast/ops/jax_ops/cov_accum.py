@@ -8,11 +8,15 @@ import jax
 import jax.numpy as jnp
 
 from .utils import select_implementation, ImplementationType
-from ..._libtoast import cov_accum_diag_hits as cov_accum_diag_hits_compiled, cov_accum_diag_invnpp as cov_accum_diag_invnpp_compiled
+from ..._libtoast import (
+    cov_accum_diag_hits as cov_accum_diag_hits_compiled,
+    cov_accum_diag_invnpp as cov_accum_diag_invnpp_compiled,
+)
 from .utils.mutableArray import MutableJaxArray
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # JAX
+
 
 def cov_accum_diag_hits_inner_jax(nsubpix, submap, subpix, hits):
     """
@@ -27,17 +31,21 @@ def cov_accum_diag_hits_inner_jax(nsubpix, submap, subpix, hits):
     """
     # displays problem size
     hits = jnp.reshape(hits, newshape=(-1, nsubpix))
-    print(f"DEBUG: jit-compiling 'cov_accum_diag_hits' with nsubpix:{nsubpix} nsamp:{submap.size} hits:{hits.shape}")
+    print(
+        f"DEBUG: jit-compiling 'cov_accum_diag_hits' with nsubpix:{nsubpix} nsamp:{submap.size} hits:{hits.shape}"
+    )
 
     # updates hits
     added_value = jnp.where((submap >= 0) & (subpix >= 0), 1, 0)
     hits = hits.at[submap, subpix].add(added_value)
     return hits.ravel()
 
+
 # jit compiling
-cov_accum_diag_hits_inner_jax = jax.jit(cov_accum_diag_hits_inner_jax, 
-                                        static_argnames=['nsubpix'],
-                                        donate_argnums=[3])
+cov_accum_diag_hits_inner_jax = jax.jit(
+    cov_accum_diag_hits_inner_jax, static_argnames=["nsubpix"], donate_argnums=[3]
+)
+
 
 def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits):
     """
@@ -58,9 +66,14 @@ def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits):
     submap_input = MutableJaxArray.to_array(submap)
     subpix_input = MutableJaxArray.to_array(subpix)
     hits_input = MutableJaxArray.to_array(hits)
-    hits[:] = cov_accum_diag_hits_inner_jax(nsubpix, submap_input, subpix_input, hits_input)
+    hits[:] = cov_accum_diag_hits_inner_jax(
+        nsubpix, submap_input, subpix_input, hits_input
+    )
 
-def cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap, subpix, weights, scale, invnpp):
+
+def cov_accum_diag_invnpp_inner_jax(
+    nsubpix, nnz, submap, subpix, weights, scale, invnpp
+):
     """
     Args:
         nsubpix (int):  The number of pixels in each submap.
@@ -81,16 +94,18 @@ def cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap, subpix, weights, scale
     """
     # displays problem size
     block = (nnz * (nnz + 1)) // 2
-    weights = jnp.reshape(weights, newshape=(-1,nnz))
-    invnpp = jnp.reshape(invnpp, newshape=(-1,nsubpix,block))
-    print(f"DEBUG: jit-compiling 'cov_accum_diag_invnpp' with nsubpix:{nsubpix} nnz:{nnz} nsamp:{submap.size} weights:{weights.shape} invnpp:{invnpp.shape}")
+    weights = jnp.reshape(weights, newshape=(-1, nnz))
+    invnpp = jnp.reshape(invnpp, newshape=(-1, nsubpix, block))
+    print(
+        f"DEBUG: jit-compiling 'cov_accum_diag_invnpp' with nsubpix:{nsubpix} nnz:{nnz} nsamp:{submap.size} weights:{weights.shape} invnpp:{invnpp.shape}"
+    )
 
     # converts flat index (i_block) back to index into upper triangular matrix of side nnz
     # you can rederive the equations by knowing that i_block = col + row*nnz + row(row+1)/2
     # then assuming col=row (close enough since row <= col < nnz) and rounding down to get row
     i_block = jnp.arange(start=0, stop=block)
-    row = (2*nnz + 1 - jnp.sqrt((2*nnz + 1)**2 - 8*i_block)).astype(int) // 2
-    col = i_block + (row*(row+1))//2 - row*nnz
+    row = (2 * nnz + 1 - jnp.sqrt((2 * nnz + 1) ** 2 - 8 * i_block)).astype(int) // 2
+    col = i_block + (row * (row + 1)) // 2 - row * nnz
 
     # computes mask
     # newaxis are there to make dimenssion compatible with added_value
@@ -99,18 +114,24 @@ def cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap, subpix, weights, scale
     valid_index = (submap_2D >= 0) & (subpix_2D >= 0)
 
     # updates invnpp
-    added_value = weights[:,col] * weights[:,row] * scale
+    added_value = weights[:, col] * weights[:, row] * scale
     masked_added_value = jnp.where(valid_index, added_value, 0.0)
-    invnpp = invnpp.at[submap,subpix,:].add(masked_added_value)
+    invnpp = invnpp.at[submap, subpix, :].add(masked_added_value)
 
     return invnpp.ravel()
 
-# jit compiling
-cov_accum_diag_invnpp_inner_jax = jax.jit(cov_accum_diag_invnpp_inner_jax, 
-                                          static_argnames=['nsubpix','nnz'],
-                                          donate_argnums=[6])
 
-def cov_accum_diag_invnpp_jax(nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp):
+# jit compiling
+cov_accum_diag_invnpp_inner_jax = jax.jit(
+    cov_accum_diag_invnpp_inner_jax,
+    static_argnames=["nsubpix", "nnz"],
+    donate_argnums=[6],
+)
+
+
+def cov_accum_diag_invnpp_jax(
+    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp
+):
     """
     Accumulate block diagonal noise covariance.
     This uses a pointing matrix to accumulate the local pieces
@@ -138,10 +159,14 @@ def cov_accum_diag_invnpp_jax(nsub, nsubpix, nnz, submap, subpix, weights, scale
     subpix_input = MutableJaxArray.to_array(subpix)
     weights_input = MutableJaxArray.to_array(weights)
     invnpp_input = MutableJaxArray.to_array(invnpp)
-    invnpp[:] = cov_accum_diag_invnpp_inner_jax(nsubpix, nnz, submap_input, subpix_input, weights_input, scale, invnpp_input)
+    invnpp[:] = cov_accum_diag_invnpp_inner_jax(
+        nsubpix, nnz, submap_input, subpix_input, weights_input, scale, invnpp_input
+    )
 
-#-------------------------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------------------------
 # NUMPY
+
 
 def cov_accum_diag_hits_numpy(nsub, nsubpix, nnz, submap, subpix, hits):
     """
@@ -161,15 +186,20 @@ def cov_accum_diag_hits_numpy(nsub, nsubpix, nnz, submap, subpix, hits):
     """
     nsamp = submap.size
     hits = np.asarray(hits).reshape((-1, nsubpix))
-    print(f"DEBUG: running 'cov_accum_diag_hits_numpy' with nsub:{nsub} nsubpix:{nsubpix} nnz:{nnz} nsamp:{nsamp} hits:{hits.shape}")
+    print(
+        f"DEBUG: running 'cov_accum_diag_hits_numpy' with nsub:{nsub} nsubpix:{nsubpix} nnz:{nnz} nsamp:{nsamp} hits:{hits.shape}"
+    )
 
     for i_samp in range(nsamp):
         isubmap = submap[i_samp]
         ipix = subpix[i_samp]
-        if ((isubmap >= 0) and (ipix >= 0)):
+        if (isubmap >= 0) and (ipix >= 0):
             hits[isubmap, ipix] += 1
 
-def cov_accum_diag_invnpp_numpy(nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp):
+
+def cov_accum_diag_invnpp_numpy(
+    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp
+):
     """
     Accumulate block diagonal noise covariance.
     This uses a pointing matrix to accumulate the local pieces
@@ -195,23 +225,28 @@ def cov_accum_diag_invnpp_numpy(nsub, nsubpix, nnz, submap, subpix, weights, sca
     """
     nsamp = submap.size
     block = (nnz * (nnz + 1)) // 2
-    weights = np.asarray(weights).reshape((-1,nnz))
-    invnpp = np.asarray(invnpp).reshape((-1,nsubpix,block))
-    print(f"DEBUG: running 'cov_accum_diag_invnpp_numpy' with nsub:{nsub} nsubpix:{nsubpix} nnz:{nnz} nsamp:{nsamp} weights:{weights.shape} scale:{scale} invnpp:{invnpp.shape}")
+    weights = np.asarray(weights).reshape((-1, nnz))
+    invnpp = np.asarray(invnpp).reshape((-1, nsubpix, block))
+    print(
+        f"DEBUG: running 'cov_accum_diag_invnpp_numpy' with nsub:{nsub} nsubpix:{nsubpix} nnz:{nnz} nsamp:{nsamp} weights:{weights.shape} scale:{scale} invnpp:{invnpp.shape}"
+    )
 
     for i_samp in range(nsamp):
         isubmap = submap[i_samp]
         ipix = subpix[i_samp]
-        if ((isubmap >= 0) and (ipix >= 0)):
+        if (isubmap >= 0) and (ipix >= 0):
             for i_block in range(block):
                 # converts i_block back to index into upper triangular matrix of side nnz
                 # you can rederive the equations by knowing that i_block = col + row*nnz + row(row+1)/2
                 # then assuming col=row (close enough since row <= col < nnz) and rounding down to get row
-                row = int(2*nnz + 1 - np.sqrt((2*nnz + 1)**2 - 8*i_block)) // 2
-                col = i_block + (row*(row+1))//2 - row*nnz
-                invnpp[isubmap,ipix,i_block] += weights[i_samp,col] * weights[i_samp,row] * scale
+                row = int(2 * nnz + 1 - np.sqrt((2 * nnz + 1) ** 2 - 8 * i_block)) // 2
+                col = i_block + (row * (row + 1)) // 2 - row * nnz
+                invnpp[isubmap, ipix, i_block] += (
+                    weights[i_samp, col] * weights[i_samp, row] * scale
+                )
 
-#-------------------------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------------------------
 # C++
 
 """
@@ -288,16 +323,18 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
 }
 """
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-cov_accum_diag_hits = select_implementation(cov_accum_diag_hits_compiled, 
-                                            cov_accum_diag_hits_numpy, 
-                                            cov_accum_diag_hits_jax)
-cov_accum_diag_invnpp = select_implementation(cov_accum_diag_invnpp_compiled, 
-                                              cov_accum_diag_invnpp_numpy, 
-                                              cov_accum_diag_invnpp_jax)
+cov_accum_diag_hits = select_implementation(
+    cov_accum_diag_hits_compiled, cov_accum_diag_hits_numpy, cov_accum_diag_hits_jax
+)
+cov_accum_diag_invnpp = select_implementation(
+    cov_accum_diag_invnpp_compiled,
+    cov_accum_diag_invnpp_numpy,
+    cov_accum_diag_invnpp_jax,
+)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("covariance");'

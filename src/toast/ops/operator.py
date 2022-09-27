@@ -170,7 +170,7 @@ class Operator(TraitConfig):
         return prov
 
     def _supports_accel(self):
-        return True # TODO False
+        return True  # TODO False
 
     def supports_accel(self):
         """Query whether the operator supports GPU computing
@@ -274,10 +274,10 @@ class Operator(TraitConfig):
         if "API" in props:
             del props["API"]
         return props
-    
+
     def __str__(self):
         """
         Converts the operator into a short human readable string
         returns only its class name (for example: 'Operator')
         """
-        return str(self.__class__).split('.')[-1][:-2]
+        return str(self.__class__).split(".")[-1][:-2]

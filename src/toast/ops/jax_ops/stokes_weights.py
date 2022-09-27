@@ -8,13 +8,23 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import assert_data_localization, dataMovementTracker, select_implementation, ImplementationType, math_qarray as qarray
+from .utils import (
+    assert_data_localization,
+    dataMovementTracker,
+    select_implementation,
+    ImplementationType,
+    math_qarray as qarray,
+)
 from .utils.mutableArray import MutableJaxArray
 from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
-from ..._libtoast import stokes_weights_I as stokes_weights_I_compiled, stokes_weights_IQU as stokes_weights_IQU_compiled
+from ..._libtoast import (
+    stokes_weights_I as stokes_weights_I_compiled,
+    stokes_weights_IQU as stokes_weights_IQU_compiled,
+)
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # JAX
+
 
 def stokes_weights_IQU_inner_jax(eps, cal, pin, hwpang):
     """
@@ -28,7 +38,7 @@ def stokes_weights_IQU_inner_jax(eps, cal, pin, hwpang):
 
     Returns:
         weights (array, float64):  The detector weights for the specified mode (size 3)
-    """   
+    """
     # applies quaternion rotations
     zaxis = jnp.array([0.0, 0.0, 1.0])
     dir = qarray.rotate_one_one_jax(pin, zaxis)
@@ -37,10 +47,12 @@ def stokes_weights_IQU_inner_jax(eps, cal, pin, hwpang):
 
     # computes by and bx
     by = orient[0] * dir[1] - orient[1] * dir[0]
-    bx = orient[0] * (-dir[2] * dir[0]) + \
-         orient[1] * (-dir[2] * dir[1]) + \
-         orient[2] * (dir[0] * dir[0] + dir[1] * dir[1])
-    
+    bx = (
+        orient[0] * (-dir[2] * dir[0])
+        + orient[1] * (-dir[2] * dir[1])
+        + orient[2] * (dir[0] * dir[0] + dir[1] * dir[1])
+    )
+
     # computes detang
     detang = jnp.arctan2(by, bx)
     detang = detang + 2.0 * hwpang
@@ -51,16 +63,32 @@ def stokes_weights_IQU_inner_jax(eps, cal, pin, hwpang):
     weights = jnp.array([cal, jnp.cos(detang) * eta * cal, jnp.sin(detang) * eta * cal])
     return weights
 
-# maps over samples, intervals and detectors
-stokes_weights_IQU_inner_jax = jax_xmap(stokes_weights_IQU_inner_jax, 
-                                        in_axes=[['detectors'], # epsilon
-                                                 [...], # cal
-                                                 ['detectors','intervals','interval_size',...], # quats
-                                                 ['intervals','interval_size']], # hwp
-                                        out_axes=['detectors','intervals','interval_size',...])
 
-def stokes_weights_IQU_interval_jax(quat_index, quats, weight_index, weights, hwp, epsilon, cal,
-                                    interval_starts, interval_ends, intervals_max_length):
+# maps over samples, intervals and detectors
+stokes_weights_IQU_inner_jax = jax_xmap(
+    stokes_weights_IQU_inner_jax,
+    in_axes=[
+        ["detectors"],  # epsilon
+        [...],  # cal
+        ["detectors", "intervals", "interval_size", ...],  # quats
+        ["intervals", "interval_size"],
+    ],  # hwp
+    out_axes=["detectors", "intervals", "interval_size", ...],
+)
+
+
+def stokes_weights_IQU_interval_jax(
+    quat_index,
+    quats,
+    weight_index,
+    weights,
+    hwp,
+    epsilon,
+    cal,
+    interval_starts,
+    interval_ends,
+    intervals_max_length,
+):
     """
     Process all the intervals as a block.
 
@@ -81,32 +109,48 @@ def stokes_weights_IQU_interval_jax(quat_index, quats, weight_index, weights, hw
     """
     # display sizes
     nb_intervals = interval_starts.size
-    print(f"DEBUG: jit-compiling 'stokes_weights_IQU_interval_jax' with n_det:{epsilon.size} cal:{cal} nb_intervals:{nb_intervals} intervals_max_length:{intervals_max_length}")
+    print(
+        f"DEBUG: jit-compiling 'stokes_weights_IQU_interval_jax' with n_det:{epsilon.size} cal:{cal} nb_intervals:{nb_intervals} intervals_max_length:{intervals_max_length}"
+    )
 
     # extract interval slices
-    intervals = JaxIntervals(interval_starts, interval_ends+1, intervals_max_length) # end+1 as the interval is inclusive
-    quats_interval = JaxIntervals.get(quats, (quat_index,intervals,ALL)) # quats[quat_index,intervals,:]
+    intervals = JaxIntervals(
+        interval_starts, interval_ends + 1, intervals_max_length
+    )  # end+1 as the interval is inclusive
+    quats_interval = JaxIntervals.get(
+        quats, (quat_index, intervals, ALL)
+    )  # quats[quat_index,intervals,:]
 
     # insures hwp is a non empty array
-    if hwp.size == 0: 
-        hwp_interval = jnp.zeros((nb_intervals,intervals_max_length))
+    if hwp.size == 0:
+        hwp_interval = jnp.zeros((nb_intervals, intervals_max_length))
     else:
-        hwp_interval = JaxIntervals.get(hwp, intervals) # hwp[intervals]
+        hwp_interval = JaxIntervals.get(hwp, intervals)  # hwp[intervals]
 
     # does the computation
-    new_weights_interval = stokes_weights_IQU_inner_jax(epsilon, cal, quats_interval, hwp_interval)
+    new_weights_interval = stokes_weights_IQU_inner_jax(
+        epsilon, cal, quats_interval, hwp_interval
+    )
 
     # updates results and returns
     # weights[weight_index,intervals,:] = new_weights_interval
-    weights = JaxIntervals.set(weights, (weight_index,intervals,ALL), new_weights_interval)
+    weights = JaxIntervals.set(
+        weights, (weight_index, intervals, ALL), new_weights_interval
+    )
     return weights
 
-# jit compiling
-stokes_weights_IQU_interval_jax = jax.jit(stokes_weights_IQU_interval_jax, 
-                                          static_argnames=['cal', 'intervals_max_length'],
-                                          donate_argnums=[3]) # donates weights
 
-def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel):
+# jit compiling
+stokes_weights_IQU_interval_jax = jax.jit(
+    stokes_weights_IQU_interval_jax,
+    static_argnames=["cal", "intervals_max_length"],
+    donate_argnums=[3],
+)  # donates weights
+
+
+def stokes_weights_IQU_jax(
+    quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel
+):
     """
     Compute the Stokes weights for the "IQU" mode.
 
@@ -125,7 +169,9 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
         None (the result is put in weights).
     """
     # make sure the data is where we expect it
-    assert_data_localization('stokes_weights_IQU', use_accel, [quats, hwp, epsilon], [weights])
+    assert_data_localization(
+        "stokes_weights_IQU", use_accel, [quats, hwp, epsilon], [weights]
+    )
 
     # prepares inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
@@ -137,11 +183,36 @@ def stokes_weights_IQU_jax(quat_index, quats, weight_index, weights, hwp, interv
     epsilon_input = MutableJaxArray.to_array(epsilon)
 
     # track data movement
-    dataMovementTracker.add("stokes_weights_IQU", use_accel, [quat_index_input, quats_input, weight_index_input, weights_input, hwp_input, epsilon_input, intervals.first, intervals.last], [weights])
+    dataMovementTracker.add(
+        "stokes_weights_IQU",
+        use_accel,
+        [
+            quat_index_input,
+            quats_input,
+            weight_index_input,
+            weights_input,
+            hwp_input,
+            epsilon_input,
+            intervals.first,
+            intervals.last,
+        ],
+        [weights],
+    )
 
     # runs computation
-    weights[:] = stokes_weights_IQU_interval_jax(quat_index_input, quats_input, weight_index_input, weights_input, hwp_input, epsilon_input, cal,
-                                                 intervals.first, intervals.last, intervals_max_length)
+    weights[:] = stokes_weights_IQU_interval_jax(
+        quat_index_input,
+        quats_input,
+        weight_index_input,
+        weights_input,
+        hwp_input,
+        epsilon_input,
+        cal,
+        intervals.first,
+        intervals.last,
+        intervals_max_length,
+    )
+
 
 def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     """
@@ -159,16 +230,20 @@ def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
         None (the result is put in weights).
     """
     # problem size
-    print(f"DEBUG: running 'stokes_weights_I_jax' with n_view:{intervals.size} n_det:{weight_index.size} n_samp:{weights.shape[1]} n_view:{intervals} cal:{cal}")
-    
+    print(
+        f"DEBUG: running 'stokes_weights_I_jax' with n_view:{intervals.size} n_det:{weight_index.size} n_samp:{weights.shape[1]} n_view:{intervals} cal:{cal}"
+    )
+
     # iterate on the intervals
     for interval in intervals:
-        interval_start = interval['first']
-        interval_end = interval['last']+1
+        interval_start = interval["first"]
+        interval_end = interval["last"] + 1
         weights[weight_index, interval_start:interval_end] = cal
 
-#-------------------------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------------------------
 # NUMPY
+
 
 def stokes_weights_IQU_inner_numpy(eps, cal, pin, hwpang, weights):
     """
@@ -188,17 +263,19 @@ def stokes_weights_IQU_inner_numpy(eps, cal, pin, hwpang, weights):
     xaxis = np.array([1.0, 0.0, 0.0])
     zaxis = np.array([0.0, 0.0, 1.0])
     eta = (1.0 - eps) / (1.0 + eps)
-    
+
     # applies quaternion rotation
     dir = qarray.rotate_one_one_numpy(pin, zaxis)
     orient = qarray.rotate_one_one_numpy(pin, xaxis)
 
     # computes by and bx
     by = orient[0] * dir[1] - orient[1] * dir[0]
-    bx = orient[0] * (-dir[2] * dir[0]) + \
-         orient[1] * (-dir[2] * dir[1]) + \
-         orient[2] * (dir[0] * dir[0] + dir[1] * dir[1])
-    
+    bx = (
+        orient[0] * (-dir[2] * dir[0])
+        + orient[1] * (-dir[2] * dir[1])
+        + orient[2] * (dir[0] * dir[0] + dir[1] * dir[1])
+    )
+
     # computes detang
     detang = np.arctan2(by, bx)
     detang += 2.0 * hwpang
@@ -209,7 +286,10 @@ def stokes_weights_IQU_inner_numpy(eps, cal, pin, hwpang, weights):
     weights[1] = np.cos(detang) * eta * cal
     weights[2] = np.sin(detang) * eta * cal
 
-def stokes_weights_IQU_numpy(quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel):
+
+def stokes_weights_IQU_numpy(
+    quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel
+):
     """
     Compute the Stokes weights for the "IQU" mode.
 
@@ -230,7 +310,9 @@ def stokes_weights_IQU_numpy(quat_index, quats, weight_index, weights, hwp, inte
     # problem size
     n_det = quat_index.size
     n_samp = quats.shape[1]
-    print(f"DEBUG: running 'stokes_weights_IQU_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{n_samp}")
+    print(
+        f"DEBUG: running 'stokes_weights_IQU_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{n_samp}"
+    )
 
     # insures hwp is a non empty array
     if (hwp is None) or (hwp.size == 0):
@@ -239,17 +321,19 @@ def stokes_weights_IQU_numpy(quat_index, quats, weight_index, weights, hwp, inte
     # iterates on detectors and intervals
     for idet in range(n_det):
         for interval in intervals:
-            interval_start = interval['first']
-            interval_end = interval['last']+1
-            for isamp in range(interval_start,interval_end):
+            interval_start = interval["first"]
+            interval_end = interval["last"] + 1
+            for isamp in range(interval_start, interval_end):
                 w_index = weight_index[idet]
                 q_index = quat_index[idet]
                 stokes_weights_IQU_inner_numpy(
                     epsilon[idet],
                     cal,
-                    quats[q_index,isamp,:],
+                    quats[q_index, isamp, :],
                     hwp[isamp],
-                    weights[w_index,isamp,:])
+                    weights[w_index, isamp, :],
+                )
+
 
 def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel):
     """
@@ -267,14 +351,17 @@ def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel):
     """
     # problem size
     n_det = weight_index.size
-    print(f"DEBUG: running 'stokes_weights_I_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{weights.shape[1]}")
-    
+    print(
+        f"DEBUG: running 'stokes_weights_I_numpy' with n_view:{intervals.size} n_det:{n_det} n_samp:{weights.shape[1]}"
+    )
+
     for interval in intervals:
-        interval_start = interval['first']
-        interval_end = interval['last']+1
+        interval_start = interval["first"]
+        interval_end = interval["last"] + 1
         weights[weight_index, interval_start:interval_end] = cal
 
-#-------------------------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------------------------
 # C++
 
 """
@@ -415,16 +502,16 @@ void stokes_weights_I(py::buffer weight_index, py::buffer weights, py::buffer in
 }
 """
 
-#-------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 # IMPLEMENTATION SWITCH
 
 # lets us play with the various implementations
-stokes_weights_I = select_implementation(stokes_weights_I_compiled, 
-                                         stokes_weights_I_numpy, 
-                                         stokes_weights_I_jax)
-stokes_weights_IQU = select_implementation(stokes_weights_IQU_compiled, 
-                                           stokes_weights_IQU_numpy, 
-                                           stokes_weights_IQU_jax)
+stokes_weights_I = select_implementation(
+    stokes_weights_I_compiled, stokes_weights_I_numpy, stokes_weights_I_jax
+)
+stokes_weights_IQU = select_implementation(
+    stokes_weights_IQU_compiled, stokes_weights_IQU_numpy, stokes_weights_IQU_jax
+)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_tod_dipole")'

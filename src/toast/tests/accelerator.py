@@ -107,7 +107,7 @@ class AcceleratorTest(MPITestCase):
 
         # Copy to device
         for tname, buffer in data.items():
-            accel_data_create(buffer) # TODO buffer = acel... in the jax case?
+            accel_data_create(buffer)  # TODO buffer = acel... in the jax case?
             accel_data_update_device(buffer)
 
         # Check that it is present

@@ -275,7 +275,9 @@ class PolyFilterTest(MPITestCase):
         # Check for consistency
         for ob in data.obs:
             for det in ob.local_detectors:
-                allclose = np.allclose(ob.detdata["signal"][det], ob.detdata["pyfilter"][det])
+                allclose = np.allclose(
+                    ob.detdata["signal"][det], ob.detdata["pyfilter"][det]
+                )
                 if not allclose:
                     print(f"pyfilter {det} = {ob.detdata['pyfilter'][det]}")
                     print(f"signal {det} = {ob.detdata['signal'][det]}")

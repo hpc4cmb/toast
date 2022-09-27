@@ -22,6 +22,7 @@ from .utils import Logger
 import jax.numpy as jnp
 from .ops.jax_ops.utils.intervals import INTERVALS_JAX
 
+
 def build_interval_dtype():
     dtdbl = np.dtype("double")
     dtll = np.dtype("longlong")
@@ -404,6 +405,7 @@ class IntervalList(Sequence, AcceleratorObject):
             # if we observe that its type is still a GPU type
             # does NOT move data back from GPU
             self.data = self.data.numpy_buffer
+
 
 @function_timer
 def regular_intervals(n, start, first, rate, duration, gap):

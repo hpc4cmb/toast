@@ -149,7 +149,7 @@ class Pipeline(Operator):
     @function_timer
     def _delete_intermediates(self, data, use_accel):
         """
-        Deals with data existing on the host from a previous call, but 
+        Deals with data existing on the host from a previous call, but
         not on the device.  Delete the host copy so that it will
         be re-created consistently.
         """
@@ -196,7 +196,7 @@ class Pipeline(Operator):
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
         msg = f"{pstr} {self} finalize"
         log.verbose(msg)
-        
+
         # FIXME:  We need to clarify in documentation that if using the
         # accelerator in _finalize() to produce output products, these
         # outputs should remain on the device so that they can be copied
@@ -233,7 +233,7 @@ class Pipeline(Operator):
 
     def _requires(self):
         # Work through the operator list in reverse order
-        # and prune intermediate products 
+        # and prune intermediate products
         # (that will be provided by a previous operator).
         if self.operators is None:
             return dict()
@@ -254,7 +254,7 @@ class Pipeline(Operator):
 
     def _provides(self):
         # Work through the operator list
-        # and prune intermediate products 
+        # and prune intermediate products
         # (that are be provided to an intermediate operator).
         # FIXME could a final result also be used by an intermediate operator?
         if self.operators is None:
@@ -300,7 +300,7 @@ class Pipeline(Operator):
                 msg = f"{self} does not support accel because of '{op}'"
                 log.debug(msg)
                 return False
-        #print(f"DEBUGGING: {self} supports accel")
+        # print(f"DEBUGGING: {self} supports accel")
         return True
 
     def __str__(self):

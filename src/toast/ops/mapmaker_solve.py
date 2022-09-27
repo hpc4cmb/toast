@@ -233,7 +233,7 @@ class SolverRHS(Operator):
                 ]
             )
             proj_pipe.operators = oplist
-        
+
         self._log_debug(comm, rank, "projection pipeline created in", timer=timer)
 
         # Run this projection pipeline.

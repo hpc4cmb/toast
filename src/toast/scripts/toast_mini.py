@@ -32,6 +32,7 @@ from toast.scripts.benchmarking_utilities import (
 from toast.timing import dump, function_timer, gather_timers
 from toast.ops.jax_ops.utils import dataMovementTracker
 
+
 def parse_arguments():
     """
     Defines and parses the arguments for the script.
@@ -268,7 +269,7 @@ def main():
         timer.report("toast_mini (gathering and dumping timing info)")
     else:
         timer.stop()
-    
+
     # display information on GPU data movement
     print(dataMovementTracker)
 

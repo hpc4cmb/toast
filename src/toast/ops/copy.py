@@ -147,7 +147,7 @@ class Copy(Operator):
                             out_key,
                             sample_shape=sample_shape,
                             dtype=ob.detdata[in_key].dtype,
-                            detectors=dets
+                            detectors=dets,
                         )
                     # Copy detector data
                     for d in dets:

@@ -431,7 +431,7 @@ class Offset(Template):
     def _get_offset_psd(self, noise, freq, step_time, det):
         """Compute the PSD of the baseline offsets."""
         psdfreq = noise.freq(det).to_value(u.Hz)
-        psd = noise.psd(det).to_value(u.K ** 2 * u.second)
+        psd = noise.psd(det).to_value(u.K**2 * u.second)
         rate = noise.rate(det).to_value(u.Hz)
 
         # Remove the white noise component from the PSD
@@ -599,7 +599,9 @@ class Offset(Template):
     def _apply_precond(self, amplitudes_in, amplitudes_out):
         if self.use_noise_prior:
             if self.use_accel:
-                raise NotImplementedError("offset template precond on accelerator not implemented")
+                raise NotImplementedError(
+                    "offset template precond on accelerator not implemented"
+                )
             # Our design matrix includes a term with the inverse offset covariance.
             # This means that our preconditioner should include this term as well.
             for det in self._all_dets:

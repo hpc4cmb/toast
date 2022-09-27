@@ -658,7 +658,9 @@ class Amplitudes(AcceleratorObject):
         if use_accel_omp:
             return accel_data_present(self._raw) and accel_data_present(self._raw_flags)
         elif use_accel_jax:
-            return accel_data_present(self.local) and accel_data_present(self.local_flags)
+            return accel_data_present(self.local) and accel_data_present(
+                self.local_flags
+            )
         else:
             return False
 
@@ -704,7 +706,7 @@ class Amplitudes(AcceleratorObject):
             self.local_flags = self._raw_flags.array()
 
 
-class AmplitudesMap(MutableMapping,AcceleratorObject):
+class AmplitudesMap(MutableMapping, AcceleratorObject):
     """Helper class to provide arithmetic operations on a collection of Amplitudes.
 
     This simply provides syntactic sugar to reduce duplicated code when working with
