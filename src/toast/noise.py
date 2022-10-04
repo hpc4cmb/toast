@@ -33,6 +33,9 @@ class Noise(object):
         indices (dict):  Integer index for every PSD, useful for generating
             indepedendent and repeateable noise realizations. If absent, running
             indices will be assigned and provided.
+        detweights (dict):  If not None, override internal logic used to determine
+            detector noise weights.  If overridden, noise weights should reflect
+            inverse white noise variance per sample.
 
     Attributes:
         detectors (list): List of detector names
@@ -47,7 +50,13 @@ class Noise(object):
 
     @function_timer
     def __init__(
-        self, detectors=list(), freqs=dict(), psds=dict(), mixmatrix=None, indices=None
+            self,
+            detectors=list(),
+            freqs=dict(),
+            psds=dict(),
+            mixmatrix=None,
+            indices=None,
+            detweights=None,
     ):
         self._dets = list(sorted(detectors))
         if mixmatrix is None:
@@ -98,7 +107,7 @@ class Noise(object):
             # last frequency point should be Nyquist
             self._rates[key] = 2.0 * self._freqs[key][-1]
 
-        self._detweights = None
+        self._detweights = detweights
 
     @property
     def detectors(self):

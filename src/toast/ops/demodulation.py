@@ -516,36 +516,6 @@ class Demodulate(Operator):
             fromrank=0,
         )
 
-        # This code is kept for reference
-        """
-        weights = tod.cache.reference("weights_{}".format(det))
-        iweights, qweights, uweights = weights.T
-        # We lowpass even constant-valued vectors to match the
-        # normalization and downsampling
-        iweights = lowpass(iweights)
-        eta = np.sqrt(qweights ** 2 + uweights ** 2)
-        eta = lowpass(eta)
-        zeros = np.zeros_like(iweights)
-
-        weights_demod0 = np.column_stack([iweights, zeros, zeros])
-        weights_name = "weights_demod0_{}".format(det)
-        tod.cache.put(weights_name, weights_demod0, replace=True)
-
-        weights_demod4r = np.column_stack([zeros, eta, zeros])
-        weights_name_4r = "weights_demod4r_{}".format(det)
-        tod.cache.put(weights_name_4r, weights_demod4r, replace=True)
-
-        weights_demod4i = np.column_stack([zeros, zeros, eta])
-        weights_name_4i = "weights_demod4i_{}".format(det)
-        tod.cache.put(weights_name_4i, weights_demod4i, replace=True)
-
-        # Downsample and copy pixel numbers
-        local_pixels = tod.cache.reference("pixels_{}".format(det))
-        pixels = local_pixels[offset % self.nskip :: self.nskip]
-        for demodkey in ["demod0", "demod4r", "demod4i"]:
-            demod_name = "pixels_{}_{}".format(demodkey, det)
-            tod.cache.put(demod_name, pixels, replace=True)
-        """
         return
 
     @function_timer
@@ -565,6 +535,7 @@ class Demodulate(Operator):
         demod_freqs = {}
         demod_psds = {}
         demod_indices = {}
+        demod_weights = {}
 
         lpf = lowpass.lpf
         lpf_freq = np.fft.rfftfreq(lpf.size, 1 / fsample.to_value(u.Hz))
@@ -576,17 +547,22 @@ class Demodulate(Operator):
             rate_in = noise.rate(det)
             # freq
             freq_in = noise.freq(det)
+            # Lowpass transfer function
+            tf = np.interp(freq_in.to_value(u.Hz), lpf_freq, lpf_value)
+            # Find the highest frequency without significant suppression
+            # to measure noise weights at
+            iweight = tf.size - 1
+            while iweight > 0 and tf[iweight] < 0.99:
+                iweight -= 1
             # psd
             psd_in = noise.psd(det)
             n_mode = len(self.prefixes)
             for indexoff, prefix in enumerate(self.prefixes):
-                demod_det = "{}_{}".format(prefix, det)
-                # Lowpass
+                demod_det = f"{prefix}_{det}"
+                # Get the demodulated PSD
                 if prefix == "demod0":
-                    # lowpass psd
-                    psd_out = psd_in * np.interp(
-                        freq_in.to_value(u.Hz), lpf_freq, lpf_value
-                    )
+                    # this PSD does not change
+                    psd_out = psd_in.copy()
                 elif prefix.startswith("demod2"):
                     # get noise at 2f
                     psd_out = np.zeros_like(psd_in)
@@ -595,6 +571,8 @@ class Demodulate(Operator):
                     # get noise at 4f
                     psd_out = np.zeros_like(psd_in)
                     psd_out[:] = np.interp(4 * hwp_rate, freq_in, psd_in)
+                # Lowpass
+                psd_out *= tf
                 # Downsample
                 rate_out = rate_in / self.nskip
                 ind = freq_in <= rate_out / 2
@@ -602,16 +580,21 @@ class Demodulate(Operator):
                 # Last bin must equal the new Nyquist frequency
                 freq_out[-1] = rate_out / 2
                 psd_out = psd_out[ind] / self.nskip
+                # Calculate noise weight
+                noisevar = psd_out[iweight].to_value(u.K**2 * u.second)
+                invvar = 1.0 / noisevar / rate_out.to_value(u.Hz)
                 # Insert
                 demod_detectors.append(demod_det)
                 demod_freqs[demod_det] = freq_out
                 demod_psds[demod_det] = psd_out
                 demod_indices[demod_det] = noise.index(det) * n_mode + indexoff
+                demod_weights[demod_det] = invvar
         demod_obs[self.noise_model] = Noise(
             detectors=demod_detectors,
             freqs=demod_freqs,
             psds=demod_psds,
             indices=demod_indices,
+            detweights=demod_weights,
         )
         return
 
