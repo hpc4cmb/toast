@@ -796,7 +796,7 @@ class SimGround(Operator):
 
             if self.det_data is not None:
                 exists_data = ob.detdata.ensure(
-                    self.det_data, dtype=np.float64, detectors=dets
+                    self.det_data, dtype=np.float64, detectors=dets, units=u.Kelvin
                 )
 
             if self.det_flags is not None:

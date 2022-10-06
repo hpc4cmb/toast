@@ -13,6 +13,7 @@ from ..instrument import GroundSite, SpaceSite
 from ..intervals import IntervalList
 from ..timing import function_timer
 from ..utils import Environment, Logger, object_fullname
+from .. import qarray as qa
 from .spt3g_utils import (
     available,
     compress_timestream,
@@ -26,6 +27,7 @@ from .spt3g_utils import (
 
 if available:
     from spt3g import core as c3g
+    from spt3g import calibration as spt_cal
 
 
 @function_timer
@@ -61,6 +63,29 @@ def export_shared(obs, name, view_name=None, view_index=0, g3t=None):
         return to_g3_quats(sview)
     else:
         return g3t(sview.flatten().tolist())
+
+
+def export_focalplane(fplane):
+	out_props = spt_cal.BolometerPropertiesMap()
+	zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+	for idx,det_name in enumerate(fplane.keys()):
+		bolo = spt_cal.BolometerProperties()
+
+		dir = fplane.detector_data["quat"][idx]
+		rdir = qa.rotate(dir, zaxis).flatten()
+		ang = np.arctan2(rdir[1], rdir[0])
+
+		mag = np.arccos(rdir[2]) * c3g.G3Units.rad
+
+		bolo.physical_name = det_name  # is this a 'physical' name?
+		bolo.x_offset = mag * np.cos(ang)
+		bolo.y_offset = mag * np.sin(ang)
+		bolo.band = (fplane.detector_data["bandcenter"][idx] / u.GHz).value * c3g.G3Units.GHz
+		bolo.pol_angle = (fplane.detector_data["pol_angle"][idx] / u.rad).value * c3g.G3Units.rad
+		bolo.pol_efficiency = fplane.detector_data["pol_efficiency"][idx]
+
+		out_props[det_name] = bolo
+	return out_props
 
 
 @function_timer
@@ -290,6 +315,9 @@ class export_obs_meta(object):
         # Construct calibration frame
         cal = c3g.G3Frame(c3g.G3FrameType.Calibration)
 
+        # Output focal plane using proper SPT structure
+        cal["BolometerProperties"] = export_focalplane(obs.telescope.focalplane)
+
         # Serialize focalplane to HDF5 bytes and write to frame.
         byte_writer = io.BytesIO()
         with h5py.File(byte_writer, "w") as f:
@@ -302,8 +330,12 @@ class export_obs_meta(object):
             byte_writer = io.BytesIO()
             with h5py.File(byte_writer, "w") as f:
                 obs[m_in].save_hdf5(f, comm=None, force_serial=True)
+            if m_out in cal:
+                del cal[m_out]
             cal[m_out] = c3g.G3VectorUnsignedChar(byte_writer.getvalue())
             del byte_writer
+            if f"{m_out}_class" in cal:
+                del cal[f"{m_out}_class"]
             cal[f"{m_out}_class"] = c3g.G3String(object_fullname(obs[m_in].__class__))
 
         return ob, cal
@@ -357,6 +389,7 @@ class export_obs_data(object):
         frame_intervals=None,
         shared_names=list(),
         det_names=list(),
+        split_interval_names=list(),
         interval_names=list(),
         compress=False,
     ):
@@ -364,6 +397,7 @@ class export_obs_data(object):
         self._frame_intervals = frame_intervals
         self._shared_names = shared_names
         self._det_names = det_names
+        self._split_interval_names = split_interval_names
         self._interval_names = interval_names
         self._compress = compress
 
@@ -376,26 +410,63 @@ class export_obs_data(object):
         log = Logger.get()
         frame_intervals = self._frame_intervals
         if frame_intervals is None:
-            # We are using the sample set distribution for our frame boundaries.
             frame_intervals = "frames"
             timespans = list()
-            offset = 0
-            n_frames = 0
-            first_set = obs.dist.samp_sets[obs.comm.group_rank].offset
-            n_set = obs.dist.samp_sets[obs.comm.group_rank].n_elem
-            for sset in range(first_set, first_set + n_set):
-                for chunk in obs.dist.sample_sets[sset]:
-                    timespans.append(
-                        (
-                            obs.shared[self._timestamp_names[0]][offset],
-                            obs.shared[self._timestamp_names[0]][offset + chunk - 1],
+
+            if len(self._split_interval_names) > 0:
+                # Split up data into frames by types of interval, as is normal for observations.
+                # There may be several types of intervals listed in _interval_names,
+                # and we need to pull them out in order
+                # So, treat each obs.intervals[ivl_key] as a queue of intervals,
+                # and cycle through them pulling out the first from each queue
+                # to add to the list of frame intervals
+                def earlier(i1, i2):
+                    if i2 is None:
+                        return True
+                    return i1.start < i2.start
+                queue_indices = [0] * len(self._split_interval_names)
+                done = False
+                while not done:
+                    done = True
+                    next = None
+                    nextIdx = -1
+                    idx = 0
+                    for ivl_key in self._split_interval_names:
+                        if queue_indices[idx] < len(obs.intervals[ivl_key]):
+                            done = False  # if any queue has at least one more interval, we must continue
+                            if earlier(obs.intervals[ivl_key][queue_indices[idx]], next):
+                                next = obs.intervals[ivl_key][queue_indices[idx]]
+                                nextIdx = idx
+                        idx += 1
+                    if not done:
+                        timespans.append(
+                            (
+                                obs.intervals[self._split_interval_names[nextIdx]][queue_indices[nextIdx]].start,
+                                obs.intervals[self._split_interval_names[nextIdx]][queue_indices[nextIdx]].stop,
+                            )
                         )
-                    )
-                    n_frames += 1
-                    offset += chunk
-            obs.intervals.create_col(
-                frame_intervals, timespans, obs.shared[self._timestamp_names[0]]
-            )
+                        queue_indices[nextIdx] += 1
+                obs.intervals.create_col(frame_intervals, timespans, obs.shared[self._timestamp_names[0]])
+            else:
+                # Divide data into frames arbitrarily, which may be unsuitable for further processing
+                # We are using the sample set distribution for our frame boundaries.
+                offset = 0
+                n_frames = 0
+                first_set = obs.dist.samp_sets[obs.comm.group_rank].offset
+                n_set = obs.dist.samp_sets[obs.comm.group_rank].n_elem
+                for sset in range(first_set, first_set + n_set):
+                    for chunk in obs.dist.sample_sets[sset]:
+                        timespans.append(
+                            (
+                                obs.shared[self._timestamp_names[0]][offset],
+                                obs.shared[self._timestamp_names[0]][offset + chunk - 1],
+                            )
+                        )
+                        n_frames += 1
+                        offset += chunk
+                obs.intervals.create_col(
+                    frame_intervals, timespans, obs.shared[self._timestamp_names[0]]
+                )
 
         output = list()
         frame_view = obs.view[frame_intervals]
@@ -456,7 +527,7 @@ class export_obs_data(object):
             if len(self._interval_names) > 0:
                 tview = obs.view[frame_intervals].shared[self._timestamp_names[0]][ivw]
                 iframe = IntervalList(
-                    obs.shared[self._timestamp_names[0]],
+                    np.array(obs.shared[self._timestamp_names[0]]),
                     timespans=[(tview[0], tview[-1])],
                 )
                 for ivl_key, ivl_val in self._interval_names:
@@ -465,6 +536,11 @@ class export_obs_data(object):
                         ivl_key,
                         iframe,
                     )
+                    # Tag frames which contain a period of turning the telescope around
+                    # This may not work usefully if the frame splitting was not based on
+                    # suitable intervals
+                    if ivl_val == "intervals_turnaround" and len(frame[ivl_val])>0:
+                        frame["Turnaround"] = c3g.G3Bool(True)
             output.append(frame)
         # Delete our temporary frame interval if we created it
         if self._frame_intervals is None:

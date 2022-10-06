@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 from astropy import units as u
+from scipy.spatial.transform import Rotation
 
 from ..utils import Environment, Logger
 
@@ -95,8 +96,9 @@ def to_g3_map_array_type(dt):
 def to_g3_unit(aunit):
     """Convert astropy unit to G3 timestream unit.
 
-    We convert our input units to SI base units (no milli-, micro-, etc prefix).
-    We also return the scale factor needed to transform to this unit.
+    We convert our input units to SPT-3G base units.
+    We also return the scale factor needed to transform to this unit,
+    defined as the ratio between definitions of the fundmental SI units.
 
     Args:
         aunit (astropy.unit):  The input unit.
@@ -111,47 +113,47 @@ def to_g3_unit(aunit):
         scale = 1.0 * aunit
         # Try to convert the units to the various types of quantities
         try:
-            scale = scale.to(u.volt)
+            scale = scale.to(u.volt)*c3g.G3Units.volt
             return (c3g.G3TimestreamUnits.Voltage, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.watt)
+            scale = scale.to(u.watt)*c3g.G3Units.watt
             return (c3g.G3TimestreamUnits.Power, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.ohm)
+            scale = scale.to(u.ohm)*(c3g.G3Units.volt/c3g.G3Units.amp)
             return (c3g.G3TimestreamUnits.Resistance, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.ampere)
+            scale = scale.to(u.ampere)*c3g.G3Units.ampere
             return (c3g.G3TimestreamUnits.Current, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.meter)
+            scale = scale.to(u.meter)*c3g.G3Units.meter
             return (c3g.G3TimestreamUnits.Distance, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.pascal)
+            scale = scale.to(u.bar)*c3g.G3Units.bar
             return (c3g.G3TimestreamUnits.Pressure, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.radian)
+            scale = scale.to(u.radian)*c3g.G3Units.radian
             return (c3g.G3TimestreamUnits.Angle, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.Jy)
+            scale = scale.to(u.Jy)*c3g.G3Units.Jy
             return (c3g.G3TimestreamUnits.FluxDensity, scale.value)
         except Exception:
             pass
         try:
-            scale = scale.to(u.Kelvin)
+            scale = scale.to(u.Kelvin)*c3g.G3Units.kelvin
             return (c3g.G3TimestreamUnits.Tcmb, scale.value)
         except Exception:
             pass
@@ -161,7 +163,7 @@ def to_g3_unit(aunit):
 def from_g3_unit(gunit):
     """Convert G3 timestream unit to astropy.
 
-    This function assumes that the quantities are in SI units.
+    This function assumes that the quantities are in SPT-3G units.
 
     Args:
         gunit (G3TimestreamUnit):  The input units.
@@ -173,23 +175,23 @@ def from_g3_unit(gunit):
     if gunit == c3g.G3TimestreamUnits.Counts:
         return u.dimensionless_unscaled
     elif gunit == c3g.G3TimestreamUnits.Voltage:
-        return u.volt
+        return u.def_unit('SPT_Voltage', u.volt/c3g.G3Units.volt)
     elif gunit == c3g.G3TimestreamUnits.Power:
-        return u.watt
+        return u.def_unit('SPT_Power', u.watt/c3g.G3Units.watt)
     elif gunit == c3g.G3TimestreamUnits.Resistance:
-        return u.ohm
+        return u.def_unit('SPT_Resistance', u.ohm/(c3g.G3Units.volt/c3g.G3Units.amp))
     elif gunit == c3g.G3TimestreamUnits.Current:
-        return u.ampere
+        return u.def_unit('SPT_Current', u.ampere/c3g.G3Units.ampere)
     elif gunit == c3g.G3TimestreamUnits.Distance:
-        return u.meter
+        return u.def_unit('SPT_Distance', u.meter/c3g.G3Units.meter)
     elif gunit == c3g.G3TimestreamUnits.Pressure:
-        return u.pascal
+        return u.def_unit('SPT_Pressure', u.bar/c3g.G3Units.bar)
     elif gunit == c3g.G3TimestreamUnits.Angle:
-        return u.radian
+        return u.def_unit('SPT_Angle', u.radian/c3g.G3Units.radian)
     elif gunit == c3g.G3TimestreamUnits.FluxDensity:
-        return u.Jy
+        return u.def_unit('SPT_FluxDensity', u.Jy/c3g.G3Units.Jy)
     elif gunit == c3g.G3TimestreamUnits.Tcmb:
-        return u.Kelvin
+        return u.def_unit('SPT_Tcmb', u.Kelvin/c3g.G3Units.kelvin)
     else:
         return u.dimensionless_unscaled
 
@@ -329,6 +331,28 @@ def to_g3_time(input):
         return c3g.G3VectorTime([c3g.G3Time(x * 1e8) for x in input])
 
 
+from_3g_rotation = Rotation.from_rotvec([0, np.pi/2., 0])
+
+
+def from_g3_quat(q: c3g.quat):
+    """Convert a single SPT-3G quaternion to TOAST conventions.
+
+    This reorders the components, and rotates from the boresight being aligned
+    with the x-axis to the z-axis being so aligned.
+	TODO: Is such a rotation appropriate for all quaternions being imported?
+
+	Args:
+	    q (spt3g.core.quat): An SPT-3G quaternion
+
+	Returns:
+	    (array): A TOAST quaternion
+    """
+    # roll components from standard order to scipy order,
+    # then perform the rotation to change coordinate systems
+    r = Rotation.from_quat([q.b, q.c, q.d, q.a])
+    return (r * from_3g_rotation).as_quat()
+
+
 def from_g3_quats(input):
     """Convert Spt3G quaternions into TOAST format.
 
@@ -342,10 +366,33 @@ def from_g3_quats(input):
 
     """
     if isinstance(input, c3g.G3VectorQuat):
-        return np.array([np.array([x.b, x.c, x.d, x.a]) for x in input])
+        return np.array([from_g3_quat(x) for x in input])
     else:
         # Assume it is a scalar
-        return np.array([input.b, input.c, input.d, input.a])
+        return from_g3_quat(input)
+
+
+to_3g_rotation = Rotation.from_rotvec([0, -np.pi/2., 0])
+
+
+def to_g3_quat(q):
+	"""Convert a single TOAST quaternion to SPT-3G conventions.
+
+	This corrects storage order, and rotates from the z-axis being aligned with
+	the boresight to the x-axis being so aligned.
+	TODO: Is such a rotation appropriate for all quaternions being exported?
+
+	Args:
+	    q (array): A TOAST quaternion
+
+	Returns:
+	    (spt3g.core.quat): An SPT-3G quaternion
+	"""
+	# first, perform rotation while in TOAST format, then convert back to an
+	# explicit quaternion to roll components to standard order
+	r = Rotation.from_quat(q)
+	q = (r * to_3g_rotation).as_quat()
+	return c3g.quat(q[3], q[0], q[1], q[2])
 
 
 def to_g3_quats(input):
@@ -362,10 +409,10 @@ def to_g3_quats(input):
     """
     if len(input.shape) == 2:
         # Array of values
-        return c3g.G3VectorQuat([c3g.quat(x[3], x[0], x[1], x[2]) for x in input])
+        return c3g.G3VectorQuat([to_g3_quat(q) for q in input])
     else:
         # One value
-        return c3g.quat(input[3], input[0], input[1], input[2])
+        return to_g3_quat(input)
 
 
 # Callable that just builds a list of frames
