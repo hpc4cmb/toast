@@ -28,6 +28,7 @@ from . import observation as test_observation
 from . import ops_cadence_map as test_ops_cadence_map
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
+from . import ops_perturbhwp as test_ops_perturbhwp
 from . import ops_elevation_noise as test_ops_elevation_noise
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
@@ -198,6 +199,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_crosslinking))
         suite.addTest(loader.loadTestsFromModule(test_ops_sss))
         suite.addTest(loader.loadTestsFromModule(test_ops_demodulate))
+        suite.addTest(loader.loadTestsFromModule(test_ops_perturbhwp))
         suite.addTest(loader.loadTestsFromModule(test_ops_filterbin))
         suite.addTest(loader.loadTestsFromModule(test_ops_noise_estim))
         suite.addTest(loader.loadTestsFromModule(test_ops_yield_cut))

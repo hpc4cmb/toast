@@ -51,6 +51,7 @@ from .sim_cosmic_rays import InjectCosmicRays
 from .sim_crosstalk import CrossTalk, MitigateCrossTalk
 from .sim_gaindrifts import GainDrifter
 from .sim_ground import SimGround
+from .sim_hwp import PerturbHWP
 from .sim_satellite import SimSatellite
 from .sim_tod_atm import SimAtmosphere
 from .sim_tod_dipole import SimDipole
