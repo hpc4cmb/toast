@@ -60,6 +60,7 @@ install(FILES
     ops_crosslinking.py
     ops_sss.py
     ops_demodulate.py
+    ops_perturbhwp.py
     ops_filterbin.py
     io_hdf5.py
     ops_noise_estim.py
