@@ -173,20 +173,26 @@ class PerturbHWP(Operator):
             key1 = self.realization * 1543343 + obs.telescope.uid
             key2 = obs.uid
             counter1 = 0
-            counter2 = 0
 
-            times = obs.shared[self.times].data
-            hwp_angle = obs.shared[self.hwp_angle].data
+            # The times and hwp_angle are shared among columns of the process
+            # grid.  Only the first process row needs to modify the data.
+            if (
+                obs.shared.comm_type(self.times) != "column"
+                or obs.shared.comm_type(self.hwp_angle) != "column"
+            ):
+                msg = f"obs {obs.name}: expected shared fields {self.times} and "
+                msg += f"{self.hwp_angle} to be on the column communicator."
+                raise RuntimeError(msg)
 
-            if obs.comm_row is not None:
-                times = obs.comm_row.gather(times)
-                hwp_angle = obs.comm_row.gather(hwp_angle)
-                if obs.comm_row.rank == 0:
-                    times = np.hstack(times)
-                    hwp_angle = np.hstack(hwp_angle)
+            if obs.comm_col_rank == 0:
+                times = obs.shared[self.times].data
+                hwp_angle = obs.shared[self.hwp_angle].data
 
-            if obs.comm_row is None or obs.comm_row.rank == 0:
-                hwp_angle = np.unwrap(hwp_angle)
+                # We are in the first process row.  In our RNG generation,
+                # "counter2" corresponds to the sample index.  If there are
+                # multiple processes in the grid row, start our RNG stream
+                # at the first sample on this process.
+                counter2 = obs.local_index_offset
 
                 time_delta = times[-1] - times[0]
 
@@ -212,6 +218,10 @@ class PerturbHWP(Operator):
                     begin_rate = nominal_rate
                     accel = 0
                 else:
+                    # This random number is for the uniform drift across the whole
+                    # observation.  All processes along the row of the grid should
+                    # use the same value here.
+                    counter2 = 0
                     component = 1
                     rngdata = rng.random(
                         1,
@@ -227,15 +237,11 @@ class PerturbHWP(Operator):
 
                 # Now calculcate the HWP angle subject to jitter and drift
                 t = new_times - new_times[0]
-                new_angle = 0.5 * accel * t ** 2 + begin_rate * t + hwp_angle[0]
+                new_angle = 0.5 * accel * t**2 + begin_rate * t + hwp_angle[0]
             else:
                 new_angle = None
 
-            if obs.comm.comm_group is not None:
-                new_angle = obs.comm.comm_group.bcast(new_angle)[
-                    offset : offset + nlocal
-                ]
-
+            # Set the new HWP angle values
             obs.shared[self.hwp_angle].set(new_angle, offset=(0,), fromrank=0)
 
     def _finalize(self, data, **kwargs):
