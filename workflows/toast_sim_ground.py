@@ -504,6 +504,8 @@ def reduce_data(job, args, data):
     timer_filter = toast.timing.Timer()
     timer_filter.start()
     log.info_rank("  Filtering signal", comm=world_comm)
+    ops.hwpfilter.apply(data)
+    log.info_rank("    Finished hwp-filtering in", comm=world_comm, timer=timer)
     ops.groundfilter.apply(data)
     log.info_rank("    Finished ground-filtering in", comm=world_comm, timer=timer)
     ops.polyfilter1D.apply(data)
@@ -736,6 +738,7 @@ def main():
         toast.ops.TimeConstant(
             name="deconvolve_time_constant", deconvolve=True, enabled=False
         ),
+        toast.ops.HWPFilter(name="hwpfilter", enabled=False),
         toast.ops.GroundFilter(name="groundfilter", enabled=False),
         toast.ops.PolyFilter(name="polyfilter1D"),
         toast.ops.PolyFilter2D(name="polyfilter2D", enabled=False),
