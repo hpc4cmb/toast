@@ -64,10 +64,6 @@ class HWPFilter(Operator):
         help="Observation detdata key",
     )
 
-    view = Unicode(
-        None, allow_none=True, help="Use this view of the data in all observations"
-    )
-
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
@@ -147,8 +143,6 @@ class HWPFilter(Operator):
     @function_timer
     def build_templates(self, obs):
         """Construct the local HWPSS template hierarchy"""
-
-        views = obs.view[self.view]
 
         # Construct trend templates.  Full domain for x is [-1, 1]
 
@@ -241,7 +235,7 @@ class HWPFilter(Operator):
             ref[good] -= trend[good]
         # HWP template
         hwptemplate = np.zeros_like(ref)
-        add_templates(hwptemplate, fourier_filter, coeff[self.trend_order + 1:])
+        add_templates(hwptemplate, fourier_filter, coeff[self.trend_order + 1 :])
         ref[good] -= hwptemplate[good]
         ref[np.logical_not(good)] = 0
         return
