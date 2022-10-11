@@ -173,7 +173,6 @@ class PerturbHWP(Operator):
             key1 = self.realization * 1543343 + obs.telescope.uid
             key2 = obs.uid
             counter1 = 0
-            counter2 = 0
 
             # The times and hwp_angle are shared among columns of the process
             # grid.  Only the first process row needs to modify the data.
@@ -219,6 +218,10 @@ class PerturbHWP(Operator):
                     begin_rate = nominal_rate
                     accel = 0
                 else:
+                    # This random number is for the uniform drift across the whole
+                    # observation.  All processes along the row of the grid should
+                    # use the same value here.
+                    counter2 = 0
                     component = 1
                     rngdata = rng.random(
                         1,
