@@ -264,6 +264,7 @@ def args_update_config(args, conf, useropts, section, prefix="", separator="\.")
                     name in user and optname in user[name]
                 ):
                     # print(f"Parsing Unit:  --> assign")
+                    parent[name][optname]["value"] = "unit"
                     parent[name][optname]["unit"] = unit
                 else:
                     # print(
@@ -281,11 +282,12 @@ def args_update_config(args, conf, useropts, section, prefix="", separator="\.")
                 else:
                     raise ValueError(f"value '{val}' is not a Quantity or None")
                 if (
-                    val != parent[name][optname]["value"]
+                    value != parent[name][optname]["value"]
                     or unit != parent[name][optname]["unit"]
                 ) and (name in user and optname in user[name]):
-                    parent[name][optname]["value"] = val
+                    parent[name][optname]["value"] = value
                     parent[name][optname]["unit"] = unit
+                # print(f"DBG {optname}:  {value} | {unit}")
             elif parent[name][optname]["type"] == "float":
                 if val is None:
                     val = "None"
@@ -972,6 +974,7 @@ def create_from_config(conf):
             child_cursor = list(cursor)
             child_cursor.append(child_key)
             child_val = get_node(tree, child_cursor)
+            # print(f"PARSE child_key {child_key} = {child_val}")
 
             if isinstance(child_val, TraitConfig):
                 # This is an already-created object
@@ -1004,11 +1007,12 @@ def create_from_config(conf):
                     is_list = None
                     try:
                         _ = len(child_val)
-                        # It is a list
+                        # It is a list, tuple, or set
                         is_list = True
                     except:
                         is_list = False
                     if is_list:
+                        parent[node_name][child_key] = list(child_val)
                         for elem in range(len(child_val)):
                             found = find_object_ref(tree, child_val[elem])
                             # print(

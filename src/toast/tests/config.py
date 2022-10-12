@@ -70,7 +70,7 @@ class ConfigOperator(ops.Operator):
     bool_default = Bool(False, help="Bool default")
     bool_none = Bool(None, allow_none=True, help="Bool none")
 
-    quantity_default = Quantity(1.2345 * u.second, help="Quantity default")
+    quantity_default = Quantity(1.2345 * u.meter / u.second, help="Quantity default")
     quantity_none = Quantity(None, allow_none=True, help="Quantity none")
 
     unit_default = Unit(u.meter / u.second, help="Unit default")
@@ -84,7 +84,9 @@ class ConfigOperator(ops.Operator):
     list_string = List(["foo", "bar", "blat"], help="List string default")
     list_string_empty = List(["", "", ""], help="List string empty")
     list_float = List([1.23, 4.56, 7.89], help="List float default")
-    list_quant = List([1.23 * u.meter, 4.56 * u.K], help="List Quantity default")
+    list_quant = List(
+        [1.23 * u.meter / u.second, 4.56 * u.K], help="List Quantity default"
+    )
     list_mixed = List(
         [None, True, "", "foo", 1.23, 4.56, 7.89 * u.meter], help="list mixed"
     )
@@ -95,8 +97,8 @@ class ConfigOperator(ops.Operator):
     )
     dict_string_empty = Dict({"a": "", "b": "", "c": ""}, help="Dict string empty")
     dict_float = Dict({"a": 1.23, "b": 4.56, "c": 7.89}, help="Dict float default")
-    dict_float = Dict(
-        {"a": 1.23 * u.meter, "b": 4.56 * u.K}, help="Dict Quantity default"
+    dict_quant = Dict(
+        {"a": 1.23 * u.meter / u.second, "b": 4.56 * u.K}, help="Dict Quantity default"
     )
     dict_mixed = Dict(
         {"a": None, "b": True, "c": "", "d": 4.56, "e": 7.89 * u.meter},
@@ -107,16 +109,20 @@ class ConfigOperator(ops.Operator):
     set_string = Set({"a", "b", "c"}, help="Set string default")
     set_string_empty = Set({"", "", ""}, help="Set string empty")
     set_float = Set({1.23, 4.56, 7.89}, help="Set float default")
-    set_quant = Set({1.23 * u.meter, 4.56 * u.meter}, help="Set Quantity default")
+    set_quant = Set(
+        {1.23 * u.meter / u.second, 4.56 * u.meter}, help="Set Quantity default"
+    )
     set_mixed = Set({None, "", "foo", True, 4.56, 7.89 * u.meter}, help="Set mixed")
 
     tuple_none = Tuple(None, allow_none=True, help="Tuple string default")
-    tuple_string = Tuple(["foo", "bar", "blat"], help="Tuple string default")
-    tuple_string_empty = Tuple(["", "", ""], help="Tuple string empty")
-    tuple_float = Tuple([1.23, 4.56, 7.89], help="Tuple float")
-    tuple_float = Tuple([1.23 * u.meter, 4.56 * u.meter], help="Tuple Quantity")
+    tuple_string = Tuple(("foo", "bar", "blat"), help="Tuple string default")
+    tuple_string_empty = Tuple(("", "", ""), help="Tuple string empty")
+    tuple_float = Tuple((1.23, 4.56, 7.89), help="Tuple float")
+    tuple_quant = Tuple(
+        (1.23 * u.meter / u.second, 4.56 * u.meter), help="Tuple Quantity"
+    )
     tuple_mixed = Tuple(
-        [None, True, "", "foo", 4.56, 7.89 * u.meter], help="Tuple mixed"
+        (None, True, "", "foo", 4.56, 7.89 * u.meter), help="Tuple mixed"
     )
 
     def __init__(self, **kwargs):
@@ -155,6 +161,8 @@ class ConfigTest(MPITestCase):
             ops.DefaultNoiseModel(name="noise_model"),
             ops.SimNoise(name="sim_noise"),
             ops.MemoryCounter(name="mem_count"),
+            ops.PointingDetectorSimple(name="det_pointing"),
+            ops.PixelsWCS(name="pixels"),
         ]
         return {x.name: x for x in oplist}
 
@@ -314,6 +322,8 @@ class ConfigTest(MPITestCase):
         # Add our fake telescope and schedule
         run.operators.sim_satellite.telescope = tele
         run.operators.sim_satellite.schedule = sch
+
+        run.operators.pixels.detector_pointing = run.operators.det_pointing
 
         run.operators.sim_pipe.apply(data)
 

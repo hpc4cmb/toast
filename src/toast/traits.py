@@ -397,110 +397,6 @@ class Quantity(Float):
         return u.Quantity(s)
 
 
-# def trait_type_to_string(trait):
-#     """Return a python type name corresponding to a trait.
-
-#     For the specified traitlet type, return the string name of the python type that
-#     should be used when assigning to the trait.
-
-#     Args:
-#         trait (traitlet.TraitType):  The trait.
-
-#     Returns:
-#         (str):  The string name.
-
-#     """
-#     if isinstance(trait, Bool):
-#         return "bool"
-#     elif isinstance(trait, List):
-#         return "list"
-#     elif isinstance(trait, Set):
-#         return "set"
-#     elif isinstance(trait, Dict):
-#         return "dict"
-#     elif isinstance(trait, Tuple):
-#         return "tuple"
-#     elif isinstance(trait, Quantity):
-#         return "Quantity"
-#     elif isinstance(trait, Unit):
-#         return "Unit"
-#     elif isinstance(trait, Float):
-#         return "float"
-#     elif isinstance(trait, Int):
-#         return "int"
-#     elif isinstance(trait, Instance):
-#         return trait.klass.__qualname__
-#     return "str"
-
-
-# def string_to_pytype(st):
-#     """Return a python type corresponding to a type string.
-
-#     Used for parsing config properties.
-
-#     Args:
-#         st (str):  The type name.
-
-#     Returns:
-#         (class):  The python type.
-
-#     """
-#     if st == "bool":
-#         return bool
-#     elif st == "list":
-#         return list
-#     elif st == "set":
-#         return set
-#     elif st == "dict":
-#         return dict
-#     elif st == "tuple":
-#         return tuple
-#     elif st == "Quantity":
-#         return u.Quantity
-#     elif st == "Unit":
-#         return u.Unit
-#     elif st == "int":
-#         return int
-#     elif st == "float":
-#         return float
-#     elif st == "str":
-#         return str
-#     # Must be a custom class...
-#     return None
-
-
-# def trait_info(trait):
-#     """Extract the trait properties.
-
-#     Returns:
-#         (tuple):  The name, python type, default value, and help string.
-
-#     """
-#     trtype = str
-#     if isinstance(trait, Bool):
-#         trtype = bool
-#     elif isinstance(trait, List):
-#         trtype = list
-#     elif isinstance(trait, Set):
-#         trtype = set
-#     elif isinstance(trait, Dict):
-#         trtype = dict
-#     elif isinstance(trait, Tuple):
-#         trtype = tuple
-#     elif isinstance(trait, Quantity):
-#         trtype = u.Quantity
-#     elif isinstance(trait, Unit):
-#         trtype = u.Unit
-#     elif isinstance(trait, Float):
-#         trtype = float
-#     elif isinstance(trait, Int):
-#         trtype = int
-#     elif isinstance(trait, Instance):
-#         trtype = trait.klass
-#     print(f"trait_info '{trait}' is {trait.name}, {trtype}, {trait.default_value}")
-#     return (trait.name, trtype, trait.default_value, trait.help)
-
-
 def trait_docs(cls):
     """Decorator which adds trait properties to signature and docstring for a class.
 
@@ -618,76 +514,6 @@ class TraitConfig(HasTraits):
             raise TraitError(msg)
         return parent
 
-    # @staticmethod
-    # def _format_conf_trait(conf, trt, tval):
-    #     retval = "None"
-    #     unitstr = "None"
-    #     typestr = trait_type_to_string(trt)
-    #     print(
-    #         f"  format_conf_trait called with {trt} -> {typestr} and value {tval}({type(tval)})"
-    #     )
-
-    #     def _format_item(c, tv):
-    #         val = "None"
-    #         unit = "None"
-    #         if isinstance(tv, TraitConfig):
-    #             # We are dumping an instance which has handles to other TraitConfig
-    #             # classes.  Do this recursively.
-    #             c = tv.get_config(input=c)
-    #             val = "@config:{}".format(tv.get_config_path())
-    #         elif isinstance(tv, u.UnitBase):
-    #             print(f"    item '{tv}' is Unit")
-    #             val = "unit"
-    #             unit = str(tv)
-    #         elif isinstance(tv, u.Quantity):
-    #             print(f"    item '{tv}' is Quantity")
-    #             val = f"{tv.value:0.14e}"
-    #             unit = str(tv.unit)
-    #         elif isinstance(tv, float):
-    #             print(f"    item '{tv}' is float")
-    #             val = f"{tv:0.14e}"
-    #         else:
-    #             # We have None or a string
-    #             if tv is not None:
-    #                 print(f"    item '{tv}' is str")
-    #                 val = f"{tv}"
-    #         return (val, unit)
-
-    #     if isinstance(trt, Dict):
-    #         if tval is not None:
-    #             retval = dict()
-    #             for k, v in tval.items():
-    #                 vstr, vunit = _format_item(conf, v)
-    #                 if vstr == "unit":
-    #                     retval[k] = f"unit {vunit}"
-    #                 elif vunit == "None":
-    #                     retval[k] = vstr
-    #                 else:
-    #                     retval[k] = f"{vstr} {vunit}"
-    #     elif isinstance(trt, List) or isinstance(trt, Set) or isinstance(trt, Tuple):
-    #         if tval is not None:
-    #             retval = list()
-    #             for v in tval:
-    #                 vstr, vunit = _format_item(conf, v)
-    #                 if vstr == "unit":
-    #                     retval.append(f"unit {vunit}")
-    #                 elif vunit == "None":
-    #                     retval.append(vstr)
-    #                 else:
-    #                     retval.append(f"{vstr} {vunit}")
-    #     elif isinstance(trt, Instance) and not isinstance(tval, TraitConfig):
-    #         # Our trait is some other class not derived from TraitConfig.  This
-    #         # means that we cannot recursively dump it to the config and we also have
-    #         # no way (currently) of serializing this instance to the config.  We set it
-    #         # to None so that default actions can be taken by the constructor.
-    #         pass
-    #     else:
-    #         # Single object
-    #         retval, unitstr = _format_item(conf, tval)
-    #         print(f"  format_item {tval} --> {retval}, {unitstr}")
-
-    #     return retval, unitstr, typestr
-
     @classmethod
     def get_class_config(cls, section=None, input=None):
         """Return a dictionary of the default traits of a class.
@@ -760,9 +586,7 @@ class TraitConfig(HasTraits):
             parent[name][trait_name]["unit"] = cf["unit"]
             parent[name][trait_name]["type"] = cf["type"]
             parent[name][trait_name]["help"] = cf["help"]
-            # print(
-            #     f"{name} instance conf {trait_name}: {cf}"
-            # )
+            # print(f"{name} instance conf {trait_name}: {cf}")
         return input
 
     @classmethod
@@ -826,10 +650,11 @@ class TraitConfig(HasTraits):
                     kw[k] = u.Unit(v["unit"])
                 # print(f"from_config {name}:    {k} = {kw[k]}")
             elif v["type"] == "Quantity":
+                # print(f"from_config {name}:    {v}")
                 if v["value"] == "None":
                     kw[k] = None
                 else:
-                    kw[k] = u.Quantity(float(v["value"]) * u.Unit(v["unit"]))
+                    kw[k] = u.Quantity(float(v["value"]), u.Unit(v["unit"]))
                 # print(f"from_config {name}:    {k} = {kw[k]}")
             elif v["type"] == "set":
                 if v["value"] == "None":
