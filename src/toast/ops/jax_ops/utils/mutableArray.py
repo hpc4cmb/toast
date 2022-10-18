@@ -37,11 +37,6 @@ class MutableJaxArray:
         self.dtype = self.data.dtype
         self.nbytes = self.data.nbytes
 
-    #def zeros(shape, dtype=None):
-    #    """creates an array of zeros"""
-    #    data = jnp.zeros(shape=shape, dtype=dtype)
-    #    return MutableJaxArray(data)
-
     def to_array(input):
         """
         Casts all array types used in TOAST to JAX-compatible array types

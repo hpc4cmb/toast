@@ -255,14 +255,15 @@ class DetectorData(AcceleratorObject):
             self._shape = shp
             self._flatshape = flatshape
             # reinitialise _data
+            should_update_GPU = self.accel_exists()
             self._flatdata = self._raw.array()[: self._flatshape]
             self._flatdata[:] = 0
             self._data = self._flatdata.reshape(self._shape)
             # move things to GPU if needed
-            if self.accel_exists():
-                print("DEBUGGING: GPU exists!")
+            if should_update_GPU:
                 if use_accel_jax:
-                    self._data = MutableJaxArray(self._data, gpu_data=jax.numpy.zeros(shape=self._shape))
+                    # NOTE: we create an array of zeroes directly on GPU to avoid useless data movement
+                    self._data = MutableJaxArray(self._data, gpu_data=jax.numpy.zeros_like(self._data))
                 else:
                     # FIXME: Should we zero the device memory?
                     pass
