@@ -404,7 +404,7 @@ class IntervalList(Sequence, AcceleratorObject):
             # insures data has been properly reset
             # if we observe that its type is still a GPU type
             # does NOT move data back from GPU
-            self.data = self.data.numpy_buffer
+            self.data = self.data.host_data
 
 
 @function_timer

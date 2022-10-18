@@ -154,7 +154,7 @@ class ScanMap(Operator):
 
     def _supports_accel(self):
         # TODO set this to true once pipelining bugs are fixed
-        return False
+        return True
 
 
 @trait_docs

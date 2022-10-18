@@ -178,7 +178,7 @@ def select_implementation(f_compiled, f_numpy, f_jax, overide_implementationType
         f_accel = f_numpy
     else:  # implementationType == ImplementationType.JAX:
         f_accel = f_jax
-    # wraps the function in a fucntion timer
+    # wraps the function in a function timer
     f = function_timer(f_accel)
     print(
         f"DEBUG: implementation picked in case of use_accel:{implementationType} ({f_accel.__name__})"

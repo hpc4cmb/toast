@@ -24,8 +24,8 @@ class INTERVALS_JAX:
         self.last = jax.device_put(data.last)
         # sets Numpy buffer aside in case we want to return it
         # TODO we could just alocate a new buffer later
-        self.numpy_buffer = (
-            data.numpy_buffer if isinstance(data, INTERVALS_JAX) else data
+        self.host_data = (
+            data.host_data if isinstance(data, INTERVALS_JAX) else data
         )
 
     def compute_max_intervals_length(intervals):
@@ -41,15 +41,15 @@ class INTERVALS_JAX:
 
     def to_host(self):
         """copies data back into the original buffer and returns it"""
-        self.numpy_buffer.start[:] = self.starts
-        self.numpy_buffer.stop[:] = self.stops
-        self.numpy_buffer.first[:] = self.firsts
-        self.numpy_buffer.last[:] = self.lasts
-        return self.numpy_buffer
+        self.host_data.start[:] = self.starts
+        self.host_data.stop[:] = self.stops
+        self.host_data.first[:] = self.firsts
+        self.host_data.last[:] = self.lasts
+        return self.host_data
 
     def __iter__(self):
         # NOTE: this is only correct if intervals are write only
-        return iter(self.numpy_buffer)
+        return iter(self.host_data)
 
     def __len__(self):
         return self.size

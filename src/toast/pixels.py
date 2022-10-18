@@ -1008,10 +1008,13 @@ class PixelData(AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_host(self.raw)
         elif use_accel_jax:
-            data_CPU = self.raw.array().reshape(self._shape)
-            data_CPU[:] = accel_data_update_host(self.data)
-            self.data = data_CPU
+            self.data = accel_data_update_host(self.data)
 
     def _accel_delete(self):
         if use_accel_omp:
             accel_data_delete(self.raw)
+        elif use_accel_jax and self._accel_exists():
+            # insures data has been properly reset
+            # if we observe that its types is still a GPU types
+            # does NOT move data back from GPU
+            self.data = self.data.cpu_data

@@ -103,8 +103,7 @@ def accel_data_present(data):
     elif use_accel_omp:
         return omp_accel_present(data)
     elif use_accel_jax:
-        from .ops.jax_ops import MutableJaxArray  # TODO
-
+        from .ops.jax_ops import MutableJaxArray  # TODO if i move the import i get a circular import problem?
         return isinstance(data, MutableJaxArray)
     else:
         log.warning("Accelerator support not enabled, data not present")
@@ -128,8 +127,7 @@ def accel_data_create(data):
     if use_accel_omp:
         omp_accel_create(data)
     elif use_accel_jax:
-        from .ops.jax_ops import MutableJaxArray  # TODO
-
+        from .ops.jax_ops import MutableJaxArray  # TODO if i move the import i get a circular import problem?
         return MutableJaxArray(data)
     else:
         log = Logger.get()
@@ -154,8 +152,7 @@ def accel_data_update_device(data):
         omp_accel_update_device(data)
         return data
     elif use_accel_jax:
-        from .ops.jax_ops import MutableJaxArray  # TODO
-
+        from .ops.jax_ops import MutableJaxArray  # TODO if i move the import i get a circular import problem?
         # deals with the fact that the data could already be a jax array
         return data if isinstance(data, MutableJaxArray) else MutableJaxArray(data)
     else:
