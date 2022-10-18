@@ -18,11 +18,18 @@ class MutableJaxArray:
     dtype: np.dtype
     nbytes: np.int64
 
-    def __init__(self, data):
-        """encapsulate an array as a jax array"""
+    def __init__(self, cpu_data, gpu_data=None):
+        """
+        encapsulate an array as a jax array
+        you can pass `gpu_data` (properly shaped) if you want to avoid a data transfert
+        """
         # gets the data into jax
-        data = MutableJaxArray.to_array(data)
-        self.data = jax.device_put(data)
+        self.cpu_data = cpu_data
+        if gpu_data is None:
+            data = MutableJaxArray.to_array(cpu_data)
+            self.data = jax.device_put(data)
+        else:
+            self.data = gpu_data
 
         # gets basic information on the data
         self.shape = self.data.shape
@@ -30,14 +37,15 @@ class MutableJaxArray:
         self.dtype = self.data.dtype
         self.nbytes = self.data.nbytes
 
-    def zeros(shape, dtype=None):
-        """creates an array of zeros"""
-        data = jnp.zeros(shape=shape, dtype=dtype)
-        return MutableJaxArray(data)
+    #def zeros(shape, dtype=None):
+    #    """creates an array of zeros"""
+    #    data = jnp.zeros(shape=shape, dtype=dtype)
+    #    return MutableJaxArray(data)
 
     def to_array(input):
         """
         Casts all array types used in TOAST to JAX-compatible array types
+        (either a numpy array or a jax array)
         """
         if isinstance(input, MutableJaxArray) or isinstance(input, MPIShared):
             # those types need to be cast into their inner data
@@ -55,14 +63,13 @@ class MutableJaxArray:
                 f"Passed a {type(input)} to MutableJaxArray.to_array. Please find the best way to convert it to a Numpy array and update the function."
             )
 
-    def to_numpy(self):
+    def to_host(self):
         """
-        converts the content back to a numpy array
-        we purposefully do not overload __array__ to avoid accidental conversions
-
-        WARNING: this function will likely cost you a copy.
+        updates the original host container and returns it
+        NOTE: we purposefully do not overload __array__ to avoid accidental conversions
         """
-        return jax.device_get(self.data)
+        self.cpu_data[:] = self.data
+        return self.cpu_data
 
     def __setitem__(self, key, value):
         """
@@ -82,11 +89,13 @@ class MutableJaxArray:
 
     def reshape(self, shape):
         """
-        produces a new array with a different shape
-        WARNING: this will copy the data and *not* propagate modifications to the older array
+        produces a new mutable array with a different shape
+        the array has a copy of the gpu data (changes will not be propagated to the original)
+        and a reshape of the cpu data (change might be propagated to the original, depending on numpy's behaviour)
         """
-        reshaped_data = jnp.reshape(self.data, newshape=shape)
-        return MutableJaxArray(reshaped_data)
+        reshaped_cpu_data = np.reshape(self.cpu_data, newshape=shape)
+        reshaped_gpu_data = jnp.reshape(self.data, newshape=shape)
+        return MutableJaxArray(reshaped_cpu_data, reshaped_gpu_data)
 
     def __str__(self):
         """

@@ -393,7 +393,7 @@ class IntervalList(Sequence, AcceleratorObject):
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
             # this moves the data back into a numpy array
-            self.data = self.data.to_numpy()
+            self.data = self.data.to_host()
 
     def _accel_delete(self):
         log = Logger.get()

@@ -254,15 +254,18 @@ class DetectorData(AcceleratorObject):
             # We can re-use the existing memory
             self._shape = shp
             self._flatshape = flatshape
-            if use_accel_jax and self.accel_exists():
-                self._data = MutableJaxArray.zeros(self._shape, dtype=dt)
-            else:
-                self._flatdata = self._raw.array()[: self._flatshape]
-                self._flatdata[:] = 0
-                self._data = self._flatdata.reshape(self._shape)
+            # reinitialise _data
+            self._flatdata = self._raw.array()[: self._flatshape]
+            self._flatdata[:] = 0
+            self._data = self._flatdata.reshape(self._shape)
+            # move things to GPU if needed
             if self.accel_exists():
-                # Should we zero the device memory?
-                pass
+                print("DEBUGGING: GPU exists!")
+                if use_accel_jax:
+                    self._data = MutableJaxArray(self._data, gpu_data=jax.numpy.zeros(shape=self._shape))
+                else:
+                    # FIXME: Should we zero the device memory?
+                    pass
             realloced = False
         return realloced
 
@@ -1482,7 +1485,7 @@ class SharedDataManager(MutableMapping, AcceleratorObject):
                 rnk = self._internal[key].shdata.comm.rank
             dt = None
             if rnk == 0:
-                dt = self.jax[key].to_numpy()
+                dt = self.jax[key].to_host()
             self._internal[key].shdata.set(dt, fromrank=0)
 
         self._accel_used[key] = False

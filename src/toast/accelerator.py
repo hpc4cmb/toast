@@ -183,7 +183,7 @@ def accel_data_update_host(data):
         omp_accel_update_host(data)
         return data
     elif use_accel_jax:
-        return data.to_numpy()
+        return data.to_host()
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")

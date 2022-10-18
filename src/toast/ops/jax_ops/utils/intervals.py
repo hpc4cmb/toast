@@ -39,7 +39,7 @@ class INTERVALS_JAX:
             # end+1 as TOAST intervals are inclusive
             return np.max(1 + intervals.last - intervals.first)
 
-    def to_numpy(self):
+    def to_host(self):
         """copies data back into the original buffer and returns it"""
         self.numpy_buffer.start[:] = self.starts
         self.numpy_buffer.stop[:] = self.stops
