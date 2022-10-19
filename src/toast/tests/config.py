@@ -38,6 +38,7 @@ from ..traits import (
     Tuple,
     Unicode,
     trait_docs,
+    trait_scalar_to_string,
 )
 from ..utils import Environment, Logger
 from ._helpers import create_comm, create_outdir, create_space_telescope, close_data
@@ -128,6 +129,111 @@ class ConfigOperator(ops.Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def modified_traits(self):
+        """Construct a modified set of trait values."""
+        tmod = dict()
+        for tname, trait in self.traits().items():
+            if tname == "enabled":
+                continue
+            if tname == "API":
+                continue
+            if trait.get(self) is None:
+                continue
+            if isinstance(trait, Bool):
+                # toggle value
+                if trait.get(self):
+                    tmod[tname] = False
+                else:
+                    tmod[tname] = True
+            elif trait.get(self) is None:
+                tmod[tname] = None
+            elif isinstance(trait, Unit):
+                tmod[tname] = u.km / u.s
+            elif isinstance(trait, Quantity):
+                tmod[tname] = 5.0 * u.km / u.s
+            elif isinstance(trait, (Int, Float)):
+                tmod[tname] = 1 + trait.get(self)
+            elif isinstance(trait, Unicode):
+                tmod[tname] = f"modified_{trait.get(self)}"
+            elif isinstance(trait, Set):
+                # Remove one element
+                s = set(trait.get(self))
+                if len(s) > 0:
+                    _ = s.pop()
+                tmod[tname] = s
+            elif isinstance(trait, Tuple):
+                # Reverse it
+                temp = list(trait.get(self))
+                temp.reverse()
+                tmod[tname] = tuple(temp)
+            elif isinstance(trait, List):
+                # Reverse it
+                temp = list(trait.get(self))
+                temp.reverse()
+                tmod[tname] = temp
+            elif isinstance(trait, Dict):
+                # Remove one element
+                d = dict(trait.get(self))
+                if len(d) > 0:
+                    k = list(d.keys())[0]
+                    del d[k]
+                tmod[tname] = d
+            else:
+                # This is some other type
+                pass
+        return tmod
+
+    def args_test(self):
+        """Build an argparse list for testing."""
+        # Get a modified set of trait values
+        tmod = self.modified_traits()
+
+        # Make an argparse list
+        targs = list()
+        for k, v in tmod.items():
+            if v is None:
+                # Skip this
+                continue
+            if isinstance(v, bool):
+                # Special case...
+                if v:
+                    targs.append(f"--{self.name}.{k}")
+                else:
+                    targs.append(f"--{self.name}.no_{k}")
+            else:
+                targs.append(f"--{self.name}.{k}")
+                if isinstance(v, set):
+                    if len(v) == 0:
+                        targs.append("{}")
+                    else:
+                        formatted = set([trait_scalar_to_string(x) for x in v])
+                        targs.append(str(formatted))
+                elif isinstance(v, tuple):
+                    if len(v) == 0:
+                        targs.append("()")
+                    else:
+                        formatted = tuple([trait_scalar_to_string(x) for x in v])
+                        targs.append(str(formatted))
+                elif isinstance(v, dict):
+                    if len(v) == 0:
+                        targs.append("{}")
+                    else:
+                        formatted = {x: trait_scalar_to_string(y) for x, y in v.items()}
+                        targs.append(str(formatted))
+                elif isinstance(v, list):
+                    if len(v) == 0:
+                        targs.append("[]")
+                    else:
+                        formatted = [trait_scalar_to_string(x) for x in v]
+                        targs.append(str(formatted))
+                elif isinstance(v, u.Unit):
+                    targs.append(str(v))
+                elif isinstance(v, u.Quantity):
+                    targs.append(f"{v.value:0.14e} {v.unit}")
+                else:
+                    targs.append(str(v))
+        return targs
+
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         comm = data.comm
@@ -196,6 +302,43 @@ class ConfigTest(MPITestCase):
             )
         self.assertTrue(run.operators.fake == fake)
 
+    def test_trait_types_argparse(self):
+        fake = ConfigOperator(name="fake")
+
+        test_args = fake.args_test()
+
+        parser = argparse.ArgumentParser(description="Test")
+        config, remaining, jobargs = parse_config(
+            parser,
+            operators=[fake],
+            templates=list(),
+            prefix="",
+            opts=test_args,
+        )
+
+        check_fake = ConfigOperator.from_config("fake", config["operators"]["fake"])
+        # run = create_from_config(config)
+
+        # Modified values that we expect
+        check = fake.modified_traits()
+
+        # Compare
+        # op = run.operators.fake
+        for tname, trait in check_fake.traits().items():
+            if tname in check:
+                tval = trait.get(check_fake)
+                if isinstance(trait, Float) and tval is not None:
+                    val_check = np.allclose(tval, check[tname])
+                elif isinstance(trait, Quantity) and tval is not None:
+                    val_check = (
+                        np.allclose(tval.value, check[tname].value)
+                        and tval.unit == check[tname].unit
+                    )
+                else:
+                    val_check = tval == check[tname]
+                if not val_check:
+                    self.assertTrue(False)
+
     def test_config_multi(self):
         testops = self.create_operators()
         objs = [y for x, y in testops.items()]
@@ -232,6 +375,8 @@ class ConfigTest(MPITestCase):
             "--sim_satellite.hwp_rpm",
             "3.0",
             "--sim_satellite.no_distribute_time",
+            "--pixels.resolution",
+            "(0.05 deg, 0.05 deg)",
             "--config",
             conf_file,
             conf2_file,

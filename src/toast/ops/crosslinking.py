@@ -14,7 +14,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
@@ -53,6 +53,8 @@ class CrossLinking(Operator):
         allow_none=True,
         help="Observation detdata key for flags to use",
     )
+
+    det_data_units = Unit(u.K, help="Desired timestream units")
 
     det_flag_mask = Int(
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
@@ -108,7 +110,9 @@ class CrossLinking(Operator):
         """Evaluate the special pointing matrix"""
 
         obs = obs_data.obs[0]
-        exists_signal = obs.detdata.ensure(self.signal, detectors=[det], units=u.K)
+        exists_signal = obs.detdata.ensure(
+            self.signal, detectors=[det], units=self.det_data_units
+        )
         exists_weights = obs.detdata.ensure(
             self.weights, sample_shape=(3,), detectors=[det]
         )
@@ -193,6 +197,7 @@ class CrossLinking(Operator):
             weights=self.weights,
             noise_model=self.noise_model,
             det_data=self.signal,
+            det_data_units=self.det_data_units,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,

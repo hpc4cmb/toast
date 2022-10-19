@@ -69,7 +69,10 @@ def set_default_values(values=None):
         #
         # ground-specific flag masks
         #
-        "turnaround": 1 + 2,  # remove invalid bit to map turnarounds
+        # This marks the turnarounds as "invalid".  To simulate data
+        # in the turnarounds, set the turnaround mask in SimGround to
+        # just "2".
+        "turnaround": 1 + 2,
         "scan_leftright": 8,
         "scan_rightleft": 16,
         "sun_up": 32,

@@ -67,7 +67,7 @@ class PixelsWCS(Operator):
     bounds = Tuple(
         None,
         allow_none=True,
-        help="The lower left and upper right Lon/Lat corners (Quantities)",
+        help="The (lon_min, lon_max, lat_min, lat_max) values (Quantities)",
     )
 
     auto_bounds = Bool(
@@ -250,17 +250,18 @@ class PixelsWCS(Operator):
             if res is not None and dims is not None:
                 # Cannot calculate yet
                 return
+
+            # Max Longitude
+            lower_left_lon = bounds[1].to_value(u.degree)
+            # Min Latitude
+            lower_left_lat = bounds[2].to_value(u.degree)
+            # Min Longitude
+            upper_right_lon = bounds[0].to_value(u.degree)
+            # Max Latitude
+            upper_right_lat = bounds[3].to_value(u.degree)
+
             pos = np.array(
-                [
-                    [
-                        bounds[0][0].to_value(u.degree),
-                        bounds[0][1].to_value(u.degree),
-                    ],
-                    [
-                        bounds[1][0].to_value(u.degree),
-                        bounds[1][1].to_value(u.degree),
-                    ],
-                ]
+                [[lower_left_lon, lower_left_lat], [upper_right_lon, upper_right_lat]]
             )
 
         self.wcs = pixell.wcsutils.build(pos, res, dims, rowmajor=False, system=proj)
@@ -329,8 +330,10 @@ class PixelsWCS(Operator):
                 lonmax = all_lonlatmax[0] * u.radian
                 latmax = all_lonlatmax[1] * u.radian
             new_bounds = (
-                (lonmax.to(u.degree), latmin.to(u.degree)),
-                (lonmin.to(u.degree), latmax.to(u.degree)),
+                lonmin.to(u.degree),
+                lonmax.to(u.degree),
+                latmin.to(u.degree),
+                latmax.to(u.degree),
             )
             log.verbose(f"PixelsWCS auto_bounds set to {new_bounds}")
             self.bounds = new_bounds

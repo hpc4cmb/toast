@@ -687,6 +687,7 @@ class TraitConfig(HasTraits):
                 elif v["value"] == "{}":
                     kw[k] = dict()
                 else:
+                    # print(f"from_config input dict = {v['value']}")
                     kw[k] = {
                         x: trait_string_to_scalar(y) for x, y in v["value"].items()
                     }
