@@ -279,7 +279,7 @@ class TemplateMatrix(Operator):
             req["intervals"].append(self.view)
         if self.transpose:
             req["detdata"].append(self.det_data)
-            # TODO no such attribute
+            # FIXME no such attribute
             # if self.shared_flags is not None:
             #    req["shared"].append(self.shared_flags)
             if self.det_flags is not None:

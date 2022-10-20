@@ -59,7 +59,6 @@ from ....accelerator import use_accel_jax, use_accel_omp
 
 class ImplementationType(Enum):
     """Describes the various implementation kind"""
-
     COMPILED = 1
     NUMPY = 2
     JAX = 3

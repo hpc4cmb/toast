@@ -153,8 +153,7 @@ def accel_data_update_device(data):
         return data
     elif use_accel_jax:
         from .ops.jax_ops import MutableJaxArray  # TODO if i move the import i get a circular import problem?
-        # deals with the fact that the data could already be a jax array
-        return data if isinstance(data, MutableJaxArray) else MutableJaxArray(data)
+        return MutableJaxArray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating device")
@@ -190,7 +189,9 @@ def accel_data_delete(data):
     """Delete device copy of the data.
 
     For OpenMP target offload, this deletes the device allocated memory and removes
-    the host entry from the global memory map.  For jax, this is a no-op.
+    the host entry from the global memory map.
+    
+    For jax, this returns a host array (if needed).
 
     Args:
         data (array):  The host array.
@@ -202,10 +203,13 @@ def accel_data_delete(data):
     if use_accel_omp:
         omp_accel_delete(data)
     elif use_accel_jax:
-        pass
+        # if needed, make sure that data is on host
+        if accel_data_present(data):
+            data = data.host_data
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot delete device data")
+    return data
 
 
 class AcceleratorObject(object):
@@ -308,7 +312,7 @@ class AcceleratorObject(object):
             log.error(msg)
             raise RuntimeError(msg)
         if self.accel_in_use():
-            # The active copy is alredy on the device
+            # The active copy is already on the device
             log = Logger.get()
             msg = f"Active data is already on device, cannot update"
             log.error(msg)

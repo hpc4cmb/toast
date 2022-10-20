@@ -73,20 +73,26 @@ class DataMovement:
         self.output_bytes = 0
         self.output_from_gpu_bytes = 0
 
-    def add(self, inputs, outputs):
+    def add(self, inputs, outputs, display=False):
         self.nb_calls += 1
         # inputs
-        for input in inputs:
+        for i,input in enumerate(inputs):
             bytes = bytes_of_input(input)
+            gpu_data = isinstance(input, jnp.ndarray)
             self.input_bytes += bytes
-            if not isinstance(input, jnp.ndarray):
+            if not gpu_data:
                 self.input_to_gpu_bytes += bytes
+            if display:
+                print(f"input[{i}] size:{bytes} GPU:{gpu_data}")
         # outputs
-        for output in outputs:
+        for i,output in enumerate(outputs):
             bytes = output.nbytes
+            gpu_data = isinstance(input, jnp.ndarray)
             self.output_bytes += bytes
             if not isinstance(output, MutableJaxArray):
                 self.output_from_gpu_bytes += bytes
+            if display:
+                print(f"output[{i}] size:{bytes} GPU:{gpu_data}")
 
 
 class DataMovementTracker:
@@ -96,14 +102,16 @@ class DataMovementTracker:
         # each function gets a pair of record: CPU,GPU
         self.records = defaultdict(lambda: (DataMovement(), DataMovement()))
 
-    def add(self, functionname, use_accel, inputs, outputs):
+    def add(self, functionname, use_accel, inputs, outputs, display=False):
         """adds information on a function call if we are in DEBUG or VERBOSE mode"""
         if use_debug_assert:
+            if display:
+                print(f"DATA MOVEMENT ({functionname} use_accel:{use_accel}):")
             record_cpu, record_gpu = self.records[functionname]
             if use_accel:
-                record_gpu.add(inputs, outputs)
+                record_gpu.add(inputs, outputs, display)
             else:
-                record_cpu.add(inputs, outputs)
+                record_cpu.add(inputs, outputs, display)
 
     def __str__(self):
         """

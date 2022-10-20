@@ -695,8 +695,8 @@ class Amplitudes(AcceleratorObject):
             # if we observe that their types are still GPU types
             # does NOT move data back from GPU
             # using self._raw.array() and self._raw_flags.array() should be equivalent
-            self.local = self.local.cpu_data
-            self.local_flags = self.local_flags.cpu_data
+            self.local = self.local.host_data
+            self.local_flags = self.local_flags.host_data
 
 
 class AmplitudesMap(MutableMapping, AcceleratorObject):

@@ -252,8 +252,8 @@ def scan_map_jax(
     # extracts pixel distribution information
     npix_submap = map_dist._n_pix_submap
     global2local = map_dist._glob2loc
-    # turns mapdata into a numpy array
-    mapdata = mapdata.raw.array()
+    # turns mapdata into an array
+    mapdata = mapdata.data
 
     # make sure the data is where we expect it
     assert_data_localization(

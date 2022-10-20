@@ -688,7 +688,7 @@ class BuildNoiseWeighted(Operator):
                     (zmap.distribution.n_local_submap, -1, weight_nnz)
                 )
                 build_noise_weighted(
-                    zmap.distribution.global_submap_to_local.array(),
+                    zmap.distribution.global_submap_to_local,
                     zmap_data,
                     pix_indx,
                     ob.detdata[self.pixels].data,

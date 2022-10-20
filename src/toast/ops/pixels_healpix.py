@@ -256,9 +256,10 @@ class PixelsHealpix(Operator):
 
             # Get the flags if needed.  Use the same flags as
             # detector pointing.  Use empty array in absence of flags
-            flags = np.array([], dtype=np.uint8)
-            if self.detector_pointing.shared_flags is not None:
-                flags = np.array(ob.shared[self.detector_pointing.shared_flags])
+            if self.detector_pointing.shared_flags is None:
+                flags = np.array([], dtype=np.uint8)
+            else:
+                flags = ob.shared[self.detector_pointing.shared_flags].data
 
             if self.use_python:
                 self._py_pixels_healpix(
