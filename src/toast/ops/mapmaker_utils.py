@@ -263,7 +263,7 @@ class BuildInverseCovariance(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
-    det_data_units = Unit(u.K, help="Desired timestream units")
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     shared_flags = Unicode(
         defaults.shared_flags,
@@ -537,7 +537,7 @@ class BuildNoiseWeighted(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
-    det_data_units = Unit(u.K, help="Desired timestream units")
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     shared_flags = Unicode(
         defaults.shared_flags,
@@ -931,7 +931,7 @@ class CovarianceAndHits(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
-    det_data_units = Unit(u.K, help="Desired timestream units")
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     shared_flags = Unicode(
         defaults.shared_flags,

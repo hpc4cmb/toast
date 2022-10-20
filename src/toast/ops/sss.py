@@ -50,7 +50,9 @@ class SimScanSynchronousSignal(Operator):
         help="Observation detdata key for accumulating simulated timestreams",
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     detector_pointing = Instance(
         klass=Operator,

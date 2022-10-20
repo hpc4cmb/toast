@@ -44,7 +44,9 @@ class SimDipole(Operator):
         help="Observation detdata key for accumulating dipole timestreams",
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"

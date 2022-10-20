@@ -257,6 +257,39 @@ class ConfigTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
         self.toastcomm = create_comm(self.comm)
 
+    def compare_trait(self, check, expected):
+        def _compare_element(chk, expt):
+            if isinstance(chk, float) and isinstance(expt, float):
+                return np.allclose(chk, expt)
+            elif isinstance(chk, Quantity) and isinstance(expt, Quantity):
+                return np.allclose(chk.value, expt.value) and chk.unit == expt.unit
+            else:
+                return chk == expt
+
+        if isinstance(check, (list, tuple)) and isinstance(expected, (list, tuple)):
+            result = True
+            for a, b in zip(check, expected):
+                if not _compare_element(a, b):
+                    result = False
+            return result
+        if isinstance(check, set) and isinstance(expected, set):
+            if len(check) != len(expected):
+                return False
+            for v in check:
+                if v not in expected:
+                    return False
+            return True
+        elif isinstance(check, dict) and isinstance(expected, dict):
+            result = True
+            if check.keys() != expected.keys():
+                return False
+            for k in check.keys():
+                if not _compare_element(check[k], expected[k]):
+                    result = False
+            return result
+        else:
+            return _compare_element(check, expected)
+
     def create_operators(self):
         oplist = [
             ops.SimSatellite(
@@ -327,16 +360,8 @@ class ConfigTest(MPITestCase):
         for tname, trait in check_fake.traits().items():
             if tname in check:
                 tval = trait.get(check_fake)
-                if isinstance(trait, Float) and tval is not None:
-                    val_check = np.allclose(tval, check[tname])
-                elif isinstance(trait, Quantity) and tval is not None:
-                    val_check = (
-                        np.allclose(tval.value, check[tname].value)
-                        and tval.unit == check[tname].unit
-                    )
-                else:
-                    val_check = tval == check[tname]
-                if not val_check:
+                if not self.compare_trait(tval, check[tname]):
+                    print(f"{tval} != {check[tname]}")
                     self.assertTrue(False)
 
     def test_config_multi(self):

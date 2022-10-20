@@ -169,7 +169,9 @@ class SimGround(Operator):
         help="Observation detdata key to initialize",
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     det_flags = Unicode(
         defaults.det_flags,

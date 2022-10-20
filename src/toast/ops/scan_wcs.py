@@ -38,7 +38,9 @@ class ScanWCSMap(Operator):
         defaults.det_data, help="Observation detdata key for accumulating output"
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     subtract = Bool(
         False, help="If True, subtract the map timestream instead of accumulating"

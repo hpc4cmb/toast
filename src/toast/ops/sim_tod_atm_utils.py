@@ -34,7 +34,9 @@ class ObserveAtmosphere(Operator):
         help="Observation detdata key for accumulating dipole timestreams",
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     quats_azel = Unicode(
         defaults.quats_azel,

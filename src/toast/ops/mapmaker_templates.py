@@ -53,7 +53,9 @@ class TemplateMatrix(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     det_flags = Unicode(
         defaults.det_flags,

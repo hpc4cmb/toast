@@ -65,7 +65,9 @@ class InjectCosmicRays(Operator):
         defaults.det_data, help="Observation detdata key to inject the gain drift"
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     crfile = Unicode(None, help="Path to the *.npz file encoding cosmic ray infos")
 

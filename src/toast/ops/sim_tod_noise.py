@@ -217,7 +217,9 @@ class SimNoise(Operator):
         help="Observation detdata key for accumulating noise timestreams",
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     serial = Bool(True, help="Use legacy serial implementation instead of batched")
 

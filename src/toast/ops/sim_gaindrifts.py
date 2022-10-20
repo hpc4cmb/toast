@@ -39,7 +39,9 @@ class GainDrifter(Operator):
         defaults.det_data, help="Observation detdata key to inject the gain drift"
     )
 
-    det_data_units = Unit(u.K, help="Desired units of detector data")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Desired units of detector data"
+    )
 
     include_common_mode = Bool(
         False, help="If True, inject a common drift to all the local detector group "

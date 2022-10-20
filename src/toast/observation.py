@@ -9,6 +9,7 @@ import types
 from collections.abc import Mapping, MutableMapping, Sequence
 
 import numpy as np
+from astropy import units as u
 from pshmem.utils import mpi_data_type
 
 from .dist import distribute_samples
@@ -78,6 +79,10 @@ def set_default_values(values=None):
         "sun_up": 32,
         "sun_close": 64,
         "elnod": 1 + 2 + 4,
+        #
+        # Units
+        #
+        "det_data_units": u.Kelvin,
     }
 
     if values is not None:

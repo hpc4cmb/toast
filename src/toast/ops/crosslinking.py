@@ -54,7 +54,7 @@ class CrossLinking(Operator):
         help="Observation detdata key for flags to use",
     )
 
-    det_data_units = Unit(u.K, help="Desired timestream units")
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     det_flag_mask = Int(
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"

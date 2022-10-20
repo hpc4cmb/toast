@@ -6,6 +6,7 @@ from astropy import units as u
 import numpy as np
 import traitlets
 
+from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..templates import AmplitudesMap
 from ..timing import Timer, function_timer
@@ -51,7 +52,7 @@ class SolverRHS(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
-    det_data_units = Unit(u.K, help="Desired timestream units")
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     overwrite = Bool(
         False, help="Overwrite the input detector data for use as scratch space"
@@ -298,7 +299,7 @@ class SolverLHS(Operator):
         "temp_LHS", help="Observation detdata key for temporary timestream data"
     )
 
-    det_data_units = Unit(u.K, help="Desired timestream units")
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     binning = Instance(
         klass=Operator,

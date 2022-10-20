@@ -55,7 +55,7 @@ class BinMap(Operator):
         defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
-    det_data_units = Unit(u.K, help="Desired timestream units")
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     det_flags = Unicode(
         defaults.det_flags,
