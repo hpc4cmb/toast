@@ -29,7 +29,6 @@ use_cpu = my_device.platform == "cpu"
     Are we using the CPU?
 """
 
-
 def set_JAX_device(process_id):
     """
     Sets `my_device` so that JAX functions can run on non-default devices.
@@ -50,12 +49,10 @@ def set_JAX_device(process_id):
     my_device = devices_available[device_id]
     print(f"DEBUG: JAX uses device number {device_id} ({my_device})")
 
-
 # ------------------------------------------------------------------------------
 # IMPLEMENTATION SELECTION
 
 from ....accelerator import use_accel_jax, use_accel_omp
-
 
 class ImplementationType(Enum):
     """Describes the various implementation kind"""
@@ -63,127 +60,72 @@ class ImplementationType(Enum):
     NUMPY = 2
     JAX = 3
 
+# implementation used on cpu
+default_cpu_implementationType = ImplementationType.COMPILED
 
-default_implementationType = ImplementationType.JAX
-"""
-Implementation to be used in the absence of user specified information.
-"""
+# implementation used on gpu
+default_gpu_implementationType = default_cpu_implementationType
+if use_accel_jax:
+    default_gpu_implementationType = ImplementationType.JAX
+elif use_accel_omp:
+    default_gpu_implementationType = ImplementationType.COMPILED
 
-
-def select_implementation(f_compiled, f_numpy, f_jax, overide_implementationType=None):
-    """
-    Returns one of the function depending on the settings.
-    Set `default_implementationType` if you want one implementation in particular.
-    `default_implementationType` defines the implementation that will be used in the absence of further information.
-    """
-    # picks the implementation to be used
-    implementationType = overide_implementationType
-    if implementationType is None:
-        if use_accel_jax:
-            implementationType = ImplementationType.JAX
-        elif use_accel_omp:
-            implementationType = ImplementationType.COMPILED
-        else:
-            implementationType = default_implementationType
-    # returns the corresponding function
-    if implementationType == ImplementationType.COMPILED:
-        f = f_compiled
+def function_of_implementationType(f_compiled, f_numpy, f_jax, implementationType):
+    """returns one of the three input functions depending on the implementation type requested"""
+    if implementationType == ImplementationType.JAX:
+        return f_jax
     elif implementationType == ImplementationType.NUMPY:
-        f = f_numpy
-    else:  # implementationType == ImplementationType.JAX:
-        f = f_jax
-    print(f"DEBUG: implementation picked:{implementationType} ({f.__name__})")
-    return f
-
+        return f_numpy 
+    else:
+        return f_compiled
 
 def is_accel_function(f):
     """
-    Returns true if one of the inputs of a funciton is called use_accel
+    Returns true if one of the inputs of a function is called use_accel
     """
     # https://stackoverflow.com/a/40363565/6422174
     args_names = f.__code__.co_varnames[: f.__code__.co_argcount]
     return "use_accel" in args_names
 
-
-def runtime_select_implementation(f_accel, f_host):
+def runtime_select_implementation(f_cpu, f_gpu):
     """
-    decides at runtime on whether to use the gpu version of a function or its cpu variant
-    depending on the use_accel input
+    Returns a function that is f_gpu when called with use_accel=True and f_cpu otherwise
     """
-
-    def f(*args, use_accel=False):
+    # otherwise picks at runtime depending on the use_accel input
+    def f(*args, **kwargs):
+        use_accel = kwargs.get('use_accel', args[-1])
         if use_accel:
-            return f_accel(*args)
+            return f_gpu(*args, **kwargs)
         else:
-            return f_host(*args)
-
+            return f_cpu(*args, **kwargs)
     return f
 
-
-def select_implementation(f_compiled, f_numpy, f_jax, overide_implementationType=None):
+def select_implementation(f_compiled, f_numpy, f_jax, overide_implementationType=None, default_to_gpu=False):
     """
-    Returns a function that will default to f_compiled for all functions
-    except the ones having `use_accel` as one of their arguments
-    In which case, uses one of the function depending on the settings.
-    Set `default_implementationType` if you want one implementation in particular.
-    `default_implementationType` defines the implementation that will be used in the absence of further information.
+    picks the implementation to use
+
+    use default_gpu_implementationType when a function is called with use_accel=True and default_cpu_implementationType otherwise
+    if overide_implementationType is set, use that implementation on cpu and gpu
+    if default_to_gpu is set to true, use the gpu implementation on both cpu and gpu
     """
-    # defaults to f_compiled if the function has no accel input
-    if not is_accel_function(f_jax):
-        return f_compiled
-    # picks the implementation type to be used on GPU
-    implementationType = overide_implementationType
-    if implementationType is None:
-        if use_accel_jax:
-            implementationType = ImplementationType.JAX
-        elif use_accel_omp:
-            implementationType = ImplementationType.COMPILED
-        else:
-            implementationType = default_implementationType
-    # gets the corresponding function
-    if implementationType == ImplementationType.COMPILED:
-        f_accel = f_compiled
-    elif implementationType == ImplementationType.NUMPY:
-        f_accel = f_numpy
-    else:  # implementationType == ImplementationType.JAX:
-        f_accel = f_jax
-    # wrap the funciton to use the compiled version on cpu
-    f = runtime_select_implementation(f_accel, f_compiled)
-    # wraps the function in a function timer
-    f = function_timer(f)
-    print(
-        f"DEBUG: implementation picked in case of use_accel:{implementationType} ({f_accel.__name__})"
-    )
-    return f
-
-
-def select_implementation(f_compiled, f_numpy, f_jax, overide_implementationType=None):
-    # defaults to f_compiled if the function has no accel input
-    if not is_accel_function(f_jax):
-        return f_compiled
-    # picks the implementation type to be used on GPU
-    implementationType = overide_implementationType
-    if implementationType is None:
-        if use_accel_jax:
-            implementationType = ImplementationType.JAX
-        elif use_accel_omp:
-            implementationType = ImplementationType.COMPILED
-        else:
-            implementationType = default_implementationType
-    # gets the corresponding function
-    if implementationType == ImplementationType.COMPILED:
-        f_accel = f_compiled
-    elif implementationType == ImplementationType.NUMPY:
-        f_accel = f_numpy
-    else:  # implementationType == ImplementationType.JAX:
-        f_accel = f_jax
-    # wraps the function in a function timer
-    f = function_timer(f_accel)
-    print(
-        f"DEBUG: implementation picked in case of use_accel:{implementationType} ({f_accel.__name__})"
-    )
-    return f
-
+    # the implementations that will be used
+    cpu_implementationType = default_cpu_implementationType if (overide_implementationType is None) else overide_implementationType
+    gpu_implementationType = default_gpu_implementationType if (overide_implementationType is None) else overide_implementationType
+    if default_to_gpu: cpu_implementationType = gpu_implementationType
+    # the functions that will be used
+    f_cpu = function_of_implementationType(f_compiled, f_numpy, f_jax, cpu_implementationType)
+    f_gpu = function_of_implementationType(f_compiled, f_numpy, f_jax, gpu_implementationType)
+    # wrap the functions in timers
+    is_accel = is_accel_function(f_gpu) # set this information aside now as the timer will destroy it
+    f_cpu = function_timer(f_cpu)
+    f_gpu = function_timer(f_gpu)
+    # wrap the function to pick the implementation at runtime
+    if is_accel:
+        print(f"DEBUG: implementation picked in case of use_accel:{gpu_implementationType} ({f_gpu.__name__})")
+        return runtime_select_implementation(f_cpu, f_gpu)
+    else:
+        print(f"DEBUG: implementation picked (no use_accel input):{cpu_implementationType} ({f_cpu.__name__})")
+        return f_cpu
 
 # ------------------------------------------------------------------------------
 # TIMING

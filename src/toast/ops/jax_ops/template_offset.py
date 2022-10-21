@@ -699,6 +699,7 @@ template_offset_project_signal = select_implementation(
     template_offset_project_signal_compiled,
     template_offset_project_signal_numpy,
     template_offset_project_signal_jax,
+    default_to_gpu=True
 )
 template_offset_apply_diag_precond = select_implementation(
     template_offset_apply_diag_precond_compiled,
