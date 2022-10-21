@@ -18,7 +18,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, Unit, trait_docs
-from ..utils import Logger
+from ..utils import Logger, unit_conversion
 from .delete import Delete
 from .operator import Operator
 from .pipeline import Pipeline
@@ -685,12 +685,19 @@ class BuildNoiseWeighted(Operator):
             noise = ob[self.noise_model]
 
             # Scale factor to get timestream data into desired units.
-            data_scale = ob.detdata[self.det_data].unit_conversion(self.det_data_units)
+            data_scale = unit_conversion(
+                ob.detdata[self.det_data].units, self.det_data_units
+            )
 
+            # Detector inverse variance weights
             detweights = np.array(
                 [noise.detector_weight(x).to_value(detwt_units) for x in dets],
                 dtype=np.float64,
             )
+
+            # Pre-multiply the detector inverse variance weights by the
+            # data scaling factor, so that this combination is applied
+            # in the compiled kernel below.
             detweights *= data_scale
 
             pix_indx = ob.detdata[self.pixels].indices(dets)

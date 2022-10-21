@@ -49,7 +49,7 @@ class SimAtmosphere(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     view = Unicode(
@@ -378,7 +378,7 @@ class SimAtmosphere(Operator):
             exists = ob.detdata.ensure(
                 self.det_data,
                 detectors=dets,
-                units=self.det_data_units,
+                create_units=self.det_data_units,
             )
 
             # Check that our view is fully covered by detector pointing.  If the

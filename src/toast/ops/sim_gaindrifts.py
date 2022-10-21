@@ -40,7 +40,7 @@ class GainDrifter(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     include_common_mode = Bool(
@@ -129,7 +129,7 @@ class GainDrifter(Operator):
             rank = ob.comm.group_rank
             # Make sure detector data output exists
             exists = ob.detdata.ensure(
-                self.det_data, detectors=dets, units=self.det_data_units
+                self.det_data, detectors=dets, create_units=self.det_data_units
             )
             obsindx = ob.uid
             telescope = ob.telescope.uid

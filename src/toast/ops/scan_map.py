@@ -11,7 +11,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
 from ..traits import Bool, Int, Unicode, Unit, trait_docs
-from ..utils import AlignedF64, Logger
+from ..utils import AlignedF64, Logger, unit_conversion
 from .operator import Operator
 
 
@@ -34,7 +34,7 @@ class ScanMap(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     view = Unicode(
@@ -84,9 +84,6 @@ class ScanMap(Operator):
             raise RuntimeError("The map to scan must be a PixelData instance")
         map_dist = map_data.distribution
 
-        scale = 1.0 * map_data.units
-        scale = scale.to_value(self.det_data_units)
-
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
@@ -110,7 +107,11 @@ class ScanMap(Operator):
 
             # If our output detector data does not yet exist, create it
             exists = ob.detdata.ensure(
-                self.det_data, detectors=dets, units=self.det_data_units
+                self.det_data, detectors=dets, create_units=self.det_data_units
+            )
+
+            data_scale = unit_conversion(
+                map_data.units, ob.detdata[self.det_data].units
             )
 
             views = ob.view[self.view]
@@ -167,7 +168,7 @@ class ScanMap(Operator):
                             "Projection supports only float32 and float64 binned maps"
                         )
 
-                    maptod *= scale
+                    maptod *= data_scale
 
                     # zero-out if needed
                     if self.zero:

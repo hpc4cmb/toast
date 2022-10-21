@@ -221,20 +221,6 @@ class DetectorData(AcceleratorObject):
     def flatdata(self):
         return self._flatdata
 
-    def unit_conversion(self, target):
-        """Get the multiplicative factor to convert data to the target units.
-
-        Args:
-            target (Unit):  The target units.
-
-        Returns:
-            (float):  The conversion factor.
-
-        """
-        scale = 1.0 * self._units
-        scale.to(target)
-        return scale.value
-
     def update_units(self, new_units):
         """Update the detector data units."""
         self._units = new_units
@@ -629,7 +615,7 @@ class DetDataManager(MutableMapping):
         sample_shape=None,
         dtype=np.float64,
         detectors=None,
-        units=u.dimensionless_unscaled,
+        create_units=u.dimensionless_unscaled,
         accel=False,
     ):
         """Ensure that the observation has the named detector data.
@@ -643,13 +629,17 @@ class DetDataManager(MutableMapping):
         The return value is true if the data already exists and includes the specified
         detectors.
 
+        The create_units option is used if the detector data does not yet exist, in
+        which case the units will be set to this.
+
         Args:
             name (str): The name of the detector data (signal, flags, etc)
             sample_shape (tuple): Use this shape for the data of each detector sample.
                 Use None or an empty tuple if you want one element per sample.
             dtype (np.dtype): Use this dtype for each element.
             detectors (list):  Ensure that these detectors exist in the object.
-            units (Unit):  Optional scalar unit associated with this data.
+            create_units (Unit):  Optional scalar unit associated with this data.
+                Only used if creating a new detdata object.
             accel (bool):  If True, make sure the device copy is in use, else use
                 the host copy.
 
@@ -690,13 +680,12 @@ class DetDataManager(MutableMapping):
             internal_dets = set(self._internal[name].detectors)
             for test_det in detectors:
                 if test_det not in internal_dets:
-                    # At least one detector is not included
+                    # At least one detector is not included.  In this case we change
+                    # detectors and set the units.
                     existing = False
                     realloced = self._internal[name].change_detectors(detectors)
+                    self._internal[name].update_units(create_units)
                     break
-            if units != self._internal[name].units:
-                # We are changing units
-                self._internal[name].update_units(units)
         else:
             # Create the data object
             existing = False
@@ -705,7 +694,7 @@ class DetDataManager(MutableMapping):
                 sample_shape=sample_shape,
                 dtype=dtype,
                 detectors=detectors,
-                units=units,
+                units=create_units,
             )
         if existing:
             # The data object exists with correct detectors

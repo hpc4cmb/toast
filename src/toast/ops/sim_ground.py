@@ -170,7 +170,7 @@ class SimGround(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     det_flags = Unicode(
@@ -813,7 +813,7 @@ class SimGround(Operator):
                     self.det_data,
                     dtype=np.float64,
                     detectors=dets,
-                    units=self.det_data_units,
+                    create_units=self.det_data_units,
                 )
 
             if self.det_flags is not None:

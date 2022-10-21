@@ -66,7 +66,7 @@ class InjectCosmicRays(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     crfile = Unicode(None, help="Path to the *.npz file encoding cosmic ray infos")
@@ -149,7 +149,7 @@ class InjectCosmicRays(Operator):
             rank = ob.comm.group_rank
             # Make sure detector data output exists
             exists = ob.detdata.ensure(
-                self.det_data, detectors=dets, units=self.det_data_units
+                self.det_data, detectors=dets, create_units=self.det_data_units
             )
             obsindx = ob.uid
             telescope = ob.telescope.uid

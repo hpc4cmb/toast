@@ -15,7 +15,7 @@ from ..atm import AtmSim
 from ..observation import default_values as defaults
 from ..timing import GlobalTimers, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
-from ..utils import Environment, Logger
+from ..utils import Environment, Logger, unit_conversion
 from .operator import Operator
 
 
@@ -35,7 +35,7 @@ class ObserveAtmosphere(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     quats_azel = Unicode(
@@ -146,10 +146,6 @@ class ObserveAtmosphere(Operator):
 
         gt.start("ObserveAtmosphere:  total")
 
-        # Unit conversion from ATM timestream (K) to det data units
-        scale = 1.0 * u.K
-        scale = scale.to_value(self.det_data_units)
-
         comm = data.comm.comm_group
         group = data.comm.group
         rank = data.comm.group_rank
@@ -167,8 +163,11 @@ class ObserveAtmosphere(Operator):
 
             # Make sure detector data output exists
             exists = ob.detdata.ensure(
-                self.det_data, detectors=dets, units=self.det_data_units
+                self.det_data, detectors=dets, create_units=self.det_data_units
             )
+
+            # Unit conversion from ATM timestream (K) to det data units
+            scale = unit_conversion(u.K, ob.detdata[self.det_data].units)
 
             # Prefix for logging
             log_prefix = f"{group} : {ob.name}"

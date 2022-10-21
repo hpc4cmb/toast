@@ -500,7 +500,7 @@ class ObservationTest(MPITestCase):
             obs.shared["everywhere"] = local_array
 
             # Allocate the default detector data
-            obs.detdata.ensure("signal", dtype=np.float64, units=u.K)
+            obs.detdata.ensure("signal", dtype=np.float64, create_units=u.K)
             # and flags.  Default data type (np.uint8) is incompatible
             if "flags" in obs.detdata:
                 del obs.detdata["flags"]

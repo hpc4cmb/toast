@@ -54,7 +54,9 @@ class CrossLinking(Operator):
         help="Observation detdata key for flags to use",
     )
 
-    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
+    )
 
     det_flag_mask = Int(
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
@@ -111,7 +113,7 @@ class CrossLinking(Operator):
 
         obs = obs_data.obs[0]
         exists_signal = obs.detdata.ensure(
-            self.signal, detectors=[det], units=self.det_data_units
+            self.signal, detectors=[det], create_units=self.det_data_units
         )
         exists_weights = obs.detdata.ensure(
             self.weights, sample_shape=(3,), detectors=[det]

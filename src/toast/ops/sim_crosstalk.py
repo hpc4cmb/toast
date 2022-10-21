@@ -155,7 +155,7 @@ class CrossTalk(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     xtalk_mat_file = Unicode(
@@ -188,7 +188,7 @@ class CrossTalk(Operator):
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank
             exists = ob.detdata.ensure(
-                self.det_data, detectors=dets, units=self.det_data_units
+                self.det_data, detectors=dets, create_units=self.det_data_units
             )
             obsindx = ob.uid
             telescope = ob.telescope.uid

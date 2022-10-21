@@ -54,10 +54,6 @@ class SolverRHS(Operator):
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
-    overwrite = Bool(
-        False, help="Overwrite the input detector data for use as scratch space"
-    )
-
     binning = Instance(
         klass=Operator,
         allow_none=True,
@@ -152,18 +148,11 @@ class SolverRHS(Operator):
         weights = self.binning.stokes_weights
 
         # Optionally Copy data to a temporary location to avoid overwriting the input.
-        copy_det = None
-        if not self.overwrite:
-            copy_det = Copy(
-                detdata=[
-                    (self.det_data, det_temp),
-                ]
-            )
-
-        # The detdata name we will use (either the original or the temp one)
-        detdata_name = self.det_data
-        if not self.overwrite:
-            detdata_name = det_temp
+        copy_det = Copy(
+            detdata=[
+                (self.det_data, det_temp),
+            ]
+        )
 
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
@@ -171,7 +160,7 @@ class SolverRHS(Operator):
             weights=weights.weights,
             view=pixels.view,
             map_key=self.binning.binned,
-            det_data=detdata_name,
+            det_data=det_temp,
             det_data_units=self.det_data_units,
             subtract=True,
         )
@@ -179,13 +168,13 @@ class SolverRHS(Operator):
         # Set up noise weighting operator
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
-            det_data=detdata_name,
+            det_data=det_temp,
             view=pixels.view,
         )
 
         # Set up template matrix operator.
         self.template_matrix.transpose = True
-        self.template_matrix.det_data = detdata_name
+        self.template_matrix.det_data = det_temp
         self.template_matrix.det_data_units = self.det_data_units
         self.template_matrix.view = pixels.view
 
@@ -196,32 +185,24 @@ class SolverRHS(Operator):
         if self.binning.full_pointing:
             # Process all detectors at once, since we have the pointing already
             proj_pipe = Pipeline(detector_sets=["ALL"])
-            oplist = list()
-            if not self.overwrite:
-                oplist.append(copy_det)
-            oplist.extend(
-                [
-                    scan_map,
-                    noise_weight,
-                    self.template_matrix,
-                ]
-            )
+            oplist = [
+                copy_det,
+                scan_map,
+                noise_weight,
+                self.template_matrix,
+            ]
             proj_pipe.operators = oplist
         else:
             # Process one detector at a time.
             proj_pipe = Pipeline(detector_sets=["SINGLE"])
-            oplist = list()
-            if not self.overwrite:
-                oplist.append(copy_det)
-            oplist.extend(
-                [
-                    pixels,
-                    weights,
-                    scan_map,
-                    noise_weight,
-                    self.template_matrix,
-                ]
-            )
+            oplist = [
+                copy_det,
+                pixels,
+                weights,
+                scan_map,
+                noise_weight,
+                self.template_matrix,
+            ]
             proj_pipe.operators = oplist
 
         log.debug_rank(
@@ -242,10 +223,9 @@ class SolverRHS(Operator):
             "MapMaker   RHS begin cleanup temporary detector data", comm=comm
         )
 
-        if not self.overwrite:
-            # Clean up our temp buffer
-            delete_temp = Delete(detdata=[det_temp])
-            delete_temp.apply(data)
+        # Clean up our temp buffer
+        delete_temp = Delete(detdata=[det_temp])
+        delete_temp.apply(data)
 
         log.debug_rank("MapMaker   RHS cleanup finished in", comm=comm, timer=timer)
 
@@ -453,6 +433,11 @@ class SolverLHS(Operator):
         template_transpose = self.template_matrix.duplicate()
         template_transpose.amplitudes = self.out
         template_transpose.transpose = True
+
+        # Clear temp detector data
+        for ob in data.obs:
+            ob.detdata[self.det_temp][:] = 0
+            ob.detdata[self.det_temp].update_units(self.det_data_units)
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.

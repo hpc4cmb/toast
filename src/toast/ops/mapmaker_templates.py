@@ -54,7 +54,7 @@ class TemplateMatrix(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     det_flags = Unicode(
@@ -244,13 +244,12 @@ class TemplateMatrix(Operator):
                     # Nothing to do for this observation
                     continue
                 exists = ob.detdata.ensure(
-                    self.det_data, detectors=dets, units=self.det_data_units
+                    self.det_data, detectors=dets, create_units=self.det_data_units
                 )
+                ob.detdata[self.det_data].update_units(self.det_data_units)
+
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
-                log.verbose(
-                    f"TemplateMatrix {ob.name}:  input host detdata={ob.detdata[self.det_data][:][0:10]}"
-                )
                 if use_accel:
                     if not exists and not ob.detdata.accel_present(self.det_data):
                         ob.detdata.accel_create(self.det_data)

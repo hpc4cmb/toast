@@ -248,7 +248,7 @@ class Demodulate(Operator):
                 self.det_data,
                 detectors=demod_dets,
                 dtype=np.float64,
-                units=obs.detdata[self.det_data].units,
+                create_units=obs.detdata[self.det_data].units,
             )
             exists_flags = demod_obs.detdata.ensure(
                 self.det_flags, detectors=demod_dets, dtype=np.uint8

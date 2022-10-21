@@ -44,7 +44,7 @@ class ScanHealpixMap(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     subtract = Bool(
@@ -176,7 +176,7 @@ class ScanHealpixMap(Operator):
                 continue
             # If our output detector data does not yet exist, create it
             exists_data = ob.detdata.ensure(
-                self.det_data, detectors=dets, units=self.det_data_units
+                self.det_data, detectors=dets, create_units=self.det_data_units
             )
 
         # Configure the low-level map scanning operator

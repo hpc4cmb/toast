@@ -72,7 +72,6 @@ class NoiseWeight(Operator):
                     # Apply
                     vw[d] *= detweight.value
 
-            # Update detector data units
             ob.detdata[self.det_data].update_units(data_output_units)
         return
 

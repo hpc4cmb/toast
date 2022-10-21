@@ -13,7 +13,7 @@ from ..fft import FFTPlanReal1DStore
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Int, Unit, Unicode, trait_docs
-from ..utils import AlignedF64, Logger, rate_from_times
+from ..utils import AlignedF64, Logger, rate_from_times, unit_conversion
 from .operator import Operator
 
 
@@ -218,7 +218,7 @@ class SimNoise(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     serial = Bool(True, help="Use legacy serial implementation instead of batched")
@@ -278,8 +278,14 @@ class SimNoise(Operator):
 
             # Make sure correct output exists
             exists = ob.detdata.ensure(
-                self.det_data, detectors=dets, units=self.det_data_units
+                self.det_data, detectors=dets, create_units=self.det_data_units
             )
+
+            # The units of the output timestream
+            data_units = ob.detdata[self.det_data].units
+
+            # The target units of the PSD needed to produce the timestream units
+            sim_units = data_units**2 * u.second
 
             # Get the sample rate from the data.  We also have nominal sample rates
             # from the noise model and also from the focalplane.  Perhaps we should add
@@ -291,10 +297,6 @@ class SimNoise(Operator):
             if self.serial:
                 # Original serial implementation (for testing / comparison)
                 for key in nse.all_keys_for_dets(dets):
-                    # Output units
-                    psd_units = nse.psd(key).unit
-                    sim_units = self.det_data_units**2 * u.second
-
                     # Simulate the noise matching this key
                     nsedata = sim_noise_timestream(
                         realization=self.realization,
@@ -356,8 +358,6 @@ class SimNoise(Operator):
                 psdbuf = AlignedF64(len(freq_zero) * len(strmindices))
                 psds = psdbuf.array().reshape((len(strmindices), len(freq_zero)))
                 for ikey, key in enumerate(strm_names):
-                    psd_units = nse.psd(key).unit
-                    sim_units = self.det_data_units**2 * u.second
                     psds[ikey][:] = nse.psd(key).to_value(sim_units)
 
                 noisebuf = AlignedF64(ob.n_local_samples * len(strmindices))

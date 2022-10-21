@@ -93,7 +93,7 @@ class SimTotalconvolve(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     calibrate = Bool(
@@ -329,7 +329,7 @@ class SimTotalconvolve(Operator):
                 my_dets.add(det)
             # Make sure detector data output exists
             exists = obs.detdata.ensure(
-                self.det_data, detectors=detectors, units=self.det_data_units
+                self.det_data, detectors=detectors, create_units=self.det_data_units
             )
         if use_mpi:
             all_dets = self.comm.gather(my_dets, root=0)
@@ -371,7 +371,7 @@ class SimTotalconvolve(Operator):
             psi_uv = props["psi_uv"].to_value(u.radian)
         else:
             raise RuntimeError(f"focalplane[{det}] does not include psi_uv")
-        return psipol
+        return psi_uv
 
     def _get_epsilon(self, focalplane, det):
         """Parse polarization leakage (epsilon) from the focalplane
@@ -793,7 +793,9 @@ class SimTotalconvolve(Operator):
             focalplane = obs.telescope.focalplane
             epsilon = self._get_epsilon(focalplane, det)
             # Make sure detector data output exists
-            exists = obs.detdata.ensure(self.det_data, detectors=[det])
+            exists = obs.detdata.ensure(
+                self.det_data, detectors=[det], create_units=self.det_data_units
+            )
             # Loop over views
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:

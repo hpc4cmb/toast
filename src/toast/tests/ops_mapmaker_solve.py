@@ -87,13 +87,10 @@ class MapmakerSolveTest(MPITestCase):
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
         tmatrix.amplitudes = "RHS"
 
-        # Set up RHS operator and run it.  We set overwrite=False so that a temporary
-        # detdata object is used.  We need the original timestream for our manual check
-        # below.
+        # Set up RHS operator and run it.
 
         rhs_calc = SolverRHS(
             det_data=sim_noise.det_data,
-            overwrite=False,
             binning=binner,
             template_matrix=tmatrix,
         )
@@ -231,7 +228,6 @@ class MapmakerSolveTest(MPITestCase):
         binner.binned = "rhs_binned"
         rhs_calc = SolverRHS(
             det_data=defaults.det_data,
-            overwrite=True,
             binning=binner,
             template_matrix=tmatrix,
         )

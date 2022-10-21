@@ -273,10 +273,13 @@ class ConfigTest(MPITestCase):
                     result = False
             return result
         if isinstance(check, set) and isinstance(expected, set):
+            # Jump through some hoops here...
             if len(check) != len(expected):
                 return False
-            for v in check:
-                if v not in expected:
+            scheck = set([str(x) for x in check])
+            sexpected = set([str(x) for x in expected])
+            for a, b in zip(sorted(scheck), sorted(sexpected)):
+                if a != b:
                     return False
             return True
         elif isinstance(check, dict) and isinstance(expected, dict):

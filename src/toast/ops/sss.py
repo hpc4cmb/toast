@@ -51,7 +51,7 @@ class SimScanSynchronousSignal(Operator):
     )
 
     det_data_units = Unit(
-        defaults.det_data_units, help="Desired units of detector data"
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     detector_pointing = Instance(
@@ -111,8 +111,11 @@ class SimScanSynchronousSignal(Operator):
             log_prefix = f"{group} : {obs.name} : "
 
             exists = obs.detdata.ensure(
-                self.det_data, detectors=dets, units=self.det_data_units
+                self.det_data, detectors=dets, create_units=self.det_data_units
             )
+
+            # The detector data units
+            self.units = obs.detdata[self.det_data].units
 
             site = obs.telescope.site
             weather = site.weather
@@ -185,7 +188,7 @@ class SimScanSynchronousSignal(Operator):
                     self.nside, np.arange(npix, dtype=np.int), lonlat=True
                 )
                 scale = self.scale * (np.abs(lat) / 90 + 0.5) ** self.power
-                sss_map *= scale.to_value(self.det_data_units)
+                sss_map *= scale.to_value(self.units)
         else:
             npix = None
             sss_map = None
