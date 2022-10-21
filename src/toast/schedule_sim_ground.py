@@ -384,12 +384,12 @@ class Patch(object):
                     angle = np.degrees(ephem.separation(sun, corner))
                     if angle < sun_avoidance_angle:
                         # Patch is too close to the Sun
-                        return False, "Too close to Sun {:.2f}".format(angle)
+                        return False, f"Too close to Sun {angle:.2f}"
                 if moon_avoidance_angle > 0:
                     angle = np.degrees(ephem.separation(moon, corner))
                     if angle < moon_avoidance_angle:
                         # Patch is too close to the Moon
-                        return False, "Too close to Moon {:.2f}".format(angle)
+                        return False, f"Too close to Moon {angle:.2f}"
         if not in_view:
             msg = "Below el_min = {:.2f} at el = {:.2f}..{:.2f}.".format(
                 np.degrees(el_min), np.degrees(patch_el_min), np.degrees(patch_el_max)
@@ -576,7 +576,9 @@ class HorizontalPatch(Patch):
         els = [self.el_min, self.el_max]
         return np.array(azs), np.array(els)
 
-    def in_patch(self, obj, angle=0):
+    def in_patch(self, obj, angle=0, el_min=-90):
+        if angle == 0:
+            return False
         azmin = obj.az - angle
         azmax = obj.az + angle
         elmin = obj.alt - angle
@@ -617,7 +619,7 @@ class HorizontalPatch(Patch):
             ]:
                 if self.in_patch(sso, angle=angle):
                     in_view = False
-                    msg += "{} too close;".format(name)
+                    msg += f"{name} too close;"
 
         if in_view:
             msg = "in view"
@@ -896,7 +898,7 @@ def unwind_quat(quat1, quat2):
 
 
 @function_timer
-def check_sso(observer, az1, az2, el, sso, angle, tstart, tstop):
+def check_sso(observer, az1, az2, el, sso, angle, el_min, tstart, tstop):
     """
     Check if a solar system object (SSO) enters within "angle" of
     the constant elevation scan.
@@ -918,20 +920,22 @@ def check_sso(observer, az1, az2, el, sso, angle, tstart, tstop):
         t2 = min(tstop, t1 + tstep)
         observer.date = t1
         sso.compute(observer)
-        sun_az1, sun_el1 = np.degrees(sso.az), np.degrees(sso.alt)
+        az1, el1 = np.degrees(sso.az), np.degrees(sso.alt)
         observer.date = t2
         sso.compute(observer)
-        sun_az2, sun_el2 = np.degrees(sso.az), np.degrees(sso.alt)
-        sun_quat1 = from_angles(sun_az1, sun_el1)
-        sun_quat2 = from_angles(sun_az2, sun_el2)
-        sun_quat2 = unwind_quat(sun_quat1, sun_quat2)
-        t = np.linspace(0, 1, 10)
-        sun_quats = qa.slerp(t, [0, 1], [sun_quat1, sun_quat2])
-        sun_vecs = qa.rotate(sun_quats, ZAXIS).T
-        dpmax = np.amax(np.dot(vecs, sun_vecs))
-        min_dist = np.degrees(np.arccos(dpmax))
-        if min_dist < angle:
-            return True, DJDtoUNIX(t1)
+        az2, el2 = np.degrees(sso.az), np.degrees(sso.alt)
+        # Only test distance if the SSO is high enough
+        if el1 > el_min and el2 > el_min:
+            quat1 = from_angles(az1, el1)
+            quat2 = from_angles(az2, el2)
+            quat2 = unwind_quat(quat1, quat2)
+            t = np.linspace(0, 1, 10)
+            quats = qa.slerp(t, [0, 1], [quat1, quat2])
+            sso_vecs = qa.rotate(quats, ZAXIS).T
+            dpmax = np.amax(np.dot(vecs, sso_vecs))
+            min_dist = np.degrees(np.arccos(dpmax))
+            if min_dist < angle:
+                return True, DJDtoUNIX(t1)
         t1 = t2
     return False, DJDtoUNIX(t2)
 
@@ -1681,6 +1685,7 @@ def add_scan(
             el / degree,
             sun,
             args.sun_avoidance_angle_deg,
+            args.sun_avoidance_altitude_deg,
             t1,
             t2,
         )
@@ -1691,6 +1696,7 @@ def add_scan(
             el / degree,
             moon,
             args.moon_avoidance_angle_deg,
+            args.moon_avoidance_altitude_deg,
             t1,
             t2,
         )
@@ -1892,6 +1898,8 @@ def get_visible(args, observer, sun, moon, patches, el_min):
     log = Logger.get()
     visible = []
     not_visible = []
+    check_sun = np.degrees(sun.alt) >= args.sun_avoidance_altitude_deg
+    check_moon = np.degrees(moon.alt) >= args.moon_avoidance_altitude_deg
     for patch in patches:
         # Reject all patches that have even one corner too close
         # to the Sun or the Moon and patches that are completely
@@ -1901,8 +1909,8 @@ def get_visible(args, observer, sun, moon, patches, el_min):
             observer,
             sun,
             moon,
-            args.sun_avoidance_angle_deg,
-            args.moon_avoidance_angle_deg,
+            args.sun_avoidance_angle_deg * check_sun,
+            args.moon_avoidance_angle_deg * check_moon,
             not (args.allow_partial_scans or args.delay_sso_check),
         )
         if not in_view:
@@ -1912,11 +1920,19 @@ def get_visible(args, observer, sun, moon, patches, el_min):
             if not (args.allow_partial_scans or args.delay_sso_check):
                 # Finally, check that the Sun or the Moon are not
                 # inside the patch
-                if args.moon_avoidance_angle_deg >= 0 and patch.in_patch(moon):
-                    not_visible.append((patch.name, "Moon in patch"))
-                    in_view = False
-                if args.sun_avoidance_angle_deg >= 0 and patch.in_patch(sun):
+                if (
+                    args.sun_avoidance_angle_deg >= 0
+                    and np.degrees(sun.alt) >= args.sun_avoidance_altitude_deg
+                    and patch.in_patch(sun)
+                ):
                     not_visible.append((patch.name, "Sun in patch"))
+                    in_view = False
+                if (
+                    args.moon_avoidance_angle_deg >= 0
+                    and np.degrees(moon.alt) >= args.moon_avoidance_altitude_deg
+                    and patch.in_patch(moon)
+                ):
+                    not_visible.append((patch.name, "Moon in patch"))
                     in_view = False
         if in_view:
             visible.append(patch)
@@ -2426,11 +2442,25 @@ def parse_args(opts=None):
         help="Minimum distance between the Sun and the bore sight [deg]",
     )
     parser.add_argument(
+        "--sun-avoidance-altitude-deg",
+        required=False,
+        default=-18,
+        type=np.float,
+        help="Minimum altitude to apply Solar avoidance [deg]",
+    )
+    parser.add_argument(
         "--moon-avoidance-angle-deg",
         required=False,
         default=20,
         type=np.float,
         help="Minimum distance between the Moon and the bore sight [deg]",
+    )
+    parser.add_argument(
+        "--moon-avoidance-altitude-deg",
+        required=False,
+        default=-18,
+        type=np.float,
+        help="Minimum altitude to apply Lunar avoidance [deg]",
     )
     parser.add_argument(
         "--sun-el-max-deg",
@@ -3050,14 +3080,13 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             # Plot sun and moon avoidance circle
             sunlon, sunlat = [], []
             moonlon, moonlat = [], []
-            sun_avoidance_angle = args.sun_avoidance_angle_deg * degree
-            moon_avoidance_angle = args.moon_avoidance_angle_deg * degree
-            for lon, lat, sso, angle_min, color, step, lw in [
+            for lon, lat, sso, angle_min, alt_min, color, step, lw in [
                 (
                     sunlon,
                     sunlat,
                     sun,
-                    sun_avoidance_angle,
+                    np.radians(args.sun_avoidance_angle_deg),
+                    np.radians(args.sun_avoidance_altitude_deg),
                     sun_avoidance_color,
                     sun_step,
                     sun_lw,
@@ -3066,7 +3095,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     moonlon,
                     moonlat,
                     moon,
-                    moon_avoidance_angle,
+                    np.radians(args.moon_avoidance_angle_deg),
+                    np.radians(args.moon_avoidance_altitude_deg),
                     moon_avoidance_color,
                     moon_step,
                     moon_lw,
@@ -3075,9 +3105,9 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                 for t in range(np.int(start_timestamp), np.int(stop_timestamp), step):
                     observer.date = to_DJD(t)
                     sso.compute(observer)
-                    lon.append(sso.a_ra / degree)
-                    lat.append(sso.a_dec / degree)
-                    if angle_min <= 0:
+                    lon.append(np.degrees(sso.a_ra))
+                    lat.append(np.degrees(sso.a_dec))
+                    if angle_min <= 0 or sso.alt < alt_min:
                         continue
                     if polmap is None:
                         # accumulate avoidance map
