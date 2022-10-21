@@ -18,7 +18,7 @@ from tomlkit import comment, document, dumps, loads, nl, table
 
 from . import instrument
 from .instrument import Focalplane, Telescope
-from .traits import TraitConfig
+from .traits import TraitConfig, trait_string_to_scalar, trait_scalar_to_string
 from .utils import Environment, Logger
 
 
@@ -52,6 +52,10 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
     class traits of the object.  Boolean parameters are converted to store_true or
     store_false actions depending on their current value.
 
+    Containers in the config (list, set, tuple, dict) are parsed as a string to
+    support easy passing on the commandline, and then later converted to the actual
+    type.
+
     Args:
         parser (ArgumentParser):  The parser to append to.
         conf (dict):  The configuration dictionary.
@@ -83,7 +87,18 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                 # This is not a user-configurable parameter.
                 # print("  skipping")
                 continue
-            if info["type"] not in ["bool", "int", "float", "str", "Quantity"]:
+            if info["type"] not in [
+                "bool",
+                "int",
+                "float",
+                "str",
+                "Quantity",
+                "Unit",
+                "list",
+                "dict",
+                "tuple",
+                "set",
+            ]:
                 # This is not something that we can get from parsing commandline
                 # options.  Skip it.
                 # print("  no type- skipping")
@@ -116,14 +131,16 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                     # General bool option
                     option = "--{}{}{}{}".format(prefix, obj, separator, name)
                     act = "store_true"
+                    dflt = False
                     if info["value"] == "True":
                         act = "store_false"
+                        dflt = True
                         option = "--{}{}{}no_{}".format(prefix, obj, separator, name)
                     # print("  add bool argument {}".format(option))
                     parser.add_argument(
                         option,
                         required=False,
-                        default=info["value"],
+                        default=dflt,
                         action=act,
                         help=info["help"],
                         dest="{}{}{}{}".format(prefix, obj, separator, name),
@@ -145,13 +162,64 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                     typ = str
                     if info["value"] != "None":
                         default = info["value"]
+                elif info["type"] == "Unit":
+                    typ = u.Unit
+                    # The "value" for a Unit is always "unit"
+                    if info["unit"] != "None":
+                        default = u.Unit(info["unit"])
                 elif info["type"] == "Quantity":
                     typ = u.Quantity
                     if info["value"] != "None":
                         default = u.Quantity(
                             "{} {}".format(info["value"], info["unit"])
                         )
-                # print("  add argument {}".format(option))
+                elif info["type"] == "list":
+                    typ = str
+                    if info["value"] != "None":
+                        if len(info["value"]) == 0:
+                            default = "[]"
+                        else:
+                            formatted = [
+                                trait_scalar_to_string(x) for x in info["value"]
+                            ]
+                            default = f"{formatted}"
+                elif info["type"] == "set":
+                    typ = str
+                    if info["value"] != "None":
+                        if len(info["value"]) == 0:
+                            default = "{}"
+                        else:
+                            formatted = set(
+                                [trait_scalar_to_string(x) for x in info["value"]]
+                            )
+                            default = f"{formatted}"
+                elif info["type"] == "tuple":
+                    typ = str
+                    if info["value"] != "None":
+                        if len(info["value"]) == 0:
+                            default = "()"
+                        else:
+                            formatted = tuple(
+                                [trait_scalar_to_string(x) for x in info["value"]]
+                            )
+                            default = f"{formatted}"
+                elif info["type"] == "dict":
+                    typ = str
+                    if info["value"] != "None":
+                        if len(info["value"]) == 0:
+                            default = "{}"
+                        else:
+                            formatted = {
+                                x: trait_scalar_to_string(y)
+                                for x, y in info["value"].items()
+                            }
+                            # print(f"dict formatted = {formatted}")
+                            default = f"{info['value']}"
+                else:
+                    raise RuntimeError("Invalid trait type, should never get here!")
+                # print(
+                #     f"  add_argument: {option}, type={typ}, default={default} ({type(default)})"
+                # )
                 parser.add_argument(
                     option,
                     required=False,
@@ -182,6 +250,103 @@ def args_update_config(args, conf, useropts, section, prefix="", separator="\.")
     user_pat = re.compile("--{}(.*?){}(.*)".format(prefix, separator))
     no_pat = re.compile("^no_(.*)")
 
+    # Regex patterns for containers
+    list_pat = re.compile(r"\[(.*)\]")
+    dictset_pat = re.compile(r"\{(.*)\}")
+    tuple_pat = re.compile(r"\((.*)\)")
+    dictelem_pat = re.compile(r"(.*):(.*)")
+
+    def _strip_quote(s):
+        if s == "":
+            return s
+        else:
+            return s.strip(" '\"")
+
+    def _parse_list(parg):
+        if parg is None:
+            return "None"
+        else:
+            mat = list_pat.match(parg)
+            if mat is None:
+                msg = f"Argparse value '{parg}' is not a list"
+                raise ValueError(msg)
+            value = list()
+            inner = mat.group(1)
+            if inner == "[]" or inner == "":
+                return value
+            else:
+                elems = inner.split(",")
+                # print(f"_parse_list elems split = {elems}")
+                for elem in elems:
+                    # value.append(trait_string_to_scalar(_strip_quote(elem)))
+                    value.append(_strip_quote(elem))
+                return value
+
+    def _parse_tuple(parg):
+        if parg is None:
+            return "None"
+        else:
+            mat = tuple_pat.match(parg)
+            if mat is None:
+                msg = f"Argparse value '{parg}' is not a tuple"
+                raise ValueError(msg)
+            value = list()
+            inner = mat.group(1)
+            if inner == "()" or inner == "":
+                return tuple(value)
+            else:
+                elems = inner.split(",")
+                for elem in elems:
+                    value.append(_strip_quote(elem))
+                    # value.append(trait_string_to_scalar(_strip_quote(elem)))
+                return tuple(value)
+
+    def _parse_set(parg):
+        if parg is None:
+            return "None"
+        else:
+            mat = dictset_pat.match(parg)
+            if mat is None:
+                msg = f"Argparse value '{parg}' is not a set"
+                raise ValueError(msg)
+            value = set()
+            inner = mat.group(1)
+            if inner == "{}" or inner == "":
+                return value
+            else:
+                elems = inner.split(",")
+                for elem in elems:
+                    value.add(_strip_quote(elem))
+                    # value.add(trait_string_to_scalar(_strip_quote(elem)))
+                return value
+
+    def _parse_dict(parg):
+        if parg is None:
+            return "None"
+        else:
+            mat = dictset_pat.match(parg)
+            if mat is None:
+                msg = f"Argparse value '{parg}' is not a dict"
+                raise ValueError(msg)
+            dstr = mat.group(1)
+            value = dict()
+            if dstr == "{}" or dstr == "":
+                return value
+            else:
+                elems = dstr.split(",")
+                for elem in elems:
+                    el = _strip_quote(elem)
+                    elem_mat = dictelem_pat.match(el)
+                    if elem_mat is None:
+                        msg = f"Argparse value '{parg}', element '{el}' "
+                        msg += f" is not a dictionary key / value "
+                        raise ValueError(msg)
+                    elem_key = _strip_quote(elem_mat.group(1))
+                    elem_val = _strip_quote(elem_mat.group(2))
+                    value[elem_key] = elem_val
+                    # value[elem_key] = trait_string_to_scalar(elem_val)
+            return value
+
     # Parse the list of user options
     user = dict()
     for uo in useropts:
@@ -209,6 +374,8 @@ def args_update_config(args, conf, useropts, section, prefix="", separator="\.")
                 raise RuntimeError(msg)
             parent = parent[p]
 
+    # print(f"PARSER start config = {parent}")
+    # print("PARSER = ", args)
     for arg, val in vars(args).items():
         obj_mat = obj_pat.match(arg)
         if obj_mat is not None:
@@ -222,35 +389,113 @@ def args_update_config(args, conf, useropts, section, prefix="", separator="\.")
                 # The actual trait name is "enabled"
                 optname = "enabled"
 
-            if val is None:
-                val = "None"
-            elif parent[name][optname]["type"] == "bool":
+            # For each option, convert the parsed value and compare with
+            # the default config value.  If it differs, and the user
+            # actively set this option, then change it.
+
+            if parent[name][optname]["type"] == "bool":
                 if isinstance(val, bool):
                     # Convert to str
                     if val:
                         val = "True"
                     else:
                         val = "False"
+                elif val is None:
+                    val = "None"
                 else:
-                    # This is already a string...
-                    pass
+                    raise ValueError(f"value '{val}' is not bool or None")
+                if (val != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = val
+            elif parent[name][optname]["type"] == "Unit":
+                # print(f"Parsing Unit:  {val} ({type(val)})")
+                if isinstance(val, u.UnitBase):
+                    unit = str(val)
+                elif val is None:
+                    unit = "None"
+                else:
+                    raise ValueError(f"value '{val}' is not a Unit or None")
+                if (unit != parent[name][optname]["unit"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = "unit"
+                    parent[name][optname]["unit"] = unit
+            elif parent[name][optname]["type"] == "Quantity":
+                # print(f"Parsing Quantity:  {val} ({type(val)})")
+                if isinstance(val, u.Quantity):
+                    value = f"{val.value:0.14e}"
+                    unit = str(val.unit)
+                elif val is None:
+                    value = "None"
+                    unit = parent[name][optname]["unit"]
+                else:
+                    raise ValueError(f"value '{val}' is not a Quantity or None")
+                if (
+                    value != parent[name][optname]["value"]
+                    or unit != parent[name][optname]["unit"]
+                ) and (name in user and optname in user[name]):
+                    parent[name][optname]["value"] = value
+                    parent[name][optname]["unit"] = unit
+            elif parent[name][optname]["type"] == "float":
+                if val is None:
+                    val = "None"
+                else:
+                    val = f"{val:0.14e}"
+                if (val != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = val
+            elif parent[name][optname]["type"] == "int":
+                if val is None:
+                    val = "None"
+                else:
+                    val = f"{val}"
+                if (val != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = val
+            elif parent[name][optname]["type"] == "list":
+                # For configs that are constructed from TOML, all sequence
+                # containers are parsed as a list.  So try several types.
+                try:
+                    value = _parse_set(val)
+                except ValueError:
+                    try:
+                        value = _parse_tuple(val)
+                    except ValueError:
+                        value = _parse_list(val)
+                if (value != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = value
+            elif parent[name][optname]["type"] == "tuple":
+                value = _parse_tuple(val)
+                if (value != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = value
+            elif parent[name][optname]["type"] == "set":
+                value = _parse_set(val)
+                if (value != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = value
+            elif parent[name][optname]["type"] == "dict":
+                value = _parse_dict(val)
+                if (value != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
+                    parent[name][optname]["value"] = value
             else:
-                # print(f"Checking option {name}.{optname} unit")
-                # print(f"  parent[{name}] = {parent[name]}")
-                if parent[name][optname]["unit"] != "None":
-                    # This option is a quantity
-                    val = "{:0.14e}".format(
-                        val.to_value(u.Unit(parent[name][optname]["unit"]))
-                    )
-                elif parent[name][optname]["type"] == "float":
-                    val = "{:0.14e}".format(val)
+                # This is a plain string
+                if val is None:
+                    val = "None"
                 else:
                     val = str(val)
-            if val != parent[name][optname]["value"]:
-                # The argparse value is different than the input config value.
-                # Only update the value if it was actually specified by the user.
-                if name in user and optname in user[name]:
-                    # The user did set this
+                if (val != parent[name][optname]["value"]) and (
+                    name in user and optname in user[name]
+                ):
                     parent[name][optname]["value"] = val
             delattr(remain, arg)
     return remain
@@ -382,6 +627,9 @@ def parse_config(
         opts = sys.argv[1:]
     args = parser.parse_args(args=opts)
 
+    # print(f"DBG conf defaults = {defaults}")
+    # print(f"DBG after parse_args:  {args}")
+
     # Dump default config values.
     if args.defaults_toml is not None:
         dump_toml(args.defaults_toml, defaults)
@@ -398,9 +646,14 @@ def parse_config(
 
     # Load any config files.  This overrides default values with config file contents.
     config = copy.deepcopy(defaults)
+
+    # print(f"DBG conf before load = {config}")
+
     if args.config is not None:
         for conf in args.config:
             config = load_config(conf, input=config)
+
+    # print(f"DBG conf after load = {config}")
 
     # Parse operator commandline options.  These override any config file or default
     # values.
@@ -436,7 +689,8 @@ def _merge_config(loaded, original):
 def _load_toml_traits(tbl):
     # print("LOAD TraitConfig object {}".format(tbl), flush=True)
     result = OrderedDict()
-    for k in tbl.keys():
+    for k in list(tbl.keys()):
+        # print(f"LOAD examine key {k}:  {type(tbl[k])}")
         if k == "class":
             # print(f"  found trait class '{tbl[k]}'")
             result[k] = tbl[k]
@@ -451,12 +705,12 @@ def _load_toml_traits(tbl):
                 result[k]["value"][str(tk)] = str(tv)
         elif isinstance(tbl[k], tomlkit.items.Array):
             # This is a list
-            # print(f"  found trait List '{tbl[k]}'")
             result[k] = OrderedDict()
             result[k]["value"] = list()
             result[k]["type"] = "list"
             result[k]["unit"] = "None"
             for it in tbl[k]:
+                # print(f"  Array element '{str(it)}'")
                 result[k]["value"].append(str(it))
         elif isinstance(tbl[k], str):
             # print(f"  Checking string '{tbl[k]}'")
@@ -481,18 +735,31 @@ def _load_toml_traits(tbl):
             else:
                 # print("    Not empty or None")
                 result[k] = OrderedDict()
-                # Is this string actually a Quantity?  We try to convert the first
-                # element of the string to a float and the remainder to a Unit.
+                # Is this string actually a Quantity or Unit?
                 try:
                     parts = tbl[k].split()
                     vstr = parts.pop(0)
                     ustr = " ".join(parts)
-                    v = float(vstr)
-                    unit = u.Unit(ustr)
-                    result[k]["value"] = "{:0.14e}".format(v)
-                    result[k]["type"] = "Quantity"
-                    result[k]["unit"] = str(unit)
-                    # print(f"  found trait Quantity '{tbl[k]}'")
+                    if vstr == "unit":
+                        # this is a Unit
+                        result[k]["value"] = "unit"
+                        result[k]["type"] = "Unit"
+                        if ustr == "None":
+                            result[k]["unit"] = "None"
+                        else:
+                            result[k]["unit"] = str(u.Unit(ustr))
+                        # print(f"  found trait Unit '{tbl[k]}'")
+                    elif ustr == "":
+                        raise ValueError("No units, just a string")
+                    else:
+                        result[k]["type"] = "Quantity"
+                        if vstr == "None":
+                            result[k]["value"] = "None"
+                        else:
+                            v = float(vstr)
+                            result[k]["value"] = f"{v:0.14e}"
+                        result[k]["unit"] = str(u.Unit(ustr))
+                        # print(f"  found trait Quantity '{tbl[k]}'")
                 except Exception as e:
                     # print("      failed... just a string")
                     # Just a regular string
@@ -521,6 +788,7 @@ def _load_toml_traits(tbl):
             result[k]["value"] = "{:0.14e}".format(tbl[k])
             result[k]["type"] = "float"
             result[k]["unit"] = "None"
+        # print(f"  parsed as: {result[k]}")
     # print("LOAD toml result = {}".format(result))
     return result
 
@@ -554,9 +822,9 @@ def load_toml(file, input=None, comm=None):
         if isinstance(
             raw_root, (tomlkit.toml_document.TOMLDocument, tomlkit.items.Table)
         ):
-            for k in raw_root.keys():
+            for k in list(raw_root.keys()):
                 try:
-                    subkeys = raw_root[k].keys()
+                    subkeys = list(raw_root[k].keys())
                     # This element is table-like.
                     if "class" in subkeys:
                         # print("LOAD found traitconfig {}".format(k), flush=True)
@@ -568,6 +836,7 @@ def load_toml(file, input=None, comm=None):
                 except Exception as e:
                     # This element is not a sub-table, just copy.
                     conf_root[k] = raw_root[k]
+                    raise
         else:
             raise RuntimeError("Cannot convert TOML node {}".format(raw_root))
 
@@ -602,8 +871,13 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
         if typ == "Quantity":
             qval = "None"
             if value != "None":
-                qval = "{} {}".format(value, unit)
+                qval = f"{value} {unit}"
             tbl.add(name, qval)
+        elif typ == "Unit":
+            uval = "unit None"
+            if unit != "None":
+                uval = f"unit {unit}"
+            tbl.add(name, uval)
         elif typ in ["list", "set", "tuple"]:
             val = "None"
             if value != "None":
@@ -613,7 +887,7 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
                     val = list()
                     for elem in value:
                         if isinstance(elem, tuple):
-                            # This is a quantity
+                            # This is a quantity / unit
                             val.append(" ".join(elem))
                         else:
                             val.append(elem)
@@ -645,8 +919,11 @@ def _dump_toml_trait(tbl, indent, name, value, unit, typ, help):
             if value != "None":
                 val = float(value)
             tbl.add(name, val)
+        elif typ == "callable":
+            # Just add None
+            tbl.add(name, "None")
         else:
-            # Just leave the string representation.
+            # This must be a custom class or a str
             tbl.add(name, value)
         if help is not None:
             tbl[name].comment(help)
@@ -899,6 +1176,7 @@ def create_from_config(conf):
             child_cursor = list(cursor)
             child_cursor.append(child_key)
             child_val = get_node(tree, child_cursor)
+            # print(f"PARSE child_key {child_key} = {child_val}")
 
             if isinstance(child_val, TraitConfig):
                 # This is an already-created object
@@ -931,16 +1209,16 @@ def create_from_config(conf):
                     is_list = None
                     try:
                         _ = len(child_val)
-                        # It is a list
+                        # It is a list, tuple, or set
                         is_list = True
                     except:
                         is_list = False
                     if is_list:
+                        parent[node_name][child_key] = list(child_val)
                         for elem in range(len(child_val)):
-                            found = find_object_ref(tree, child_val[elem])
-                            # print(
-                            #     "find_object {} --> {}".format(child_val[elem], found)
-                            # )
+                            test_val = parent[node_name][child_key][elem]
+                            found = find_object_ref(tree, test_val)
+                            # print("find_object {} --> {}".format(test_val, found))
                             if found is None:
                                 unresolved += 1
                             else:

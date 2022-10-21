@@ -6,7 +6,6 @@ import numpy as np
 import traitlets
 
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -27,7 +26,7 @@ class BuildPixelDistribution(Operator):
     NOTE:  The pointing operator must have the "pixels" and "create_dist"
     traits, which will be set by this operator during execution.
 
-    Output PixelData objects are stored in the Data dictionary.
+    Output PixelDistribution objects are stored in the Data dictionary.
 
     """
 

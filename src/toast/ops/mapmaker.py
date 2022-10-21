@@ -9,7 +9,6 @@ import traitlets
 
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
 from ..pixels_io_wcs import write_wcs_fits
 from ..timing import Timer, function_timer
@@ -627,6 +626,7 @@ class Calibrate(Operator):
 
         # Solve for template amplitudes
         amplitudes_solve = SolveAmplitudes(
+            name=self.name,
             det_data=self.det_data,
             convergence=self.convergence,
             iter_min=self.iter_min,
@@ -658,7 +658,12 @@ class Calibrate(Operator):
 
         out_calib = self.det_data
         if self.result is not None:
+            # We are writing out calibrated timestreams to a new set of detector
+            # data rather than overwriting the inputs.  Here we create these output
+            # timestreams if they do not exist.  We do this by copying the inputs,
+            # since the application of the amplitudes below will zero these
             out_calib = self.result
+            Copy(detdata=[(self.det_data, self.result)]).apply(data)
 
         amplitudes_apply = ApplyAmplitudes(
             op="divide",

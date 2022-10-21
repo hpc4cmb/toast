@@ -14,7 +14,7 @@ from ..observation import default_values as defaults
 from ..ops.mapmaker_solve import SolverLHS, SolverRHS
 from ..templates import AmplitudesMap, Offset
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -87,13 +87,10 @@ class MapmakerSolveTest(MPITestCase):
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
         tmatrix.amplitudes = "RHS"
 
-        # Set up RHS operator and run it.  We set overwrite=False so that a temporary
-        # detdata object is used.  We need the original timestream for our manual check
-        # below.
+        # Set up RHS operator and run it.
 
         rhs_calc = SolverRHS(
             det_data=sim_noise.det_data,
-            overwrite=False,
             binning=binner,
             template_matrix=tmatrix,
         )
@@ -147,8 +144,7 @@ class MapmakerSolveTest(MPITestCase):
             data["RHS"][tmpl.name].local, data["check_RHS"][tmpl.name].local
         )
 
-        del data
-        return
+        close_data(data)
 
     def test_lhs(self):
         # Create a fake satellite data set for testing
@@ -232,7 +228,6 @@ class MapmakerSolveTest(MPITestCase):
         binner.binned = "rhs_binned"
         rhs_calc = SolverRHS(
             det_data=defaults.det_data,
-            overwrite=True,
             binning=binner,
             template_matrix=tmatrix,
         )
@@ -242,6 +237,9 @@ class MapmakerSolveTest(MPITestCase):
 
         # Now we will run the LHS operator and compare.  Re-use the previous detdata
         # array for temp space.
+
+        for ob in data.obs:
+            ob.detdata[defaults.det_data].update_units(u.K)
 
         tmatrix.amplitudes = "amplitudes"
         binner.binned = "lhs_binned"
@@ -262,5 +260,4 @@ class MapmakerSolveTest(MPITestCase):
             data["amplitudes_check"][tmpl.name].local,
         )
 
-        del data
-        return
+        close_data(data)

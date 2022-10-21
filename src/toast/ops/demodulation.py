@@ -245,7 +245,10 @@ class Demodulate(Operator):
             self._demodulate_shared_data(obs, demod_obs)
 
             exists_data = demod_obs.detdata.ensure(
-                self.det_data, detectors=demod_dets, dtype=np.float64
+                self.det_data,
+                detectors=demod_dets,
+                dtype=np.float64,
+                create_units=obs.detdata[self.det_data].units,
             )
             exists_flags = demod_obs.detdata.ensure(
                 self.det_flags, detectors=demod_dets, dtype=np.uint8
@@ -404,9 +407,6 @@ class Demodulate(Operator):
         for name, ivals in obs.intervals.items():
             timespans = [[ival.start, ival.stop] for ival in ivals]
             demod_obs.intervals[name] = IntervalList(times, timespans=timespans)
-        # The full data interval is corrupt (empty) and needs to be reset
-        del demod_obs.intervals[None]
-        return
 
     @function_timer
     def _demodulate_flag(self, flags, wkernel, offset):

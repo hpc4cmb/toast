@@ -33,13 +33,15 @@ from ..traits import (
     Int,
     List,
     Quantity,
+    Unit,
     Set,
     Tuple,
     Unicode,
     trait_docs,
+    trait_scalar_to_string,
 )
 from ..utils import Environment, Logger
-from ._helpers import create_comm, create_outdir, create_space_telescope
+from ._helpers import create_comm, create_outdir, create_space_telescope, close_data
 from .mpi import MPITestCase
 
 
@@ -69,8 +71,11 @@ class ConfigOperator(ops.Operator):
     bool_default = Bool(False, help="Bool default")
     bool_none = Bool(None, allow_none=True, help="Bool none")
 
-    quantity_default = Quantity(1.2345 * u.second, help="Quantity default")
+    quantity_default = Quantity(1.2345 * u.meter / u.second, help="Quantity default")
     quantity_none = Quantity(None, allow_none=True, help="Quantity none")
+
+    unit_default = Unit(u.meter / u.second, help="Unit default")
+    unit_none = Unit(None, allow_none=True, help="Unit none")
 
     # NOTE:  Our config system does not currently support Instance traits
     # with allow_none=False.
@@ -80,7 +85,9 @@ class ConfigOperator(ops.Operator):
     list_string = List(["foo", "bar", "blat"], help="List string default")
     list_string_empty = List(["", "", ""], help="List string empty")
     list_float = List([1.23, 4.56, 7.89], help="List float default")
-    list_quant = List([1.23 * u.meter, 4.56 * u.K], help="List Quantity default")
+    list_quant = List(
+        [1.23 * u.meter / u.second, 4.56 * u.K], help="List Quantity default"
+    )
     list_mixed = List(
         [None, True, "", "foo", 1.23, 4.56, 7.89 * u.meter], help="list mixed"
     )
@@ -91,8 +98,8 @@ class ConfigOperator(ops.Operator):
     )
     dict_string_empty = Dict({"a": "", "b": "", "c": ""}, help="Dict string empty")
     dict_float = Dict({"a": 1.23, "b": 4.56, "c": 7.89}, help="Dict float default")
-    dict_float = Dict(
-        {"a": 1.23 * u.meter, "b": 4.56 * u.K}, help="Dict Quantity default"
+    dict_quant = Dict(
+        {"a": 1.23 * u.meter / u.second, "b": 4.56 * u.K}, help="Dict Quantity default"
     )
     dict_mixed = Dict(
         {"a": None, "b": True, "c": "", "d": 4.56, "e": 7.89 * u.meter},
@@ -103,20 +110,129 @@ class ConfigOperator(ops.Operator):
     set_string = Set({"a", "b", "c"}, help="Set string default")
     set_string_empty = Set({"", "", ""}, help="Set string empty")
     set_float = Set({1.23, 4.56, 7.89}, help="Set float default")
-    set_quant = Set({1.23 * u.meter, 4.56 * u.meter}, help="Set Quantity default")
+    set_quant = Set(
+        {1.23 * u.meter / u.second, 4.56 * u.meter}, help="Set Quantity default"
+    )
     set_mixed = Set({None, "", "foo", True, 4.56, 7.89 * u.meter}, help="Set mixed")
 
     tuple_none = Tuple(None, allow_none=True, help="Tuple string default")
-    tuple_string = Tuple(["foo", "bar", "blat"], help="Tuple string default")
-    tuple_string_empty = Tuple(["", "", ""], help="Tuple string empty")
-    tuple_float = Tuple([1.23, 4.56, 7.89], help="Tuple float")
-    tuple_float = Tuple([1.23 * u.meter, 4.56 * u.meter], help="Tuple Quantity")
+    tuple_string = Tuple(("foo", "bar", "blat"), help="Tuple string default")
+    tuple_string_empty = Tuple(("", "", ""), help="Tuple string empty")
+    tuple_float = Tuple((1.23, 4.56, 7.89), help="Tuple float")
+    tuple_quant = Tuple(
+        (1.23 * u.meter / u.second, 4.56 * u.meter), help="Tuple Quantity"
+    )
     tuple_mixed = Tuple(
-        [None, True, "", "foo", 4.56, 7.89 * u.meter], help="Tuple mixed"
+        (None, True, "", "foo", 4.56, 7.89 * u.meter), help="Tuple mixed"
     )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def modified_traits(self):
+        """Construct a modified set of trait values."""
+        tmod = dict()
+        for tname, trait in self.traits().items():
+            if tname == "enabled":
+                continue
+            if tname == "API":
+                continue
+            if trait.get(self) is None:
+                continue
+            if isinstance(trait, Bool):
+                # toggle value
+                if trait.get(self):
+                    tmod[tname] = False
+                else:
+                    tmod[tname] = True
+            elif trait.get(self) is None:
+                tmod[tname] = None
+            elif isinstance(trait, Unit):
+                tmod[tname] = u.km / u.s
+            elif isinstance(trait, Quantity):
+                tmod[tname] = 5.0 * u.km / u.s
+            elif isinstance(trait, (Int, Float)):
+                tmod[tname] = 1 + trait.get(self)
+            elif isinstance(trait, Unicode):
+                tmod[tname] = f"modified_{trait.get(self)}"
+            elif isinstance(trait, Set):
+                # Remove one element
+                s = set(trait.get(self))
+                if len(s) > 0:
+                    _ = s.pop()
+                tmod[tname] = s
+            elif isinstance(trait, Tuple):
+                # Reverse it
+                temp = list(trait.get(self))
+                temp.reverse()
+                tmod[tname] = tuple(temp)
+            elif isinstance(trait, List):
+                # Reverse it
+                temp = list(trait.get(self))
+                temp.reverse()
+                tmod[tname] = temp
+            elif isinstance(trait, Dict):
+                # Remove one element
+                d = dict(trait.get(self))
+                if len(d) > 0:
+                    k = list(d.keys())[0]
+                    del d[k]
+                tmod[tname] = d
+            else:
+                # This is some other type
+                pass
+        return tmod
+
+    def args_test(self):
+        """Build an argparse list for testing."""
+        # Get a modified set of trait values
+        tmod = self.modified_traits()
+
+        # Make an argparse list
+        targs = list()
+        for k, v in tmod.items():
+            if v is None:
+                # Skip this
+                continue
+            if isinstance(v, bool):
+                # Special case...
+                if v:
+                    targs.append(f"--{self.name}.{k}")
+                else:
+                    targs.append(f"--{self.name}.no_{k}")
+            else:
+                targs.append(f"--{self.name}.{k}")
+                if isinstance(v, set):
+                    if len(v) == 0:
+                        targs.append("{}")
+                    else:
+                        formatted = set([trait_scalar_to_string(x) for x in v])
+                        targs.append(str(formatted))
+                elif isinstance(v, tuple):
+                    if len(v) == 0:
+                        targs.append("()")
+                    else:
+                        formatted = tuple([trait_scalar_to_string(x) for x in v])
+                        targs.append(str(formatted))
+                elif isinstance(v, dict):
+                    if len(v) == 0:
+                        targs.append("{}")
+                    else:
+                        formatted = {x: trait_scalar_to_string(y) for x, y in v.items()}
+                        targs.append(str(formatted))
+                elif isinstance(v, list):
+                    if len(v) == 0:
+                        targs.append("[]")
+                    else:
+                        formatted = [trait_scalar_to_string(x) for x in v]
+                        targs.append(str(formatted))
+                elif isinstance(v, u.Unit):
+                    targs.append(str(v))
+                elif isinstance(v, u.Quantity):
+                    targs.append(f"{v.value:0.14e} {v.unit}")
+                else:
+                    targs.append(str(v))
+        return targs
 
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
@@ -141,6 +257,42 @@ class ConfigTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
         self.toastcomm = create_comm(self.comm)
 
+    def compare_trait(self, check, expected):
+        def _compare_element(chk, expt):
+            if isinstance(chk, float) and isinstance(expt, float):
+                return np.allclose(chk, expt)
+            elif isinstance(chk, Quantity) and isinstance(expt, Quantity):
+                return np.allclose(chk.value, expt.value) and chk.unit == expt.unit
+            else:
+                return chk == expt
+
+        if isinstance(check, (list, tuple)) and isinstance(expected, (list, tuple)):
+            result = True
+            for a, b in zip(check, expected):
+                if not _compare_element(a, b):
+                    result = False
+            return result
+        if isinstance(check, set) and isinstance(expected, set):
+            # Jump through some hoops here...
+            if len(check) != len(expected):
+                return False
+            scheck = set([str(x) for x in check])
+            sexpected = set([str(x) for x in expected])
+            for a, b in zip(sorted(scheck), sorted(sexpected)):
+                if a != b:
+                    return False
+            return True
+        elif isinstance(check, dict) and isinstance(expected, dict):
+            result = True
+            if check.keys() != expected.keys():
+                return False
+            for k in check.keys():
+                if not _compare_element(check[k], expected[k]):
+                    result = False
+            return result
+        else:
+            return _compare_element(check, expected)
+
     def create_operators(self):
         oplist = [
             ops.SimSatellite(
@@ -151,6 +303,8 @@ class ConfigTest(MPITestCase):
             ops.DefaultNoiseModel(name="noise_model"),
             ops.SimNoise(name="sim_noise"),
             ops.MemoryCounter(name="mem_count"),
+            ops.PointingDetectorSimple(name="det_pointing"),
+            ops.PixelsWCS(name="pixels"),
         ]
         return {x.name: x for x in oplist}
 
@@ -183,6 +337,35 @@ class ConfigTest(MPITestCase):
                 flush=True,
             )
         self.assertTrue(run.operators.fake == fake)
+
+    def test_trait_types_argparse(self):
+        fake = ConfigOperator(name="fake")
+
+        test_args = fake.args_test()
+
+        parser = argparse.ArgumentParser(description="Test")
+        config, remaining, jobargs = parse_config(
+            parser,
+            operators=[fake],
+            templates=list(),
+            prefix="",
+            opts=test_args,
+        )
+
+        check_fake = ConfigOperator.from_config("fake", config["operators"]["fake"])
+        # run = create_from_config(config)
+
+        # Modified values that we expect
+        check = fake.modified_traits()
+
+        # Compare
+        # op = run.operators.fake
+        for tname, trait in check_fake.traits().items():
+            if tname in check:
+                tval = trait.get(check_fake)
+                if not self.compare_trait(tval, check[tname]):
+                    print(f"{tval} != {check[tname]}")
+                    self.assertTrue(False)
 
     def test_config_multi(self):
         testops = self.create_operators()
@@ -220,6 +403,8 @@ class ConfigTest(MPITestCase):
             "--sim_satellite.hwp_rpm",
             "3.0",
             "--sim_satellite.no_distribute_time",
+            "--pixels.resolution",
+            "(0.05 deg, 0.05 deg)",
             "--config",
             conf_file,
             conf2_file,
@@ -284,10 +469,13 @@ class ConfigTest(MPITestCase):
 
     def test_run(self):
         testops = self.create_operators()
+        conf_pipe = dict()
+        for op_name, op in testops.items():
+            conf_pipe = op.get_config(input=conf_pipe)
 
         pipe = ops.Pipeline(name="sim_pipe")
         pipe.operators = [y for x, y in testops.items()]
-        conf_pipe = pipe.get_config()
+        conf_pipe = pipe.get_config(input=conf_pipe)
 
         conf_file = os.path.join(self.outdir, "run_conf.toml")
         if self.toastcomm.world_rank == 0:
@@ -308,4 +496,8 @@ class ConfigTest(MPITestCase):
         run.operators.sim_satellite.telescope = tele
         run.operators.sim_satellite.schedule = sch
 
+        run.operators.pixels.detector_pointing = run.operators.det_pointing
+
         run.operators.sim_pipe.apply(data)
+
+        close_data(data)

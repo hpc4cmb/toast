@@ -35,7 +35,7 @@ class Noise(object):
             indices will be assigned and provided.
         detweights (dict):  If not None, override internal logic used to determine
             detector noise weights.  If overridden, noise weights should reflect
-            inverse white noise variance per sample.
+            inverse white noise variance per sample (and have units).
 
     Attributes:
         detectors (list): List of detector names
@@ -50,13 +50,13 @@ class Noise(object):
 
     @function_timer
     def __init__(
-            self,
-            detectors=list(),
-            freqs=dict(),
-            psds=dict(),
-            mixmatrix=None,
-            indices=None,
-            detweights=None,
+        self,
+        detectors=list(),
+        freqs=dict(),
+        psds=dict(),
+        mixmatrix=None,
+        indices=None,
+        detweights=None,
     ):
         self._dets = list(sorted(detectors))
         if mixmatrix is None:
@@ -95,15 +95,22 @@ class Noise(object):
         for key in self._keys:
             if psds[key].shape[0] != freqs[key].shape[0]:
                 raise ValueError("PSD length must match the number of frequencies")
+            if not isinstance(freqs[key], u.Quantity):
+                raise TypeError("Each frequency array must be a Quantity")
             if not isinstance(psds[key], u.Quantity):
                 raise TypeError("Each PSD array must be a Quantity")
+            # Ensure that the frequencies are convertible to expected units
+            try:
+                test_convert = freqs[key].to(u.Hz)
+            except Exception:
+                raise ValueError("Each frequency array must be convertible to Hz")
             # Ensure that the PSDs are convertible to expected units
             try:
-                test_convert = psds[key].to_value(u.K**2 * u.second)
+                test_convert = psds[key].to(u.K**2 * u.second)
             except Exception:
                 raise ValueError("Each PSD must be convertible to K**2 * s")
-            self._freqs[key] = np.copy(freqs[key])
-            self._psds[key] = np.copy(psds[key])
+            self._freqs[key] = np.copy(freqs[key].to(u.Hz))
+            self._psds[key] = np.copy(psds[key].to(u.K**2 * u.second))
             # last frequency point should be Nyquist
             self._rates[key] = 2.0 * self._freqs[key][-1]
 
@@ -207,7 +214,7 @@ class Noise(object):
             # Compute an effective scalar "noise weight" for each detector based on the
             # white noise level, accounting for the fact that the PSD may have a
             # transfer function roll-off near Nyquist
-            self._detweights = {d: 0.0 for d in self.detectors}
+            self._detweights = {d: 0.0 * (1.0 / u.K**2) for d in self.detectors}
             mix = self.mixing_matrix
             for k in self.keys:
                 freq = self.freq(k)
@@ -219,14 +226,14 @@ class Noise(object):
                 if first == last:
                     first = max(0, first - 1)
                     last = min(freq.size - 1, last + 1)
-                noisevar_mid = np.median(psd[first:last].to_value(u.K**2 * u.second))
+                noisevar_mid = np.median(psd[first:last])
                 # Noise in the end of the PSD
                 first = np.searchsorted(freq, rate * 0.45, side="left")
                 last = np.searchsorted(freq, rate * 0.50, side="right")
                 if first == last:
                     first = max(0, first - 1)
                     last = min(freq.size - 1, last + 1)
-                noisevar_end = np.median(psd[first:last].to_value(u.K**2 * u.second))
+                noisevar_end = np.median(psd[first:last])
                 if noisevar_end / noisevar_mid < 0.5:
                     # There is a transfer function roll-off.  Measure the
                     # white noise plateau value
@@ -240,8 +247,8 @@ class Noise(object):
                 if first == last:
                     first = max(0, first - 1)
                     last = min(freq.size - 1, last + 1)
-                noisevar = np.median(psd[first:last].to_value(u.K**2 * u.second))
-                invvar = 1.0 / noisevar / rate.to_value(u.Hz)
+                noisevar = np.median(psd[first:last])
+                invvar = (1.0 / noisevar / rate).decompose()
                 for det in self._dets_for_keys[k]:
                     self._detweights[det] += mix[det][k] * invvar
         return self._detweights[det]

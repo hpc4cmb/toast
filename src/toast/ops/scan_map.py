@@ -4,13 +4,14 @@
 
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from .._libtoast import scan_map_float32, scan_map_float64
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, trait_docs
-from ..utils import AlignedF64, Logger
+from ..traits import Bool, Int, Unicode, Unit, trait_docs
+from ..utils import AlignedF64, Logger, unit_conversion
 from .operator import Operator
 
 
@@ -30,6 +31,10 @@ class ScanMap(Operator):
 
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for the timestream data"
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     view = Unicode(
@@ -101,7 +106,13 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data, detectors=dets, create_units=self.det_data_units
+            )
+
+            data_scale = unit_conversion(
+                map_data.units, ob.detdata[self.det_data].units
+            )
 
             views = ob.view[self.view]
             for ivw, vw in enumerate(views):
@@ -156,6 +167,8 @@ class ScanMap(Operator):
                         raise RuntimeError(
                             "Projection supports only float32 and float64 binned maps"
                         )
+
+                    maptod *= data_scale
 
                     # zero-out if needed
                     if self.zero:
@@ -367,6 +380,9 @@ class ScanScale(Operator):
         if map_data.n_value != 1:
             raise RuntimeError("The map to scan must have one value per pixel")
         map_dist = map_data.distribution
+
+        if map_data.units != u.dimensionless_unscaled:
+            log.warning("Map for scaling is not unitless.  Ignoring units.")
 
         for ob in data.obs:
             # Get the detectors we are using for this observation

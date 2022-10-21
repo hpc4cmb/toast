@@ -12,7 +12,7 @@ from .. import qarray as qa
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir
+from ._helpers import create_ground_data, create_outdir, close_data
 from .mpi import MPITestCase
 
 
@@ -39,3 +39,5 @@ class SSSTest(MPITestCase):
             detector_pointing=detpointing_azel,
         )
         sss.apply(data)
+
+        close_data(data)

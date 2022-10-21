@@ -11,8 +11,8 @@ from .. import qarray as qa
 from ..dipole import dipole
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger
+from ..traits import Bool, Int, Quantity, Unit, Unicode, trait_docs
+from ..utils import Environment, Logger, unit_conversion
 from .operator import Operator
 
 
@@ -42,6 +42,10 @@ class SimDipole(Operator):
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key for accumulating dipole timestreams",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     view = Unicode(
@@ -151,7 +155,12 @@ class SimDipole(Operator):
                 continue
 
             # Make sure detector data output exists
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data, detectors=dets, create_units=self.det_data_units
+            )
+
+            # Unit conversion from dipole timestream (K) to det data units
+            scale = unit_conversion(u.K, ob.detdata[self.det_data].units)
 
             # Loop over views
             views = ob.view[self.view]
@@ -193,9 +202,9 @@ class SimDipole(Operator):
 
                     # Add contribution to output
                     if self.subtract:
-                        views.detdata[self.det_data][vw][det] -= dipole_tod
+                        views.detdata[self.det_data][vw][det] -= scale * dipole_tod
                     else:
-                        views.detdata[self.det_data][vw][det] += dipole_tod
+                        views.detdata[self.det_data][vw][det] += scale * dipole_tod
         return
 
     def _finalize(self, data, **kwargs):

@@ -13,7 +13,7 @@ from ..mpi import MPI
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -81,8 +81,7 @@ class MapmakerUtilsTest(MPITestCase):
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)
 
-        del data
-        return
+        close_data(data)
 
     def test_inv_cov(self):
         # Create a fake satellite data set for testing
@@ -148,16 +147,21 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Manual check
 
-        check_invnpp = PixelData(data["pixel_dist"], np.float64, n_value=6)
-        check_invnpp_corr = PixelData(data["pixel_dist"], np.float64, n_value=6)
+        invnpp_units = 1.0 / (u.K**2)
+        check_invnpp = PixelData(
+            data["pixel_dist"], np.float64, n_value=6, units=invnpp_units
+        )
+        check_invnpp_corr = PixelData(
+            data["pixel_dist"], np.float64, n_value=6, units=invnpp_units
+        )
 
         for ob in data.obs:
             noise = ob["noise_model"]
             noise_corr = ob["noise_model_corr"]
 
             for det in ob.local_detectors:
-                detweight = noise.detector_weight(det)
-                detweight_corr = noise_corr.detector_weight(det)
+                detweight = noise.detector_weight(det).to_value(invnpp_units)
+                detweight_corr = noise_corr.detector_weight(det).to_value(invnpp_units)
 
                 wt = ob.detdata[defaults.weights][det]
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
@@ -202,8 +206,7 @@ class MapmakerUtilsTest(MPITestCase):
             if comm is not None:
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)
-        del data
-        return
+        close_data(data)
 
     def test_zmap(self):
         # Create a fake satellite data set for testing
@@ -271,8 +274,15 @@ class MapmakerUtilsTest(MPITestCase):
 
         # Manual check
 
-        check_zmap = PixelData(data["pixel_dist"], np.float64, n_value=3)
-        check_zmap_corr = PixelData(data["pixel_dist"], np.float64, n_value=3)
+        invnpp_units = 1.0 / (u.K**2)
+        zmap_units = 1.0 / u.K
+
+        check_zmap = PixelData(
+            data["pixel_dist"], np.float64, n_value=3, units=zmap_units
+        )
+        check_zmap_corr = PixelData(
+            data["pixel_dist"], np.float64, n_value=3, units=zmap_units
+        )
 
         for ob in data.obs:
             noise = ob["noise_model"]
@@ -288,12 +298,12 @@ class MapmakerUtilsTest(MPITestCase):
                         continue
                     for j in range(3):
                         check_zmap.data[local_sm[i], local_pix[i], j] += (
-                            noise.detector_weight(det)
+                            noise.detector_weight(det).to_value(invnpp_units)
                             * ob.detdata["noise"][det, i]
                             * wt[i, j]
                         )
                         check_zmap_corr.data[local_sm[i], local_pix[i], j] += (
-                            noise_corr.detector_weight(det)
+                            noise_corr.detector_weight(det).to_value(invnpp_units)
                             * ob.detdata["noise_corr"][det, i]
                             * wt[i, j]
                         )
@@ -332,5 +342,4 @@ class MapmakerUtilsTest(MPITestCase):
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)
 
-        del data
-        return
+        close_data(data)

@@ -9,6 +9,7 @@ import types
 from collections.abc import Mapping, MutableMapping, Sequence
 
 import numpy as np
+from astropy import units as u
 from pshmem.utils import mpi_data_type
 
 from .dist import distribute_samples
@@ -69,12 +70,19 @@ def set_default_values(values=None):
         #
         # ground-specific flag masks
         #
-        "turnaround": 1 + 2,  # remove invalid bit to map turnarounds
+        # This marks the turnarounds as "invalid".  To simulate data
+        # in the turnarounds, set the turnaround mask in SimGround to
+        # just "2".
+        "turnaround": 1 + 2,
         "scan_leftright": 8,
         "scan_rightleft": 16,
         "sun_up": 32,
         "sun_close": 64,
         "elnod": 1 + 2 + 4,
+        #
+        # Units
+        #
+        "det_data_units": u.Kelvin,
     }
 
     if values is not None:

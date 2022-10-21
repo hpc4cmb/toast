@@ -9,7 +9,7 @@ from astropy import units as u
 from .. import rng
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Callable, Float, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Callable, Float, Int, Quantity, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 from .sim_tod_noise import sim_noise_timestream
@@ -37,6 +37,10 @@ class GainDrifter(Operator):
 
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key to inject the gain drift"
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     include_common_mode = Bool(
@@ -124,7 +128,9 @@ class GainDrifter(Operator):
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank
             # Make sure detector data output exists
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data, detectors=dets, create_units=self.det_data_units
+            )
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane

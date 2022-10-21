@@ -21,7 +21,7 @@ from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import set_matplotlib_backend
-from ._helpers import create_comm, create_outdir, plot_projected_quats
+from ._helpers import create_comm, create_outdir, plot_projected_quats, close_data
 from .mpi import MPITestCase
 
 
@@ -100,8 +100,6 @@ class SimGroundTest(MPITestCase):
             quats="pquats",
         )
         plotdetpointing.apply(data)
-        # print(data.obs[0].shared[defaults.boresight_azel][:])
-        # print(data.obs[0].detdata["pquats"][:])
         if data.comm.world_rank == 0:
             n_debug = 100
             bquat = np.array(data.obs[0].shared[defaults.boresight_azel][10:n_debug, :])
@@ -167,6 +165,8 @@ class SimGroundTest(MPITestCase):
             hp.mollview(hits, xsize=1600, max=50, nest=pixels.nest)
             plt.savefig(outfile)
             plt.close()
+
+        close_data(data)
 
     def test_phase(self):
         # Slow sampling
@@ -250,3 +250,6 @@ class SimGroundTest(MPITestCase):
         step2 = np.median(np.diff(az2[good2]))
 
         assert np.abs((step1 - step2) / step1) < 1e-3
+
+        del data2
+        close_data(data1)

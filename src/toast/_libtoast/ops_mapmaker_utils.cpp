@@ -229,15 +229,15 @@ void init_ops_mapmaker_utils(py::module & m) {
                 )
                 {
                     # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr( \
-                            dev_pixels,                          \
-                            dev_weights,                         \
-                            dev_det_data,                        \
-                            dev_det_flags,                       \
-                            dev_intervals,                       \
-                            dev_shared_flags,                    \
-                            dev_zmap \
-                        )
+                    is_device_ptr(                                   \
+                    dev_pixels,                                      \
+                    dev_weights,                                     \
+                    dev_det_data,                                    \
+                    dev_det_flags,                                   \
+                    dev_intervals,                                   \
+                    dev_shared_flags,                                \
+                    dev_zmap                                         \
+                    )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel for default(shared)

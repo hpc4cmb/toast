@@ -17,6 +17,7 @@ from ._helpers import (
     create_fake_sky,
     create_ground_data,
     create_outdir,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -89,8 +90,7 @@ class ScanWCSTest(MPITestCase):
                     ob.detdata["test"][det], ob.detdata[defaults.det_data][det]
                 )
 
-        del data
-        return
+        close_data(data)
 
     def test_wcs_mask(self):
         # Create fake observing of a small patch
@@ -154,5 +154,4 @@ class ScanWCSTest(MPITestCase):
                     ob.detdata["test_flags"][det], ob.detdata[defaults.det_flags][det]
                 )
 
-        del data
-        return
+        close_data(data)

@@ -18,6 +18,7 @@ from ._helpers import (
     create_healpix_ring_satellite,
     create_outdir,
     create_satellite_data,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -282,7 +283,7 @@ class SimTotalconvolveTest(MPITestCase):
 
         self.assertFalse(fail)
 
-        return
+        close_data(data)
 
     def test_sim(self):
         if not ops.totalconvolve.available():
@@ -447,7 +448,7 @@ class SimTotalconvolveTest(MPITestCase):
 
         self.assertFalse(fail)
 
-        return
+        close_data(data)
 
     def test_sim_hwp(self):
         if not ops.totalconvolve.available():
@@ -471,4 +472,4 @@ class SimTotalconvolveTest(MPITestCase):
         )
         sim_totalconvolve.exec(data)
 
-        return
+        close_data(data)

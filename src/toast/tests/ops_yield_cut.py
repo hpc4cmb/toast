@@ -12,7 +12,7 @@ from astropy import units as u
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir
+from ._helpers import create_ground_data, create_outdir, close_data
 from .mpi import MPITestCase
 
 
@@ -46,4 +46,4 @@ class YieldCutTest(MPITestCase):
         keep_frac = ngood / ntotal
         assert np.abs(cut.keep_frac - keep_frac) < 0.1
 
-        return
+        close_data(data)

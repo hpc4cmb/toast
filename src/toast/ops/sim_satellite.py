@@ -18,7 +18,7 @@ from ..observation import Observation
 from ..observation import default_values as defaults
 from ..schedule import SatelliteSchedule
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger, name_UID, rate_from_times
 from .operator import Operator
 from .sim_hwp import simulate_hwp_response
@@ -254,6 +254,10 @@ class SimSatellite(Operator):
         defaults.det_data,
         allow_none=True,
         help="Observation detdata key to initialize",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     det_flags = Unicode(
@@ -550,7 +554,10 @@ class SimSatellite(Operator):
 
             if self.det_data is not None:
                 exists_data = ob.detdata.ensure(
-                    self.det_data, dtype=np.float64, detectors=dets
+                    self.det_data,
+                    dtype=np.float64,
+                    detectors=dets,
+                    create_units=self.det_data_units,
                 )
 
             if self.det_flags is not None:

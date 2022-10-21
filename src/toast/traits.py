@@ -4,11 +4,13 @@
 
 import copy
 import re
+import collections
 from collections import OrderedDict
 
 import traitlets
 from astropy import units as u
 from traitlets import (
+    TraitType,
     Bool,
     Callable,
     Dict,
@@ -28,6 +30,333 @@ from traitlets import (
 from .utils import import_from_name, object_fullname
 
 
+def trait_string_to_scalar(val):
+    """Attempt to convert a string to other basic python types.
+
+    Trait containers support arbitrary objects, and there are situations where
+    we just have a string value and need to determine the actual python type.
+    This arises when parsing a config dictionary or when converting the config
+    elements of a container.
+
+    Args:
+        val (str):  The input.
+
+    Returns:
+        (scalar):  The converted value.
+
+    """
+    if not isinstance(val, str):
+        # This is an already-instantiated object
+        return val
+    if val == "None":
+        return None
+    elif val == "True":
+        return True
+    elif val == "False":
+        return False
+    elif val == "":
+        return val
+    else:
+        # See if we have a Quantity or Unit string representation
+        try:
+            parts = val.split()
+            vstr = parts.pop(0)
+            ustr = " ".join(parts)
+            if vstr == "unit":
+                # This string is a unit.  See if there is anything
+                # following, and if not assume dimensionless_unscaled.
+                if ustr == "":
+                    return u.dimensionless_unscaled
+                else:
+                    return u.Unit(ustr)
+            elif ustr == "":
+                raise ValueError("Empty unit string")
+            else:
+                # See if we have a quantity
+                value = float(vstr)
+                unit = u.Unit(ustr)
+                return u.Quantity(value, unit=unit)
+        except (IndexError, ValueError):
+            # No.  Try int next
+            try:
+                ival = int(val)
+                # Yes
+                return ival
+            except ValueError:
+                # No.  Try float
+                try:
+                    fval = float(val)
+                    # Yes
+                    return fval
+                except ValueError:
+                    # String or some other object
+                    return val
+
+
+def trait_scalar_to_string(val):
+    """Convert a scalar value into a string.
+
+    This is needed to stringify both scalar traits and also container
+    elements.
+
+    Args:
+        val (object):  A python scalar
+
+    Returns:
+        (str):  The string version.
+
+    """
+    if val is None:
+        return "None"
+    elif isinstance(val, u.UnitBase):
+        return f"unit {str(val)}"
+    elif isinstance(val, u.Quantity):
+        return f"{val.value:0.14e} {str(val.unit)}"
+    elif isinstance(val, bool):
+        if val:
+            return "True"
+        else:
+            return "False"
+    elif isinstance(val, float):
+        return f"{val:0.14e}"
+    elif isinstance(val, int):
+        return f"{val}"
+    if isinstance(val, TraitConfig):
+        # This trait value is a reference to another TraitConfig
+        return "@config:{}".format(val.get_config_path())
+    else:
+        # Must be a string
+        return val
+
+
+# Add mixin methods to built-in Trait types
+
+# Scalar base types
+
+Bool.py_type = lambda self: bool
+Float.py_type = lambda self: float
+Int.py_type = lambda self: int
+Unicode.py_type = lambda self: str
+
+
+def _create_scalar_trait_get_conf(conf_type):
+    # Create a class method that gets a config entry for a scalar
+    # trait with no units.
+    def _get_conf(self, obj=None):
+        cf = dict()
+        cf["type"] = conf_type
+        if obj is None:
+            v = self.default_value
+        else:
+            v = self.get(obj)
+        cf["value"] = trait_scalar_to_string(v)
+        cf["unit"] = "None"
+        cf["help"] = str(self.help)
+        return cf
+
+    return _get_conf
+
+
+Bool.get_conf = _create_scalar_trait_get_conf("bool")
+Float.get_conf = _create_scalar_trait_get_conf("float")
+Int.get_conf = _create_scalar_trait_get_conf("int")
+Unicode.get_conf = _create_scalar_trait_get_conf("str")
+
+# Container types.  These need specialized get_conf() methods.
+
+List.py_type = lambda self: list
+
+
+def list_get_conf(self, obj=None):
+    cf = dict()
+    cf["type"] = "list"
+    if obj is None:
+        val = self.default_value
+    else:
+        v = self.get(obj)
+        if v is None:
+            val = "None"
+        else:
+            val = list()
+            for item in v:
+                val.append(trait_scalar_to_string(item))
+    cf["value"] = val
+    cf["unit"] = "None"
+    cf["help"] = str(self.help)
+    return cf
+
+
+List.get_conf = list_get_conf
+
+Set.py_type = lambda self: set
+
+
+def set_get_conf(self, obj=None):
+    cf = dict()
+    cf["type"] = "set"
+    if obj is None:
+        val = self.default_value
+    else:
+        v = self.get(obj)
+        if v is None:
+            val = "None"
+        else:
+            val = set()
+            for item in v:
+                val.add(trait_scalar_to_string(item))
+    cf["value"] = val
+    cf["unit"] = "None"
+    cf["help"] = str(self.help)
+    return cf
+
+
+Set.get_conf = set_get_conf
+
+Dict.py_type = lambda self: dict
+
+
+def dict_get_conf(self, obj=None):
+    cf = dict()
+    cf["type"] = "dict"
+    if obj is None:
+        val = self.default_value
+    else:
+        v = self.get(obj)
+        if v is None:
+            val = "None"
+        else:
+            val = dict()
+            for k, v in v.items():
+                val[k] = trait_scalar_to_string(v)
+    cf["value"] = val
+    cf["unit"] = "None"
+    cf["help"] = str(self.help)
+    return cf
+
+
+Dict.get_conf = dict_get_conf
+
+Tuple.py_type = lambda self: tuple
+
+
+def tuple_get_conf(self, obj=None):
+    cf = dict()
+    cf["type"] = "tuple"
+    if obj is None:
+        val = self.default_value
+    else:
+        v = self.get(obj)
+        if v is None:
+            val = "None"
+        else:
+            val = list()
+            for item in v:
+                val.append(trait_scalar_to_string(item))
+            val = tuple(val)
+    cf["value"] = val
+    cf["unit"] = "None"
+    cf["help"] = str(self.help)
+    return cf
+
+
+Tuple.get_conf = tuple_get_conf
+
+Instance.py_type = lambda self: self.klass
+
+
+def instance_get_conf(self, obj=None):
+    cf = dict()
+    cf["type"] = object_fullname(self.klass)
+    if obj is None:
+        val = self.default_value
+    else:
+        v = self.get(obj)
+        if v is None:
+            val = "None"
+        elif isinstance(v, TraitConfig):
+            val = trait_scalar_to_string(v)
+        else:
+            # There is nothing we can do with this
+            val = "None"
+    cf["value"] = val
+    cf["unit"] = "None"
+    cf["help"] = str(self.help)
+    return cf
+
+
+Instance.get_conf = instance_get_conf
+
+Callable.py_type = lambda self: collections.abc.Callable
+
+
+def callable_get_conf(self, obj=None):
+    cf = dict()
+    cf["type"] = "callable"
+    if obj is None:
+        val = self.default_value
+    else:
+        v = self.get(obj)
+        if v is None:
+            val = "None"
+        else:
+            # There is no way of serializing a generic callable
+            # into a string.  Just set it to None.
+            val = "None"
+    cf["value"] = val
+    cf["unit"] = "None"
+    cf["help"] = str(self.help)
+    return cf
+
+
+Callable.get_conf = callable_get_conf
+
+
+class Unit(TraitType):
+    """A trait representing an astropy Unit."""
+
+    default_value = u.dimensionless_unscaled
+    info_text = "a Unit"
+
+    def __init__(self, default_value=Undefined, **kwargs):
+        super().__init__(default_value=default_value, **kwargs)
+
+    def py_type(self):
+        return u.Unit
+
+    def get_conf(self, obj=None):
+        cf = dict()
+        cf["type"] = "Unit"
+        if obj is None:
+            val = self.default_value
+        else:
+            val = self.get(obj)
+        cf["value"] = "unit"
+        if val is None:
+            cf["unit"] = "None"
+        else:
+            cf["unit"] = str(val)
+        cf["help"] = str(self.help)
+        return cf
+
+    def validate(self, obj, value):
+        if value is None:
+            if self.allow_none:
+                return None
+            else:
+                raise TraitError("Attempt to set trait to None, while allow_none=False")
+        try:
+            # Can we construct a unit from this?
+            return u.Unit(value)
+        except (ValueError, TypeError):
+            msg = f"Value '{value}' can not be used to construct a Unit"
+            raise TraitError(msg)
+
+    def from_string(self, s):
+        if self.allow_none and s == "None":
+            return None
+        return u.Unit(s)
+
+
 class Quantity(Float):
     """A Quantity trait with units."""
 
@@ -36,6 +365,22 @@ class Quantity(Float):
 
     def __init__(self, default_value=Undefined, **kwargs):
         super().__init__(default_value=default_value, **kwargs)
+
+    def get_conf(self, obj=None):
+        cf = dict()
+        cf["type"] = "Quantity"
+        if obj is None:
+            v = self.default_value
+        else:
+            v = self.get(obj)
+        if v is None:
+            cf["value"] = "None"
+            cf["unit"] = "None"
+        else:
+            cf["value"] = trait_scalar_to_string(v.value)
+            cf["unit"] = str(v.unit)
+        cf["help"] = str(self.help)
+        return cf
 
     def validate(self, obj, value):
         if not isinstance(value, u.Quantity):
@@ -52,156 +397,6 @@ class Quantity(Float):
         return u.Quantity(s)
 
 
-def trait_type_to_string(trait):
-    """Return a python type name corresponding to a trait.
-
-    For the specified traitlet type, return the string name of the python type that
-    should be used when assigning to the trait.
-
-    Args:
-        trait (traitlet.TraitType):  The trait.
-
-    Returns:
-        (str):  The string name.
-
-    """
-    if isinstance(trait, Bool):
-        return "bool"
-    elif isinstance(trait, List):
-        return "list"
-    elif isinstance(trait, Set):
-        return "set"
-    elif isinstance(trait, Dict):
-        return "dict"
-    elif isinstance(trait, Tuple):
-        return "tuple"
-    elif isinstance(trait, Quantity):
-        return "Quantity"
-    elif isinstance(trait, Float):
-        return "float"
-    elif isinstance(trait, Int):
-        return "int"
-    elif isinstance(trait, Instance):
-        return trait.klass.__qualname__
-    return "str"
-
-
-def trait_string_to_value(val):
-    """Attempt to convert a string to other basic types.
-
-    Trait containers support arbitrary objects, but when parsing a config everything
-    is a string.  This attempts to convert a value to its real type.
-
-    Args:
-        val (str):  The input.
-
-    Returns:
-        (scalar):  The converted value.
-
-    """
-    if isinstance(val, TraitConfig):
-        # Reference to another object
-        return val
-    elif val == "None":
-        return None
-    elif val == "True":
-        return True
-    elif val == "False":
-        return False
-    elif val == "":
-        return val
-    else:
-        # See if we have a Quantity string representation
-        try:
-            parts = val.split()
-            vstr = parts.pop(0)
-            ustr = " ".join(parts)
-            if ustr == "":
-                raise ValueError("No unit")
-            v = float(vstr)
-            unit = u.Unit(ustr)
-            # Yes
-            return u.Quantity(v, unit=unit)
-        except (IndexError, ValueError):
-            # No.  Try int next
-            try:
-                ival = int(val)
-                # Yes
-                return ival
-            except ValueError:
-                # No.  Try float
-                try:
-                    fval = float(val)
-                    # Yes
-                    return fval
-                except ValueError:
-                    # Just a string
-                    return val
-
-
-def string_to_pytype(st):
-    """Return a python type corresponding to a type string.
-
-    Used for parsing config properties.
-
-    Args:
-        st (str):  The type name.
-
-    Returns:
-        (class):  The python type.
-
-    """
-    if st == "bool":
-        return bool
-    elif st == "list":
-        return list
-    elif st == "set":
-        return set
-    elif st == "dict":
-        return dict
-    elif st == "tuple":
-        return tuple
-    elif st == "Quantity":
-        return u.Quantity
-    elif st == "int":
-        return int
-    elif st == "float":
-        return float
-    elif st == "str":
-        return str
-    # Must be a custom class...
-    return None
-
-
-def trait_info(trait):
-    """Extract the trait properties.
-
-    Returns:
-        (tuple):  The name, python type, default value, and help string.
-
-    """
-    trtype = str
-    if isinstance(trait, Bool):
-        trtype = bool
-    elif isinstance(trait, List):
-        trtype = list
-    elif isinstance(trait, Set):
-        trtype = set
-    elif isinstance(trait, Dict):
-        trtype = dict
-    elif isinstance(trait, Tuple):
-        trtype = tuple
-    elif isinstance(trait, Quantity):
-        trtype = u.Quantity
-    elif isinstance(trait, Float):
-        trtype = float
-    elif isinstance(trait, Int):
-        trtype = int
-    elif isinstance(trait, Instance):
-        trtype = trait.klass
-    return (trait.name, trtype, trait.default_value, trait.help)
-
-
 def trait_docs(cls):
     """Decorator which adds trait properties to signature and docstring for a class.
 
@@ -215,12 +410,13 @@ def trait_docs(cls):
     doc += "    Attributes:\n"
     # doc += "Attributes:\n"
     for trait_name, trait in cls.class_traits().items():
-        default = trait.default_value
-        trait_type = trait_type_to_string(trait)
-        if trait_type == "str":
-            default = "'{}'".format(default)
+        cf = trait.get_conf()
+        if cf["type"] == "Unit":
+            default = cf["unit"]
+        else:
+            default = cf["value"]
         doc += "\t{} ({}):  {} (default = {})\n".format(
-            trait_name, trait_type, trait.help, default
+            trait_name, cf["type"], cf["help"], default
         )
     doc += "\n"
     cls.__doc__ = doc
@@ -262,6 +458,9 @@ class TraitConfig(HasTraits):
 
     def __eq__(self, other):
         if len(self.traits()) != len(other.traits()):
+            # print(
+            #     f"DBG self has {len(self.traits())} traits, other has {len(other.traits())}"
+            # )
             return False
         # Now we know that both objects have the same number of traits- compare the
         # types and values.
@@ -271,14 +470,17 @@ class TraitConfig(HasTraits):
                 tset = {x: x for x in trait.get(self)}
                 oset = {x: x for x in trother.get(other)}
                 if tset != oset:
+                    # print(f"DBG {tset} != {oset}")
                     return False
             elif isinstance(trait, Dict):
                 tdict = dict(trait.get(self))
                 odict = dict(trother.get(other))
                 if tdict != odict:
+                    # print(f"DBG {tdict} != {odict}")
                     return False
             else:
                 if trait.get(self) != trother.get(other):
+                    # print(f"DBG trait {trait.get(self)} != {trother.get(other)}")
                     return False
         return True
 
@@ -312,61 +514,6 @@ class TraitConfig(HasTraits):
             raise TraitError(msg)
         return parent
 
-    @staticmethod
-    def _format_conf_trait(conf, trt, tval):
-        retval = "None"
-        unitstr = "None"
-        typestr = trait_type_to_string(trt)
-
-        def _format_item(c, tv):
-            val = "None"
-            unit = "None"
-            if tv is None:
-                return (val, unit)
-            if isinstance(tv, TraitConfig):
-                # We are dumping an instance which has handles to other TraitConfig
-                # classes.  Do this recursively.
-                c = tv.get_config(input=c)
-                val = "@config:{}".format(tv.get_config_path())
-            elif isinstance(tv, u.Quantity):
-                val = "{:0.14e}".format(tv.value)
-                unit = str(tv.unit)
-            elif isinstance(tv, float):
-                val = "{:0.14e}".format(tv)
-            else:
-                val = "{}".format(tv)
-            return (val, unit)
-
-        if isinstance(trt, Dict):
-            if tval is not None:
-                retval = dict()
-                for k, v in tval.items():
-                    vstr, vunit = _format_item(conf, v)
-                    if vunit == "None":
-                        retval[k] = vstr
-                    else:
-                        retval[k] = f"{vstr} {vunit}"
-        elif isinstance(trt, List) or isinstance(trt, Set) or isinstance(trt, Tuple):
-            if tval is not None:
-                retval = list()
-                for v in tval:
-                    vstr, vunit = _format_item(conf, v)
-                    if vunit == "None":
-                        retval.append(vstr)
-                    else:
-                        retval.append(f"{vstr} {vunit}")
-        elif isinstance(trt, Instance) and not isinstance(tval, TraitConfig):
-            # Our trait is some other class not derived from TraitConfig.  This
-            # means that we cannot recursively dump it to the config and we also have
-            # no way (currently) of serializing this instance to the config.  We set it
-            # to None so that default actions can be taken by the constructor.
-            pass
-        else:
-            # Single object
-            retval, unitstr = _format_item(conf, tval)
-
-        return retval, unitstr, typestr
-
     @classmethod
     def get_class_config(cls, section=None, input=None):
         """Return a dictionary of the default traits of a class.
@@ -395,13 +542,15 @@ class TraitConfig(HasTraits):
         parent[name] = OrderedDict()
         parent[name]["class"] = object_fullname(cls)
         for trait_name, trait in cls.class_traits().items():
-            trname, trtype, trdefault, trhelp = trait_info(trait)
-            parent[name][trname] = OrderedDict()
-            valstr, unitstr, typestr = cls._format_conf_trait(input, trait, trdefault)
-            parent[name][trname]["value"] = valstr
-            parent[name][trname]["unit"] = unitstr
-            parent[name][trname]["type"] = typestr
-            parent[name][trname]["help"] = trhelp
+            cf = trait.get_conf()
+            parent[name][trait_name] = OrderedDict()
+            parent[name][trait_name]["value"] = cf["value"]
+            parent[name][trait_name]["unit"] = cf["unit"]
+            parent[name][trait_name]["type"] = cf["type"]
+            parent[name][trait_name]["help"] = cf["help"]
+            # print(
+            #     f"{name} class conf {trait_name}: {cf}"
+            # )
         return input
 
     def get_config(self, section=None, input=None):
@@ -431,19 +580,13 @@ class TraitConfig(HasTraits):
         parent[name] = OrderedDict()
         parent[name]["class"] = object_fullname(self.__class__)
         for trait_name, trait in self.traits().items():
-            trname, trtype, trdefault, trhelp = trait_info(trait)
-            trval = None
-            if trait.get(self) is not None:
-                try:
-                    trval = trtype(trait.get(self))
-                except Exception:
-                    trval = str(trait.get(self))
-            parent[name][trname] = OrderedDict()
-            valstr, unitstr, typestr = self._format_conf_trait(input, trait, trval)
-            parent[name][trname]["value"] = valstr
-            parent[name][trname]["unit"] = unitstr
-            parent[name][trname]["type"] = typestr
-            parent[name][trname]["help"] = trhelp
+            cf = trait.get_conf(obj=self)
+            parent[name][trait_name] = OrderedDict()
+            parent[name][trait_name]["value"] = cf["value"]
+            parent[name][trait_name]["unit"] = cf["unit"]
+            parent[name][trait_name]["type"] = cf["type"]
+            parent[name][trait_name]["help"] = cf["help"]
+            # print(f"{name} instance conf {trait_name}: {cf}")
         return input
 
     @classmethod
@@ -496,33 +639,76 @@ class TraitConfig(HasTraits):
         kw = dict()
         kw["name"] = name
         for k, v in props.items():
-            if v["unit"] != "None":
-                # Scalar Quantity
-                kw[k] = u.Quantity(float(v["value"]) * u.Unit(v["unit"]))
+            if v["type"] == "Unit":
+                if v["value"] != "unit":
+                    raise RuntimeError(
+                        f"Unit trait does not have 'unit' as the conf value"
+                    )
+                if v["unit"] == "None":
+                    kw[k] = None
+                else:
+                    kw[k] = u.Unit(v["unit"])
+                # print(f"from_config {name}:    {k} = {kw[k]}")
+            elif v["type"] == "Quantity":
+                # print(f"from_config {name}:    {v}")
+                if v["value"] == "None":
+                    kw[k] = None
+                else:
+                    kw[k] = u.Quantity(float(v["value"]), u.Unit(v["unit"]))
+                # print(f"from_config {name}:    {k} = {kw[k]}")
+            elif v["type"] == "set":
+                if v["value"] == "None":
+                    kw[k] = None
+                elif v["value"] == "{}":
+                    kw[k] = set()
+                else:
+                    kw[k] = set([trait_string_to_scalar(x) for x in v["value"]])
+                # print(f"from_config {name}:    {k} = {kw[k]}")
+            elif v["type"] == "list":
+                if v["value"] == "None":
+                    kw[k] = None
+                elif v["value"] == "[]":
+                    kw[k] = list()
+                else:
+                    kw[k] = list([trait_string_to_scalar(x) for x in v["value"]])
+                # print(f"from_config {name}:    {k} = {kw[k]}")
                 continue
-            if v["value"] == "None":
-                # None value
-                kw[k] = None
-                continue
-            pyt = string_to_pytype(v["type"])
-            if pyt is None:
-                # This is some kind of more complicated class.  We will let the
-                # constructor choose the default value.
-                continue
-            if v["value"] == "{}" or v["value"] == "()" or v["value"] == "[]":
-                # Empty container
-                kw[k] = pyt()
-                continue
-            if pyt == list or pyt == set or pyt == tuple:
-                kw[k] = pyt([trait_string_to_value(x) for x in v["value"]])
-                continue
-            if pyt == dict:
-                # Convert items
-                kw[k] = dict()
-                for dk, dv in v["value"].items():
-                    kw[k][dk] = trait_string_to_value(dv)
-                continue
-            # Other scalar
-            kw[k] = trait_string_to_value(v["value"])
+            elif v["type"] == "tuple":
+                if v["value"] == "None":
+                    kw[k] = None
+                elif v["value"] == "()":
+                    kw[k] = tuple()
+                else:
+                    kw[k] = tuple([trait_string_to_scalar(x) for x in v["value"]])
+                # print(f"from_config {name}:    {k} = {kw[k]}")
+            elif v["type"] == "dict":
+                if v["value"] == "None":
+                    kw[k] = None
+                elif v["value"] == "{}":
+                    kw[k] = dict()
+                else:
+                    # print(f"from_config input dict = {v['value']}")
+                    kw[k] = {
+                        x: trait_string_to_scalar(y) for x, y in v["value"].items()
+                    }
+                # print(f"from_config {name}:    {k} = {kw[k]}")
+            elif (
+                v["type"] == "float"
+                or v["type"] == "int"
+                or v["type"] == "str"
+                or v["type"] == "bool"
+            ):
+                if v["value"] == "None":
+                    kw[k] = None
+                else:
+                    kw[k] = trait_string_to_scalar(v["value"])
+                # print(f"from_config {name}:    {k} = {kw[k]}")
+            elif v["type"] == "unknown":
+                # This was a None value in the TOML or similar unknown object
+                pass
+            else:
+                # This is either a class instance of some arbitrary type,
+                # or a callable.
+                pass
         # Instantiate class and return
         return cls(**kw)

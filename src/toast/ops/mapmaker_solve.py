@@ -2,13 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from astropy import units as u
 import numpy as np
 import traitlets
 
+from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..templates import AmplitudesMap
 from ..timing import Timer, function_timer
-from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
@@ -50,9 +52,7 @@ class SolverRHS(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
-    overwrite = Bool(
-        False, help="Overwrite the input detector data for use as scratch space"
-    )
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     binning = Instance(
         klass=Operator,
@@ -105,23 +105,6 @@ class SolverRHS(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _log_debug(self, comm, rank, msg, timer=None):
-        """Helper function to log a DEBUG level message from rank zero"""
-        log = Logger.get()
-        if comm is not None:
-            comm.barrier()
-        if timer is not None:
-            timer.stop()
-        if rank == 0:
-            if timer is None:
-                msg = "MapMaker   RHS {}".format(msg)
-            else:
-                msg = "MapMaker   RHS {} {:0.2f} s".format(msg, timer.seconds())
-            log.debug(msg)
-        if timer is not None:
-            timer.clear()
-            timer.start()
-
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
@@ -144,17 +127,18 @@ class SolverRHS(Operator):
         # Make a binned map
 
         timer.start()
-        self._log_debug(comm, rank, "begin binned map")
+        log.debug_rank("MapMaker   RHS begin binned map", comm=comm)
 
         self.binning.det_data = self.det_data
+        self.binning.det_data_units = self.det_data_units
         self.binning.apply(data, detectors=detectors)
 
-        self._log_debug(comm, rank, "binned map finished in", timer=timer)
+        log.debug_rank("MapMaker   RHS binned map finished in", comm=comm, timer=timer)
 
         # Build a pipeline for the projection and template matrix application.
         # First create the operators that we will use.
 
-        self._log_debug(comm, rank, "begin create projection pipeline")
+        log.debug_rank("MapMaker   RHS begin create projection pipeline", comm=comm)
 
         # Name of the temporary detdata created if we are not overwriting inputs
         det_temp = "temp_RHS"
@@ -164,18 +148,11 @@ class SolverRHS(Operator):
         weights = self.binning.stokes_weights
 
         # Optionally Copy data to a temporary location to avoid overwriting the input.
-        copy_det = None
-        if not self.overwrite:
-            copy_det = Copy(
-                detdata=[
-                    (self.det_data, det_temp),
-                ]
-            )
-
-        # The detdata name we will use (either the original or the temp one)
-        detdata_name = self.det_data
-        if not self.overwrite:
-            detdata_name = det_temp
+        copy_det = Copy(
+            detdata=[
+                (self.det_data, det_temp),
+            ]
+        )
 
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
@@ -183,20 +160,22 @@ class SolverRHS(Operator):
             weights=weights.weights,
             view=pixels.view,
             map_key=self.binning.binned,
-            det_data=detdata_name,
+            det_data=det_temp,
+            det_data_units=self.det_data_units,
             subtract=True,
         )
 
         # Set up noise weighting operator
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
-            det_data=detdata_name,
+            det_data=det_temp,
             view=pixels.view,
         )
 
         # Set up template matrix operator.
         self.template_matrix.transpose = True
-        self.template_matrix.det_data = detdata_name
+        self.template_matrix.det_data = det_temp
+        self.template_matrix.det_data_units = self.det_data_units
         self.template_matrix.view = pixels.view
 
         # Create a pipeline that projects the binned map and applies noise
@@ -206,52 +185,49 @@ class SolverRHS(Operator):
         if self.binning.full_pointing:
             # Process all detectors at once, since we have the pointing already
             proj_pipe = Pipeline(detector_sets=["ALL"])
-            oplist = list()
-            if not self.overwrite:
-                oplist.append(copy_det)
-            oplist.extend(
-                [
-                    scan_map,
-                    noise_weight,
-                    self.template_matrix,
-                ]
-            )
+            oplist = [
+                copy_det,
+                scan_map,
+                noise_weight,
+                self.template_matrix,
+            ]
             proj_pipe.operators = oplist
         else:
             # Process one detector at a time.
             proj_pipe = Pipeline(detector_sets=["SINGLE"])
-            oplist = list()
-            if not self.overwrite:
-                oplist.append(copy_det)
-            oplist.extend(
-                [
-                    pixels,
-                    weights,
-                    scan_map,
-                    noise_weight,
-                    self.template_matrix,
-                ]
-            )
+            oplist = [
+                copy_det,
+                pixels,
+                weights,
+                scan_map,
+                noise_weight,
+                self.template_matrix,
+            ]
             proj_pipe.operators = oplist
 
-        self._log_debug(comm, rank, "projection pipeline created in", timer=timer)
+        log.debug_rank(
+            "MapMaker   RHS projection pipeline created in", comm=comm, timer=timer
+        )
 
         # Run this projection pipeline.
 
-        self._log_debug(comm, rank, "begin run projection pipeline")
+        log.debug_rank("MapMaker   RHS begin run projection pipeline", comm=comm)
 
         proj_pipe.apply(data, detectors=detectors)
 
-        self._log_debug(comm, rank, "projection pipeline finished in", timer=timer)
+        log.debug_rank(
+            "MapMaker   RHS projection pipeline finished in", comm=comm, timer=timer
+        )
 
-        self._log_debug(comm, rank, "begin cleanup temporary detector data")
+        log.debug_rank(
+            "MapMaker   RHS begin cleanup temporary detector data", comm=comm
+        )
 
-        if not self.overwrite:
-            # Clean up our temp buffer
-            delete_temp = Delete(detdata=[det_temp])
-            delete_temp.apply(data)
+        # Clean up our temp buffer
+        delete_temp = Delete(detdata=[det_temp])
+        delete_temp.apply(data)
 
-        self._log_debug(comm, rank, "cleanup finished in", timer=timer)
+        log.debug_rank("MapMaker   RHS cleanup finished in", comm=comm, timer=timer)
 
         return
 
@@ -302,6 +278,8 @@ class SolverLHS(Operator):
     det_temp = Unicode(
         "temp_LHS", help="Observation detdata key for temporary timestream data"
     )
+
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
     binning = Instance(
         klass=Operator,
@@ -358,23 +336,6 @@ class SolverLHS(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _log_debug(self, comm, rank, msg, timer=None):
-        """Helper function to log a DEBUG level message from rank zero"""
-        log = Logger.get()
-        if comm is not None:
-            comm.barrier()
-        if timer is not None:
-            timer.stop()
-        if rank == 0:
-            if timer is None:
-                msg = "MapMaker   LHS {}".format(msg)
-            else:
-                msg = "MapMaker   LHS {} {:0.2f} s".format(msg, timer.seconds())
-            log.debug(msg)
-        if timer is not None:
-            timer.clear()
-            timer.start()
-
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
@@ -394,6 +355,12 @@ class SolverLHS(Operator):
         if self.out is None:
             raise RuntimeError("You must set the 'out' trait before calling exec()")
 
+        # Clear temp detector data if it exists
+        for ob in data.obs:
+            if self.det_temp in ob.detdata:
+                ob.detdata[self.det_temp][:] = 0
+                ob.detdata[self.det_temp].update_units(self.det_data_units)
+
         # Pointing operator used in the binning
         pixels = self.binning.pixel_pointing
         weights = self.binning.stokes_weights
@@ -401,23 +368,27 @@ class SolverLHS(Operator):
         # Project amplitudes into timestreams and make a binned map.
 
         timer.start()
-        self._log_debug(comm, rank, "begin project amplitudes and binning")
+        log.debug_rank("MapMaker   LHS begin project amplitudes and binning", comm=comm)
 
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
+        self.template_matrix.det_data_units = self.det_data_units
         self.template_matrix.view = pixels.view
 
         self.binning.det_data = self.det_temp
+        self.binning.det_data_units = self.det_data_units
 
         self.binning.pre_process = self.template_matrix
         self.binning.apply(data, detectors=detectors)
         self.binning.pre_process = None
 
-        self._log_debug(comm, rank, "projection and binning finished in", timer=timer)
+        log.debug_rank(
+            "MapMaker   LHS projection and binning finished in", comm=comm, timer=timer
+        )
 
         # Add noise prior
 
-        self._log_debug(comm, rank, "begin add noise prior")
+        log.debug_rank("MapMaker   LHS begin add noise prior", comm=comm)
 
         # Zero out the amplitudes before accumulating the updated values
         if self.out in data:
@@ -427,12 +398,16 @@ class SolverLHS(Operator):
             data[self.template_matrix.amplitudes], data[self.out]
         )
 
-        self._log_debug(comm, rank, "add noise prior finished in", timer=timer)
+        log.debug_rank(
+            "MapMaker   LHS add noise prior finished in", comm=comm, timer=timer
+        )
 
         # Build a pipeline for the map scanning and template matrix application.
         # First create the operators that we will use.
 
-        self._log_debug(comm, rank, "begin scan map and accumulate amplitudes")
+        log.debug_rank(
+            "MapMaker   LHS begin scan map and accumulate amplitudes", comm=comm
+        )
 
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
@@ -441,6 +416,7 @@ class SolverLHS(Operator):
             view=pixels.view,
             map_key=self.binning.binned,
             det_data=self.det_temp,
+            det_data_units=self.det_data_units,
             subtract=True,
         )
 
@@ -457,6 +433,11 @@ class SolverLHS(Operator):
         template_transpose = self.template_matrix.duplicate()
         template_transpose.amplitudes = self.out
         template_transpose.transpose = True
+
+        # Clear temp detector data
+        for ob in data.obs:
+            ob.detdata[self.det_temp][:] = 0
+            ob.detdata[self.det_temp].update_units(self.det_data_units)
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
@@ -491,8 +472,10 @@ class SolverLHS(Operator):
 
         proj_pipe.apply(data, detectors=detectors)
 
-        self._log_debug(
-            comm, rank, "map scan and amplitude accumulate finished in", timer=timer
+        log.debug_rank(
+            "MapMaker   LHS map scan and amplitude accumulate finished in",
+            comm=comm,
+            timer=timer,
         )
 
         return
@@ -672,6 +655,10 @@ def solve(
     for iter in range(n_iter_max):
         if not np.isfinite(sqsum):
             raise RuntimeError("Residual is not finite")
+
+        # print(
+        #     f"{iter}: {data.comm.world_rank} amps = {data[proposal_key]['GainTemplate'].local}"
+        # )
 
         # q = A * d
         lhs_op.apply(data, detectors=detectors)

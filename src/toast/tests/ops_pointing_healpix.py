@@ -13,7 +13,7 @@ from .._libtoast import healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -242,6 +242,8 @@ class PointingHealpixTest(MPITestCase):
         if rank == 0:
             handle.close()
 
+        close_data(data)
+
     def test_pixweight_pipe(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
@@ -288,6 +290,8 @@ class PointingHealpixTest(MPITestCase):
         if rank == 0:
             handle.close()
 
+        close_data(data)
+
     def test_hpix_interval(self):
         data = create_satellite_data(self.comm)
 
@@ -323,6 +327,8 @@ class PointingHealpixTest(MPITestCase):
         pixels.view = half_intervals
         pixels.apply(data)
 
+        close_data(data)
+
     def test_weights_hwpnull(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
@@ -341,3 +347,5 @@ class PointingHealpixTest(MPITestCase):
         data.info(handle=handle)
         if rank == 0:
             handle.close()
+
+        close_data(data)

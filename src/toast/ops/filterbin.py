@@ -454,6 +454,10 @@ class FilterBin(Operator):
             comm=data.comm.comm_world,
         )
 
+        # Get the units used across the distributed data for our desired
+        # input detector data
+        self._det_data_units = data.detector_units(self.det_data)
+
         self._initialize_comm(data)
 
         # Filter data
@@ -498,7 +502,7 @@ class FilterBin(Operator):
             if self.shared_flags is not None:
                 common_flags = obs.shared[self.shared_flags].data
             else:
-                common_flags = np.zeros(phase.size, dtype=np.uint8)
+                common_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             if self.grank == 0:
                 log.debug(
@@ -672,8 +676,10 @@ class FilterBin(Operator):
             return
 
         if self.hwp_angle not in obs.shared:
-            msg = f"Cannot apply HWP filtering at order = {self.hwp_filter_order}: " \
+            msg = (
+                f"Cannot apply HWP filtering at order = {self.hwp_filter_order}: "
                 f"no HWP angle found under key = '{self.hwp_angle}'"
+            )
             raise RuntimeError(msg)
         hwp_angle = obs.shared[self.hwp_angle].data
         shared_flags = np.array(obs.shared[self.shared_flags])
@@ -1234,6 +1240,7 @@ class FilterBin(Operator):
         self.binning.noiseweighted = noiseweighted_map_name
         self.binning.binned = map_name
         self.binning.det_data = self.det_data
+        self.binning.det_data_units = self._det_data_units
         self.binning.covariance = cov_name
 
         cov = CovarianceAndHits(
@@ -1244,6 +1251,7 @@ class FilterBin(Operator):
             rcond=rcond_name,
             det_flags=self.binning.det_flags,
             det_flag_mask=self.binning.det_flag_mask,
+            det_data_units=self._det_data_units,
             shared_flags=self.binning.shared_flags,
             shared_flag_mask=self.binning.shared_flag_mask,
             pixel_pointing=self.binning.pixel_pointing,
@@ -1302,6 +1310,7 @@ class FilterBin(Operator):
             data[self.binning.pixel_dist],
             dtype=np.float32,
             n_value=self.deproject_nnz,
+            units=self._det_data_units,
         )
         if filename_is_hdf5(self.deproject_map):
             read_healpix_hdf5(

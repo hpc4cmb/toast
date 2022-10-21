@@ -15,7 +15,7 @@ from ..instrument_sim import fake_hexagon_focalplane
 from ..io import H5File
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 from .ops_noise_estim import plot_noise_estim_compare
 
@@ -210,3 +210,5 @@ class InstrumentTest(MPITestCase):
                 np.testing.assert_array_almost_equal(
                     in_psd.value, fit_psd.value, decimal=2
                 )
+
+        close_data(data)

@@ -13,7 +13,7 @@ from .. import qarray as qa
 from ..dipole import dipole
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_healpix_ring_satellite, create_outdir
+from ._helpers import create_healpix_ring_satellite, create_outdir, close_data
 from .mpi import MPITestCase
 
 
@@ -172,3 +172,5 @@ class SimDipoleTest(MPITestCase):
             maxloc = np.argmax(mdata)
             np.testing.assert_equal(minloc, self.dip_min_pix)
             np.testing.assert_equal(maxloc, self.dip_max_pix)
+
+        close_data(data)

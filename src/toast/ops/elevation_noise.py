@@ -250,6 +250,8 @@ class ElevationNoise(Operator):
             for idet, det in enumerate(obs.all_detectors):
                 if det not in local_check:
                     continue
+                local_rates[idet] = focalplane.sample_rate.to_value(u.Hz)
+
                 # If both the A and C values are unset, the noise model is not modified.
                 if self.noise_a is not None:
                     noise_a = self.noise_a
@@ -258,6 +260,8 @@ class ElevationNoise(Operator):
                     noise_a = focalplane[det]["elevation_noise_a"]
                     noise_c = focalplane[det]["elevation_noise_c"]
                 else:
+                    local_net_factors[idet] = 1.0
+                    local_tot_factors[idet] = 1.0
                     continue
 
                 if self.modulate_pwv and self.pwv_a0 is not None:
@@ -292,8 +296,6 @@ class ElevationNoise(Operator):
                 el = np.median(np.concatenate(el_view))
 
                 # Compute the scaling factors
-
-                local_rates[idet] = focalplane.sample_rate.to_value(u.Hz)
 
                 net_factor = noise_a / np.sin(el) + noise_c
                 local_net_factors[idet] = net_factor
@@ -381,8 +383,9 @@ class ElevationNoise(Operator):
         if data.comm.group_rank == 0:
             net_factors = np.array(self.net_factors)
             total_factors = np.array(self.total_factors)
-            weights_in = np.array(self.weights_in)
-            weights_out = np.array(self.weights_out)
+            wt_units = 1.0 / (u.K**2)
+            weights_in = np.array([x.to_value(wt_units) for x in self.weights_in])
+            weights_out = np.array([x.to_value(wt_units) for x in self.weights_out])
             rates = np.array(self.rates)
             rank_comm = data.comm.comm_group_rank
             if rank_comm is not None:

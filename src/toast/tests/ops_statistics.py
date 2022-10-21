@@ -12,7 +12,7 @@ from astropy import units as u
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -74,4 +74,4 @@ class StatisticsTest(MPITestCase):
                 np.testing.assert_approx_equal(
                     kurt[idet], stats.kurtosis(sig, fisher=False), significant=6
                 )
-        return
+        close_data(data)

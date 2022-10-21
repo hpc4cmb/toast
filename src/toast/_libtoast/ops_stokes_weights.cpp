@@ -180,12 +180,12 @@ void init_ops_stokes_weights(py::module & m) {
                 )
                 {
                     # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr( \
-                            dev_weights, \
-                            dev_quats, \
-                            dev_hwp, \
-                            dev_intervals \
-                        )
+                    is_device_ptr(                                   \
+                    dev_weights,                                     \
+                    dev_quats,                                       \
+                    dev_hwp,                                         \
+                    dev_intervals                                    \
+                    )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel for default(shared)
@@ -292,10 +292,10 @@ void init_ops_stokes_weights(py::module & m) {
                 )
                 {
                     # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr( \
-                            dev_weights, \
-                            dev_intervals \
-                        )
+                    is_device_ptr(                                   \
+                    dev_weights,                                     \
+                    dev_intervals                                    \
+                    )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel for default(shared)

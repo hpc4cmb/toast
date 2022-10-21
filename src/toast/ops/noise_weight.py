@@ -51,6 +51,10 @@ class NoiseWeight(Operator):
                 # Nothing to do for this observation
                 continue
 
+            data_input_units = ob.detdata[self.det_data].units
+            data_invcov_units = 1.0 / data_input_units**2
+            data_output_units = 1.0 / data_input_units
+
             # Check that the noise model exists
             if self.noise_model not in ob:
                 msg = "Noise model {} does not exist in observation {}".format(
@@ -63,10 +67,12 @@ class NoiseWeight(Operator):
             for vw in ob.view[self.view].detdata[self.det_data]:
                 for d in dets:
                     # Get the detector weight from the noise model.
-                    detweight = noise.detector_weight(d)
+                    detweight = noise.detector_weight(d).to(data_invcov_units)
 
                     # Apply
-                    vw[d] *= detweight
+                    vw[d] *= detweight.value
+
+            ob.detdata[self.det_data].update_units(data_output_units)
         return
 
     def _finalize(self, data, **kwargs):

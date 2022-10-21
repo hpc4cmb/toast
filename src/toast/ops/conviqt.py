@@ -13,8 +13,15 @@ from .. import qarray as qa
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
+from ..traits import Bool, Dict, Instance, Int, Quantity, Unit, Unicode, trait_docs
+from ..utils import (
+    Environment,
+    GlobalTimers,
+    Logger,
+    Timer,
+    dtype_to_aligned,
+    unit_conversion,
+)
 from .operator import Operator
 
 conviqt = None
@@ -81,6 +88,10 @@ class SimConviqt(Operator):
         defaults.det_data,
         allow_none=False,
         help="Observation detdata key for accumulating convolved timestreams",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     calibrate = Bool(
@@ -252,6 +263,8 @@ class SimConviqt(Operator):
 
         all_detectors = self._get_all_detectors(data, detectors)
 
+        self.units = data.detector_units(self.det_data)
+
         for det in all_detectors:
             verbose = self.comm.rank == 0 and self.verbosity > 0
 
@@ -301,7 +314,9 @@ class SimConviqt(Operator):
             for det in obs_dets:
                 my_dets.add(det)
             # Make sure detector data output exists
-            exists = obs.detdata.ensure(self.det_data, detectors=detectors)
+            exists = obs.detdata.ensure(
+                self.det_data, detectors=detectors, units=self.det_data_units
+            )
         all_dets = self.comm.gather(my_dets, root=0)
         if self.comm.rank == 0:
             for some_dets in all_dets:
@@ -535,7 +550,9 @@ class SimConviqt(Operator):
             focalplane = obs.telescope.focalplane
             epsilon = self._get_epsilon(focalplane, det)
             # Make sure detector data output exists
-            exists = obs.detdata.ensure(self.det_data, detectors=[det])
+            exists = obs.detdata.ensure(
+                self.det_data, detectors=[det], create_units=self.det_data_units
+            )
             # Loop over views
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:
@@ -551,6 +568,7 @@ class SimConviqt(Operator):
         timer = Timer()
         timer.start()
         offset = 0
+        scale = unit_conversion(u.K, self.units)
         for obs in data.obs:
             if det not in obs.local_detectors:
                 continue
@@ -558,7 +576,7 @@ class SimConviqt(Operator):
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:
                 nsample = len(view[det])
-                view[det] += convolved_data[offset : offset + nsample]
+                view[det] += scale * convolved_data[offset : offset + nsample]
                 offset += nsample
         if verbose:
             timer.report_clear(f"save detector {det}")

@@ -83,6 +83,17 @@ def create_comm(mpicomm):
     return toastcomm
 
 
+def close_data(data):
+    """Make sure that data objects and comms are cleaned up."""
+    cm = data.comm
+    if cm.comm_world is not None:
+        cm.comm_world.barrier()
+    data.clear()
+    del data
+    cm.close()
+    del cm
+
+
 def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1):
     """Create a fake satellite telescope with at least one pixel per process."""
     npix = 1
@@ -406,7 +417,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
             shape=(ob.n_local_samples, 4),
             dtype=np.float64,
         )
-        ob.detdata.create(defaults.det_data, dtype=np.float64)
+        ob.detdata.create(defaults.det_data, dtype=np.float64, units=u.K)
         ob.detdata.create(defaults.det_flags, dtype=np.uint8)
         # Rank zero of each grid column creates the data
         stamps = None
@@ -472,7 +483,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
 def create_fake_sky(data, dist_key, map_key):
     np.random.seed(987654321)
     dist = data[dist_key]
-    pix_data = PixelData(dist, np.float64, n_value=3)
+    pix_data = PixelData(dist, np.float64, n_value=3, units=u.K)
     # Just replicate the fake data across all local submaps
     off = 0
     for submap in range(dist.n_submap):

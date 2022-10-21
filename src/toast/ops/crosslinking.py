@@ -6,15 +6,15 @@ import os
 
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from .. import qarray as qa
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
@@ -26,7 +26,7 @@ from .pointing import BuildPixelDistribution
 
 class UniformNoise:
     def detector_weight(self, det):
-        return 1.0
+        return 1.0 / (u.K**2)
 
 
 @trait_docs
@@ -52,6 +52,10 @@ class CrossLinking(Operator):
         defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     det_flag_mask = Int(
@@ -108,7 +112,9 @@ class CrossLinking(Operator):
         """Evaluate the special pointing matrix"""
 
         obs = obs_data.obs[0]
-        exists_signal = obs.detdata.ensure(self.signal, detectors=[det])
+        exists_signal = obs.detdata.ensure(
+            self.signal, detectors=[det], create_units=self.det_data_units
+        )
         exists_weights = obs.detdata.ensure(
             self.weights, sample_shape=(3,), detectors=[det]
         )
@@ -193,6 +199,7 @@ class CrossLinking(Operator):
             weights=self.weights,
             noise_model=self.noise_model,
             det_data=self.signal,
+            det_data_units=self.det_data_units,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,

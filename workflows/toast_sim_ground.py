@@ -303,7 +303,8 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
         log.info_rank(
             f"  Discarded {nbad} / {ngood + nbad} observations "
             f"with PWV > {args.pwv_limit} mm in",
-            comm=world_comm, timer=timer,
+            comm=world_comm,
+            timer=timer,
         )
 
     # Construct a "perfect" noise model just from the focalplane parameters

@@ -17,6 +17,7 @@ from ._helpers import (
     create_fake_sky,
     create_outdir,
     create_satellite_data,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -82,8 +83,7 @@ class ScanHealpixTest(MPITestCase):
                     decimal=5,
                 )
 
-        del data
-        return
+        close_data(data)
 
     def test_healpix_mask(self):
         # Create a fake satellite data set for testing
@@ -138,8 +138,7 @@ class ScanHealpixTest(MPITestCase):
                     ob.detdata["test_flags"][det], ob.detdata[defaults.det_flags][det]
                 )
 
-        del data
-        return
+        close_data(data)
 
     def test_healpix_hdf5(self):
         # Create a fake satellite data set for testing
@@ -196,5 +195,4 @@ class ScanHealpixTest(MPITestCase):
                     decimal=5,
                 )
 
-        del data
-        return
+        close_data(data)
