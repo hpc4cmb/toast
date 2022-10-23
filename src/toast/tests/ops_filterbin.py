@@ -105,50 +105,53 @@ class FilterBinTest(MPITestCase):
         # Confirm that the filtered map has less noise than the unfiltered map
 
         if data.comm.world_rank == 0:
-            import matplotlib.pyplot as plt
+            if sys.platform.lower() == "darwin":
+                print(f"WARNING:  Skipping test_filterbin plots on MacOS")
+            else:
+                import matplotlib.pyplot as plt
 
-            rot = [43, -42]
-            reso = 4
-            fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+                rot = [43, -42]
+                reso = 4
+                fig = plt.figure(figsize=[18, 12])
+                cmap = "coolwarm"
 
-            fname_binned = os.path.join(
-                self.outdir, f"{filterbin.name}_unfiltered_map.h5"
-            )
-            fname_filtered = os.path.join(
-                self.outdir, f"{filterbin.name}_filtered_map.h5"
-            )
+                fname_binned = os.path.join(
+                    self.outdir, f"{filterbin.name}_unfiltered_map.h5"
+                )
+                fname_filtered = os.path.join(
+                    self.outdir, f"{filterbin.name}_filtered_map.h5"
+                )
 
-            binned = np.atleast_2d(read_healpix(fname_binned, None))
-            filtered = np.atleast_2d(read_healpix(fname_filtered, None))
+                binned = np.atleast_2d(read_healpix(fname_binned, None))
+                filtered = np.atleast_2d(read_healpix(fname_filtered, None))
 
-            good = binned != 0
-            rms1 = np.std(binned[good])
-            rms2 = np.std(filtered[good])
+                good = binned != 0
+                rms1 = np.std(binned[good])
+                rms2 = np.std(filtered[good])
 
-            nrow, ncol = 2, 2
-            for m in binned, filtered:
-                m[m == 0] = hp.UNSEEN
-            args = {"rot": rot, "reso": reso, "cmap": cmap}
-            hp.gnomview(
-                binned[0],
-                sub=[nrow, ncol, 1],
-                title=f"Binned map : {rms1}",
-                **args,
-            )
-            hp.gnomview(
-                filtered[0],
-                sub=[nrow, ncol, 2],
-                title=f"Filtered map : {rms2}",
-                **args,
-            )
+                nrow, ncol = 2, 2
+                for m in binned, filtered:
+                    m[m == 0] = hp.UNSEEN
+                args = {"rot": rot, "reso": reso, "cmap": cmap}
+                hp.gnomview(
+                    binned[0],
+                    sub=[nrow, ncol, 1],
+                    title=f"Binned map : {rms1}",
+                    **args,
+                )
+                hp.gnomview(
+                    filtered[0],
+                    sub=[nrow, ncol, 2],
+                    title=f"Filtered map : {rms2}",
+                    **args,
+                )
 
-            fname = os.path.join(self.outdir, "filter_test.png")
-            fig.savefig(fname)
-            check = rms2 < 1e-4 * rms1
-            if not check:
-                print(f"rms2 = {rms2}, rms1 = {rms1}")
-            self.assertTrue(check)
+                fname = os.path.join(self.outdir, "filter_test.png")
+                fig.savefig(fname)
+                check = rms2 < 1e-4 * rms1
+                if not check:
+                    print(f"rms2 = {rms2}, rms1 = {rms1}")
+                self.assertTrue(check)
 
         close_data(data)
 
