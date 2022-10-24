@@ -556,6 +556,8 @@ def filename_is_hdf5(filename):
 def read_healpix(filename, *args, **kwargs):
     """Read a FITS or HDF5 map serially"""
 
+    filename = filename.strip()
+
     if filename_is_fits(filename):
 
         # Load a FITS map with healpy
@@ -614,6 +616,9 @@ def read_healpix(filename, *args, **kwargs):
             result = mapdata, header
         else:
             result = mapdata
+    else:
+        msg = f"Could not ascertain file type for '{fname}'"
+        raise RuntimeError(msg)
 
     return result
 
