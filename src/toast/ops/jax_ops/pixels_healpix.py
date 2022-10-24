@@ -501,7 +501,7 @@ void pixels_healpix(
 
 # lets us play with the various implementations
 pixels_healpix = select_implementation(
-    pixels_healpix_compiled, pixels_healpix_numpy, pixels_healpix_jax, default_to_gpu=True
+    pixels_healpix_compiled, pixels_healpix_numpy, pixels_healpix_jax
 )
 
 # To test:

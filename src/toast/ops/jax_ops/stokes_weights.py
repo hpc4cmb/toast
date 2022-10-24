@@ -510,7 +510,7 @@ stokes_weights_I = select_implementation(
     stokes_weights_I_compiled, stokes_weights_I_numpy, stokes_weights_I_jax
 )
 stokes_weights_IQU = select_implementation(
-    stokes_weights_IQU_compiled, stokes_weights_IQU_numpy, stokes_weights_IQU_jax, default_to_gpu=True
+    stokes_weights_IQU_compiled, stokes_weights_IQU_numpy, stokes_weights_IQU_jax
 )
 
 # To test:
