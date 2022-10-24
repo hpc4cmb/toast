@@ -32,7 +32,6 @@ void OmpManager::assign_device(int node_procs, int node_rank, bool disabled) {
 
     // Clear any existing memory buffers
     clear();
-    free_dummy();
 
     node_procs_ = node_procs;
     node_rank_ = node_rank;
@@ -72,8 +71,6 @@ void OmpManager::assign_device(int node_procs, int node_rank, bool disabled) {
 
     auto & env = toast::Environment::get();
     env.set_acc(n_target, proc_per_dev, target_dev_);
-
-    allocate_dummy(n_target);
 
     return;
 }
@@ -118,6 +115,8 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
         throw std::runtime_error(o.str().c_str());
     }
 
+    std::cout << "OmpManager create for host buffer " << (int64_t)buffer << " mem_size_ count = " << n << std::endl;
+
     // Add to the map
     o.str("");
     o << "OmpManager:  creating entry for host ptr "
@@ -157,6 +156,9 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
 
 void OmpManager::remove(void * buffer, size_t nbytes) {
     size_t n = mem_size_.count(buffer);
+
+    std::cout << "OmpManager remove host buffer " << (int64_t)buffer << " mem_size_ count = " << n << std::endl;
+
     auto log = toast::Logger::get();
     std::ostringstream o;
 
@@ -364,59 +366,6 @@ void OmpManager::dump() {
     return;
 }
 
-void OmpManager::allocate_dummy(int n_target) {
-    // Allocate a small dummy device buffer that can be used to represent
-    // a NULL host pointer when passing to device functions with use_device_ptr().
-
-    auto log = toast::Logger::get();
-    std::ostringstream o;
-
-    null = malloc(sizeof(int64_t));
-    dev_null_ = NULL;
-
-    if (n_target > 0) {
-        #ifdef HAVE_OPENMP_TARGET
-        dev_null_ = omp_target_alloc(sizeof(int64_t), target_dev_);
-        if (dev_null_ == NULL) {
-            o.str("");
-            o << "OmpManager:  failed to allocate dummy dev pointer";
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
-        int failed = omp_target_associate_ptr(
-            null, dev_null_, sizeof(int64_t), 0, target_dev_
-        );
-        if (failed != 0) {
-            o.str("");
-            o << "OmpManager:  failed to associate dev null pointer";
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
-        #endif // ifdef HAVE_OPENMP_TARGET
-    }
-}
-
-void OmpManager::free_dummy() {
-    auto log = toast::Logger::get();
-    std::ostringstream o;
-
-    if (dev_null_ != NULL) {
-        #ifdef HAVE_OPENMP_TARGET
-        int failed = omp_target_disassociate_ptr(null, target_dev_);
-        if (failed != 0) {
-            o.str("");
-            o << "OmpManager:  destructor failed to disassociate dev null pointer";
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
-        omp_target_free(dev_null_, target_dev_);
-        #endif // ifdef HAVE_OPENMP_TARGET
-    }
-    if (null != NULL) {
-        free(null);
-    }
-}
-
 OmpManager::OmpManager() : mem_size_(), mem_() {
     auto log = toast::Logger::get();
     std::ostringstream o;
@@ -427,25 +376,24 @@ OmpManager::OmpManager() : mem_size_(), mem_() {
     target_dev_ = -2;
     node_procs_ = -1;
     node_rank_ = -1;
-    null = NULL;
-    dev_null_ = NULL;
 }
 
 OmpManager::~OmpManager() {
     auto log = toast::Logger::get();
     std::ostringstream o;
     clear();
-    free_dummy();
 }
 
 void OmpManager::clear() {
     #ifdef HAVE_OPENMP_TARGET
+    std::vector <void *> to_clear;
     for (auto & p : mem_) {
-        omp_target_free(p.second, target_dev_);
+        to_clear.push_back(p.first);
+    }
+    for (auto & p : to_clear) {
+        remove(p, mem_size_.at(p));
     }
     #endif // ifdef HAVE_OPENMP_TARGET
-    mem_size_.clear();
-    mem_.clear();
 }
 
 void extract_accel_buffer(py::buffer_info const & info, void ** host_ptr,
@@ -599,6 +547,62 @@ void init_accelerator(py::module & m) {
             "data"),
         R"(
         Create device copy of the data.
+
+        Args:
+            data (array):  The host data.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "accel_reset", [](py::buffer data)
+        {
+            auto & log = toast::Logger::get();
+            py::buffer_info info = data.request();
+            void * p_host;
+            size_t n_elem;
+            size_t n_bytes;
+            extract_accel_buffer(info, &p_host, &n_elem, &n_bytes);
+
+            std::ostringstream o;
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+            #endif // ifndef HAVE_OPENMP_TARGET
+
+            auto & omgr = OmpManager::get();
+            int present = omgr.present(p_host, n_bytes);
+            if (present == 0) {
+                o.str("");
+                o << "Data is not present on device, cannot reset.";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+
+            o.str("");
+            o << "reset device with host pointer " << p_host << " (" << n_bytes << " bytes)";
+            log.verbose(o.str().c_str());
+
+            uint8_t * p_dev = omgr.device_ptr <uint8_t> (
+                static_cast <uint8_t *> (p_host)
+            );
+            #pragma omp target map(to: n_bytes) is_device_ptr(p_dev)
+            {
+                for (size_t i = 0; i < n_bytes; ++i) {
+                    p_dev[i] = 0;
+                }
+            }
+            return;
+        }, py::arg(
+            "data"),
+        R"(
+        Reset device copy of the data to zero.
+
+        This is done directly on the device, without copying zeros.
 
         Args:
             data (array):  The host data.

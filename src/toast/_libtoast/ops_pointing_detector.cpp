@@ -124,7 +124,7 @@ void init_ops_pointing_detector(py::module & m) {
                 shared_flags, "flags", 1, temp_shape, {-1}
             );
             if (temp_shape[0] != n_samp) {
-                raw_flags = (uint8_t *)omgr.null;
+                raw_flags = omgr.null_ptr <uint8_t> ();
                 use_flags = false;
             }
 
@@ -146,10 +146,6 @@ void init_ops_pointing_detector(py::module & m) {
                 n_det,                     \
                 n_samp,                    \
                 use_flags                  \
-                )                          \
-                use_device_ptr(            \
-                raw_focalplane,            \
-                raw_quat_index             \
                 )
                 {
                     # pragma omp target teams distribute collapse(2) \

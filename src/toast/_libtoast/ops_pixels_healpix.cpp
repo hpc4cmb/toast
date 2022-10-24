@@ -87,10 +87,11 @@ void hpix_init(hpix * hp, int64_t nside) {
     }
 
     int64_t init_jr[12] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
-    memcpy(hp->jr, init_jr, sizeof(init_jr));
-
     int64_t init_jp[12] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
-    memcpy(hp->jp, init_jp, sizeof(init_jp));
+    for (int i = 0; i < 12; ++i) {
+        hp->jr[i] = init_jr[i];
+        hp->jp[i] = init_jp[i];
+    }
 
     for (uint64_t m = 0; m < 0x100; ++m) {
         hp->utab[m] = (m & 0x1) | ((m & 0x2) << 1) | ((m & 0x4) << 2) |
@@ -383,7 +384,7 @@ void init_ops_pixels_healpix(py::module & m) {
                 shared_flags, "flags", 1, temp_shape, {-1}
             );
             if (temp_shape[0] != n_samp) {
-                raw_flags = (uint8_t *)omgr.null;
+                raw_flags = omgr.null_ptr <uint8_t> ();
                 use_flags = false;
             }
 
@@ -409,12 +410,7 @@ void init_ops_pixels_healpix(py::module & m) {
                 shared_flag_mask,         \
                 use_flags                 \
                 )                         \
-                map(tofrom: raw_hsub)     \
-                use_device_ptr(           \
-                raw_pixel_index,          \
-                raw_quat_index,           \
-                raw_hsub                  \
-                )
+                map(tofrom: raw_hsub)
                 {
                     hpix hp;
                     hpix_init(&hp, nside);

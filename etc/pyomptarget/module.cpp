@@ -447,6 +447,9 @@ PYBIND11_MODULE(pyomptarget, m) {
                             isamp <= raw_intervals[iview].last;
                             isamp++
                         ) {
+                            // Test stack allocation with a mapped variable
+                            //double dummy[n_det];
+
                             pointing_detector_inner(
                                 raw_quat_index,
                                 dev_flags,

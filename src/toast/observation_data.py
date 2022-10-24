@@ -13,6 +13,7 @@ from pshmem import MPIShared
 from .accelerator import (
     AcceleratorObject,
     accel_data_create,
+    accel_data_reset,
     accel_data_delete,
     accel_data_present,
     accel_data_update_device,
@@ -275,8 +276,11 @@ class DetectorData(AcceleratorObject):
             self._flatdata[:] = 0
             self._data = self._flatdata.reshape(self._shape)
             if self.accel_exists():
-                # Should we zero the device memory?
-                pass
+                # Reset device memory to zero
+                if use_accel_omp:
+                    accel_data_reset(self._raw)
+                elif use_accel_jax:
+                    pass
             realloced = False
         return realloced
 

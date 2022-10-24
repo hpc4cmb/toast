@@ -39,7 +39,17 @@ class OmpManager {
 
         ~OmpManager();
 
-        void * null;
+        template <typename T>
+        T * null_ptr() {
+            static T instance = T();
+            if (! present(static_cast <void *> (&instance), sizeof(T))) {
+                // Create device copy on demand
+                void * dummy = create(
+                    static_cast <void *> (&instance), sizeof(T)
+                );
+            }
+            return &instance;
+        }
 
         template <typename T>
         T * device_ptr(T * buffer) {
@@ -75,8 +85,6 @@ class OmpManager {
 
         OmpManager();
         void clear();
-        void allocate_dummy(int n_target);
-        void free_dummy();
 
         std::unordered_map <void *, size_t> mem_size_;
         std::unordered_map <void *, void *> mem_;
@@ -84,7 +92,6 @@ class OmpManager {
         int target_dev_;
         int node_procs_;
         int node_rank_;
-        void * dev_null_;
 };
 
 

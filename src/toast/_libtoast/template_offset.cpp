@@ -154,7 +154,7 @@ void init_template_offset(py::module & m) {
 
             // Optionally use flags
             bool use_flags = false;
-            uint8_t * raw_det_flags = (uint8_t *)omgr.null;
+            uint8_t * raw_det_flags = omgr.null_ptr <uint8_t> ();
             if (flag_index >= 0) {
                 raw_det_flags = extract_buffer <uint8_t> (
                     flag_data, "flag_data", 2, temp_shape, {-1, n_samp}

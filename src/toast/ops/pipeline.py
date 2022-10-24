@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 import traitlets
 
-from ..accelerator import use_accel_jax, use_accel_omp
+from ..accelerator import accel_enabled
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Int, List, Unicode, trait_docs
@@ -90,7 +90,7 @@ class Pipeline(Operator):
                 comp_dets = set(data.all_local_detectors(selection=None))
             else:
                 comp_dets = set(detectors)
-            if (use_accel_omp or use_accel_jax) and self.supports_accel():
+            if accel_enabled() and self.supports_accel():
                 # All our operators support it.
                 msg = "Pipeline operators {}".format(
                     ", ".join([x.name for x in self.operators])
@@ -209,6 +209,13 @@ class Pipeline(Operator):
             msg = f"{pstr} Pipeline copying out accel data products: {prov}"
             log.verbose(msg)
             data.accel_update_host(self.provides())
+
+            # Clear intermediate objects
+            interm = self._get_intermediate()
+            data.accel_delete(interm)
+
+            # DEBUG, see if deleting inputs produce correct results
+            data.accel_delete(self._requires)
         return result
 
     def _requires(self):

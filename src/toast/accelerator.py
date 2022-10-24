@@ -7,6 +7,7 @@ import time
 
 from ._libtoast import Logger
 from ._libtoast import accel_create as omp_accel_create
+from ._libtoast import accel_reset as omp_accel_reset
 from ._libtoast import accel_delete as omp_accel_delete
 from ._libtoast import accel_enabled as omp_accel_enabled
 from ._libtoast import accel_get_device as omp_accel_get_device
@@ -127,6 +128,30 @@ def accel_data_create(data):
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot create")
+
+
+def accel_data_reset(data):
+    """Reset device buffers.
+
+    Using the input data array, reset to zero the corresponding device array.  
+    For OpenMP target offload, this runs a small device kernel that sets the
+    memory to zero.  For jax arrays, this is a no-op, since those
+    arrays are mapped and managed elsewhere.
+
+    Args:
+        data (array):  The host array.
+
+    Returns:
+        None
+
+    """
+    if use_accel_omp:
+        omp_accel_reset(data)
+    elif use_accel_jax:
+        pass
+    else:
+        log = Logger.get()
+        log.warning("Accelerator support not enabled, cannot reset")
 
 
 def accel_data_update_device(data):

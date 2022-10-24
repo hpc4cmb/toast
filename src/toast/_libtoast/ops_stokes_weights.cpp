@@ -286,9 +286,6 @@ void init_ops_stokes_weights(py::module & m) {
                 n_view,                    \
                 n_det,                     \
                 n_samp                     \
-                )                          \
-                use_device_ptr(            \
-                raw_weight_index           \
                 )
                 {
                     # pragma omp target teams distribute collapse(2) \

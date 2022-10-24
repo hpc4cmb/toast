@@ -1,0 +1,13 @@
+#!/bin/bash
+
+export OMP_TARGET_OFFLOAD=MANDATORY
+export OMP_DISPLAY_ENV=verbose
+
+#export LIBOMPTARGET_INFO=$((0x1 | 0x2 | 0x4 | 0x8 | 0x10 | 0x20))
+export LIBOMPTARGET_INFO=-1
+export LIBOMPTARGET_DEVICE_RTL_DEBUG=3
+
+#export HSA_IGNORE_SRAMECC_MISREPORT=1
+
+eval "$@"
+

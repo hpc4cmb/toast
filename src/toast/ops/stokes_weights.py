@@ -263,7 +263,7 @@ class StokesWeights(Operator):
             else:
                 if self.mode == "IQU":
                     if self.hwp_angle is None:
-                        hwp_data = np.zeros((0,), dtype=np.float64)
+                        hwp_data = np.zeros(1, dtype=np.float64)
                     else:
                         hwp_data = ob.shared[self.hwp_angle].data
                     stokes_weights_IQU(
