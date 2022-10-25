@@ -309,15 +309,8 @@ class ElevationNoise(Operator):
 
                 local_tot_factors[idet] = net_factor**2
 
-            # FIXME:  This was modifying the view used by the input detector pointing.
-            # It seems like that might produce unexpected results.  Are we saying that
-            # by estimating the elevation-dependent noise scaling we are invalidating
-            # the detector pointing for any samples not used in that estimate?  For
-            # example, maybe the user wants to compute the scaling from data outside of
-            # turnarounds.  That does not mean that pointing in the turnarounds is
-            # invalid.
-            #
-            # self.detector_pointing.view = detector_pointing_view
+            # Restore the original detector pointing view
+            self.detector_pointing.view = detector_pointing_view
 
             # Communicate the PSD scale factors
             if obs.comm.comm_group is not None:
