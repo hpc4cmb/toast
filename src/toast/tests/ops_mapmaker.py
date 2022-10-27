@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import sys
 
 import healpy as hp
 import numpy as np
@@ -34,6 +35,10 @@ class MapmakerTest(MPITestCase):
             self.obs_per_group = self.total_obs // 2
 
     def test_offset(self):
+        if sys.platform.lower() == "darwin":
+            print(f"WARNING:  Skipping test_offset on MacOS")
+            return
+
         testdir = os.path.join(self.outdir, "offset")
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
