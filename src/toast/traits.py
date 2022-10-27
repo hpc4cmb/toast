@@ -692,16 +692,16 @@ class TraitConfig(HasTraits):
                         x: trait_string_to_scalar(y) for x, y in v["value"].items()
                     }
                 # print(f"from_config {name}:    {k} = {kw[k]}")
+            elif v["value"] == "None":
+                # Regardless of type, we set this to None
+                kw[k] = None
             elif (
                 v["type"] == "float"
                 or v["type"] == "int"
                 or v["type"] == "str"
                 or v["type"] == "bool"
             ):
-                if v["value"] == "None":
-                    kw[k] = None
-                else:
-                    kw[k] = trait_string_to_scalar(v["value"])
+                kw[k] = trait_string_to_scalar(v["value"])
                 # print(f"from_config {name}:    {k} = {kw[k]}")
             elif v["type"] == "unknown":
                 # This was a None value in the TOML or similar unknown object
