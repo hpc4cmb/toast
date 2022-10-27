@@ -235,7 +235,9 @@ class SimSatellite(Operator):
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     shared_flags = Unicode(
-        defaults.shared_flags, help="Observation shared key for common flags"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for common flags",
     )
 
     hwp_angle = Unicode(

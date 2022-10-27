@@ -166,9 +166,7 @@ class CMakeBuild(build_ext):
             cmake_args += ["-DCMAKE_C_COMPILER={}".format(cc)]
         else:
             # We just let cmake guess the compilers and hope for the best...
-            print(
-                f"C Compiler:  not specified, will use CMake to discover"
-            )
+            print(f"C Compiler:  not specified, will use CMake to discover")
             pass
 
         if "CMAKE_CXX_COMPILER" in cmake_opts:
@@ -177,9 +175,7 @@ class CMakeBuild(build_ext):
             print(
                 f"C++ Compiler:  using serial compiler '{cxx}' from TOAST_BUILD environment variables"
             )
-            cmake_args += [
-                f"-DCMAKE_CXX_COMPILER={cxx}"
-            ]
+            cmake_args += [f"-DCMAKE_CXX_COMPILER={cxx}"]
             _ = cmake_opts.pop("CMAKE_CXX_COMPILER")
         elif cxx is not None:
             # Use serial compilers that were used when building MPI
@@ -189,9 +185,7 @@ class CMakeBuild(build_ext):
             cmake_args += ["-DCMAKE_CXX_COMPILER={}".format(cxx)]
         else:
             # We just let cmake guess the compilers and hope for the best...
-            print(
-                f"C++ Compiler:  not specified, will use CMake to discover"
-            )
+            print(f"C++ Compiler:  not specified, will use CMake to discover")
             pass
 
         # Append any other TOAST_BUILD_ options to the cmake args
@@ -214,9 +208,7 @@ class CMakeBuild(build_ext):
         print("-" * 10, "Running CMake prepare", "-" * 40)
         cmake_com = ["cmake", cmake_list_dir] + cmake_args
         print("\n".join([f"   {x}" for x in cmake_com]))
-        subprocess.check_call(
-            cmake_com, cwd=self.build_temp, env=env
-        )
+        subprocess.check_call(cmake_com, cwd=self.build_temp, env=env)
 
         print("-" * 10, "Building extensions", "-" * 40)
         cmake_cmd = ["cmake", "--build", "."] + self.build_args
@@ -308,6 +300,7 @@ conf["entry_points"] = {
         "toast_hdf5_to_spt3g = toast.scripts.toast_hdf5_to_spt3g:main",
         "toast_timing_plot = toast.scripts.toast_timing_plot:main",
         "toast_obsmatrix_combine = toast.scripts.toast_obsmatrix_combine:main",
+        "toast_config_verify = toast.scripts.toast_config_verify:main",
     ]
 }
 conf["cmdclass"] = {"build_ext": CMakeBuild}

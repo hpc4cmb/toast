@@ -671,6 +671,7 @@ def parse_config(
 
 
 def _merge_config(loaded, original):
+    log = Logger.get()
     for section, objs in loaded.items():
         if section in original.keys():
             # We have this section
@@ -679,8 +680,28 @@ def _merge_config(loaded, original):
                     # This is a new object
                     original[section][objname] = objprops
                 else:
+                    # Only update the value and unit, while preserving
+                    # any pre-existing type information.
                     for k, v in objprops.items():
-                        original[section][objname][k] = v
+                        if k == "class":
+                            continue
+                        if k in original[section][objname]:
+                            # This key exists in the original object traits
+                            cursor = original[section][objname][k]
+                            cursor["value"] = v["value"]
+                            cursor["unit"] = v["unit"]
+                            if "type" not in cursor:
+                                cursor["type"] = v["type"]
+                        else:
+                            # We have a config option that does not exist
+                            # in the current object.  Warn user that this may
+                            # indicate a stale config file.
+                            msg = f"Object {objname} currently has no configuration"
+                            msg += f" trait '{k}'.  This might be handled by the "
+                            msg += f"class through API translation, but your config "
+                            msg += f"file may be out of date."
+                            log.warning(msg)
+                            original[section][objname][k] = v
         else:
             # A new section
             original[section] = objs

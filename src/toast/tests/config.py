@@ -369,12 +369,15 @@ class ConfigTest(MPITestCase):
 
     def test_config_multi(self):
         testops = self.create_operators()
+        testops["fake"] = ConfigOperator(name="fake")
+        testops["scan_map"] = ops.ScanHealpixMap(name="scan_map")
+
         objs = [y for x, y in testops.items()]
         defaults = build_config(objs)
 
-        conf_file = os.path.join(self.outdir, "multi_defaults.toml")
+        conf_defaults_file = os.path.join(self.outdir, "multi_defaults.toml")
         if self.toastcomm.world_rank == 0:
-            dump_toml(conf_file, defaults)
+            dump_toml(conf_defaults_file, defaults)
         if self.toastcomm.comm_world is not None:
             self.toastcomm.comm_world.barrier()
 
@@ -384,51 +387,86 @@ class ConfigTest(MPITestCase):
         testops["sim_noise"].serial = False
         testops["sim_satellite"].hwp_rpm = 8.0
         testops["sim_satellite"].distribute_time = True
+        testops["sim_satellite"].shared_flags = None
+        testops["scan_map"].file = "blat"
+        testops["fake"].unicode_none = "foo"
 
-        # Dump this config
-        objs = [y for x, y in testops.items()]
-        conf = build_config(objs)
-        conf2_file = os.path.join(self.outdir, "multi_conf.toml")
+        # Dump these to 2 disjoint configs
+        testops_fake = {"fake": testops["fake"]}
+        testops_notfake = dict(testops)
+        del testops_notfake["fake"]
+
+        conf_fake = build_config([y for x, y in testops_fake.items()])
+        conf_notfake = build_config([y for x, y in testops_notfake.items()])
+
+        conf_notfake_file = os.path.join(self.outdir, "multi_notfake.toml")
         if self.toastcomm.world_rank == 0:
-            dump_toml(conf2_file, conf)
+            dump_toml(conf_notfake_file, conf_notfake)
         if self.toastcomm.comm_world is not None:
             self.toastcomm.comm_world.barrier()
 
-        # Options for testing
-        arg_opts = [
-            "--mem_count.prefix",
-            "altpref",
-            "--mem_count.enable",
-            "--sim_noise.serial",
-            "--sim_satellite.hwp_rpm",
-            "3.0",
-            "--sim_satellite.no_distribute_time",
-            "--pixels.resolution",
-            "(0.05 deg, 0.05 deg)",
-            "--config",
-            conf_file,
-            conf2_file,
-        ]
+        conf_fake_file = os.path.join(self.outdir, "multi_fake.toml")
+        if self.toastcomm.world_rank == 0:
+            dump_toml(conf_fake_file, conf_fake)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
 
-        parser = argparse.ArgumentParser(description="Test")
-        config, remaining, jobargs = parse_config(
-            parser,
-            operators=[y for x, y in testops.items()],
-            templates=list(),
-            prefix="",
-            opts=arg_opts,
-        )
+        # Load the configs in either order (since they are disjoint)
+        # and verify that the final result is the same
 
-        # Instantiate
-        run = create_from_config(config)
-        runops = run.operators
+        iter = 1
+        for conf_order in (
+            [conf_notfake_file, conf_fake_file],
+            [conf_fake_file, conf_notfake_file],
+        ):
+            # Options for testing
+            arg_opts = [
+                "--mem_count.prefix",
+                "altpref",
+                "--mem_count.enable",
+                "--sim_noise.serial",
+                "--sim_satellite.hwp_rpm",
+                "3.0",
+                "--sim_satellite.no_distribute_time",
+                "--pixels.resolution",
+                "(0.05 deg, 0.05 deg)",
+                "--scan_map.file",
+                "foobar",
+                "--fake.unicode_none",
+                "None",
+                "--config",
+            ]
+            arg_opts.extend(conf_order)
 
-        # Check
-        self.assertTrue(runops.mem_count.prefix == "altpref")
-        self.assertTrue(runops.mem_count.enabled == True)
-        self.assertTrue(runops.sim_noise.serial == True)
-        self.assertTrue(runops.sim_satellite.distribute_time == False)
-        self.assertTrue(runops.sim_satellite.hwp_rpm == 3.0)
+            parser = argparse.ArgumentParser(description="Test")
+            config, remaining, jobargs = parse_config(
+                parser,
+                operators=[y for x, y in testops.items()],
+                templates=list(),
+                prefix="",
+                opts=arg_opts,
+            )
+            debug_file = os.path.join(self.outdir, f"debug_{iter}.toml")
+            if self.toastcomm.world_rank == 0:
+                dump_toml(debug_file, config)
+            if self.toastcomm.comm_world is not None:
+                self.toastcomm.comm_world.barrier()
+
+            iter += 1
+
+            # Instantiate
+            run = create_from_config(config)
+            runops = run.operators
+
+            # Check
+            self.assertTrue(runops.mem_count.prefix == "altpref")
+            self.assertTrue(runops.mem_count.enabled == True)
+            self.assertTrue(runops.sim_noise.serial == True)
+            self.assertTrue(runops.sim_satellite.distribute_time == False)
+            self.assertTrue(runops.sim_satellite.hwp_rpm == 3.0)
+            self.assertTrue(runops.sim_satellite.shared_flags is None)
+            self.assertTrue(runops.fake.unicode_none is None)
+            self.assertTrue(runops.scan_map.file == "foobar")
 
     def test_roundtrip(self):
         testops = self.create_operators()
