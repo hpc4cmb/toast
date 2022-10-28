@@ -258,13 +258,13 @@ class ObserveAtmosphere(Operator):
                     az = 2 * np.pi - phi
                     el = np.pi / 2 - theta
 
-                    if np.ptp(az) < np.pi:
-                        azmin_det = np.amin(az)
-                        azmax_det = np.amax(az)
-                    else:
-                        # Scanning across the zero azimuth.
-                        azmin_det = np.amin(az[az > np.pi]) - 2 * np.pi
-                        azmax_det = np.amax(az[az < np.pi])
+                    az = np.unwrap(az)
+                    while np.amin(az) < 0:
+                        az += 2 * np.pi
+                    while np.amax(az) > 2 * np.pi:
+                        az -= 2 * np.pi
+                    azmin_det = np.amin(az)
+                    azmax_det = np.amax(az)
                     elmin_det = np.amin(el)
                     elmax_det = np.amax(el)
 
