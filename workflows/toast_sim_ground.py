@@ -52,6 +52,7 @@ if t3g.available:
 warnings.simplefilter("error")
 warnings.simplefilter("ignore", erfa.core.ErfaWarning)
 
+
 def parse_config(operators, templates, comm):
     """Parse command line arguments and load any config files.
 
@@ -173,7 +174,8 @@ def load_instrument_and_schedule(args, comm):
             focalplane = comm.bcast(focalplane, root=0)
     else:
         focalplane = toast.instrument.Focalplane(
-            sample_rate=sample_rate, thinfp=args.thinfp,
+            sample_rate=sample_rate,
+            thinfp=args.thinfp,
         )
         with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
             focalplane.load_hdf5(f.handle, comm=comm)

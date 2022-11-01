@@ -263,7 +263,9 @@ class DetectorData(AcceleratorObject):
             if should_update_GPU:
                 if use_accel_jax:
                     # NOTE: we create an array of zeroes directly on GPU to avoid useless data movement
-                    self._data = MutableJaxArray(self._data, gpu_data=jax.numpy.zeros_like(self._data))
+                    self._data = MutableJaxArray(
+                        self._data, gpu_data=jax.numpy.zeros_like(self._data)
+                    )
                 else:
                     # FIXME: Should we zero the device memory?
                     pass
@@ -1413,7 +1415,9 @@ class SharedDataManager(MutableMapping, AcceleratorObject):
         if use_accel_omp:
             accel_data_create(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            self._internal[key].shdata.data = MutableJaxArray(self._internal[key].shdata.data)
+            self._internal[key].shdata.data = MutableJaxArray(
+                self._internal[key].shdata.data
+            )
 
     def accel_update_device(self, key):
         """Copy the named shared data to the accelerator.
@@ -1447,7 +1451,9 @@ class SharedDataManager(MutableMapping, AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_device(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            self._internal[key].shdata.data = MutableJaxArray(self._internal[key].shdata.data)
+            self._internal[key].shdata.data = MutableJaxArray(
+                self._internal[key].shdata.data
+            )
 
         self._accel_used[key] = True
 
@@ -1483,7 +1489,9 @@ class SharedDataManager(MutableMapping, AcceleratorObject):
         if use_accel_omp:
             _ = accel_data_update_host(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            self._internal[key].shdata.data = accel_data_update_host(self._internal[key].shdata.data)
+            self._internal[key].shdata.data = accel_data_update_host(
+                self._internal[key].shdata.data
+            )
 
         self._accel_used[key] = False
 
@@ -1513,7 +1521,9 @@ class SharedDataManager(MutableMapping, AcceleratorObject):
         if use_accel_omp:
             accel_data_delete(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            self._internal[key].shdata.data = accel_data_delete(self._internal[key].shdata.data)
+            self._internal[key].shdata.data = accel_data_delete(
+                self._internal[key].shdata.data
+            )
 
         self._accel_used[key] = False
 
@@ -1533,7 +1543,9 @@ class SharedDataManager(MutableMapping, AcceleratorObject):
                 if use_accel_omp:
                     accel_data_delete(self._internal[key].shdata._flat)
                 elif use_accel_jax:
-                    self._internal[key].shdata.data = accel_data_delete(self._internal[key].shdata.data)
+                    self._internal[key].shdata.data = accel_data_delete(
+                        self._internal[key].shdata.data
+                    )
             self._accel_used[key] = False
 
     # Mapping methods

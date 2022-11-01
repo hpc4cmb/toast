@@ -658,7 +658,9 @@ class Amplitudes(AcceleratorObject):
         if use_accel_omp:
             return accel_data_present(self._raw) and accel_data_present(self._raw_flags)
         elif use_accel_jax:
-            return accel_data_present(self.local) and accel_data_present(self.local_flags)
+            return accel_data_present(self.local) and accel_data_present(
+                self.local_flags
+            )
         else:
             return False
 

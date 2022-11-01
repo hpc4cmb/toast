@@ -76,7 +76,7 @@ class DataMovement:
     def add(self, inputs, outputs, display=False):
         self.nb_calls += 1
         # inputs
-        for i,input in enumerate(inputs):
+        for i, input in enumerate(inputs):
             bytes = bytes_of_input(input)
             gpu_data = isinstance(input, jnp.ndarray)
             self.input_bytes += bytes
@@ -85,7 +85,7 @@ class DataMovement:
             if display:
                 print(f"input[{i}] size:{bytes} GPU:{gpu_data}")
         # outputs
-        for i,output in enumerate(outputs):
+        for i, output in enumerate(outputs):
             bytes = output.nbytes
             gpu_data = isinstance(input, jnp.ndarray)
             self.output_bytes += bytes

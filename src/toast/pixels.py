@@ -177,7 +177,7 @@ class PixelDistribution(AcceleratorObject):
         return self._glob2loc
 
     # TODO remover timer to keep a match between the number of lines in the compiled and jax profiles
-    #@function_timer
+    # @function_timer
     def global_pixel_to_submap(self, gl):
         """Convert global pixel indices into the local submap and pixel.
 
@@ -439,6 +439,7 @@ class PixelDistribution(AcceleratorObject):
             # if we observe that its types is still a GPU types
             # does NOT move data back from GPU
             self._glob2loc = self._glob2loc.host_data
+
 
 class PixelData(AcceleratorObject):
     """Distributed map-domain data.

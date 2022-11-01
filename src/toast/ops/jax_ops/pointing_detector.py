@@ -168,7 +168,7 @@ def pointing_detector_jax(
             intervals.first,
             intervals.last,
         ],
-        [quats]
+        [quats],
     )
 
     # runs computation

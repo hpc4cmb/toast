@@ -25,7 +25,7 @@ class MutableJaxArray:
         """
         # stores cpu and gpu data
         if isinstance(cpu_data, MutableJaxArray):
-            self.host_data = cpu_data.host_data 
+            self.host_data = cpu_data.host_data
             self.data = cpu_data.data
         else:
             self.host_data = cpu_data
@@ -33,7 +33,7 @@ class MutableJaxArray:
             if gpu_data is None:
                 data = MutableJaxArray.to_array(cpu_data)
                 self.data = jax.device_put(data)
-                
+
         # gets basic information on the data
         self.shape = self.data.shape
         self.size = self.data.size
