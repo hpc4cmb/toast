@@ -866,7 +866,6 @@ class AmplitudesMap(MutableMapping, AcceleratorObject):
         self._check_other(other)
         result = 0.0
         for k, v in self._internal.items():
-            d = v.dot(other[k])
             result += v.dot(other[k])
         return result
 
