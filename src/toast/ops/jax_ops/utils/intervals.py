@@ -39,10 +39,10 @@ class INTERVALS_JAX:
 
     def to_host(self):
         """copies data back into the original buffer and returns it"""
-        self.host_data.start[:] = self.starts
-        self.host_data.stop[:] = self.stops
-        self.host_data.first[:] = self.firsts
-        self.host_data.last[:] = self.lasts
+        self.host_data.start[:] = self.start
+        self.host_data.stop[:] = self.stop
+        self.host_data.first[:] = self.first
+        self.host_data.last[:] = self.last
         return self.host_data
 
     def __iter__(self):
