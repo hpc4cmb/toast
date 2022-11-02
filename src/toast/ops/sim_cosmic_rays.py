@@ -10,7 +10,7 @@ from scipy import interpolate, signal
 from .. import rng
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Callable, Float, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Callable, Float, Int, Quantity, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 
@@ -64,8 +64,14 @@ class InjectCosmicRays(Operator):
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key to inject the gain drift"
     )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
+    )
+
     crfile = Unicode(None, help="Path to the *.npz file encoding cosmic ray infos")
-    crdata_units = Quantity(1 * u.W, help="set the unities of the input amplitudes ")
+
+    crdata_units = Unit(u.W, help="The units of the input amplitudes")
 
     realization = Int(0, help="integer to set a different random seed ")
 
@@ -73,11 +79,14 @@ class InjectCosmicRays(Operator):
         0.0015,
         help="the expected event rate of hits in a detector",
     )
+
     inject_direct_hits = Bool(False, help="inject  direct hits as glitches in the TODs")
+
     conversion_factor = Quantity(
         1 * u.K / u.W,
         help="factor to convert the cosmic ray signal (usually Watts) into temperature units",
     )
+
     include_common_mode = Bool(
         False, help="will include also common mode per pixel pair  if set to True"
     )
@@ -139,7 +148,9 @@ class InjectCosmicRays(Operator):
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank
             # Make sure detector data output exists
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data, detectors=dets, create_units=self.det_data_units
+            )
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
@@ -259,7 +270,7 @@ class InjectCosmicRays(Operator):
                 tmparray = tmparray * self.crdata_units
                 ob.detdata[self.det_data][det] += (
                     self.conversion_factor * tmparray
-                ).value
+                ).to_value(self.det_data_units)
 
         return
 

@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from ._helpers import create_fake_sky, create_outdir, create_satellite_data
+from ._helpers import create_fake_sky, create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -71,8 +71,7 @@ class ScanMapTest(MPITestCase):
                         val, ob.detdata[defaults.det_data][det, i]
                     )
 
-        del data
-        return
+        close_data(data)
 
     def test_scan_add_subtract(self):
         # Create a fake satellite data set for testing
@@ -136,8 +135,7 @@ class ScanMapTest(MPITestCase):
 
         np.testing.assert_equal(trms, np.zeros_like(trms))
 
-        del data
-        return
+        close_data(data)
 
     def test_mask(self):
         # Create a fake satellite data set for testing
@@ -188,5 +186,4 @@ class ScanMapTest(MPITestCase):
                     else:
                         self.assertTrue(ob.detdata["mask_flags"][det, i] == 0)
 
-        del data
-        return
+        close_data(data)

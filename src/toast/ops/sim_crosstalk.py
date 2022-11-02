@@ -4,12 +4,13 @@
 
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from .. import rng
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 
@@ -153,6 +154,10 @@ class CrossTalk(Operator):
         help="Observation detdata key for the timestream data",
     )
 
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
+    )
+
     xtalk_mat_file = Unicode(
         None, allow_none=True, help="CrossTalk matrix dictionary of dictionaries"
     )
@@ -182,7 +187,9 @@ class CrossTalk(Operator):
                 continue
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data, detectors=dets, create_units=self.det_data_units
+            )
             obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane

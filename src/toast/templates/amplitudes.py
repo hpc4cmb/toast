@@ -87,6 +87,9 @@ class Amplitudes(AcceleratorObject):
         dtype=np.float64,
         use_group=False,
     ):
+        # print(
+        #     f"Amplitudes({comm.world_rank}, n_global={n_global}, n_local={n_local}, lc_ind={local_indices}, lc_rng={local_ranges}, dt={dtype}, use_group={use_group}"
+        # )
         self._comm = comm
         self._n_global = n_global
         self._n_local = n_local
@@ -108,19 +111,22 @@ class Amplitudes(AcceleratorObject):
             self._global_last = self._n_local - 1
         else:
             if (self._local_indices is None) and (self._local_ranges is None):
-                check = None
                 rank = 0
                 if self._mpicomm is not None:
-                    check = self._mpicomm.allgather(self._n_local)
+                    all_n_local = self._mpicomm.gather(self._n_local, root=0)
                     rank = self._mpicomm.rank
+                    if rank == 0:
+                        all_n_local = np.array(all_n_local, dtype=np.int64)
+                        if np.sum(all_n_local) != self._n_global:
+                            msg = "Total amplitudes on all processes does "
+                            msg += "not equal n_global"
+                            raise RuntimeError(msg)
+                    all_n_local = self._mpicomm.bcast(all_n_local, root=0)
                 else:
-                    check = [self._n_local]
-                if np.sum(check) != self._n_global:
-                    msg = "Total amplitudes on all processes does not equal n_global"
-                    raise RuntimeError(msg)
+                    all_n_local = np.array([self._n_local], dtype=np.int64)
                 self._global_first = 0
                 for i in range(rank):
-                    self._global_first += check[i]
+                    self._global_first += all_n_local[i]
                 self._global_last = self._global_first + self._n_local - 1
             elif self._local_ranges is not None:
                 # local data is specified by ranges
@@ -869,13 +875,7 @@ class AmplitudesMap(MutableMapping, AcceleratorObject):
             result += v.dot(other[k])
         return result
 
-    def accel_exists(self):
-        """Check if the amplitude data exists on the accelerator.
-
-        Returns:
-            (bool):  True if the data is present.
-
-        """
+    def _accel_exists(self):
         if not accel_enabled():
             return False
         result = 0
@@ -891,85 +891,25 @@ class AmplitudesMap(MutableMapping, AcceleratorObject):
             raise RuntimeError(msg)
         return True
 
-    def accel_in_use(self):
-        """Check if the device data copy is the one currently in use.
-
-        Returns:
-            (bool):  True if the accelerator device copy is being used.
-
-        """
-        if not accel_enabled():
-            return False
-        result = 0
-        for k, v in self._internal.items():
-            if v.accel_in_use():
-                result += 1
-        if result == 0:
-            return False
-        elif result != len(self._internal):
-            log = Logger.get()
-            msg = f"Only some of the Amplitudes are in use on device"
-            log.error(msg)
-            raise RuntimeError(msg)
-        return True
-
-    def accel_used(self, state):
-        """Set the in-use state of the device data copy.
-
-        Setting the state to `True` is only possible if the data exists
-        on the device.
-
-        Args:
-            state (bool):  True if the device copy is in use, else False.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
-        for k, v in self._internal.items():
-            v.accel_used(state)
-
-    def accel_create(self):
-        """Create the amplitude data on the accelerator.
-
-        Returns:
-            None
-        """
+    def _accel_create(self):
         if not accel_enabled():
             return
         for k, v in self._internal.items():
             v.accel_create()
 
-    def accel_update_device(self):
-        """Copy the amplitude data to the accelerator.
-
-        Returns:
-            None
-        """
+    def _accel_update_device(self):
         if not accel_enabled():
             return
         for k, v in self._internal.items():
             v.accel_update_device()
 
-    def accel_update_host(self):
-        """Copy the amplitude data from the accelerator.
-
-        Returns:
-            None
-        """
+    def _accel_update_host(self):
         if not accel_enabled():
             return
         for k, v in self._internal.items():
             v.accel_update_host()
 
-    def accel_delete(self):
-        """Delete the amplitude data from the accelerator.
-
-        Returns:
-            None
-        """
+    def _accel_delete(self):
         if not accel_enabled():
             return
         for k, v in self._internal.items():

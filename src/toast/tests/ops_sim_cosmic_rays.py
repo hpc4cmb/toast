@@ -17,6 +17,7 @@ from ._helpers import (
     create_outdir,
     create_satellite_data,
     create_satellite_data_big,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -70,6 +71,7 @@ class SimCosmicRayTest(MPITestCase):
             for det in obs.local_detectors:
                 detindx = focalplane[det]["uid"]
                 assert obs.detdata[key][det].sum() != 0.0
+        close_data(data)
 
     def test_cosmic_rays_glitches(self):
         # Create a fake satellite data set for testing
@@ -97,6 +99,7 @@ class SimCosmicRayTest(MPITestCase):
             for det in obs.local_detectors:
                 detindx = focalplane[det]["uid"]
                 assert obs.detdata[key][det].sum() != 0.0
+        close_data(data)
 
     def test_cosmic_rays_commonmode(self):
         # Create a fake satellite data set for testing
@@ -121,3 +124,4 @@ class SimCosmicRayTest(MPITestCase):
             for det in obs.local_detectors:
                 detindx = focalplane[det]["uid"]
                 assert obs.detdata[key][det].sum() != 0.0
+        close_data(data)

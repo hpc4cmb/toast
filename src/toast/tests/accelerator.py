@@ -24,7 +24,7 @@ from ..data import Data
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..traits import Int, Unicode, trait_docs
-from ._helpers import create_comm, create_outdir, create_satellite_data
+from ._helpers import create_comm, create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -304,7 +304,7 @@ class AcceleratorTest(MPITestCase):
         self.assertEqual(data["test_pix"], check_data["test_pix"])
 
         del check_data
-        del data
+        close_data(data)
 
     def test_operator_stage(self):
         if not (use_accel_omp or use_accel_jax):
@@ -339,3 +339,5 @@ class AcceleratorTest(MPITestCase):
                     ob.detdata[accel_op.det_data][det],
                     16.0 * ob.detdata["original"][det],
                 )
+
+        close_data(data)

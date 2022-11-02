@@ -67,7 +67,7 @@ class PixelsWCS(Operator):
     bounds = Tuple(
         None,
         allow_none=True,
-        help="The lower left and upper right Lon/Lat corners (Quantities)",
+        help="The (lon_min, lon_max, lat_min, lat_max) values (Quantities)",
     )
 
     auto_bounds = Bool(
@@ -165,7 +165,7 @@ class PixelsWCS(Operator):
             self._done_auto = True
 
     @traitlets.observe("center_offset")
-    def _reset_auto_bounds(self, change):
+    def _reset_auto_center(self, change):
         # Track whether we need to recompute the bounds.
         if change["new"] is not None:
             if self.auto_bounds:
@@ -250,17 +250,18 @@ class PixelsWCS(Operator):
             if res is not None and dims is not None:
                 # Cannot calculate yet
                 return
+
+            # Max Longitude
+            lower_left_lon = bounds[1].to_value(u.degree)
+            # Min Latitude
+            lower_left_lat = bounds[2].to_value(u.degree)
+            # Min Longitude
+            upper_right_lon = bounds[0].to_value(u.degree)
+            # Max Latitude
+            upper_right_lat = bounds[3].to_value(u.degree)
+
             pos = np.array(
-                [
-                    [
-                        bounds[0][0].to_value(u.degree),
-                        bounds[0][1].to_value(u.degree),
-                    ],
-                    [
-                        bounds[1][0].to_value(u.degree),
-                        bounds[1][1].to_value(u.degree),
-                    ],
-                ]
+                [[lower_left_lon, lower_left_lat], [upper_right_lon, upper_right_lat]]
             )
 
         self.wcs = pixell.wcsutils.build(pos, res, dims, rowmajor=False, system=proj)
@@ -302,37 +303,37 @@ class PixelsWCS(Operator):
         if self.auto_bounds and not self._done_auto:
             # Pass through the boresight pointing for every observation and build
             # the maximum extent of the detector field of view.
-            lonmax = 0 * u.radian
+            lonmax = -2 * np.pi * u.radian
             lonmin = 2 * np.pi * u.radian
             latmax = (-np.pi / 2) * u.radian
             latmin = (np.pi / 2) * u.radian
             for ob in data.obs:
-                # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
-                if len(dets) == 0:
-                    # Nothing to do for this observation
-                    continue
+                # The scan range is computed collectively among the group.
                 lnmin, lnmax, ltmin, ltmax = self._get_scan_range(ob)
                 lonmin = min(lonmin, lnmin)
                 lonmax = max(lonmax, lnmax)
                 latmin = min(latmin, ltmin)
                 latmax = max(latmax, ltmax)
-            if ob.comm.comm_group_rank is not None:
-                # Synchronize between groups
-                if ob.comm.group_rank == 0:
-                    lonmin = ob.comm.comm_group_rank.allreduce(lonmin, op=MPI.MIN)
-                    latmin = ob.comm.comm_group_rank.allreduce(latmin, op=MPI.MIN)
-                    lonmax = ob.comm.comm_group_rank.allreduce(lonmax, op=MPI.MAX)
-                    latmax = ob.comm.comm_group_rank.allreduce(latmax, op=MPI.MAX)
-            # Broadcast result within the group
-            if ob.comm.comm_group is not None:
-                lonmin = ob.comm.comm_group.bcast(lonmin, root=0)
-                lonmax = ob.comm.comm_group.bcast(lonmax, root=0)
-                latmin = ob.comm.comm_group.bcast(latmin, root=0)
-                latmax = ob.comm.comm_group.bcast(latmax, root=0)
+            if data.comm.comm_world is not None:
+                lonlatmin = np.zeros(2, dtype=np.float64)
+                lonlatmax = np.zeros(2, dtype=np.float64)
+                lonlatmin[0] = lonmin.to_value(u.radian)
+                lonlatmin[1] = latmin.to_value(u.radian)
+                lonlatmax[0] = lonmax.to_value(u.radian)
+                lonlatmax[1] = latmax.to_value(u.radian)
+                all_lonlatmin = np.zeros(2, dtype=np.float64)
+                all_lonlatmax = np.zeros(2, dtype=np.float64)
+                data.comm.comm_world.Allreduce(lonlatmin, all_lonlatmin, op=MPI.MIN)
+                data.comm.comm_world.Allreduce(lonlatmax, all_lonlatmax, op=MPI.MAX)
+                lonmin = all_lonlatmin[0] * u.radian
+                latmin = all_lonlatmin[1] * u.radian
+                lonmax = all_lonlatmax[0] * u.radian
+                latmax = all_lonlatmax[1] * u.radian
             new_bounds = (
-                (lonmax.to(u.degree), latmin.to(u.degree)),
-                (lonmin.to(u.degree), latmax.to(u.degree)),
+                lonmin.to(u.degree),
+                lonmax.to(u.degree),
+                latmin.to(u.degree),
+                latmax.to(u.degree),
             )
             log.verbose(f"PixelsWCS auto_bounds set to {new_bounds}")
             self.bounds = new_bounds
@@ -414,6 +415,7 @@ class PixelsWCS(Operator):
             flags = None
             if self.detector_pointing.shared_flags is not None:
                 flags = np.array(ob.shared[self.detector_pointing.shared_flags])
+                fvals, fcounts = np.unique(flags, return_counts=True)
                 flags &= self.detector_pointing.shared_flag_mask
                 n_good = np.sum(flags == 0)
                 n_bad = np.sum(flags != 0)
@@ -427,34 +429,25 @@ class PixelsWCS(Operator):
                 for vslice in view_slices:
                     # Timestream of detector quaternions
                     quats = ob.detdata[quats_name][det][vslice]
+
                     view_samples = len(quats)
-
-                    # print(f"det {det} quats = {quats}")
-                    theta, phi = qa.to_position(quats)
-                    # print(f"det {det} rad theta, phi = {theta}, {phi}")
-
+                    theta, phi, _ = qa.to_iso_angles(quats)
                     to_deg = 180.0 / np.pi
                     theta *= to_deg
                     phi *= to_deg
-                    # print(f"det {det} deg theta, phi = {theta}, {phi}")
 
                     world_in = np.column_stack([phi, 90.0 - theta])
 
                     if center_lonlat is not None:
-                        # print(f"orig = {world_in}")
-                        # print(f"center_lonlat = {center_lonlat}")
                         world_in[:, 0] -= center_lonlat[vslice, 0]
                         world_in[:, 1] -= center_lonlat[vslice, 1]
-                        # print(f"final = {world_in}")
 
-                    # print(f"det {det} world_in = {world_in}")
                     rdpix = self.wcs.wcs_world2pix(world_in, 0)
                     if flags is not None:
                         # Set bad pointing to pixel -1
                         bad_pointing = flags[vslice] != 0
                         rdpix[bad_pointing] = -1
                     rdpix = np.array(np.around(rdpix), dtype=np.int64)
-                    # print(f"det {det} rdpix = {rdpix}")
 
                     ob.detdata[self.pixels][det][vslice] = (
                         rdpix[:, 0] * self.pix_dec + rdpix[:, 1]
@@ -462,8 +455,6 @@ class PixelsWCS(Operator):
 
                     if self.create_dist is not None:
                         good = ob.detdata[self.pixels][det][vslice] >= 0
-                        # print(f"det {det} has {np.sum(good)} good pixels")
-                        # print((ob.detdata[self.pixels][det][vslice])[good])
                         self._local_submaps[
                             (ob.detdata[self.pixels][det][vslice])[good]
                             // self._n_pix_submap
@@ -475,6 +466,13 @@ class PixelsWCS(Operator):
         # extract this into a more general helper routine somewhere.
         fov = obs.telescope.focalplane.field_of_view
         fp_radius = 0.5 * fov.to_value(u.radian)
+
+        # Get the flags if needed.  Use the same flags as
+        # detector pointing.
+        flags = None
+        if self.detector_pointing.shared_flags is not None:
+            flags = np.array(obs.shared[self.detector_pointing.shared_flags])
+            flags &= self.detector_pointing.shared_flag_mask
 
         # work in parallel
         rank = obs.comm.group_rank
@@ -501,14 +499,21 @@ class PixelsWCS(Operator):
         lon = []
         lat = []
         quats = obs.shared[self.detector_pointing.boresight][rank::ntask].copy()
+        rank_good = slice(None)
+        if self.detector_pointing.shared_flags is not None:
+            rank_good = flags[rank::ntask] == 0
+
         for idet, detquat in enumerate(detquats):
-            theta, phi = qa.to_position(qa.mult(quats, detquat))
+            theta, phi, _ = qa.to_iso_angles(qa.mult(quats, detquat))
             if center_lonlat is None:
-                lon.append(phi)
-                lat.append(np.pi / 2 - theta)
+                lon.append(phi[rank_good])
+                lat.append(np.pi / 2 - theta[rank_good])
             else:
-                lon.append(phi - center_lonlat[rank::ntask, 0])
-                lat.append((np.pi / 2 - theta) - center_lonlat[rank::ntask, 1])
+                lon.append(phi[rank_good] - center_lonlat[rank::ntask, 0][rank_good])
+                lat.append(
+                    (np.pi / 2 - theta[rank_good])
+                    - center_lonlat[rank::ntask, 1][rank_good]
+                )
         lon = np.unwrap(np.hstack(lon))
         lat = np.hstack(lat)
 
@@ -527,10 +532,20 @@ class PixelsWCS(Operator):
 
         # Combine results
         if obs.comm.comm_group is not None:
-            lonmin = obs.comm.comm_group.allreduce(lonmin, op=MPI.MIN)
-            lonmax = obs.comm.comm_group.allreduce(lonmax, op=MPI.MAX)
-            latmin = obs.comm.comm_group.allreduce(latmin, op=MPI.MIN)
-            latmax = obs.comm.comm_group.allreduce(latmax, op=MPI.MAX)
+            lonlatmin = np.zeros(2, dtype=np.float64)
+            lonlatmax = np.zeros(2, dtype=np.float64)
+            lonlatmin[0] = lonmin
+            lonlatmin[1] = latmin
+            lonlatmax[0] = lonmax
+            lonlatmax[1] = latmax
+            all_lonlatmin = np.zeros(2, dtype=np.float64)
+            all_lonlatmax = np.zeros(2, dtype=np.float64)
+            obs.comm.comm_group.Allreduce(lonlatmin, all_lonlatmin, op=MPI.MIN)
+            obs.comm.comm_group.Allreduce(lonlatmax, all_lonlatmax, op=MPI.MAX)
+            lonmin = all_lonlatmin[0]
+            latmin = all_lonlatmin[1]
+            lonmax = all_lonlatmax[0]
+            latmax = all_lonlatmax[1]
 
         return (
             lonmin * u.radian,
@@ -551,7 +566,6 @@ class PixelsWCS(Operator):
                     self._local_submaps == 1
                 ]
 
-            # print(f"create WCS pixdist {self._n_pix}, {self.submaps}, {submaps}")
             data[self.create_dist] = PixelDistribution(
                 n_pix=self._n_pix,
                 n_submap=self.submaps,

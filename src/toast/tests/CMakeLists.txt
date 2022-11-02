@@ -52,6 +52,7 @@ install(FILES
     ops_sim_crosstalk.py
     ops_polyfilter.py
     ops_groundfilter.py
+    ops_hwpfilter.py
     ops_sim_cosmic_rays.py
     ops_time_constant.py
     spt3g.py
@@ -59,6 +60,7 @@ install(FILES
     ops_crosslinking.py
     ops_sss.py
     ops_demodulate.py
+    ops_perturbhwp.py
     ops_filterbin.py
     io_hdf5.py
     ops_noise_estim.py

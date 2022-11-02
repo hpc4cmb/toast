@@ -17,6 +17,7 @@ from .flag_intervals import FlagIntervals
 from .flag_sso import FlagSSO
 from .gainscrambler import GainScrambler
 from .groundfilter import GroundFilter
+from .hwpfilter import HWPFilter
 from .load_hdf5 import LoadHDF5
 from .load_spt3g import LoadSpt3g
 from .madam import Madam, madam_params_from_mapmaker
@@ -51,6 +52,7 @@ from .sim_cosmic_rays import InjectCosmicRays
 from .sim_crosstalk import CrossTalk, MitigateCrossTalk
 from .sim_gaindrifts import GainDrifter
 from .sim_ground import SimGround
+from .sim_hwp import PerturbHWP
 from .sim_satellite import SimSatellite
 from .sim_tod_atm import SimAtmosphere
 from .sim_tod_dipole import SimDipole

@@ -21,7 +21,7 @@ from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import set_matplotlib_backend
-from ._helpers import create_comm, create_outdir
+from ._helpers import create_comm, create_outdir, plot_projected_quats, close_data
 from .mpi import MPITestCase
 
 
@@ -34,7 +34,7 @@ class SimGroundTest(MPITestCase):
 
         npix = 1
         ring = 1
-        while 2 * npix < self.toastcomm.group_size:
+        while npix <= self.toastcomm.group_size:
             npix += 6 * ring
             ring += 1
         self.npix = npix
@@ -94,6 +94,24 @@ class SimGroundTest(MPITestCase):
         )
         sim_ground.apply(data)
 
+        # Plot some pointing
+        plotdetpointing = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_azel,
+            quats="pquats",
+        )
+        plotdetpointing.apply(data)
+        if data.comm.world_rank == 0:
+            n_debug = 100
+            bquat = np.array(data.obs[0].shared[defaults.boresight_azel][10:n_debug, :])
+            dquat = data.obs[0].detdata["pquats"][:, 10:n_debug, :]
+            invalid = np.array(data.obs[0].shared[defaults.shared_flags][10:n_debug])
+            invalid &= defaults.shared_mask_invalid
+            valid = np.logical_not(invalid)
+            outfile = os.path.join(self.outdir, "pointing.pdf")
+            plot_projected_quats(
+                outfile, qbore=bquat, qdet=dquat, valid=valid, scale=1.0
+            )
+
         # Pointing
         detpointing = ops.PointingDetectorSimple()
         pixels = ops.PixelsHealpix(
@@ -147,6 +165,8 @@ class SimGroundTest(MPITestCase):
             hp.mollview(hits, xsize=1600, max=50, nest=pixels.nest)
             plt.savefig(outfile)
             plt.close()
+
+        close_data(data)
 
     def test_phase(self):
         # Slow sampling
@@ -230,3 +250,6 @@ class SimGroundTest(MPITestCase):
         step2 = np.median(np.diff(az2[good2]))
 
         assert np.abs((step1 - step2) / step1) < 1e-3
+
+        del data2
+        close_data(data1)

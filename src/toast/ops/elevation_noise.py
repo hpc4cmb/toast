@@ -10,6 +10,7 @@ from astropy import units as u
 
 from .. import qarray as qa
 from ..intervals import IntervalList
+from ..mpi import MPI
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
@@ -154,7 +155,16 @@ class ElevationNoise(Operator):
             log.error(msg)
             raise RuntimeError(msg)
 
+        if detectors is not None:
+            msg = "You must run this operator on all detectors at once"
+            log.error(msg)
+            raise RuntimeError(msg)
+
         for obs in data.obs:
+            if obs.comm_row_size != 1:
+                msg = "Observation data must be distributed by detector, not samples"
+                log.error(msg)
+                raise RuntimeError(msg)
             obs_data = data.select(obs_uid=obs.uid)
             focalplane = obs.telescope.focalplane
 
@@ -170,12 +180,6 @@ class ElevationNoise(Operator):
                 obs.intervals[self.view] = IntervalList(
                     timestamps=times, timespans=[(t_start, t_stop)]
                 )
-
-            # Get the detectors we are using for this observation
-            dets = obs.select_local_detectors(detectors)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             # Check that the noise model exists
             if self.noise_model not in obs:
@@ -208,23 +212,15 @@ class ElevationNoise(Operator):
 
             noise = obs[self.noise_model]
 
-            # Create a new base-class noise object with the same PSDs and
-            # mixing matrix as the input.  Then modify those values.  If the
-            # output name is the same as the input, then delete the input
-            # and replace it with the new model.
+            # We will be collectively building the scale factor for all detectors.
+            # Allocate arrays for communication
 
-            nse_keys = noise.keys
-            nse_dets = noise.detectors
-            nse_freqs = {x: noise.freq(x) for x in nse_keys}
-            nse_psds = {x: noise.psd(x) for x in nse_keys}
-            nse_indx = {x: noise.index(x) for x in nse_keys}
-            out_noise = Noise(
-                detectors=nse_dets,
-                freqs=nse_freqs,
-                psds=nse_psds,
-                indices=nse_indx,
-                mixmatrix=noise.mixing_matrix,
-            )
+            local_net_factors = np.zeros(len(obs.all_detectors), dtype=np.float64)
+            local_tot_factors = np.zeros(len(obs.all_detectors), dtype=np.float64)
+            local_rates = np.zeros(len(obs.all_detectors), dtype=np.float64)
+            all_net_factors = np.zeros(len(obs.all_detectors), dtype=np.float64)
+            all_tot_factors = np.zeros(len(obs.all_detectors), dtype=np.float64)
+            all_rates = np.zeros(len(obs.all_detectors), dtype=np.float64)
 
             # We are building up a data product (a noise model) which has values for
             # all detectors.  For each detector we need to expand the detector pointing.
@@ -250,7 +246,12 @@ class ElevationNoise(Operator):
                         flags = None
                 view_flags.append(flags)
 
-            for det in dets:
+            local_check = set(obs.local_detectors)
+            for idet, det in enumerate(obs.all_detectors):
+                if det not in local_check:
+                    continue
+                local_rates[idet] = focalplane.sample_rate.to_value(u.Hz)
+
                 # If both the A and C values are unset, the noise model is not modified.
                 if self.noise_a is not None:
                     noise_a = self.noise_a
@@ -259,6 +260,8 @@ class ElevationNoise(Operator):
                     noise_a = focalplane[det]["elevation_noise_a"]
                     noise_c = focalplane[det]["elevation_noise_c"]
                 else:
+                    local_net_factors[idet] = 1.0
+                    local_tot_factors[idet] = 1.0
                     continue
 
                 if self.modulate_pwv and self.pwv_a0 is not None:
@@ -280,7 +283,7 @@ class ElevationNoise(Operator):
                 el_view = list()
                 for vw in range(len(views)):
                     # Detector elevation
-                    theta, _ = qa.to_position(
+                    theta, _, _ = qa.to_iso_angles(
                         views.detdata[self.detector_pointing.quats][vw][det]
                     )
 
@@ -292,12 +295,10 @@ class ElevationNoise(Operator):
 
                 el = np.median(np.concatenate(el_view))
 
-                # Scale the PSD
+                # Compute the scaling factors
 
                 net_factor = noise_a / np.sin(el) + noise_c
-
-                self.net_factors.append(net_factor)
-                self.rates.append(focalplane.sample_rate.to_value(u.Hz))
+                local_net_factors[idet] = net_factor
 
                 if modulate_pwv:
                     pwv = obs.telescope.site.weather.pwv.to_value(u.mm)
@@ -306,14 +307,54 @@ class ElevationNoise(Operator):
                 if self.extra_factor is not None:
                     net_factor *= self.extra_factor
 
-                out_noise.psd(det)[:] *= net_factor**2
-                self.total_factors.append(net_factor)
+                local_tot_factors[idet] = net_factor**2
 
+            # Restore the original detector pointing view
             self.detector_pointing.view = detector_pointing_view
 
-            # Store the new noise model in the observation.
+            # Communicate the PSD scale factors
+            if obs.comm.comm_group is not None:
+                obs.comm.comm_group.Allreduce(
+                    local_net_factors, all_net_factors, op=MPI.SUM
+                )
+                obs.comm.comm_group.Allreduce(
+                    local_tot_factors, all_tot_factors, op=MPI.SUM
+                )
+                obs.comm.comm_group.Allreduce(local_rates, all_rates, op=MPI.SUM)
+            else:
+                all_tot_factors[:] = local_tot_factors
+                all_net_factors[:] = local_net_factors
+                all_rates[:] = local_rates
 
-            for det in dets:
+            # Store the factors for statistics computed later
+            self.net_factors.extend(all_net_factors.tolist())
+            self.total_factors.extend(all_tot_factors.tolist())
+            self.rates.extend(all_rates.tolist())
+
+            # Create a new base-class noise object with the same PSDs and
+            # mixing matrix as the input.  Then modify those values.  If the
+            # output name is the same as the input, then delete the input
+            # and replace it with the new model.
+
+            nse_keys = noise.keys
+            nse_dets = noise.detectors
+            nse_freqs = {x: noise.freq(x) for x in nse_keys}
+            nse_psds = {x: noise.psd(x) for x in nse_keys}
+            nse_indx = {x: noise.index(x) for x in nse_keys}
+            out_noise = Noise(
+                detectors=nse_dets,
+                freqs=nse_freqs,
+                psds=nse_psds,
+                indices=nse_indx,
+                mixmatrix=noise.mixing_matrix,
+            )
+
+            # Modify all psds first, since the first call to detector_weight()
+            # will trigger the calculation for all detectors.
+            for idet, det in enumerate(obs.all_detectors):
+                out_noise.psd(det)[:] *= all_tot_factors[idet]
+
+            for idet, det in enumerate(obs.all_detectors):
                 self.weights_in.append(noise.detector_weight(det))
                 self.weights_out.append(out_noise.detector_weight(det))
 
@@ -328,45 +369,50 @@ class ElevationNoise(Operator):
 
     def _finalize(self, data, **kwargs):
         log = Logger.get()
-        comm = data.comm.comm_world
-        net_factors = np.array(self.net_factors)
-        total_factors = np.array(self.total_factors)
-        weights_in = np.array(self.weights_in)
-        weights_out = np.array(self.weights_out)
-        rates = np.array(self.rates)
-        if comm is not None:
-            net_factors = comm.gather(net_factors)
-            total_factors = comm.gather(total_factors)
-            weights_in = comm.gather(weights_in)
-            weights_out = comm.gather(weights_out)
-            rates = comm.gather(rates)
-            if comm.rank == 0:
-                net_factors = np.hstack(net_factors)
-                total_factors = np.hstack(total_factors)
-                weights_in = np.hstack(weights_in)
-                weights_out = np.hstack(weights_out)
-                rates = np.hstack(rates)
-        if (comm is None or comm.rank == 0) and len(net_factors) > 0:
-            net = net_factors
-            tot = total_factors
-            net1 = np.sqrt(1 / weights_in / rates) * 1e6
-            net2 = np.sqrt(1 / weights_out / rates) * 1e6
-            log.info_rank(
-                f"Elevation noise: \n"
-                f"  NET_factor: \n"
-                f"     min = {np.amin(net):8.3f},    max = {np.amax(net):8.3f}\n"
-                f"    mean = {np.mean(net):8.3f}, median = {np.median(net):8.3f}\n"
-                f"  TOTAL factor: \n"
-                f"     min = {np.amin(tot):8.3f},    max = {np.amax(tot):8.3f}\n"
-                f"    mean = {np.mean(tot):8.3f}, median = {np.median(tot):8.3f}\n"
-                f"  NET_in [uK root(s)]: \n"
-                f"     min = {np.amin(net1):8.1f},    max = {np.amax(net1):8.1f}\n"
-                f"    mean = {np.mean(net1):8.1f}, median = {np.median(net1):8.1f}\n"
-                f"  NET_out: [uK root(s)]\n"
-                f"     min = {np.amin(net2):8.1f},    max = {np.amax(net2):8.1f}\n"
-                f"    mean = {np.mean(net2):8.1f}, median = {np.median(net2):8.1f}\n",
-                comm=comm,
-            )
+        # Within a process group, all processes have a copy of the same information
+        # for all detectors.  To build the global statistics, we just need to gather
+        # data from the rank zero of all groups.
+
+        if data.comm.group_rank == 0:
+            net_factors = np.array(self.net_factors)
+            total_factors = np.array(self.total_factors)
+            wt_units = 1.0 / (u.K**2)
+            weights_in = np.array([x.to_value(wt_units) for x in self.weights_in])
+            weights_out = np.array([x.to_value(wt_units) for x in self.weights_out])
+            rates = np.array(self.rates)
+            rank_comm = data.comm.comm_group_rank
+            if rank_comm is not None:
+                net_factors = rank_comm.gather(net_factors)
+                total_factors = rank_comm.gather(total_factors)
+                weights_in = rank_comm.gather(weights_in)
+                weights_out = rank_comm.gather(weights_out)
+                rates = rank_comm.gather(rates)
+                if rank_comm.rank == 0:
+                    net_factors = np.hstack(net_factors)
+                    total_factors = np.hstack(total_factors)
+                    weights_in = np.hstack(weights_in)
+                    weights_out = np.hstack(weights_out)
+                    rates = np.hstack(rates)
+            if data.comm.world_rank == 0 and len(net_factors) > 0:
+                net = net_factors
+                tot = total_factors
+                net1 = np.sqrt(1 / weights_in / rates) * 1e6
+                net2 = np.sqrt(1 / weights_out / rates) * 1e6
+                log.info(
+                    f"Elevation noise: \n"
+                    f"  NET_factor: \n"
+                    f"     min = {np.amin(net):8.3f},    max = {np.amax(net):8.3f}\n"
+                    f"    mean = {np.mean(net):8.3f}, median = {np.median(net):8.3f}\n"
+                    f"  TOTAL factor: \n"
+                    f"     min = {np.amin(tot):8.3f},    max = {np.amax(tot):8.3f}\n"
+                    f"    mean = {np.mean(tot):8.3f}, median = {np.median(tot):8.3f}\n"
+                    f"  NET_in [uK root(s)]: \n"
+                    f"     min = {np.amin(net1):8.1f},    max = {np.amax(net1):8.1f}\n"
+                    f"    mean = {np.mean(net1):8.1f}, median = {np.median(net1):8.1f}\n"
+                    f"  NET_out: [uK root(s)]\n"
+                    f"     min = {np.amin(net2):8.1f},    max = {np.amax(net2):8.1f}\n"
+                    f"    mean = {np.mean(net2):8.1f}, median = {np.median(net2):8.1f}\n"
+                )
         return
 
     def _requires(self):

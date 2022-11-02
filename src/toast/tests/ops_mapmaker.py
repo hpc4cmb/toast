@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import sys
 
 import healpy as hp
 import numpy as np
@@ -15,7 +16,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_fake_sky, create_outdir, create_satellite_data
+from ._helpers import create_fake_sky, create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -32,6 +33,10 @@ class MapmakerTest(MPITestCase):
             self.obs_per_group = self.total_obs // 2
 
     def test_offset(self):
+        if sys.platform.lower() == "darwin":
+            print(f"WARNING:  Skipping test_offset on MacOS")
+            return
+
         testdir = os.path.join(self.outdir, "offset")
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
@@ -144,8 +149,7 @@ class MapmakerTest(MPITestCase):
         mapper.name = "test2"
         mapper.apply(data)
 
-        del data
-        return
+        close_data(data)
 
     def test_compare_madam_noprior(self):
         if not ops.madam.available():
@@ -456,8 +460,7 @@ class MapmakerTest(MPITestCase):
 
         self.assertFalse(fail)
 
-        del data
-        return
+        close_data(data)
 
     def test_compare_madam_diagpre(self):
         if not ops.madam.available():
@@ -681,8 +684,7 @@ class MapmakerTest(MPITestCase):
 
         self.assertFalse(fail)
 
-        del data
-        return
+        close_data(data)
 
     def test_compare_madam_bandpre(self):
         if not ops.madam.available():
@@ -910,5 +912,4 @@ class MapmakerTest(MPITestCase):
 
         self.assertFalse(fail)
 
-        del data
-        return
+        close_data(data)

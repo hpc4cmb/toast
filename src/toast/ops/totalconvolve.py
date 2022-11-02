@@ -14,7 +14,17 @@ from .. import qarray as qa
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Dict, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import (
+    Bool,
+    Dict,
+    Float,
+    Instance,
+    Int,
+    Quantity,
+    Unit,
+    Unicode,
+    trait_docs,
+)
 from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
 from .operator import Operator
 
@@ -80,6 +90,10 @@ class SimTotalconvolve(Operator):
         defaults.det_data,
         allow_none=False,
         help="Observation detdata key for accumulating convolved timestreams",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     calibrate = Bool(
@@ -314,7 +328,9 @@ class SimTotalconvolve(Operator):
             for det in obs_dets:
                 my_dets.add(det)
             # Make sure detector data output exists
-            exists = obs.detdata.ensure(self.det_data, detectors=detectors)
+            exists = obs.detdata.ensure(
+                self.det_data, detectors=detectors, create_units=self.det_data_units
+            )
         if use_mpi:
             all_dets = self.comm.gather(my_dets, root=0)
             if self.comm.rank == 0:
@@ -355,7 +371,7 @@ class SimTotalconvolve(Operator):
             psi_uv = props["psi_uv"].to_value(u.radian)
         else:
             raise RuntimeError(f"focalplane[{det}] does not include psi_uv")
-        return psipol
+        return psi_uv
 
     def _get_epsilon(self, focalplane, det):
         """Parse polarization leakage (epsilon) from the focalplane
@@ -496,7 +512,7 @@ class SimTotalconvolve(Operator):
                     if verbose:
                         timer.report_clear(f"initialize flags for detector {det}")
 
-                theta, phi, psi = qa.to_angles(quats)
+                theta, phi, psi = qa.to_iso_angles(quats)
                 # Polarization angle in the Pxx basis
                 psi_pol = self._get_psi_pol(focalplane, det)
                 if self.dxx:
@@ -777,7 +793,9 @@ class SimTotalconvolve(Operator):
             focalplane = obs.telescope.focalplane
             epsilon = self._get_epsilon(focalplane, det)
             # Make sure detector data output exists
-            exists = obs.detdata.ensure(self.det_data, detectors=[det])
+            exists = obs.detdata.ensure(
+                self.det_data, detectors=[det], create_units=self.det_data_units
+            )
             # Loop over views
             views = obs.view[self.view]
             for view in views.detdata[self.det_data]:

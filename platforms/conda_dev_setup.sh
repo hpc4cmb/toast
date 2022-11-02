@@ -47,11 +47,13 @@ if [ "x${envname}" = "x" ]; then
     exit 1
 fi
 
+# Activate the base environment
 basedir=$(dirname $(dirname "${conda_exe}"))
 source ${basedir}/etc/profile.d/conda.sh
-
+conda deactivate
 conda activate base
 
+# Get the list of packages to install
 pkgfile="${scriptdir}/conda_dev_pkgs.txt"
 pkglist=$(cat "${pkgfile}" | xargs -I % echo -n '"%" ')
 platform=$(python -c 'import sys; print(sys.platform)')
@@ -61,6 +63,8 @@ else
     pkglist="${pkglist} gcc_linux-64 gxx_linux-64"
 fi
 
+# Determine whether the environment is a name or a
+# full path.
 env_noslash=$(echo "${envname}" | sed -e 's/\///g')
 is_path=no
 if [ "${env_noslash}" != "${envname}" ]; then
@@ -72,9 +76,10 @@ if [ "${env_noslash}" != "${envname}" ]; then
 	env_check="${envname}"
     fi
 else
-    env_check=$(conda env list | grep ${envname})    
+    env_check=$(conda env list | grep "${envname} ")
 fi
-    
+
+# Packages to install with pip instead of conda
 pip_list="pixell"
 
 if [ "x${env_check}" = "x" ]; then

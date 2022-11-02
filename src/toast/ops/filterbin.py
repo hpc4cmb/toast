@@ -18,6 +18,7 @@ from .._libtoast import (
     build_template_covariance,
     expand_matrix,
     legendre,
+    fourier,
 )
 from ..mpi import MPI
 from ..observation import default_values as defaults
@@ -194,7 +195,7 @@ def combine_observation_matrix(rootname):
     scipy.sparse.save_npz(rootname, obs_matrix)
     log.info_rank(f"Wrote in", timer=timer, comm=None)
 
-    log.info_rank(f"All done in", timer=timer, comm=None)
+    log.info_rank(f"All done in", timer=timer0, comm=None)
 
     return f"{rootname}.npz"
 
@@ -246,6 +247,10 @@ class FilterBin(Operator):
         help="Bit mask value for optional telescope flagging",
     )
 
+    hwp_angle = Unicode(
+        defaults.hwp_angle, allow_none=True, help="Observation shared key for HWP angle"
+    )
+
     deproject_map = Unicode(
         None,
         allow_none=True,
@@ -273,6 +278,12 @@ class FilterBin(Operator):
 
     azimuth = Unicode(
         defaults.azimuth, allow_none=True, help="Observation shared key for Azimuth"
+    )
+
+    hwp_filter_order = Int(
+        None,
+        allow_none=True,
+        help="Order of HWP-synchronous signal filter.",
     )
 
     ground_filter_order = Int(
@@ -443,6 +454,10 @@ class FilterBin(Operator):
             comm=data.comm.comm_world,
         )
 
+        # Get the units used across the distributed data for our desired
+        # input detector data
+        self._det_data_units = data.detector_units(self.det_data)
+
         self._initialize_comm(data)
 
         # Filter data
@@ -487,7 +502,7 @@ class FilterBin(Operator):
             if self.shared_flags is not None:
                 common_flags = obs.shared[self.shared_flags].data
             else:
-                common_flags = np.zeros(phase.size, dtype=np.uint8)
+                common_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             if self.grank == 0:
                 log.debug(
@@ -656,6 +671,31 @@ class FilterBin(Operator):
         return
 
     @function_timer
+    def _add_hwp_templates(self, obs, templates):
+        if self.hwp_filter_order is None:
+            return
+
+        if self.hwp_angle not in obs.shared:
+            msg = (
+                f"Cannot apply HWP filtering at order = {self.hwp_filter_order}: "
+                f"no HWP angle found under key = '{self.hwp_angle}'"
+            )
+            raise RuntimeError(msg)
+        hwp_angle = obs.shared[self.hwp_angle].data
+        shared_flags = np.array(obs.shared[self.shared_flags])
+
+        nfilter = 2 * self.hwp_filter_order
+        if nfilter < 1:
+            return
+
+        fourier_templates = np.zeros([nfilter, hwp_angle.size])
+        fourier(hwp_angle, fourier_templates, 1, self.hwp_filter_order + 1)
+
+        templates.append(fourier_templates)
+
+        return
+
+    @function_timer
     def _add_ground_templates(self, obs, templates):
         if self.ground_filter_order is None:
             return
@@ -734,6 +774,7 @@ class FilterBin(Operator):
     def _build_common_templates(self, obs):
         templates = SparseTemplates()
 
+        self._add_hwp_templates(obs, templates)
         self._add_ground_templates(obs, templates)
         self._add_poly_templates(obs, templates)
 
@@ -988,7 +1029,7 @@ class FilterBin(Operator):
                 az = obs.shared[self.azimuth]
             else:
                 quats = obs.shared[self.boresight_azel]
-                theta, phi = qa.to_position(quats)
+                theta, phi, _ = qa.to_iso_angles(quats)
                 az = 2 * np.pi - phi
         except Exception as e:
             msg = (
@@ -1199,6 +1240,7 @@ class FilterBin(Operator):
         self.binning.noiseweighted = noiseweighted_map_name
         self.binning.binned = map_name
         self.binning.det_data = self.det_data
+        self.binning.det_data_units = self._det_data_units
         self.binning.covariance = cov_name
 
         cov = CovarianceAndHits(
@@ -1209,6 +1251,7 @@ class FilterBin(Operator):
             rcond=rcond_name,
             det_flags=self.binning.det_flags,
             det_flag_mask=self.binning.det_flag_mask,
+            det_data_units=self._det_data_units,
             shared_flags=self.binning.shared_flags,
             shared_flag_mask=self.binning.shared_flag_mask,
             pixel_pointing=self.binning.pixel_pointing,
@@ -1267,6 +1310,7 @@ class FilterBin(Operator):
             data[self.binning.pixel_dist],
             dtype=np.float32,
             n_value=self.deproject_nnz,
+            units=self._det_data_units,
         )
         if filename_is_hdf5(self.deproject_map):
             read_healpix_hdf5(

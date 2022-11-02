@@ -30,7 +30,7 @@ from ..spt3g import (
     to_g3_time,
     to_g3_unit,
 )
-from ._helpers import create_ground_data, create_outdir
+from ._helpers import create_ground_data, create_outdir, close_data
 from .mpi import MPITestCase
 
 if available:
@@ -262,6 +262,7 @@ class Spt3gTest(MPITestCase):
             if ob != orig:
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
+        close_data(data)
 
     def test_save_load_no_compression(self):
         rank = 0
@@ -325,6 +326,7 @@ class Spt3gTest(MPITestCase):
             if ob != orig:
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
+        close_data(data)
 
     def test_run_g3pipe(self):
         rank = 0
@@ -379,3 +381,5 @@ class Spt3gTest(MPITestCase):
         )
 
         runner.apply(data)
+
+        close_data(data)

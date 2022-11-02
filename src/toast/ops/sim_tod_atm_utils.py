@@ -14,8 +14,8 @@ from .. import qarray as qa
 from ..atm import AtmSim
 from ..observation import default_values as defaults
 from ..timing import GlobalTimers, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger
+from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
+from ..utils import Environment, Logger, unit_conversion
 from .operator import Operator
 
 
@@ -32,6 +32,10 @@ class ObserveAtmosphere(Operator):
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key for accumulating dipole timestreams",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     quats_azel = Unicode(
@@ -158,7 +162,12 @@ class ObserveAtmosphere(Operator):
             absorption, loading = self._get_absorption_and_loading(ob, dets)
 
             # Make sure detector data output exists
-            exists = ob.detdata.ensure(self.det_data, detectors=dets)
+            exists = ob.detdata.ensure(
+                self.det_data, detectors=dets, create_units=self.det_data_units
+            )
+
+            # Unit conversion from ATM timestream (K) to det data units
+            scale = unit_conversion(u.K, ob.detdata[self.det_data].units)
 
             # Prefix for logging
             log_prefix = f"{group} : {ob.name}"
@@ -225,7 +234,7 @@ class ObserveAtmosphere(Operator):
 
                     # Convert Az/El quaternion of the detector back into
                     # angles from the simulation.
-                    theta, phi = qa.to_position(azel_quat)
+                    theta, phi, _ = qa.to_iso_angles(azel_quat)
 
                     # Stokes weights for observing polarized atmosphere
                     if self.weights is None:
@@ -249,13 +258,13 @@ class ObserveAtmosphere(Operator):
                     az = 2 * np.pi - phi
                     el = np.pi / 2 - theta
 
-                    if np.ptp(az) < np.pi:
-                        azmin_det = np.amin(az)
-                        azmax_det = np.amax(az)
-                    else:
-                        # Scanning across the zero azimuth.
-                        azmin_det = np.amin(az[az > np.pi]) - 2 * np.pi
-                        azmax_det = np.amax(az[az < np.pi])
+                    az = np.unwrap(az)
+                    while np.amin(az) < 0:
+                        az += 2 * np.pi
+                    while np.amax(az) > 2 * np.pi:
+                        az -= 2 * np.pi
+                    azmin_det = np.amin(az)
+                    azmax_det = np.amax(az)
                     elmin_det = np.amin(el)
                     elmax_det = np.amax(el)
 
@@ -458,7 +467,7 @@ class ObserveAtmosphere(Operator):
                         )
 
                     # Add contribution to output
-                    views.detdata[self.det_data][vw][det, good] += atmdata
+                    views.detdata[self.det_data][vw][det, good] += scale * atmdata
                     gt.stop("ObserveAtmosphere:  detector accumulate")
 
                     # Dump timestream snapshot

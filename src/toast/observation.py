@@ -9,8 +9,10 @@ import types
 from collections.abc import Mapping, MutableMapping, Sequence
 
 import numpy as np
+from astropy import units as u
 from pshmem.utils import mpi_data_type
 
+from .accelerator import AcceleratorObject
 from .dist import distribute_samples
 from .instrument import Session, Telescope
 from .intervals import IntervalList, interval_dtype
@@ -69,12 +71,19 @@ def set_default_values(values=None):
         #
         # ground-specific flag masks
         #
-        "turnaround": 1 + 2,  # remove invalid bit to map turnarounds
+        # This marks the turnarounds as "invalid".  To simulate data
+        # in the turnarounds, set the turnaround mask in SimGround to
+        # just "2".
+        "turnaround": 1 + 2,
         "scan_leftright": 8,
         "scan_rightleft": 16,
         "sun_up": 32,
         "sun_close": 64,
         "elnod": 1 + 2 + 4,
+        #
+        # Units
+        #
+        "det_data_units": u.Kelvin,
     }
 
     if values is not None:
@@ -692,6 +701,10 @@ class Observation(MutableMapping):
             self.shared.accel_create(key)
         for key in names["intervals"]:
             self.intervals.accel_create(key)
+        for key, val in self._internal.items():
+            if isinstance(val, AcceleratorObject):
+                if not val.accel_exists():
+                    val.accel_create()
 
     def accel_update_device(self, names):
         """Copy data objects to the device.
@@ -712,6 +725,10 @@ class Observation(MutableMapping):
             self.shared.accel_update_device(key)
         for key in names["intervals"]:
             self.intervals.accel_update_device(key)
+        for key, val in self._internal.items():
+            if isinstance(val, AcceleratorObject):
+                if not val.accel_in_use():
+                    val.accel_update_device()
 
     def accel_update_host(self, names):
         """Copy data objects from the device.
@@ -732,8 +749,16 @@ class Observation(MutableMapping):
             self.shared.accel_update_host(key)
         for key in names["intervals"]:
             self.intervals.accel_update_host(key)
+        for key, val in self._internal.items():
+            if isinstance(val, AcceleratorObject):
+                if val.accel_in_use():
+                    val.accel_update_host()
 
     def accel_clear(self):
         self.detdata.accel_clear()
         self.shared.accel_clear()
         self.intervals.accel_clear()
+        for key, val in self._internal.items():
+            if isinstance(val, AcceleratorObject):
+                if val.accel_exists():
+                    val.accel_delete()

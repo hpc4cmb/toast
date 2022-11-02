@@ -29,6 +29,7 @@ class GainTemplate(Template):
     #    data             : The Data instance we are working with
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
+    #    det_data_units   : The units of the detector data
     #    det_flags        : Optional detector solver flags
     #    det_flag_mask    : Bit mask for detector solver flags
     #
@@ -53,7 +54,7 @@ class GainTemplate(Template):
     def _get_polynomials(self, N):
         norder = self.order + 1
         L = np.zeros((N, norder), dtype=np.float64)
-        x = np.linspace(-1.0, 1.0, N)
+        x = np.linspace(-1.0, 1.0, num=N, endpoint=True)
         for i in range(norder):
             L[:, i] = scipy.special.legendre(i)(x)
         return L
@@ -72,6 +73,9 @@ class GainTemplate(Template):
                     all_dets[d] = None
 
         self._all_dets = list(all_dets.keys())
+
+        # The inverse variance units
+        invvar_units = 1.0 / (self.det_data_units**2)
 
         # Go through the data one local detector at a time and compute the offsets into
         # the amplitudes.
@@ -133,7 +137,7 @@ class GainTemplate(Template):
                 for det in ob.local_detectors:
                     detweight = 1.0
                     if noise is not None:
-                        detweight = noise.detector_weight(det)
+                        detweight = noise.detector_weight(det).to_value(invvar_units)
 
                     good = slice(0, view_len, 1)
                     if self.det_flags is not None:

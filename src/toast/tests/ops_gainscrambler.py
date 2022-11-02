@@ -7,7 +7,7 @@ import os
 import numpy as np
 
 from .. import ops
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -53,5 +53,4 @@ class OpGainScramblerTest(MPITestCase):
                 if np.abs(rms / old) - 2 > 1e-3:
                     raise RuntimeError(f"det {det} old rms = {old}, new rms = {rms}")
 
-        data.clear()
-        del data
+        close_data(data)

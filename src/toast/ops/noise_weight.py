@@ -5,6 +5,7 @@
 import numpy as np
 import traitlets
 
+from ..accelerator import use_accel_jax
 from ..noise_sim import AnalyticNoise
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
@@ -52,6 +53,10 @@ class NoiseWeight(Operator):
                 # Nothing to do for this observation
                 continue
 
+            data_input_units = ob.detdata[self.det_data].units
+            data_invcov_units = 1.0 / data_input_units**2
+            data_output_units = 1.0 / data_input_units
+
             # Check that the noise model exists
             if self.noise_model not in ob:
                 msg = "Noise model {} does not exist in observation {}".format(
@@ -59,9 +64,9 @@ class NoiseWeight(Operator):
                 )
                 raise RuntimeError(msg)
 
-            # computes the noise for each detector
+            # computes the noise for each detector (using the correct unit)
             noise = ob[self.noise_model]
-            detector_weights = [noise.detector_weight(detector) for detector in dets]
+            detector_weights = [noise.detector_weight(detector).to(data_invcov_units) for detector in dets]
 
             # multiplies detectors by their respective noise
             intervals = ob.intervals[self.view].data
@@ -70,6 +75,9 @@ class NoiseWeight(Operator):
             noise_weight(
                 det_data, det_data_indx, intervals, detector_weights, use_accel
             )
+
+            # updates the unit for the output
+            ob.detdata[self.det_data].update_units(data_output_units)
 
         return
 
@@ -90,4 +98,5 @@ class NoiseWeight(Operator):
         return dict()
 
     def _supports_accel(self):
-        return True
+        # TODO set this to True in all cases once there is an OpenMP implementation
+        return use_accel_jax

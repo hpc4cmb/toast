@@ -41,11 +41,12 @@ class AnalyticNoise(Noise):
         NET=dict(),
         indices=None,
     ):
-        self._rate = rate
-        self._fmin = fmin
-        self._fknee = fknee
-        self._alpha = alpha
-        self._NET = NET
+        # Convert everything to consistent units
+        self._rate = {x: y.to(u.Hz) for x, y in rate.items()}
+        self._fmin = {x: y.to(u.Hz) for x, y in fmin.items()}
+        self._fknee = {x: y.to(u.Hz) for x, y in fknee.items()}
+        self._alpha = dict(alpha)
+        self._NET = {x: y.to(u.K * np.sqrt(1.0 * u.second)) for x, y in NET.items()}
 
         for d in detectors:
             if self._alpha[d] < 0.0:
@@ -106,12 +107,11 @@ class AnalyticNoise(Noise):
                 ktemp = np.power(fknee_hz, self._alpha[d])
                 mtemp = np.power(fmin_hz, self._alpha[d])
                 temp = np.power(freqs[d].to_value(u.Hz), self._alpha[d])
-                psds[d] = (temp + ktemp) / (temp + mtemp)
-                psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second))) ** 2
+                psd_vals = (temp + ktemp) / (temp + mtemp)
+                psds[d] = psd_vals * self._NET[d] ** 2
             else:
-                psds[d] = np.ones_like(freqs[d].to_value(u.Hz))
-                psds[d] *= (self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second))) ** 2
-            psds[d] *= (self._NET[d].unit) ** 2
+                psd_vals = np.ones_like(freqs[d].to_value(u.Hz))
+                psds[d] = psd_vals * self._NET[d] ** 2
 
             last_det = d
 
@@ -135,11 +135,8 @@ class AnalyticNoise(Noise):
         return self._NET[det]
 
     def _detector_weight(self, det):
-        return (
-            1.0
-            / (self._NET[det] ** 2).to_value(u.K**2 * u.second)
-            / self._rate[det].to_value(u.Hz)
-        )
+        wt = 1.0 / (self._NET[det] ** 2) / self._rate[det]
+        return wt.decompose()
 
     def _save_hdf5(self, handle, comm, **kwargs):
         """Internal method which can be overridden by derived classes."""

@@ -14,7 +14,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir
+from ._helpers import create_ground_data, create_outdir, close_data
 from .mpi import MPITestCase
 
 
@@ -35,27 +35,27 @@ class DemodulateTest(MPITestCase):
 
         # Pointing operator
 
-        dist_key = "pixel_dist"
         detpointing = ops.PointingDetectorSimple(shared_flag_mask=0)
         pixels = ops.PixelsHealpix(
             nside=nside,
-            create_dist=dist_key,
             detector_pointing=detpointing,
-            # view="scanning",
         )
-        pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
-        weights.apply(data)
+
+        # Build the pixel distribution
+        build_dist = ops.BuildPixelDistribution(pixel_pointing=pixels)
+        build_dist.apply(data)
 
         # Create a fake sky with only intensity and Q-polarization
 
         map_key = "fake_map"
+        dist_key = build_dist.pixel_dist
         dist = data[dist_key]
-        pix_data = PixelData(dist, np.float64, n_value=3)
+        pix_data = PixelData(dist, np.float64, n_value=3, units=u.K)
         off = 0
         map_values = [10, -1, 2]
         for submap in range(dist.n_submap):
@@ -73,7 +73,15 @@ class DemodulateTest(MPITestCase):
             weights=weights.weights,
             map_key=map_key,
         )
-        scanner.apply(data)
+        scan_pipe = ops.Pipeline(
+            detector_sets=["SINGLE"],
+            operators=[
+                pixels,
+                weights,
+                scanner,
+            ],
+        )
+        scan_pipe.apply(data)
 
         # Simulate noise
         # sim_noise = ops.SimNoise(noise_model=default_model.noise_model)
@@ -108,6 +116,7 @@ class DemodulateTest(MPITestCase):
         # Demodulate
 
         demod = ops.Demodulate(stokes_weights=weights, purge=True)
+        # demod.purge = False
         demod_data = demod.apply(data)
 
         # ops.Delete(detdata=[defaults.weights]).apply(demod_data)
@@ -179,5 +188,7 @@ class DemodulateTest(MPITestCase):
             outfile = os.path.join(self.outdir, "map_comparison.png")
             fig.savefig(outfile)
 
-        del data, demod_data
-        return
+        if self.comm is not None:
+            self.comm.barrier()
+        close_data(demod_data)
+        close_data(data)

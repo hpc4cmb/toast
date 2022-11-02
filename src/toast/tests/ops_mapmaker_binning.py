@@ -17,7 +17,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 
@@ -128,8 +128,7 @@ class MapmakerBinningTest(MPITestCase):
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)
 
-        del data
-        return
+        close_data(data)
 
     def test_compare_madam(self):
         if not ops.madam.available():
@@ -290,5 +289,4 @@ class MapmakerBinningTest(MPITestCase):
 
         self.assertFalse(fail)
 
-        del data
-        return
+        close_data(data)

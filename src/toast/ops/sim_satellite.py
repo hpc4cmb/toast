@@ -2,22 +2,23 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from datetime import datetime, timedelta, timezone
+
 import numpy as np
 import traitlets
 from astropy import units as u
-from datetime import datetime, timezone, timedelta
 from scipy.constants import degree
 
 from .. import qarray as qa
 from ..dist import distribute_discrete
 from ..healpix import ang2vec
-from ..instrument import Telescope, Session
+from ..instrument import Session, Telescope
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
 from ..observation import default_values as defaults
 from ..schedule import SatelliteSchedule
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger, name_UID, rate_from_times
 from .operator import Operator
 from .sim_hwp import simulate_hwp_response
@@ -31,39 +32,50 @@ def satellite_scanning(
     ob_key,
     sample_offset=0,
     q_prec=None,
-    spin_period_m=1.0,
-    spin_angle_deg=85.0,
-    prec_period_m=0.0,
-    prec_angle_deg=0.0,
+    spin_period=1.0 * u.minute,
+    spin_angle=85.0 * u.degree,
+    prec_period=0.0 * u.minute,
+    prec_angle=0.0 * u.degree,
 ):
     """Generate boresight quaternions for a generic satellite.
 
-    Given scan strategy parameters and the relevant angles
-    and rates, generate an array of quaternions representing
-    the rotation of the ecliptic coordinate axes to the
+    Given scan strategy parameters and the relevant angles and rates, generate an array
+    of quaternions representing the rotation of the ecliptic coordinate axes to the
     boresight.
+
+    The boresight / focalplane frame has the Z-axis pointed along the line of sight
+    and has the Y-axis oriented to be parallel to the scan direction.
+
+    In terms of relative rotations, this function:
+
+    - Rotates the ecliptic Z-axis to precession axis
+
+    - Rotates about the precession axis
+
+    - Rotates by the opening angle to the spin axis
+
+    - Rotates about the spin axis
+
+    - Rotates by the opening angle to the boresight line-of-sight
+
+    - Rotates by PI/2 about the line of sight to match the focalplane conventions
+      used internally in TOAST.
 
     Args:
         ob (Observation): The observation to populate.
         ob_key (str): The observation shared key to create.
-        sample_offset (int): The global offset in samples from the start
-            of the mission.
-        q_prec (ndarray): If None (the default), then the
-            precession axis will be fixed along the
-            X axis.  If a 1D array of size 4 is given,
-            This will be the fixed quaternion used
-            to rotate the Z coordinate axis to the
-            precession axis.  If a 2D array of shape
-            (nsim, 4) is given, this is the time-varying
-            rotation of the Z axis to the precession axis.
-        spin_period_m (float): The period (in minutes) of the
-            rotation about the spin axis.
-        spin_angle_deg (float): The opening angle (in degrees)
-            of the boresight from the spin axis.
-        prec_period_m (float): The period (in minutes) of the
-            rotation about the precession axis.
-        prec_angle_deg (float): The opening angle (in degrees)
-            of the spin axis from the precession axis.
+        sample_offset (int): The global offset in samples from the start of the
+            mission.
+        q_prec (ndarray): If None (the default), then the precession axis will be fixed
+            along the ecliptic X-axis.  If a 1D array of size 4 is given, This will be
+            the fixed quaternion used to rotate the ecliptic Z-axis to the precession
+            axis.  If a 2D array of shape (n_samp, 4) is given, this is the
+            time-varying rotation of the ecliptic Z-axis to the precession axis.
+        spin_period (Quantity): The period of the rotation about the spin axis.
+        spin_angle (Quantity): The opening angle of the boresight from the spin axis.
+        prec_period (Quantity): The period of the rotation about the precession axis.
+        prec_angle (Quantity): The opening angle of the spin axis from the precession
+            axis.
 
     """
     env = Environment.get()
@@ -84,19 +96,11 @@ def satellite_scanning(
         # Compute effective sample rate
         (sample_rate, dt, _, _, _) = rate_from_times(ob.shared["times"])
 
-        spin_rate = None
-        if spin_period_m > 0.0:
-            spin_rate = 1.0 / (60.0 * spin_period_m)
-        else:
-            spin_rate = 0.0
-        spin_angle = spin_angle_deg * np.pi / 180.0
+        spin_rate = 1.0 / spin_period.to_value(u.second)
+        spin_angle_rad = spin_angle.to_value(u.radian)
 
-        prec_rate = None
-        if prec_period_m > 0.0:
-            prec_rate = 1.0 / (60.0 * prec_period_m)
-        else:
-            prec_rate = 0.0
-        prec_angle = prec_angle_deg * np.pi / 180.0
+        prec_rate = 1.0 / prec_period.to_value(u.second)
+        prec_angle_rad = prec_angle.to_value(u.radian)
 
         xaxis = np.array([1, 0, 0], dtype=np.float64)
         yaxis = np.array([0, 1, 0], dtype=np.float64)
@@ -113,13 +117,15 @@ def satellite_scanning(
                 buf_n = n_samp - buf_off
             bslice = slice(buf_off, buf_off + buf_n)
 
+            # Rotation of the Ecliptic coordinate axis to the precession axis
+
             satrot = np.empty((buf_n, 4), np.float64)
             if q_prec is None:
                 # in this case, we just have a fixed precession axis, pointing
                 # along the ecliptic X axis.
-                satrot[:, :] = np.tile(
-                    qa.rotation(np.array([0.0, 1.0, 0.0]), np.pi / 2), buf_n
-                ).reshape(-1, 4)
+                satrot[:, :] = np.tile(qa.rotation(yaxis, np.pi / 2), buf_n).reshape(
+                    -1, 4
+                )
             elif q_prec.flatten().shape[0] == 4:
                 # we have a fixed precession axis.
                 satrot[:, :] = np.tile(q_prec.flatten(), buf_n).reshape(-1, 4)
@@ -127,57 +133,47 @@ def satellite_scanning(
                 # we have full vector of quaternions
                 satrot[:, :] = q_prec[bslice, :]
 
-            # Time-varying rotation about precession axis.
-            # Increment per sample is
+            # Time-varying rotation about precession axis.  Increment per sample is
             # (2pi radians) X (precrate) / (samplerate)
-            # Construct quaternion from axis / angle form.
-
-            # print("satrot = ", satrot[-1])
 
             precang = np.arange(buf_n, dtype=np.float64)
             precang += float(buf_off + first_samp + sample_offset)
             precang *= prec_rate / sample_rate
             precang = 2.0 * np.pi * (precang - np.floor(precang))
 
-            cang = np.cos(0.5 * precang)
-            sang = np.sin(0.5 * precang)
-
-            precaxis = np.multiply(
-                sang.reshape(-1, 1), np.tile(zaxis, buf_n).reshape(-1, 3)
-            )
-
-            precrot = np.concatenate((precaxis, cang.reshape(-1, 1)), axis=1)
+            precrot = qa.rotation(zaxis, precang)
 
             # Rotation which performs the precession opening angle
-            precopen = qa.rotation(np.array([1.0, 0.0, 0.0]), prec_angle)
 
-            # Time-varying rotation about spin axis.  Increment
-            # per sample is
+            precopen = qa.rotation(xaxis, prec_angle_rad)
+
+            # Time-varying rotation about spin axis.  Increment per sample is
             # (2pi radians) X (spinrate) / (samplerate)
-            # Construct quaternion from axis / angle form.
 
             spinang = np.arange(buf_n, dtype=np.float64)
             spinang += float(buf_off + first_samp + sample_offset)
             spinang *= spin_rate / sample_rate
             spinang = 2.0 * np.pi * (spinang - np.floor(spinang))
 
-            cang = np.cos(0.5 * spinang)
-            sang = np.sin(0.5 * spinang)
-
-            spinaxis = np.multiply(
-                sang.reshape(-1, 1), np.tile(zaxis, buf_n).reshape(-1, 3)
-            )
-
-            spinrot = np.concatenate((spinaxis, cang.reshape(-1, 1)), axis=1)
+            spinrot = qa.rotation(zaxis, spinang)
 
             # Rotation which performs the spin axis opening angle
 
-            spinopen = qa.rotation(np.array([1.0, 0.0, 0.0]), spin_angle)
+            spinopen = qa.rotation(xaxis, spin_angle_rad)
 
-            # compose final rotation
+            # Rotation of focalplane by PI/2
 
-            boresight[bslice, :] = qa_mult(
-                satrot, qa_mult(precrot, qa_mult(precopen, qa_mult(spinrot, spinopen)))
+            fprot = qa.rotation(zaxis, 0.5 * np.pi)
+
+            # Compose the final rotation.  These are relative rotations, so note
+            # the order.
+
+            boresight[bslice, :] = qa.mult(
+                satrot,
+                qa.mult(
+                    precrot,
+                    qa.mult(precopen, qa.mult(spinrot, qa.mult(spinopen, fprot))),
+                ),
             )
             buf_off += buf_n
 
@@ -241,7 +237,9 @@ class SimSatellite(Operator):
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     shared_flags = Unicode(
-        defaults.shared_flags, help="Observation shared key for common flags"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for common flags",
     )
 
     hwp_angle = Unicode(
@@ -260,6 +258,10 @@ class SimSatellite(Operator):
         defaults.det_data,
         allow_none=True,
         help="Observation detdata key to initialize",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     det_flags = Unicode(
@@ -531,10 +533,10 @@ class SimSatellite(Operator):
                 self.boresight,
                 sample_offset=scan_offsets[obindx],
                 q_prec=q_prec,
-                spin_period_m=scan.spin_period.to_value(u.minute),
-                spin_angle_deg=self.spin_angle.to_value(u.degree),
-                prec_period_m=scan.prec_period.to_value(u.minute),
-                prec_angle_deg=self.prec_angle.to_value(u.degree),
+                spin_period=scan.spin_period,
+                spin_angle=self.spin_angle,
+                prec_period=scan.prec_period,
+                prec_angle=self.prec_angle,
             )
 
             # Set HWP angle
@@ -556,7 +558,10 @@ class SimSatellite(Operator):
 
             if self.det_data is not None:
                 exists_data = ob.detdata.ensure(
-                    self.det_data, dtype=np.float64, detectors=dets
+                    self.det_data,
+                    dtype=np.float64,
+                    detectors=dets,
+                    create_units=self.det_data_units,
                 )
 
             if self.det_flags is not None:

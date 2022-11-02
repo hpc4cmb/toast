@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import copy
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import traitlets
@@ -14,14 +14,24 @@ from .. import qarray as qa
 from ..coordinates import azel_to_radec
 from ..dist import distribute_discrete, distribute_uniform
 from ..healpix import ang2vec
-from ..instrument import Telescope, Session
+from ..instrument import Session, Telescope
 from ..intervals import IntervalList, regular_intervals
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
 from ..observation import default_values as defaults
 from ..schedule import GroundSchedule
 from ..timing import GlobalTimers, Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
+from ..traits import (
+    Bool,
+    Float,
+    Instance,
+    Int,
+    List,
+    Quantity,
+    Unit,
+    Unicode,
+    trait_docs,
+)
 from ..utils import (
     Environment,
     Logger,
@@ -152,13 +162,19 @@ class SimGround(Operator):
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     shared_flags = Unicode(
-        defaults.shared_flags, help="Observation shared key for common flags"
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for common flags",
     )
 
     det_data = Unicode(
         defaults.det_data,
         allow_none=True,
         help="Observation detdata key to initialize",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     det_flags = Unicode(
@@ -798,7 +814,10 @@ class SimGround(Operator):
 
             if self.det_data is not None:
                 exists_data = ob.detdata.ensure(
-                    self.det_data, dtype=np.float64, detectors=dets
+                    self.det_data,
+                    dtype=np.float64,
+                    detectors=dets,
+                    create_units=self.det_data_units,
                 )
 
             if self.det_flags is not None:
@@ -828,15 +847,14 @@ class SimGround(Operator):
                 ]
                 # Get the motion of the site for these times.
                 position, velocity = site.position_velocity(stamps)
-                # Convert Az / El to quaternions.
-                # Remember that the azimuth is measured clockwise and the
-                # longitude counter-clockwise.
-                bore_azel = qa.from_angles(
-                    np.pi / 2 - el_data,
-                    -(az_data),
-                    np.zeros_like(el_data),
-                    IAU=False,
+                # Convert Az / El to quaternions.  Remember that the azimuth is
+                # measured clockwise and the longitude counter-clockwise.  We define
+                # the focalplane coordinate X-axis to be pointed in the direction
+                # of decreasing elevation.
+                bore_azel = qa.from_lonlat_angles(
+                    -(az_data), el_data, np.zeros_like(el_data)
                 )
+
                 if scan.boresight_angle.to_value(u.radian) != 0:
                     zaxis = np.array([0, 0, 1.0])
                     rot = qa.rotation(zaxis, scan.boresight_angle.to_value(u.radian))

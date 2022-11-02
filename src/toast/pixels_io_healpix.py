@@ -7,6 +7,7 @@ import os
 import h5py
 import healpy as hp
 import numpy as np
+from astropy import units as u
 
 from .io import have_hdf5_parallel
 from .mpi import MPI, use_mpi
@@ -33,6 +34,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
         None
 
     """
+    log = Logger.get()
     dist = pix.distribution
     rank = 0
     if dist.comm is not None:
@@ -50,12 +52,34 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
     # that we can (hopefully) read through all columns in chunks such that
     # we only ever have a couple FITS blocks in memory.
     fdata = None
+    fscale = 1.0
     if rank == 0:
         # Check that the file is in expected format
         errors = ""
         h = hp.fitsfunc.pf.open(path, "readonly")
         nside = hp.npix2nside(dist.n_pix)
         nside_map = h[1].header["nside"]
+        if "TUNIT1" in h[1].header:
+            if h[1].header["TUNIT1"] == "":
+                funits = u.dimensionless_unscaled
+            elif h[1].header["TUNIT1"] == "K":
+                funits = u.K
+            elif h[1].header["TUNIT1"] == "mK":
+                funits = u.mK
+            elif h[1].header["TUNIT1"] == "uK":
+                funits = u.uK
+            else:
+                funits = u.Unit(h[1].header["TUNIT1"])
+        else:
+            msg = f"Pixel data in {path} does not have TUNIT1 key.  "
+            msg += f"Assuming '{pix.units}'."
+            log.info(msg)
+            funits = pix.units
+        if funits != pix.units:
+            scale = 1.0 * funits
+            scale.to(pix.units)
+            fscale = scale.value
+
         if nside_map != nside:
             errors += "Wrong NSide: {} has {}, expected {}\n" "".format(
                 path, nside_map, nside
@@ -80,6 +104,8 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
         if pix.n_value == 1:
             fdata = (fdata,)
 
+    if dist.comm is not None:
+        fscale = dist.comm.bcast(fscale, root=0)
     buf = np.zeros(comm_submap * dist.n_pix_submap * pix.n_value, dtype=pix.dtype)
     view = buf.reshape(comm_submap, dist.n_pix_submap, pix.n_value)
 
@@ -115,7 +141,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
             for sm in range(submap_off, submap_off + comm_submap):
                 if sm in dist.local_submaps:
                     loc = dist.global_submap_to_local[sm]
-                    pix.data[loc, :, :] = view[sm - submap_off, :, :]
+                    pix.data[loc, :, :] = fscale * view[sm - submap_off, :, :]
             out_off = 0
             submap_off += comm_submap
             buf.fill(0)
@@ -129,7 +155,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
         for sm in range(submap_off, submap_off + comm_submap):
             if sm in dist.local_submaps:
                 loc = dist.global_submap_to_local[sm]
-                pix.data[loc, :, :] = view[sm - submap_off, :, :]
+                pix.data[loc, :, :] = fscale * view[sm - submap_off, :, :]
     return
 
 
@@ -267,6 +293,16 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
     # The distribution
     dist = pix.distribution
 
+    # Unit string to write
+    if pix.units == u.K:
+        funits = "K"
+    elif pix.units == u.mK:
+        funits = "mK"
+    elif pix.units == u.uK:
+        funits = "uK"
+    else:
+        funits = str(pix.units)
+
     rank = 0
     if dist.comm is not None:
         rank = dist.comm.rank
@@ -280,7 +316,10 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
         if report_memory:
             mem = memreport(msg="(root node)", silent=True)
             log.info_rank(f"About to write {path}:  {mem}")
-        hp.write_map(path, fview, dtype=dtypes, fits_IDL=False, nest=nest)
+        extra = [(f"TUNIT{x}", f"{funits}") for x in range(pix.n_value)]
+        hp.write_map(
+            path, fview, dtype=dtypes, fits_IDL=False, nest=nest, extra_header=extra
+        )
         del fview
         for col in range(pix.n_value):
             fdata[col].clear()
@@ -319,6 +358,7 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
     comm_submap = pix.comm_nsubmap(comm_bytes)
 
     fdata = None
+    fscale = 1.0
     if rank == 0:
         try:
             f = h5py.File(path, "r")
@@ -340,6 +380,19 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
         else:
             msg = f"Could not determine {path} pixel ordering."
             raise RuntimeError(msg)
+        if "UNITS" in header:
+            if header["UNITS"] == "":
+                funits = u.dimensionless_unscaled
+            else:
+                funits = u.Unit(header["UNITS"])
+        else:
+            msg = f"Pixel data in {path} does not have UNITS.  Assuming {pix.units}."
+            log.info(msg)
+            funits = pix.units
+        if funits != pix.units:
+            scale = 1.0 * funits
+            scale.to(pix.units)
+            fscale = scale.value
 
         nnz, npix = dset.shape
         if nnz < pix.n_value:
@@ -357,6 +410,9 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
         else:
             # No reorder, we'll only load what we need
             mapdata = dset
+
+    if dist.comm is not None:
+        fscale = dist.comm.bcast(fscale, root=0)
 
     buf = np.zeros(comm_submap * pix.n_value * dist.n_pix_submap, dtype=pix.dtype)
     view = buf.reshape(comm_submap, pix.n_value, dist.n_pix_submap)
@@ -386,7 +442,7 @@ def read_healpix_hdf5(pix, path, nest=True, comm_bytes=10000000):
         for i, submap in enumerate(hit_submaps[submap_offset:submap_last]):
             if submap in dist.local_submaps:
                 loc = dist.global_submap_to_local[submap]
-                pix.data[loc] = view[i].T
+                pix.data[loc] = fscale * view[i].T
 
         submap_offset = submap_last
 
@@ -452,6 +508,7 @@ def write_healpix_hdf5(
     else:
         header["ORDERING"] = "RING"
     header["NSIDE"] = hp.npix2nside(dist.n_pix)
+    header["UNITS"] = str(pix.units)
 
     dtype = pix.dtype
     if single_precision:
@@ -554,7 +611,20 @@ def filename_is_hdf5(filename):
 
 @function_timer
 def read_healpix(filename, *args, **kwargs):
-    """Read a FITS or HDF5 map serially"""
+    """Read a FITS or HDF5 map serially.
+
+    This reads the file into simple numpy arrays on the calling process.
+    Units in the file are ignored.
+
+    Args:
+        filename (str):  The path to the file.
+
+    Returns:
+        (tuple):  The map data and optionally header.
+
+    """
+
+    filename = filename.strip()
 
     if filename_is_fits(filename):
 
@@ -614,13 +684,29 @@ def read_healpix(filename, *args, **kwargs):
             result = mapdata, header
         else:
             result = mapdata
+    else:
+        msg = f"Could not ascertain file type for '{fname}'"
+        raise RuntimeError(msg)
 
     return result
 
 
 @function_timer
 def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
-    """Write a FITS or HDF5 map serially"""
+    """Write a FITS or HDF5 map serially.
+
+    This writes the map data from a simple numpy array on the calling process.
+    No units are written to the file.
+
+    Args:
+        filename (str):  The path to the file.
+        mapdata (array):  The data array.
+        nside_submap (int):  The submap NSIDE, used for dataset chunking.
+
+    Returns:
+        None
+
+    """
 
     if filename_is_fits(filename):
 

@@ -73,6 +73,7 @@ class Data(MutableMapping):
             for ob in self.obs:
                 ob.clear()
         self.obs.clear()
+        self._internal.clear()
         return
 
     def all_local_detectors(self, selection=None):
@@ -92,6 +93,48 @@ class Data(MutableMapping):
                 if d not in all_dets:
                     all_dets[d] = None
         return list(all_dets.keys())
+
+    def detector_units(self, det_data):
+        """Get the detector data units for a given field.
+
+        This verifies that the specified detector data field has the same
+        units in all observations where it occurs, and returns that unit.
+
+        Args:
+            det_data (str):  The detector data field.
+
+        Returns:
+            (Unit):  The unit used across all observations.
+
+        """
+        log = Logger.get()
+        local_units = None
+        for ob in self.obs:
+            if det_data not in ob.detdata:
+                continue
+            ob_units = ob.detdata[det_data].units
+            if local_units is None:
+                local_units = ob_units
+            else:
+                if ob_units != local_units:
+                    msg = f"obs {ob.name} detdata {det_data} units "
+                    msg += f"{ob_units} != {local_units}"
+                    log.error(msg)
+                    raise RuntimeError(msg)
+        if self.comm.comm_world is None:
+            det_units = local_units
+        else:
+            det_units = self.comm.comm_world.gather(local_units, root=0)
+            if self.comm.world_rank == 0:
+                for dtu in det_units:
+                    if dtu != local_units:
+                        msg = f"observations have different units "
+                        msg += f"{dtu} != {local_units}"
+                        log.error(msg)
+                        raise RuntimeError(msg)
+            # We know that every process is the same now
+            det_units = local_units
+        return det_units
 
     def info(self, handle=None):
         """Print information about the distributed data.

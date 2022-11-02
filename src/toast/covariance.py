@@ -135,6 +135,10 @@ def covariance_invert(npp, threshold, rcond=None, use_alltoallv=False):
             True,
         )
 
+    # Invert the units
+    new_units = (1.0 / npp.units).decompose()
+    npp.update_units(new_units)
+
     return
 
 
@@ -205,6 +209,10 @@ def covariance_multiply(npp1, npp2, use_alltoallv=False):
             npp1.raw,
             npp2.raw,
         )
+
+    # Update the units
+    new_units = (npp1.units * npp2.units).decompose()
+    npp1.update_units(new_units)
 
     return
 
@@ -287,4 +295,8 @@ def covariance_apply(npp, m, use_alltoallv=False):
             nppdata,
             mdata,
         )
+
+    # Update units
+    new_units = (npp.units * m.units).decompose()
+    m.update_units(new_units)
     return

@@ -302,7 +302,7 @@ void accumulate_observation_matrix(py::array_t <double,
 
                 // `filter_matrix` holds the value of `Z` at
                 // (isample, jsample).  Now accumulate that value to
-                // approriate (ipixel, jpixel) in the observatio matrix.
+                // approriate (ipixel, jpixel) in the observation matrix.
 
                 for (size_t inz = 0; inz < nnz; ++inz) {
                     double iweight = fast_weights(isample, inz) * filter_matrix;

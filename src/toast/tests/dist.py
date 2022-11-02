@@ -20,6 +20,7 @@ from ._helpers import (
     create_outdir,
     create_satellite_data,
     create_satellite_empty,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -180,6 +181,7 @@ class DataTest(MPITestCase):
         alt_data.clear()
         del alt_data
         self.assertTrue("boresight_radec" in data.obs[0].shared)
+        close_data(data)
 
     def test_select(self):
         toastcomm = create_comm(self.comm)
@@ -216,6 +218,7 @@ class DataTest(MPITestCase):
 
         selected_keyval = data.select(obs_key="season", obs_val=1)
         self.assertTrue(len(selected_keyval.obs) == 2)
+        close_data(data)
 
     def test_split(self):
         toastcomm = create_comm(self.comm)
@@ -262,6 +265,12 @@ class DataTest(MPITestCase):
                 sum2 += obs["var1"]
 
         nt.assert_equal(sum1, sum2)
+        del datasplit_indx
+        del datasplit_name
+        del datasplit_season
+        del datasplit_site
+        del datasplit_uid
+        close_data(data)
 
     def test_none(self):
         # test that Comm with None argument returns a None communicator
@@ -324,3 +333,6 @@ class DataTest(MPITestCase):
             for ob in sel.obs:
                 mat = re.match(r".*-(\d\d)", ob.name)
                 self.assertTrue(mat.group(1) == sname)
+
+        del datasplit_session
+        close_data(data)

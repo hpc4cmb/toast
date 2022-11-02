@@ -15,7 +15,7 @@ from ..dipole import dipole
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir
+from ._helpers import create_ground_data, create_outdir, close_data
 from .mpi import MPITestCase
 
 
@@ -176,6 +176,7 @@ class SimAtmTest(MPITestCase):
             pfrac = np.median(p[good] / mdata[0][good])
             if pfrac > 0.01:
                 raise RuntimeError("Simulated atmosphere is polarized")
+        close_data(data)
 
     def test_sim_interp(self):
         if not available_atm:
@@ -221,7 +222,7 @@ class SimAtmTest(MPITestCase):
                     sig1 = obs.detdata["interpolated_signal"][det]
                     assert np.std(sig1 - sig0) / np.std(sig0) < 1e-2
 
-        return
+        close_data(data)
 
     def test_sim_pol(self):
         if not available_atm:
@@ -384,6 +385,7 @@ class SimAtmTest(MPITestCase):
             pfrac = np.median(p[good] / i[good])
             if pfrac < 0.01:
                 raise RuntimeError("Simulated atmosphere is not polarized")
+        close_data(data)
 
     def test_loading(self):
         if not available_atm:
@@ -440,7 +442,7 @@ class SimAtmTest(MPITestCase):
                 sig = obs.detdata[defaults.det_data][det]
                 assert np.std(sig) != 0
 
-        return
+        close_data(data)
 
     def test_bandpass(self):
         if not available_atm:
@@ -506,4 +508,4 @@ class SimAtmTest(MPITestCase):
                 new_rms = np.std(obs.detdata[defaults.det_data][det])
                 assert new_rms > 1.1 * old_rms[obs.name][det]
 
-        return
+        close_data(data)

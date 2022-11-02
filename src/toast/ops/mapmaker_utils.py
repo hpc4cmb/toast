@@ -2,15 +2,18 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from astropy import units as u
 import numpy as np
 import traitlets
 
 from ..covariance import covariance_invert
+from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
-from ..utils import Logger
+from ..traits import Bool, Float, Instance, Int, Unicode, Unit, trait_docs
+from ..utils import Logger, unit_conversion
+from .delete import Delete
 from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
@@ -259,6 +262,8 @@ class BuildInverseCovariance(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
+
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
@@ -319,6 +324,8 @@ class BuildInverseCovariance(Operator):
             comm=data.comm.comm_world,
         )
 
+        invcov_units = 1.0 / (self.det_data_units**2)
+
         invcov = None
         weight_nnz = None
         cov_nnz = None
@@ -329,9 +336,15 @@ class BuildInverseCovariance(Operator):
 
         if self.inverse_covariance in data:
             # We have an existing map from a previous call.  Verify
-            # the distribution.
+            # the distribution and units.
             if data[self.inverse_covariance].distribution != dist:
                 msg = "Existing inv cov '{}' has different data distribution".format(
+                    self.inverse_covariance
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
+            if data[self.inverse_covariance].units != invcov_units:
+                msg = "Existing inv cov '{}' has different units".format(
                     self.inverse_covariance
                 )
                 log.error(msg)
@@ -340,18 +353,30 @@ class BuildInverseCovariance(Operator):
             cov_nnz = invcov.n_value
             weight_nnz = int((np.sqrt(1 + 8 * cov_nnz) - 1) // 2)
         else:
-            try:
-                first_detwt = data.obs[0].detdata[self.weights][0]
-                if len(first_detwt.shape) == 1:
-                    weight_nnz = 1
+            # We are creating a new data object
+            weight_nnz = 0
+            for ob in data.obs:
+                # Get the detectors we are using for this observation
+                dets = ob.select_local_detectors(selection=detectors)
+                if len(dets) == 0:
+                    # Nothing to do for this observation
+                    continue
+                if self.weights in ob.detdata:
+                    if len(ob.detdata[self.weights].detector_shape) == 1:
+                        cur_nnz = 1
+                    else:
+                        cur_nnz = ob.detdata[self.weights].detector_shape[1]
+                    weight_nnz = max(weight_nnz, cur_nnz)
                 else:
-                    weight_nnz = first_detwt.shape[1]
-            except KeyError:
-                weight_nnz = 0
+                    raise RuntimeError(
+                        f"Stokes weights '{self.weights}' not in obs {ob.name}"
+                    )
             if data.comm.comm_world is not None:
-                weight_nnz = np.amax(data.comm.comm_world.allgather(weight_nnz))
+                weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
             cov_nnz = int(weight_nnz * (weight_nnz + 1) // 2)
-            data[self.inverse_covariance] = PixelData(dist, np.float64, n_value=cov_nnz)
+            data[self.inverse_covariance] = PixelData(
+                dist, np.float64, n_value=cov_nnz, units=invcov_units
+            )
             invcov = data[self.inverse_covariance]
 
         for ob in data.obs:
@@ -425,7 +450,7 @@ class BuildInverseCovariance(Operator):
                         local_sm.astype(np.int64),
                         local_pix.astype(np.int64),
                         wview[det].reshape(-1),
-                        detweight,
+                        detweight.to_value(invcov_units),
                         invcov.raw,
                     )
         return
@@ -440,7 +465,8 @@ class BuildInverseCovariance(Operator):
 
     def _requires(self):
         req = {
-            "global": [self.pixel_dist, self.noise_model],
+            "global": [self.pixel_dist],
+            "meta": [self.noise_model],
             "shared": list(),
             "detdata": [self.pixels, self.weights],
             "intervals": list(),
@@ -514,6 +540,8 @@ class BuildNoiseWeighted(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
+
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
@@ -585,6 +613,9 @@ class BuildNoiseWeighted(Operator):
                 )
             )
 
+        detwt_units = 1.0 / (self.det_data_units**2)
+        zmap_units = 1.0 / self.det_data_units
+
         zmap = None
         weight_nnz = None
 
@@ -593,27 +624,42 @@ class BuildNoiseWeighted(Operator):
 
         if self.zmap in data:
             # We have an existing map from a previous call.  Verify
-            # the distribution.
+            # the distribution and units
             if data[self.zmap].distribution != dist:
                 msg = "Existing zmap '{}' has different data distribution".format(
                     self.zmap
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
+            if data[self.zmap].units != zmap_units:
+                msg = f"Existing zmap '{self.zmap}' has different units"
+                msg += f" ({data[self.zmap].units}) != {zmap_units}"
+                log.error(msg)
+                raise RuntimeError(msg)
             zmap = data[self.zmap]
             weight_nnz = zmap.n_value
         else:
-            try:
-                first_detwt = data.obs[0].detdata[self.weights][0]
-                if len(first_detwt.shape) == 1:
-                    weight_nnz = 1
+            weight_nnz = 0
+            for ob in data.obs:
+                # Get the detectors we are using for this observation
+                dets = ob.select_local_detectors(selection=detectors)
+                if len(dets) == 0:
+                    # Nothing to do for this observation
+                    continue
+                if self.weights in ob.detdata:
+                    if len(ob.detdata[self.weights].detector_shape) == 1:
+                        weight_nnz = 1
+                    else:
+                        weight_nnz = ob.detdata[self.weights].detector_shape[1]
                 else:
-                    weight_nnz = first_detwt.shape[1]
-            except KeyError:
-                weight_nnz = 0
+                    raise RuntimeError(
+                        f"Stokes weights '{self.weights}' not in obs {ob.name}"
+                    )
             if data.comm.comm_world is not None:
-                weight_nnz = np.amax(data.comm.comm_world.allgather(weight_nnz))
-            data[self.zmap] = PixelData(dist, np.float64, n_value=weight_nnz)
+                weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
+            data[self.zmap] = PixelData(
+                dist, np.float64, n_value=weight_nnz, units=zmap_units
+            )
             zmap = data[self.zmap]
 
         if use_accel:
@@ -641,9 +687,21 @@ class BuildNoiseWeighted(Operator):
 
             noise = ob[self.noise_model]
 
-            detweights = np.array(
-                [noise.detector_weight(x) for x in dets], dtype=np.float64
+            # Scale factor to get timestream data into desired units.
+            data_scale = unit_conversion(
+                ob.detdata[self.det_data].units, self.det_data_units
             )
+
+            # Detector inverse variance weights
+            detweights = np.array(
+                [noise.detector_weight(x).to_value(detwt_units) for x in dets],
+                dtype=np.float64,
+            )
+
+            # Pre-multiply the detector inverse variance weights by the
+            # data scaling factor, so that this combination is applied
+            # in the compiled kernel below.
+            detweights *= data_scale
 
             pix_indx = ob.detdata[self.pixels].indices(dets)
             weight_indx = ob.detdata[self.weights].indices(dets)
@@ -712,9 +770,9 @@ class BuildNoiseWeighted(Operator):
 
     def _finalize(self, data, use_acc=False, **kwargs):
         if self.zmap in data:
+            log = Logger.get()
             # We have called exec() at least once
             if use_acc:
-                log = Logger.get()
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update self",
                     comm=data.comm.comm_group,
@@ -725,12 +783,28 @@ class BuildNoiseWeighted(Operator):
             else:
                 data[self.zmap].sync_allreduce()
             if use_acc:
-                log = Logger.get()
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update device",
                     comm=data.comm.comm_group,
                 )
                 data[self.zmap].accel_update_device()
+
+            zmap_good = data[self.zmap].data[:, :, 0] != 0.0
+            zmap_min = np.zeros((data[self.zmap].n_value), dtype=np.float64)
+            zmap_max = np.zeros((data[self.zmap].n_value), dtype=np.float64)
+            if np.count_nonzero(zmap_good) > 0:
+                zmap_min[:] = np.amin(data[self.zmap].data[zmap_good, :], axis=0)
+                zmap_max[:] = np.amax(data[self.zmap].data[zmap_good, :], axis=0)
+            all_zmap_min = np.zeros_like(zmap_min)
+            all_zmap_max = np.zeros_like(zmap_max)
+            if data.comm.comm_world is not None:
+                data.comm.comm_world.Reduce(zmap_min, all_zmap_min, op=MPI.MIN, root=0)
+                data.comm.comm_world.Reduce(zmap_max, all_zmap_max, op=MPI.MAX, root=0)
+            if data.comm.world_rank == 0:
+                msg = f"  Noise-weighted map pixel value range:\n"
+                for m in range(data[self.zmap].n_value):
+                    msg += f"    map {m} {zmap_min[m]:1.3e} ... {zmap_max[m]:1.3e}"
+                log.debug(msg)
         return
 
     def _requires(self):
@@ -869,6 +943,8 @@ class CovarianceAndHits(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
+    det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
+
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
@@ -982,6 +1058,28 @@ class CovarianceAndHits(Operator):
             )
             pix_dist.apply(data)
 
+        # Check if map domain products exist and are consistent.  The hits
+        # and inverse covariance accumulation operators support multiple
+        # calls to exec() to accumulate data.  But in this convenience
+        # function we are explicitly accumulating in one-shot.  This means
+        # that any existing data products must be set to zero.
+
+        if self.hits in data:
+            if data[self.hits].distribution == data[self.pixel_dist]:
+                # Distributions are equal, just set to zero
+                data[self.hits].reset()
+            else:
+                # Inconsistent- delete it so that it will be re-created.
+                del data[self.hits]
+        if self.covariance in data:
+            if data[self.covariance].distribution == data[self.pixel_dist]:
+                # Distribution matches, set to zero and update units
+                data[self.covariance].reset()
+                invcov_units = 1.0 / (self.det_data_units**2)
+                data[self.covariance].update_units(invcov_units)
+            else:
+                del data[self.covariance]
+
         # Hit map operator
 
         build_hits = BuildHitMap(
@@ -1006,6 +1104,7 @@ class CovarianceAndHits(Operator):
             pixels=self.pixel_pointing.pixels,
             weights=self.stokes_weights.weights,
             noise_model=self.noise_model,
+            det_data_units=self.det_data_units,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,
@@ -1030,11 +1129,11 @@ class CovarianceAndHits(Operator):
         ]
 
         pipe_out = accum.apply(data, detectors=detectors)
-        # print("cov and hits:  hits = ", data[self.hits].data)
-        # print("cov and hits:  cov = ", data[self.covariance].data)
 
         # Optionally, store the inverse covariance
         if self.inverse_covariance is not None:
+            if self.inverse_covariance in data:
+                del data[self.inverse_covariance]
             data[self.inverse_covariance] = data[self.covariance].duplicate()
 
         # Extract the results
@@ -1049,6 +1148,20 @@ class CovarianceAndHits(Operator):
             rcond=rcond,
             use_alltoallv=(self.sync_type == "alltoallv"),
         )
+
+        rcond_good = rcond.data[:, :, 0] > 0.0
+        rcond_min = 0.0
+        rcond_max = 0.0
+        if np.count_nonzero(rcond_good) > 0:
+            rcond_min = np.amin(rcond.data[rcond_good, 0])
+            rcond_max = np.amax(rcond.data[rcond_good, 0])
+        if data.comm.comm_world is not None:
+            rcond_min = data.comm.comm_world.reduce(rcond_min, root=0, op=MPI.MIN)
+            rcond_max = data.comm.comm_world.reduce(rcond_max, root=0, op=MPI.MAX)
+        if data.comm.world_rank == 0:
+            msg = f"  Pixel covariance condition number range = "
+            msg += f"{rcond_min:1.3e} ... {rcond_max:1.3e}"
+            log.debug(msg)
 
         # Store rcond
         data[self.rcond] = rcond

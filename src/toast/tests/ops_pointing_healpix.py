@@ -13,7 +13,7 @@ from .._libtoast import healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
-from ._helpers import create_outdir, create_satellite_data
+from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
 from ..ops.jax_ops.qarray import mult as qa_mult
@@ -47,7 +47,7 @@ class PointingHealpixTest(MPITestCase):
         xaxis, yaxis, zaxis = np.eye(3)
         for phi in phivec:
             phirot = qa.rotation(zaxis, phi)
-            quats.append(qa.from_angles(theta, phi, psi))
+            quats.append(qa.from_iso_angles(theta, phi, psi))
         quats = np.vstack(quats)
         healpix_pixels(
             hpix,
@@ -114,7 +114,7 @@ class PointingHealpixTest(MPITestCase):
         )
         weights_ref = []
         for quat in quats:
-            theta, phi, psi = qa.to_angles(quat)
+            theta, phi, psi = qa.to_iso_angles(quat)
             weights_ref.append(np.array([1, np.cos(2 * psi), np.sin(2 * psi)]))
         weights_ref = np.vstack(weights_ref)
         failed = False
@@ -244,6 +244,8 @@ class PointingHealpixTest(MPITestCase):
         if rank == 0:
             handle.close()
 
+        close_data(data)
+
     def test_pixweight_pipe(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
@@ -290,6 +292,8 @@ class PointingHealpixTest(MPITestCase):
         if rank == 0:
             handle.close()
 
+        close_data(data)
+
     def test_hpix_interval(self):
         data = create_satellite_data(self.comm)
 
@@ -325,6 +329,8 @@ class PointingHealpixTest(MPITestCase):
         pixels.view = half_intervals
         pixels.apply(data)
 
+        close_data(data)
+
     def test_weights_hwpnull(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
@@ -343,3 +349,5 @@ class PointingHealpixTest(MPITestCase):
         data.info(handle=handle)
         if rank == 0:
             handle.close()
+
+        close_data(data)

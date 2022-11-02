@@ -5,6 +5,7 @@
 import os
 
 import numpy as np
+from astropy import units as u
 from pshmem.utils import mpi_data_type
 
 from ._libtoast import global_to_local as libtoast_global_to_local
@@ -459,14 +460,16 @@ class PixelData(AcceleratorObject):
             integers, 4 and 8 byte floating point numbers, and 4 and 8 byte complex
             numbers.
         n_value (int):  The number of values per pixel.
+        units (Unit):  The units of the map data.
 
     """
 
-    def __init__(self, dist, dtype, n_value=1):
+    def __init__(self, dist, dtype, n_value=1, units=u.dimensionless_unscaled):
         log = Logger.get()
 
         self._dist = dist
         self._n_value = n_value
+        self._units = units
 
         # construct a new dtype in case the parameter given is shortcut string
         ttype = np.dtype(dtype)
@@ -580,6 +583,16 @@ class PixelData(AcceleratorObject):
     def __del__(self):
         self.clear()
 
+    def reset(self):
+        """Set memory to zero"""
+        restore = False
+        if self.accel_in_use():
+            restore = True
+            self.accel_update_host()
+        self.raw[:] = 0
+        if restore:
+            self.accel_update_device()
+
     @property
     def distribution(self):
         """(PixelDistribution): The distribution information."""
@@ -594,6 +607,15 @@ class PixelData(AcceleratorObject):
     def n_value(self):
         """(int): The number of non-zero values per pixel."""
         return self._n_value
+
+    @property
+    def units(self):
+        """(Unit):  The map data units."""
+        return self._units
+
+    def update_units(self, new_units):
+        """Update the units associated with the data."""
+        self._units = new_units
 
     def __getitem__(self, key):
         return np.array(self.data[key], dtype=self._dtype, copy=False)
@@ -612,8 +634,10 @@ class PixelData(AcceleratorObject):
         return len(self.data)
 
     def __repr__(self):
-        val = "<PixelData {} values per pixel, dtype = {}, dist = {}>".format(
-            self._n_value, self._dtype, self._dist
+        val = (
+            "<PixelData {} values per pixel, dtype = {}, units= {}, dist = {}>".format(
+                self._n_value, self._dtype, self._units, self._dist
+            )
         )
         return val
 
@@ -639,7 +663,9 @@ class PixelData(AcceleratorObject):
                 distribution.
 
         """
-        dup = PixelData(self.distribution, self.dtype, n_value=self.n_value)
+        dup = PixelData(
+            self.distribution, self.dtype, n_value=self.n_value, units=self._units
+        )
         dup.raw[:] = self.raw
         return dup
 

@@ -17,7 +17,17 @@ from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
+from ..traits import (
+    Bool,
+    Float,
+    Instance,
+    Int,
+    List,
+    Quantity,
+    Unit,
+    Unicode,
+    trait_docs,
+)
 from ..utils import Environment, Logger, Timer
 from .operator import Operator
 from .pipeline import Pipeline
@@ -38,6 +48,10 @@ class SimScanSynchronousSignal(Operator):
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key for accumulating simulated timestreams",
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     detector_pointing = Instance(
@@ -96,7 +110,12 @@ class SimScanSynchronousSignal(Operator):
             dets = obs.select_local_detectors(detectors)
             log_prefix = f"{group} : {obs.name} : "
 
-            exists = obs.detdata.ensure(self.det_data, detectors=dets)
+            exists = obs.detdata.ensure(
+                self.det_data, detectors=dets, create_units=self.det_data_units
+            )
+
+            # The detector data units
+            self.units = obs.detdata[self.det_data].units
 
             site = obs.telescope.site
             weather = site.weather
@@ -169,7 +188,7 @@ class SimScanSynchronousSignal(Operator):
                     self.nside, np.arange(npix, dtype=np.int), lonlat=True
                 )
                 scale = self.scale * (np.abs(lat) / 90 + 0.5) ** self.power
-                sss_map *= scale.to_value(u.K)
+                sss_map *= scale.to_value(self.units)
         else:
             npix = None
             sss_map = None
@@ -201,7 +220,7 @@ class SimScanSynchronousSignal(Operator):
                 quats = obs.detdata[self.detector_pointing.quats][det]
 
             # Convert Az/El quaternion of the detector into angles
-            theta, phi = qa.to_position(quats)
+            theta, phi, _ = qa.to_iso_angles(quats)
 
             signal = obs.detdata[self.det_data][det]
 

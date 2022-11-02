@@ -4,13 +4,15 @@
 
 import numpy as np
 import traitlets
+from astropy import units as u
 
+from ..accelerator import use_accel_jax
 from ..observation import default_values as defaults
 from .jax_ops import scan_map
 from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, trait_docs
-from ..utils import AlignedF64, Logger
+from ..traits import Bool, Int, Unicode, Unit, trait_docs
+from ..utils import AlignedF64, Logger, unit_conversion
 from .operator import Operator
 
 
@@ -30,6 +32,10 @@ class ScanMap(Operator):
 
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for the timestream data"
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     view = Unicode(
@@ -101,13 +107,14 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            ob.detdata.ensure(self.det_data, detectors=dets, accel=use_accel)
+            ob.detdata.ensure(self.det_data, detectors=dets, create_units=self.det_data_units, accel=use_accel)
 
             intervals = ob.intervals[self.view].data
             det_data = ob.detdata[self.det_data].data
             det_data_indx = ob.detdata[self.det_data].indices(dets)
             pixels = ob.detdata[self.pixels].data
             pixels_indx = ob.detdata[self.pixels].indices(dets)
+            data_scale = unit_conversion(map_data.units, ob.detdata[self.det_data].units)
             if self.weights is None:
                 weights, weight_indx = None, None
             else:
@@ -124,6 +131,7 @@ class ScanMap(Operator):
                 weight_indx,
                 intervals,
                 map_dist,
+                data_scale,
                 self.zero,
                 self.subtract,
                 use_accel=use_accel,
@@ -153,8 +161,8 @@ class ScanMap(Operator):
         return prov
 
     def _supports_accel(self):
-        # TODO set this to true once pipelining bugs are fixed
-        return True
+        # TODO set this to True in all cases once there is an OpenMP implementation
+        return use_accel_jax
 
 
 @trait_docs
@@ -331,6 +339,9 @@ class ScanScale(Operator):
         if map_data.n_value != 1:
             raise RuntimeError("The map to scan must have one value per pixel")
         map_dist = map_data.distribution
+
+        if map_data.units != u.dimensionless_unscaled:
+            log.warning("Map for scaling is not unitless.  Ignoring units.")
 
         for ob in data.obs:
             # Get the detectors we are using for this observation

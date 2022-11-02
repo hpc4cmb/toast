@@ -20,7 +20,7 @@ from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..schedule_sim_satellite import create_satellite_schedule
 from ..vis import set_matplotlib_backend
-from ._helpers import create_comm, create_outdir
+from ._helpers import create_comm, create_outdir, plot_projected_quats, close_data
 from .mpi import MPITestCase
 
 
@@ -33,7 +33,7 @@ class SimSatelliteTest(MPITestCase):
 
         npix = 1
         ring = 1
-        while 2 * npix <= self.toastcomm.group_size:
+        while npix <= self.toastcomm.group_size:
             npix += 6 * ring
             ring += 1
         self.npix = npix
@@ -43,7 +43,7 @@ class SimSatelliteTest(MPITestCase):
         # Slow sampling
         fp = fake_hexagon_focalplane(
             n_pix=self.npix,
-            sample_rate=(1.0 / 60.0) * u.Hz,
+            sample_rate=(5.0 / 60.0) * u.Hz,
         )
         site = SpaceSite("L2")
 
@@ -74,6 +74,24 @@ class SimSatelliteTest(MPITestCase):
         )
         sim_sat.apply(data)
 
+        # Plot some pointing
+        plotdetpointing = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            quats="pquats",
+        )
+        plotdetpointing.apply(data)
+        if data.comm.world_rank == 0:
+            n_debug = 10
+            bquat = np.array(data.obs[0].shared[defaults.boresight_radec][0:n_debug, :])
+            dquat = data.obs[0].detdata["pquats"][:, 0:n_debug, :]
+            invalid = np.array(data.obs[0].shared[defaults.shared_flags][0:n_debug])
+            invalid &= defaults.shared_mask_invalid
+            valid = np.logical_not(invalid)
+            outfile = os.path.join(self.outdir, "pointing.pdf")
+            plot_projected_quats(
+                outfile, qbore=bquat, qdet=dquat, valid=valid, scale=1.0
+            )
+
         # Expand pointing and make a hit map.
         detpointing = ops.PointingDetectorSimple()
         pixels = ops.PixelsHealpix(
@@ -102,6 +120,7 @@ class SimSatelliteTest(MPITestCase):
             hp.mollview(hits, xsize=1600, nest=True)
             plt.savefig(outfile)
             plt.close()
+        close_data(data)
 
     def test_precession(self):
         # Test that the precession axis computed for a SpaceSite (anti-sun direction)

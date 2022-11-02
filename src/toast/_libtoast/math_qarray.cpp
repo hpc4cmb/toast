@@ -5,6 +5,8 @@
 
 #include <module.hpp>
 
+#include <qarray.hpp>
+
 
 void init_math_qarray(py::module & m) {
     // Quaternion arrays
@@ -582,6 +584,198 @@ void init_math_qarray(py::module & m) {
             vec1 (array_like):  flattened 1D array of float64 values.
             vec2 (array_like):  flattened 1D array of float64 values.
             out (array_like):  flattened 1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "qa_from_iso", [](py::buffer theta, py::buffer phi,
+                          py::buffer psi, py::buffer out) {
+            // This is used to return the actual shape of each buffer
+            std::vector <int64_t> temp_shape(1);
+
+            double * raw_theta = extract_buffer <double> (
+                theta, "theta", 1, temp_shape, {-1}
+            );
+            int64_t n_elem = temp_shape[0];
+
+            double * raw_phi = extract_buffer <double> (
+                phi, "phi", 1, temp_shape, {n_elem}
+            );
+
+            double * raw_psi = extract_buffer <double> (
+                psi, "psi", 1, temp_shape, {n_elem}
+            );
+
+            int64_t quat_elem = 4 * n_elem;
+            double * raw_out = extract_buffer <double> (
+                out, "out", 1, temp_shape, {quat_elem}
+            );
+
+            #pragma omp parallel default(shared)
+            {
+                double qtheta[4];
+                double qphi[4];
+                double qpsi[4];
+                double qtemp[4];
+                double half;
+                int64_t qf;
+
+                #pragma omp for schedule(static)
+                for (int64_t i = 0; i < n_elem; ++i) {
+                    qf = 4 * i;
+
+                    // phi rotation around z-axis
+                    half = 0.5 * raw_phi[i];
+                    qphi[0] = 0.0;
+                    qphi[1] = 0.0;
+                    qphi[2] = ::sin(half);
+                    qphi[3] = ::cos(half);
+
+                    // theta rotation around y-axis
+                    half = 0.5 * raw_theta[i];
+                    qtheta[0] = 0.0;
+                    qtheta[1] = ::sin(half);
+                    qtheta[2] = 0.0;
+                    qtheta[3] = ::cos(half);
+
+                    // psi rotation about z-axis
+                    half = 0.5 * raw_psi[i];
+                    qpsi[0] = 0.0;
+                    qpsi[1] = 0.0;
+                    qpsi[2] = ::sin(half);
+                    qpsi[3] = ::cos(half);
+
+                    qa_mult(qtheta, qpsi, qtemp);
+                    qa_mult(qphi, qtemp, &(raw_out[qf]));
+                    qa_normalize_inplace(1, &(raw_out[qf]));
+                }
+            }
+            return;
+        }, py::arg("theta"), py::arg("phi"), py::arg("psi"), py::arg(
+            "out"), R"(
+        Create quaternions from ISO spherical coordinate rotations.
+
+        The theta, phi, psi angles describe standard ZYZ rotations:  a phi rotation
+        about the Z axis, then the theta rotation about the new Y axis, then the psi
+        rotation about the new Z axis.
+
+        The results are stored in the output buffer.
+
+        Args:
+            theta (array_like):  flattened 1D array of float64 values.
+            phi (array_like):  flattened 1D array of float64 values.
+            psi (array_like):  flattened 1D array of float64 values.
+            out (array_like):  flattened 1D array of float64 values.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "qa_to_iso", [](py::buffer q, py::buffer theta, py::buffer phi,
+                        py::buffer psi) {
+            double const xaxis[3] = {1.0, 0.0, 0.0};
+            double const zaxis[3] = {0.0, 0.0, 1.0};
+
+            // This is used to return the actual shape of each buffer
+            std::vector <int64_t> temp_shape(1);
+
+            double * raw_theta = extract_buffer <double> (
+                theta, "theta", 1, temp_shape, {-1}
+            );
+            int64_t n_elem = temp_shape[0];
+
+            double * raw_phi = extract_buffer <double> (
+                phi, "phi", 1, temp_shape, {n_elem}
+            );
+
+            double * raw_psi = extract_buffer <double> (
+                psi, "psi", 1, temp_shape, {n_elem}
+            );
+
+            int64_t quat_elem = 4 * n_elem;
+            double * raw_q = extract_buffer <double> (
+                q, "q", 1, temp_shape, {quat_elem}
+            );
+
+            #pragma omp parallel default(shared)
+            {
+                double qtemp[4];
+                double dir[3];
+                double orient[3];
+
+                // The X/Y cartesian coordinates of the line of nodes
+                double nodes_x;
+                double nodes_y;
+
+                // Angle from original X axis to the line of nodes
+                double eps = std::numeric_limits <double>::epsilon();
+
+                #pragma omp for schedule(static)
+                for (int64_t i = 0; i < n_elem; ++i) {
+                    int64_t qf = 4 * i;
+                    qtemp[0] = raw_q[qf];
+                    qtemp[1] = raw_q[qf + 1];
+                    qtemp[2] = raw_q[qf + 2];
+                    qtemp[3] = raw_q[qf + 3];
+
+                    qa_normalize_inplace(1, qtemp);
+                    qa_rotate(qtemp, zaxis, dir);
+                    qa_rotate(qtemp, xaxis, orient);
+
+                    if (::fabs(::fabs(dir[2]) - 1.0) < eps) {
+                        raw_phi[i] = 0.0;
+                        if (dir[2] >= 0.0) {
+                            raw_theta[i] = 0.0;
+                            raw_psi[i] = ::atan2(-orient[0], orient[1]) + toast::PI_2;
+                        } else {
+                            raw_theta[i] = toast::PI;
+                            raw_psi[i] = ::atan2(orient[0], orient[1]) + toast::PI_2;
+                        }
+                    } else {
+                        raw_phi[i] = ::atan2(dir[1], dir[0]);
+                        raw_theta[i] = toast::PI_2 - ::asin(dir[2]);
+
+                        // psi = atan2((V_nodes x V_orient) . V_dir, V_nodes . V_orient)
+                        // Line of nodes is the rotated Y-axis
+                        nodes_x = ::cos(toast::PI_2 + raw_phi[i]);
+                        nodes_y = ::sin(toast::PI_2 + raw_phi[i]);
+                        raw_psi[i] = ::atan2(
+                            nodes_y * orient[2] * dir[0]
+                            - nodes_x * orient[2] * dir[1]
+                            + (nodes_x * orient[1] - nodes_y * orient[0]) * dir[2],
+                            nodes_x * orient[0] + nodes_y * orient[1]
+                                     ) + toast::PI_2;
+                    }
+                    if (raw_psi[i] > toast::PI) {
+                        raw_psi[i] -= toast::TWOPI;
+                    }
+                    if (raw_psi[i] <= -toast::PI) {
+                        raw_psi[i] += toast::TWOPI;
+                    }
+                }
+            }
+
+            return;
+        }, py::arg("q"), py::arg("theta"), py::arg("phi"), py::arg(
+            "psi"), R"(
+        Convert quaternions to ISO spherical coordinates.
+
+        The theta, phi, psi angles describe standard ZYZ rotations:  a phi rotation
+        about the Z axis, then the theta rotation about the new Y axis, then the psi
+        rotation about the new Z axis.
+
+        The results are stored in the output buffer.
+
+        Args:
+            q (array_like):  flattened 1D array of float64 values.
+            theta (array_like):  flattened 1D array of float64 values.
+            phi (array_like):  flattened 1D array of float64 values.
+            psi (array_like):  flattened 1D array of float64 values.
 
         Returns:
             None

@@ -24,6 +24,10 @@ void init_template_offset(py::module & m) {
             py::buffer intervals,
             bool use_accel
         ) {
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -47,12 +51,12 @@ void init_template_offset(py::module & m) {
                 n_amp_views, "n_amp_views", 1, temp_shape, {n_view}
             );
 
-            auto & omgr = OmpManager::get();
-            int dev = omgr.get_device();
-            bool offload = (!omgr.device_is_host()) && use_accel;
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
+
+                double * dev_det_data = omgr.device_ptr(raw_det_data);
+                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
                 # pragma omp target data \
                 device(dev)              \
@@ -63,25 +67,25 @@ void init_template_offset(py::module & m) {
                 step_length,             \
                 amp_offset,              \
                 raw_n_amp_views          \
-                )                        \
-                use_device_ptr(          \
-                raw_amplitudes,          \
-                raw_det_data,            \
-                raw_intervals            \
                 )
                 {
                     int64_t offset = amp_offset;
-                    # pragma omp target teams distribute firstprivate(offset)
+                    # pragma omp target teams distribute firstprivate(offset) \
+                    is_device_ptr(                                            \
+                    dev_amplitudes,                                           \
+                    dev_det_data,                                             \
+                    dev_intervals                                             \
+                    )
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         # pragma omp parallel for default(shared)
                         for (
-                            int64_t isamp = raw_intervals[iview].first;
-                            isamp <= raw_intervals[iview].last;
+                            int64_t isamp = dev_intervals[iview].first;
+                            isamp <= dev_intervals[iview].last;
                             isamp++
                         ) {
                             int64_t d = data_index * n_samp + isamp;
                             int64_t amp = offset + (int64_t)(isamp / step_length);
-                            raw_det_data[d] += raw_amplitudes[amp];
+                            dev_det_data[d] += dev_amplitudes[amp];
                         }
                         offset += raw_n_amp_views[iview];
                     }
@@ -121,6 +125,10 @@ void init_template_offset(py::module & m) {
             py::buffer intervals,
             bool use_accel
         ) {
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -144,10 +152,6 @@ void init_template_offset(py::module & m) {
                 n_amp_views, "n_amp_views", 1, temp_shape, {n_view}
             );
 
-            auto & omgr = OmpManager::get();
-            int dev = omgr.get_device();
-            bool offload = (!omgr.device_is_host()) && use_accel;
-
             // Optionally use flags
             bool use_flags = false;
             uint8_t * raw_det_flags = (uint8_t *)omgr.null;
@@ -161,6 +165,11 @@ void init_template_offset(py::module & m) {
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
+                double * dev_det_data = omgr.device_ptr(raw_det_data);
+                uint8_t * dev_det_flags = omgr.device_ptr(raw_det_flags);
+                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
+
                 # pragma omp target data \
                 device(dev)              \
                 map(to:                  \
@@ -172,21 +181,21 @@ void init_template_offset(py::module & m) {
                 amp_offset,              \
                 raw_n_amp_views,         \
                 use_flags                \
-                )                        \
-                use_device_ptr(          \
-                raw_amplitudes,          \
-                raw_det_data,            \
-                raw_det_flags,           \
-                raw_intervals            \
                 )
                 {
                     int64_t offset = amp_offset;
-                    # pragma omp target teams distribute firstprivate(offset)
+                    # pragma omp target teams distribute firstprivate(offset) \
+                    is_device_ptr(                                            \
+                    dev_amplitudes,                                           \
+                    dev_det_data,                                             \
+                    dev_det_flags,                                            \
+                    dev_intervals                                             \
+                    )
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         # pragma omp parallel for default(shared)
                         for (
-                            int64_t isamp = raw_intervals[iview].first;
-                            isamp <= raw_intervals[iview].last;
+                            int64_t isamp = dev_intervals[iview].first;
+                            isamp <= dev_intervals[iview].last;
                             isamp++
                         ) {
                             int64_t d = data_index * n_samp + isamp;
@@ -194,15 +203,15 @@ void init_template_offset(py::module & m) {
                             double contrib = 0.0;
                             if (use_flags) {
                                 int64_t f = flag_index * n_samp + isamp;
-                                uint8_t check = raw_det_flags[f] & flag_mask;
+                                uint8_t check = dev_det_flags[f] & flag_mask;
                                 if (check == 0) {
-                                    contrib = raw_det_data[d];
+                                    contrib = dev_det_data[d];
                                 }
                             } else {
                                 contrib = raw_det_data[d];
                             }
                             # pragma omp atomic
-                            raw_amplitudes[amp] += contrib;
+                            dev_amplitudes[amp] += contrib;
                         }
                         offset += raw_n_amp_views[iview];
                     }
@@ -246,6 +255,10 @@ void init_template_offset(py::module & m) {
             py::buffer amplitudes_out,
             bool use_accel
         ) {
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(3);
 
@@ -262,28 +275,31 @@ void init_template_offset(py::module & m) {
                 offset_var, "offset_var", 1, temp_shape, {n_amp}
             );
 
-            auto & omgr = OmpManager::get();
-            int dev = omgr.get_device();
-            bool offload = (!omgr.device_is_host()) && use_accel;
-
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
+
+                double * dev_amp_in = omgr.device_ptr(raw_amp_in);
+                double * dev_amp_out = omgr.device_ptr(raw_amp_out);
+                double * dev_offset_var = omgr.device_ptr(raw_offset_var);
 
                 # pragma omp target data \
                 device(dev)              \
                 map(to:                  \
                 n_amp                    \
-                )                        \
-                use_device_ptr(          \
-                raw_amp_in,              \
-                raw_amp_out,             \
-                raw_offset_var           \
                 )
                 {
-                    # pragma omp parallel for default(shared)
-                    for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                        raw_amp_out[iamp] = raw_amp_in[iamp];
-                        raw_amp_out[iamp] *= raw_offset_var[iamp];
+                    # pragma omp target \
+                    is_device_ptr(      \
+                    dev_amp_in,         \
+                    dev_amp_out,        \
+                    dev_offset_var      \
+                    )
+                    {
+                        # pragma omp parallel for default(shared)
+                        for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+                            dev_amp_out[iamp] = dev_amp_in[iamp];
+                            dev_amp_out[iamp] *= dev_offset_var[iamp];
+                        }
                     }
                 }
 

@@ -477,6 +477,8 @@ def extract_global_intervals(old_dist, intervals_manager):
         global_intervals = dict()
 
     for iname in list(intervals_manager.keys()):
+        if iname == intervals_manager.all_name:
+            continue
         result = global_interval_times(old_dist, intervals_manager, iname, join=False)
         if old_dist.comm.group_rank == 0:
             global_intervals[iname] = result
@@ -545,6 +547,9 @@ def redistribute_detector_data(
             old_dist.comm.comm_group, detdata_manager[field].dtype
         )
 
+        # Units
+        units = detdata_manager[field].units
+
         # Allocate new data
         sample_shape = None
         n_per_sample = 1
@@ -557,6 +562,7 @@ def redistribute_detector_data(
             field,
             sample_shape=sample_shape,
             dtype=detdata_manager[field].dtype,
+            units=units,
         )
 
         # Redistribution send / recv slices

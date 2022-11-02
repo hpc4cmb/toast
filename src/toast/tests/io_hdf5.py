@@ -14,7 +14,7 @@ from ..data import Data
 from ..io import load_hdf5, save_hdf5
 from ..mpi import MPI
 from ..observation_data import DetectorData
-from ._helpers import create_ground_data, create_outdir
+from ._helpers import create_ground_data, create_outdir, close_data
 from .mpi import MPITestCase
 
 
@@ -107,6 +107,8 @@ class IoHdf5Test(MPITestCase):
                     )
                 self.assertTrue(ob == orig)
 
+            close_data(data)
+
     def test_save_load_float32(self):
         rank = 0
         if self.comm is not None:
@@ -151,6 +153,8 @@ class IoHdf5Test(MPITestCase):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
 
+        close_data(data)
+
     def test_save_load_ops(self):
         rank = 0
         if self.comm is not None:
@@ -185,3 +189,5 @@ class IoHdf5Test(MPITestCase):
             if ob != orig:
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
+
+        close_data(data)

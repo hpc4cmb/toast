@@ -7,6 +7,12 @@ import jax.numpy as jnp
 # ------------------------------------------------------------------------------
 # Numpy to JAX intervals
 
+# TODO
+# an interval can have None as its start
+# this means that it covers the whole observation
+# 
+# do we need to cover this case? (it is covered in the python code for scanmap)
+# could we just represent it with a 0-end interval ?
 
 class INTERVALS_JAX:
     """

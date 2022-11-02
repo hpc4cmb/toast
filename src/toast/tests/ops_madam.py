@@ -13,7 +13,13 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
-from ._helpers import create_fake_sky, create_outdir, create_satellite_data, fake_flags
+from ._helpers import (
+    create_fake_sky,
+    create_outdir,
+    create_satellite_data,
+    fake_flags,
+    close_data,
+)
 from .mpi import MPITestCase
 
 
@@ -244,5 +250,4 @@ class MadamTest(MPITestCase):
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(0.9 * check_rms < rms[ob.name][det])
 
-        del data
-        return
+        close_data(data)

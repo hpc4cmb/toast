@@ -20,6 +20,7 @@ from ._helpers import (
     create_outdir,
     create_satellite_empty,
     fake_flags,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -309,6 +310,11 @@ class ObservationTest(MPITestCase):
                 (obs.n_local_samples,), dtype=np.float64
             )
 
+            obs.detdata["with_units"] = u.Quantity(
+                np.ones(obs.n_local_samples, dtype=np.float64),
+                u.K,
+            )
+
             # Store some values for detector data
             for det in dets:
                 obs.detdata["signal"][det] = np.random.normal(
@@ -349,6 +355,8 @@ class ObservationTest(MPITestCase):
 
             # ... Or you can access it as one big array (first dimension is detector)
             # print("\n", obs.detdata["signal"].data, "\n")
+
+        close_data(data)
 
     def test_view(self):
         np.random.seed(12345)
@@ -467,6 +475,7 @@ class ObservationTest(MPITestCase):
                 np.testing.assert_equal(
                     ob.detdata[dd][:, -1], ob.view["good"].detdata[dd][-1][:, -1]
                 )
+        close_data(data)
 
     def test_redistribute(self):
         # Populate the observations
@@ -491,7 +500,7 @@ class ObservationTest(MPITestCase):
             obs.shared["everywhere"] = local_array
 
             # Allocate the default detector data
-            obs.detdata.ensure("signal", dtype=np.float64)
+            obs.detdata.ensure("signal", dtype=np.float64, create_units=u.K)
             # and flags.  Default data type (np.uint8) is incompatible
             if "flags" in obs.detdata:
                 del obs.detdata["flags"]
@@ -566,6 +575,8 @@ class ObservationTest(MPITestCase):
             if ob != orig:
                 print(f"Rank {self.comm.rank}: {orig} != {ob}", flush=True)
             self.assertTrue(ob == orig)
+
+        close_data(data)
 
     # The code below is here for reference, but we cannot actually test this
     # within the unit test framework.  The reason is that the operator classes

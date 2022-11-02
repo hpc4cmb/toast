@@ -18,7 +18,13 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import read_healpix
 from ..vis import set_matplotlib_backend
-from ._helpers import create_fake_sky, create_ground_data, create_outdir, fake_flags
+from ._helpers import (
+    create_fake_sky,
+    create_ground_data,
+    create_outdir,
+    fake_flags,
+    close_data,
+)
 from .mpi import MPITestCase
 
 
@@ -58,10 +64,9 @@ class FilterBinTest(MPITestCase):
 
         # Add a strong gradient that should be filtered out completely
         for obs in data.obs:
-            times = obs.shared[defaults.times]
+            grad = np.arange(obs.n_local_samples)
             for det in obs.local_detectors:
-                obs.detdata[defaults.det_data] += times.data
-                obs.detdata[defaults.det_data][:] = times.data
+                obs.detdata[defaults.det_data][det] += grad
 
         # Make fake flags
         fake_flags(data)
@@ -88,6 +93,7 @@ class FilterBinTest(MPITestCase):
             shared_flags=defaults.shared_flags,
             shared_flag_mask=1,
             binning=binning,
+            hwp_filter_order=4,
             ground_filter_order=5,
             split_ground_template=True,
             poly_filter_order=2,
@@ -99,49 +105,55 @@ class FilterBinTest(MPITestCase):
         # Confirm that the filtered map has less noise than the unfiltered map
 
         if data.comm.world_rank == 0:
-            import matplotlib.pyplot as plt
+            if sys.platform.lower() == "darwin":
+                print(f"WARNING:  Skipping test_filterbin plots on MacOS")
+            else:
+                import matplotlib.pyplot as plt
 
-            rot = [43, -42]
-            reso = 4
-            fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
+                rot = [43, -42]
+                reso = 4
+                fig = plt.figure(figsize=[18, 12])
+                cmap = "coolwarm"
 
-            fname_binned = os.path.join(
-                self.outdir, f"{filterbin.name}_unfiltered_map.h5"
-            )
-            fname_filtered = os.path.join(
-                self.outdir, f"{filterbin.name}_filtered_map.h5"
-            )
+                fname_binned = os.path.join(
+                    self.outdir, f"{filterbin.name}_unfiltered_map.h5"
+                )
+                fname_filtered = os.path.join(
+                    self.outdir, f"{filterbin.name}_filtered_map.h5"
+                )
 
-            binned = np.atleast_2d(read_healpix(fname_binned, None))
-            filtered = np.atleast_2d(read_healpix(fname_filtered, None))
+                binned = np.atleast_2d(read_healpix(fname_binned, None))
+                filtered = np.atleast_2d(read_healpix(fname_filtered, None))
 
-            good = binned != 0
-            rms1 = np.std(binned[good])
-            rms2 = np.std(filtered[good])
+                good = binned != 0
+                rms1 = np.std(binned[good])
+                rms2 = np.std(filtered[good])
 
-            nrow, ncol = 2, 2
-            for m in binned, filtered:
-                m[m == 0] = hp.UNSEEN
-            args = {"rot": rot, "reso": reso, "cmap": cmap}
-            hp.gnomview(
-                binned[0],
-                sub=[nrow, ncol, 1],
-                title=f"Binned map : {rms1}",
-                **args,
-            )
-            hp.gnomview(
-                filtered[0],
-                sub=[nrow, ncol, 2],
-                title=f"Filtered map : {rms2}",
-                **args,
-            )
+                nrow, ncol = 2, 2
+                for m in binned, filtered:
+                    m[m == 0] = hp.UNSEEN
+                args = {"rot": rot, "reso": reso, "cmap": cmap}
+                hp.gnomview(
+                    binned[0],
+                    sub=[nrow, ncol, 1],
+                    title=f"Binned map : {rms1}",
+                    **args,
+                )
+                hp.gnomview(
+                    filtered[0],
+                    sub=[nrow, ncol, 2],
+                    title=f"Filtered map : {rms2}",
+                    **args,
+                )
 
-            fname = os.path.join(self.outdir, "filter_test.png")
-            fig.savefig(fname)
+                fname = os.path.join(self.outdir, "filter_test.png")
+                fig.savefig(fname)
+                check = rms2 < 1e-4 * rms1
+                if not check:
+                    print(f"rms2 = {rms2}, rms1 = {rms1}")
+                self.assertTrue(check)
 
-            assert rms2 < 1e-6 * rms1
-        return
+        close_data(data)
 
     def test_filterbin_obsmatrix(self):
         if sys.platform.lower() == "darwin":
@@ -275,7 +287,7 @@ class FilterBinTest(MPITestCase):
                 if rms2 > 1e-5 * rms1:
                     print(f"rms2 = {rms2}, rms1 = {rms1}")
                 assert rms2 < 1e-5 * rms1
-        return
+        close_data(data)
 
     def test_filterbin_obsmatrix_flags(self):
         if sys.platform.lower() == "darwin":
@@ -429,7 +441,7 @@ class FilterBinTest(MPITestCase):
                     print(f"rms2 = {rms2}, rms1 = {rms1}")
                 assert rms2 < 1e-5 * rms1
 
-        return
+        close_data(data)
 
     def test_filterbin_obsmatrix_cached(self):
         if sys.platform.lower() == "darwin":
@@ -604,4 +616,4 @@ class FilterBinTest(MPITestCase):
                         print(f"rms2 = {rms2}, rms1 = {rms1}")
                     assert rms2 < 1e-5 * rms1
 
-        return
+        close_data(data)

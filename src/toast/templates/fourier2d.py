@@ -35,6 +35,7 @@ class Fourier2D(Template):
     #    data             : The Data instance we are working with
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
+    #    det_data_units   : The units of the detector data
     #    det_flags        : Optional detector solver flags
     #    det_flag_mask    : Bit mask for detector solver flags
     #
@@ -87,6 +88,9 @@ class Fourier2D(Template):
         self._nmode = (2 * self.order) ** 2 + 1
         if self.fit_subharmonics:
             self._nmode += 2
+
+        # The inverse variance units
+        invvar_units = 1.0 / (self.det_data_units**2)
 
         # Every process determines their local amplitude ranges.
 
@@ -263,7 +267,7 @@ class Fourier2D(Template):
                 for det in ob.local_detectors:
                     detweight = 1.0
                     if noise is not None:
-                        detweight = noise.detector_weight(det)
+                        detweight = noise.detector_weight(det).to_value(invvar_units)
                     det_quat = fp[det]["quat"]
                     x, y, z = qa.rotate(det_quat, zaxis)
                     theta, phi = np.arcsin([x, y])

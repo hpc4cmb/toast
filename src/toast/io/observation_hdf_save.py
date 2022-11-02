@@ -335,6 +335,11 @@ def save_hdf5_intervals(obs, hgrp, fields, log_prefix):
             log.warning_rank(msg, comm=comm)
             continue
 
+        if field == obs.intervals.all_name:
+            # This is the internal fake interval for all samples.  We don't
+            # save this because it is re-created on demand.
+            continue
+
         # Get the list of start / stop tuples on the rank zero process
         ilist = global_interval_times(obs.dist, obs.intervals, field, join=False)
 

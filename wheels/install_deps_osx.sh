@@ -58,10 +58,10 @@ if [ ${pyver} == "3.8" ]; then
     numpy_ver="1.20"
 fi
 if [ ${pyver} == "3.9" ]; then
-    numpy_ver="1.20"
+    numpy_ver="1.24"
 fi
 if [ ${pyver} == "3.10" ]; then
-    numpy_ver="1.22"
+    numpy_ver="1.24"
 fi
 
 # Install build requirements.

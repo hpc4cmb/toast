@@ -16,6 +16,7 @@ from ._helpers import (
     create_outdir,
     create_satellite_data,
     create_satellite_data_big,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -54,7 +55,7 @@ class SimCrossTalkTest(MPITestCase):
 
         np.testing.assert_almost_equal(invM.dot(M), np.eye(ndet), decimal=4)
 
-        return
+        close_data(data)
 
     def test_xtalk(self):
 
@@ -79,7 +80,7 @@ class SimCrossTalkTest(MPITestCase):
             detdata_old, data.obs[0].detdata[key].data, decimal=8
         )
 
-        return
+        close_data(data)
 
     def test_xtalk_big(self):
 
@@ -107,7 +108,7 @@ class SimCrossTalkTest(MPITestCase):
             detdata_old, data.obs[0].detdata[key].data, decimal=8
         )
 
-        return
+        close_data(data)
 
     def test_xtalk_errors(self):
 
@@ -135,7 +136,7 @@ class SimCrossTalkTest(MPITestCase):
             detdata_old, data.obs[0].detdata[key].data, decimal=2
         )
 
-        return
+        close_data(data)
 
     """
     def test_xtalk_file(self):

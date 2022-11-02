@@ -749,3 +749,22 @@ def table_write_parallel_hdf5(table, root, name, comm=None):
         if rank == 0:
             mdset[:] = header_encoded
     del mdset
+
+
+def unit_conversion(source, target):
+    """Get the multiplicative factor to convert data.
+
+    Given data in source units, return the scale factor needed to convert
+    that data into target units.
+
+    Args:
+        source (Unit):  The source units.
+        target (Unit):  The target units.
+
+    Returns:
+        (float):  The conversion factor.
+
+    """
+    scale = 1.0 * source
+    scale.to(target)
+    return scale.value

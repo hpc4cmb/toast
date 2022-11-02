@@ -86,6 +86,10 @@ void init_ops_pointing_detector(py::module & m) {
             uint8_t shared_flag_mask,
             bool use_accel
         ) {
+            auto & omgr = OmpManager::get();
+            int dev = omgr.get_device();
+            bool offload = (!omgr.device_is_host()) && use_accel;
+
             // What if quats has more dets than we are considering in quat_index?
 
             // This is used to return the actual shape of each buffer
@@ -114,10 +118,6 @@ void init_ops_pointing_detector(py::module & m) {
             );
             int64_t n_view = temp_shape[0];
 
-            auto & omgr = OmpManager::get();
-            int dev = omgr.get_device();
-            bool offload = (!omgr.device_is_host()) && use_accel;
-
             // Optionally use flags
             bool use_flags = true;
             uint8_t * raw_flags = extract_buffer <uint8_t> (
@@ -131,6 +131,11 @@ void init_ops_pointing_detector(py::module & m) {
             if (offload) {
                 #ifdef HAVE_OPENMP_TARGET
 
+                double * dev_quats = omgr.device_ptr(raw_quats);
+                double * dev_boresight = omgr.device_ptr(raw_boresight);
+                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                uint8_t * dev_flags = omgr.device_ptr(raw_flags);
+
                 # pragma omp target data   \
                 device(dev)                \
                 map(to:                    \
@@ -143,29 +148,31 @@ void init_ops_pointing_detector(py::module & m) {
                 use_flags                  \
                 )                          \
                 use_device_ptr(            \
-                raw_boresight,             \
-                raw_quats,                 \
-                raw_intervals,             \
-                raw_flags,                 \
                 raw_focalplane,            \
                 raw_quat_index             \
                 )
                 {
-                    # pragma omp target teams distribute collapse(2)
+                    # pragma omp target teams distribute collapse(2) \
+                    is_device_ptr(                                   \
+                    dev_boresight,                                   \
+                    dev_quats,                                       \
+                    dev_flags,                                       \
+                    dev_intervals                                    \
+                    )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel for default(shared)
                             for (
-                                int64_t isamp = raw_intervals[iview].first;
-                                isamp <= raw_intervals[iview].last;
+                                int64_t isamp = dev_intervals[iview].first;
+                                isamp <= dev_intervals[iview].last;
                                 isamp++
                             ) {
                                 pointing_detector_inner(
                                     raw_quat_index,
-                                    raw_flags,
-                                    raw_boresight,
+                                    dev_flags,
+                                    dev_boresight,
                                     raw_focalplane,
-                                    raw_quats,
+                                    dev_quats,
                                     isamp,
                                     n_samp,
                                     idet,

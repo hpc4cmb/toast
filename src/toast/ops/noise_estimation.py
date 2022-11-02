@@ -218,6 +218,8 @@ class NoiseEstim(Operator):
             if self.det_flags is not None:
                 dup_detdata.append(self.det_flags)
             dup_intervals = list()
+            if self.view is not None:
+                dup_intervals.append(self.view)
             temp_obs = obs.duplicate(
                 times=self.times,
                 meta=list(),
@@ -283,7 +285,7 @@ class NoiseEstim(Operator):
             if self.pairs is not None:
                 msg = "focalplane_key is not compatible with pairs"
                 raise RuntimeError(msg)
-            # Measure the averages of the signal across the focalplane
+            # Measure the averages of the signal across the focalplane.
             Copy(detdata=[(self.det_data, "temp_signal")]).apply(data)
             CommonModeFilter(
                 det_data="temp_signal",
@@ -325,7 +327,6 @@ class NoiseEstim(Operator):
             scan_mask.apply(data, detectors=detectors)
 
         for orig_obs in data.obs:
-
             obs = self._redistribute(orig_obs)
 
             if self.focalplane_key is not None:

@@ -28,11 +28,13 @@ from . import observation as test_observation
 from . import ops_cadence_map as test_ops_cadence_map
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
+from . import ops_perturbhwp as test_ops_perturbhwp
 from . import ops_elevation_noise as test_ops_elevation_noise
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_groundfilter as test_ops_groundfilter
+from . import ops_hwpfilter as test_ops_hwpfilter
 from . import ops_madam as test_ops_madam
 from . import ops_mapmaker as test_ops_mapmaker
 from . import ops_mapmaker_binning as test_ops_mapmaker_binning
@@ -191,6 +193,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))
         suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_hwpfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_crosstalk))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
         suite.addTest(loader.loadTestsFromModule(test_ops_time_constant))
@@ -198,6 +201,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_crosslinking))
         suite.addTest(loader.loadTestsFromModule(test_ops_sss))
         suite.addTest(loader.loadTestsFromModule(test_ops_demodulate))
+        suite.addTest(loader.loadTestsFromModule(test_ops_perturbhwp))
         suite.addTest(loader.loadTestsFromModule(test_ops_filterbin))
         suite.addTest(loader.loadTestsFromModule(test_ops_noise_estim))
         suite.addTest(loader.loadTestsFromModule(test_ops_yield_cut))

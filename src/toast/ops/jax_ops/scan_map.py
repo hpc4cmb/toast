@@ -50,6 +50,7 @@ def scan_map_inner_jax(
     pixels,
     weights,
     det_data,
+    data_scale,
     should_zero,
     should_subtract,
 ):
@@ -63,6 +64,7 @@ def scan_map_inner_jax(
         pixels (array, int): pixels (size nsample)
         weights (array, float64):  The pointing matrix weights (size: nsample*nmap).
         det_data (array, float64):  The timestream on which to accumulate the map values (size nsample).
+        data_scale (float): unit rescaling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
 
@@ -79,7 +81,7 @@ def scan_map_inner_jax(
     mapdata = jnp.where(valid_samples[:, jnp.newaxis], mapdata[submap, subpix, :], 0.0)
 
     # computes the update term
-    update = jnp.sum(mapdata * weights, axis=1)
+    update = jnp.sum(mapdata * weights, axis=1) * data_scale
 
     # updates det_data and returns
     if should_zero:
@@ -95,15 +97,16 @@ def scan_map_inner_jax(
 #                                       ['detectors','intervals',...], # pixels
 #                                       ['detectors','intervals',...], # weights
 #                                       ['detectors','intervals',...], # det_data
+#                                       [...], # data_scale
 #                                       [...], # should_zero
 #                                       [...]], # should_subtract
 #                              out_axes=['detectors','intervals',...])
 # TODO xmap is commented out for now due to a [bug with static argnum](https://github.com/google/jax/issues/10741)
 scan_map_inner_jax = jax.vmap(
-    scan_map_inner_jax, in_axes=[None, None, None, 0, 0, 0, None, None], out_axes=0
+    scan_map_inner_jax, in_axes=[None, None, None, 0, 0, 0, None, None, None], out_axes=0
 )  # loop on intervals
 scan_map_inner_jax = jax.vmap(
-    scan_map_inner_jax, in_axes=[None, None, None, 0, 0, 0, None, None], out_axes=0
+    scan_map_inner_jax, in_axes=[None, None, None, 0, 0, 0, None, None, None], out_axes=0
 )  # loop on detectors
 
 
@@ -121,6 +124,7 @@ def scan_map_interval_jax(
     interval_starts,
     interval_ends,
     intervals_max_length,
+    data_scale,
     should_zero,
     should_subtract,
 ):
@@ -141,6 +145,7 @@ def scan_map_interval_jax(
         interval_starts (array, int): size n_view
         interval_ends (array, int): size n_view
         intervals_max_length (int): maximum length of an interval
+        data_scale (float): unit scaling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
 
@@ -149,7 +154,7 @@ def scan_map_interval_jax(
     """
     # display sizes
     print(
-        f"DEBUG: jit-compiling 'scan_map' with n_det:{det_data_index.size} nmap:{nmap} npix_submap:{npix_submap} n_view:{interval_starts.size} n_samp:{det_data.shape[-1]} intervals_max_length:{intervals_max_length} should_zero:{should_zero} should_subtract:{should_subtract}"
+        f"DEBUG: jit-compiling 'scan_map' with n_det:{det_data_index.size} nmap:{nmap} npix_submap:{npix_submap} n_view:{interval_starts.size} n_samp:{det_data.shape[-1]} intervals_max_length:{intervals_max_length} data_scale:{data_scale} should_zero:{should_zero} should_subtract:{should_subtract}"
     )
 
     # turns mapdata into a numpy array of shape ?*npix_submap*nmap
@@ -184,6 +189,7 @@ def scan_map_interval_jax(
         pixels_interval,
         weights_interval,
         det_data_interval,
+        data_scale,
         should_zero,
         should_subtract,
     )
@@ -221,6 +227,7 @@ def scan_map_jax(
     weight_index,
     intervals,
     map_dist,
+    data_scale,
     should_zero,
     should_subtract,
     use_accel,
@@ -242,6 +249,7 @@ def scan_map_jax(
         weight_index (optional array, int): The indexes of the weights (size n_det)
         intervals (array, Interval): The intervals to modify (size n_view)
         map_dist (PixelDistribution): encapsulate information to translate the pixel mapping
+        data_scale (float): unit scalling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
         use_accel (bool): should we use an accelerator
@@ -317,6 +325,7 @@ def scan_map_jax(
         intervals.first,
         intervals.last,
         intervals_max_length,
+        data_scale,
         should_zero,
         should_subtract,
     )
@@ -353,6 +362,7 @@ def scan_map_interval_numpy(
     pixels,
     weights,
     det_data,
+    data_scale,
     should_zero,
     should_subtract,
 ):
@@ -366,6 +376,7 @@ def scan_map_interval_numpy(
         pixels (array, int): pixels (size nsample)
         weights (array, float64):  The pointing matrix weights (size: nsample*nmap).
         det_data (array, float64):  The timestream on which to accumulate the map values (size nsample).
+        data_scale (float): unit scalling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
 
@@ -390,9 +401,9 @@ def scan_map_interval_numpy(
     if should_zero:
         det_data[:] = 0.0
     if should_subtract:
-        det_data[valid_samples] -= np.sum(valid_mapdata * valid_weights, axis=1)
+        det_data[valid_samples] -= np.sum(valid_mapdata * valid_weights, axis=1)*data_scale
     else:
-        det_data[valid_samples] += np.sum(valid_mapdata * valid_weights, axis=1)
+        det_data[valid_samples] += np.sum(valid_mapdata * valid_weights, axis=1)*data_scale
     return det_data
 
 
@@ -407,6 +418,7 @@ def scan_map_numpy(
     weight_index,
     intervals,
     map_dist,
+    data_scale,
     should_zero,
     should_subtract,
     use_accel,
@@ -428,6 +440,7 @@ def scan_map_numpy(
         weight_index (optional array, int): The indexes of the weights (size n_det)
         intervals (array, Interval): The intervals to modify (size n_view)
         map_dist (PixelDistribution): encapsulate information to translate the pixel mapping
+        data_scale (float): unit scalling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
         use_accel (bool): should we use an accelerator
@@ -446,13 +459,19 @@ def scan_map_numpy(
 
     # iterates on detectors and intervals
     n_det = det_data_index.size
+    n_local_samples = pixels.shape[1]
     for idet in range(n_det):
         p_index = pixels_index[idet]
         d_index = det_data_index[idet]
         w_index = None if (weight_index is None) else weight_index[idet]
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"] + 1
+            if interval["first"] is None:
+                # This is a view of the whole obs
+                interval_start = 0
+                interval_end = n_local_samples
+            else:
+                interval_start = interval["first"]
+                interval_end = interval["last"] + 1
             # gets interval data
             pixels_interval = pixels[p_index, interval_start:interval_end]
             weights_interval = (
@@ -469,6 +488,7 @@ def scan_map_numpy(
                 pixels_interval,
                 weights_interval,
                 det_data_interval,
+                data_scale,
                 should_zero,
                 should_subtract,
             )
@@ -490,6 +510,7 @@ def scan_map_compiled(
     weight_index,
     intervals,
     map_dist,
+    data_scale,
     should_zero,
     should_subtract,
     use_accel,
@@ -511,6 +532,7 @@ def scan_map_compiled(
         weight_index (array, int): The indexes of the weights (size n_det)
         intervals (array, Interval): The intervals to modify (size n_view)
         map_dist (PixelDistribution):
+        data_scale (float): unit scalling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
         use_accel (bool): should we use an accelerator
@@ -538,10 +560,16 @@ def scan_map_compiled(
 
     # iterates on detectors and intervals
     n_det = det_data_index.size
+    n_local_samples = pixels.shape[1]
     for idet in range(n_det):
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"] + 1
+            if interval["first"] is None:
+                # This is a view of the whole obs
+                interval_start = 0
+                interval_end = n_local_samples
+            else:
+                interval_start = interval["first"]
+                interval_end = interval["last"] + 1
 
             # gets interval pixels
             p_index = pixels_index[idet]
@@ -569,6 +597,9 @@ def scan_map_compiled(
                 weights_interval.reshape(-1),
                 maptod,
             )
+
+            # applies unit scaling
+            maptod *= data_scale
 
             # Add or subtract to det_data, zero out if needed
             # Note that the map scanned timestream will have

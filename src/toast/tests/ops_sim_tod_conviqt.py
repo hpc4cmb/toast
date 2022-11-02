@@ -18,6 +18,7 @@ from ._helpers import (
     create_fake_sky_alm,
     create_outdir,
     create_satellite_data,
+    close_data,
 )
 from .mpi import MPITestCase
 
@@ -343,7 +344,7 @@ class SimConviqtTest(MPITestCase):
 
             np.testing.assert_almost_equal(cl_smoothed[0], cl_out[0], decimal=2)
 
-        return
+        close_data(data)
 
     def test_sim_weighted_conviqt(self):
         if not ops.conviqt.available():
@@ -455,7 +456,7 @@ class SimConviqtTest(MPITestCase):
 
             np.testing.assert_almost_equal(cl_out, cl_outw, decimal=2)
 
-        return
+        close_data(data)
 
     def test_sim_TEB_conviqt(self):
         if not ops.conviqt.available():
@@ -571,7 +572,7 @@ class SimConviqtTest(MPITestCase):
 
             np.testing.assert_almost_equal(cl_out, cl_outw, decimal=2)
 
-        return
+        close_data(data)
 
     def test_sim_hwp(self):
         if not ops.conviqt.available():
@@ -802,4 +803,4 @@ class SimConviqtTest(MPITestCase):
 
             np.testing.assert_almost_equal(cl_out_wo_hwp, cl_out_w_hwp, decimal=2)
 
-        return
+        close_data(data)

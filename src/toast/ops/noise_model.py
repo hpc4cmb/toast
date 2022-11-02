@@ -290,9 +290,17 @@ class FitNoiseModel(Operator):
         fknee = x[0]
         alpha = x[1]
         current = self._evaluate_log_model(freqs, fmin, net, fknee, alpha)
-        weights = np.ones_like(current) * freqs[-1]
-        weights -= freqs[-1] / (1.0 + freqs**2)
+
+        # Weight the difference so that low frequencies do not impact the fit.  This is
+        # basically a high-pass butterworth.
+        n_freq = len(freqs)
+        hp = np.arange(n_freq, dtype=np.float64)
+        hp *= 2.0 / n_freq
+        weights = 0.1 + 2.0 / np.sqrt(1.0 + np.power(hp, -4))
         resid = np.multiply(weights, current - logdata)
+        # print(
+        #     f"      current-data = {current - logdata}, weights = {weights}, resid = {resid}"
+        # )
         return resid
 
     def _fit_log_jac(self, x, *args, **kwargs):
@@ -363,9 +371,9 @@ class FitNoiseModel(Operator):
         bad = input_data <= 0
         n_bad = np.count_nonzero(bad)
         if n_bad > 0:
-            log.warning(
-                "Some PSDs have negative values.  Change noise estimation parameters."
-            )
+            msg = "Some PSDs have negative values.  Consider changing "
+            msg += "noise estimation parameters."
+            log.warning(msg)
         input_data[bad] = 1.0e-6
         input_log_data = np.log(input_data)
 
@@ -387,9 +395,10 @@ class FitNoiseModel(Operator):
             x_0,
             jac=self._fit_log_jac,
             bounds=bounds,
-            xtol=1.0e-12,
-            gtol=1.0e-12,
-            ftol=1.0e-12,
+            xtol=1.0e-10,
+            gtol=1.0e-10,
+            ftol=1.0e-10,
+            max_nfev=500,
             kwargs={
                 "freqs": input_freqs,
                 "logdata": input_log_data,

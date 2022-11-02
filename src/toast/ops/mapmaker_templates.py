@@ -6,15 +6,16 @@ import os
 
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
+from ..pixels import PixelData
 from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
 from ..pixels_io_wcs import write_wcs_fits
 from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, List, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .arithmetic import Combine
 from .mapmaker_solve import SolverLHS, SolverRHS, solve
@@ -23,8 +24,6 @@ from .memory_counter import MemoryCounter
 from .operator import Operator
 from .pipeline import Pipeline
 from .scan_map import ScanMask
-
-# TODO
 from ..accelerator import use_accel_jax
 
 
@@ -50,6 +49,10 @@ class TemplateMatrix(Operator):
 
     det_data = Unicode(
         None, allow_none=True, help="Observation detdata key for the timestream data"
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
     )
 
     det_flags = Unicode(
@@ -99,6 +102,7 @@ class TemplateMatrix(Operator):
             transpose=self.transpose,
             view=self.view,
             det_data=self.det_data,
+            det_data_units=self.det_data_units,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
         )
@@ -178,6 +182,7 @@ class TemplateMatrix(Operator):
         if not self._initialized:
             for tmpl in self.templates:
                 tmpl.view = self.view
+                tmpl.det_data_units = self.det_data_units
                 tmpl.det_flags = self.det_flags
                 tmpl.det_flag_mask = self.det_flag_mask
                 # This next line will trigger calculation of the number
@@ -199,6 +204,17 @@ class TemplateMatrix(Operator):
         all_dets = data.all_local_detectors(selection=detectors)
 
         if self.transpose:
+            # Check that the incoming detector data in all observations has the correct
+            # units.
+            input_units = 1.0 / self.det_data_units
+            for ob in data.obs:
+                if ob.detdata[self.det_data].units != input_units:
+                    msg = f"obs {ob.name} detdata {self.det_data}"
+                    msg += f" does not have units of {input_units}"
+                    msg += f" before template matrix projection"
+                    log.error(msg)
+                    raise RuntimeError(msg)
+
             if self.amplitudes not in data:
                 # The output template amplitudes do not yet exist.
                 # Create these with all zero values.
@@ -235,13 +251,15 @@ class TemplateMatrix(Operator):
                     # Nothing to do for this observation
                     continue
                 exists = ob.detdata.ensure(
-                    self.det_data, detectors=dets, accel=use_accel
+                    self.det_data,
+                    detectors=dets,
+                    accel=use_accel,
+                    create_units=self.det_data_units,
                 )
+                ob.detdata[self.det_data].update_units(self.det_data_units)
+
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
-                log.verbose(
-                    f"TemplateMatrix {ob.name}:  input host detdata={ob.detdata[self.det_data][:][0:10]}"
-                )
                 if use_accel:
                     if not ob.detdata.accel_exists(self.det_data):
                         ob.detdata.accel_create(self.det_data)
@@ -279,9 +297,6 @@ class TemplateMatrix(Operator):
             req["intervals"].append(self.view)
         if self.transpose:
             req["detdata"].append(self.det_data)
-            # FIXME no such attribute
-            # if self.shared_flags is not None:
-            #    req["shared"].append(self.shared_flags)
             if self.det_flags is not None:
                 req["detdata"].append(self.det_flags)
         else:
@@ -467,6 +482,10 @@ class SolveAmplitudes(Operator):
             memreport.prefix = "After resetting pixel distribution"
             memreport.apply(data)
 
+        # Get the units used across the distributed data for our desired
+        # input detector data
+        det_data_units = data.detector_units(self.det_data)
+
         # We use the input binning operator to define the flags that the user has
         # specified.  We will save the name / bit mask for these and restore them later.
         # Then we will use the binning operator with our solver flags.  These input
@@ -649,6 +668,7 @@ class SolveAmplitudes(Operator):
                 covariance=self.solver_cov_name,
                 hits=self.solver_hits_name,
                 rcond=self.solver_rcond_name,
+                det_data_units=det_data_units,
                 det_flags=self.solver_flags,
                 det_flag_mask=255,
                 pixel_pointing=self.binning.pixel_pointing,
@@ -732,6 +752,7 @@ class SolveAmplitudes(Operator):
 
         # First application of the template matrix will propagate flags and
         # the flag mask to the templates
+        self.template_matrix.det_data_units = det_data_units
         self.template_matrix.det_flags = self.solver_flags
         self.template_matrix.det_flag_mask = 255
 
@@ -739,6 +760,7 @@ class SolveAmplitudes(Operator):
         self.binning.shared_flag_mask = 0
         self.binning.det_flags = self.solver_flags
         self.binning.det_flag_mask = 255
+        self.binning.det_data_units = det_data_units
 
         # Set the binning operator to output to temporary map.  This will be
         # overwritten on each iteration of the solver.
@@ -746,14 +768,15 @@ class SolveAmplitudes(Operator):
         self.binning.covariance = self.solver_cov_name
 
         self.template_matrix.amplitudes = self.solver_rhs
+
         rhs_calc = SolverRHS(
             name=f"{self.name}_rhs",
             det_data=self.det_data,
+            det_data_units=det_data_units,
             overwrite=False,
             binning=self.binning,
             template_matrix=self.template_matrix,
         )
-
         rhs_calc.apply(data, detectors=detectors)
 
         log.info_rank(
@@ -774,6 +797,7 @@ class SolveAmplitudes(Operator):
 
         lhs_calc = SolverLHS(
             name="{}_lhs".format(self.name),
+            det_data_units=det_data_units,
             binning=self.binning,
             template_matrix=self.template_matrix,
         )
@@ -972,31 +996,35 @@ class ApplyAmplitudes(Operator):
             # Nothing to do!
             return
 
+        # Get the units used across the distributed data for our desired
+        # input detector data
+        det_data_units = data.detector_units(self.det_data)
+
+        # Temporary location for single-detector projected template
+        # timestreams.
+        projected = f"{self.name}_temp"
+
         # Are we saving the resulting timestream to a new location?  If so,
         # create that now for all detectors.
 
-        result = f"{self.name}_temp"
         if self.output is not None:
-            for ob in data.obs:
-                # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
-                if len(dets) == 0:
-                    # Nothing to do for this observation
-                    continue
-                exists = ob.detdata.ensure(self.output, detectors=dets)
-            result = self.output
+            # We just copy the input here, since it will be overwritten
+            Copy(detdata=[(self.det_data, self.output)]).apply(data)
 
         # Projecting amplitudes to timestreams
         self.template_matrix.transpose = False
-        self.template_matrix.det_data = result
+        self.template_matrix.det_data = projected
+        self.template_matrix.det_data_units = det_data_units
         self.template_matrix.amplitudes = self.amplitudes
 
         # Arithmetic operator
-        combine = Combine(op=self.op, first=self.det_data, second=result)
+        combine = Combine(op=self.op, first=self.det_data, second=projected)
         if self.output is None:
             combine.result = self.det_data
         else:
             combine.result = self.output
+
+        apply_input = np.array(data.obs[0].detdata[self.det_data][:])
 
         # Project and operate, one detector at a time
         pipe = Pipeline(

@@ -45,13 +45,12 @@ export CXX=clang++
 export CFLAGS="-O3 -fPIC"
 export CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
 
-# Install most dependencies with homebrew, including python-3.9
+# Use homebrew python for development files
 eval ${brew_com} install python3
 
-# Add this homebrew python to our path
-export PATH="${brew_root}/opt/python@3.9/bin:$PATH"
-brew_py_ver=$(python3 --version | awk '{print $2}')
-echo "Using python $(which python3), version ${brew_py_ver}"
+brew_py="${brew_root}/opt/python@3/bin/python3"
+brew_py_ver=$(eval ${brew_py} --version | awk '{print $2}')
+echo "Using python ${brew_py}, version ${brew_py_ver}"
 
 if [ -d ${venv_path} ]; then
     echo "Virtualenv \"${venv_path}\" already exists, activating"
@@ -65,7 +64,7 @@ if [ -d ${venv_path} ]; then
     fi
 else
     echo "Creating virtualenv \"${venv_path}\""
-    python3 -m venv "${venv_path}"
+    eval "${brew_py} -m venv \"${venv_path}\""
     source "${venv_path}/bin/activate"
 fi
 

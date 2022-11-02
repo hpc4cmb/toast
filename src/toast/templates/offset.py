@@ -40,6 +40,7 @@ class Offset(Template):
     #    data             : The Data instance we are working with
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
+    #    det_data_units   : The units of the detector data
     #    det_flags        : Optional detector solver flags
     #    det_flag_mask    : Bit mask for detector solver flags
     #
@@ -112,6 +113,9 @@ class Offset(Template):
 
         if self.use_noise_prior and self.noise_model is None:
             raise RuntimeError("cannot use noise prior without specifying noise_model")
+
+        # Units for inverse variance weighting
+        detnoise_units = 1.0 / self.det_data_units**2
 
         # Use this as an "Ordered Set".  We want the unique detectors on this process,
         # but sorted in order of occurrence.
@@ -222,7 +226,11 @@ class Offset(Template):
                 # "Noise weight" (time-domain inverse variance)
                 detnoise = 1.0
                 if self.noise_model is not None:
-                    detnoise = ob[self.noise_model].detector_weight(det)
+                    detnoise = (
+                        ob[self.noise_model]
+                        .detector_weight(det)
+                        .to_value(detnoise_units)
+                    )
 
                 # The step length for this observation
                 step_length = self._step_length(
@@ -301,7 +309,11 @@ class Offset(Template):
                     )
 
                     # "Noise weight" (time-domain inverse variance)
-                    detnoise = ob[self.noise_model].detector_weight(det)
+                    detnoise = (
+                        ob[self.noise_model]
+                        .detector_weight(det)
+                        .to_value(detnoise_units)
+                    )
 
                     # Log version of offset PSD and its inverse for interpolation
                     logfreq = np.log(self._freq[iob])
@@ -431,7 +443,7 @@ class Offset(Template):
     def _get_offset_psd(self, noise, freq, step_time, det):
         """Compute the PSD of the baseline offsets."""
         psdfreq = noise.freq(det).to_value(u.Hz)
-        psd = noise.psd(det).to_value(u.K**2 * u.second)
+        psd = noise.psd(det).to_value(self.det_data_units**2 * u.second)
         rate = noise.rate(det).to_value(u.Hz)
 
         # Remove the white noise component from the PSD

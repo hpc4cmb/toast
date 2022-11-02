@@ -164,10 +164,10 @@ class PolyFilter2D(Operator):
 
             detector_position = {}
             for det in detectors:
-                det_quat = temp_ob.telescope.focalplane[det]["quat"]
-                x, y, z = qa.rotate(det_quat, ZAXIS)
-                theta, phi = np.arcsin([x, y])
-                detector_position[det] = [theta, phi]
+                theta, phi, _ = qa.to_iso_angles(
+                    temp_ob.telescope.focalplane[det]["quat"]
+                )
+                detector_position[det] = (theta, phi)
 
             # Enumerate detector groups (e.g. wafers) to filter
 
@@ -239,7 +239,7 @@ class PolyFilter2D(Operator):
             phimax = np.amax(np.abs(phivec))
             scale = 0.999 / max(thetamax, phimax)
 
-            for det in detector_position:
+            for det in detectors:
                 theta, phi = detector_position[det]
                 detector_position[det] = [theta * scale, phi * scale]
 
@@ -270,13 +270,10 @@ class PolyFilter2D(Operator):
             signal_mem = AlignedF64()
             coeff_mem = AlignedF64()
 
-            views = temp_ob.view[self.view]
+            views = temp_ob.intervals[self.view]
             for iview, view in enumerate(views):
-                if view.start is None:
-                    # This is a view of the whole obs
-                    nsample = temp_ob.n_local_samples
-                else:
-                    nsample = view.stop - view.start
+                nsample = view.last - view.first + 1
+                vslice = slice(view.first, view.last + 1)
 
                 # Accumulate the linear regression templates
 
@@ -301,7 +298,7 @@ class PolyFilter2D(Operator):
                 det_groups = -1 * np.ones(ndet, dtype=np.int32)
 
                 if self.shared_flags is not None:
-                    shared_flags = views.shared[self.shared_flags][iview]
+                    shared_flags = temp_ob.shared[self.shared_flags][vslice]
                     shared_mask = (shared_flags & self.shared_flag_mask) == 0
                 else:
                     shared_mask = np.ones(nsample, dtype=bool)
@@ -313,9 +310,9 @@ class PolyFilter2D(Operator):
                     ind_group = group_index[det]
                     det_groups[ind_det] = ind_group
 
-                    signal = views.detdata[self.det_data][iview][idet]
+                    signal = temp_ob.detdata[self.det_data][idet, vslice]
                     if self.det_flags is not None:
-                        det_flags = views.detdata[self.det_flags][iview][idet]
+                        det_flags = temp_ob.detdata[self.det_flags][idet, vslice]
                         det_mask = (det_flags & self.det_flag_mask) == 0
                         mask = np.logical_and(shared_mask, det_mask)
                     else:
@@ -358,14 +355,14 @@ class PolyFilter2D(Operator):
                     if self.det_flags is not None:
                         sample_flags = np.ones(
                             len(local_dets),
-                            dtype=views.detdata[self.det_flags][0].dtype,
+                            dtype=temp_ob.detdata[self.det_flags].dtype,
                         )
                         sample_flags *= self.poly_flag_mask
                         sample_flags *= dets_in_group
                         for isample in range(nsample):
                             if np.all(coeff[isample, igroup] == 0):
-                                views.detdata[self.det_flags][iview][
-                                    :, isample
+                                temp_ob.detdata[self.det_flags][
+                                    :, view.first + isample
                                 ] |= sample_flags
 
                 gt.stop("Poly2D:  Update detector flags")
@@ -381,7 +378,7 @@ class PolyFilter2D(Operator):
                         continue
                     igroup = group_index[det]
                     ind = detector_index[det]
-                    signal = views.detdata[self.det_data][iview][idet]
+                    signal = temp_ob.detdata[self.det_data][idet, vslice]
                     mask = trmasks[idet]
                     signal -= np.sum(trcoeff[igroup] * templates[ind], 1) * mask
 
