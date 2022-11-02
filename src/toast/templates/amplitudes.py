@@ -708,7 +708,7 @@ class Amplitudes(AcceleratorObject):
             self.local_flags_jax = None
 
 
-class AmplitudesMap(MutableMapping):
+class AmplitudesMap(MutableMapping, AcceleratorObject):
     """Helper class to provide arithmetic operations on a collection of Amplitudes.
 
     This simply provides syntactic sugar to reduce duplicated code when working with
@@ -876,13 +876,7 @@ class AmplitudesMap(MutableMapping):
             result += v.dot(other[k])
         return result
 
-    def accel_exists(self):
-        """Check if the amplitude data exists on the accelerator.
-
-        Returns:
-            (bool):  True if the data is present.
-
-        """
+    def _accel_exists(self):
         if not accel_enabled():
             return False
         result = 0
@@ -898,89 +892,25 @@ class AmplitudesMap(MutableMapping):
             raise RuntimeError(msg)
         return True
 
-    def accel_in_use(self):
-        """Check if the device data copy is the one currently in use.
-
-        Returns:
-            (bool):  True if the accelerator device copy is being used.
-
-        """
-        if not accel_enabled():
-            return False
-        result = 0
-        for k, v in self._internal.items():
-            if v.accel_in_use():
-                result += 1
-        if result == 0:
-            return False
-        elif result != len(self._internal):
-            log = Logger.get()
-            msg = f"Only some of the Amplitudes are in use on device"
-            log.error(msg)
-            raise RuntimeError(msg)
-        return True
-
-    def accel_used(self, state):
-        """Set the in-use state of the device data copy.
-
-        Setting the state to `True` is only possible if the data exists
-        on the device.
-
-        Args:
-            state (bool):  True if the device copy is in use, else False.
-
-        Returns:
-            None
-
-        """
-        if not accel_enabled():
-            return
-        for k, v in self._internal.items():
-            v.accel_used(state)
-
-    def accel_create(self):
-        """Create the amplitude data on the accelerator.
-
-        Returns:
-            None
-
-        """
+    def _accel_create(self):
         if not accel_enabled():
             return
         for k, v in self._internal.items():
             v.accel_create()
 
-    def accel_update_device(self):
-        """Copy the amplitude data to the accelerator.
-
-        Returns:
-            None
-
-        """
+    def _accel_update_device(self):
         if not accel_enabled():
             return
         for k, v in self._internal.items():
             v.accel_update_device()
 
-    def accel_update_host(self):
-        """Copy the amplitude data from the accelerator.
-
-        Returns:
-            None
-
-        """
+    def _accel_update_host(self):
         if not accel_enabled():
             return
         for k, v in self._internal.items():
             v.accel_update_host()
 
-    def accel_delete(self, key):
-        """Delete the amplitude data from the accelerator.
-
-        Returns:
-            None
-
-        """
+    def _accel_delete(self):
         if not accel_enabled():
             return
         for k, v in self._internal.items():
