@@ -8,14 +8,11 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import (
-    assert_data_localization,
-    dataMovementTracker,
-    MutableJaxArray,
-    select_implementation,
-    ImplementationType,
-)
-from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ...jax.mutableArray import MutableJaxArray
+from ...jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ...jax.implementation_selection import select_implementation
+from ...jax.data_localization import dataMovementTracker
+
 from ..._libtoast import (
     scan_map_float64 as scan_map_interval_float64_compiled,
     scan_map_float32 as scan_map_interval_float32_compiled,
@@ -263,23 +260,6 @@ def scan_map_jax(
     # turns mapdata into an array
     mapdata = mapdata.data
 
-    # make sure the data is where we expect it
-    assert_data_localization(
-        "scan_map",
-        use_accel,
-        [
-            mapdata,
-            global2local,
-            det_data,
-            det_data_index,
-            pixels,
-            pixels_index,
-            weights,
-            weight_index,
-        ],
-        [det_data],
-    )
-
     # prepares inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     mapdata = MutableJaxArray.to_array(mapdata)
@@ -459,19 +439,13 @@ def scan_map_numpy(
 
     # iterates on detectors and intervals
     n_det = det_data_index.size
-    n_local_samples = pixels.shape[1]
     for idet in range(n_det):
         p_index = pixels_index[idet]
         d_index = det_data_index[idet]
         w_index = None if (weight_index is None) else weight_index[idet]
         for interval in intervals:
-            if interval["first"] is None:
-                # This is a view of the whole obs
-                interval_start = 0
-                interval_end = n_local_samples
-            else:
-                interval_start = interval["first"]
-                interval_end = interval["last"] + 1
+            interval_start = interval["first"]
+            interval_end = interval["last"] + 1
             # gets interval data
             pixels_interval = pixels[p_index, interval_start:interval_end]
             weights_interval = (
@@ -560,16 +534,10 @@ def scan_map_compiled(
 
     # iterates on detectors and intervals
     n_det = det_data_index.size
-    n_local_samples = pixels.shape[1]
     for idet in range(n_det):
         for interval in intervals:
-            if interval["first"] is None:
-                # This is a view of the whole obs
-                interval_start = 0
-                interval_end = n_local_samples
-            else:
-                interval_start = interval["first"]
-                interval_end = interval["last"] + 1
+            interval_start = interval["first"]
+            interval_end = interval["last"] + 1
 
             # gets interval pixels
             p_index = pixels_index[idet]

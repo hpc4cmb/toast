@@ -30,7 +30,7 @@ from toast.scripts.benchmarking_utilities import (
     select_case,
 )
 from toast.timing import dump, function_timer, gather_timers
-from toast.ops.jax_ops.utils import dataMovementTracker
+from toast.jax.data_localization import dataMovementTracker
 
 
 def parse_arguments():

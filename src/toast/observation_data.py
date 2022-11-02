@@ -29,7 +29,7 @@ from .utils import (
 
 if use_accel_jax:
     import jax
-    from .ops.jax_ops import MutableJaxArray
+    from .jax.mutableArray import MutableJaxArray
 
 
 class DetectorData(AcceleratorObject):

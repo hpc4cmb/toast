@@ -37,11 +37,6 @@ from .utils import (
     Logger,
 )
 
-if use_accel_jax:
-    import jax
-    import jax.numpy as jnp
-
-
 class PixelDistribution(AcceleratorObject):
     """Class representing the distribution of submaps.
 

@@ -18,7 +18,8 @@ from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 
-from .jax_ops import build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
+from .._libtoast import cov_accum_diag_hits, cov_accum_diag_invnpp
+from .jax_ops import build_noise_weighted
 
 
 @trait_docs

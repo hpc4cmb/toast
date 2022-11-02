@@ -19,9 +19,8 @@ from .accelerator import (
 from .timing import function_timer
 from .utils import Logger
 
-import jax.numpy as jnp
-from .ops.jax_ops.utils.intervals import INTERVALS_JAX
-
+if use_accel_jax:
+    from .jax.intervals import INTERVALS_JAX
 
 def build_interval_dtype():
     dtdbl = np.dtype("double")

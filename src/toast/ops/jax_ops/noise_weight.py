@@ -8,14 +8,10 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import (
-    assert_data_localization,
-    dataMovementTracker,
-    MutableJaxArray,
-    select_implementation,
-    ImplementationType,
-)
-from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ...jax.mutableArray import MutableJaxArray
+from ...jax.intervals import INTERVALS_JAX, JaxIntervals
+from ...jax.implementation_selection import select_implementation
+from ...jax.data_localization import dataMovementTracker
 
 # -------------------------------------------------------------------------------------------------
 # JAX
@@ -94,11 +90,6 @@ def noise_weight_jax(det_data, det_data_index, intervals, detector_weights, use_
     Returns:
         None: det_data is updated in place
     """
-    # make sure the data is where we expect it
-    assert_data_localization(
-        "noise_weight", use_accel, [det_data, det_data_index], [det_data]
-    )
-
     # prepares inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     det_data_input = MutableJaxArray.to_array(det_data)

@@ -3,7 +3,6 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-import numpy as np
 
 from ._libtoast import Logger
 from ._libtoast import accel_create as omp_accel_create
@@ -28,23 +27,19 @@ if "TOAST_GPU_OPENMP" in os.environ and os.environ["TOAST_GPU_OPENMP"] in enable
         raise RuntimeError(msg)
 
 use_accel_jax = False
-if "TOAST_GPU_JAX" in os.environ and os.environ["TOAST_GPU_JAX"] in enable_vals:
-    # try:
-    import jax
-
-    # import jax.numpy as jnp
-    # TODO cannot be put here due to curcular reference problems?
-    # from .ops.jax_ops import MutableJaxArray
-
-    use_accel_jax = True
-# TODO reenable catch-all error?
-# except Exception:
-#    # There could be many possible exceptions...
-#    log = Logger.get()
-#    msg = "TOAST_GPU_JAX enabled at runtime, but jax is not "
-#    msg += "importable."
-#    log.error(msg)
-#    raise RuntimeError(msg)
+if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_vals):
+    try:
+        use_accel_jax = True
+        import jax
+        from .jax.mutableArray import MutableJaxArray
+        from .jax.intervals import INTERVALS_JAX
+    except Exception:
+        # There could be many possible exceptions...
+        log = Logger.get()
+        msg = "TOAST_GPU_JAX enabled at runtime, but jax is not "
+        msg += "importable."
+        log.error(msg)
+        raise RuntimeError(msg)
 
 if use_accel_omp and use_accel_jax:
     log = Logger.get()
@@ -103,10 +98,6 @@ def accel_data_present(data):
     elif use_accel_omp:
         return omp_accel_present(data)
     elif use_accel_jax:
-        from .ops.jax_ops import (
-            MutableJaxArray,
-        )  # TODO if i move the import i get a circular import problem?
-
         return isinstance(data, MutableJaxArray)
     else:
         log.warning("Accelerator support not enabled, data not present")
@@ -130,10 +121,6 @@ def accel_data_create(data):
     if use_accel_omp:
         omp_accel_create(data)
     elif use_accel_jax:
-        from .ops.jax_ops import (
-            MutableJaxArray,
-        )  # TODO if i move the import i get a circular import problem?
-
         return MutableJaxArray(data)
     else:
         log = Logger.get()
@@ -158,10 +145,6 @@ def accel_data_update_device(data):
         omp_accel_update_device(data)
         return data
     elif use_accel_jax:
-        from .ops.jax_ops import (
-            MutableJaxArray,
-        )  # TODO if i move the import i get a circular import problem?
-
         return MutableJaxArray(data)
     else:
         log = Logger.get()

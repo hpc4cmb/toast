@@ -8,15 +8,11 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from toast.ops.jax_ops.utils.mutableArray import MutableJaxArray
+from ...jax.mutableArray import MutableJaxArray
+from ...jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ...jax.data_localization import dataMovementTracker
+from ...jax.implementation_selection import select_implementation
 
-from .utils import (
-    assert_data_localization,
-    dataMovementTracker,
-    select_implementation,
-    ImplementationType,
-)
-from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from ..._libtoast import build_noise_weighted as build_noise_weighted_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -182,23 +178,6 @@ def build_noise_weighted_jax(
     Returns:
         None (the result is put in zmap).
     """
-    # make sure the data is where we expect it
-    assert_data_localization(
-        "build_noise_weighted",
-        use_accel,
-        [
-            global2local,
-            zmap,
-            pixels,
-            weights,
-            det_data,
-            det_flags,
-            det_scale,
-            shared_flags,
-        ],
-        [zmap],
-    )
-
     # prepares inputs
     if intervals.size == 0:
         return  # deals with a corner case in tests

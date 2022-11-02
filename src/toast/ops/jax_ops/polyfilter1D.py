@@ -7,8 +7,8 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from .utils import get_compile_time, select_implementation, ImplementationType
-from .utils.intervals import JaxIntervals, ALL
+from ...jax.implementation_selection import select_implementation
+
 from ..._libtoast import filter_polynomial as filter_polynomial_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -407,9 +407,6 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
 filter_polynomial = select_implementation(
     filter_polynomial_compiled, filter_polynomial_numpy, filter_polynomial_jax
 )
-
-# TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-filter_polynomial = get_compile_time(filter_polynomial)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

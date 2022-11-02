@@ -7,14 +7,11 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from .utils import (
-    assert_data_localization,
-    dataMovementTracker,
-    ImplementationType,
-    select_implementation,
-    MutableJaxArray,
-)
-from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ...jax.mutableArray import MutableJaxArray
+from ...jax.intervals import INTERVALS_JAX, JaxIntervals
+from ...jax.implementation_selection import select_implementation
+from ...jax.data_localization import dataMovementTracker
+
 from ..._libtoast import (
     template_offset_add_to_signal as template_offset_add_to_signal_compiled,
     template_offset_project_signal as template_offset_project_signal_compiled,
@@ -136,11 +133,6 @@ def template_offset_add_to_signal_jax(
     Returns:
         None (the result is put in det_data).
     """
-    # make sure the data is where we expect it
-    assert_data_localization(
-        "template_offset_add_to_signal", use_accel, [amplitudes, det_data], [det_data]
-    )
-
     # prepare inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     det_data_input = MutableJaxArray.to_array(det_data)
@@ -325,14 +317,6 @@ def template_offset_project_signal_jax(
     Returns:
         None (the result is put in amplitudes).
     """
-    # make sure the data is where we expect it
-    assert_data_localization(
-        "template_offset_project_signal",
-        use_accel,
-        [det_data, flag_data, amplitudes],
-        [amplitudes],
-    )
-
     # prepare inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     use_flag = flag_index >= 0
@@ -400,14 +384,6 @@ def template_offset_apply_diag_precond_jax(
     Returns:
         None (the result is put in amplitudes_out).
     """
-    # make sure the data is where we expect it
-    assert_data_localization(
-        "template_offset_apply_diag_precond",
-        use_accel,
-        [amplitudes_in, offset_var],
-        [amplitudes_out],
-    )
-
     # problem size
     # print(f"DEBUG: running 'template_offset_apply_diag_precond_jax' with n_amp:{amplitudes_in.size}")
 

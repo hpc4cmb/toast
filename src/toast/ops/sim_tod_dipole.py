@@ -15,9 +15,6 @@ from ..traits import Bool, Int, Quantity, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger, unit_conversion
 from .operator import Operator
 
-from .jax_ops.qarray import mult as qa_mult
-
-
 @trait_docs
 class SimDipole(Operator):
     """Operator which generates dipole signal for detectors.
@@ -191,7 +188,7 @@ class SimDipole(Operator):
                     detquat = props["quat"]
 
                     # Timestream of detector quaternions
-                    quats = qa_mult(boresight, detquat)
+                    quats = qa.mult(boresight, detquat)
 
                     # Compute the dipole timestream for this view and detector
                     dipole_tod = dipole(

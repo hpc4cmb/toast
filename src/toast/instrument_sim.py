@@ -7,7 +7,6 @@ from astropy import units as u
 from astropy.table import Column, QTable
 
 from . import qarray as qa
-from .ops.jax_ops.qarray import mult as qa_mult
 
 from .instrument import Focalplane
 from .instrument_coords import quat_to_xieta, xieta_to_quat

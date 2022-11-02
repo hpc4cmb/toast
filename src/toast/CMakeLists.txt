@@ -156,6 +156,7 @@ install(DIRECTORY
 # Process the sub directories
 add_subdirectory(io)
 add_subdirectory(tests)
+add_subdirectory(jax)
 add_subdirectory(ops)
 add_subdirectory(templates)
 add_subdirectory(scripts)

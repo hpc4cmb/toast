@@ -8,8 +8,9 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import get_compile_time, select_implementation, ImplementationType
-from .utils.mutableArray import MutableJaxArray
+from ...jax.mutableArray import MutableJaxArray
+from ...jax.implementation_selection import select_implementation
+
 from ..._libtoast import filter_poly2D as filter_poly2D_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -294,9 +295,6 @@ void toast::filter_poly2D_solve(
 filter_poly2D = select_implementation(
     filter_poly2D_compiled, filter_poly2D_numpy, filter_poly2D_jax
 )
-
-# TODO we extract the compile time at this level to encompas the call and data movement to/from GPU
-filter_poly2D = get_compile_time(filter_poly2D)
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

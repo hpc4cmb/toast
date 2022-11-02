@@ -9,7 +9,6 @@ install(FILES
     pixels_healpix.py
     stokes_weights.py
     template_offset.py
-    qarray.py
     pointing_detector.py
     build_noise_weighted.py
     cov_accum.py
@@ -17,4 +16,4 @@ install(FILES
     DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops
 )
 
-add_subdirectory(utils)
+add_subdirectory(math)

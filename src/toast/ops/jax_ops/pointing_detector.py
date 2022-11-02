@@ -8,15 +8,12 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import (
-    assert_data_localization,
-    dataMovementTracker,
-    select_implementation,
-    ImplementationType,
-)
-from .utils.mutableArray import MutableJaxArray
-from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
-from .qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
+from ...jax.mutableArray import MutableJaxArray
+from ...jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ...jax.implementation_selection import select_implementation
+from ...jax.data_localization import dataMovementTracker
+from ...jax.math_qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
+
 from ..._libtoast import pointing_detector as pointing_detector_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -141,10 +138,6 @@ def pointing_detector_jax(
     Returns:
         None (the result is put in quats).
     """
-    # make sure the data is where we expect it
-    # TODO input data is not on GPU for no but this should be solved later when a fixit is implemented
-    # assert_data_localization('pointing_detector', use_accel, [focalplane, boresight, shared_flags], [quats])
-
     # prepares inputs
     if intervals.size == 0:
         return  # deals with a corner case in tests

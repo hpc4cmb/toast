@@ -8,16 +8,12 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from .utils import (
-    assert_data_localization,
-    dataMovementTracker,
-    select_implementation,
-    ImplementationType,
-    math_qarray as qarray,
-    math_healpix as healpix,
-)
-from .utils.mutableArray import MutableJaxArray
-from .utils.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ...jax.mutableArray import MutableJaxArray
+from ...jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ...jax.implementation_selection import select_implementation
+from ...jax.data_localization import dataMovementTracker
+from .math import qarray, healpix
+
 from ..._libtoast import pixels_healpix as pixels_healpix_compiled
 
 # -------------------------------------------------------------------------------------------------
@@ -208,11 +204,6 @@ def pixels_healpix_jax(
     Returns:
         None (results are stored in pixels and hit_submaps).
     """
-    # make sure the data is where we expect it
-    assert_data_localization(
-        "pixels_healpix", use_accel, [quats, flags, hit_submaps], [pixels, hit_submaps]
-    )
-
     # prepares inputs
     if intervals.size == 0:
         return  # deals with a corner case in tests
