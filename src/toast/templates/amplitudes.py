@@ -717,6 +717,7 @@ class AmplitudesMap(MutableMapping, AcceleratorObject):
 
     def __init__(self):
         self._internal = dict()
+        super().__init__()
 
     # Mapping methods
 

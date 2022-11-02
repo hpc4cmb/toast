@@ -18,6 +18,7 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .arithmetic import Combine
+from .copy import Copy
 from .mapmaker_solve import SolverLHS, SolverRHS, solve
 from .mapmaker_utils import CovarianceAndHits
 from .memory_counter import MemoryCounter
