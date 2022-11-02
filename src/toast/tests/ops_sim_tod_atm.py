@@ -380,10 +380,17 @@ class SimAtmTest(MPITestCase):
             plt.close()
 
             good = mdata[0] != hp.UNSEEN
-            p = np.sqrt(mdata[1] ** 2 + mdata[2] ** 2)
-            i = np.abs(mdata[0])
-            pfrac = np.median(p[good] / i[good])
+            p = np.sqrt(mdata[1][good] ** 2 + mdata[2][good] ** 2)
+            i = np.abs(mdata[0][good])
+            pfrac = np.median(p / i)
             if pfrac < 0.01:
+                print(
+                    f"polarized atmosphere: using {np.count_nonzero(good)} pixels"
+                )
+                print(
+                    f"polarized atmosphere: p_avg = {np.mean(p)}, i_avg = {np.mean(i)}"
+                )
+                print(f"polarized atmosphere: pfrac = {pfrac}")
                 raise RuntimeError("Simulated atmosphere is not polarized")
         close_data(data)
 

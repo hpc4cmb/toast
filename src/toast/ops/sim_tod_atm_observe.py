@@ -11,12 +11,17 @@ from astropy import units as u
 from numpy.core.fromnumeric import size
 
 from .. import qarray as qa
-from ..atm import AtmSim
+from ..atm import available_utils
+from ..mpi import MPI
 from ..observation import default_values as defaults
+from ..observation_dist import global_interval_times
 from ..timing import GlobalTimers, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
-from ..utils import Environment, Logger, unit_conversion
+from ..utils import Environment, Logger, Timer, unit_conversion
 from .operator import Operator
+
+if available_utils:
+    from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
 
 
 @trait_docs
@@ -85,7 +90,9 @@ class ObserveAtmosphere(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
-    sim = Unicode("atmsim", help="The observation key for the list of AtmSim objects")
+    sim = Unicode(
+        "atm_sim", help="Data key with the dictionary of sims per session"
+    )
 
     absorption = Unicode(
         None, allow_none=True, help="The observation key for the absorption"
@@ -157,9 +164,15 @@ class ObserveAtmosphere(Operator):
                 # Nothing to do for this observation
                 continue
 
+            # Get the session name for this observation
+            session_name = ob.session.name
+
             gt.start("ObserveAtmosphere:  per-observation setup")
+
             # Bandpass-specific unit conversion, relative to 150GHz
-            absorption, loading = self._get_absorption_and_loading(ob, dets)
+            absorption, loading = self._detector_absorption_and_loading(
+                ob, self.absorption, self.loading, dets
+            )
 
             # Make sure detector data output exists
             exists = ob.detdata.ensure(
@@ -204,7 +217,7 @@ class ObserveAtmosphere(Operator):
                         & self.shared_flag_mask
                     )
 
-                sim_list = ob[self.sim][cur_wind]
+                sim_list = data[self.sim][session_name][cur_wind]
 
                 for det in dets:
                     gt.start("ObserveAtmosphere:  detector setup")
@@ -410,7 +423,8 @@ class ObserveAtmosphere(Operator):
                         )
 
                     # Calibrate the atmospheric fluctuations to appropriate bandpass
-                    atmdata *= self.gain * absorption[det]
+                    if absorption is not None:
+                        atmdata *= self.gain * absorption[det]
 
                     if self.debug_tod:
                         first = ob.intervals[self.view][vw].first
@@ -492,7 +506,7 @@ class ObserveAtmosphere(Operator):
         gt.stop("ObserveAtmosphere:  total")
 
     @function_timer
-    def _get_absorption_and_loading(self, obs, dets):
+    def _detector_absorption_and_loading(self, obs, absorption_key, loading_key, dets):
         """Bandpass-specific unit conversion and loading"""
 
         if obs.telescope.focalplane.bandpass is None:
@@ -503,20 +517,19 @@ class ObserveAtmosphere(Operator):
         n_freq = self.n_bandpass_freqs
         freqs = np.linspace(freq_min, freq_max, n_freq)
 
-        absorption_det = {}
-        for det in dets:
-            absorption_det[det] = bandpass.convolve(
-                det, freqs, obs[self.absorption], rj=True
-            )
+        absorption_det = None
+        if absorption_key is not None:
+            absorption_det = {
+                det: bandpass.convolve(det, freqs, obs[absorption_key], rj=True)
+                for det in dets
+            }
 
-        if self.loading is None:
-            loading_det = None
-        else:
-            loading_det = {}
-            for det in dets:
-                loading_det[det] = bandpass.convolve(
-                    det, freqs, obs[self.loading], rj=True
-                )
+        loading_det = None
+        if loading_key is not None:
+            loading_det = {
+                det: bandpass.convolve(det, freqs, obs[loading_key], rj=True)
+                for det in dets
+            }
 
         return absorption_det, loading_det
 
@@ -564,7 +577,7 @@ class ObserveAtmosphere(Operator):
 
     def _requires(self):
         req = {
-            "meta": [self.sim],
+            "global": [self.sim],
             "shared": [
                 self.times,
             ],
