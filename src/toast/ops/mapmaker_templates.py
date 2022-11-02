@@ -244,7 +244,10 @@ class TemplateMatrix(Operator):
                     # Nothing to do for this observation
                     continue
                 exists = ob.detdata.ensure(
-                    self.det_data, detectors=dets, create_units=self.det_data_units
+                    self.det_data,
+                    detectors=dets,
+                    accel=use_accel,
+                    create_units=self.det_data_units,
                 )
                 ob.detdata[self.det_data].update_units(self.det_data_units)
 
@@ -285,8 +288,6 @@ class TemplateMatrix(Operator):
             req["intervals"].append(self.view)
         if self.transpose:
             req["detdata"].append(self.det_data)
-            if self.shared_flags is not None:
-                req["shared"].append(self.shared_flags)
             if self.det_flags is not None:
                 req["detdata"].append(self.det_flags)
         else:

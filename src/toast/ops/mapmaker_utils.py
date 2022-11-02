@@ -466,7 +466,8 @@ class BuildInverseCovariance(Operator):
 
     def _requires(self):
         req = {
-            "global": [self.pixel_dist, self.noise_model],
+            "global": [self.pixel_dist],
+            "meta": [self.noise_model],
             "shared": list(),
             "detdata": [self.pixels, self.weights],
             "intervals": list(),
