@@ -74,7 +74,8 @@ class Data(MutableMapping):
             for ob in self.obs:
                 ob.clear()
         self.obs.clear()
-        self._internal.clear()
+        if not self._view:
+            self._internal.clear()
         return
 
     def all_local_detectors(self, selection=None):
@@ -209,12 +210,6 @@ class Data(MutableMapping):
                 wcomm.barrier()
         return
 
-    def _view_internal(self):
-        ret = dict()
-        for k, v in self._internal.items():
-            ret[k] = v
-        return ret
-
     def split(
         self,
         obs_index=False,
@@ -270,7 +265,7 @@ class Data(MutableMapping):
             # Splitting by (unique) index
             for iob, ob in enumerate(self.obs):
                 newdat = Data(comm=self._comm, view=True)
-                newdat._internal = self._view_internal()
+                newdat._internal = self._internal
                 newdat.obs.append(ob)
                 datasplit[iob] = newdat
         elif obs_name:
@@ -283,7 +278,7 @@ class Data(MutableMapping):
                         raise RuntimeError(msg)
                 else:
                     newdat = Data(comm=self._comm, view=True)
-                    newdat._internal = self._view_internal()
+                    newdat._internal = self._internal
                     newdat.obs.append(ob)
                     datasplit[ob.name] = newdat
         elif obs_uid:
@@ -296,7 +291,7 @@ class Data(MutableMapping):
                         raise RuntimeError(msg)
                 else:
                     newdat = Data(comm=self._comm, view=True)
-                    newdat._internal = self._view_internal()
+                    newdat._internal = self._internal
                     newdat.obs.append(ob)
                     datasplit[ob.uid] = newdat
         elif obs_session_name:
@@ -311,7 +306,7 @@ class Data(MutableMapping):
                     sname = ob.session.name
                     if sname not in datasplit:
                         newdat = Data(comm=self._comm, view=True)
-                        newdat._internal = self._view_internal()
+                        newdat._internal = self._internal
                         datasplit[sname] = newdat
                     datasplit[sname].obs.append(ob)
         elif obs_key is not None:
@@ -339,7 +334,7 @@ class Data(MutableMapping):
                         raise RuntimeError(msg)
                     if obs_val not in datasplit:
                         newdat = Data(comm=self._comm, view=True)
-                        newdat._internal = self._view_internal()
+                        newdat._internal = self._internal
                         datasplit[obs_val] = newdat
                     datasplit[obs_val].obs.append(ob)
         return datasplit
@@ -392,7 +387,7 @@ class Data(MutableMapping):
         new_data = Data(comm=self._comm, view=True)
 
         # Use a reference to the original metadata
-        new_data._internal = self._view_internal()
+        new_data._internal = self._internal
 
         for iob, ob in enumerate(self.obs):
             if obs_index is not None and obs_index == iob:
