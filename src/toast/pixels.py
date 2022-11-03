@@ -37,6 +37,7 @@ from .utils import (
     Logger,
 )
 
+
 class PixelDistribution(AcceleratorObject):
     """Class representing the distribution of submaps.
 

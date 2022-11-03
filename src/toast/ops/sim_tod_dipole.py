@@ -15,6 +15,7 @@ from ..traits import Bool, Int, Quantity, Unit, Unicode, trait_docs
 from ..utils import Environment, Logger, unit_conversion
 from .operator import Operator
 
+
 @trait_docs
 class SimDipole(Operator):
     """Operator which generates dipole signal for detectors.

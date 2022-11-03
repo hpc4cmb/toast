@@ -7,6 +7,7 @@ import jax.numpy as jnp
 # ------------------------------------------------------------------------------
 # Numpy to JAX intervals
 
+
 class INTERVALS_JAX:
     """
     Encapsulate the information from an array of structures into a structure of array

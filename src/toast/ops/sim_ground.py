@@ -52,6 +52,7 @@ from .sim_ground_utils import (
 )
 from .sim_hwp import simulate_hwp_response
 
+
 @trait_docs
 class SimGround(Operator):
     """Simulate a generic ground-based telescope scanning.

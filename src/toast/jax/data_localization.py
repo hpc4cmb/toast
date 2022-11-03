@@ -4,7 +4,9 @@ from .mutableArray import MutableJaxArray
 import jax.numpy as jnp
 from ..utils import Logger
 
-use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (os.environ["TOAST_LOGLEVEL"] in ["DEBUG", "VERBOSE"])
+use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (
+    os.environ["TOAST_LOGLEVEL"] in ["DEBUG", "VERBOSE"]
+)
 """
 Assert is used only if `TOAST_LOGLEVEL` is set to `DEBUG`.
 """
@@ -13,6 +15,7 @@ Assert is used only if `TOAST_LOGLEVEL` is set to `DEBUG`.
 # ASSERT
 
 # TODO move this check into the data movement tracker
+
 
 def assert_data_localization(function_name, use_accel, inputs, outputs):
     """
@@ -51,6 +54,7 @@ def assert_data_localization(function_name, use_accel, inputs, outputs):
 # ----------------------------------------------------------------------------------------
 # TRACKER
 
+
 def bytes_of_input(input):
     """
     Returns the size of an input in bytes.
@@ -63,6 +67,7 @@ def bytes_of_input(input):
 
 class DataMovement:
     """data structure used to track data movement to and from the GPU for a particular function"""
+
     def __init__(self):
         self.nb_calls = 0
         self.input_bytes = 0
@@ -119,6 +124,7 @@ class DataMovementTracker:
             result += f"{function_name}, {record.nb_calls}, {record.input_bytes}, {record.input_to_gpu_bytes}, {record.output_bytes}, {record.output_from_gpu_bytes}\n"
         result += "-----"
         return result
+
 
 dataMovementTracker = DataMovementTracker()
 """global variable used to track data movement to and from the GPU"""

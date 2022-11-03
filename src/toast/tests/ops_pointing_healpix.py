@@ -16,6 +16,7 @@ from ..observation import default_values as defaults
 from ._helpers import create_outdir, create_satellite_data, close_data
 from .mpi import MPITestCase
 
+
 class PointingHealpixTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]

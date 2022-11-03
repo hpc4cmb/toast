@@ -27,6 +27,7 @@ if available_atm:
 if available_utils:
     from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec
 
+
 @trait_docs
 class SimAtmosphere(Operator):
     """Operator which generates atmosphere timestreams for detectors.

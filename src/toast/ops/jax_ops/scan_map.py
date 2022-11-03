@@ -100,10 +100,14 @@ def scan_map_inner_jax(
 #                              out_axes=['detectors','intervals',...])
 # TODO xmap is commented out for now due to a [bug with static argnum](https://github.com/google/jax/issues/10741)
 scan_map_inner_jax = jax.vmap(
-    scan_map_inner_jax, in_axes=[None, None, None, 0, 0, 0, None, None, None], out_axes=0
+    scan_map_inner_jax,
+    in_axes=[None, None, None, 0, 0, 0, None, None, None],
+    out_axes=0,
 )  # loop on intervals
 scan_map_inner_jax = jax.vmap(
-    scan_map_inner_jax, in_axes=[None, None, None, 0, 0, 0, None, None, None], out_axes=0
+    scan_map_inner_jax,
+    in_axes=[None, None, None, 0, 0, 0, None, None, None],
+    out_axes=0,
 )  # loop on detectors
 
 
@@ -381,9 +385,13 @@ def scan_map_interval_numpy(
     if should_zero:
         det_data[:] = 0.0
     if should_subtract:
-        det_data[valid_samples] -= np.sum(valid_mapdata * valid_weights, axis=1)*data_scale
+        det_data[valid_samples] -= (
+            np.sum(valid_mapdata * valid_weights, axis=1) * data_scale
+        )
     else:
-        det_data[valid_samples] += np.sum(valid_mapdata * valid_weights, axis=1)*data_scale
+        det_data[valid_samples] += (
+            np.sum(valid_mapdata * valid_weights, axis=1) * data_scale
+        )
     return det_data
 
 

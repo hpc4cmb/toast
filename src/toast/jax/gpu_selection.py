@@ -13,7 +13,7 @@ my_device = devices_available[0]
 """
 
 # whether we are running on CPU
-use_cpu = (my_device.platform == "cpu")
+use_cpu = my_device.platform == "cpu"
 """
     Are we using the CPU?
 """
@@ -38,4 +38,3 @@ def set_JAX_device(process_id):
     global my_device
     my_device = devices_available[device_id]
     print(f"DEBUG: JAX uses device number {device_id} ({my_device})")
-

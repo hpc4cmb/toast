@@ -1,7 +1,7 @@
-
 from enum import Enum
 from ..timing import function_timer
 from ..accelerator import use_accel_jax, use_accel_omp
+
 
 class ImplementationType(Enum):
     """Describes the various implementation kind"""
@@ -21,6 +21,7 @@ if use_accel_jax:
 elif use_accel_omp:
     default_gpu_implementationType = ImplementationType.COMPILED
 
+
 def function_of_implementationType(f_compiled, f_numpy, f_jax, implementationType):
     """returns one of the three input functions depending on the implementation type requested"""
     if implementationType == ImplementationType.JAX:
@@ -29,6 +30,7 @@ def function_of_implementationType(f_compiled, f_numpy, f_jax, implementationTyp
         return f_numpy
     else:
         return f_compiled
+
 
 def runtime_select_implementation(f_cpu, f_gpu):
     """
@@ -45,9 +47,7 @@ def runtime_select_implementation(f_cpu, f_gpu):
     return f
 
 
-def select_implementation(
-    f_compiled, f_numpy, f_jax, overide_implementationType=None
-):
+def select_implementation(f_compiled, f_numpy, f_jax, overide_implementationType=None):
     """
     picks the implementation to use
 

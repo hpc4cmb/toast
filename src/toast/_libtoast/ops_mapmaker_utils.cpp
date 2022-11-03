@@ -9,23 +9,23 @@
 #include <intervals.hpp>
 
 #ifdef HAVE_OPENMP_TARGET
-#pragma omp declare target
+# pragma omp declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
 void build_noise_weighted_inner(
-    int32_t const *pixel_index,
-    int32_t const *weight_index,
-    int32_t const *flag_index,
-    int32_t const *data_index,
-    int64_t const *global2local,
-    double const *data,
-    uint8_t const *det_flags,
-    uint8_t const *shared_flags,
-    int64_t const *pixels,
-    double const *weights,
-    double const *det_scale,
-    double *zmap_val,
-    int64_t *zoff,
+    int32_t const * pixel_index,
+    int32_t const * weight_index,
+    int32_t const * flag_index,
+    int32_t const * data_index,
+    int64_t const * global2local,
+    double const * data,
+    uint8_t const * det_flags,
+    uint8_t const * shared_flags,
+    int64_t const * pixels,
+    double const * weights,
+    double const * det_scale,
+    double * zmap_val,
+    int64_t * zoff,
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
@@ -34,8 +34,7 @@ void build_noise_weighted_inner(
     uint8_t shared_mask,
     int64_t n_pix_submap,
     bool use_shared_flags,
-    bool use_det_flags)
-{
+    bool use_det_flags) {
     int32_t w_indx = weight_index[idet];
     int32_t p_indx = pixel_index[idet];
     int32_t f_indx = flag_index[idet];
@@ -52,21 +51,18 @@ void build_noise_weighted_inner(
     int64_t global_submap;
 
     uint8_t det_check = 0;
-    if (use_det_flags)
-    {
+    if (use_det_flags) {
         det_check = det_flags[off_f] & det_mask;
     }
     uint8_t shared_check = 0;
-    if (use_shared_flags)
-    {
+    if (use_shared_flags) {
         shared_check = shared_flags[isamp] & shared_mask;
     }
 
     if (
         (pixels[off_p] >= 0) &&
         (det_check == 0) &&
-        (shared_check == 0))
-    {
+        (shared_check == 0)) {
         // Good data, accumulate
         global_submap = (int64_t)(pixels[off_p] / n_pix_submap);
 
@@ -79,16 +75,12 @@ void build_noise_weighted_inner(
 
         scaled_data = data[off_d] * det_scale[idet];
 
-        for (int64_t iweight = 0; iweight < nnz; iweight++)
-        {
+        for (int64_t iweight = 0; iweight < nnz; iweight++) {
             zmap_val[iweight] = scaled_data * weights[off_wt + iweight];
         }
-    }
-    else
-    {
+    } else   {
         (*zoff) = -1;
-        for (int64_t iweight = 0; iweight < nnz; iweight++)
-        {
+        for (int64_t iweight = 0; iweight < nnz; iweight++) {
             zmap_val[iweight] = 0.0;
         }
     }
@@ -96,29 +88,28 @@ void build_noise_weighted_inner(
 }
 
 #ifdef HAVE_OPENMP_TARGET
-#pragma omp end declare target
+# pragma omp end declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
-void init_ops_mapmaker_utils(py::module &m)
-{
+void init_ops_mapmaker_utils(py::module & m) {
     m.def(
         "build_noise_weighted", [](
-                                    py::buffer global2local,
-                                    py::buffer zmap,
-                                    py::buffer pixel_index,
-                                    py::buffer pixels,
-                                    py::buffer weight_index,
-                                    py::buffer weights,
-                                    py::buffer data_index,
-                                    py::buffer det_data,
-                                    py::buffer flag_index,
-                                    py::buffer det_flags,
-                                    py::buffer det_scale,
-                                    uint8_t det_flag_mask,
-                                    py::buffer intervals,
-                                    py::buffer shared_flags,
-                                    uint8_t shared_flag_mask,
-                                    bool use_accel)
+            py::buffer global2local,
+            py::buffer zmap,
+            py::buffer pixel_index,
+            py::buffer pixels,
+            py::buffer weight_index,
+            py::buffer weights,
+            py::buffer data_index,
+            py::buffer det_data,
+            py::buffer flag_index,
+            py::buffer det_flags,
+            py::buffer det_scale,
+            uint8_t det_flag_mask,
+            py::buffer intervals,
+            py::buffer shared_flags,
+            uint8_t shared_flag_mask,
+            bool use_accel)
         {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
@@ -197,7 +188,7 @@ void init_ops_mapmaker_utils(py::module &m)
             }
 
             if (offload) {
-#ifdef HAVE_OPENMP_TARGET
+                #ifdef HAVE_OPENMP_TARGET
 
                 int64_t * dev_pixels = omgr.device_ptr(raw_pixels);
                 double * dev_weights = omgr.device_ptr(raw_weights);
@@ -207,45 +198,45 @@ void init_ops_mapmaker_utils(py::module &m)
                 uint8_t * dev_shared_flags = omgr.device_ptr(raw_shared_flags);
                 uint8_t * dev_det_flags = omgr.device_ptr(raw_det_flags);
 
-#pragma omp target data                       \
-device(dev)                                   \
-    map(to                                    \
-        :                                     \
-        raw_weight_index [0:n_det],           \
-        raw_pixel_index [0:n_det],            \
-        raw_flag_index [0:n_det],             \
-        raw_data_index [0:n_det],             \
-        raw_det_scale [0:n_det],              \
-        raw_global2local [0:n_global_submap], \
-        n_view,                               \
-        n_det,                                \
-        n_samp,                               \
-        nnz,                                  \
-        n_pix_submap,                         \
-        det_flag_mask,                        \
-        shared_flag_mask,                     \
-        use_shared_flags,                     \
-        use_det_flags)                        \
-        use_device_ptr(                       \
-            raw_weight_index,                 \
-            raw_pixel_index,                  \
-            raw_flag_index,                   \
-            raw_data_index,                   \
-            raw_det_scale,                    \
-            raw_global2local)
+                # pragma omp target data              \
+                device(dev)                           \
+                map(to                                \
+                :                                     \
+                raw_weight_index [0:n_det],           \
+                raw_pixel_index [0:n_det],            \
+                raw_flag_index [0:n_det],             \
+                raw_data_index [0:n_det],             \
+                raw_det_scale [0:n_det],              \
+                raw_global2local [0:n_global_submap], \
+                n_view,                               \
+                n_det,                                \
+                n_samp,                               \
+                nnz,                                  \
+                n_pix_submap,                         \
+                det_flag_mask,                        \
+                shared_flag_mask,                     \
+                use_shared_flags,                     \
+                use_det_flags)                        \
+                use_device_ptr(                       \
+                raw_weight_index,                     \
+                raw_pixel_index,                      \
+                raw_flag_index,                       \
+                raw_data_index,                       \
+                raw_det_scale,                        \
+                raw_global2local)
                 {
-#pragma omp target teams distribute collapse(2) \
-    is_device_ptr(                              \
-        dev_pixels,                             \
-        dev_weights,                            \
-        dev_det_data,                           \
-        dev_det_flags,                          \
-        dev_intervals,                          \
-        dev_shared_flags,                       \
-        dev_zmap)
+                    # pragma omp target teams distribute collapse(2) \
+                    is_device_ptr(                                   \
+                    dev_pixels,                                      \
+                    dev_weights,                                     \
+                    dev_det_data,                                    \
+                    dev_det_flags,                                   \
+                    dev_intervals,                                   \
+                    dev_shared_flags,                                \
+                    dev_zmap)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-#pragma omp parallel for default(shared)
+                            # pragma omp parallel for default(shared)
                             for (
                                 int64_t isamp = dev_intervals[iview].first;
                                 isamp <= dev_intervals[iview].last;
@@ -278,7 +269,7 @@ device(dev)                                   \
                                     use_det_flags
                                 );
                                 for (int64_t iw = 0; iw < nnz; iw++) {
-#pragma omp atomic
+                                    # pragma omp atomic
                                     dev_zmap[zoff + iw] += zmap_val[iw];
                                 }
                             }
@@ -286,11 +277,11 @@ device(dev)                                   \
                     }
                 }
 
-#endif // ifdef HAVE_OPENMP_TARGET
+                #endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-#pragma omp parallel for default(shared)
+                        #pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = raw_intervals[iview].first;
                             isamp <= raw_intervals[iview].last;
@@ -326,7 +317,7 @@ device(dev)                                   \
                             // #pragma omp critical
                             {
                                 for (int64_t iw = 0; iw < nnz; iw++) {
-#pragma omp atomic
+                                    #pragma omp atomic
                                     raw_zmap[zoff + iw] += zmap_val[iw];
                                 }
                             }
@@ -334,5 +325,6 @@ device(dev)                                   \
                     }
                 }
             }
-            return; });
+            return;
+        });
 }

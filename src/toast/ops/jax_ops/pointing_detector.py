@@ -12,7 +12,10 @@ from ...jax.mutableArray import MutableJaxArray
 from ...jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from ...jax.implementation_selection import select_implementation
 from ...jax.data_localization import dataMovementTracker
-from .math.qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
+from .math.qarray import (
+    mult_one_one_numpy as qa_mult_numpy,
+    mult_one_one_jax as qa_mult_jax,
+)
 
 from ..._libtoast import pointing_detector as pointing_detector_compiled
 

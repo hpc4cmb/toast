@@ -107,14 +107,21 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            ob.detdata.ensure(self.det_data, detectors=dets, create_units=self.det_data_units, accel=use_accel)
+            ob.detdata.ensure(
+                self.det_data,
+                detectors=dets,
+                create_units=self.det_data_units,
+                accel=use_accel,
+            )
 
             intervals = ob.intervals[self.view].data
             det_data = ob.detdata[self.det_data].data
             det_data_indx = ob.detdata[self.det_data].indices(dets)
             pixels = ob.detdata[self.pixels].data
             pixels_indx = ob.detdata[self.pixels].indices(dets)
-            data_scale = unit_conversion(map_data.units, ob.detdata[self.det_data].units)
+            data_scale = unit_conversion(
+                map_data.units, ob.detdata[self.det_data].units
+            )
             if self.weights is None:
                 weights, weight_indx = None, None
             else:

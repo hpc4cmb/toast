@@ -15,6 +15,7 @@ from ....qarray import mult as mult_compiled
 # -------------------------------------------------------------------------------------------------
 # JAX
 
+
 def rotate_one_one_jax(q, v_in):
     """
     Rotate a vector by a quaternion.
@@ -53,7 +54,8 @@ def rotate_one_one_jax(q, v_in):
 
     return jnp.array([v_out_0, v_out_1, v_out_2])
 
-#-----
+
+# -----
 
 
 # def mult_one_one_jax(p, q):
@@ -135,8 +137,10 @@ def mult_jax(p_in, q_in):
     # converts to a numpy type if the input was a numpy type
     return jax.device_get(out) if isinstance(p_in, np.ndarray) else out
 
+
 # -------------------------------------------------------------------------------------------------
 # NUMPY
+
 
 def rotate_one_one_numpy(q, v_in):
     """
@@ -177,7 +181,8 @@ def rotate_one_one_numpy(q, v_in):
 
     return v_out
 
-#-----
+
+# -----
 
 
 def mult_one_one_numpy(p, q):
@@ -246,6 +251,7 @@ def mult_numpy(p_in, q_in):
     if q_is_array:
         return mult_one_many_numpy(p_in, q_in)
     return mult_one_one_numpy(p_in, q_in)
+
 
 # -------------------------------------------------------------------------------------------------
 # C++

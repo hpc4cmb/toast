@@ -22,6 +22,7 @@ from .utils import Logger
 if use_accel_jax:
     from .jax.intervals import INTERVALS_JAX
 
+
 def build_interval_dtype():
     dtdbl = np.dtype("double")
     dtll = np.dtype("longlong")
