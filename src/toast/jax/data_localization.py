@@ -114,9 +114,9 @@ class DataMovementTracker:
         if not use_debug_assert:
             return "DataMovementTracker: no monitoring unless TOAST_LOGLEVEL is set to DEBUG or VERBOSE."
         result = "DataMovementTracker:\n-----\n"
-        result += "function, nb calls gpu, input bytes gpu, input bytes moved to GPU gpu, output bytes gpu, output bytes moved from GPU gpu\n"
-        for function_name, record_gpu in sorted(self.records.items()):
-            result += f"{function_name}, {record_gpu.nb_calls}, {record_gpu.input_bytes}, {record_gpu.input_to_gpu_bytes}, {record_gpu.output_bytes}, {record_gpu.output_from_gpu_bytes}\n"
+        result += "function, nb calls, input bytes, input bytes moved to GPU, output bytes, output bytes moved from GPU\n"
+        for function_name, record in sorted(self.records.items()):
+            result += f"{function_name}, {record.nb_calls}, {record.input_bytes}, {record.input_to_gpu_bytes}, {record.output_bytes}, {record.output_from_gpu_bytes}\n"
         result += "-----"
         return result
 

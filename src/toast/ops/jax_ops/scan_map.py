@@ -444,8 +444,8 @@ def scan_map_numpy(
         d_index = det_data_index[idet]
         w_index = None if (weight_index is None) else weight_index[idet]
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"] + 1
+            interval_start = interval.first
+            interval_end = interval.last + 1
             # gets interval data
             pixels_interval = pixels[p_index, interval_start:interval_end]
             weights_interval = (
@@ -536,8 +536,8 @@ def scan_map_compiled(
     n_det = det_data_index.size
     for idet in range(n_det):
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"] + 1
+            interval_start = interval.first
+            interval_end = interval.last + 1
 
             # gets interval pixels
             p_index = pixels_index[idet]

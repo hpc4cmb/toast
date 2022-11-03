@@ -67,7 +67,7 @@ class IntervalList(Sequence, AcceleratorObject):
                 raise RuntimeError(
                     "If constructing from intervals, other spans should be None"
                 )
-            timespans = [(x["start"], x["stop"]) for x in intervals]
+            timespans = [(x.start, x.stop) for x in intervals]
             indices = self._find_indices(timespans)
             self.data = np.array(
                 [
@@ -320,17 +320,17 @@ class IntervalList(Sequence, AcceleratorObject):
                 done_other = True
 
             if res_first is None:
-                res_first = next["first"]
-                res_last = next["last"]
+                res_first = next.first
+                res_last = next.last
             else:
                 # We use '<' here instead of '<=', so that intervals which are next to
                 # each other (but not overlapping) are not combined.  If the combination
                 # is desired, the simplify() method can be used.
-                if next["first"] < res_last + 1:
+                if next.first < res_last + 1:
                     # We overlap last interval
-                    if next["last"] > res_last:
+                    if next.last > res_last:
                         # This interval extends beyond the last interval
-                        res_last = next["last"]
+                        res_last = next.last
                 else:
                     # We have a break, close out previous interval and start a new one
                     result.append(
@@ -341,8 +341,8 @@ class IntervalList(Sequence, AcceleratorObject):
                             res_last,
                         )
                     )
-                    res_first = next["first"]
-                    res_last = next["last"]
+                    res_first = next.first
+                    res_last = next.last
         # Close out final interval
         result.append(
             (self.timestamps[res_first], self.timestamps[res_last], res_first, res_last)

@@ -342,8 +342,8 @@ def build_noise_weighted_numpy(
     # iterates on detectors and intervals
     for idet in range(n_det):
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"]
+            interval_start = interval.first
+            interval_end = interval.last
             for isamp in range(interval_start, interval_end + 1):
                 p_index = pixel_index[idet]
                 w_index = weight_index[idet]

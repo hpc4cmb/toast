@@ -12,7 +12,7 @@ from ...jax.mutableArray import MutableJaxArray
 from ...jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from ...jax.implementation_selection import select_implementation
 from ...jax.data_localization import dataMovementTracker
-from ...jax.math_qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
+from .math.qarray import mult_one_one_numpy as qa_mult_numpy, mult_one_one_jax as qa_mult_jax
 
 from ..._libtoast import pointing_detector as pointing_detector_compiled
 
@@ -234,8 +234,8 @@ def pointing_detector_numpy(
     # iterates on all detectors and all intervals
     for idet in range(n_det):
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"] + 1
+            interval_start = interval.first
+            interval_end = interval.last + 1
             for isamp in range(interval_start, interval_end):
                 q_index = quat_index[idet]
                 quats[q_index, isamp, :] = pointing_detector_inner_numpy(

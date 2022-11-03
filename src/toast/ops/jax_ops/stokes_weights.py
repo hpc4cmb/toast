@@ -228,8 +228,8 @@ def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
 
     # iterate on the intervals
     for interval in intervals:
-        interval_start = interval["first"]
-        interval_end = interval["last"] + 1
+        interval_start = interval.first
+        interval_end = interval.last + 1
         weights[weight_index, interval_start:interval_end] = cal
 
 
@@ -313,8 +313,8 @@ def stokes_weights_IQU_numpy(
     # iterates on detectors and intervals
     for idet in range(n_det):
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"] + 1
+            interval_start = interval.first
+            interval_end = interval.last + 1
             for isamp in range(interval_start, interval_end):
                 w_index = weight_index[idet]
                 q_index = quat_index[idet]
@@ -348,8 +348,8 @@ def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel):
     )
 
     for interval in intervals:
-        interval_start = interval["first"]
-        interval_end = interval["last"] + 1
+        interval_start = interval.first
+        interval_end = interval.last + 1
         weights[weight_index, interval_start:interval_end] = cal
 
 

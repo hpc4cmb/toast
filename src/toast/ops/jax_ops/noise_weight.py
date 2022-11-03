@@ -146,8 +146,8 @@ def noise_weight_numpy(
         d_index = det_data_index[idet]
         detector_weight = detector_weights[idet]
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"] + 1
+            interval_start = interval.first
+            interval_end = interval.last + 1
             # applies the multiplication
             det_data[d_index, interval_start:interval_end] *= detector_weight
 

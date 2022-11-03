@@ -336,8 +336,8 @@ def pixels_healpix_numpy(
 
     for idet in range(n_det):
         for interval in intervals:
-            interval_start = interval["first"]
-            interval_end = interval["last"] + 1
+            interval_start = interval.first
+            interval_end = interval.last + 1
             for isamp in range(interval_start, interval_end):
                 p_index = pixel_index[idet]
                 q_index = quat_index[idet]

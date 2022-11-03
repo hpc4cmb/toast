@@ -440,8 +440,8 @@ def template_offset_add_to_signal_numpy(
 
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
-        interval_start = interval["first"]
-        interval_end = interval["last"]
+        interval_start = interval.first
+        interval_end = interval.last
         for isamp in range(interval_start, interval_end + 1):
             amp = offset + int(isamp / step_length)
             det_data[data_index, isamp] += amplitudes[amp]
@@ -487,8 +487,8 @@ def template_offset_project_signal_numpy(
 
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
-        interval_start = interval["first"]
-        interval_end = interval["last"] + 1
+        interval_start = interval.first
+        interval_end = interval.last + 1
         for isamp in range(interval_start, interval_end):
             det_data_samp = det_data[data_index, isamp]
             # skip sample if it is flagged
