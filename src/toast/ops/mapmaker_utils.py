@@ -738,7 +738,7 @@ class BuildNoiseWeighted(Operator):
                 ob.intervals[self.view].data,
                 shared_flag_data,
                 self.shared_flag_mask,
-                use_accel,
+                use_accel=use_accel,
             )
             zmap.data = zmap_data.reshape(zmap.data.shape)
         return

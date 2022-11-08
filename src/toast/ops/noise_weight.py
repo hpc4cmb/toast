@@ -78,7 +78,7 @@ class NoiseWeight(Operator):
             det_data = ob.detdata[self.det_data].data
             det_data_indx = ob.detdata[self.det_data].indices(dets)
             noise_weight(
-                det_data, det_data_indx, intervals, detector_weights, use_accel
+                det_data, det_data_indx, intervals, detector_weights, use_accel=use_accel
             )
 
             # updates the unit for the output

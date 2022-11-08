@@ -255,7 +255,7 @@ class StokesWeights(Operator):
                     ob.intervals[self.view].data,
                     det_epsilon,
                     cal,
-                    use_accel,
+                    use_accel=use_accel,
                 )
             else:
                 stokes_weights_I(
@@ -263,7 +263,7 @@ class StokesWeights(Operator):
                     ob.detdata[self.weights].data,
                     ob.intervals[self.view].data,
                     cal,
-                    use_accel,
+                    use_accel=use_accel,
                 )
         return
 

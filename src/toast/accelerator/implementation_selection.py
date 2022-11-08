@@ -1,84 +1,64 @@
-from enum import Enum
+from enum import IntEnum
 from functools import wraps
+from ..utils import Logger
 from ..timing import function_timer
 from ..accelerator import use_accel_jax, use_accel_omp
 from .data_localization import function_datamovementtracker
 
 
-class ImplementationType(Enum):
+class ImplementationType(IntEnum):
     """Describes the various implementation kind"""
+    DEFAULT = 0
     COMPILED = 1
     NUMPY = 2
     JAX = 3
 
-
-# implementation used on cpu
-default_cpu_implementationType = ImplementationType.COMPILED
-
-# implementation used on gpu
-default_gpu_implementationType = default_cpu_implementationType
-if use_accel_jax:
-    default_gpu_implementationType = ImplementationType.JAX
-elif use_accel_omp:
-    default_gpu_implementationType = ImplementationType.COMPILED
-
-
-def function_of_implementationType(f_compiled, f_numpy, f_jax, implementationType):
-    """returns one of the three input functions depending on the implementation type requested"""
-    if implementationType == ImplementationType.JAX:
-        return f_jax
-    elif implementationType == ImplementationType.NUMPY:
-        return f_numpy
-    else:
-        return f_compiled
-
-
-def runtime_select_implementation(f_cpu, f_gpu):
+def select_implementation_cpu(f_compiled, f_numpy, f_jax):
     """
-    Returns a function that is f_gpu when called with use_accel=True and f_cpu otherwise
+    Builds a new function that will select an implementation at runtime depending on its 'implementation_type' input.
+    Adds timers on all kernels.
     """
-    # otherwise picks at runtime depending on the use_accel input
-    @wraps(f_gpu)
-    def f(*args, **kwargs):
-        use_accel = kwargs.get("use_accel", args[-1])
+    # functions are timed by default
+    f_compiled = function_timer(f_compiled)
+    f_numpy = function_timer(f_numpy)
+    f_jax = function_timer(f_jax)
+    f_default_cpu = f_compiled # sets the default on CPU
+    cpu_functions = [f_default_cpu, f_compiled, f_numpy, f_jax]
+    # pick a function at runtime
+    @wraps(f_compiled)
+    def f_wrapped(*args, implementation_type=ImplementationType.DEFAULT, **kwargs):
+        # pick a function
+        f = cpu_functions[implementation_type]
+        # returns the result
+        return f(*args, **kwargs)
+    return f_wrapped
+
+def select_implementation(f_compiled, f_numpy, f_jax):
+    """
+    Builds a new function that will select an implementation at runtime depending on its 'use_accel' and 'implementation_type' inputs.
+    Adds timers on all kernels.
+    Adds movement trackers on the GPU kernels.
+    """
+    # functions are timed by default
+    f_compiled = function_timer(f_compiled)
+    f_numpy = function_timer(f_numpy)
+    f_jax = function_timer(f_jax)
+    f_default_cpu = f_compiled # sets the default on CPU
+    cpu_functions = [f_default_cpu, f_compiled, f_numpy, f_jax]
+    # we also track data movement on GPU functions
+    f_compiled_gpu = function_datamovementtracker(f_compiled)
+    f_numpy_gpu = function_datamovementtracker(f_numpy)
+    f_jax_gpu = function_datamovementtracker(f_jax)
+    f_default_gpu = f_jax_gpu if use_accel_jax else f_compiled_gpu # picks a GPU default depending on flags
+    gpu_functions = [f_default_gpu, f_compiled_gpu, f_numpy_gpu, f_jax_gpu]
+    # pick a function at runtime
+    @wraps(f_compiled)
+    def f_wrapped(*args, use_accel=False, implementation_type=ImplementationType.DEFAULT, **kwargs):
+        # pick a function
         if use_accel:
-            return f_gpu(*args, **kwargs)
+            f = gpu_functions[implementation_type]
         else:
-            return f_cpu(*args, **kwargs)
-
-    return f
-
-
-def select_implementation(f_compiled, f_numpy, f_jax, overide_implementationType=None):
-    """
-    picks the implementation to use
-
-    use default_gpu_implementationType when a function is called with use_accel=True and default_cpu_implementationType otherwise
-    if overide_implementationType is set, use that implementation on cpu and gpu
-    """
-    # the implementations that will be used
-    cpu_implementationType = (
-        default_cpu_implementationType
-        if (overide_implementationType is None)
-        else overide_implementationType
-    )
-    gpu_implementationType = (
-        default_gpu_implementationType
-        if (overide_implementationType is None)
-        else overide_implementationType
-    )
-    # the functions that will be used
-    f_cpu = function_of_implementationType(
-        f_compiled, f_numpy, f_jax, cpu_implementationType
-    )
-    f_gpu = function_of_implementationType(
-        f_compiled, f_numpy, f_jax, gpu_implementationType
-    )
-    # wrap the functions in timers and (optional) trackers
-    f_cpu = function_timer(f_cpu)
-    f_gpu = function_datamovementtracker(function_timer(f_gpu))
-    # wrap the function to pick the implementation at runtime
-    print(
-        f"DEBUG: implementation picked in case of use_accel:{gpu_implementationType} ({f_gpu.__name__})"
-    )
-    return runtime_select_implementation(f_cpu, f_gpu)
+            f = cpu_functions[implementation_type]
+        # returns the result
+        return f(*args, use_accel=use_accel, **kwargs)
+    return f_wrapped

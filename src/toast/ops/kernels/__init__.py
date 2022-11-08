@@ -1,4 +1,4 @@
-from ...accelerator.implementation_selection import select_implementation
+from ...accelerator.implementation_selection import select_implementation, select_implementation_cpu
 
 from .compiled_kernels import (
     scan_map as scan_map_compiled,
@@ -63,11 +63,11 @@ pointing_detector = select_implementation(pointing_detector_compiled, pointing_d
 build_noise_weighted = select_implementation(build_noise_weighted_compiled, build_noise_weighted_python, build_noise_weighted_jax)
 noise_weight = select_implementation(noise_weight_compiled, noise_weight_python, noise_weight_jax)
 
-# kernels with no use_accel, default to compiled
-cov_accum_diag_hits = cov_accum_diag_hits_compiled
-cov_accum_diag_invnpp = cov_accum_diag_invnpp_compiled
-filter_polynomial = filter_polynomial_compiled
-filter_poly2D = filter_poly2D_compiled
+# kernels with no use_accel
+cov_accum_diag_hits = select_implementation_cpu(cov_accum_diag_hits_compiled, cov_accum_diag_hits_python, cov_accum_diag_hits_jax)
+cov_accum_diag_invnpp = select_implementation_cpu(cov_accum_diag_invnpp_compiled, cov_accum_diag_invnpp_python, cov_accum_diag_invnpp_jax)
+filter_polynomial = select_implementation_cpu(filter_polynomial_compiled, filter_polynomial_python, filter_polynomial_jax)
+filter_poly2D = select_implementation_cpu(filter_poly2D_compiled, filter_poly2D_python, filter_poly2D_jax)
 
 # kernels that have not been ported
 from ..._libtoast import (
