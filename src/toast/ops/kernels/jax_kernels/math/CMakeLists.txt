@@ -5,6 +5,6 @@ install(FILES
     __init__.py
     qarray.py
     healpix.py
-    DESTINATION ${PYTHON_SITE}/toast/ops/jax_ops/math
+    DESTINATION ${PYTHON_SITE}/toast/ops/kernels/jax_kernels/math
 )
 

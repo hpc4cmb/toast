@@ -12,7 +12,7 @@ import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
-from .._libtoast import subtract_mean, sum_detectors, filter_polynomial, filter_poly2D
+from .kernels import subtract_mean, sum_detectors, filter_polynomial, filter_poly2D
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
@@ -84,10 +84,6 @@ class PolyFilter2D(Operator):
 
     focalplane_key = Unicode(
         None, allow_none=True, help="Which focalplane key to match"
-    )
-
-    use_python = Bool(
-        False, help="If True, use a pure python implementation for testing."
     )
 
     @traitlets.validate("shared_flag_mask")
@@ -323,23 +319,9 @@ class PolyFilter2D(Operator):
 
                 gt.stop("Poly2D:  Accumulate templates")
 
-                if self.use_python:
-                    gt.start("Poly2D:  Solve templates (with python)")
-                    for isample in range(nsample):
-                        for group, igroup in group_ids.items():
-                            good = group_det == igroup
-                            mask = masks[isample, good]
-                            t = templates[good].T.copy() * mask
-                            proj = np.dot(t, signals[isample, good] * mask)
-                            ccinv = np.dot(t, t.T)
-                            coeff[isample, igroup] = np.linalg.lstsq(
-                                ccinv, proj, rcond=None
-                            )[0]
-                    gt.stop("Poly2D:  Solve templates (with python)")
-                else:
-                    gt.start("Poly2D:  Solve templates")
-                    filter_poly2D(det_groups, templates, signals, masks, coeff)
-                    gt.stop("Poly2D:  Solve templates")
+                gt.start("Poly2D:  Solve templates")
+                filter_poly2D(det_groups, templates, signals, masks, coeff)
+                gt.stop("Poly2D:  Solve templates")
 
                 gt.start("Poly2D:  Update detector flags")
 

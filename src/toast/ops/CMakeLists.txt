@@ -65,4 +65,4 @@ install(FILES
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
 
-add_subdirectory(jax_ops)
+add_subdirectory(kernels)

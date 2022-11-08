@@ -6,15 +6,12 @@ import numpy as np
 import traitlets
 
 from .. import qarray as qa
-from .._libtoast import pointing_detector
+from .kernels import pointing_detector
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Int, Unicode, trait_docs
 from ..utils import Logger
 from .operator import Operator
-
-from ..ops.jax_ops import pointing_detector
-
 
 @trait_docs
 class PointingDetectorSimple(Operator):
@@ -60,8 +57,6 @@ class PointingDetectorSimple(Operator):
         help="The output coordinate system ('C', 'E', 'G')",
     )
 
-    use_python = Bool(False, help="If True, use python implementation")
-
     @traitlets.validate("coord_in")
     def _check_coord_in(self, proposal):
         check = proposal["value"]
@@ -91,9 +86,6 @@ class PointingDetectorSimple(Operator):
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
-
-        if self.use_python and use_accel:
-            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         coord_rot = None
         if self.coord_in is None:
@@ -168,26 +160,16 @@ class PointingDetectorSimple(Operator):
 
             # FIXME: handle coordinate transforms here too...
 
-            if self.use_python:
-                self._py_pointing_detector(
-                    fp_quats,
-                    ob.shared[self.boresight].data,
-                    quat_indx,
-                    ob.detdata[self.quats].data,
-                    ob.intervals[self.view].data,
-                    flags,
-                )
-            else:
-                pointing_detector(
-                    fp_quats,
-                    ob.shared[self.boresight].data,
-                    quat_indx,
-                    ob.detdata[self.quats].data,
-                    ob.intervals[self.view].data,
-                    flags,
-                    self.shared_flag_mask,
-                    use_accel,
-                )
+            pointing_detector(
+                fp_quats,
+                ob.shared[self.boresight].data,
+                quat_indx,
+                ob.detdata[self.quats].data,
+                ob.intervals[self.view].data,
+                flags,
+                self.shared_flag_mask,
+                use_accel,
+            )
 
         return
 
@@ -218,22 +200,3 @@ class PointingDetectorSimple(Operator):
     def _supports_accel(self):
         return True
 
-    def _py_pointing_detector(
-        self,
-        fp_quats,
-        bore_data,
-        quat_indx,
-        quat_data,
-        intr_data,
-        flag_data,
-    ):
-        """Internal python implementation for comparison tests."""
-        for idet in range(len(quat_indx)):
-            qidx = quat_indx[idet]
-            for vw in intr_data:
-                samples = slice(vw.first, vw.last + 1, 1)
-                bore = np.array(bore_data[samples])
-                if self.shared_flags is not None:
-                    good = (flag_data[samples] & self.shared_flag_mask) == 0
-                    bore[np.invert(good)] = np.array([0, 0, 0, 1], dtype=np.float64)
-                quat_data[qidx][samples] = qa.mult(bore, fp_quats[idet])

@@ -1,11 +1,12 @@
 from enum import Enum
+from functools import wraps
 from ..timing import function_timer
 from ..accelerator import use_accel_jax, use_accel_omp
+from .data_localization import function_datamovementtracker
 
 
 class ImplementationType(Enum):
     """Describes the various implementation kind"""
-
     COMPILED = 1
     NUMPY = 2
     JAX = 3
@@ -37,6 +38,7 @@ def runtime_select_implementation(f_cpu, f_gpu):
     Returns a function that is f_gpu when called with use_accel=True and f_cpu otherwise
     """
     # otherwise picks at runtime depending on the use_accel input
+    @wraps(f_gpu)
     def f(*args, **kwargs):
         use_accel = kwargs.get("use_accel", args[-1])
         if use_accel:
@@ -72,9 +74,9 @@ def select_implementation(f_compiled, f_numpy, f_jax, overide_implementationType
     f_gpu = function_of_implementationType(
         f_compiled, f_numpy, f_jax, gpu_implementationType
     )
-    # wrap the functions in timers
+    # wrap the functions in timers and (optional) trackers
     f_cpu = function_timer(f_cpu)
-    f_gpu = function_timer(f_gpu)
+    f_gpu = function_datamovementtracker(function_timer(f_gpu))
     # wrap the function to pick the implementation at runtime
     print(
         f"DEBUG: implementation picked in case of use_accel:{gpu_implementationType} ({f_gpu.__name__})"

@@ -9,7 +9,7 @@ except ImportError:
 
 import numpy as np
 
-from .._libtoast import integrate_simpson
+from ..ops.kernels import integrate_simpson
 from ..rng import random, random_multi
 from ..utils import AlignedU64
 from .mpi import MPITestCase

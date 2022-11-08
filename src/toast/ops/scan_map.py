@@ -8,7 +8,7 @@ from astropy import units as u
 
 from ..accelerator import use_accel_jax
 from ..observation import default_values as defaults
-from .jax_ops import scan_map
+from .kernels import scan_map
 from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
 from ..traits import Bool, Int, Unicode, Unit, trait_docs

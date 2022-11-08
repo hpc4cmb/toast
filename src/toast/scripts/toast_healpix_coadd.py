@@ -19,7 +19,7 @@ import numpy as np
 
 import toast
 from toast import PixelData, PixelDistribution
-from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
+from toast.ops.kernels import cov_apply_diag, cov_eigendecompose_diag
 from toast.covariance import covariance_apply, covariance_invert
 from toast.mpi import MPI, Comm, get_world
 from toast.pixels_io_healpix import (

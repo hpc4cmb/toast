@@ -30,7 +30,7 @@ from toast.scripts.benchmarking_utilities import (
     select_case,
 )
 from toast.timing import dump, function_timer, gather_timers
-from toast.jax.data_localization import dataMovementTracker
+from toast.accelerator.data_localization import display_datamovement
 
 
 def parse_arguments():
@@ -271,7 +271,7 @@ def main():
         timer.stop()
 
     # display information on GPU data movement
-    print(dataMovementTracker)
+    display_datamovement()
 
 
 if __name__ == "__main__":

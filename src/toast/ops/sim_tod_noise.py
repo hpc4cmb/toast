@@ -8,7 +8,7 @@ from astropy import units as u
 from scipy import interpolate
 
 from .. import rng
-from .._libtoast import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
+from .kernels import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
 from ..fft import FFTPlanReal1DStore
 from ..observation import default_values as defaults
 from ..timing import function_timer

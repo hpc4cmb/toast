@@ -4,14 +4,14 @@
 
 import os
 
-from ._libtoast import Logger
-from ._libtoast import accel_create as omp_accel_create
-from ._libtoast import accel_delete as omp_accel_delete
-from ._libtoast import accel_enabled as omp_accel_enabled
-from ._libtoast import accel_get_device as omp_accel_get_device
-from ._libtoast import accel_present as omp_accel_present
-from ._libtoast import accel_update_device as omp_accel_update_device
-from ._libtoast import accel_update_host as omp_accel_update_host
+from .._libtoast import Logger
+from .._libtoast import accel_create as omp_accel_create
+from .._libtoast import accel_delete as omp_accel_delete
+from .._libtoast import accel_enabled as omp_accel_enabled
+from .._libtoast import accel_get_device as omp_accel_get_device
+from .._libtoast import accel_present as omp_accel_present
+from .._libtoast import accel_update_device as omp_accel_update_device
+from .._libtoast import accel_update_host as omp_accel_update_host
 
 enable_vals = ["1", "yes", "true"]
 
@@ -31,8 +31,8 @@ if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_va
     try:
         use_accel_jax = True
         import jax
-        from .jax.mutableArray import MutableJaxArray
-        from .jax.intervals import INTERVALS_JAX
+        from ..jax.mutableArray import MutableJaxArray
+        from ..jax.intervals import INTERVALS_JAX
     except Exception:
         # There could be many possible exceptions...
         log = Logger.get()
@@ -98,7 +98,7 @@ def accel_data_present(data):
     elif use_accel_omp:
         return omp_accel_present(data)
     elif use_accel_jax:
-        return isinstance(data, MutableJaxArray)
+        return isinstance(data, MutableJaxArray) or isinstance(data, jax.numpy.ndarray) or isinstance(data, INTERVALS_JAX)
     else:
         log.warning("Accelerator support not enabled, data not present")
         return False

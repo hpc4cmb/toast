@@ -13,7 +13,7 @@ import scipy.io
 import scipy.sparse
 import traitlets
 
-from .._libtoast import (
+from .kernels import (
     accumulate_observation_matrix,
     build_template_covariance,
     expand_matrix,

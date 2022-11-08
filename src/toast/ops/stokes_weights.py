@@ -8,7 +8,7 @@ import traitlets
 from .. import qarray as qa
 from ..healpix import HealpixPixels
 from ..observation import default_values as defaults
-from .jax_ops import stokes_weights_I, stokes_weights_IQU
+from .kernels import stokes_weights_I, stokes_weights_IQU
 from ..pixels import PixelDistribution
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Unicode, trait_docs
@@ -106,8 +106,6 @@ class StokesWeights(Operator):
 
     IAU = Bool(False, help="If True, use the IAU convention rather than COSMO")
 
-    use_python = Bool(False, help="If True, use python implementation")
-
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
         detpointing = proposal["value"]
@@ -150,9 +148,6 @@ class StokesWeights(Operator):
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
-
-        if self.use_python and use_accel:
-            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         # Expand detector pointing
         if self.quats is not None:
@@ -246,45 +241,30 @@ class StokesWeights(Operator):
                 for idet, d in enumerate(dets):
                     det_epsilon[idet] = focalplane[d]["pol_leakage"]
 
-            if self.use_python:
-                hwp_data = None
-                if self.hwp_angle is not None:
+            if self.mode == "IQU":
+                if self.hwp_angle is None:
+                    hwp_data = np.zeros((0,), dtype=np.float64)
+                else:
                     hwp_data = ob.shared[self.hwp_angle].data
-                self._py_stokes_weights(
+                stokes_weights_IQU(
                     quat_indx,
                     ob.detdata[quats_name].data,
                     weight_indx,
                     ob.detdata[self.weights].data,
-                    ob.intervals[self.view].data,
-                    cal,
-                    det_epsilon,
                     hwp_data,
+                    ob.intervals[self.view].data,
+                    det_epsilon,
+                    cal,
+                    use_accel,
                 )
             else:
-                if self.mode == "IQU":
-                    if self.hwp_angle is None:
-                        hwp_data = np.zeros((0,), dtype=np.float64)
-                    else:
-                        hwp_data = ob.shared[self.hwp_angle].data
-                    stokes_weights_IQU(
-                        quat_indx,
-                        ob.detdata[quats_name].data,
-                        weight_indx,
-                        ob.detdata[self.weights].data,
-                        hwp_data,
-                        ob.intervals[self.view].data,
-                        det_epsilon,
-                        cal,
-                        use_accel,
-                    )
-                else:
-                    stokes_weights_I(
-                        weight_indx,
-                        ob.detdata[self.weights].data,
-                        ob.intervals[self.view].data,
-                        cal,
-                        use_accel,
-                    )
+                stokes_weights_I(
+                    weight_indx,
+                    ob.detdata[self.weights].data,
+                    ob.intervals[self.view].data,
+                    cal,
+                    use_accel,
+                )
         return
 
     def _finalize(self, data, **kwargs):
@@ -306,67 +286,3 @@ class StokesWeights(Operator):
 
     def _supports_accel(self):
         return self.detector_pointing.supports_accel()
-
-    def _py_stokes_weights(
-        self,
-        quat_indx,
-        quat_data,
-        weight_indx,
-        weight_data,
-        intr_data,
-        cal,
-        det_epsilon,
-        hwp_data,
-    ):
-        """Internal python implementation for comparison tests."""
-        zaxis = np.array([0, 0, 1], dtype=np.float64)
-        xaxis = np.array([1, 0, 0], dtype=np.float64)
-        if self.mode == "IQU":
-            for idet in range(len(quat_indx)):
-                qidx = quat_indx[idet]
-                widx = weight_indx[idet]
-                eta = (1.0 - det_epsilon[idet]) / (1.0 + det_epsilon[idet])
-                for vw in intr_data:
-                    samples = slice(vw.first, vw.last + 1, 1)
-                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
-                    orient = qa.rotate(quat_data[qidx][samples], xaxis)
-
-                    # The vector orthogonal to the line of sight that is parallel
-                    # to the local meridian.
-                    dir_ang = np.arctan2(dir[:, 1], dir[:, 0])
-                    dir_r = np.sqrt(1.0 - dir[:, 2] * dir[:, 2])
-                    m_z = dir_r
-                    m_x = -dir[:, 2] * np.cos(dir_ang)
-                    m_y = -dir[:, 2] * np.sin(dir_ang)
-
-                    # Compute the rotation angle from the meridian vector to the
-                    # orientation vector.  The direction vector is normal to the plane
-                    # containing these two vectors, so the rotation angle is:
-                    #
-                    # angle = atan2((v_m x v_o) . v_d, v_m . v_o)
-                    # angle = atan2(
-                    #     d_x (m_y o_z - m_z o_y)
-                    #       - d_y (m_x o_z - m_z o_x)
-                    #       + d_z (m_x o_y - m_y o_x),
-                    #     m_x o_x + m_y o_y + m_z o_z
-                    # )
-                    #
-                    ay = (
-                        dir[:, 0] * (m_y * orient[:, 2] - m_z * orient[:, 1])
-                        - dir[:, 1] * (m_x * orient[:, 2] - m_z * orient[:, 0])
-                        + dir[:, 2] * (m_x * orient[:, 1] - m_y * orient[:, 0])
-                    )
-                    ax = m_x * orient[:, 0] + m_y * orient[:, 1] + m_z * orient[:, 2]
-                    ang = np.arctan2(ay, ax)
-                    if hwp_data is not None:
-                        ang += 2.0 * hwp_data[samples]
-                    ang *= 2.0
-                    weight_data[widx][samples, 0] = cal
-                    weight_data[widx][samples, 1] = cal * eta * np.cos(ang)
-                    weight_data[widx][samples, 2] = cal * eta * np.sin(ang)
-        else:
-            for idet in range(len(quat_indx)):
-                widx = weight_indx[idet]
-                for vw in intr_data:
-                    samples = slice(vw.first, vw.last + 1, 1)
-                    weight_data[widx][samples] = cal

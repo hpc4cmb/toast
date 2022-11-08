@@ -18,8 +18,7 @@ from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 
-from .._libtoast import cov_accum_diag_hits, cov_accum_diag_invnpp
-from .jax_ops import build_noise_weighted
+from .kernels import build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
 
 
 @trait_docs
@@ -565,8 +564,6 @@ class BuildNoiseWeighted(Operator):
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
-    use_python = Bool(False, help="If True, use python implementation")
-
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
         check = proposal["value"]
@@ -602,9 +599,6 @@ class BuildNoiseWeighted(Operator):
         # Check that the detector data is set
         if self.det_data is None:
             raise RuntimeError("You must set the det_data trait before calling exec()")
-
-        if self.use_python and use_accel:
-            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         dist = data[self.pixel_dist]
         if data.comm.world_rank == 0:
@@ -722,51 +716,31 @@ class BuildNoiseWeighted(Operator):
             else:
                 shared_flag_data = np.zeros(1, dtype=np.uint8)
 
-            if self.use_python:
-                self._py_build_noise_weighted(
-                    zmap,
-                    pix_indx,
-                    ob.detdata[self.pixels].data,
-                    weight_indx,
-                    ob.detdata[self.weights].data.reshape(
-                        (n_weight_dets, ob.n_local_samples, -1)
-                    ),
-                    data_indx,
-                    ob.detdata[self.det_data].data,
-                    flag_indx,
-                    flag_data,
-                    self.det_flag_mask,
-                    ob.intervals[self.view].data,
-                    shared_flag_data,
-                    self.shared_flag_mask,
-                    detweights,
-                )
-            else:
-                # uses a separate variable in case the reshaping copies the data
-                zmap_data = zmap.data.reshape(
-                    (zmap.distribution.n_local_submap, -1, weight_nnz)
-                )
-                build_noise_weighted(
-                    zmap.distribution.global_submap_to_local,
-                    zmap_data,
-                    pix_indx,
-                    ob.detdata[self.pixels].data,
-                    weight_indx,
-                    ob.detdata[self.weights].data.reshape(
-                        (n_weight_dets, ob.n_local_samples, -1)
-                    ),
-                    data_indx,
-                    ob.detdata[self.det_data].data,
-                    flag_indx,
-                    flag_data,
-                    detweights,
-                    self.det_flag_mask,
-                    ob.intervals[self.view].data,
-                    shared_flag_data,
-                    self.shared_flag_mask,
-                    use_accel,
-                )
-                zmap.data = zmap_data.reshape(zmap.data.shape)
+            # uses a separate variable in case the reshaping copies the data
+            zmap_data = zmap.data.reshape(
+                (zmap.distribution.n_local_submap, -1, weight_nnz)
+            )
+            build_noise_weighted(
+                zmap.distribution.global_submap_to_local,
+                zmap_data,
+                pix_indx,
+                ob.detdata[self.pixels].data,
+                weight_indx,
+                ob.detdata[self.weights].data.reshape(
+                    (n_weight_dets, ob.n_local_samples, -1)
+                ),
+                data_indx,
+                ob.detdata[self.det_data].data,
+                flag_indx,
+                flag_data,
+                detweights,
+                self.det_flag_mask,
+                ob.intervals[self.view].data,
+                shared_flag_data,
+                self.shared_flag_mask,
+                use_accel,
+            )
+            zmap.data = zmap_data.reshape(zmap.data.shape)
         return
 
     def _finalize(self, data, use_acc=False, **kwargs):
@@ -832,56 +806,6 @@ class BuildNoiseWeighted(Operator):
 
     def _supports_accel(self):
         return True
-
-    def _py_build_noise_weighted(
-        self,
-        zmap,
-        pixel_indx,
-        pixel_data,
-        weight_indx,
-        weight_data,
-        det_indx,
-        det_data,
-        flag_indx,
-        flag_data,
-        flag_mask,
-        intr_data,
-        shared_flags,
-        shared_mask,
-        det_scale,
-    ):
-        """Internal python implementation for comparison tests."""
-        global2local = zmap.distribution.global_submap_to_local.array()
-        npix_submap = zmap.distribution.n_pix_submap
-        nnz = zmap.n_value
-        for idet in range(len(det_indx)):
-            didx = det_indx[idet]
-            pidx = pixel_indx[idet]
-            widx = weight_indx[idet]
-            fidx = flag_indx[idet]
-            for vw in intr_data:
-                samples = slice(vw.first, vw.last + 1, 1)
-                good = np.logical_and(
-                    ((flag_data[fidx][samples] & flag_mask) == 0),
-                    ((shared_flags[samples] & shared_mask) == 0),
-                )
-                pixel_buffer = pixel_data[pidx][samples]
-                det_buffer = det_data[didx][samples]
-                weight_buffer = weight_data[widx][samples]
-                global_submap = pixel_buffer[good] // npix_submap
-                submap_pix = pixel_buffer[good] - global_submap * npix_submap
-                local_submap = np.array(
-                    [global2local[x] for x in global_submap], dtype=np.int64
-                )
-                tempdata = np.multiply(
-                    weight_buffer[good],
-                    np.multiply(det_scale[idet], det_buffer[good])[:, np.newaxis],
-                )
-                np.add.at(
-                    zmap.data,
-                    (local_submap, submap_pix),
-                    tempdata,
-                )
 
 
 @trait_docs

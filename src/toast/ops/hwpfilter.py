@@ -8,7 +8,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from .._libtoast import add_templates, bin_invcov, bin_proj, legendre, fourier
+from .kernels import add_templates, bin_invcov, bin_proj, legendre, fourier
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults

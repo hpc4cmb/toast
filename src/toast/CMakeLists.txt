@@ -141,7 +141,6 @@ install(FILES
     schedule_sim_ground.py
     schedule_sim_satellite.py
     widgets.py
-    accelerator.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )
@@ -155,6 +154,7 @@ install(DIRECTORY
 
 # Process the sub directories
 add_subdirectory(io)
+add_subdirectory(accelerator)
 add_subdirectory(tests)
 add_subdirectory(jax)
 add_subdirectory(ops)

@@ -11,7 +11,7 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
-from .jax_ops import noise_weight
+from .kernels import noise_weight
 
 
 @trait_docs

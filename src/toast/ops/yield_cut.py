@@ -10,7 +10,7 @@ from astropy import units as u
 
 from .. import qarray as qa
 from .. import rng
-from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
+from .kernels import add_templates, bin_invcov, bin_proj, legendre
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
