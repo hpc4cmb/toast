@@ -53,12 +53,14 @@ def select_implementation(f_compiled, f_numpy, f_jax):
     gpu_functions = [f_default_gpu, f_compiled_gpu, f_numpy_gpu, f_jax_gpu]
     # pick a function at runtime
     @wraps(f_compiled)
-    def f_wrapped(*args, use_accel=False, implementation_type=ImplementationType.DEFAULT, **kwargs):
+    def f_wrapped(*args, implementation_type=ImplementationType.DEFAULT, **kwargs):
+        # extracts the use_accel input
+        use_accel = kwargs.get('use_accel', args[-1])
         # pick a function
         if use_accel:
             f = gpu_functions[implementation_type]
         else:
             f = cpu_functions[implementation_type]
         # returns the result
-        return f(*args, use_accel=use_accel, **kwargs)
+        return f(*args, **kwargs)
     return f_wrapped

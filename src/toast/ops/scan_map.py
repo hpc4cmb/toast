@@ -141,7 +141,7 @@ class ScanMap(Operator):
                 data_scale,
                 self.zero,
                 self.subtract,
-                use_accel=use_accel,
+                use_accel,
             )
 
         return

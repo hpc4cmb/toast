@@ -266,7 +266,7 @@ class PixelsHealpix(Operator):
                 self._n_pix_submap,
                 self.nside,
                 self.nest,
-                use_accel=use_accel
+                use_accel
             )
 
             if self._local_submaps is not None:

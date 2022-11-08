@@ -168,7 +168,7 @@ class PointingDetectorSimple(Operator):
                 ob.intervals[self.view].data,
                 flags,
                 self.shared_flag_mask,
-                use_accel=use_accel,
+                use_accel,
             )
 
         return
