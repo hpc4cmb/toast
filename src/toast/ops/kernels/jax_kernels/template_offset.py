@@ -7,6 +7,8 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
+from ....utils import Logger
+
 from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals
 
@@ -45,6 +47,10 @@ def template_offset_add_to_signal_intervals(
     Returns:
         det_data
     """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"template_offset_add_to_signal: jit-compiling.")
+
     # split data to separate the final amplitude from the rest
     # as it is the only one that does not have step_length samples
     nb_intervals = interval_starts.size
@@ -191,6 +197,10 @@ def template_offset_project_signal_intervals(
     Returns:
         amplitudes
     """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"template_offset_project_signal: jit-compiling.")
+
     # gets interval information
     nb_amplitudes = offsets_max_length
     nb_intervals = interval_starts.size

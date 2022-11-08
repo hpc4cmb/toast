@@ -2,11 +2,11 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-
 import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
+
+from ....utils import Logger
 
 from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
@@ -56,6 +56,10 @@ def build_noise_weighted_interval(
     Returns:
         zmap
     """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"build_noise_weighted: jit-compiling.")
+
     # should we use flags?
     n_samp = pixels.shape[1]
     use_det_flags = det_flags.shape[1] == n_samp

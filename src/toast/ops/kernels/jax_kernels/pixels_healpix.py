@@ -2,10 +2,10 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-
 import jax
 import jax.numpy as jnp
+
+from ....utils import Logger
 
 from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
@@ -94,6 +94,10 @@ def pixels_healpix_interval(
     Returns:
         (pixels, hit_submaps)
     """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"pixels_healpix: jit-compiling.")
+
     # flag
     n_samp = pixels.shape[1]
     use_flags = (flag_mask != 0) and (flags.size == n_samp)

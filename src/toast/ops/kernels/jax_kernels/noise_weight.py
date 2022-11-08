@@ -5,6 +5,8 @@
 import jax
 import jax.numpy as jnp
 
+from ....utils import Logger
+
 from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals
 
@@ -31,6 +33,10 @@ def noise_weight_interval(
     Returns:
         det_data
     """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"noise_weight: jit-compiling.")
+
     # turns detector_weights into a jax array
     detector_weights = jnp.array(detector_weights)
 

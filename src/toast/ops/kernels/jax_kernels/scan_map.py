@@ -2,10 +2,10 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-
 import jax
 import jax.numpy as jnp
+
+from ....utils import Logger
 
 from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
@@ -142,6 +142,10 @@ def scan_map_interval(
     Returns:
         det_data (array, float): size ???*n_samp
     """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"scan_map: jit-compiling.")
+
     # turns mapdata into a numpy array of shape ?*npix_submap*nmap
     mapdata = jnp.reshape(mapdata, newshape=(-1, npix_submap, nmap))
 

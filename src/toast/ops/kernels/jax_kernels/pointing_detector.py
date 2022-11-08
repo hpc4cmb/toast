@@ -6,6 +6,8 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
+from ....utils import Logger
+
 from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from .math import qarray
@@ -71,6 +73,10 @@ def pointing_detector_interval(
     Returns:
         quats
     """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"pointing_detector: jit-compiling.")
+
     # extract interval slices
     intervals = JaxIntervals(
         interval_starts, interval_ends + 1, intervals_max_length

@@ -2,11 +2,11 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-
 import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
+
+from ....utils import Logger
 
 from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
@@ -95,6 +95,10 @@ def stokes_weights_IQU_interval(
     Returns:
         weights
     """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"stokes_weights_IQU: jit-compiling.")
+
     # extract interval slices
     intervals = JaxIntervals(
         interval_starts, interval_ends + 1, intervals_max_length
