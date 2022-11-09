@@ -120,7 +120,7 @@ class TemplateOffsetTest(MPITestCase):
             times=defaults.times,
             noise_model=noise_model.noise_model,
             step_time=step_seconds * u.second,
-            kernel_implementation = ImplementationType.NUMPY
+            kernel_implementation=ImplementationType.NUMPY,
         )
 
         # Set the data

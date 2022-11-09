@@ -5,7 +5,6 @@
 import numpy as np
 
 
-
 def cov_accum_diag_hits(nsub, nsubpix, nnz, submap, subpix, hits):
     """
     Accumulate hit map.
@@ -35,9 +34,7 @@ def cov_accum_diag_hits(nsub, nsubpix, nnz, submap, subpix, hits):
             hits[isubmap, ipix] += 1
 
 
-def cov_accum_diag_invnpp(
-    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp
-):
+def cov_accum_diag_invnpp(nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp):
     """
     Accumulate block diagonal noise covariance.
     This uses a pointing matrix to accumulate the local pieces

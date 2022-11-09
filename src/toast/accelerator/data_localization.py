@@ -4,7 +4,7 @@ from functools import wraps
 from ..utils import Logger
 from ..accelerator import accel_data_present
 
-#--------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 # RECORDING CLASS
 
 use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (
@@ -14,14 +14,16 @@ use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (
 Assert is used only if `TOAST_LOGLEVEL` is set to `DEBUG`.
 """
 
+
 def bytes_of_data(data):
     """
     Returns the size of an input in bytes.
     """
-    if hasattr(data, 'nbytes'):
+    if hasattr(data, "nbytes"):
         return data.nbytes
     else:
-        return sys.getsizeof(data)        
+        return sys.getsizeof(data)
+
 
 class DataMovementRecord:
     """
@@ -61,6 +63,7 @@ class DataMovementRecord:
             some_gpu_input = some_gpu_input or gpu_data
         return some_gpu_input
 
+
 class DataMovementTracker:
     """
     data structure used to track data movement to and from the GPU for several functions
@@ -77,13 +80,14 @@ class DataMovementTracker:
         this is useful to monitor data movement on a per function basis
         """
         # records the data size and movement
-        if display: print(f"DATA MOVEMENT ({functionname}):")
+        if display:
+            print(f"DATA MOVEMENT ({functionname}):")
         some_gpu_input = self.records[functionname].add(args, kwargs, display)
         # sends a warning if no GPU input has been detected
         if not some_gpu_input:
             msg = f"function '{functionname}' has NO input on GPU!"
             log = Logger.get()
-            log.warning(msg) 
+            log.warning(msg)
 
     def __str__(self):
         """
@@ -99,22 +103,27 @@ class DataMovementTracker:
         result += "-----"
         return result
 
-#--------------------------------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------------------------------
 # OPERATIONS
 
 dataMovementTracker = DataMovementTracker()
 """global variable used to track data movement to and from the GPU"""
+
 
 def function_datamovementtracker(f):
     """
     Wraps a function to keep track of movement to and from the GPU
     NOTE: the recording is only done if we are in DEBUG or VERBOSE mode
     """
+
     @wraps(f)
     def f_result(*args, **kwargs):
         dataMovementTracker.add(f.__name__, args, kwargs)
         return f(*args, **kwargs)
+
     return f_result if use_debug_assert else f
+
 
 def display_datamovement():
     """Displays all recorded data movement so far"""

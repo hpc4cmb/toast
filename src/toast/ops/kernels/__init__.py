@@ -1,4 +1,8 @@
-from .implementation_selection import ImplementationType, select_implementation, select_implementation_cpu
+from .implementation_selection import (
+    ImplementationType,
+    select_implementation,
+    select_implementation_cpu,
+)
 
 from .compiled_kernels import (
     scan_map as scan_map_compiled,
@@ -53,39 +57,73 @@ from .jax_kernels import (
 
 # kernels with use_accel
 scan_map = select_implementation(scan_map_compiled, scan_map_python, scan_map_jax)
-pixels_healpix = select_implementation(pixels_healpix_compiled, pixels_healpix_python, pixels_healpix_jax)
-stokes_weights_I = select_implementation(stokes_weights_I_compiled, stokes_weights_I_python, stokes_weights_I_jax)
-stokes_weights_IQU = select_implementation(stokes_weights_IQU_compiled, stokes_weights_IQU_python, stokes_weights_IQU_jax)
-template_offset_add_to_signal = select_implementation(template_offset_add_to_signal_compiled, template_offset_add_to_signal_python, template_offset_add_to_signal_jax)
-template_offset_project_signal = select_implementation(template_offset_project_signal_compiled, template_offset_project_signal_python, template_offset_project_signal_jax)
-template_offset_apply_diag_precond = select_implementation(template_offset_apply_diag_precond_compiled, template_offset_apply_diag_precond_python, template_offset_apply_diag_precond_jax)
-pointing_detector = select_implementation(pointing_detector_compiled, pointing_detector_python, pointing_detector_jax)
-build_noise_weighted = select_implementation(build_noise_weighted_compiled, build_noise_weighted_python, build_noise_weighted_jax)
-noise_weight = select_implementation(noise_weight_compiled, noise_weight_python, noise_weight_jax)
+pixels_healpix = select_implementation(
+    pixels_healpix_compiled, pixels_healpix_python, pixels_healpix_jax
+)
+stokes_weights_I = select_implementation(
+    stokes_weights_I_compiled, stokes_weights_I_python, stokes_weights_I_jax
+)
+stokes_weights_IQU = select_implementation(
+    stokes_weights_IQU_compiled, stokes_weights_IQU_python, stokes_weights_IQU_jax
+)
+template_offset_add_to_signal = select_implementation(
+    template_offset_add_to_signal_compiled,
+    template_offset_add_to_signal_python,
+    template_offset_add_to_signal_jax,
+)
+template_offset_project_signal = select_implementation(
+    template_offset_project_signal_compiled,
+    template_offset_project_signal_python,
+    template_offset_project_signal_jax,
+)
+template_offset_apply_diag_precond = select_implementation(
+    template_offset_apply_diag_precond_compiled,
+    template_offset_apply_diag_precond_python,
+    template_offset_apply_diag_precond_jax,
+)
+pointing_detector = select_implementation(
+    pointing_detector_compiled, pointing_detector_python, pointing_detector_jax
+)
+build_noise_weighted = select_implementation(
+    build_noise_weighted_compiled, build_noise_weighted_python, build_noise_weighted_jax
+)
+noise_weight = select_implementation(
+    noise_weight_compiled, noise_weight_python, noise_weight_jax
+)
 
 # kernels with no use_accel
-cov_accum_diag_hits = select_implementation_cpu(cov_accum_diag_hits_compiled, cov_accum_diag_hits_python, cov_accum_diag_hits_jax)
-cov_accum_diag_invnpp = select_implementation_cpu(cov_accum_diag_invnpp_compiled, cov_accum_diag_invnpp_python, cov_accum_diag_invnpp_jax)
-filter_polynomial = select_implementation_cpu(filter_polynomial_compiled, filter_polynomial_python, filter_polynomial_jax)
-filter_poly2D = select_implementation_cpu(filter_poly2D_compiled, filter_poly2D_python, filter_poly2D_jax)
+cov_accum_diag_hits = select_implementation_cpu(
+    cov_accum_diag_hits_compiled, cov_accum_diag_hits_python, cov_accum_diag_hits_jax
+)
+cov_accum_diag_invnpp = select_implementation_cpu(
+    cov_accum_diag_invnpp_compiled,
+    cov_accum_diag_invnpp_python,
+    cov_accum_diag_invnpp_jax,
+)
+filter_polynomial = select_implementation_cpu(
+    filter_polynomial_compiled, filter_polynomial_python, filter_polynomial_jax
+)
+filter_poly2D = select_implementation_cpu(
+    filter_poly2D_compiled, filter_poly2D_python, filter_poly2D_jax
+)
 
 # kernels that have not been ported
 from ..._libtoast import (
-    add_templates, 
-    bin_invcov, 
-    bin_proj, 
+    add_templates,
+    bin_invcov,
+    bin_proj,
     legendre,
     fourier,
     accumulate_observation_matrix,
     build_template_covariance,
     expand_matrix,
-    fod_autosums, 
+    fod_autosums,
     fod_crosssums,
-    subtract_mean, 
+    subtract_mean,
     sum_detectors,
-    tod_sim_noise_timestream, 
+    tod_sim_noise_timestream,
     tod_sim_noise_timestream_batch,
     integrate_simpson,
-    cov_apply_diag, 
+    cov_apply_diag,
     cov_eigendecompose_diag,
 )

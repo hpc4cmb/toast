@@ -5,6 +5,7 @@
 import numpy as np
 from .math import qarray
 
+
 def pointing_detector_inner(flag, boresight, focalplane, mask):
     """
     Process a single detector and a single sample inside an interval.
@@ -62,6 +63,7 @@ def pointing_detector(
                     focalplane[idet, :],
                     shared_flag_mask,
                 )
+
 
 def _py_pointing_detector(
     self,

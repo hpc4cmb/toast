@@ -7,6 +7,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
+
 def filter_polynomial_interval(flags_interval, signals_interval, order):
     """
     Process a single interval
@@ -113,6 +114,7 @@ def filter_polynomial(order, flags, signals_list, starts, stops):
     # puts new signals back into the list
     for isignal, signal in enumerate(signals_list):
         signal[:] = signals[:, isignal]
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

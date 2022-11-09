@@ -229,5 +229,6 @@ def pixels_healpix(
     pixels[:] = new_pixels
     hit_submaps[:] = new_hit_submaps
 
+
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix", "ops_sim_ground", "ops_sim_satellite", "ops_demodulate");'

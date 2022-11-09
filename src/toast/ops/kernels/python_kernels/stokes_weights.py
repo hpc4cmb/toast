@@ -6,6 +6,7 @@ import numpy as np
 
 from .math import qarray
 
+
 def stokes_weights_IQU_inner(eps, cal, pin, hwpang, weights):
     """
     Compute the Stokes weights for one detector and the IQU mode.
@@ -110,20 +111,21 @@ def stokes_weights_I(weight_index, weights, intervals, cal, use_accel):
         interval_end = interval.last + 1
         weights[weight_index, interval_start:interval_end] = cal
 
+
 # hwp_data = None
 # if self.hwp_angle is not None:
 #   hwp_data = ob.shared[self.hwp_angle].data
 def _py_stokes_weights(
-        self,
-        quat_indx,
-        quat_data,
-        weight_indx,
-        weight_data,
-        intr_data,
-        cal,
-        det_epsilon,
-        hwp_data,
-    ):
+    self,
+    quat_indx,
+    quat_data,
+    weight_indx,
+    weight_data,
+    intr_data,
+    cal,
+    det_epsilon,
+    hwp_data,
+):
     """Internal python implementation for comparison tests."""
     zaxis = np.array([0, 0, 1], dtype=np.float64)
     xaxis = np.array([1, 0, 0], dtype=np.float64)

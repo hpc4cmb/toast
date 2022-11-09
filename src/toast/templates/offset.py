@@ -69,7 +69,9 @@ class Offset(Template):
     precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("precond_width")
@@ -518,7 +520,7 @@ class Offset(Template):
                 ob.detdata[self.det_data].data,
                 ob.intervals[self.view].data,
                 self.use_accel,
-                implementation_type=self.kernel_implementation
+                implementation_type=self.kernel_implementation,
             )
 
             amp_offset += np.sum(n_amp_views)

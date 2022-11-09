@@ -18,7 +18,12 @@ from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 
-from .kernels import ImplementationType, build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
+from .kernels import (
+    ImplementationType,
+    build_noise_weighted,
+    cov_accum_diag_hits,
+    cov_accum_diag_invnpp,
+)
 
 
 @trait_docs
@@ -81,7 +86,9 @@ class BuildHitMap(Operator):
     )
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("det_flag_mask")
@@ -292,7 +299,9 @@ class BuildInverseCovariance(Operator):
     )
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("det_flag_mask")
@@ -575,7 +584,9 @@ class BuildNoiseWeighted(Operator):
     )
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("det_flag_mask")

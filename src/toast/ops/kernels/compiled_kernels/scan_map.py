@@ -8,6 +8,7 @@ from ...._libtoast import (
     scan_map_float32 as scan_map_interval_float32_compiled,
 )
 
+
 def scan_map(
     mapdata,
     nmap,
@@ -115,6 +116,7 @@ def scan_map(
                 det_data[d_index, interval_start:interval_end] -= maptod
             else:
                 det_data[d_index, interval_start:interval_end] += maptod
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve", "ops_scan_map")'

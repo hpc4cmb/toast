@@ -55,14 +55,10 @@ def cov_accum_diag_hits(nsub, nsubpix, nnz, submap, subpix, hits):
     submap_input = MutableJaxArray.to_array(submap)
     subpix_input = MutableJaxArray.to_array(subpix)
     hits_input = MutableJaxArray.to_array(hits)
-    hits[:] = cov_accum_diag_hits_inner(
-        nsubpix, submap_input, subpix_input, hits_input
-    )
+    hits[:] = cov_accum_diag_hits_inner(nsubpix, submap_input, subpix_input, hits_input)
 
 
-def cov_accum_diag_invnpp_inner(
-    nsubpix, nnz, submap, subpix, weights, scale, invnpp
-):
+def cov_accum_diag_invnpp_inner(nsubpix, nnz, submap, subpix, weights, scale, invnpp):
     """
     Args:
         nsubpix (int):  The number of pixels in each submap.
@@ -115,9 +111,7 @@ cov_accum_diag_invnpp_inner = jax.jit(
 )
 
 
-def cov_accum_diag_invnpp(
-    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp
-):
+def cov_accum_diag_invnpp(nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp):
     """
     Accumulate block diagonal noise covariance.
     This uses a pointing matrix to accumulate the local pieces
@@ -148,6 +142,7 @@ def cov_accum_diag_invnpp(
     invnpp[:] = cov_accum_diag_invnpp_inner(
         nsubpix, nnz, submap_input, subpix_input, weights_input, scale, invnpp_input
     )
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("covariance");'

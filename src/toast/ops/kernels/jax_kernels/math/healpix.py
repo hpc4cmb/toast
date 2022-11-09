@@ -9,6 +9,7 @@ import jax.numpy as jnp
 TWOINVPI = 0.63661977236758134308
 MACHINE_EPSILON = np.finfo(np.float).eps
 
+
 class HPIX_JAX:
     """
     JAX compatible HPIX structure

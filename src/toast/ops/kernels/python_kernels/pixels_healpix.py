@@ -91,50 +91,49 @@ def pixels_healpix(
                     pixels[p_index, isamp] = -1
                 else:
                     # computes pixel value and saves it
-                    pixel = pixels_healpix_inner(
-                        hpix, quats[q_index, isamp, :], nest
-                    )
+                    pixel = pixels_healpix_inner(hpix, quats[q_index, isamp, :], nest)
                     pixels[p_index, isamp] = pixel
                     # modifies submap in place
                     sub_map = pixel // n_pix_submap
                     hit_submaps[sub_map] = 1
 
+
 def _py_pixels_healpix(
-        self,
-        quat_indx,
-        quat_data,
-        flag_data,
-        flag_mask,
-        pix_indx,
-        pix_data,
-        intr_data,
-        hit_submaps,
-    ):
-        """Internal python implementation for comparison tests."""
-        zaxis = np.array([0, 0, 1], dtype=np.float64)
-        if self.nest:
-            for idet in range(len(quat_indx)):
-                qidx = quat_indx[idet]
-                pidx = pix_indx[idet]
-                for vw in intr_data:
-                    samples = slice(vw.first, vw.last + 1, 1)
-                    dir = qarray.rotate_one_one.rotate(quat_data[qidx][samples], zaxis)
-                    pix_data[pidx][samples] = self.hpix.vec2nest(dir)
-                    good = (flag_data[samples] & flag_mask) == 0
-                    bad = np.logical_not(good)
-                    sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
-                    hit_submaps[sub_maps] = 1
-                    pix_data[pidx][samples][bad] = -1
-        else:
-            for idet in range(len(quat_indx)):
-                qidx = quat_indx[idet]
-                pidx = pix_indx[idet]
-                for vw in intr_data:
-                    samples = slice(vw.first, vw.last + 1, 1)
-                    dir = qarray.rotate_one_one.rotate(quat_data[qidx][samples], zaxis)
-                    pix_data[pidx][samples] = self.hpix.vec2ring(dir)
-                    good = (flag_data[samples] & flag_mask) == 0
-                    bad = np.logical_not(good)
-                    sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
-                    hit_submaps[sub_maps] = 1
-                    pix_data[pidx][samples][bad] = -1
+    self,
+    quat_indx,
+    quat_data,
+    flag_data,
+    flag_mask,
+    pix_indx,
+    pix_data,
+    intr_data,
+    hit_submaps,
+):
+    """Internal python implementation for comparison tests."""
+    zaxis = np.array([0, 0, 1], dtype=np.float64)
+    if self.nest:
+        for idet in range(len(quat_indx)):
+            qidx = quat_indx[idet]
+            pidx = pix_indx[idet]
+            for vw in intr_data:
+                samples = slice(vw.first, vw.last + 1, 1)
+                dir = qarray.rotate_one_one.rotate(quat_data[qidx][samples], zaxis)
+                pix_data[pidx][samples] = self.hpix.vec2nest(dir)
+                good = (flag_data[samples] & flag_mask) == 0
+                bad = np.logical_not(good)
+                sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
+                hit_submaps[sub_maps] = 1
+                pix_data[pidx][samples][bad] = -1
+    else:
+        for idet in range(len(quat_indx)):
+            qidx = quat_indx[idet]
+            pidx = pix_indx[idet]
+            for vw in intr_data:
+                samples = slice(vw.first, vw.last + 1, 1)
+                dir = qarray.rotate_one_one.rotate(quat_data[qidx][samples], zaxis)
+                pix_data[pidx][samples] = self.hpix.vec2ring(dir)
+                good = (flag_data[samples] & flag_mask) == 0
+                bad = np.logical_not(good)
+                sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
+                hit_submaps[sub_maps] = 1
+                pix_data[pidx][samples][bad] = -1

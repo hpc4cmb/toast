@@ -353,5 +353,6 @@ def template_offset_apply_diag_precond(
     # runs the computation
     amplitudes_out[:] = amplitudes_in * offset_var
 
+
 # To test:
 # python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker")'

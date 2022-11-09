@@ -7,6 +7,7 @@ import numpy as np
 TWOINVPI = 0.63661977236758134308
 MACHINE_EPSILON = np.finfo(np.float).eps
 
+
 class HPIX_PYTHON:
     """
     Encapsulate the information from a hpix structure in a JAX compatible way

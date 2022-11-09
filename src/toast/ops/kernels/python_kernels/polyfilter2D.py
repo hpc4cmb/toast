@@ -4,6 +4,7 @@
 
 import numpy as np
 
+
 def filter_poly2D(det_groups, templates, signals, masks, coeff):
     """
     Solves for 2D polynomial coefficients at each sample.
@@ -45,6 +46,7 @@ def filter_poly2D(det_groups, templates, signals, masks, coeff):
             )
             coeff[isamp, igroup, :] = coeff_sample_group
 
+
 def _py_filterpoly2D():
     gt.start("Poly2D:  Solve templates (with python)")
     for isample in range(nsample):
@@ -54,7 +56,5 @@ def _py_filterpoly2D():
             t = templates[good].T.copy() * mask
             proj = np.dot(t, signals[isample, good] * mask)
             ccinv = np.dot(t, t.T)
-            coeff[isample, igroup] = np.linalg.lstsq(
-                ccinv, proj, rcond=None
-            )[0]
+            coeff[isample, igroup] = np.linalg.lstsq(ccinv, proj, rcond=None)[0]
     gt.stop("Poly2D:  Solve templates (with python)")

@@ -98,7 +98,11 @@ def accel_data_present(data):
     elif use_accel_omp:
         return omp_accel_present(data)
     elif use_accel_jax:
-        return isinstance(data, MutableJaxArray) or isinstance(data, jax.numpy.ndarray) or isinstance(data, INTERVALS_JAX)
+        return (
+            isinstance(data, MutableJaxArray)
+            or isinstance(data, jax.numpy.ndarray)
+            or isinstance(data, INTERVALS_JAX)
+        )
     else:
         log.warning("Accelerator support not enabled, data not present")
         return False

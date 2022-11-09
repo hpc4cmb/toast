@@ -68,7 +68,9 @@ class PixelsHealpix(Operator):
     single_precision = Bool(False, help="If True, use 32bit int in output")
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("detector_pointing")
@@ -271,7 +273,7 @@ class PixelsHealpix(Operator):
                 self.nside,
                 self.nest,
                 use_accel,
-                implementation_type=self.kernel_implementation
+                implementation_type=self.kernel_implementation,
             )
 
             if self._local_submaps is not None:

@@ -13,6 +13,7 @@ from ..traits import Bool, UseEnum, Int, Unicode, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
+
 @trait_docs
 class PointingDetectorSimple(Operator):
     """Operator which translates boresight pointing into detector frame"""
@@ -58,7 +59,9 @@ class PointingDetectorSimple(Operator):
     )
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("coord_in")
@@ -204,4 +207,3 @@ class PointingDetectorSimple(Operator):
 
     def _supports_accel(self):
         return True
-

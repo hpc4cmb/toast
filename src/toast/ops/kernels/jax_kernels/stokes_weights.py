@@ -13,7 +13,6 @@ from ....jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
 from .math import qarray
 
 
-
 def stokes_weights_IQU_inner(eps, cal, pin, hwpang):
     """
     Compute the Stokes weights for one detector.
@@ -199,6 +198,7 @@ def stokes_weights_I(weight_index, weights, intervals, cal, use_accel):
         interval_start = interval.first
         interval_end = interval.last + 1
         weights[weight_index, interval_start:interval_end] = cal
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_tod_dipole")'

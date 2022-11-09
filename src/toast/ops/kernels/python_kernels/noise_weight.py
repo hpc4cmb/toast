@@ -4,9 +4,8 @@
 
 import numpy as np
 
-def noise_weight(
-    det_data, det_data_index, intervals, detector_weights, use_accel
-):
+
+def noise_weight(det_data, det_data_index, intervals, detector_weights, use_accel):
     """
     multiplies det_data by the weighs in detector_weights
 

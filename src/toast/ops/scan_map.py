@@ -63,7 +63,9 @@ class ScanMap(Operator):
     zero = Bool(False, help="If True, zero the data before accumulating / subtracting")
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     def __init__(self, **kwargs):
@@ -328,7 +330,9 @@ class ScanScale(Operator):
     )
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     def __init__(self, **kwargs):

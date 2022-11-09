@@ -153,5 +153,6 @@ def pointing_detector(
         intervals_max_length,
     )
 
+
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix", "ops_demodulate")'

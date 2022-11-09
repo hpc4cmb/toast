@@ -11,7 +11,6 @@ from jax.experimental.maps import xmap as jax_xmap
 from ....jax.mutableArray import MutableJaxArray
 
 
-
 def filter_poly2D_sample_group(
     igroup, det_groups, templates, signals_sample, masks_sample
 ):
@@ -107,6 +106,7 @@ def filter_poly2D(det_groups, templates, signals, masks, coeff):
     coeff[:] = filter_poly2D_coeffs(
         ngroup, det_groups_input, templates_input, signals_input, masks_input
     )
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

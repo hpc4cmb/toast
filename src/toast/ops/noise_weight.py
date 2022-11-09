@@ -40,7 +40,9 @@ class NoiseWeight(Operator):
     )
 
     kernel_implementation = UseEnum(
-        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     def __init__(self, **kwargs):
@@ -82,7 +84,12 @@ class NoiseWeight(Operator):
             det_data = ob.detdata[self.det_data].data
             det_data_indx = ob.detdata[self.det_data].indices(dets)
             noise_weight(
-                det_data, det_data_indx, intervals, detector_weights, use_accel, implementation_type=self.kernel_implementation
+                det_data,
+                det_data_indx,
+                intervals,
+                detector_weights,
+                use_accel,
+                implementation_type=self.kernel_implementation,
             )
 
             # updates the unit for the output

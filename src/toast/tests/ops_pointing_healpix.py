@@ -207,6 +207,7 @@ class PointingHealpixTest(MPITestCase):
         self.assertFalse(failed)
         return
 
+
 def test_hpix_simple(self):
     # Create a fake satellite data set for testing
     data = create_satellite_data(self.comm)
@@ -227,9 +228,7 @@ def test_hpix_simple(self):
     pixels.apply(data)
 
     for ob in data.obs:
-        np.testing.assert_array_equal(
-            ob.detdata[defaults.pixels], ob.detdata["pypix"]
-        )
+        np.testing.assert_array_equal(ob.detdata[defaults.pixels], ob.detdata["pypix"])
 
     rank = 0
     if self.comm is not None:

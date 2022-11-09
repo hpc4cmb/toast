@@ -48,6 +48,7 @@ def rotate_one_one(q, v_in):
 
     return jnp.array([v_out_0, v_out_1, v_out_2])
 
+
 # def mult_one_one(p, q):
 #    """
 #    compose two quaternions

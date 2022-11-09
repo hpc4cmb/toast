@@ -117,52 +117,53 @@ def build_noise_weighted(
                     shared_flag_mask,
                 )
 
+
 def _py_build_noise_weighted(
-        self,
-        zmap,
-        pixel_indx,
-        pixel_data,
-        weight_indx,
-        weight_data,
-        det_indx,
-        det_data,
-        flag_indx,
-        flag_data,
-        flag_mask,
-        intr_data,
-        shared_flags,
-        shared_mask,
-        det_scale,
-    ):
-        """Internal python implementation for comparison tests."""
-        global2local = zmap.distribution.global_submap_to_local.array()
-        npix_submap = zmap.distribution.n_pix_submap
-        nnz = zmap.n_value
-        for idet in range(len(det_indx)):
-            didx = det_indx[idet]
-            pidx = pixel_indx[idet]
-            widx = weight_indx[idet]
-            fidx = flag_indx[idet]
-            for vw in intr_data:
-                samples = slice(vw.first, vw.last + 1, 1)
-                good = np.logical_and(
-                    ((flag_data[fidx][samples] & flag_mask) == 0),
-                    ((shared_flags[samples] & shared_mask) == 0),
-                )
-                pixel_buffer = pixel_data[pidx][samples]
-                det_buffer = det_data[didx][samples]
-                weight_buffer = weight_data[widx][samples]
-                global_submap = pixel_buffer[good] // npix_submap
-                submap_pix = pixel_buffer[good] - global_submap * npix_submap
-                local_submap = np.array(
-                    [global2local[x] for x in global_submap], dtype=np.int64
-                )
-                tempdata = np.multiply(
-                    weight_buffer[good],
-                    np.multiply(det_scale[idet], det_buffer[good])[:, np.newaxis],
-                )
-                np.add.at(
-                    zmap.data,
-                    (local_submap, submap_pix),
-                    tempdata,
-                )
+    self,
+    zmap,
+    pixel_indx,
+    pixel_data,
+    weight_indx,
+    weight_data,
+    det_indx,
+    det_data,
+    flag_indx,
+    flag_data,
+    flag_mask,
+    intr_data,
+    shared_flags,
+    shared_mask,
+    det_scale,
+):
+    """Internal python implementation for comparison tests."""
+    global2local = zmap.distribution.global_submap_to_local.array()
+    npix_submap = zmap.distribution.n_pix_submap
+    nnz = zmap.n_value
+    for idet in range(len(det_indx)):
+        didx = det_indx[idet]
+        pidx = pixel_indx[idet]
+        widx = weight_indx[idet]
+        fidx = flag_indx[idet]
+        for vw in intr_data:
+            samples = slice(vw.first, vw.last + 1, 1)
+            good = np.logical_and(
+                ((flag_data[fidx][samples] & flag_mask) == 0),
+                ((shared_flags[samples] & shared_mask) == 0),
+            )
+            pixel_buffer = pixel_data[pidx][samples]
+            det_buffer = det_data[didx][samples]
+            weight_buffer = weight_data[widx][samples]
+            global_submap = pixel_buffer[good] // npix_submap
+            submap_pix = pixel_buffer[good] - global_submap * npix_submap
+            local_submap = np.array(
+                [global2local[x] for x in global_submap], dtype=np.int64
+            )
+            tempdata = np.multiply(
+                weight_buffer[good],
+                np.multiply(det_scale[idet], det_buffer[good])[:, np.newaxis],
+            )
+            np.add.at(
+                zmap.data,
+                (local_submap, submap_pix),
+                tempdata,
+            )

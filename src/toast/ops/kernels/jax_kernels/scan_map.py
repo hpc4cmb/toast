@@ -281,5 +281,6 @@ def scan_map(
         should_subtract,
     )
 
+
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve", "ops_scan_map")'
