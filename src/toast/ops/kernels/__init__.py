@@ -126,4 +126,6 @@ from ..._libtoast import (
     integrate_simpson,
     cov_apply_diag,
     cov_eigendecompose_diag,
+    stokes_weights,
+    healpix_pixels,
 )
