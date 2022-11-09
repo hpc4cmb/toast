@@ -12,11 +12,11 @@ import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
-from .kernels import subtract_mean, sum_detectors, filter_polynomial, filter_poly2D
+from .kernels import ImplementationType, subtract_mean, sum_detectors, filter_polynomial, filter_poly2D
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, UseEnum, Dict, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import (
     AlignedF64,
     AlignedU8,
@@ -84,6 +84,10 @@ class PolyFilter2D(Operator):
 
     focalplane_key = Unicode(
         None, allow_none=True, help="Which focalplane key to match"
+    )
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
     )
 
     @traitlets.validate("shared_flag_mask")
@@ -320,7 +324,7 @@ class PolyFilter2D(Operator):
                 gt.stop("Poly2D:  Accumulate templates")
 
                 gt.start("Poly2D:  Solve templates")
-                filter_poly2D(det_groups, templates, signals, masks, coeff)
+                filter_poly2D(det_groups, templates, signals, masks, coeff, implementation_type=self.kernel_implementation)
                 gt.stop("Poly2D:  Solve templates")
 
                 gt.start("Poly2D:  Update detector flags")
@@ -456,6 +460,10 @@ class PolyFilter(Operator):
         "throw", allow_none=True, help="Use this view of the data in all observations"
     )
 
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+    )
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -534,14 +542,14 @@ class PolyFilter(Operator):
                     signals.append(signal)
                 else:
                     filter_polynomial(
-                        self.order, last_flags, signals, local_starts, local_stops
+                        self.order, last_flags, signals, local_starts, local_stops, implementation_type=self.kernel_implementation
                     )
                     signals = [signal]
                 last_flags = flags.copy()
 
             if len(signals) > 0:
                 filter_polynomial(
-                    self.order, last_flags, signals, local_starts, local_stops
+                    self.order, last_flags, signals, local_starts, local_stops, implementation_type=self.kernel_implementation
                 )
 
             # Optionally flag unfiltered data

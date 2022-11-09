@@ -11,14 +11,14 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, Unicode, Unit, trait_docs
+from ..traits import Bool, UseEnum, Float, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger, unit_conversion
 from .delete import Delete
 from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 
-from .kernels import build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
+from .kernels import ImplementationType, build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
 
 
 @trait_docs
@@ -78,6 +78,10 @@ class BuildHitMap(Operator):
 
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+    )
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
     )
 
     @traitlets.validate("det_flag_mask")
@@ -181,6 +185,7 @@ class BuildHitMap(Operator):
                         local_sm.astype(np.int64),
                         local_pix.astype(np.int64),
                         hits.raw,
+                        implementation_type=self.kernel_implementation,
                     )
         return
 
@@ -284,6 +289,10 @@ class BuildInverseCovariance(Operator):
 
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+    )
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
     )
 
     @traitlets.validate("det_flag_mask")
@@ -452,6 +461,7 @@ class BuildInverseCovariance(Operator):
                         wview[det].reshape(-1),
                         detweight.to_value(invcov_units),
                         invcov.raw,
+                        implementation_type=self.kernel_implementation,
                     )
         return
 
@@ -562,6 +572,10 @@ class BuildNoiseWeighted(Operator):
 
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
+    )
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
     )
 
     @traitlets.validate("det_flag_mask")
@@ -739,6 +753,7 @@ class BuildNoiseWeighted(Operator):
                 shared_flag_data,
                 self.shared_flag_mask,
                 use_accel,
+                implementation_type=self.kernel_implementation,
             )
             zmap.data = zmap_data.reshape(zmap.data.shape)
         return

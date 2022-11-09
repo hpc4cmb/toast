@@ -3,6 +3,7 @@
 
 install(FILES
     __init__.py
+    implementation_selection.py
     DESTINATION ${PYTHON_SITE}/toast/ops/kernels
 )
 

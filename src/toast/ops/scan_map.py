@@ -8,10 +8,10 @@ from astropy import units as u
 
 from ..accelerator import use_accel_jax
 from ..observation import default_values as defaults
-from .kernels import scan_map
+from .kernels import ImplementationType, scan_map
 from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, Unit, trait_docs
+from ..traits import Bool, UseEnum, Int, Unicode, Unit, trait_docs
 from ..utils import AlignedF64, Logger, unit_conversion
 from .operator import Operator
 
@@ -61,6 +61,10 @@ class ScanMap(Operator):
     )
 
     zero = Bool(False, help="If True, zero the data before accumulating / subtracting")
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -142,6 +146,7 @@ class ScanMap(Operator):
                 self.zero,
                 self.subtract,
                 use_accel,
+                implementation_type=self.kernel_implementation,
             )
 
         return
@@ -322,6 +327,10 @@ class ScanScale(Operator):
         help="The Data key where the weight map is located",
     )
 
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -383,6 +392,7 @@ class ScanScale(Operator):
                 should_zero=True,
                 should_subtract=False,
                 use_accel=False,
+                implementation_type=self.kernel_implementation,
             )
 
         return

@@ -8,10 +8,10 @@ import traitlets
 from ..accelerator import use_accel_jax
 from ..noise_sim import AnalyticNoise
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, UseEnum, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
-from .kernels import noise_weight
+from .kernels import ImplementationType, noise_weight
 
 
 @trait_docs
@@ -37,6 +37,10 @@ class NoiseWeight(Operator):
 
     det_data = Unicode(
         None, allow_none=True, help="Observation detdata key for the timestream data"
+    )
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
     )
 
     def __init__(self, **kwargs):
@@ -78,7 +82,7 @@ class NoiseWeight(Operator):
             det_data = ob.detdata[self.det_data].data
             det_data_indx = ob.detdata[self.det_data].indices(dets)
             noise_weight(
-                det_data, det_data_indx, intervals, detector_weights, use_accel
+                det_data, det_data_indx, intervals, detector_weights, use_accel, implementation_type=self.kernel_implementation
             )
 
             # updates the unit for the output

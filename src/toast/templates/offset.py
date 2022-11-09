@@ -11,6 +11,7 @@ import traitlets
 from astropy import units as u
 
 from ..ops.kernels import (
+    ImplementationType,
     template_offset_add_to_signal,
     template_offset_project_signal,
     template_offset_apply_diag_precond,
@@ -18,7 +19,7 @@ from ..ops.kernels import (
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, UseEnum, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import AlignedF64, Logger, rate_from_times
 from .amplitudes import Amplitudes
 from .template import Template
@@ -66,6 +67,10 @@ class Offset(Template):
     )
 
     precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+    )
 
     @traitlets.validate("precond_width")
     def _check_precond_width(self, proposal):
@@ -513,6 +518,7 @@ class Offset(Template):
                 ob.detdata[self.det_data].data,
                 ob.intervals[self.view].data,
                 self.use_accel,
+                implementation_type=self.kernel_implementation
             )
 
             amp_offset += np.sum(n_amp_views)
@@ -551,6 +557,7 @@ class Offset(Template):
                 amplitudes.local,
                 ob.intervals[self.view].data,
                 self.use_accel,
+                implementation_type=self.kernel_implementation,
             )
 
             amp_offset += np.sum(n_amp_views)
@@ -634,6 +641,7 @@ class Offset(Template):
                 amplitudes_in.local,
                 amplitudes_out.local,
                 self.use_accel,
+                implementation_type=self.kernel_implementation,
             )
         return
 

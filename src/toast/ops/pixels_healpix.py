@@ -9,11 +9,11 @@ from ..healpix import Pixels
 from ..observation import default_values as defaults
 from ..pixels import PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, UseEnum, Instance, Int, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 
-from .kernels import pixels_healpix
+from .kernels import ImplementationType, pixels_healpix
 
 
 @trait_docs
@@ -66,6 +66,10 @@ class PixelsHealpix(Operator):
     )
 
     single_precision = Bool(False, help="If True, use 32bit int in output")
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+    )
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
@@ -266,7 +270,8 @@ class PixelsHealpix(Operator):
                 self._n_pix_submap,
                 self.nside,
                 self.nest,
-                use_accel
+                use_accel,
+                implementation_type=self.kernel_implementation
             )
 
             if self._local_submaps is not None:

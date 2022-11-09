@@ -6,10 +6,10 @@ import numpy as np
 import traitlets
 
 from .. import qarray as qa
-from .kernels import pointing_detector
+from .kernels import ImplementationType, pointing_detector
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, trait_docs
+from ..traits import Bool, UseEnum, Int, Unicode, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -55,6 +55,10 @@ class PointingDetectorSimple(Operator):
         None,
         allow_none=True,
         help="The output coordinate system ('C', 'E', 'G')",
+    )
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
     )
 
     @traitlets.validate("coord_in")
@@ -169,6 +173,7 @@ class PointingDetectorSimple(Operator):
                 flags,
                 self.shared_flag_mask,
                 use_accel,
+                implementation_type=self.kernel_implementation,
             )
 
         return

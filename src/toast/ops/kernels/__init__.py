@@ -1,4 +1,4 @@
-from ...accelerator.implementation_selection import select_implementation, select_implementation_cpu
+from .implementation_selection import ImplementationType, select_implementation, select_implementation_cpu
 
 from .compiled_kernels import (
     scan_map as scan_map_compiled,

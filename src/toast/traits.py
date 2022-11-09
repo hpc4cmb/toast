@@ -12,6 +12,7 @@ from astropy import units as u
 from traitlets import (
     TraitType,
     Bool,
+    UseEnum,
     Callable,
     Dict,
     Float,
@@ -134,6 +135,7 @@ def trait_scalar_to_string(val):
 # Scalar base types
 
 Bool.py_type = lambda self: bool
+UseEnum.py_type = lambda self: self.enum_class
 Float.py_type = lambda self: float
 Int.py_type = lambda self: int
 Unicode.py_type = lambda self: str
@@ -158,6 +160,7 @@ def _create_scalar_trait_get_conf(conf_type):
 
 
 Bool.get_conf = _create_scalar_trait_get_conf("bool")
+UseEnum.get_conf = _create_scalar_trait_get_conf("enum")
 Float.get_conf = _create_scalar_trait_get_conf("float")
 Int.get_conf = _create_scalar_trait_get_conf("int")
 Unicode.get_conf = _create_scalar_trait_get_conf("str")

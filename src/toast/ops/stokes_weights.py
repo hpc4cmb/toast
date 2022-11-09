@@ -8,10 +8,10 @@ import traitlets
 from .. import qarray as qa
 from ..healpix import HealpixPixels
 from ..observation import default_values as defaults
-from .kernels import stokes_weights_I, stokes_weights_IQU
+from .kernels import ImplementationType, stokes_weights_I, stokes_weights_IQU
 from ..pixels import PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, UseEnum, Instance, Int, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .delete import Delete
 from .operator import Operator
@@ -105,6 +105,10 @@ class StokesWeights(Operator):
     )
 
     IAU = Bool(False, help="If True, use the IAU convention rather than COSMO")
+
+    kernel_implementation = UseEnum(
+        ImplementationType, default_value=ImplementationType.DEFAULT, help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX)."
+    )
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
@@ -256,6 +260,7 @@ class StokesWeights(Operator):
                     det_epsilon,
                     cal,
                     use_accel,
+                    implementation_type=self.kernel_implementation,
                 )
             else:
                 stokes_weights_I(
@@ -264,6 +269,7 @@ class StokesWeights(Operator):
                     ob.intervals[self.view].data,
                     cal,
                     use_accel,
+                    implementation_type=self.kernel_implementation,
                 )
         return
 
