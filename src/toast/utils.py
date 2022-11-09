@@ -767,4 +767,4 @@ def unit_conversion(source, target):
     """
     scale = 1.0 * source
     scale.to(target)
-    return scale.value
+    return scale.to(target).value
