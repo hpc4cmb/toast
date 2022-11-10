@@ -252,11 +252,11 @@ class PixelsWCS(Operator):
                 return
 
             # Max Longitude
-            lower_left_lon = bounds[1].to_value(u.degree)
+            lower_left_lon = bounds[0].to_value(u.degree)
             # Min Latitude
             lower_left_lat = bounds[2].to_value(u.degree)
             # Min Longitude
-            upper_right_lon = bounds[0].to_value(u.degree)
+            upper_right_lon = bounds[1].to_value(u.degree)
             # Max Latitude
             upper_right_lat = bounds[3].to_value(u.degree)
 
@@ -340,7 +340,7 @@ class PixelsWCS(Operator):
             self._done_auto = True
 
         if self._local_submaps is None and self.create_dist is not None:
-            self._local_submaps = np.zeros(self.submaps, dtype=np.bool)
+            self._local_submaps = np.zeros(self.submaps, dtype=np.uint8)
 
         # Expand detector pointing
         if self.quats is not None:
@@ -366,14 +366,6 @@ class PixelsWCS(Operator):
                 # Nothing to do for this observation
                 continue
 
-            # FIXME:  remove this workaround after #557 is merged
-            if view is None:
-                view_slices = [slice(None)]
-            else:
-                view_slices = [
-                    slice(x.first, x.last + 1, 1) for x in ob.intervals[view]
-                ]
-
             # Create (or re-use) output data for the pixels, weights and optionally the
             # detector quaternions.
 
@@ -386,6 +378,8 @@ class PixelsWCS(Operator):
                     self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
                 )
 
+            view_slices = [slice(x.first, x.last + 1, 1) for x in ob.intervals[view]]
+
             # Do we already have pointing for all requested detectors?
             if exists:
                 # Yes...
@@ -393,9 +387,9 @@ class PixelsWCS(Operator):
                     # but the caller wants the pixel distribution
                     for det in ob.select_local_detectors(detectors):
                         for vslice in view_slices:
-                            good = ob.detdata[self.pixels][det][vslice] >= 0
+                            good = ob.detdata[self.pixels][det, vslice] >= 0
                             self._local_submaps[
-                                ob.detdata[self.pixels][det][vslice][good]
+                                ob.detdata[self.pixels][det, vslice][good]
                                 // self._n_pix_submap
                             ] = True
 
@@ -449,14 +443,14 @@ class PixelsWCS(Operator):
                         rdpix[bad_pointing] = -1
                     rdpix = np.array(np.around(rdpix), dtype=np.int64)
 
-                    ob.detdata[self.pixels][det][vslice] = (
+                    ob.detdata[self.pixels][det, vslice] = (
                         rdpix[:, 0] * self.pix_dec + rdpix[:, 1]
                     )
 
                     if self.create_dist is not None:
                         good = ob.detdata[self.pixels][det][vslice] >= 0
                         self._local_submaps[
-                            (ob.detdata[self.pixels][det][vslice])[good]
+                            (ob.detdata[self.pixels][det, vslice])[good]
                             // self._n_pix_submap
                         ] = 1
 
