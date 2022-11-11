@@ -278,7 +278,8 @@ class DetectorData(AcceleratorObject):
             if self.accel_exists():
                 # Reset device memory to zero
                 if use_accel_omp:
-                    accel_data_reset(self._raw)
+                    # accel_data_reset(self._raw)
+                    pass
                 elif use_accel_jax:
                     pass
             realloced = False

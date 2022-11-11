@@ -208,14 +208,14 @@ class Pipeline(Operator):
             prov = self.provides()
             msg = f"{pstr} Pipeline copying out accel data products: {prov}"
             log.verbose(msg)
-            data.accel_update_host(self.provides())
+            #data.accel_update_host(self.provides())
 
             # Clear intermediate objects
             interm = self._get_intermediate()
-            data.accel_delete(interm)
+            #data.accel_delete(interm)
 
             # DEBUG, see if deleting inputs produce correct results
-            data.accel_delete(self._requires)
+            #data.accel_delete(self._requires)
         return result
 
     def _requires(self):

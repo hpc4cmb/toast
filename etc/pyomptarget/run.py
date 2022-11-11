@@ -52,6 +52,7 @@ def main():
     ).reshape((-1, 4))
 
     quat_index = np.arange(ndet, dtype=np.int32)
+    pixel_index = np.arange(ndet, dtype=np.int32)
 
     shared_flags = np.zeros(nsamp, dtype=np.uint8)
 
@@ -64,8 +65,9 @@ def main():
     intervals[0].stop = -1.0
 
     quats = np.zeros((ndet, nsamp, 4), dtype=np.float64)
+    pixels = np.zeros((ndet, nsamp), dtype=np.int64)
 
-    mem = pyomptarget.stage_data(boresight, quats, intervals, shared_flags)
+    mem = pyomptarget.stage_data(boresight, quats, intervals, shared_flags, pixels)
 
     # time.sleep(5)
 
@@ -79,9 +81,29 @@ def main():
         shared_flags,
     )
 
-    pyomptarget.unstage_data(mem, quats)
+    nside = 1024
+    nside_submap = 16
+    n_pix_submap = 12 * nside_submap**2
+    n_submap = (nside // nside_submap) ** 2
+    hit_submaps = np.zeros(n_submap, dtype=np.uint8)
 
-    # print(quats)
+    pyomptarget.pixels_healpix_nest(
+        mem,
+        quat_index,
+        quats,
+        shared_flags,
+        pixel_index,
+        pixels,
+        intervals,
+        hit_submaps,
+        n_pix_submap,
+        nside,
+    )
+
+    pyomptarget.unstage_data(mem, quats, pixels)
+
+    print(quats)
+    print(pixels)
 
 
 if __name__ == "__main__":

@@ -12,8 +12,6 @@ cmake \
     -DCMAKE_CXX_FLAGS="-O3 -g -fPIC" \
     -DUSE_OPENMP_TARGET=TRUE \
     -DOPENMP_TARGET_FLAGS="\
-    -fopenmp-target-debug=3 \
-    -foffload-lto \
     -fopenmp-targets=amdgcn-amd-amdhsa \
     -Xopenmp-target=amdgcn-amd-amdhsa \
     -march=gfx1030 \

@@ -596,6 +596,9 @@ void init_accelerator(py::module & m) {
                     p_dev[i] = 0;
                 }
             }
+            o.str("");
+            o << "reset device with host pointer " << p_host << " DONE";
+            log.verbose(o.str().c_str());
             return;
         }, py::arg(
             "data"),

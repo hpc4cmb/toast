@@ -339,10 +339,8 @@ class PixelsHealpix(Operator):
         return req
 
     def _provides(self):
-        prov = {
-            "detdata": [self.pixels],
-            "global": list(),
-        }
+        prov = self.detector_pointing.provides()
+        prov["detdata"].append(self.pixels)
         if self.create_dist is not None:
             prov["global"].append(self.create_dist)
         return prov
