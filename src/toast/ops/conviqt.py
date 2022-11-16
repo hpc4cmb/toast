@@ -315,7 +315,7 @@ class SimConviqt(Operator):
                 my_dets.add(det)
             # Make sure detector data output exists
             exists = obs.detdata.ensure(
-                self.det_data, detectors=detectors, units=self.det_data_units
+                self.det_data, detectors=detectors, create_units=self.det_data_units
             )
         all_dets = self.comm.gather(my_dets, root=0)
         if self.comm.rank == 0:
@@ -568,7 +568,7 @@ class SimConviqt(Operator):
         timer = Timer()
         timer.start()
         offset = 0
-        scale = unit_conversion(u.K, self.units)
+        scale = unit_conversion(u.K, self.det_data_units)
         for obs in data.obs:
             if det not in obs.local_detectors:
                 continue
