@@ -76,13 +76,14 @@ class GainScrambler(Operator):
             key2 = obsindx
             counter1 = 0
             counter2 = 0
+            for detindx,det in enumerate(dets) :
 
-            for det in dets:
+                #for det in enumerate(dets) :
                 # Test the detector pattern
                 if pat is not None and pat.match(det) is None:
                     continue
 
-                detindx = focalplane[det]["uid"]
+                #detindx = focalplane[det]["uid"]
                 counter1 = detindx
 
                 rngdata = rng.random(

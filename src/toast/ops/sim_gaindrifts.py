@@ -76,10 +76,10 @@ class GainDrifter(Operator):
         100 * u.mK,
         help="temperature of the focalplane for `thermal_drift` ",
     )
-    responsivity_function = Callable(
-        lambda dT: dT,
-        help="Responsivity function takes as input  the thermal  fluctuations,`dT` defined as `dT=Tdrift/Tbath + 1 `. Default we assume the identity function ",
-    )
+#    responsivity_function = Callable(
+#        lambda dT: dT,
+#        help="Responsivity function takes as input  the thermal  fluctuations,`dT` defined as `dT=Tdrift/Tbath + 1 `. Default we assume the identity function ",
+#    )
 
     realization = Int(0, help="integer to set a different random seed ")
     component = Int(0, allow_none=False, help="Component index for this simulation")
@@ -93,6 +93,7 @@ class GainDrifter(Operator):
         "wafer",
         help='focalplane table column to use for grouping detectors: can be any string like "wafer", "pixel"',
     )
+    responsivity_function =lambda dT: dT
 
     def get_psd(self, f):
         return (
@@ -142,9 +143,9 @@ class GainDrifter(Operator):
                     self.realization * 4294967296 + telescope * 65536 + self.component
                 )
                 counter2 = 0
-
-                for det in dets:
-                    detindx = focalplane[det]["uid"]
+                for detindx,det in enumerate(dets) :
+                #for det in dets:
+                #    detindx = focalplane[det]["uid"]
                     key2 = obsindx
                     counter1 = detindx
 
@@ -186,9 +187,9 @@ class GainDrifter(Operator):
                         psd=psd,
                         py=False,
                     )
-
-                for det in dets:
-                    detindx = focalplane[det]["uid"]
+                for detindx,det in enumerate(dets) :
+                #for det in dets:
+                #    detindx = focalplane[det]["uid"]
                     # we inject a detector mismatch in the thermal thermal_fluctuation
                     # only if the mismatch !=0
                     if self.detector_mismatch != 0:
@@ -266,9 +267,9 @@ class GainDrifter(Operator):
                         gain.clear()
                         del gain
                 gain_common = np.array(gain_common)
-
-                for det in dets:
-                    detindx = focalplane[det]["uid"]
+                for detindx,det in enumerate(dets) :
+                #for det in dets:
+                    #detindx = focalplane[det]["uid"]
                     size = ob.detdata[self.det_data][det].size
 
                     # simulate a noise-like timestream

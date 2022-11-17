@@ -163,7 +163,8 @@ class InjectCosmicRays(Operator):
             counter2 = 0
 
             for kk, det in enumerate(dets):
-                detindx = focalplane[det]["uid"]
+                #detindx = focalplane[det]["uid"]
+                detindx = kk +12345
                 key2 = obsindx
                 counter1 = detindx
 
