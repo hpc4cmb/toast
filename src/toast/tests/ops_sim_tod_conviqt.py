@@ -803,4 +803,5 @@ class SimConviqtTest(MPITestCase):
 
             np.testing.assert_almost_equal(cl_out_wo_hwp, cl_out_w_hwp, decimal=2)
 
-        close_data(data)
+        close_data(data_w_hwp)
+        close_data(data_wo_hwp)
