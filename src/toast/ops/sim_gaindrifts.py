@@ -93,7 +93,6 @@ class GainDrifter(Operator):
         "wafer",
         help='focalplane table column to use for grouping detectors: can be any string like "wafer", "pixel"',
     )
-    responsivity_function =lambda dT: dT
 
     def get_psd(self, f):
         return (
@@ -224,8 +223,9 @@ class GainDrifter(Operator):
                     # this will avoid unit errors when multiplied to the det_data.
 
                     dT = (Tdrift / self.focalplane_Tbath + 1).to_value()
-
-                    ob.detdata[self.det_data][det] *= self.responsivity_function(dT)
+                    responsivity_function =lambda dT: dT
+                    
+                    ob.detdata[self.det_data][det] *= responsivity_function(dT)
 
             elif self.drift_mode == "slow_drift":
                 fmin = fsampl / (4 * size)
