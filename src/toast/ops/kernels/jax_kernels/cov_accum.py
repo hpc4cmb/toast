@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 
 from ....jax.mutableArray import MutableJaxArray
+from ....utils import AlignedI64, AlignedF64
 
 
 def cov_accum_diag_hits_inner(nsubpix, submap, subpix, hits):
@@ -55,6 +56,10 @@ def cov_accum_diag_hits(nsub, nsubpix, nnz, submap, subpix, hits):
     submap_input = MutableJaxArray.to_array(submap)
     subpix_input = MutableJaxArray.to_array(subpix)
     hits_input = MutableJaxArray.to_array(hits)
+    # AlignedI64 cannot be modified using numpy-style slices
+    # useful when running on CPU
+    if isinstance(hits, AlignedI64): hits = hits_input
+    # run kernel
     hits[:] = cov_accum_diag_hits_inner(nsubpix, submap_input, subpix_input, hits_input)
 
 
@@ -139,6 +144,10 @@ def cov_accum_diag_invnpp(nsub, nsubpix, nnz, submap, subpix, weights, scale, in
     subpix_input = MutableJaxArray.to_array(subpix)
     weights_input = MutableJaxArray.to_array(weights)
     invnpp_input = MutableJaxArray.to_array(invnpp)
+    # AlignedF64 cannot be modified using numpy-style slices
+    # useful when running on CPU
+    if isinstance(invnpp, AlignedF64): invnpp = invnpp_input
+    # run kernel
     invnpp[:] = cov_accum_diag_invnpp_inner(
         nsubpix, nnz, submap_input, subpix_input, weights_input, scale, invnpp_input
     )
