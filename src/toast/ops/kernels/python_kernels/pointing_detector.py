@@ -84,3 +84,6 @@ def _py_pointing_detector(
                 good = (flag_data[samples] & self.shared_flag_mask) == 0
                 bore[np.invert(good)] = np.array([0, 0, 0, 1], dtype=np.float64)
             quat_data[qidx][samples] = qarray.mult_one_one(bore, fp_quats[idet])
+
+# To test:
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_demodulate")'

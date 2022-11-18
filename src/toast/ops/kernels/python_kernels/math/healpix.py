@@ -153,7 +153,7 @@ def zphi2nest(hpix, phi, region, z, rtz):
     return pix
 
 
-def zphi2ring(hpix, phi, region, z, rtz, pix):
+def zphi2ring(hpix, phi, region, z, rtz):
     """
     Args:
         hpix (HealpixPixels):  The healpix projection object.

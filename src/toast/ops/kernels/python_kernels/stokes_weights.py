@@ -91,27 +91,6 @@ def stokes_weights_IQU(
                     weights[w_index, isamp, :],
                 )
 
-
-def stokes_weights_I(weight_index, weights, intervals, cal, use_accel):
-    """
-    Compute the Stokes weights for the "I" mode.
-
-    Args:
-        weight_index (array, int): The indexes of the weights (size n_det)
-        weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp)
-        intervals (array, Interval): The intervals to modify (size n_view)
-        cal (float):  A constant to apply to the pointing weights.
-        use_accel (bool): should we use the accelerator
-
-    Returns:
-        None (the result is put in weights).
-    """
-    for interval in intervals:
-        interval_start = interval.first
-        interval_end = interval.last + 1
-        weights[weight_index, interval_start:interval_end] = cal
-
-
 # hwp_data = None
 # if self.hwp_angle is not None:
 #   hwp_data = ob.shared[self.hwp_angle].data
@@ -178,3 +157,26 @@ def _py_stokes_weights(
             for vw in intr_data:
                 samples = slice(vw.first, vw.last + 1, 1)
                 weight_data[widx][samples] = cal
+
+
+def stokes_weights_I(weight_index, weights, intervals, cal, use_accel):
+    """
+    Compute the Stokes weights for the "I" mode.
+
+    Args:
+        weight_index (array, int): The indexes of the weights (size n_det)
+        weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp)
+        intervals (array, Interval): The intervals to modify (size n_view)
+        cal (float):  A constant to apply to the pointing weights.
+        use_accel (bool): should we use the accelerator
+
+    Returns:
+        None (the result is put in weights).
+    """
+    for interval in intervals:
+        interval_start = interval.first
+        interval_end = interval.last + 1
+        weights[weight_index, interval_start:interval_end] = cal
+
+# To test:
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_tod_dipole")'

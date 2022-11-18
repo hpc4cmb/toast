@@ -41,6 +41,25 @@ def template_offset_add_to_signal(
             det_data[data_index, isamp] += amplitudes[amp]
         offset += view_offset
 
+def _py_add_to_signal(
+    self,
+    step_length,
+    amp_offset,
+    n_amp_views,
+    amplitudes,
+    data_index,
+    det_data,
+    intr_data,
+):
+    """Internal python implementation for comparison testing."""
+    offset = amp_offset
+    for ivw, vw in enumerate(intr_data):
+        samples = slice(vw.first, vw.last + 1, 1)
+        sampidx = np.arange(vw.first, vw.last + 1, dtype=np.int64)
+        amp_vals = np.array([amplitudes[offset + x] for x in (sampidx // step_length)])
+        det_data[data_index[0], samples] += amp_vals
+        offset += n_amp_views[ivw]
+
 
 def template_offset_project_signal(
     data_index,
@@ -93,43 +112,6 @@ def template_offset_project_signal(
             ] += det_data_samp  # WARNING: this has to be done one at a time to avoid conflicts
         offset += view_offset
 
-
-def template_offset_apply_diag_precond(
-    offset_var, amplitudes_in, amplitudes_out, use_accel
-):
-    """
-    Args:
-        offset_var (array, double): size n_amp
-        amplitudes_in (array, double): size n_amp
-        amplitudes_out (array, double): size n_amp
-        use_accel (bool): should we use the accelerator
-
-    Returns:
-        None (the result is put in amplitudes_out).
-    """
-    amplitudes_out[:] = amplitudes_in * offset_var
-
-
-def _py_add_to_signal(
-    self,
-    step_length,
-    amp_offset,
-    n_amp_views,
-    amplitudes,
-    data_index,
-    det_data,
-    intr_data,
-):
-    """Internal python implementation for comparison testing."""
-    offset = amp_offset
-    for ivw, vw in enumerate(intr_data):
-        samples = slice(vw.first, vw.last + 1, 1)
-        sampidx = np.arange(vw.first, vw.last + 1, dtype=np.int64)
-        amp_vals = np.array([amplitudes[offset + x] for x in (sampidx // step_length)])
-        det_data[data_index[0], samples] += amp_vals
-        offset += n_amp_views[ivw]
-
-
 def _py_project_signal(
     self,
     data_index,
@@ -160,8 +142,20 @@ def _py_project_signal(
         np.add.at(amplitudes, ampidx, ddata)
         offset += n_amp_views[ivw]
 
+def template_offset_apply_diag_precond(
+    offset_var, amplitudes_in, amplitudes_out, use_accel
+):
+    """
+    Args:
+        offset_var (array, double): size n_amp
+        amplitudes_in (array, double): size n_amp
+        amplitudes_out (array, double): size n_amp
+        use_accel (bool): should we use the accelerator
 
-def _py_apply_diag_precond(self, offset_var, amp_in, amp_out):
-    """Internal python implementation for comparison testing."""
-    amp_out[:] = amp_in
-    amp_out *= offset_var
+    Returns:
+        None (the result is put in amplitudes_out).
+    """
+    amplitudes_out[:] = amplitudes_in * offset_var
+
+# To test:
+# python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker")'

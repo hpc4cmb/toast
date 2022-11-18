@@ -48,7 +48,6 @@ def filter_poly2D(det_groups, templates, signals, masks, coeff):
 
 
 def _py_filterpoly2D():
-    gt.start("Poly2D:  Solve templates (with python)")
     for isample in range(nsample):
         for group, igroup in group_ids.items():
             good = group_det == igroup
@@ -57,4 +56,6 @@ def _py_filterpoly2D():
             proj = np.dot(t, signals[isample, good] * mask)
             ccinv = np.dot(t, t.T)
             coeff[isample, igroup] = np.linalg.lstsq(ccinv, proj, rcond=None)[0]
-    gt.stop("Poly2D:  Solve templates (with python)")
+
+# To test:
+# python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

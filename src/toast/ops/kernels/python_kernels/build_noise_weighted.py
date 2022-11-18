@@ -167,3 +167,6 @@ def _py_build_noise_weighted(
                 (local_submap, submap_pix),
                 tempdata,
             )
+
+# To test:
+# python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole"); toast.tests.run("ops_demodulate")'

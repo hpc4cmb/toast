@@ -137,3 +137,6 @@ def _py_pixels_healpix(
                 sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
                 hit_submaps[sub_maps] = 1
                 pix_data[pidx][samples][bad] = -1
+
+# To test:
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_ground"); toast.tests.run("ops_sim_satellite"); toast.tests.run("ops_demodulate"); toast.tests.run("ops_sim_tod_conviqt");'
