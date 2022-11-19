@@ -4,89 +4,52 @@
 
 import numpy as np
 
-
-def rotate_one_one(q, v_in):
+def rotate(q_in, v_in):
     """
-    Rotate a vector by a quaternion.
+    Rotate a batch of vectors by a batch of quaternion.
 
     Args:
-        q(array, double): quaternion of shape (4)
-        v_in(array, double): vector of size 3
+        q_in(array, double): a batch of quaternions of shape (nb_quats,4)
+        v_in(array, double): a batch of vectors of size (nb_vec,3)
 
     Returns:
-        v_out(array, double): vector of size 3
+        v_out(array, double): batch of vectors of size (nb_quats,3)
     """
+    # insures the inputs have the proper shapes
+    q_arr = np.reshape(q_in, newshape=(-1,4))
+    v_arr = np.reshape(v_in, newshape=(-1,3))
+    batch_size = max(q_arr.shape[0], v_arr.shape[0])
+
     # normalize quaternion
-    q_unit = q / np.linalg.norm(q)
+    q_unit = q_arr / np.linalg.norm(q_arr, axis=1)[:,np.newaxis]
 
     # builds the elments that make the matrix representation of the quaternion
-    xw = q_unit[3] * q_unit[0]
-    yw = q_unit[3] * q_unit[1]
-    zw = q_unit[3] * q_unit[2]
-    x2 = -q_unit[0] * q_unit[0]
-    xy = q_unit[0] * q_unit[1]
-    xz = q_unit[0] * q_unit[2]
-    y2 = -q_unit[1] * q_unit[1]
-    yz = q_unit[1] * q_unit[2]
-    z2 = -q_unit[2] * q_unit[2]
+    xw = q_unit[:,3] * q_unit[:,0]
+    yw = q_unit[:,3] * q_unit[:,1]
+    zw = q_unit[:,3] * q_unit[:,2]
+    x2 = -q_unit[:,0] * q_unit[:,0]
+    xy = q_unit[:,0] * q_unit[:,1]
+    xz = q_unit[:,0] * q_unit[:,2]
+    y2 = -q_unit[:,1] * q_unit[:,1]
+    yz = q_unit[:,1] * q_unit[:,2]
+    z2 = -q_unit[:,2] * q_unit[:,2]
 
     # matrix product
-    v_out = np.empty(3)
-    v_out[0] = (
-        2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] + (yw + xz) * v_in[2]) + v_in[0]
+    v_out = np.empty(shape=(batch_size,3))
+    v_out[:,0] = (
+        2 * ((y2 + z2) * v_arr[:,0] + (xy - zw) * v_arr[:,1] + (yw + xz) * v_arr[:,2]) + v_arr[:,0]
     )
-    v_out[1] = (
-        2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] + (yz - xw) * v_in[2]) + v_in[1]
+    v_out[:,1] = (
+        2 * ((zw + xy) * v_arr[:,0] + (x2 + z2) * v_arr[:,1] + (yz - xw) * v_arr[:,2]) + v_arr[:,1]
     )
-    v_out[2] = (
-        2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] + (x2 + y2) * v_in[2]) + v_in[2]
+    v_out[:,2] = (
+        2 * ((xz - yw) * v_arr[:,0] + (xw + yz) * v_arr[:,1] + (x2 + y2) * v_arr[:,2]) + v_arr[:,2]
     )
 
+    # returns properly shaped output
+    if (q_in.ndim < 2) and (v_in.ndim < 2):
+        v_out = np.reshape(v_out, newshape=(3,))
     return v_out
-
-
-# -----
-
-
-def mult_one_one(p, q):
-    """
-    compose two quaternions
-    """
-    r = np.empty(4)
-    r[0] = p[0] * q[3] + p[1] * q[2] - p[2] * q[1] + p[3] * q[0]
-    r[1] = -p[0] * q[2] + p[1] * q[3] + p[2] * q[0] + p[3] * q[1]
-    r[2] = p[0] * q[1] - p[1] * q[0] + p[2] * q[3] + p[3] * q[2]
-    r[3] = -p[0] * q[0] - p[1] * q[1] - p[2] * q[2] + p[3] * q[3]
-    return r
-
-
-def mult_one_many(p, q_arr):
-    q_arr = np.reshape(q_arr, newshape=(-1, 4))
-    out = np.empty_like(q_arr)
-    nb_quaternions = q_arr.shape[0]
-    for i in range(nb_quaternions):
-        out[i:] = mult_one_one(p, q_arr[i, :])
-    return out
-
-
-def mult_many_one(p_arr, q):
-    p_arr = np.reshape(p_arr, newshape=(-1, 4))
-    out = np.empty_like(p_arr)
-    nb_quaternions = p_arr.shape[0]
-    for i in range(nb_quaternions):
-        out[i:] = mult_one_one(p_arr[i, :], q)
-    return out
-
-
-def mult_many_many(p_arr, q_arr):
-    p_arr = np.reshape(p_arr, newshape=(-1, 4))
-    q_arr = np.reshape(q_arr, newshape=(-1, 4))
-    out = np.empty_like(q_arr)
-    nb_quaternions = q_arr.shape[0]
-    for i in range(nb_quaternions):
-        out[i:] = mult_one_one(p_arr[i, :], q_arr[i, :])
-    return out
-
 
 def mult(p_in, q_in):
     """
@@ -103,14 +66,14 @@ def mult(p_in, q_in):
     Returns:
         out (array_like):  flattened 1D array of float64 values.
     """
-    # picks the correct implementation depending on which input is an array (if any)
-    # print(f"DEBUG: running 'mult_numpy' for p:{p_in.size} and q:{q_in.size}")
-    p_is_array = p_in.size > 4
-    q_is_array = q_in.size > 4
-    if p_is_array and q_is_array:
-        return mult_many_many(p_in, q_in)
-    if p_is_array:
-        return mult_many_one(p_in, q_in)
-    if q_is_array:
-        return mult_one_many(p_in, q_in)
-    return mult_one_one(p_in, q_in)
+    p_arr = np.reshape(p_in, newshape=(-1, 4))
+    q_arr = np.reshape(q_in, newshape=(-1, 4))
+    nb_quaternions = max(p_arr.shape[0], q_arr.shape[0])
+    out = np.empty(shape=(nb_quaternions,4))
+    out[:,0] = p_arr[:,0] * q_arr[:,3] + p_arr[:,1] * q_arr[:,2] - p_arr[:,2] * q_arr[:,1] + p_arr[:,3] * q_arr[:,0]
+    out[:,1] = -p_arr[:,0] * q_arr[:,2] + p_arr[:,1] * q_arr[:,3] + p_arr[:,2] * q_arr[:,0] + p_arr[:,3] * q_arr[:,1]
+    out[:,2] = p_arr[:,0] * q_arr[:,1] - p_arr[:,1] * q_arr[:,0] + p_arr[:,2] * q_arr[:,3] + p_arr[:,3] * q_arr[:,2]
+    out[:,3] = -p_arr[:,0] * q_arr[:,0] - p_arr[:,1] * q_arr[:,1] - p_arr[:,2] * q_arr[:,2] + p_arr[:,3] * q_arr[:,3]
+    if (p_in.ndim < 2) and (q_in.ndim < 2):
+        out = np.reshape(out, newshape=(4,))
+    return out

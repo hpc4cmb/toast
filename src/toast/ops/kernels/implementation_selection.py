@@ -14,7 +14,6 @@ class ImplementationType(IntEnum):
     NUMPY = 2
     JAX = 3
 
-
 def select_implementation_cpu(f_compiled, f_numpy, f_jax):
     """
     Builds a new function that will select an implementation at runtime depending on its 'implementation_type' input.

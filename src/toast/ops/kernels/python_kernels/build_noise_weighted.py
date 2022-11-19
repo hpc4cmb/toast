@@ -4,6 +4,83 @@
 
 import numpy as np
 
+# TODO does not pass "ops_pointing_wcs"
+def build_noise_weighted_ted(
+    global2local,
+    zmap,
+    pixel_index,
+    pixels,
+    weight_index,
+    weights,
+    data_index,
+    det_data,
+    flag_index,
+    det_flags,
+    det_scale,
+    det_flag_mask,
+    intervals,
+    shared_flags,
+    shared_flag_mask,
+    use_accel,
+):
+    """
+    Args:
+        global2local (array, int): size n_global_submap
+        zmap (array, double): size n_local_submap*n_pix_submap*nnz
+        pixel_index (array, int): size n_det
+        pixels (array, int): size ???*n_samp
+        weight_index (array, int): The indexes of the weights (size n_det)
+        weights (array, double): The flat packed detectors weights for the specified mode (size ???*n_samp*nnz)
+        data_index (array, int): size n_det
+        det_data (array, double): size ???*n_samp
+        flag_index (array, int): size n_det
+        det_flags (array, uint8): size ???*n_samp or 1*1
+        det_scale (array, double): size n_det
+        det_flag_mask (uint8)
+        intervals (array, Interval): The intervals to modify (size n_view)
+        shared_flags (array, uint8): size n_samp
+        shared_flag_mask (uint8)
+        use_accel (Bool): should we use the accelerator?
+
+    Returns:
+        None (the result is put in zmap).
+    """
+    # should we use flags?
+    n_det = data_index.size
+    n_pix_submap = zmap.shape[1]
+
+    # iterates on detectors and intervals
+    for idet in range(n_det):
+        p_index = pixel_index[idet]
+        w_index = weight_index[idet]
+        f_index = flag_index[idet]
+        d_index = data_index[idet]
+        for interval in intervals:
+            samples = slice(interval.first, interval.last + 1, 1)
+            good = np.logical_and(
+                ((det_flags[f_index][samples] & det_flag_mask) == 0),
+                ((shared_flags[samples] & shared_flag_mask) == 0),
+            )
+            pixel_buffer = pixels[p_index][samples]
+            det_buffer = det_data[d_index][samples]
+            weight_buffer = weights[w_index][samples]
+            global_submap = pixel_buffer[good] // n_pix_submap
+            submap_pix = pixel_buffer[good] - global_submap * n_pix_submap
+            local_submap = np.array(
+                [global2local[x] for x in global_submap], dtype=np.int64
+            )
+            tempdata = np.multiply(
+                weight_buffer[good],
+                np.multiply(det_scale[idet], det_buffer[good])[:, np.newaxis],
+            )
+            np.add.at(
+                zmap,
+                (local_submap, submap_pix),
+                tempdata,
+            )
+
+#-----
+
 
 def build_noise_weighted_inner(
     global2local,
@@ -29,7 +106,6 @@ def build_noise_weighted_inner(
         zmap (array, double): size n_local_submap*n_pix_submap*nnz
         det_mask (uint8)
         shared_mask (uint8)
-
     Returns:
         None (the result is put in zmap).
     """
@@ -84,7 +160,6 @@ def build_noise_weighted(
         shared_flags (array, uint8): size n_samp
         shared_flag_mask (uint8)
         use_accel (Bool): should we use the accelerator?
-
     Returns:
         None (the result is put in zmap).
     """
@@ -96,14 +171,14 @@ def build_noise_weighted(
     # iterates on detectors and intervals
     n_det = data_index.size
     for idet in range(n_det):
+        p_index = pixel_index[idet]
+        w_index = weight_index[idet]
+        f_index = flag_index[idet]
+        d_index = data_index[idet]
         for interval in intervals:
             interval_start = interval.first
             interval_end = interval.last
             for isamp in range(interval_start, interval_end + 1):
-                p_index = pixel_index[idet]
-                w_index = weight_index[idet]
-                f_index = flag_index[idet]
-                d_index = data_index[idet]
                 build_noise_weighted_inner(
                     global2local,
                     det_data[d_index, isamp],
@@ -117,56 +192,5 @@ def build_noise_weighted(
                     shared_flag_mask,
                 )
 
-
-def _py_build_noise_weighted(
-    self,
-    zmap,
-    pixel_indx,
-    pixel_data,
-    weight_indx,
-    weight_data,
-    det_indx,
-    det_data,
-    flag_indx,
-    flag_data,
-    flag_mask,
-    intr_data,
-    shared_flags,
-    shared_mask,
-    det_scale,
-):
-    """Internal python implementation for comparison tests."""
-    global2local = zmap.distribution.global_submap_to_local.array()
-    npix_submap = zmap.distribution.n_pix_submap
-    nnz = zmap.n_value
-    for idet in range(len(det_indx)):
-        didx = det_indx[idet]
-        pidx = pixel_indx[idet]
-        widx = weight_indx[idet]
-        fidx = flag_indx[idet]
-        for vw in intr_data:
-            samples = slice(vw.first, vw.last + 1, 1)
-            good = np.logical_and(
-                ((flag_data[fidx][samples] & flag_mask) == 0),
-                ((shared_flags[samples] & shared_mask) == 0),
-            )
-            pixel_buffer = pixel_data[pidx][samples]
-            det_buffer = det_data[didx][samples]
-            weight_buffer = weight_data[widx][samples]
-            global_submap = pixel_buffer[good] // npix_submap
-            submap_pix = pixel_buffer[good] - global_submap * npix_submap
-            local_submap = np.array(
-                [global2local[x] for x in global_submap], dtype=np.int64
-            )
-            tempdata = np.multiply(
-                weight_buffer[good],
-                np.multiply(det_scale[idet], det_buffer[good])[:, np.newaxis],
-            )
-            np.add.at(
-                zmap.data,
-                (local_submap, submap_pix),
-                tempdata,
-            )
-
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole"); toast.tests.run("ops_demodulate")'
+# python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole"); toast.tests.run("ops_demodulate"); toast.tests.run("ops_pointing_wcs")'

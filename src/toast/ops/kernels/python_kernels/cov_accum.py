@@ -23,9 +23,6 @@ def cov_accum_diag_hits(nsub, nsubpix, nnz, submap, subpix, hits):
     """
     nsamp = submap.size
     hits = np.asarray(hits).reshape((-1, nsubpix))
-    print(
-        f"DEBUG: running 'cov_accum_diag_hits_numpy' with nsub:{nsub} nsubpix:{nsubpix} nnz:{nnz} nsamp:{nsamp} hits:{hits.shape}"
-    )
 
     for i_samp in range(nsamp):
         isubmap = submap[i_samp]

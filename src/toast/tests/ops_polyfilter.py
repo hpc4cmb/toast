@@ -285,7 +285,7 @@ class PolyFilterTest(MPITestCase):
         # Do the same with C++ implementation
 
         polyfilter.det_data = defaults.det_data
-        # polyfilter..kernel_implementation = ImplementationType.DEFAULT
+        polyfilter.kernel_implementation = ImplementationType.DEFAULT
         polyfilter.apply(data)
 
         if data.comm.world_rank == 0:
@@ -319,7 +319,7 @@ class PolyFilterTest(MPITestCase):
             good = ob.detdata[defaults.det_flags].data == 0
             good *= ob.shared[defaults.shared_flags].data == 0
             check_rms = np.std(ob.detdata[defaults.det_data].data[good])
-            # TODO does not pass self.assertLess(check_rms, rms_limit * rms[ob.name])
+            self.assertLess(check_rms, rms_limit * rms[ob.name])
 
         close_data(data)
 
