@@ -4,7 +4,8 @@
 
 import numpy as np
 
-def filter_poly2D(det_groups, templates, signals, masks, coeff):
+# fails comparison test in polyfilter
+def filter_poly2D_ted(det_groups, templates, signals, masks, coeff):
     """
     Solves for 2D polynomial coefficients at each sample.
 
@@ -33,7 +34,7 @@ def filter_poly2D(det_groups, templates, signals, masks, coeff):
             proj = np.dot(t, signals[isamp, good] * mask)
             ccinv = np.dot(t, t.T)
             # Fits the coefficients
-            coeff[isamp, igroup] = np.linalg.lstsq(ccinv, proj, rcond=None)[0]
+            coeff[isamp, igroup] = np.linalg.lstsq(ccinv, proj, rcond=1e-3)[0]
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

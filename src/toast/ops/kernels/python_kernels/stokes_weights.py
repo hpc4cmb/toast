@@ -29,6 +29,9 @@ def stokes_weights_IQU(
     zaxis = np.array([0, 0, 1], dtype=np.float64)
     xaxis = np.array([1, 0, 0], dtype=np.float64)
 
+    # insures hwp is a non empty array
+    hwp = None if (hwp.size == 0) else hwp
+
     # iterates on detectors and intervals
     n_det = quat_index.size
     for idet in range(n_det):
@@ -68,8 +71,6 @@ def stokes_weights_IQU(
             ax = m_x * orient[:, 0] + m_y * orient[:, 1] + m_z * orient[:, 2]
             ang = np.arctan2(ay, ax)
             if hwp is not None:
-                # TODO fails in ops_sim_tod_atm
-                #      operands could not be broadcast together with shapes (8850,) (0,) (8850,) 
                 ang += 2.0 * hwp[samples]
             ang *= 2.0
             weights[w_index][samples, 0] = cal
@@ -95,5 +96,6 @@ def stokes_weights_I(weight_index, weights, intervals, cal, use_accel):
         interval_end = interval.last + 1
         weights[weight_index, interval_start:interval_end] = cal
 
+
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_tod_dipole")'
+# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_tod_dipole"); toast.tests.run("ops_sim_tod_atm")'
