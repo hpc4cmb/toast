@@ -26,8 +26,8 @@ def filter_poly2D_ted(det_groups, templates, signals, masks, coeff):
     for isamp in range(nsample):
         # For each group of detectors
         for igroup in range(ngroup):
-            # Masks detectors not in this group         
-            good = (det_groups == igroup)
+            # Masks detectors not in this group
+            good = det_groups == igroup
             mask = masks[isamp, good]
             t = templates[good].T.copy() * mask
             # Projection
@@ -35,6 +35,7 @@ def filter_poly2D_ted(det_groups, templates, signals, masks, coeff):
             ccinv = np.dot(t, t.T)
             # Fits the coefficients
             coeff[isamp, igroup] = np.linalg.lstsq(ccinv, proj, rcond=1e-3)[0]
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_polyfilter")'

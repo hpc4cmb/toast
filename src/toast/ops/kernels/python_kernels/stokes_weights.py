@@ -6,6 +6,7 @@ import numpy as np
 
 from .math import qarray
 
+
 def stokes_weights_IQU(
     quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel
 ):
@@ -76,6 +77,7 @@ def stokes_weights_IQU(
             weights[w_index][samples, 0] = cal
             weights[w_index][samples, 1] = cal * eta * np.cos(ang)
             weights[w_index][samples, 2] = cal * eta * np.sin(ang)
+
 
 def stokes_weights_I(weight_index, weights, intervals, cal, use_accel):
     """

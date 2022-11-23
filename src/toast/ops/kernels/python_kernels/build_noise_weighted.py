@@ -69,7 +69,9 @@ def build_noise_weighted(
             shared_flags_samples = shared_flags[interval_start:interval_end]
             # keeps only good samples
             det_check = skip_det_flags or ((det_flags_samples & det_flag_mask) == 0)
-            shared_check = skip_shared_flags or ((shared_flags_samples & shared_flag_mask) == 0)
+            shared_check = skip_shared_flags or (
+                (shared_flags_samples & shared_flag_mask) == 0
+            )
             good_samples = (pixel_samples >= 0) & (det_check & shared_check)
             data_samples = data_samples[good_samples]
             pixel_samples = pixel_samples[good_samples]
@@ -81,7 +83,12 @@ def build_noise_weighted(
             # accumulates
             # cannot use += due to duplicated indices, np.add being atomic
             scaled_data = data_samples * det_scale_det
-            np.add.at(zmap, (local_submap, isubpix), scaled_data[:, np.newaxis] * weights_sample)
+            np.add.at(
+                zmap,
+                (local_submap, isubpix),
+                scaled_data[:, np.newaxis] * weights_sample,
+            )
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole"); toast.tests.run("ops_demodulate"); toast.tests.run("ops_pointing_wcs")'

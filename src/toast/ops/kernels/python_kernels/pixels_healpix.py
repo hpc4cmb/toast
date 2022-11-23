@@ -53,14 +53,19 @@ def pixels_healpix(
             samples = slice(interval.first, interval.last + 1, 1)
             dir = qarray.rotate(quats[q_index][samples], zaxis)
             # loops as the healpix operations are not vectorised to run on a batch of quaternions
-            for isample in range(interval.first, interval.last+1):
+            for isample in range(interval.first, interval.last + 1):
                 (phi, region, z, rtz) = healpix.vec2zphi(dir[isample])
-                pixels[p_index][isample] = healpix.zphi2nest(hpix, phi, region, z, rtz) if nest else healpix.zphi2ring(hpix, phi, region, z, rtz)
+                pixels[p_index][isample] = (
+                    healpix.zphi2nest(hpix, phi, region, z, rtz)
+                    if nest
+                    else healpix.zphi2ring(hpix, phi, region, z, rtz)
+                )
             good = (flags[samples] & flag_mask) == 0
             bad = np.logical_not(good)
             sub_maps = pixels[p_index][samples][good] // n_pix_submap
             hit_submaps[sub_maps] = 1
             pixels[p_index][samples][bad] = -1
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_ground"); toast.tests.run("ops_sim_satellite"); toast.tests.run("ops_demodulate"); toast.tests.run("ops_sim_tod_conviqt");'

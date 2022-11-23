@@ -40,6 +40,7 @@ def template_offset_add_to_signal(
         det_data[data_index, samples] += amp_vals
         offset += view_offset
 
+
 def template_offset_project_signal(
     data_index,
     det_data,
@@ -77,7 +78,9 @@ def template_offset_project_signal(
     for interval, view_offset in zip(intervals, n_amp_views):
         samples = slice(interval.first, interval.last + 1, 1)
         ampidx = (
-            offset + np.arange(interval.first, interval.last + 1, dtype=np.int64) // step_length
+            offset
+            + np.arange(interval.first, interval.last + 1, dtype=np.int64)
+            // step_length
         )
         ddata = det_data[data_index][samples]
         # skip sample if it is flagged
@@ -91,6 +94,7 @@ def template_offset_project_signal(
         # using np.add to insure atomicity
         np.add.at(amplitudes, ampidx, ddata)
         offset += view_offset
+
 
 def template_offset_apply_diag_precond(
     offset_var, amplitudes_in, amplitudes_out, use_accel
@@ -106,6 +110,7 @@ def template_offset_apply_diag_precond(
         None (the result is put in amplitudes_out).
     """
     amplitudes_out[:] = amplitudes_in * offset_var
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker")'

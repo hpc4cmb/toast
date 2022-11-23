@@ -44,7 +44,10 @@ def pointing_detector(
             new_quats = qarray.mult(boresight_samples, focalplane_det)
             # masks bad samples
             good_samples = (flags_samples & shared_flag_mask) == 0
-            quats[q_index, interval_start:interval_end, :] = np.where(good_samples[:,np.newaxis], new_quats, focalplane_det[np.newaxis,:])
-               
+            quats[q_index, interval_start:interval_end, :] = np.where(
+                good_samples[:, np.newaxis], new_quats, focalplane_det[np.newaxis, :]
+            )
+
+
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_demodulate"); toast.tests.run("ops_pointing_wcs")'

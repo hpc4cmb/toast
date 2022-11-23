@@ -16,6 +16,7 @@ from ..vis import set_matplotlib_backend
 from ._helpers import create_healpix_ring_satellite, create_outdir, close_data
 from .mpi import MPITestCase
 
+
 class SimDipoleTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -91,7 +92,7 @@ class SimDipoleTest(MPITestCase):
         pixels = ops.PixelsHealpix(
             nside=self.nside,
             nest=False,
-            detector_pointing=detpointing,            
+            detector_pointing=detpointing,
         )
         weights = ops.StokesWeights(
             mode="I",
