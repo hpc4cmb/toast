@@ -5,44 +5,6 @@
 import numpy as np
 from .math import qarray
 
-# TODO does not pass "ops_pointing_wcs"
-def pointing_detector_ted(
-    focalplane,
-    boresight,
-    quat_index,
-    quats,
-    intervals,
-    shared_flags,
-    shared_flag_mask,
-    use_accel,
-):
-    """
-    Args:
-        focalplane (array, double): size n_det*4
-        boresight (array, double): size n_samp*4
-        quat_index (array, int): size n_det
-        quats (array, double): size ???*n_samp*4
-        intervals (array, Interval): The intervals to modify (size n_view)
-        shared_flags (array, uint8): size n_samp
-        shared_flag_mask (uint8)
-        use_accel (bool): should weuse the accelerator
-
-    Returns:
-        None (the result is put in quats).
-    """
-    # iterates on all detectors and all intervals
-    n_det = quat_index.size
-    for idet in range(n_det):
-        q_index = quat_index[idet]
-        for interval in intervals:
-            samples = slice(interval.first, interval.last + 1, 1)
-            bore = np.array(boresight[samples])
-            if shared_flags is not None:
-                good = shared_flags[samples] & (shared_flag_mask == 0)
-                bore[np.invert(good)] = np.array([0, 0, 0, 1], dtype=np.float64)
-            quats[q_index][samples] = qarray.mult(bore, focalplane[idet])
-
-#----------
 
 def pointing_detector(
     focalplane,
