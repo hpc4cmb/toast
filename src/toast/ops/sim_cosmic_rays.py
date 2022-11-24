@@ -151,7 +151,7 @@ class InjectCosmicRays(Operator):
             exists = ob.detdata.ensure(
                 self.det_data, detectors=dets, create_units=self.det_data_units
             )
-            obsindx = ob.uid
+            sindx = ob.session.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
             size = ob.detdata[self.det_data][dets[0]].size
@@ -164,7 +164,7 @@ class InjectCosmicRays(Operator):
 
             for kk, det in enumerate(dets):
                 detindx = focalplane[det]["uid"]
-                key2 = obsindx
+                key2 = sindx
                 counter1 = detindx
 
                 rngdata = rng.random(

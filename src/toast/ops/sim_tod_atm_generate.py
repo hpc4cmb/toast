@@ -44,9 +44,7 @@ class GenerateAtmosphere(Operator):
         defaults.boresight_azel, help="Observation shared key for Az/El boresight"
     )
 
-    wind_intervals = Unicode(
-        "wind", help="Intervals to create for wind breaks"
-    )
+    wind_intervals = Unicode("wind", help="Intervals to create for wind breaks")
 
     shared_flags = Unicode(
         defaults.shared_flags,
@@ -62,7 +60,9 @@ class GenerateAtmosphere(Operator):
         "atm_sim", help="Data key to store the dictionary of sims per session"
     )
 
-    turnaround_interval = Unicode("turnaround", allow_none=True, help="Interval name for turnarounds")
+    turnaround_interval = Unicode(
+        "turnaround", allow_none=True, help="Interval name for turnarounds"
+    )
 
     realization = Int(
         0, help="If simulating multiple realizations, the realization index"
@@ -137,9 +137,7 @@ class GenerateAtmosphere(Operator):
         False, help="If True, redo and overwrite any cached atmospheric realizations."
     )
 
-    cache_only = Bool(
-        False, help="If True, only cache the atmosphere on disk."
-    )
+    cache_only = Bool(False, help="If True, only cache the atmosphere on disk.")
 
     debug_spectrum = Bool(False, help="If True, dump out Kolmogorov debug files")
 
@@ -247,18 +245,18 @@ class GenerateAtmosphere(Operator):
             elmin = None
             elmax = None
             for ob in sdata.obs:
-                ob_azmin, ob_azmax, ob_elmin, ob_elmax = self._get_scan_range(first_obs)
+                ob_azmin, ob_azmax, ob_elmin, ob_elmax = self._get_scan_range(ob)
                 if azmin is None:
                     azmin = ob_azmin
                     azmax = ob_azmax
                     elmin = ob_elmin
                     elmax = ob_elmax
                 else:
-                    azmin = np.min(azmin, ob_azmin)
-                    azmax = np.max(azmax, ob_azmax)
-                    elmin = np.min(elmin, ob_elmin)
-                    elmax = np.max(elmax, ob_elmax)
-            scan_range = (azmin, azmax, elmin, elmax)
+                    azmin = min(azmin, ob_azmin)
+                    azmax = max(azmax, ob_azmax)
+                    elmin = min(elmin, ob_elmin)
+                    elmax = max(elmax, ob_elmax)
+            scan_range = (azmin * u.rad, azmax * u.rad, elmin * u.rad, elmax * u.rad)
 
             # Loop over the time span in "wind_time"-sized chunks.
             # wind_time is intended to reflect the correlation length
@@ -334,7 +332,7 @@ class GenerateAtmosphere(Operator):
                         self._plot_snapshots(
                             sim,
                             log_prefix,
-                            ob.name,
+                            sname,
                             scan_range,
                             tmin,
                             tmax,
@@ -357,7 +355,9 @@ class GenerateAtmosphere(Operator):
             if not self.cache_only:
                 # Create the wind intervals
                 for ob in sdata.obs:
-                    ob.intervals.create_col(self.wind_intervals, wind_times, ob.shared[self.times])
+                    ob.intervals.create_col(
+                        self.wind_intervals, wind_times, ob.shared[self.times]
+                    )
         if not self.cache_only:
             # Add output to data
             data[self.output] = sim_output
@@ -491,7 +491,7 @@ class GenerateAtmosphere(Operator):
             elmin = obs.comm.comm_group.allreduce(elmin, op=MPI.MIN)
             elmax = obs.comm.comm_group.allreduce(elmax, op=MPI.MAX)
 
-        return azmin * u.radian, azmax * u.radian, elmin * u.radian, elmax * u.radian
+        return azmin, azmax, elmin, elmax
 
     @function_timer
     def _get_time_range(self, tmin, istart, times, tmax_tot, obs, weather):
@@ -531,10 +531,14 @@ class GenerateAtmosphere(Operator):
                 if self.turnaround_interval is not None:
                     iturn = 0
                     while iturn < len(obs.intervals[self.turnaround_interval]) - 1 and (
-                        times[istop] > obs.intervals[self.turnaround_interval][iturn].stop
+                        times[istop]
+                        > obs.intervals[self.turnaround_interval][iturn].stop
                     ):
                         iturn += 1
-                    if times[istop] > obs.intervals[self.turnaround_interval][iturn].stop:
+                    if (
+                        times[istop]
+                        > obs.intervals[self.turnaround_interval][iturn].stop
+                    ):
                         # We are past the last turnaround.
                         # Extend to the end of the observation.
                         istop = len(times)
@@ -830,4 +834,3 @@ class GenerateAtmosphere(Operator):
             "detdata": list(),
         }
         return prov
-

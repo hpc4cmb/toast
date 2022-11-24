@@ -89,6 +89,8 @@ class Statistics(Operator):
         nstat = 3  # Variance, Skewness, Kurtosis
 
         for obs in data.obs:
+            # NOTE:  We could use the session name / uid in the filename
+            # too for easy sorting.
             if obs.name is None:
                 fname_out = f"{self.name}_{obs.uid}.h5"
             else:

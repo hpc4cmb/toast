@@ -52,7 +52,7 @@ def init_xtalk_matrix(data, realization=0):
     counter2 = 1234567
     ob = data.obs[0]
     alldets = ob.telescope.focalplane.detectors
-    key2 = ob.uid
+    key2 = ob.session.uid
     Ndets = len(alldets)
     rngdata = rng.random(
         Ndets,
@@ -190,7 +190,6 @@ class CrossTalk(Operator):
             exists = ob.detdata.ensure(
                 self.det_data, detectors=dets, create_units=self.det_data_units
             )
-            obsindx = ob.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
             # we loop over all the procs except rank

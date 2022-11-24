@@ -431,7 +431,9 @@ class SimAtmosphere(Operator):
                         raise RuntimeError(msg)
 
             # Compute the absorption and loading for this observation
-            self._common_absorption_and_loading(ob, absorption_key, loading_key, comm)
+            self._common_absorption_and_loading(
+                ob, dets, absorption_key, loading_key, comm
+            )
 
             # Create temporary intervals by combining views
             if temporary_view != wind_intervals:
@@ -480,7 +482,9 @@ class SimAtmosphere(Operator):
         del data[atm_sim_key]
 
     @function_timer
-    def _common_absorption_and_loading(self, obs, absorption_key, loading_key, comm):
+    def _common_absorption_and_loading(
+        self, obs, dets, absorption_key, loading_key, comm
+    ):
         """Compute the (common) absorption and loading prior to bandpass convolution."""
 
         if absorption_key is None and loading_key is None:
@@ -492,54 +496,109 @@ class SimAtmosphere(Operator):
         weather = obs.telescope.site.weather
         bandpass = obs.telescope.focalplane.bandpass
 
-        freq_min, freq_max = bandpass.get_range()
-        n_freq = self.n_bandpass_freqs
-        freqs = np.linspace(freq_min, freq_max, n_freq)
-        if comm is None:
-            ntask = 1
-            my_rank = 0
-        else:
-            ntask = comm.size
-            my_rank = comm.rank
-        n_freq_task = int(np.ceil(n_freq / ntask))
-        my_start = min(my_rank * n_freq_task, n_freq)
-        my_stop = min(my_start + n_freq_task, n_freq)
-        my_n_freq = my_stop - my_start
+        if absorption_key is None and loading_key is None:
+            # Nothing to do
+            return
 
-        absorption = list()
-        loading = list()
-
-        if my_n_freq > 0:
-            if absorption_key is not None:
-                absorption = atm_absorption_coefficient_vec(
-                    altitude.to_value(u.meter),
-                    weather.air_temperature.to_value(u.Kelvin),
-                    weather.surface_pressure.to_value(u.Pa),
-                    weather.pwv.to_value(u.mm),
-                    freqs[my_start].to_value(u.GHz),
-                    freqs[my_stop - 1].to_value(u.GHz),
-                    my_n_freq,
-                )
-            if loading_key is not None:
-                loading = atm_atmospheric_loading_vec(
-                    altitude.to_value(u.meter),
-                    weather.air_temperature.to_value(u.Kelvin),
-                    weather.surface_pressure.to_value(u.Pa),
-                    weather.pwv.to_value(u.mm),
-                    freqs[my_start].to_value(u.GHz),
-                    freqs[my_stop - 1].to_value(u.GHz),
-                    my_n_freq,
-                )
-
-        if comm is not None:
-            if absorption_key is not None:
-                absorption = np.hstack(comm.allgather(absorption))
-            if loading_key is not None:
-                loading = np.hstack(comm.allgather(loading))
+        generate_absorption = False
         if absorption_key is not None:
-            obs[absorption_key] = absorption
+            if absorption_key in obs:
+                for det in dets:
+                    if det not in obs[absorption_key]:
+                        generate_absorption = True
+                        break
+            else:
+                generate_absorption = True
+
+        generate_loading = False
         if loading_key is not None:
-            obs[loading_key] = loading
+            if loading_key in obs:
+                for det in dets:
+                    if det not in obs[loading_key]:
+                        generate_loading = True
+                        break
+            else:
+                generate_loading = True
+
+        if (not generate_loading) and (not generate_absorption):
+            # Nothing to do for these detectors
+            return
+
+        if generate_loading:
+            if loading_key in obs:
+                # Delete stale data
+                del obs[loading_key]
+            obs[loading_key] = dict()
+
+        if generate_absorption:
+            if absorption_key in obs:
+                # Delete stale data
+                del obs[absorption_key]
+            obs[absorption_key] = dict()
+
+        # The focalplane likely has groups of detectors whose bandpass spans
+        # the same frequency range.  First we build this grouping.
+
+        freq_groups = dict()
+        for det in dets:
+            dfmin, dfmax = bandpass.get_range(det=det)
+            fkey = f"{dfmin} {dfmax}"
+            if fkey not in freq_groups:
+                freq_groups[fkey] = list()
+            freq_groups[fkey].append(det)
+
+        # Work on each frequency group of detectors.  Collectively use the
+        # processes in the group to do the calculation.
+
+        for fkey, fdets in freq_groups.items():
+            freq_min, freq_max = bandpass.get_range(det=fdets[0])
+            n_freq = self.n_bandpass_freqs
+            freqs = np.linspace(freq_min, freq_max, n_freq)
+            if comm is None:
+                ntask = 1
+                my_rank = 0
+            else:
+                ntask = comm.size
+                my_rank = comm.rank
+            n_freq_task = int(np.ceil(n_freq / ntask))
+            my_start = min(my_rank * n_freq_task, n_freq)
+            my_stop = min(my_start + n_freq_task, n_freq)
+            my_n_freq = my_stop - my_start
+
+            absorption = list()
+            loading = list()
+
+            if my_n_freq > 0:
+                if generate_absorption:
+                    absorption = atm_absorption_coefficient_vec(
+                        altitude.to_value(u.meter),
+                        weather.air_temperature.to_value(u.Kelvin),
+                        weather.surface_pressure.to_value(u.Pa),
+                        weather.pwv.to_value(u.mm),
+                        freqs[my_start].to_value(u.GHz),
+                        freqs[my_stop - 1].to_value(u.GHz),
+                        my_n_freq,
+                    )
+                if generate_loading:
+                    loading = atm_atmospheric_loading_vec(
+                        altitude.to_value(u.meter),
+                        weather.air_temperature.to_value(u.Kelvin),
+                        weather.surface_pressure.to_value(u.Pa),
+                        weather.pwv.to_value(u.mm),
+                        freqs[my_start].to_value(u.GHz),
+                        freqs[my_stop - 1].to_value(u.GHz),
+                        my_n_freq,
+                    )
+
+            if comm is not None:
+                if generate_absorption:
+                    absorption = np.hstack(comm.allgather(absorption))
+                if generate_loading:
+                    loading = np.hstack(comm.allgather(loading))
+            if generate_absorption:
+                obs[absorption_key][fkey] = absorption
+            if generate_loading:
+                obs[loading_key][fkey] = loading
 
     def _finalize(self, data, **kwargs):
         return
@@ -566,4 +625,3 @@ class SimAtmosphere(Operator):
             ],
         }
         return prov
-

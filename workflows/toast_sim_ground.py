@@ -671,7 +671,7 @@ def reduce_data(job, args, data):
 
     # Optionally run Madam
 
-    if toast.ops.madam.available():
+    if toast.ops.madam.available() and ops.madam.enabled:
         ops.madam.params = toast.ops.madam_params_from_mapmaker(ops.mapmaker)
         ops.madam.pixel_pointing = job.pixels_final
         ops.madam.stokes_weights = job.weights_final

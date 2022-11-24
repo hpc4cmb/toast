@@ -575,9 +575,12 @@ def fake_hexagon_focalplane(
 
     n_det = len(det_data)
 
+    nominal_freq = str(int(bandcenter.to_value(u.GHz)))
+    det_names = [f"{x}-{nominal_freq}" for x in det_data.keys()]
+
     det_table = QTable(
         [
-            Column(name="name", data=[x for x in det_data.keys()]),
+            Column(name="name", data=det_names),
             Column(name="quat", data=[det_data[x]["quat"] for x in det_data.keys()]),
             Column(name="pol_leakage", length=n_det, unit=None),
             Column(name="psi_pol", length=n_det, unit=u.rad),
@@ -597,8 +600,6 @@ def fake_hexagon_focalplane(
     np.random.seed(random_seed)
 
     for idet, det in enumerate(det_data.keys()):
-        det_table[idet]["name"] = det
-        det_table[idet]["quat"] = det_data[det]["quat"]
         det_table[idet]["pol_leakage"] = epsilon
         # psi_pol is the rotation from the PXX beam frame to the polarization
         # sensitive direction.
@@ -731,9 +732,12 @@ def fake_rhombihex_focalplane(
 
     n_det = len(det_data)
 
+    nominal_freq = str(int(bandcenter.to_value(u.GHz)))
+    det_names = [f"{x}-{nominal_freq}" for x in det_data.keys()]
+
     det_table = QTable(
         [
-            Column(name="name", data=[x for x in det_data.keys()]),
+            Column(name="name", data=det_names),
             Column(name="quat", data=[det_data[x]["quat"] for x in det_data.keys()]),
             Column(name="pol_leakage", length=n_det, unit=None),
             Column(name="psi_pol", length=n_det, unit=u.rad),
@@ -753,8 +757,6 @@ def fake_rhombihex_focalplane(
     np.random.seed(random_seed)
 
     for idet, det in enumerate(det_data.keys()):
-        det_table[idet]["name"] = det
-        det_table[idet]["quat"] = det_data[det]["quat"]
         det_table[idet]["pol_leakage"] = epsilon
         # psi_pol is the rotation from the PXX beam frame to the polarization
         # sensitive direction.

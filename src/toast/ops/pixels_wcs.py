@@ -391,7 +391,7 @@ class PixelsWCS(Operator):
                             self._local_submaps[
                                 ob.detdata[self.pixels][det, vslice][good]
                                 // self._n_pix_submap
-                            ] = True
+                            ] = 1
 
                 if data.comm.group_rank == 0:
                     msg = (
