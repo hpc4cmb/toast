@@ -16,6 +16,6 @@ echo "*** spawns MPI processes independently (they each have a comm world of"
 echo "*** one process.  So we are not really testing much.  Change this to"
 echo "*** two processes once it works."
 echo "======================================================================="
-com="mpirun -np 1 python -c 'import toast.tests; toast.tests.run()'"
+com="mpirun -np 1 python -m mpi4py -c 'import toast.tests; toast.tests.run()'"
 echo ${com}
 eval ${com}

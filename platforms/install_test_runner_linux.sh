@@ -29,4 +29,7 @@ cmake \
 
 make -j 2 install
 
+# Copy additional test scripts
+cp ${toastdir}/etc/test_mpi_exit_code* /usr/local/bin/
+
 popd >/dev/null 2>&1
