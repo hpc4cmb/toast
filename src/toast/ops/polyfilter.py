@@ -63,7 +63,8 @@ class PolyFilter2D(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
@@ -452,7 +453,8 @@ class PolyFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     poly_flag_mask = Int(
@@ -626,7 +628,8 @@ class CommonModeFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging"
     )
 
     shared_flags = Unicode(
