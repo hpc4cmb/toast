@@ -23,7 +23,6 @@ class INTERVALS_JAX:
         self.first = jax.device_put(data.first)
         self.last = jax.device_put(data.last)
         # sets Numpy buffer aside in case we want to return it
-        # TODO we could just alocate a new buffer later
         self.host_data = data.host_data if isinstance(data, INTERVALS_JAX) else data
 
     def compute_max_intervals_length(intervals):

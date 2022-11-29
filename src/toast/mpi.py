@@ -61,16 +61,15 @@ if use_accel_omp or use_accel_jax:
         accel_assign_device(node_procs, node_rank, False)
     else:
         import jax
-
-        n_target = len(jax.devices())
-        if n_target == 0:
+        devices = jax.local_devices()
+        n_devices = len(devices)
+        if n_devices == 0:
+            # No device, JAX will display a warning and default to CPU
             jax_local_device = 0
         else:
-            proc_per_dev = node_procs // n_target
-            if n_target * proc_per_dev < node_procs:
-                proc_per_dev += 1
-            target_dev = node_rank // proc_per_dev
-            jax_local_device = jax.devices()[target_dev]
+            # NOTE: work under the assumption that consecutive ranks are on the same node
+            # TODO: is `node_rank` a node-local rank?
+            jax_local_device = devices[node_rank % n_devices]
 else:
     # Disabled == True
     accel_assign_device(1, 0, True)

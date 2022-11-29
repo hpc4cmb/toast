@@ -52,7 +52,6 @@ if use_accel_omp and use_accel_jax:
 # MPI initialization.
 jax_local_device = None
 
-
 # Wrapper functions that work with either numpy arrays mapped to omp device memory
 # or jax arrays.
 
