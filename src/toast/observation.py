@@ -68,6 +68,7 @@ def set_default_values(values=None):
         "shared_mask_irregular": 4,
         "det_mask_invalid": 1,
         "det_mask_sso": 1 + 2,
+        "det_mask_processing": 2,
         #
         # ground-specific flag masks
         #
