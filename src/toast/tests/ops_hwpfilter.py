@@ -38,28 +38,19 @@ class HWPFilterTest(MPITestCase):
         sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
 
+        ops.Copy(detdata=[(defaults.det_data, "signal_orig")]).apply(data)
+
         # Make fake flags
         fake_flags(data)
 
-        rms_noise = dict()
-        rms_hwpss = dict()
         for ob in data.obs:
             hwp_angle = ob.shared[defaults.hwp_angle].data
-            rms_noise[ob.name] = dict()
-            rms_hwpss[ob.name] = dict()
             for det in ob.local_detectors:
-                flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
-                flags |= ob.detdata[defaults.det_flags][det]
-                good = flags == 0
                 # Add HWP-synchronous signal to the data
                 order = 4
-                rms_noise[ob.name][det] = np.std(
-                    ob.detdata[defaults.det_data][det][good]
-                )
                 ob.detdata[defaults.det_data][det] += np.cos(order * hwp_angle)
-                rms_hwpss[ob.name][det] = np.std(
-                    ob.detdata[defaults.det_data][det][good]
-                )
+
+        ops.Copy(detdata=[(defaults.det_data, "signal_copy")]).apply(data)
 
         # Filter
 
@@ -75,12 +66,23 @@ class HWPFilterTest(MPITestCase):
                 flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
-                check_rms = np.std(ob.detdata[defaults.det_data][det][good])
-                # print(
-                #     f"check_rms = {check_rms}, "
-                #     f"rms_hwpss = {rms_hwpss[ob.name][det]}, "
-                #     f"rms_noise = {rms_noise[ob.name][det]}"
-                # )
-                self.assertTrue(check_rms <= rms_noise[ob.name][det])
+                orig_signal = ob.detdata["signal_orig"][det]
+                old_signal = ob.detdata["signal_copy"][det]
+                new_signal = ob.detdata[defaults.det_data][det]
+                # Check that the filtered signal is cleaner than the input signal
+                if np.std(new_signal[good]) > np.std(old_signal[good]):
+                    import pdb
+                    import matplotlib.pyplot as plt
+                    pdb.set_trace()
+                self.assertTrue(
+                    np.std(new_signal[good]) < np.std(old_signal[good])
+                )
+                # Check that the flagged samples were also cleaned and not,
+                # for example, set to zero. Use np.diff() to remove any
+                # residual trend
+                self.assertTrue(
+                    np.std(np.diff(new_signal) - np.diff(orig_signal))
+                    < 0.1 * np.std(np.diff(new_signal))
+                )
 
         close_data(data)

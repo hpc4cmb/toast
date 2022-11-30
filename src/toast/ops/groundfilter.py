@@ -292,12 +292,11 @@ class GroundFilter(Operator):
         if self.detrend:
             trend = np.zeros_like(ref)
             add_templates(trend, legendre_trend, coeff[: self.trend_order])
-            ref[good] -= trend[good]
+            ref -= trend
         # Ground template
         grtemplate = np.zeros_like(ref)
         add_templates(grtemplate, legendre_filter, coeff[self.trend_order :])
-        ref[good] -= grtemplate[good]
-        ref[np.logical_not(good)] = 0
+        ref -= grtemplate
         return
 
     @function_timer

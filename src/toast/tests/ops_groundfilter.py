@@ -38,20 +38,18 @@ class GroundFilterTest(MPITestCase):
         sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
 
+        ops.Copy(detdata=[(defaults.det_data, "signal_orig")]).apply(data)
+
         # Make fake flags
         fake_flags(data)
 
-        rms = dict()
+        # Add scan-synchronous signal to the data
         for ob in data.obs:
             az = ob.shared[defaults.azimuth].data * 100
-            rms[ob.name] = dict()
             for det in ob.local_detectors:
-                flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
-                flags |= ob.detdata[defaults.det_flags][det]
-                good = flags == 0
-                # Add scan-synchronous signal to the data
                 ob.detdata[defaults.det_data][det] += az
-                rms[ob.name][det] = np.std(ob.detdata[defaults.det_data][det][good])
+
+        ops.Copy(detdata=[(defaults.det_data, "signal_copy")]).apply(data)
 
         # Filter
 
@@ -62,7 +60,7 @@ class GroundFilterTest(MPITestCase):
             split_template=False,
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_invalid,
             shared_flags=defaults.shared_flags,
             shared_flag_mask=self.shared_flag_mask,
             view=None,
@@ -74,9 +72,18 @@ class GroundFilterTest(MPITestCase):
                 flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
-                check_rms = np.std(ob.detdata[defaults.det_data][det][good])
-                # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
-                self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
+                orig_signal = ob.detdata["signal_orig"][det]
+                old_signal = ob.detdata["signal_copy"][det]
+                new_signal = ob.detdata[defaults.det_data][det]
+                # Check that the filtered signal is cleaner than the input signal
+                self.assertTrue(
+                    np.std(new_signal[good]) < 0.1 * np.std(old_signal[good])
+                )
+                # Check that the flagged samples were also cleaned and not,
+                # for example, set to zero
+                self.assertTrue(
+                    np.std(new_signal - orig_signal) < 0.1 * np.std(new_signal)
+                )
         close_data(data)
 
     def test_groundfilter_split(self):
