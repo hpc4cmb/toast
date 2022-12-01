@@ -270,7 +270,8 @@ def test(name=None, verbosity=2):
         ret = comm.allreduce(ret, op=MPI.SUM)
 
     if ret > 0:
-        sys.exit(ret)
+        print(f"{ret} Processes had failures")
+        sys.exit(6)
 
     # alltimers = timing.gather_timers(comm=comm)
     # if rank == 0:

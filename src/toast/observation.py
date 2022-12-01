@@ -661,7 +661,13 @@ class Observation(MutableMapping):
 
         # Do the actual redistribution
         new_shr_manager, new_det_manager, new_intervals_manager = redistribute_data(
-            self.dist, new_dist, self.shared, self.detdata, self.intervals, times=times
+            self.dist,
+            new_dist,
+            self.shared,
+            self.detdata,
+            self.intervals,
+            times=times,
+            dbg=self.name,
         )
 
         # Replace our distribution and data managers with the new ones.

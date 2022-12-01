@@ -11,6 +11,7 @@ import numpy.testing as nt
 from astropy import units as u
 from pshmem import MPIShared
 
+from ..data import Data
 from ..mpi import MPI, Comm
 from ..observation import DetectorData, Observation
 from ..observation import default_values as defaults
@@ -477,7 +478,7 @@ class ObservationTest(MPITestCase):
                 )
         close_data(data)
 
-    def test_redistribute(self):
+    def create_redist_data(self):
         # Populate the observations
         np.random.seed(12345)
         rms = 10.0
@@ -549,10 +550,14 @@ class ObservationTest(MPITestCase):
                 )
 
             # Test the redistribution of intervals that align with scanning pattern
-            obs.intervals["frames"] = (
-                obs.intervals["scanning"] | obs.intervals["turnaround"]
-            )
-            obs.intervals["frames"] |= obs.intervals["elnod"]
+            # obs.intervals["frames"] = (
+            #     obs.intervals["scanning"] | obs.intervals["turnaround"]
+            # )
+            # obs.intervals["frames"] |= obs.intervals["elnod"]
+        return data
+
+    def test_redistribute(self):
+        data = self.create_redist_data()
 
         # Redistribute, and make a copy for verification later
         original = list()
@@ -576,6 +581,75 @@ class ObservationTest(MPITestCase):
                 print(f"Rank {self.comm.rank}: {orig} != {ob}", flush=True)
             self.assertTrue(ob == orig)
 
+        close_data(data)
+
+    def test_partial_redist(self):
+        data = self.create_redist_data()
+
+        # Zero signal values
+        for ob in data.obs:
+            ob.detdata[defaults.det_data][:] = 0.0
+
+        # Make a copy without redistribution for later checking
+        inplace = Data(data.comm)
+        for ob in data.obs:
+            new_ob = ob.duplicate(times=defaults.times)
+            for idet, det in enumerate(new_ob.all_detectors):
+                if det in new_ob.local_detectors:
+                    new_vals = (
+                        idet * new_ob.n_all_samples
+                        + new_ob.local_index_offset
+                        + np.arange(new_ob.n_local_samples)
+                    )
+                    new_ob.detdata[defaults.det_data][det] = new_vals
+            inplace.obs.append(new_ob)
+
+        for ob in data.obs:
+            # Duplicate a subset of data
+            proc_rows = ob.dist.process_rows
+            temp_ob = ob.duplicate(
+                times=defaults.times,
+                meta=list(),
+                shared=[defaults.boresight_radec, defaults.boresight_azel],
+                detdata=[defaults.det_data],
+                intervals=list(),
+            )
+
+            # Redistribute
+            temp_ob.redistribute(1, times=defaults.times, override_sample_sets=None)
+            # temp_ob.redistribute(1, times=defaults.times)
+
+            # Modify the signal
+            for idet, det in enumerate(temp_ob.all_detectors):
+                if det not in temp_ob.local_detectors:
+                    raise RuntimeError("Redistributed obs should have all dets")
+                new_vals = (
+                    idet * temp_ob.n_all_samples
+                    + temp_ob.local_index_offset
+                    + np.arange(temp_ob.n_local_samples)
+                )
+                temp_ob.detdata[defaults.det_data][det] = new_vals
+
+            # Distribute back
+            temp_ob.redistribute(
+                proc_rows,
+                times=defaults.times,
+                override_sample_sets=ob.dist.sample_sets,
+            )
+
+            # Copy into place
+            for det in ob.local_detectors:
+                ob.detdata[defaults.det_data][det, :] = temp_ob.detdata[
+                    defaults.det_data
+                ][det, :]
+
+        # Verify
+        for ob, check in zip(data.obs, inplace.obs):
+            if ob != check:
+                print(f"{ob.name}:  {ob} != {check}")
+                self.assertTrue(False)
+
+        del inplace
         close_data(data)
 
     # The code below is here for reference, but we cannot actually test this

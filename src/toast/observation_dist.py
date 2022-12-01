@@ -795,7 +795,13 @@ def redistribute_shared_data(
 
 
 def redistribute_data(
-    old_dist, new_dist, shared_manager, detdata_manager, intervals_manager, times=None
+    old_dist,
+    new_dist,
+    shared_manager,
+    detdata_manager,
+    intervals_manager,
+    times=None,
+    dbg=None,
 ):
     """Helper function to redistribute data in an observation.
 
