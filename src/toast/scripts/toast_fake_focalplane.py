@@ -190,7 +190,7 @@ def main():
     # Guard against being called with multiple processes
     mpiworld, procs, rank = get_world()
     if rank == 0:
-        with H5File(args.out, "w", comm=world, force_serial=True) as f:
+        with H5File(args.out, "w", comm=mpiworld, force_serial=True) as f:
             fp.save_hdf5(f.handle)
         plotfile = "{}.pdf".format(args.out)
         plot_focalplane(
