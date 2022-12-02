@@ -847,8 +847,8 @@ class DetDataManager(MutableMapping):
             return
         if not self._internal[key].accel_exists():
             msg = f"Detector data '{key}' type = {type(self._internal[key])} is not present on device, cannot delete"
-            log.error(msg)
-            raise RuntimeError(msg)
+            log.warning(msg)
+            return
         log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete")
         self._internal[key].accel_delete()
 
@@ -1452,8 +1452,8 @@ class SharedDataManager(MutableMapping):
         if self.accel_exists(key):
             log = Logger.get()
             msg = f"Data already exists on device, cannot create"
-            log.error(msg)
-            raise RuntimeError(msg)
+            log.warning(msg)
+            return
 
         log.verbose(f"SharedDataMgr {key} accel_create")
         if use_accel_omp:
@@ -1488,8 +1488,8 @@ class SharedDataManager(MutableMapping):
             # The active copy is on the device
             log = Logger.get()
             msg = f"Active data is already on device, cannot update"
-            log.error(msg)
-            raise RuntimeError(msg)
+            log.warning(msg)
+            return
 
         log.verbose(f"SharedDataMgr {key} accel_update_device")
         if use_accel_omp:
@@ -1520,14 +1520,14 @@ class SharedDataManager(MutableMapping):
             raise RuntimeError(msg)
         if not self.accel_exists(key):
             msg = f"Shared data '{key}' is not present on device, cannot copy to host"
-            log.error(msg)
-            raise RuntimeError(msg)
+            log.warning(msg)
+            return
         if not self._accel_used[key]:
             # The active copy is on the host
             log = Logger.get()
             msg = f"Active data is already on host, cannot update"
-            log.error(msg)
-            raise RuntimeError(msg)
+            log.warning(msg)
+            return
 
         log.verbose(f"SharedDataMgr {key} accel_update_host")
         if use_accel_omp:
@@ -1558,8 +1558,8 @@ class SharedDataManager(MutableMapping):
             raise RuntimeError(msg)
         if not self.accel_exists(key):
             msg = f"Shared data '{key}' is not present on device, cannot delete"
-            log.error(msg)
-            raise RuntimeError(msg)
+            log.warning(msg)
+            return
 
         log.verbose(f"SharedDataMgr {key} accel_delete")
         if use_accel_omp:
@@ -2131,8 +2131,8 @@ class IntervalsManager(MutableMapping):
             return
         if not self[key].accel_exists():
             msg = f"Intervals list '{key}' is not present on device, cannot delete"
-            log.error(msg)
-            raise RuntimeError(msg)
+            log.warning(msg)
+            return
         log.verbose(f"IntervalsManager {key} accel_delete")
         self[key].accel_delete()
 
