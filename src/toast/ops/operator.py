@@ -44,11 +44,22 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if use_accel and not self.accel_have_requires(data):
-                msg = f"Operator {self.name} exec: required inputs not on device. "
-                msg += "There is likely a problem with a Pipeline or the "
-                msg += "operator dependencies."
-                raise RuntimeError(msg)
+            # insures data is where it should be for this operator
+            if use_accel:
+                requires = self.requires()
+                if self.supports_accel():
+                    # make sure all inputs are on GPU
+                    # no-op if they are already staged
+                    data.accel_create(requires)
+                    data.accel_update_device(requires)
+                else:
+                    # make sure all inputs are on CPU
+                    # no-op if they are already staged
+                    data.accel_update_host(requires)
+                    # displays a message to push users to keep their operators GPU-able
+                    log = Logger.get()
+                    log.debug(f"Had to move some data back to host as '{self}' does not support accel.")
+            # runs the operator
             self._exec(
                 data,
                 detectors=detectors,
@@ -80,11 +91,6 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if use_accel and not self.accel_have_requires(data):
-                msg = f"Operator {self.name} finalize: required inputs not on device. "
-                msg += "There is likely a problem with a Pipeline or the "
-                msg += "operator dependencies."
-                raise RuntimeError(msg)
             return self._finalize(data, use_accel=use_accel, **kwargs)
         else:
             if data.comm.world_rank == 0:
@@ -170,7 +176,7 @@ class Operator(TraitConfig):
         return prov
 
     def _supports_accel(self):
-        return True  # TODO False
+        return False
 
     def supports_accel(self):
         """Query whether the operator supports GPU computing
@@ -180,43 +186,6 @@ class Operator(TraitConfig):
 
         """
         return self._supports_accel()
-
-    def accel_have_requires(self, data):
-        # Helper function to determine if all requirements are met to use accelerator
-        # for a data object.
-        log = Logger.get()
-        if not self.supports_accel():
-            # No support for OpenACC
-            return False
-        all_present = True
-        req = self.requires()
-        for ob in data.obs:
-            for key in req["detdata"]:
-                if not ob.detdata.accel_exists(key):
-                    msg = f"{self.name}:  obs {ob.name}, detdata {key} not on device"
-                    all_present = False
-                else:
-                    msg = f"{self.name}:  obs {ob.name}, detdata {key} is on device"
-                log.verbose(msg)
-            for key in req["shared"]:
-                if not ob.shared.accel_exists(key):
-                    msg = f"{self.name}:  obs {ob.name}, shared {key} not on device"
-                    all_present = False
-                else:
-                    msg = f"{self.name}:  obs {ob.name}, shared {key} is on device"
-                log.verbose(msg)
-            for key in req["intervals"]:
-                if not ob.intervals.accel_exists(key):
-                    msg = f"{self.name}:  obs {ob.name}, intervals {key} not on device"
-                    all_present = False
-                else:
-                    msg = f"{self.name}:  obs {ob.name}, intervals {key} is on device"
-                log.verbose(msg)
-        if all_present:
-            log.verbose(f"{self.name}:  all required inputs on device")
-        else:
-            log.verbose(f"{self.name}:  some required inputs not on device")
-        return all_present
 
     @classmethod
     def get_class_config_path(cls):

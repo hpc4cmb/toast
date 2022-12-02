@@ -78,29 +78,16 @@ class Pipeline(Operator):
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
-        # By default, if the calling code passed use_accel=True, then we assume the
-        # data staging is being handled at a higher level.
+        # If the calling code passed use_accel=True, we assume that they will retrieve the outputs properly
+        # otherwise, if we could benefit from using the accelerator, use it and get outputs back ourselves
         self._staged_accel = False
-
-        if not use_accel:
-            # The calling code determined that we do not have all the data present to
-            # use the accelerator.  HOWEVER, if our operators support it, we can stage
-            # the data to and from the device.
-            if detectors is None:
-                comp_dets = set(data.all_local_detectors(selection=None))
-            else:
-                comp_dets = set(detectors)
-            if accel_enabled() and self.supports_accel():
-                # All our operators support it.
-                msg = f"{self} fully supports accelerators, data to be staged: {self.requires()}"
-                log.verbose_rank(msg, comm=data.comm.comm_world)
-                use_accel = True
-
-            # those functions are out of the previoustest to appear on the profile independently of the value of use_accel
-            # deletes leftover intermediate values
-            self._delete_intermediates(data, use_accel)
-            # send the requirements to the device
-            self._stage_requirements_to_device(data, use_accel)
+        if (not use_accel) and accel_enabled() and self._supports_accel_partial():
+            # some of our operators support using the accelerator
+            msg = f"{self} supports accelerators."
+            log.verbose_rank(msg, comm=data.comm.comm_world)
+            use_accel = True
+            # keep track of the fact that it is our responsability to bring the outputs back from device
+            self._staged_accel = True
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -144,51 +131,6 @@ class Pipeline(Operator):
                     log.verbose(msg)
                     op.exec(data, detectors=selected_set, use_accel=use_accel)
 
-        return
-
-    @function_timer
-    def _delete_intermediates(self, data, use_accel):
-        """
-        Deals with data existing on the host from a previous call, but
-        not on the device.  Delete the host copy so that it will
-        be re-created consistently.
-        """
-        if use_accel:
-            log = Logger.get()
-            interm = self._get_intermediate()
-            log.verbose(f"intermediate = {interm}")
-            for ob in data.obs:
-                for obj in interm["detdata"]:
-                    if obj in ob.detdata and not ob.detdata.accel_exists(obj):
-                        msg = f"Pipeline intermediate detdata '{obj}' in "
-                        msg += f"observation '{ob.name}' exists on "
-                        msg += f"the host but not the device.  Deleting."
-                        log.verbose_rank(msg, comm=data.comm.comm_group)
-                        del ob.detdata[obj]
-                for obj in interm["shared"]:
-                    if obj in ob.shared and not ob.shared.accel_exists(obj):
-                        msg = f"Pipeline intermediate shared data '{obj}' in "
-                        msg += f"observation '{ob.name}' exists on "
-                        msg += f"the host but not the device.  Deleting."
-                        log.verbose_rank(msg, comm=data.comm.comm_group)
-                        del ob.shared[obj]
-                for obj in interm["intervals"]:
-                    if obj in ob.intervals and not ob.intervals.accel_exists(obj):
-                        msg = f"Pipeline intermediate intervals '{obj}' in "
-                        msg += f"observation '{ob.name}' exists on "
-                        msg += f"the host but not the device.  Deleting."
-                        log.verbose_rank(msg, comm=data.comm.comm_group)
-                        del ob.intervals[obj]
-
-    @function_timer
-    def _stage_requirements_to_device(self, data, use_accel):
-        """move required data to the device"""
-        if use_accel:
-            requires = self.requires()
-            data.accel_create(requires)
-            data.accel_update_device(requires)
-            self._staged_accel = True
-
     @function_timer
     def _finalize(self, data, use_accel=False, **kwargs):
         log = Logger.get()
@@ -202,7 +144,7 @@ class Pipeline(Operator):
         # outputs should remain on the device so that they can be copied
         # out at the end automatically.
 
-        if not use_accel and self._staged_accel:
+        if self._staged_accel:
             use_accel = True
 
         if self.operators is not None:
@@ -210,7 +152,7 @@ class Pipeline(Operator):
                 log.verbose(msg)
                 result.append(op.finalize(data, use_accel=use_accel))
 
-        # Copy out from accelerator if we did the copy in.
+        # Copy output from accelerator if we asked for it to be staged.
         if self._staged_accel:
             # copy out the outputs to the CPU
             prov = self.provides()
@@ -218,13 +160,13 @@ class Pipeline(Operator):
             log.verbose(msg)
             data.accel_update_host(prov)
             # deletes the intermediates from the GPU
-            # otherwise, they will get REused by other pipelines despite still being on GPU
+            # otherwise, they might get REused by other pipelines despite still being on GPU
             interm = self._get_intermediate()
             msg = f"{pstr} {self} deleting accel data intermediate outputs: {interm}"
             log.verbose(msg)
             data.accel_delete(interm)
             # deletes the inputs
-            # otherwise, they will get REused by other pipelines despite still being on GPU
+            # otherwise, they might get REused by other pipelines despite still being on GPU
             req = self.requires()
             msg = f"{pstr} {self} deleting accel data inputs: {req}"
             log.verbose(msg)
@@ -290,15 +232,21 @@ class Pipeline(Operator):
             interm[k] = list(interm[k])
         return interm
 
+    def _supports_accel_partial(self):
+        """
+        Returns True if at least one of the operators is accelerator compatible.
+        """
+        for op in self.operators:
+            if op.supports_accel():
+                return True
+        return False
+
     def _supports_accel(self):
         """
-        Returns True if all the operators are GPU compatible.
+        Returns True if *all* the operators are accelerator compatible.
         """
         for op in self.operators:
             if not op.supports_accel():
-                log = Logger.get()
-                msg = f"{self} does not support accel because of '{op}'"
-                log.debug(msg)
                 return False
         return True
 

@@ -5,7 +5,7 @@
 import numpy as np
 
 # fails comparison test in polyfilter
-def filter_poly2D_ted(det_groups, templates, signals, masks, coeff):
+def filter_poly2D(det_groups, templates, signals, masks, coeff):
     """
     Solves for 2D polynomial coefficients at each sample.
 
