@@ -134,7 +134,6 @@ class Pipeline(Operator):
     @function_timer
     def _finalize(self, data, use_accel=False, **kwargs):
         log = Logger.get()
-        result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
         msg = f"{pstr} {self} finalize"
         log.verbose(msg)
@@ -144,33 +143,26 @@ class Pipeline(Operator):
         # outputs should remain on the device so that they can be copied
         # out at the end automatically.
 
-        if self._staged_accel:
-            use_accel = True
+        # did we set use_accel to True?
+        use_accel = use_accel or self._staged_accel
 
+        # run finalize on all the operators in the pipeline
+        # NOTE: this might produce some output products
+        result = list()
         if self.operators is not None:
             for op in self.operators:
-                log.verbose(msg)
                 result.append(op.finalize(data, use_accel=use_accel))
 
-        # Copy output from accelerator if we asked for it to be staged.
+        # running finalize on the operators deleted their inputs from device leaving only the final outputs on device
+        # (both inputs and intermediate outputs will have been deleted)
+        # it is our responsability to copy these outputs back to the host
         if self._staged_accel:
-            # copy out the outputs to the CPU
             prov = self.provides()
             msg = f"{pstr} {self} copying out accel data outputs: {prov}"
             log.verbose(msg)
             data.accel_update_host(prov)
-            # deletes the intermediates from the GPU
-            # otherwise, they might get REused by other pipelines despite still being on GPU
-            interm = self._get_intermediate()
-            msg = f"{pstr} {self} deleting accel data intermediate outputs: {interm}"
-            log.verbose(msg)
-            data.accel_delete(interm)
-            # deletes the inputs
-            # otherwise, they might get REused by other pipelines despite still being on GPU
-            req = self.requires()
-            msg = f"{pstr} {self} deleting accel data inputs: {req}"
-            log.verbose(msg)
-            data.accel_delete(req)
+            data.accel_delete(prov)
+
         return result
 
     def _requires(self):
@@ -215,22 +207,14 @@ class Pipeline(Operator):
             prov[k] = list(prov[k])
         return prov
 
-    def _get_intermediate(self):
-        keys = ["global", "meta", "detdata", "shared", "intervals"]
-        # full provide minus intermediate
-        prov = self.provides()
-        # full provide
-        interm = {x: set() for x in keys}
+    def _supports_accel(self):
+        """
+        Returns True if *all* the operators are accelerator compatible.
+        """
         for op in self.operators:
-            oprov = op.provides()
-            for k in keys:
-                if k in oprov:
-                    interm[k] |= set(oprov[k])
-        # deduce intermediate by subtraction
-        for k in keys:
-            interm[k] -= set(prov[k])
-            interm[k] = list(interm[k])
-        return interm
+            if not op.supports_accel():
+                return False
+        return True
 
     def _supports_accel_partial(self):
         """
@@ -240,15 +224,6 @@ class Pipeline(Operator):
             if op.supports_accel():
                 return True
         return False
-
-    def _supports_accel(self):
-        """
-        Returns True if *all* the operators are accelerator compatible.
-        """
-        for op in self.operators:
-            if not op.supports_accel():
-                return False
-        return True
 
     def __str__(self):
         """

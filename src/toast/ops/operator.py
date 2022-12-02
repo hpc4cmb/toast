@@ -91,7 +91,16 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            return self._finalize(data, use_accel=use_accel, **kwargs)
+            # runs the operator's own finalize
+            result = self._finalize(data, use_accel=use_accel, **kwargs)
+            # clean up our data movements
+            if use_accel and self.supports_accel():
+                # delete inputs from device
+                requires = self.requires()
+                log.verbose(f"{self} deleting accel data inputs: {requires}")
+                data.accel_delete(requires)
+                # NOTE: outputs are left on device as it is not our responsability to deal with them
+            return result
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
