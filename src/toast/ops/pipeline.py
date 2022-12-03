@@ -157,11 +157,11 @@ class Pipeline(Operator):
         # (both inputs and intermediate outputs will have been deleted)
         # it is our responsability to copy these outputs back to the host
         if self._staged_accel:
-            prov = self.provides()
-            msg = f"{pstr} {self} copying out accel data outputs: {prov}"
+            provides = self.provides()
+            msg = f"{pstr} {self} copying out accel data outputs: {provides}"
             log.verbose(msg)
-            data.accel_update_host(prov)
-            data.accel_delete(prov)
+            data.accel_update_host(provides)
+            data.accel_delete(provides)
 
         return result
 
