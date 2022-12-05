@@ -170,7 +170,7 @@ class Operator(TraitConfig):
         return prov
 
     def _supports_accel(self):
-        return True  # TODO False
+        return False
 
     def supports_accel(self):
         """Query whether the operator supports GPU computing
