@@ -776,24 +776,46 @@ class SetDict(UserDict):
     Utility class representing a dictionary of sets with some inplace operations.
     NOTE: all values must be iterable and will be converted into sets.
     """
+
     def __setitem__(self, key, value):
-        """insures that values are stored as sets (this will be used by the constructor)"""
+        """
+        insures that values are stored as sets
+        this will be used by the `__init__` function
+        """
         super().__setitem__(key, set(value))
 
     def __isub__(self, other):
-        """-= operation performing set difference on all keys"""
-        for (key,value) in other.items():
-            self[key] -= value
+        """
+        -= operation performing set difference on all keys
+        `other` can be a normal dict
+        """
+        for (key, value) in other.items():
+            self[key] -= set(value)
         return self
 
     def __ior__(self, other):
-        """|= operation performing set union on all keys"""
-        for (key,value) in other.items():
-            self[key] |= value
+        """
+        |= operation performing set union on all keys
+        `other` can be a normal dict
+        """
+        for (key, value) in other.items():
+            self[key] |= set(value)
         return self
-    
+
     def __iand__(self, other):
-        """&= operation performing set intersection on all keys"""
-        for (key,value) in other.items():
-            self[key] &= value
+        """
+        &= operation performing set intersection on all keys
+        `other` can be a normal dict
+        """
+        for (key, value) in other.items():
+            self[key] &= set(value)
         return self
+
+    def __str__(self):
+        """prints only the non-empty sets for brevity sake"""
+        result = "{ "
+        for (k, v) in self.items():
+            if len(v) > 0:
+                result += f"{k}:{list(v)} "
+        result += "}"
+        return result

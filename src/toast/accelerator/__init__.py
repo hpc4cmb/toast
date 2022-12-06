@@ -283,8 +283,8 @@ class AcceleratorObject(object):
         if self.accel_exists():
             log = Logger.get()
             msg = f"Data already exists on device, cannot create"
-            log.warning(msg)
-            return
+            log.error(msg)
+            raise RuntimeError(msg)
         self._accel_create()
 
     def _accel_update_device(self):
@@ -310,8 +310,8 @@ class AcceleratorObject(object):
             # The active copy is already on the device
             log = Logger.get()
             msg = f"Active data is already on device, cannot update"
-            log.warning(msg)
-            return
+            log.error(msg)
+            raise RuntimeError(msg)
         self._accel_update_device()
         self.accel_used(True)
 
@@ -329,14 +329,14 @@ class AcceleratorObject(object):
         if not self.accel_exists():
             log = Logger.get()
             msg = f"Data does not exist on device, cannot update host"
-            log.warning(msg)
-            return
+            log.error(msg)
+            raise RuntimeError(msg)
         if not self.accel_in_use():
             # The active copy is already on the host
             log = Logger.get()
             msg = f"Active data is already on host, cannot update"
-            log.warning(msg)
-            return
+            log.error(msg)
+            raise RuntimeError(msg)
         self._accel_update_host()
         self.accel_used(False)
 
@@ -356,7 +356,7 @@ class AcceleratorObject(object):
             # NOTE: this check does not apply to JAX as the data will not be on device after an update_host
             log = Logger.get()
             msg = f"Data does not exist on device, cannot delete"
-            log.warning(msg)
-            return
+            log.error(msg)
+            raise RuntimeError(msg)
         self._accel_delete()
         self._accel_used = False

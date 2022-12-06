@@ -11,6 +11,7 @@ from ..traits import Int, List, Unicode, trait_docs
 from ..utils import Logger, SetDict
 from .operator import Operator
 
+
 @trait_docs
 class Pipeline(Operator):
     """Class representing a sequence of Operators.
@@ -83,7 +84,12 @@ class Pipeline(Operator):
             log.verbose_rank(msg, comm=data.comm.comm_world)
             use_accel = True
             # keeps track of the data that we are moving to device
-            self._staged_data = SetDict({key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]})
+            self._staged_data = SetDict(
+                {
+                    key: set()
+                    for key in ["global", "meta", "detdata", "shared", "intervals"]
+                }
+            )
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -119,7 +125,9 @@ class Pipeline(Operator):
                 msg = f"{pstr} {self} detector set {selected_set}"
                 log.verbose(msg)
                 for op in self.operators:
-                    self._exec_operator(op, data, detectors=selected_set, use_accel=use_accel)
+                    self._exec_operator(
+                        op, data, detectors=selected_set, use_accel=use_accel
+                    )
 
     @function_timer
     def _exec_operator(self, op, data, detectors, use_accel):
@@ -127,7 +135,8 @@ class Pipeline(Operator):
         # displays some debugging information
         log = Logger.get()
         msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} calling operator '{op.name}' exec()"
-        if (detectors is None): msg += " with ALL dets"
+        if detectors is None:
+            msg += " with ALL dets"
         log.verbose(msg)
         # insures data is where it should be for this operator
         if self._staged_data is not None:
@@ -139,14 +148,16 @@ class Pipeline(Operator):
                 data.accel_update_device(requires)
                 # updates our record of data on device
                 self._staged_data |= requires
-                self._staged_data |= SetDict(op.provides())
+                self._staged_data |= op.provides()
             else:
                 # get inputs not already on host
-                requires &= self._staged_data # intersection
+                requires &= self._staged_data  # intersection
                 data.accel_update_host(requires)
                 # displays a message to push users to keep their operators device-able
                 log = Logger.get()
-                log.debug(f"Had to move {requires} back to host as '{op}' does not support accel.")
+                log.debug(
+                    f"Had to move {requires} back to host as '{op}' does not support accel."
+                )
                 # updates our record of data on device
                 self._staged_data -= requires
         # runs operator
@@ -179,7 +190,7 @@ class Pipeline(Operator):
         if self._staged_data is not None:
             # get outputs back from device
             provides = SetDict(self.provides())
-            provides &= self._staged_data # intersection
+            provides &= self._staged_data  # intersection
             log.verbose(f"{pstr} {self} copying out accel data outputs: {provides}")
             data.accel_update_host(provides)
             # deleting all data from device
@@ -196,12 +207,14 @@ class Pipeline(Operator):
         (that will be provided by a previous operator).
         """
         # constructs the union of the requires minus the provides (in reverse order)
-        req = SetDict({key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]})
+        req = SetDict(
+            {key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]}
+        )
         for op in reversed(self.operators):
-            req |= SetDict(op.requires())
-            req -= SetDict(op.provides())
+            req |= op.requires()
+            req -= op.provides()
         # converts into a dictionary of lists
-        req = { k:list(v) for (k,v) in req.items() }
+        req = {k: list(v) for (k, v) in req.items()}
         return req
 
     def _provides(self):
@@ -212,12 +225,14 @@ class Pipeline(Operator):
         FIXME could a final result also be used by an intermediate operator?
         """
         # constructs the union of the provides minus the requires
-        prov = SetDict({key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]})
+        prov = SetDict(
+            {key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]}
+        )
         for op in self.operators:
-            prov |= SetDict(op.provides())
-            prov -= SetDict(op.requires())
+            prov |= op.provides()
+            prov -= op.requires()
         # converts into a dictionary of lists
-        prov = { k:list(v) for (k,v) in prov.items() }
+        prov = {k: list(v) for (k, v) in prov.items()}
         return prov
 
     def _supports_accel(self):

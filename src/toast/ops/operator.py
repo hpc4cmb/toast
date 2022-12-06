@@ -76,7 +76,7 @@ class Operator(TraitConfig):
         log = Logger.get()
         if self.enabled:
             msg = f"Calling finalize() for operator {self.name}"
-            log.debug(msg)
+            log.verbose(msg)
             return self._finalize(data, use_accel=use_accel, **kwargs)
         else:
             if data.comm.world_rank == 0:

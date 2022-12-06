@@ -462,16 +462,28 @@ class Data(MutableMapping):
                         f"Calling ob {ob.name} detdata accel_create for '{key}'"
                     )
                     ob.detdata.accel_create(key)
+                else:
+                    log.verbose(
+                        f"NOT calling ob {ob.name} detdata accel_create for '{key}' as it is alreaddy on device"
+                    )
             for key in names["shared"]:
                 if not ob.shared.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} shared accel_create for '{key}'")
                     ob.shared.accel_create(key)
+                else:
+                    log.verbose(
+                        f"NOT calling ob {ob.name} shared accel_create for '{key}' as it is alreaddy on device"
+                    )
             for key in names["intervals"]:
                 if not ob.intervals.accel_exists(key):
                     log.verbose(
                         f"Calling ob {ob.name} intervals accel_create for '{key}'"
                     )
                     ob.intervals.accel_create(key)
+                else:
+                    log.verbose(
+                        f"NOT calling ob {ob.name} intervals accel_create for '{key}' as it is alreaddy on device"
+                    )
 
         for key in names["global"]:
             val = self._internal[key]
@@ -479,6 +491,10 @@ class Data(MutableMapping):
                 if not val.accel_exists():
                     log.verbose(f"Calling Data accel_create for '{key}'")
                     val.accel_create()
+                else:
+                    log.verbose(
+                        f"NOT calling Data accel_create for '{key}' as it is alreaddy on device"
+                    )
             else:
                 log.verbose(
                     f"Did not apply Data accel_create to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
@@ -502,19 +518,31 @@ class Data(MutableMapping):
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
-                if not ob.detdata.accel_in_use(key):
+                if ob.detdata.accel_in_use(key):
+                    msg = f"Skipping {ob.name} detdata update_device for '{key}', "
+                    msg += "device data in use"
+                    log.verbose(msg)
+                else:
                     log.verbose(
                         f"Calling ob {ob.name} detdata update_device for '{key}'"
                     )
                     ob.detdata.accel_update_device(key)
             for key in names["shared"]:
-                if not ob.shared.accel_in_use(key):
+                if ob.shared.accel_in_use(key):
+                    msg = f"Skipping {ob.name} shared update_device for '{key}', "
+                    msg += "device data in use"
+                    log.verbose(msg)
+                else:
                     log.verbose(
                         f"Calling ob {ob.name} shared update_device for '{key}'"
                     )
                     ob.shared.accel_update_device(key)
             for key in names["intervals"]:
-                if not ob.intervals.accel_in_use(key):
+                if ob.intervals.accel_in_use(key):
+                    msg = f"Skipping {ob.name} intervals update_device for '{key}', "
+                    msg += "device data in use"
+                    log.verbose(msg)
+                else:
                     log.verbose(
                         f"Calling ob {ob.name} intervals update_device for '{key}'"
                     )
@@ -522,12 +550,16 @@ class Data(MutableMapping):
         for key in names["global"]:
             val = self._internal[key]
             if isinstance(val, AcceleratorObject):
-                if not val.accel_in_use():
+                if val.accel_in_use():
+                    msg = f"Skipping update_device for '{key}', "
+                    msg += "device data in use"
+                    log.verbose(msg)
+                else:
                     log.verbose(f"Calling Data update_device for '{key}'")
                     val.accel_update_device()
             else:
                 log.verbose(
-                    f"Did NOT apply Data accel_update_device to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                    f"Did not apply Data accel_update_device to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
                 )
 
     def accel_update_host(self, names):
@@ -548,31 +580,64 @@ class Data(MutableMapping):
         log = Logger.get()
         for ob in self.obs:
             for key in names["detdata"]:
-                if ob.detdata.accel_exists(key) and ob.detdata.accel_in_use(key):
+                if ob.detdata.accel_exists(key):
+                    if not ob.detdata.accel_in_use(key):
+                        msg = f"Skipping {ob.name} detdata update_host for '{key}', "
+                        msg += "host data in use"
+                        log.verbose(msg)
+                    else:
+                        log.verbose(
+                            f"Calling ob {ob.name} detdata update_host for '{key}'"
+                        )
+                        ob.detdata.accel_update_host(key)
+                else:
                     log.verbose(
-                        f"Calling ob {ob.name} detdata update_host for '{key}'"
+                        f"Skip update_host for ob {ob.name} detdata '{key}', data not present"
                     )
-                    ob.detdata.accel_update_host(key)
             for key in names["shared"]:
-                if ob.shared.accel_exists(key) and ob.shared.accel_in_use(key):
+                if ob.shared.accel_exists(key):
+                    if not ob.shared.accel_in_use(key):
+                        msg = f"Skipping {ob.name} shared update_host for '{key}', "
+                        msg += "host data in use"
+                        log.verbose(msg)
+                    else:
+                        log.verbose(
+                            f"Calling ob {ob.name} shared update_host for '{key}'"
+                        )
+                        ob.shared.accel_update_host(key)
+                else:
                     log.verbose(
-                        f"Calling ob {ob.name} shared update_host for '{key}'"
+                        f"Skip update_host for ob {ob.name} shared '{key}', data not present"
                     )
-                    ob.shared.accel_update_host(key)
             for key in names["intervals"]:
-                if ob.intervals.accel_exists(key) and ob.intervals.accel_in_use(key):
+                if ob.intervals.accel_exists(key):
+                    if not ob.intervals.accel_in_use(key):
+                        msg = f"Skipping {ob.name} intervals update_host for '{key}', "
+                        msg += "host data in use"
+                        log.verbose(msg)
+                    else:
+                        log.verbose(
+                            f"Calling ob {ob.name} intervals update_host for '{key}'"
+                        )
+                        ob.intervals.accel_update_host(key)
+                else:
                     log.verbose(
-                        f"Calling ob {ob.name} intervals update_host for '{key}'"
+                        f"Skip update_host for ob {ob.name} intervals '{key}', data not present"
                     )
-                    ob.intervals.accel_update_host(key)
         for key in names["global"]:
             val = self._internal[key]
-            if isinstance(val, AcceleratorObject) and val.accel_in_use():
-                log.verbose(f"Calling Data update_host for '{key}'")
-                val.accel_update_host()
+            if isinstance(val, AcceleratorObject):
+                if not val.accel_in_use():
+                    log.verbose(f"not val.accel_in_use for '{key}'")
+                    msg = f"Skipping update_host for '{key}', "
+                    msg += "host data in use"
+                    log.verbose(msg)
+                else:
+                    log.verbose(f"Calling Data update_host for '{key}'")
+                    val.accel_update_host()
             else:
                 log.verbose(
-                    f"Did NOT apply Data accel_update_host to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                    f"Did not apply Data accel_update_host to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
                 )
 
     def accel_delete(self, names):
@@ -598,16 +663,28 @@ class Data(MutableMapping):
                         f"Calling ob {ob.name} detdata accel_delete for '{key}'"
                     )
                     ob.detdata.accel_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} detdata '{key}', data not present"
+                    )
             for key in names["shared"]:
                 if ob.shared.accel_exists(key):
                     log.verbose(f"Calling ob {ob.name} shared accel_delete for '{key}'")
                     ob.shared.accel_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} shared '{key}', data not present"
+                    )
             for key in names["intervals"]:
                 if ob.intervals.accel_exists(key):
                     log.verbose(
                         f"Calling ob {ob.name} intervals accel_delete for '{key}'"
                     )
                     ob.intervals.accel_delete(key)
+                else:
+                    log.verbose(
+                        f"Skip delete for ob {ob.name} intervals '{key}', data not present"
+                    )
         for key in names["global"]:
             val = self._internal[key]
             if isinstance(val, AcceleratorObject):
@@ -615,7 +692,7 @@ class Data(MutableMapping):
                 val.accel_delete()
             else:
                 log.verbose(
-                    f"Did NOT apply Data accel_delete to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                    f"Did not apply Data accel_delete to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
                 )
 
     def accel_clear(self):
@@ -630,5 +707,5 @@ class Data(MutableMapping):
                 val.accel_delete()
             else:
                 log.verbose(
-                    f"Did NOT apply Data accel_clear to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
+                    f"Did not apply Data accel_clear to '{key}' of type '{type(val)}' as it does not derive from AcceleratorObject"
                 )
