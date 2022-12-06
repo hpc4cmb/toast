@@ -2,17 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from collections import OrderedDict
-
 import traitlets
 
 from ..accelerator import accel_enabled
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Int, List, Unicode, trait_docs
-from ..utils import Logger
+from ..utils import Logger, SetDict
 from .operator import Operator
-
 
 @trait_docs
 class Pipeline(Operator):
@@ -75,19 +72,18 @@ class Pipeline(Operator):
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
-
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
-        # If the calling code passed use_accel=True, we assume that they will retrieve the outputs properly
-        # otherwise, if we could benefit from using the accelerator, use it and get outputs back ourselves
-        self._staged_accel = False
+        # If the calling code passed use_accel=True, we assume that it will move the data for us
+        # otherwise, if possible, use the accelerator and deal with data movement ourselves
+        self._staged_data = None
         if (not use_accel) and accel_enabled() and self._supports_accel_partial():
             # some of our operators support using the accelerator
             msg = f"{self} supports accelerators."
             log.verbose_rank(msg, comm=data.comm.comm_world)
             use_accel = True
-            # keep track of the fact that it is our responsability to bring the outputs back from device
-            self._staged_accel = True
+            # keeps track of the data that we are moving to device
+            self._staged_data = SetDict({key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]})
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -97,9 +93,7 @@ class Pipeline(Operator):
         if len(self.detector_sets) == 1 and self.detector_sets[0] == "ALL":
             # Run the operators with all detectors at once
             for op in self.operators:
-                msg = f"{pstr} {self} calling operator '{op.name}' exec() with ALL dets"
-                log.verbose(msg)
-                op.exec(data, detectors=None, use_accel=use_accel)
+                self._exec_operator(op, data, detectors=None, use_accel=use_accel)
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
             all_local_dets = data.all_local_detectors(selection=detectors)
@@ -108,9 +102,7 @@ class Pipeline(Operator):
                 msg = f"{pstr} {self} SINGLE detector {det}"
                 log.verbose(msg)
                 for op in self.operators:
-                    msg = f"{pstr} {self} calling operator '{op.name}' exec()"
-                    log.verbose(msg)
-                    op.exec(data, detectors=[det], use_accel=use_accel)
+                    self._exec_operator(op, data, detectors=[det], use_accel=use_accel)
         else:
             # We have explicit detector sets
             det_check = set(detectors)
@@ -127,9 +119,38 @@ class Pipeline(Operator):
                 msg = f"{pstr} {self} detector set {selected_set}"
                 log.verbose(msg)
                 for op in self.operators:
-                    msg = f"{pstr} {self} calling operator '{op.name}' exec()"
-                    log.verbose(msg)
-                    op.exec(data, detectors=selected_set, use_accel=use_accel)
+                    self._exec_operator(op, data, detectors=selected_set, use_accel=use_accel)
+
+    @function_timer
+    def _exec_operator(self, op, data, detectors, use_accel):
+        """Runs an operator, dealing with data movement to/from device if needed."""
+        # displays some debugging information
+        log = Logger.get()
+        msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} calling operator '{op.name}' exec()"
+        if (detectors is None): msg += " with ALL dets"
+        log.verbose(msg)
+        # insures data is where it should be for this operator
+        if self._staged_data is not None:
+            requires = SetDict(op.requires())
+            if op.supports_accel():
+                # get inputs not already on device
+                requires -= self._staged_data
+                data.accel_create(requires)
+                data.accel_update_device(requires)
+                # updates our record of data on device
+                self._staged_data |= requires
+                self._staged_data |= SetDict(op.provides())
+            else:
+                # get inputs not already on host
+                requires &= self._staged_data # intersection
+                data.accel_update_host(requires)
+                # displays a message to push users to keep their operators device-able
+                log = Logger.get()
+                log.debug(f"Had to move {requires} back to host as '{op}' does not support accel.")
+                # updates our record of data on device
+                self._staged_data -= requires
+        # runs operator
+        op.exec(data, detectors=detectors, use_accel=use_accel)
 
     @function_timer
     def _finalize(self, data, use_accel=False, **kwargs):
@@ -143,8 +164,8 @@ class Pipeline(Operator):
         # outputs should remain on the device so that they can be copied
         # out at the end automatically.
 
-        # did we set use_accel to True?
-        use_accel = use_accel or self._staged_accel
+        # did we set use_accel to True when running?
+        use_accel = use_accel or (self._staged_data is not None)
 
         # run finalize on all the operators in the pipeline
         # NOTE: this might produce some output products
@@ -153,58 +174,50 @@ class Pipeline(Operator):
             for op in self.operators:
                 result.append(op.finalize(data, use_accel=use_accel))
 
-        # running finalize on the operators deleted their inputs from device leaving only the final outputs on device
-        # (both inputs and intermediate outputs will have been deleted)
-        # it is our responsability to copy these outputs back to the host
-        if self._staged_accel:
-            provides = self.provides()
-            msg = f"{pstr} {self} copying out accel data outputs: {provides}"
-            log.verbose(msg)
+        # get outputs back and clean up data
+        # if we are in charge of the data movement
+        if self._staged_data is not None:
+            # get outputs back from device
+            provides = SetDict(self.provides())
+            provides &= self._staged_data # intersection
+            log.verbose(f"{pstr} {self} copying out accel data outputs: {provides}")
             data.accel_update_host(provides)
-            data.accel_delete(provides)
+            # deleting all data from device
+            log.verbose(f"{pstr} {self} deleting accel data: {self._staged_data}")
+            data.accel_delete(self._staged_data)
+            self._staged_data = None
 
         return result
 
     def _requires(self):
-        # Work through the operator list in reverse order
-        # and prune intermediate products
-        # (that will be provided by a previous operator).
-        if self.operators is None:
-            return dict()
-        keys = ["global", "meta", "detdata", "shared", "intervals"]
-        req = {x: set() for x in keys}
+        """
+        Work through the operator list in reverse order
+        and prune intermediate products
+        (that will be provided by a previous operator).
+        """
+        # constructs the union of the requires minus the provides (in reverse order)
+        req = SetDict({key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]})
         for op in reversed(self.operators):
-            oreq = op.requires()
-            oprov = op.provides()
-            for k in keys:
-                if k in oreq:
-                    req[k] |= set(oreq[k])
-                if k in oprov:
-                    req[k] -= set(oprov[k])
-        for k in keys:
-            req[k] = list(req[k])
-
+            req |= SetDict(op.requires())
+            req -= SetDict(op.provides())
+        # converts into a dictionary of lists
+        req = { k:list(v) for (k,v) in req.items() }
         return req
 
     def _provides(self):
-        # Work through the operator list
-        # and prune intermediate products
-        # (that are be provided to an intermediate operator).
-        # FIXME could a final result also be used by an intermediate operator?
-        if self.operators is None:
-            return dict()
-        keys = ["global", "meta", "detdata", "shared", "intervals"]
-        prov = {x: set() for x in keys}
+        """
+        Work through the operator list
+        and prune intermediate products
+        (that are be provided to an intermediate operator).
+        FIXME could a final result also be used by an intermediate operator?
+        """
+        # constructs the union of the provides minus the requires
+        prov = SetDict({key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]})
         for op in self.operators:
-            oreq = op.requires()
-            oprov = op.provides()
-            for k in keys:
-                if k in oprov:
-                    prov[k] |= set(oprov[k])
-                if k in oreq:
-                    prov[k] -= set(oreq[k])
-        for k in keys:
-            prov[k] = list(prov[k])
+            prov |= SetDict(op.provides())
+            prov -= SetDict(op.requires())
+        # converts into a dictionary of lists
+        prov = { k:list(v) for (k,v) in prov.items() }
         return prov
 
     def _supports_accel(self):

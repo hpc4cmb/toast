@@ -44,22 +44,6 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            # insures data is where it should be for this operator
-            if use_accel:
-                requires = self.requires()
-                if self.supports_accel():
-                    # make sure all inputs are on GPU
-                    # no-op if they are already staged
-                    data.accel_create(requires)
-                    data.accel_update_device(requires)
-                else:
-                    # make sure all inputs are on CPU
-                    # no-op if they are already staged
-                    data.accel_update_host(requires)
-                    # displays a message to push users to keep their operators GPU-able
-                    log = Logger.get()
-                    log.debug(f"Had to move some data back to host as '{self}' does not support accel.")
-            # runs the operator
             self._exec(
                 data,
                 detectors=detectors,
@@ -91,16 +75,9 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            # runs the operator's own finalize
-            result = self._finalize(data, use_accel=use_accel, **kwargs)
-            # clean up our data movements
-            if use_accel and self.supports_accel():
-                # delete inputs from device
-                requires = self.requires()
-                log.verbose(f"{self} deleting accel data inputs: {requires}")
-                data.accel_delete(requires)
-                # NOTE: outputs are left on device as it is not our responsability to deal with them
-            return result
+            msg = f"Calling finalize() for operator {self.name}"
+            log.debug(msg)
+            return self._finalize(data, use_accel=use_accel, **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"

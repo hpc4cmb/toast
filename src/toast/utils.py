@@ -9,6 +9,7 @@ import importlib
 import os
 import warnings
 from tempfile import TemporaryDirectory
+from collections import UserDict
 
 import astropy.io.misc.hdf5 as aspy5
 import h5py
@@ -768,3 +769,31 @@ def unit_conversion(source, target):
     scale = 1.0 * source
     scale.to(target)
     return scale.value
+
+
+class SetDict(UserDict):
+    """
+    Utility class representing a dictionary of sets with some inplace operations.
+    NOTE: all values must be iterable and will be converted into sets.
+    """
+    def __setitem__(self, key, value):
+        """insures that values are stored as sets (this will be used by the constructor)"""
+        super().__setitem__(key, set(value))
+
+    def __isub__(self, other):
+        """-= operation performing set difference on all keys"""
+        for (key,value) in other.items():
+            self[key] -= value
+        return self
+
+    def __ior__(self, other):
+        """|= operation performing set union on all keys"""
+        for (key,value) in other.items():
+            self[key] |= value
+        return self
+    
+    def __iand__(self, other):
+        """&= operation performing set intersection on all keys"""
+        for (key,value) in other.items():
+            self[key] &= value
+        return self
