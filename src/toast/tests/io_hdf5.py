@@ -173,7 +173,7 @@ class IoHdf5Test(MPITestCase):
         for ob in data.obs:
             original[ob.name] = ob.duplicate(times="times")
 
-        saver = ops.SaveHDF5(volume=datadir, config=config)
+        saver = ops.SaveHDF5(volume=datadir, config=config, verify=True)
         saver.apply(data)
 
         if data.comm.comm_world is not None:
@@ -189,5 +189,33 @@ class IoHdf5Test(MPITestCase):
             if ob != orig:
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
+
+        close_data(data)
+
+    def test_save_load_ops_f32(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        datadir = os.path.join(self.outdir, "save_load_ops_f32")
+        if rank == 0:
+            os.makedirs(datadir)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        data, config = self.create_data()
+
+        # Make a copy for later comparison.
+        original = dict()
+        for ob in data.obs:
+            original[ob.name] = ob.duplicate(times="times")
+
+        saver = ops.SaveHDF5(
+            volume=datadir, config=config, detdata_float32=True, verify=True
+        )
+        saver.apply(data)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
 
         close_data(data)

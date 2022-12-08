@@ -555,7 +555,7 @@ def save_hdf5(
             if meta_group is not None:
                 kgroup = meta_group.create_group(k)
                 kgroup.attrs["class"] = object_fullname(v.__class__)
-            v.save_hdf5(kgroup, comm=comm)
+            v.save_hdf5(kgroup, obs)
             del kgroup
         elif isinstance(v, u.Quantity):
             if isinstance(v.value, np.ndarray):

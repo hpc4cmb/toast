@@ -11,6 +11,7 @@ import numpy.testing as nt
 from astropy import units as u
 from pshmem import MPIShared
 
+from .. import ops
 from ..data import Data
 from ..mpi import MPI, Comm
 from ..observation import DetectorData, Observation
@@ -483,6 +484,8 @@ class ObservationTest(MPITestCase):
         np.random.seed(12345)
         rms = 10.0
         data = create_ground_data(self.comm, sample_rate=10 * u.Hz)
+        ops.DefaultNoiseModel().apply(data)
+
         for obs in data.obs:
             n_samp = obs.n_local_samples
             dets = obs.local_detectors

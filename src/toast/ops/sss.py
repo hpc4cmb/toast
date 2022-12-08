@@ -185,7 +185,7 @@ class SimScanSynchronousSignal(Operator):
                 ).astype(dtype)
                 sss_map /= np.std(sss_map)
                 lon, lat = hp.pix2ang(
-                    self.nside, np.arange(npix, dtype=np.int), lonlat=True
+                    self.nside, np.arange(npix, dtype=np.int64), lonlat=True
                 )
                 scale = self.scale * (np.abs(lat) / 90 + 0.5) ** self.power
                 sss_map *= scale.to_value(self.units)

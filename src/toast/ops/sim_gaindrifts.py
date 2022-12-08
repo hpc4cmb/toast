@@ -245,7 +245,7 @@ class GainDrifter(Operator):
                 # inject the common mode but only an indepedendent slow drift
 
                 if self.detector_mismatch == 1:
-                    gain_common = np.zeros_like(det_group, dtype=np.float_)
+                    gain_common = np.zeros_like(det_group, dtype=np.float64)
                 else:
                     gain_common = []
                     for iw, w in enumerate(det_group):

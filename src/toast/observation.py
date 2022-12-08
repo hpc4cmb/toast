@@ -671,6 +671,11 @@ class Observation(MutableMapping):
             dbg=self.name,
         )
 
+        # Redistribute any metadata objects that support it.
+        for k, v in self._internal.items():
+            if hasattr(v, "redistribute"):
+                v.redistribute(self.dist, new_dist)
+
         # Replace our distribution and data managers with the new ones.
         del self.dist
         self.dist = new_dist

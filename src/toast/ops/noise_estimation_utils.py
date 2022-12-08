@@ -187,7 +187,7 @@ def crosscov_psd(
     # for the unflagged samples
     naverage = lagmax
 
-    nreal = np.int(np.ceil((time_stop - time_start) / stationary_period))
+    nreal = int(np.ceil((time_stop - time_start) / stationary_period))
 
     # Communicate lagmax samples from the beginning of the array
     # backwards in the MPI communicator
@@ -276,7 +276,7 @@ def crosscov_psd(
     # Collect the estimated covariance functions
 
     my_covs = {}
-    nreal_task = np.int(np.ceil(nreal / ntask))
+    nreal_task = int(np.ceil(nreal / ntask))
 
     if comm is None:
         for ireal in range(nreal):

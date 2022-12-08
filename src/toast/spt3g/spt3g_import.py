@@ -13,6 +13,7 @@ from astropy import units as u
 
 from ..instrument import Focalplane, GroundSite, SpaceSite
 from ..intervals import IntervalList
+from ..mpi import MPI, Comm
 from ..observation import Observation
 from ..timing import function_timer
 from ..utils import Environment, Logger, import_from_name
@@ -367,6 +368,18 @@ class import_obs_meta(object):
                     focalplane.load_hdf5(f)
                 del byte_reader
 
+                telescope = telescope_class(
+                    telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
+                )
+
+                # Make a fake obs for loading noise models
+                fake_obs = Observation(
+                    Comm(world=MPI.COMM_SELF),
+                    telescope,
+                    1,
+                    process_rows=1,
+                )
+
                 noise = dict()
                 for frm_model, obs_model in self._noise_models:
                     if frm_model not in frm:
@@ -378,12 +391,11 @@ class import_obs_meta(object):
                     byte_reader = io.BytesIO(np.array(frm[frm_model], dtype=np.uint8))
                     noise[obs_model] = noise_class()
                     with h5py.File(byte_reader, "r") as f:
-                        noise[obs_model].load_hdf5(f)
+                        noise[obs_model].load_hdf5(f, fake_obs)
                     del byte_reader
 
-        telescope = telescope_class(
-            telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
-        )
+                del fake_obs
+
         return name, uid, meta, detsets, telescope, session, noise
 
 

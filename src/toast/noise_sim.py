@@ -138,72 +138,181 @@ class AnalyticNoise(Noise):
         wt = 1.0 / (self._NET[det] ** 2) / self._rate[det]
         return wt.decompose()
 
-    def _save_hdf5(self, handle, comm, **kwargs):
-        """Internal method which can be overridden by derived classes."""
-        # First save the base class info
-        self._save_base_hdf5(handle, comm)
+    def _gather_sim(self, comm, out):
+        # Gather simulation properties to the rank zero process
+        if comm is None or comm.size == 1:
+            out["fmin"] = self._fmin
+            out["fknee"] = self._fknee
+            out["rate"] = self._rate
+            out["alpha"] = self._alpha
+            out["NET"] = self._NET
+            return out
 
+        pfmin = comm.gather(self._fmin, root=0)
+        pfknee = comm.gather(self._fknee, root=0)
+        prate = comm.gather(self._rate, root=0)
+        palpha = comm.gather(self._alpha, root=0)
+        pnet = comm.gather(self._NET, root=0)
+        if comm.rank == 0:
+            out["fmin"] = dict()
+            out["fknee"] = dict()
+            out["rate"] = dict()
+            out["alpha"] = dict()
+            out["NET"] = dict()
+            for pr, pfm, pfk, pa, pn in zip(prate, pfmin, pfknee, palpha, pnet):
+                out["rate"].update(pr)
+                out["fmin"].update(pfm)
+                out["fknee"].update(pfk)
+                out["alpha"].update(pa)
+                out["NET"].update(pn)
+
+    def _gather(self, comm):
+        # Base class properties
+        out = self._gather_base(comm)
+        # Sim properties
+        self._gather_sim(comm, out)
+        return out
+
+    def _scatter_sim(self, comm, local_dets, props):
+        if comm is None or comm.size == 1:
+            self._fmin = props["fmin"]
+            self._fknee = props["fknee"]
+            self._rate = props["rate"]
+            self._alpha = props["alpha"]
+            self._NET = props["NET"]
+            return
+
+        # Broadcast and extract our local properties
+        all_rate = None
+        all_fmin = None
+        all_fknee = None
+        all_alpha = None
+        all_net = None
+        if comm.rank == 0:
+            all_rate = props["rate"]
+            all_fmin = props["fmin"]
+            all_fknee = props["fknee"]
+            all_alpha = props["alpha"]
+            all_net = props["NET"]
+
+        all_rate = comm.bcast(all_rate, root=0)
+        self._rate = {x: all_rate[x] for x in local_dets}
+        del all_rate
+
+        all_fmin = comm.bcast(all_fmin, root=0)
+        self._fmin = {x: all_fmin[x] for x in local_dets}
+        del all_fmin
+
+        all_fknee = comm.bcast(all_fknee, root=0)
+        self._fknee = {x: all_fknee[x] for x in local_dets}
+        del all_fknee
+
+        all_alpha = comm.bcast(all_alpha, root=0)
+        self._alpha = {x: all_alpha[x] for x in local_dets}
+        del all_alpha
+
+        all_net = comm.bcast(all_net, root=0)
+        self._NET = {x: all_net[x] for x in local_dets}
+        del all_net
+
+    def _scatter(self, comm, local_dets, props):
+        self._scatter_base(comm, local_dets, props)
+        self._scatter_sim(comm, local_dets, props)
+
+    def _save_hdf5(self, handle, obs, **kwargs):
+        gcomm = obs.comm.comm_group
         rank = 0
-        if comm is not None:
-            rank = comm.rank
+        if gcomm is not None:
+            rank = gcomm.rank
 
+        # First save the base class info
+        self._save_base_hdf5(handle, obs)
+
+        # Each column of the process grid has the same information.
+        props = None
+        maxstr = 0
+        n_det = 0
+        if obs.comm_row_rank == 0:
+            props = dict()
+            self._gather_sim(obs.comm_col, props)
+            if obs.comm_col_rank == 0:
+                n_det = len(props["NET"])
+                maxstr = 1 + max([len(x) for x in props["NET"].keys()])
+
+        if gcomm is not None:
+            n_det = gcomm.bcast(n_det, root=0)
+            maxstr = gcomm.bcast(maxstr, root=0)
+
+        ds = None
         if handle is not None:
             # Write the noise model parameters as a dataset
-            maxstr = 1 + max([len(x) for x in self._dets])
             adtype = np.dtype(f"a{maxstr}, f8, f8, f8, f8, f8")
-            ds = handle.create_dataset("analytic", (len(self._dets),), dtype=adtype)
-            if rank == 0:
-                packed = np.array(
-                    [
-                        (
-                            d,
-                            self._rate[d].to_value(u.Hz),
-                            self._fmin[d].to_value(u.Hz),
-                            self._fknee[d].to_value(u.Hz),
-                            self._alpha[d],
-                            self._NET[d].to_value(u.K * np.sqrt(1.0 * u.second)),
-                        )
-                        for d in self._dets
-                    ],
-                    dtype=adtype,
-                )
-                ds.write_direct(packed)
-            del ds
+            ds = handle.create_dataset("analytic", (n_det,), dtype=adtype)
+        if gcomm is not None:
+            gcomm.barrier()
 
-    def _load_hdf5(self, handle, comm, **kwargs):
-        """Internal method which can be overridden by derived classes."""
+        if rank == 0:
+            packed = np.array(
+                [
+                    (
+                        d,
+                        props["rate"][d].to_value(u.Hz),
+                        props["fmin"][d].to_value(u.Hz),
+                        props["fknee"][d].to_value(u.Hz),
+                        props["alpha"][d],
+                        props["NET"][d].to_value(u.K * np.sqrt(1.0 * u.second)),
+                    )
+                    for d in props["NET"].keys()
+                ],
+                dtype=adtype,
+            )
+            ds.write_direct(packed)
+        if gcomm is not None:
+            gcomm.barrier()
+
+        del ds
+
+    def _load_hdf5(self, handle, obs, **kwargs):
         # First load the base class information
-        self._load_base_hdf5(handle, comm)
+        self._load_base_hdf5(handle, obs)
 
-        # Now load the dataset of analytic parameters.
+        gcomm = obs.comm.comm_group
+        rank = 0
+        if gcomm is not None:
+            rank = gcomm.rank
 
-        # Determine if we need to broadcast results.  This occurs if only one process
-        # has the file open but the communicator has more than one process.
-        need_bcast = hdf5_use_serial(handle, comm)
-
+        props = None
         if handle is not None:
-            # get noise model paramters
-            self._rate = dict()
-            self._fmin = dict()
-            self._fknee = dict()
-            self._alpha = dict()
-            self._NET = dict()
             ds = handle["analytic"]
-            for row in ds[:]:
-                dname = row[0].decode()
-                self._rate[dname] = row[1] * u.Hz
-                self._fmin[dname] = row[2] * u.Hz
-                self._fknee[dname] = row[3] * u.Hz
-                self._alpha[dname] = row[4]
-                self._NET[dname] = row[5] * u.K * np.sqrt(1.0 * u.second)
+            if rank == 0:
+                # get noise model parameters
+                props = dict()
+                props["rate"] = dict()
+                props["fmin"] = dict()
+                props["fknee"] = dict()
+                props["alpha"] = dict()
+                props["NET"] = dict()
+                for row in ds[:]:
+                    dname = row[0].decode()
+                    props["rate"][dname] = row[1] * u.Hz
+                    props["fmin"][dname] = row[2] * u.Hz
+                    props["fknee"][dname] = row[3] * u.Hz
+                    props["alpha"][dname] = row[4]
+                    props["NET"][dname] = row[5] * u.K * np.sqrt(1.0 * u.second)
             del ds
 
-        if need_bcast and comm is not None:
-            self._rate = comm.bcast(self._rate, root=0)
-            self._fmin = comm.bcast(self._fmin, root=0)
-            self._fknee = comm.bcast(self._fknee, root=0)
-            self._alpha = comm.bcast(self._alpha, root=0)
-            self._NET = comm.bcast(self._NET, root=0)
+        # The data now exists on the rank zero process of the group.  If we have
+        # multiple processes along each row, broadcast data to the other processes
+        # in the first row.
+        if obs.comm_row_size > 1 and obs.comm_col_rank == 0:
+            props = obs.comm_row.bcast(props, root=0)
+
+        # Scatter across each column of the process grid
+        self._scatter_sim(
+            obs.comm_col,
+            obs.local_detectors,
+            props,
+        )
 
     def __repr__(self):
         value = f"<AnalyticNoise model with {len(self._dets)} detectors"

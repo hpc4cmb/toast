@@ -140,11 +140,11 @@ class ElevationNoise(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.net_factors = []
-        self.total_factors = []
-        self.weights_in = []
-        self.weights_out = []
-        self.rates = []
+        self.net_factors = list()
+        self.total_factors = list()
+        self.weights_in = list()
+        self.weights_out = list()
+        self.rates = list()
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -182,7 +182,7 @@ class ElevationNoise(Operator):
                 )
 
             # Check that the noise model exists
-            if self.noise_model not in obs:
+            if self.noise_model not in obs or obs[self.noise_model] is None:
                 msg = (
                     "Noise model {self.noise_model} does not exist in "
                     "observation {obs.name}"
@@ -215,12 +215,10 @@ class ElevationNoise(Operator):
             # We will be collectively building the scale factor for all detectors.
             # Allocate arrays for communication
 
-            local_net_factors = np.zeros(len(obs.all_detectors), dtype=np.float64)
-            local_tot_factors = np.zeros(len(obs.all_detectors), dtype=np.float64)
-            local_rates = np.zeros(len(obs.all_detectors), dtype=np.float64)
-            all_net_factors = np.zeros(len(obs.all_detectors), dtype=np.float64)
-            all_tot_factors = np.zeros(len(obs.all_detectors), dtype=np.float64)
-            all_rates = np.zeros(len(obs.all_detectors), dtype=np.float64)
+            local_net_factors = np.zeros(len(obs.local_detectors), dtype=np.float64)
+            local_tot_factors = np.zeros(len(obs.local_detectors), dtype=np.float64)
+            local_rates = np.zeros(len(obs.local_detectors), dtype=np.float64)
+            local_weights_in = list()
 
             # We are building up a data product (a noise model) which has values for
             # all detectors.  For each detector we need to expand the detector pointing.
@@ -246,11 +244,9 @@ class ElevationNoise(Operator):
                         flags = None
                 view_flags.append(flags)
 
-            local_check = set(obs.local_detectors)
-            for idet, det in enumerate(obs.all_detectors):
-                if det not in local_check:
-                    continue
+            for idet, det in enumerate(obs.local_detectors):
                 local_rates[idet] = focalplane.sample_rate.to_value(u.Hz)
+                local_weights_in.append(noise.detector_weight(det))
 
                 # If both the A and C values are unset, the noise model is not modified.
                 if self.noise_a is not None:
@@ -312,24 +308,27 @@ class ElevationNoise(Operator):
             # Restore the original detector pointing view
             self.detector_pointing.view = detector_pointing_view
 
-            # Communicate the PSD scale factors
-            if obs.comm.comm_group is not None:
-                obs.comm.comm_group.Allreduce(
-                    local_net_factors, all_net_factors, op=MPI.SUM
-                )
-                obs.comm.comm_group.Allreduce(
-                    local_tot_factors, all_tot_factors, op=MPI.SUM
-                )
-                obs.comm.comm_group.Allreduce(local_rates, all_rates, op=MPI.SUM)
-            else:
-                all_tot_factors[:] = local_tot_factors
-                all_net_factors[:] = local_net_factors
-                all_rates[:] = local_rates
-
-            # Store the factors for statistics computed later
-            self.net_factors.extend(all_net_factors.tolist())
-            self.total_factors.extend(all_tot_factors.tolist())
-            self.rates.extend(all_rates.tolist())
+            # Gather the PSD scale factors to the root process of the group
+            # for calculating statistics later.
+            if obs.comm_row_rank == 0:
+                if obs.comm_col_size > 1:
+                    all_net_factors = obs.comm_col.gather(local_net_factors, root=0)
+                    all_tot_factors = obs.comm_col.gather(local_tot_factors, root=0)
+                    all_rates = obs.comm_col.gather(local_rates, root=0)
+                    all_weights_in = obs.comm_col.gather(local_weights_in, root=0)
+                    if obs.comm_col_rank == 0:
+                        for pnet, ptot, prate, pw in zip(
+                            all_net_factors, all_tot_factors, all_rates, all_weights_in
+                        ):
+                            self.net_factors.extend(pnet.tolist())
+                            self.total_factors.extend(ptot.tolist())
+                            self.rates.extend(prate.tolist())
+                            self.weights_in.extend(pw)
+                else:
+                    self.net_factors.extend(local_net_factors.tolist())
+                    self.total_factors.extend(local_tot_factors.tolist())
+                    self.rates.extend(local_rates.tolist())
+                    self.weights_in.extend(local_weights_in)
 
             # Create a new base-class noise object with the same PSDs and
             # mixing matrix as the input.  Then modify those values.  If the
@@ -351,12 +350,21 @@ class ElevationNoise(Operator):
 
             # Modify all psds first, since the first call to detector_weight()
             # will trigger the calculation for all detectors.
-            for idet, det in enumerate(obs.all_detectors):
-                out_noise.psd(det)[:] *= all_tot_factors[idet]
+            for idet, det in enumerate(obs.local_detectors):
+                out_noise.psd(det)[:] *= local_tot_factors[idet]
 
-            for idet, det in enumerate(obs.all_detectors):
-                self.weights_in.append(noise.detector_weight(det))
-                self.weights_out.append(out_noise.detector_weight(det))
+            local_weights_out = list()
+            for idet, det in enumerate(obs.local_detectors):
+                local_weights_out.append(out_noise.detector_weight(det))
+
+            if obs.comm_row_rank == 0:
+                if obs.comm_col_size > 1:
+                    all_weights_out = obs.comm_col.gather(local_weights_out, root=0)
+                    if obs.comm_col_rank == 0:
+                        for pw in all_weights_out:
+                            self.weights_out.extend(pw)
+                else:
+                    self.weights_out.extend(local_weights_out)
 
             if self.out_model is None or self.noise_model == self.out_model:
                 # We are replacing the input

@@ -491,37 +491,53 @@ def load_hdf5(
         sample_sets=obs_sample_sets,
         process_rows=process_rows,
     )
+
+    # Load observation metadata.  This is complicated because a subset of processes
+    # may have the file open, but the object loader may need the whole communicator
+    # to load the object.  First we load all simple metadata and record the names
+    # of more complicated objects to load.  Then we ensure that all processes have
+    # this information.  Then all processes load more complicated objects
+    # collectively.
+
+    meta_load = dict()
+
     if hgroup is not None:
-        # Load other metadata
         meta_group = hgroup["metadata"]
         for obj_name in meta_group.keys():
             obj = meta_group[obj_name]
             if meta is not None and obj_name not in meta:
+                # The user restricted the list of things to load, and this is
+                # not in the list.
                 continue
             if isinstance(obj, h5py.Group):
-                # This is an object to restore
+                # This might be an object to restore
                 if "class" in obj.attrs:
                     objclass = import_from_name(obj.attrs["class"])
-                    obs[obj_name] = objclass()
-                    if hasattr(obs[obj_name], "load_hdf5"):
-                        obs[obj_name].load_hdf5(obj, comm=None)
+                    test_obj = objclass()
+                    if hasattr(test_obj, "load_hdf5"):
+                        # Record this in the dictionary of things to load in the
+                        # next step.
+                        meta_load[obj_name] = test_obj
                     else:
                         msg = f"metadata object group '{obj_name}' has class "
                         msg += f"{obj.attrs['class']}, but instantiated "
                         msg += f"object does not have a load_hdf5() method"
                         log.error(msg)
+                else:
+                    # This must be some other custom user dataset.  Ignore it.
+                    pass
             else:
                 # Array-like dataset that we can load
                 if "units" in obj.attrs:
                     # This array is a quantity
-                    obs[obj_name] = u.Quantity(
+                    meta_load[obj_name] = u.Quantity(
                         np.array(obj), unit=u.Unit(obj.attrs["units"])
                     )
                 else:
-                    obs[obj_name] = np.array(obj)
+                    meta_load[obj_name] = np.array(obj)
             del obj
 
-        # Now extract attributes
+        # Now extract attributes (scalars)
         units_pat = re.compile(r"(.*)_units")
         for k, v in meta_group.attrs.items():
             if meta is not None and k not in meta:
@@ -532,21 +548,37 @@ def load_hdf5(
             # Check for quantity
             unit_name = f"{k}_units"
             if unit_name in meta_group.attrs:
-                obs[k] = u.Quantity(v, unit=u.Unit(meta_group.attrs[unit_name]))
+                meta_load[k] = u.Quantity(v, unit=u.Unit(meta_group.attrs[unit_name]))
             else:
-                obs[k] = v
-
+                meta_load[k] = v
         del meta_group
+
+    # Communicate the partial metadata
+    if not parallel and nproc > 1:
+        meta_load = comm.comm_group.bcast(meta_load, root=0)
+
+    # Now load any remaining metadata objects
+
+    meta_group = None
+    if hgroup is not None:
+        meta_group = hgroup["metadata"]
+    for meta_key in list(meta_load.keys()):
+        if hasattr(meta_load[meta_key], "load_hdf5"):
+            handle = None
+            if hgroup is not None:
+                handle = meta_group[meta_key]
+            meta_load[meta_key].load_hdf5(handle, obs)
+            del handle
+    del meta_group
+
+    # Assign the internal observation dictionary
+    obs._internal = meta_load
 
     log.debug_rank(
         f"{log_prefix} Finished other metadata in",
         comm=comm.comm_group,
         timer=timer,
     )
-
-    # Broadcast the observation metadata if needed
-    if not parallel and nproc > 1:
-        obs._internal = comm.comm_group.bcast(obs._internal, root=0)
 
     # Load shared data
 

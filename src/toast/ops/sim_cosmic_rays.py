@@ -226,8 +226,8 @@ class InjectCosmicRays(Operator):
 
                     glitch_seconds = 0.15  # seconds, i.e. ~ 3samples at 19Hz
                     # we approximate the number of samples to the closest integer
-                    nsamples_high = np.int_(np.around(glitch_seconds * fsampl_sims))
-                    nsamples_low = np.int_(np.around(glitch_seconds * samplerate))
+                    nsamples_high = int(np.around(glitch_seconds * fsampl_sims))
+                    nsamples_low = int(np.around(glitch_seconds * samplerate))
                     # import pdb; pdb.set_trace()
                     # np.random.seed( obsindx//1e3  +detindx//1e3 )
                     n_events = np.random.poisson(n_events_expected)
@@ -257,7 +257,9 @@ class InjectCosmicRays(Operator):
                     # otherwise we've problems in downsampling
 
                     # estimate the timestamps rounding off the events in seconds
-                    time_stamp_glitches = np.int_(np.around(time_glitches * samplerate))
+                    time_stamp_glitches = np.around(time_glitches * samplerate).astype(
+                        np.int64
+                    )
                     # we measure the glitch and the bestfit timeconstant in millisec
                     tglitch = np.linspace(0, glitch_seconds * 1e3, nsamples_high)
                     glitch_func = lambda t, C1, C2, tau: C1 + (C2 * np.exp(-t / tau))

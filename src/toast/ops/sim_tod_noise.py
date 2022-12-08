@@ -138,9 +138,9 @@ def sim_noise_timestream(
         # gaussian Re/Im randoms, packed into a complex valued array
 
         key1 = (
-            int(realization) * int(4294967296) + 
-            int(telescope) * int(65536) + 
-            int(component)
+            int(realization) * int(4294967296)
+            + int(telescope) * int(65536)
+            + int(component)
         )
         key2 = int(sindx) * int(4294967296) + int(detindx)
         counter1 = 0
@@ -150,7 +150,7 @@ def sim_noise_timestream(
             fftlen, sampler="gaussian", key=(key1, key2), counter=(counter1, counter2)
         ).array()
 
-        fdata = np.zeros(npsd, dtype=np.complex)
+        fdata = np.zeros(npsd, dtype=np.complex128)
 
         # Set the DC and Nyquist frequency imaginary part to zero
         fdata[0] = rngdata[0] + 0.0j

@@ -222,6 +222,20 @@ class DistDetSamp(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __repr__(self):
+        s = f"<DistDetSamp "
+        s += f"P_row {self.comm_row_rank}/{self.comm_row_size} "
+        s += f"P_col {self.comm_col_rank}/{self.comm_col_size} "
+        s += "dets=["
+        for d in self.dets[self.comm.group_rank]:
+            s += f"{d},"
+        s += "]"
+        s += " samples=["
+        off = self.samps[self.comm.group_rank].offset
+        nsamp = self.samps[self.comm.group_rank].n_elem
+        s += f"{off} ... {off+nsamp}]>"
+        return s
+
 
 def compute_1d_offsets(off, n, target_dist):
     """Helper function to compute slices along one dimension.
