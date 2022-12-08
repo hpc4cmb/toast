@@ -271,7 +271,7 @@ class ScanWCSMask(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.mask_name = "{}_mask".format(self.name)
+        self.mask_name = f"{self.name}_mask"
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
