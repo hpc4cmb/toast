@@ -141,7 +141,7 @@ class ScanWCSTest(MPITestCase):
         scan_wcs = ops.ScanWCSMask(
             file=input_file,
             det_flags="test_flags",
-            det_flags_mask=defaults.det_mask_invalid,
+            det_flags_value=defaults.det_mask_invalid,
             pixel_pointing=pixels,
         )
         scan_wcs.apply(data)
