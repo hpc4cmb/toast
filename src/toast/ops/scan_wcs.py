@@ -227,7 +227,8 @@ class ScanWCSMask(Operator):
     )
 
     det_flags_value = Int(
-        1, help="The detector flag value to set where the mask result is non-zero"
+        defaults.det_mask_processing,
+        help="The detector flag value to set where the mask result is non-zero",
     )
 
     mask_bits = Int(
