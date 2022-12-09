@@ -100,9 +100,9 @@ class PolyFilterTest(MPITestCase):
             order=1,
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.shared_mask_invalid,
+            det_flag_mask=defaults.det_mask_invalid,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.det_mask_invalid,
+            shared_flag_mask=defaults.shared_mask_invalid,
             poly_flag_mask=1,
             view="scanning",
         )
@@ -123,6 +123,106 @@ class PolyFilterTest(MPITestCase):
                 old_rms = np.std(old_signal[good])
                 new_rms = np.std(new_signal[good])
                 self.assertLess(new_rms / old_rms, 1e-6)
+        close_data(data)
+
+    def test_polyfilter_trend(self):
+
+        # Create a fake ground data set for testing
+        data = create_ground_data(self.comm)
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky pixel values locally
+        create_fake_sky(data, "pixel_dist", "fake_map")
+
+        # Scan map into timestreams
+        scanner = ops.ScanMap(
+            det_data=defaults.det_data,
+            pixels=pixels.pixels,
+            weights=weights.weights,
+            map_key="fake_map",
+        )
+        scanner.apply(data)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
+        sim_noise.apply(data)
+
+        ops.Copy(detdata=[(defaults.det_data, "signal_orig")]).apply(data)
+
+        # Make fake flags
+        fake_flags(data)
+
+        for ob in data.obs:
+            times = np.array(ob.shared[defaults.times])
+            for det in ob.local_detectors:
+                flags = (
+                    np.array(ob.shared[defaults.shared_flags])
+                    & defaults.shared_mask_invalid
+                ) != 0
+                flags |= (
+                    ob.detdata[defaults.det_flags][det] & defaults.det_mask_invalid
+                ) != 0
+                good = np.logical_not(flags)
+                signal = ob.detdata[defaults.det_data][det]
+                # Add a strong gradient to the TOD
+                signal[:] += times
+
+        ops.Copy(detdata=[(defaults.det_data, "signal_copy")]).apply(data)
+
+        # Filter
+
+        polyfilter = ops.PolyFilter(
+            order=1,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
+            det_flag_mask=defaults.det_mask_invalid,
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=defaults.shared_mask_invalid,
+            poly_flag_mask=1,
+            view=None,
+        )
+        polyfilter.apply(data)
+
+        for ob in data.obs:
+            for det in ob.local_detectors:
+                flags = (
+                    np.array(ob.shared[defaults.shared_flags])
+                    & defaults.shared_mask_invalid
+                ) != 0
+                flags |= (
+                    ob.detdata[defaults.det_flags][det] & defaults.det_mask_invalid
+                ) != 0
+                good = np.logical_not(flags)
+                orig_signal = ob.detdata["signal_orig"][det]
+                old_signal = ob.detdata["signal_copy"][det]
+                new_signal = ob.detdata[defaults.det_data][det]
+                old_rms = np.std(old_signal[good])
+                new_rms = np.std(new_signal[good])
+                self.assertLess(new_rms / old_rms, 1e-1)
+                # Verify that the filtering the signal has restored the
+                # original RMS, even across the flagged regions
+                # using np.diff() removes any residual trend
+                orig_rms = np.std(np.diff(orig_signal))
+                diff_rms = np.std(np.diff(new_signal) - np.diff(orig_signal))
+                self.assertLess(diff_rms / orig_rms, 1e-3)
         close_data(data)
 
     def test_polyfilter2D(self):
@@ -258,7 +358,7 @@ class PolyFilterTest(MPITestCase):
             order=norder - 1,
             det_data="pyfilter",
             det_flags="pyflags",
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_invalid,
             shared_flags=defaults.shared_flags,
             shared_flag_mask=255,
             focalplane_key="wafer",
@@ -372,7 +472,7 @@ class PolyFilterTest(MPITestCase):
         common_filter = ops.CommonModeFilter(
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_invalid,
             shared_flags=defaults.shared_flags,
             shared_flag_mask=255,
             view=None,
