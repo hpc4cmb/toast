@@ -899,7 +899,7 @@ class Madam(Operator):
                     for psdstart, psd, detw in psdlist:
                         psdstarts.append(psdstart)
                         psdvals.append(psd)
-                    detweights[idet] = psdlist[0][2].to_value(1 / u.K**2)
+                    detweights[idet] = psdlist[0][2]
                 npsdtot = np.sum(npsd)
                 psdstarts = np.array(psdstarts, dtype=np.float64)
                 psdvals = np.hstack(psdvals).astype(madam.PSD_TYPE)
