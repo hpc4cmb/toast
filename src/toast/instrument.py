@@ -326,7 +326,7 @@ class Bandpass(object):
     def get_range(self, det=None):
         """Return the maximum range of frequencies needed for convolution."""
         if det is not None:
-            return self.fmin[det], self.fmin[det]
+            return self.fmin[det], self.fmax[det]
         elif self.fmin_tot is None:
             self.fmin_tot = min(self.fmin.values())
             self.fmax_tot = max(self.fmax.values())
@@ -482,7 +482,13 @@ class Focalplane(object):
 
     @function_timer
     def _get_noise(self):
-        """Use the noise parameters to instantiate an analytical noise model"""
+        """Use the noise parameters to instantiate an analytical noise model.
+
+        The detector "indices" in the noise model are set to the 32bit detector
+        UID integers.  This allows reproducibility of noise simulations if the
+        same detector appears in multiple noise models.
+
+        """
 
         model_available = False
         noise_keys = "psd_fmin", "psd_fknee", "psd_alpha", "psd_net"
@@ -498,6 +504,7 @@ class Focalplane(object):
             alpha = {}
             NET = {}
             rates = {}
+            indices = {}
             for row in self.detector_data:
                 name = row["name"]
                 dets.append(name)
@@ -506,9 +513,16 @@ class Focalplane(object):
                 fknee[name] = row["psd_fknee"]
                 alpha[name] = row["psd_alpha"]
                 NET[name] = row["psd_net"]
+                indices[name] = row["uid"]
 
             self.noise = AnalyticNoise(
-                rate=rates, fmin=fmin, detectors=dets, fknee=fknee, alpha=alpha, NET=NET
+                rate=rates,
+                fmin=fmin,
+                detectors=dets,
+                fknee=fknee,
+                alpha=alpha,
+                NET=NET,
+                indices=indices,
             )
         else:
             self.noise = None

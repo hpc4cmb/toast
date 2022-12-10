@@ -164,10 +164,9 @@ class PolyFilter2D(Operator):
 
             detector_position = {}
             for det in detectors:
-                theta, phi, _ = qa.to_iso_angles(
-                    temp_ob.telescope.focalplane[det]["quat"]
-                )
-                detector_position[det] = (theta, phi)
+                x, y, z = qa.rotate(temp_ob.telescope.focalplane[det]["quat"], ZAXIS)
+                theta, phi = np.arcsin([x, y])
+                detector_position[det] = [theta, phi]
 
             # Enumerate detector groups (e.g. wafers) to filter
 
@@ -334,7 +333,7 @@ class PolyFilter2D(Operator):
                             proj = np.dot(t, signals[isample, good] * mask)
                             ccinv = np.dot(t, t.T)
                             coeff[isample, igroup] = np.linalg.lstsq(
-                                ccinv, proj, rcond=None
+                                ccinv, proj, rcond=1.0e-6
                             )[0]
                     gt.stop("Poly2D:  Solve templates (with python)")
                 else:
@@ -346,7 +345,7 @@ class PolyFilter2D(Operator):
 
                 for igroup in range(ngroup):
                     local_dets = temp_ob.local_detectors
-                    dets_in_group = np.zeros(len(local_dets), dtype=np.bool)
+                    dets_in_group = np.zeros(len(local_dets), dtype=bool)
                     for idet, det in enumerate(local_dets):
                         if group_index[det] == igroup:
                             dets_in_group[idet] = True

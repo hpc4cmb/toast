@@ -428,6 +428,7 @@ class NoiseEstim(Operator):
             noise_dets = list()
             noise_freqs = dict()
             noise_psds = dict()
+            noise_indices = dict()
 
             for det1, det2 in pairs:
                 if det1 not in det_names or det2 not in det_names:
@@ -481,6 +482,7 @@ class NoiseEstim(Operator):
                     noise_dets.append(det1)
                     noise_freqs[det1] = nse_freqs[1:] * u.Hz
                     noise_psds[det1] = nse_psd[1:] * psd_unit
+                    noise_indices[det1] = obs.telescope.focalplane[det1]["uid"]
 
             self._re_redistribute(orig_obs, obs)
 
@@ -490,8 +492,12 @@ class NoiseEstim(Operator):
                     noise_dets = data.comm.comm_group.bcast(noise_dets, root=0)
                     noise_freqs = data.comm.comm_group.bcast(noise_freqs, root=0)
                     noise_psds = data.comm.comm_group.bcast(noise_psds, root=0)
+                    noise_indices = data.comm.comm_group.bcast(noise_indices, root=0)
                 orig_obs[self.out_model] = Noise(
-                    detectors=noise_dets, freqs=noise_freqs, psds=noise_psds
+                    detectors=noise_dets,
+                    freqs=noise_freqs,
+                    psds=noise_psds,
+                    indices=noise_indices,
                 )
 
         return
@@ -658,7 +664,7 @@ class NoiseEstim(Operator):
 
                 psdvalues = np.array([x[col] for x in all_psds])
                 smooth_values = scipy.signal.medfilt(psdvalues, 11)
-                good = np.ones(psdvalues.size, dtype=np.bool)
+                good = np.ones(psdvalues.size, dtype=bool)
                 good[psdvalues == 0] = False
 
                 for i in range(10):

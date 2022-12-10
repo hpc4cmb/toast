@@ -90,9 +90,7 @@ class ObserveAtmosphere(Operator):
         defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
     )
 
-    sim = Unicode(
-        "atm_sim", help="Data key with the dictionary of sims per session"
-    )
+    sim = Unicode("atm_sim", help="Data key with the dictionary of sims per session")
 
     absorption = Unicode(
         None, allow_none=True, help="The observation key for the absorption"
@@ -513,23 +511,26 @@ class ObserveAtmosphere(Operator):
             raise RuntimeError("Focalplane does not define bandpass")
         bandpass = obs.telescope.focalplane.bandpass
 
-        freq_min, freq_max = bandpass.get_range()
         n_freq = self.n_bandpass_freqs
-        freqs = np.linspace(freq_min, freq_max, n_freq)
 
         absorption_det = None
-        if absorption_key is not None:
-            absorption_det = {
-                det: bandpass.convolve(det, freqs, obs[absorption_key], rj=True)
-                for det in dets
-            }
-
         loading_det = None
         if loading_key is not None:
-            loading_det = {
-                det: bandpass.convolve(det, freqs, obs[loading_key], rj=True)
-                for det in dets
-            }
+            loading_det = dict()
+        if absorption_key is not None:
+            absorption_det = dict()
+        for det in dets:
+            freq_min, freq_max = bandpass.get_range(det=det)
+            fkey = f"{freq_min} {freq_max}"
+            freqs = np.linspace(freq_min, freq_max, n_freq)
+            if absorption_key is not None:
+                absorption_det[det] = bandpass.convolve(
+                    det, freqs, obs[absorption_key][fkey], rj=True
+                )
+            if loading_key is not None:
+                loading_det[det] = bandpass.convolve(
+                    det, freqs, obs[loading_key][fkey], rj=True
+                )
 
         return absorption_det, loading_det
 

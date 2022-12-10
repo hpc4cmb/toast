@@ -62,7 +62,7 @@ class TimeConstant(Operator):
             tau = self.tau
         if self.tau_sigma:
             # randomize tau in a reproducible manner
-            counter1 = obs.uid
+            counter1 = obs.session.uid
             counter2 = self.realization
             key1 = focalplane[det]["uid"]
             key2 = 123456

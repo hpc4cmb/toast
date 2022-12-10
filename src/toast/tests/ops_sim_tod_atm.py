@@ -384,9 +384,7 @@ class SimAtmTest(MPITestCase):
             i = np.abs(mdata[0][good])
             pfrac = np.median(p / i)
             if pfrac < 0.01:
-                print(
-                    f"polarized atmosphere: using {np.count_nonzero(good)} pixels"
-                )
+                print(f"polarized atmosphere: using {np.count_nonzero(good)} pixels")
                 print(
                     f"polarized atmosphere: p_avg = {np.mean(p)}, i_avg = {np.mean(i)}"
                 )
@@ -516,3 +514,171 @@ class SimAtmTest(MPITestCase):
                 assert new_rms > 1.1 * old_rms[obs.name][det]
 
         close_data(data)
+
+    def count_mem(self, data, pref):
+        n_seg = 0
+        n_bytes = 0
+        shnames = set()
+        mem_count = ops.MemoryCounter()
+        mem_count.prefix = pref
+        for ob in data.obs:
+            for name, info in ob.shared._internal.items():
+                shnames.add(name)
+                n_seg += 1
+                n_bytes += info[0]._n * info[0]._dsize
+        # Uncomment for debugging...
+        # print(f"{pref} {n_seg} shared memory segments with {n_bytes} bytes: {shnames}")
+        # mem_count.apply(data)
+
+    def test_sim_split(self):
+        if not available_atm:
+            print("TOAST was compiled without atmosphere support, skipping tests")
+            return
+
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        # Set up operators
+
+        # Simple detector pointing
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_azel, quats="quats_azel"
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec, quats="quats_radec"
+        )
+
+        # Pointing matrix
+        pixels = ops.PixelsHealpix(
+            nside=self.nside,
+            nest=False,
+            detector_pointing=detpointing_radec,
+        )
+        weights_radec = ops.StokesWeights(
+            mode="IQU",
+            detector_pointing=detpointing_radec,
+        )
+        weights_azel = ops.StokesWeights(
+            mode="IQU",
+            detector_pointing=detpointing_azel,
+        )
+
+        # Create a noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel()
+
+        # Make an elevation-dependent noise model
+        el_model = ops.ElevationNoise(
+            noise_model="noise_model",
+            out_model="el_weighted",
+            detector_pointing=detpointing_azel,
+        )
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(noise_model=el_model.out_model)
+
+        # Simulate atmosphere signal and accumulate
+        sim_atm = ops.SimAtmosphere(
+            detector_pointing=detpointing_azel,
+            detector_weights=weights_azel,
+        )
+
+        # Build hit map and covariance
+        cov_and_hits = ops.CovarianceAndHits(
+            pixel_pointing=pixels,
+            stokes_weights=weights_radec,
+            noise_model=el_model.out_model,
+        )
+
+        # Simulate and process all detectors simultaneously
+
+        ppp = 10
+
+        freq_list = [(100 + 10 * x) * u.GHz for x in range(4)]
+
+        full_data = create_ground_data(
+            self.comm,
+            freqs=freq_list,
+            pixel_per_process=ppp,
+        )
+
+        print(f"full_data has {len(full_data.obs)} observations")
+        # full_data.info()
+        self.count_mem(full_data, "After full sim ground")
+
+        default_model.apply(full_data)
+        self.count_mem(full_data, "After full default model")
+
+        el_model.apply(full_data)
+        self.count_mem(full_data, "After full el model")
+
+        sim_noise.apply(full_data)
+        self.count_mem(full_data, "After full sim noise")
+
+        sim_atm.apply(full_data)
+        self.count_mem(full_data, "After full sim atm")
+
+        cov_and_hits.apply(full_data)
+        self.count_mem(full_data, "After full cov and hits")
+
+        # Simulate data split by frequency and process
+
+        split_data = create_ground_data(
+            self.comm, freqs=freq_list, pixel_per_process=ppp, split=True
+        )
+        # split_data.info()
+        self.count_mem(split_data, "After split sim ground")
+
+        default_model.apply(split_data)
+        self.count_mem(split_data, "After split default model")
+
+        el_model.apply(split_data)
+        self.count_mem(split_data, "After split el model")
+
+        sim_noise.apply(split_data)
+        self.count_mem(split_data, "After split sim noise")
+
+        sim_atm.apply(split_data)
+        self.count_mem(split_data, "After split sim atm")
+
+        cov_and_hits.apply(split_data)
+        self.count_mem(split_data, "After split cov and hits")
+
+        # Compare two cases
+
+        for obs in full_data.obs:
+            # Get the session
+            ses = obs.session
+            # Find split observations in this same session
+            for sobs in split_data.obs:
+                if sobs.session.name == ses.name:
+                    # Compare detector timestreams.  The way we created the
+                    # split ensures that... ????
+                    for det in sobs.local_detectors:
+                        stod = sobs.detdata[defaults.det_data][det]
+                        ftod = obs.detdata[defaults.det_data][det]
+                        if not np.allclose(stod, ftod):
+                            msg = f"{ses.name} {det}\n"
+                            msg += f"  full = {ftod}\n"
+                            msg += f"  split = {stod}\n"
+                            print(msg)
+                            self.assertTrue(False)
+
+        if full_data[cov_and_hits.hits] != split_data[cov_and_hits.hits]:
+            hfull = full_data[cov_and_hits.hits]
+            hsplit = split_data[cov_and_hits.hits]
+            hfull_good = hfull.data != 0
+            hsplit_good = hsplit.data != 0
+            hfull_nz = np.count_nonzero(hfull_good)
+            hsplit_nz = np.count_nonzero(hsplit_good)
+            hfull_max = np.max(hfull.data[hfull_good])
+            hsplit_max = np.max(hsplit.data[hsplit_good])
+            msg = f"Proc {full_data.comm.world_rank} full hits: "
+            msg += f"{hfull_nz} hit pixels, max = {hfull_max} "
+            msg += f"split hits: {hsplit_nz} hit pixels, max = {hsplit_max}"
+            print(msg)
+            self.assertTrue(False)
+
+        # Cleanup
+        close_data(full_data)
+        close_data(split_data)

@@ -378,7 +378,7 @@ void toast::filter_poly2D_solve(
         int rank;
         int info;
         int one = 1;
-        double rcond_limit = 1e-3;
+        double rcond_limit = 1e-6;
         int LWORK = toast::LinearAlgebra::gelss_buffersize(inmode, inmode, one, inmode,
                                                            inmode, rcond_limit);
         toast::AlignedVector <double> rhs(nmode);
