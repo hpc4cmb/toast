@@ -137,8 +137,12 @@ def sim_noise_timestream(
 
         # gaussian Re/Im randoms, packed into a complex valued array
 
-        key1 = int(realization * 4294967296 + telescope * 65536 + component)
-        key2 = int(sindx * 4294967296 + detindx)
+        key1 = (
+            int(realization) * int(4294967296) + 
+            int(telescope) * int(65536) + 
+            int(component)
+        )
+        key2 = int(sindx) * int(4294967296) + int(detindx)
         counter1 = 0
         counter2 = firstsamp * oversample
 
