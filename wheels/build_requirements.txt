@@ -1,5 +1,4 @@
 # Build dependencies installed after any low-level / pinned packages
-cmake
 tomlkit
 traitlets>=5.0
 scipy
@@ -10,5 +9,4 @@ pshmem>=0.2.10
 pyyaml
 astropy
 healpy
-pixell
 ephem

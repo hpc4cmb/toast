@@ -46,6 +46,7 @@ class CadenceMapTest(MPITestCase):
         cadence_map = ops.CadenceMap(
             pixel_dist="pixel_dist",
             pixel_pointing=pixelpointing,
+            output_dir=self.outdir,
         )
 
         cadence_map.apply(data)

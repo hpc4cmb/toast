@@ -258,10 +258,9 @@ conf["author_email"] = "tskisner.public@gmail.com"
 conf["license"] = "BSD"
 conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = get_version()
-conf["python_requires"] = ">=3.7.0"
+conf["python_requires"] = ">=3.8.0"
 conf["setup_requires"] = (["wheel"],)
 conf["install_requires"] = [
-    "cmake",
     "tomlkit",
     "traitlets>=5.0",
     "numpy",
@@ -273,7 +272,6 @@ conf["install_requires"] = [
     "pyyaml",
     "astropy",
     "healpy",
-    "pixell",
     "ephem",
 ]
 conf["extras_require"] = {
@@ -311,10 +309,10 @@ conf["classifiers"] = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 

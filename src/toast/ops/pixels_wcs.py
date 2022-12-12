@@ -5,10 +5,9 @@
 import warnings
 
 import numpy as np
-import pixell
-import pixell.enmap
 import traitlets
 from astropy import units as u
+from astropy.wcs import WCS
 
 from .. import qarray as qa
 from ..mpi import MPI
@@ -34,7 +33,7 @@ class PixelsWCS(Operator):
     If the view trait is not specified, then this operator will use the same data
     view as the detector pointing operator when computing the pointing matrix pixels.
 
-    This uses the pixell package to construct the WCS projection parameters.  By
+    This uses the astropy wcs utilities to build the projection parameters.  By
     default, the world to pixel conversion is performed with internal, optimized code
     unless use_astropy is set to True.
 
@@ -242,6 +241,7 @@ class PixelsWCS(Operator):
                     center[1].to_value(u.degree),
                 ]
             )
+            mid = pos
         else:
             # Using bounds, exactly one of resolution or dimensions specified
             if len(res) > 0 and len(dims) > 0:
@@ -260,16 +260,57 @@ class PixelsWCS(Operator):
             pos = np.array(
                 [[lower_left_lon, lower_left_lat], [upper_right_lon, upper_right_lat]]
             )
+            mid = np.mean(pos, axis=0)
 
-        self.wcs = pixell.wcsutils.build(pos, res, dims, rowmajor=False, system=proj)
+        def _wcs_ref_res(w, p, r, d):
+            w.wcs.crpix = [1, 1]
+            if len(r) == 0:
+                w.wcs.cdelt = [1, 1]
+                corners = w.wcs_world2pix(p, 1)
+                w.wcs.cdelt *= (corners[1] - corners[0]) / d
+            else:
+                w.wcs.cdelt = r
+                if p.ndim == 2:
+                    w.wcs.cdelt[p[1] < p[0]] *= -1
+            if p.ndim == 1:
+                if len(dims) > 0:
+                    off = w.wcs_world2pix(p[None], 0)[0]
+                    w.wcs.crpix = np.array(d) / 2.0 + 0.5 - off
+            else:
+                off = w.wcs_world2pix(p[0, None], 0)[0] + 0.5
+                w.wcs.crpix -= off
+
+        self.wcs = WCS(naxis=2)
+        if proj == "CAR":
+            self.wcs.wcs.ctype = ["RA---CAR", "DEC--CAR"]
+            self.wcs.wcs.crval = np.array([mid[0], 0])
+        elif proj == "CEA":
+            self.wcs.wcs.ctype = ["RA---CEA", "DEC--CEA"]
+            self.wcs.wcs.crval = np.array([mid[0], 0])
+            lam = np.cos(np.deg2rad(mid[1]))**2
+            self.wcs.wcs.set_pv([(2, 1, lam)])
+        elif proj == "MER":
+            self.wcs.wcs.ctype = ["RA---MER", "DEC--MER"]
+            self.wcs.wcs.crval = np.array([mid[0], 0])
+        elif proj == "ZEA":
+            self.wcs.wcs.ctype = ["RA---ZEA", "DEC--ZEA"]
+            self.wcs.wcs.crval = mid
+        elif proj == "TAN":
+            self.wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+            self.wcs.wcs.crval = mid
+        else:
+            msg = f"Invalid WCS projection name '{proj}'"
+            raise ValueError(msg)
+        _wcs_ref_res(self.wcs, pos, res, dims)
+
         if len(dims) == 0:
             # Compute from the bounding box corners
-            lower_left = self.wcs.wcs_world2pix(np.array([[pos[0, 0], pos[0, 1]]]), 0)[
-                0
-            ]
-            upper_right = self.wcs.wcs_world2pix(np.array([[pos[1, 0], pos[1, 1]]]), 0)[
-                0
-            ]
+            lower_left = self.wcs.wcs_world2pix(
+                np.array([[pos[0, 0], pos[0, 1]]]), 0
+            )[0]
+            upper_right = self.wcs.wcs_world2pix(
+                np.array([[pos[1, 0], pos[1, 1]]]), 0
+            )[0]
             self.wcs_shape = tuple(
                 np.round(np.abs(upper_right - lower_left)).astype(int)
             )
@@ -426,6 +467,10 @@ class PixelsWCS(Operator):
                     to_deg = 180.0 / np.pi
                     theta *= to_deg
                     phi *= to_deg
+                    shift = phi >= 360.0
+                    phi[shift] -= 360.0
+                    shift = phi < 0.0
+                    phi[shift] += 360.0
 
                     world_in = np.column_stack([phi, 90.0 - theta])
 

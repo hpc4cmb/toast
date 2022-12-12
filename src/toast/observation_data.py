@@ -1754,7 +1754,9 @@ class SharedDataManager(MutableMapping):
             log.verbose(f"  comm_col not equivalent")
             return False
         if set(self._internal.keys()) != set(other._internal.keys()):
-            log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
+            log.verbose(
+                f"  keys {set(self._internal.keys())} != {set(other._internal.keys())}"
+            )
             return False
         for k in self._internal.keys():
             if self._internal[k].shdata.shape != other._internal[k].shdata.shape:
