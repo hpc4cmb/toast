@@ -533,8 +533,8 @@ def reduce_data(job, args, data):
 
     # Load and apply processing mask
 
-    ops.processing_mask.pixel_pointing = ops.pixels_radec
-    ops.processing_mask.pixel_dist = ops.binner.pixel_dist
+    ops.processing_mask.pixel_pointing = job.pixels_final
+    ops.processing_mask.pixel_dist = ops.binner_final.pixel_dist
     ops.processing_mask.apply(data)
     log.info_rank("  Raised processing flags in", comm=world_comm, timer=timer)
 
