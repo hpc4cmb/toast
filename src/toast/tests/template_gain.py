@@ -12,8 +12,8 @@ from .. import ops
 from ..templates import GainTemplate
 from ..utils import rate_from_times
 from ._helpers import create_outdir, create_satellite_data, close_data
-from .mpi import MPITestCase
-
+from .mpi import MPITestCase 
+ 
 
 class TemplateGainTest(MPITestCase):
     def setUp(self):
@@ -59,13 +59,13 @@ class TemplateGainTest(MPITestCase):
             stokes_weights=weights,
             noise_model=noise_model.noise_model,
         )
-
+        poly_order = 0 
         # set up a gain fluctuation template
         tmpl = GainTemplate(
             noise_model=None,
             # noise_model=noise_model.noise_model,
             template_name=template,
-            order=1,
+            order=poly_order,
         )
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
 
@@ -77,11 +77,17 @@ class TemplateGainTest(MPITestCase):
             template_matrix=tmatrix,
         )
         calibration.apply(data)
-
-        for ob in data.obs:
-            for det in ob.local_detectors:
-                np.testing.assert_allclose(
-                    ob.detdata["calibrated"][det], np.ones(ob.n_local_samples)
-                )
+        #import pdb; pdb.set_trace() 
+        
+         
+        gain_fitted_amplitudes =  calibration.template_matrix.templates[0].data['Calibrate_solve_amplitudes']
+        n_gain_amplitudes = gain_fitted_amplitudes['GainTemplate'] .n_global
+        np.testing.assert_allclose(
+            gain_fitted_amplitudes , np.ones(n_gain_amplitudes) )
+        
+        #for ob in data.obs:
+        #    for det in ob.local_detectors:
+        #        np.testing.assert_allclose(
+        #            ob.detdata["calibrated"][det], np.ones(ob.n_local_samples)        )
 
         close_data(data)
