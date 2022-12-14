@@ -21,6 +21,7 @@ install(FILES
     sim_ground_utils.py
     elevation_noise.py
     flag_intervals.py
+    common_mode_noise.py
     noise_model.py
     noise_weight.py
     gainscrambler.py

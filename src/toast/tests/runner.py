@@ -56,6 +56,7 @@ from . import ops_sim_satellite as test_ops_sim_satellite
 from . import ops_sim_tod_atm as test_ops_sim_tod_atm
 from . import ops_sim_tod_conviqt as test_ops_sim_tod_conviqt
 from . import ops_sim_tod_dipole as test_ops_sim_tod_dipole
+from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_sim_tod_noise as test_ops_sim_tod_noise
 from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
 from . import ops_sss as test_ops_sss

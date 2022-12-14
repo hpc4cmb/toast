@@ -33,6 +33,7 @@ from .mapmaker_utils import (
 from .memory_counter import MemoryCounter
 from .noise_estimation import NoiseEstim
 from .noise_model import DefaultNoiseModel, FitNoiseModel
+from .common_mode_noise import CommonModeNoise
 from .noise_weight import NoiseWeight
 from .operator import Operator
 from .pipeline import Pipeline
