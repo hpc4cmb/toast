@@ -138,14 +138,14 @@ class CommonModeNoise(Operator):
                 for det in obs.all_detectors:
                     dets_by_key[None].append(det)
             else:
-                if self.focalplane_key not in focalplane.colnames:
+                if self.focalplane_key not in focalplane.detector_data.colnames:
                     msg = f"Focalplane does not have column for '{self.focalplane_key}'"
                     raise RuntimeError(msg)
                 for det in obs.all_detectors:
-                    key = focalplane[self.focalplane_key][det]
+                    key = focalplane[det][self.focalplane_key]
                     if key not in dets_by_key:
                         dets_by_key[key] = []
-                    dets_by_key.append(det)
+                    dets_by_key[key].append(det)
 
             # Create a new base-class noise object with the same PSDs and
             # mixing matrix as the input.  Then modify those values.  If the

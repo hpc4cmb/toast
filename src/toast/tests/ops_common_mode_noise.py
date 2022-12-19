@@ -50,10 +50,6 @@ class CommonModeNoiseTest(MPITestCase):
         return
 
     def test_sim(self):
-        # Test the uncorrelated noise generation.
-        # Verify that the white noise part of the spectrum is normalized
-        # correctly.
-
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
@@ -64,7 +60,7 @@ class CommonModeNoiseTest(MPITestCase):
         noise_model = ops.DefaultNoiseModel()
         noise_model.apply(data)
 
-        # Simulate data with common mode
+        # Simulate data without common mode
         sim_noise = ops.SimNoise()
         sim_noise.det_data = "noise_uncorrelated"
         sim_noise.apply(data)
@@ -97,5 +93,64 @@ class CommonModeNoiseTest(MPITestCase):
                     common_mode2 = noise2 - noise1
                     # Make sure the common mode agrees
                     np.testing.assert_array_almost_equal(common_mode, common_mode2)
+
+        return
+
+    def test_sim_multi(self):
+        # Simulate different common modes
+
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm, pixel_per_process=2)
+
+        # This is a simulation with the same focalplane for every obs...
+        sample_rate = data.obs[0].telescope.focalplane.sample_rate
+
+        # Create a noise model from focalplane detector properties
+        noise_model = ops.DefaultNoiseModel()
+        noise_model.apply(data)
+
+        # Simulate data without common mode
+        sim_noise = ops.SimNoise()
+        sim_noise.det_data = "noise_uncorrelated"
+        sim_noise.apply(data)
+
+        # Add common mode noise
+        common_mode_model = ops.CommonModeNoise(
+            fmin=1e-5 * u.Hz,
+            fknee=1.0 * u.Hz,
+            alpha=2.0,
+            NET=1.0 * u.K / u.Hz**0.5,
+            focalplane_key="pixel",
+        )
+        common_mode_model.apply(data)
+
+        # Simulate data with common mode
+        sim_noise = ops.SimNoise()
+        sim_noise.det_data = "noise_correlated"
+        sim_noise.apply(data)
+
+        # Compare results
+        for ob in data.obs:
+            common_modes = {}
+            for det in ob.local_detectors:
+                noise1 = ob.detdata["noise_uncorrelated"][det]
+                noise2 = ob.detdata["noise_correlated"][det]
+                pixel = ob.telescope.focalplane[det]["pixel"]
+
+                if pixel not in common_modes:
+                    common_mode = noise2 - noise1
+                    common_modes[pixel] = common_mode
+                    # Make sure we simulated a common mode
+                    assert np.std(common_mode) > 1e-10
+                else:
+                    common_mode = common_modes[pixel]
+                    common_mode2 = noise2 - noise1
+                    # Make sure the common mode agrees
+                    np.testing.assert_array_almost_equal(common_mode, common_mode2)
+            # Make sure the common modes are not the same
+            pixels = list(common_modes.keys())
+            common_mode1 = common_modes[pixels[0]]
+            common_mode2 = common_modes[pixels[1]]
+            assert np.std(common_mode1 - common_mode2) > 1e-10
 
         return
