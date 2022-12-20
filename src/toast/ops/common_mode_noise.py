@@ -102,13 +102,10 @@ class CommonModeNoise(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
-        # FIXME : Is this necessary?
-        """
         if detectors is not None:
             msg = "You must run this operator on all detectors at once"
             log.error(msg)
             raise RuntimeError(msg)
-        """
 
         for obs in data.obs:
             if obs.comm_row_size != 1:
@@ -136,6 +133,8 @@ class CommonModeNoise(Operator):
             if self.focalplane_key is None:
                 dets_by_key[None] = []
                 for det in obs.all_detectors:
+                    if detset is not None and det not in detset:
+                        continue
                     dets_by_key[None].append(det)
             else:
                 if self.focalplane_key not in focalplane.detector_data.colnames:
