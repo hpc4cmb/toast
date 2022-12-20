@@ -24,6 +24,7 @@ install(FILES
     ops_sim_satellite.py
     ops_sim_ground.py
     ops_sim_tod_noise.py
+    ops_common_mode_noise.py
     ops_sim_tod_dipole.py
     ops_sim_tod_atm.py
     ops_sim_tod_conviqt.py
