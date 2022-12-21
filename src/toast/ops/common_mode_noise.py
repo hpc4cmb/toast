@@ -138,7 +138,8 @@ class CommonModeNoise(Operator):
                     dets_by_key[None].append(det)
             else:
                 if self.focalplane_key not in focalplane.detector_data.colnames:
-                    msg = f"Focalplane does not have column for '{self.focalplane_key}'"
+                    msg = f"Focalplane does not have column for '{self.focalplane_key}'.  "
+                    msg += f"Available columns are {focalplane.detector_data.colnames}"
                     raise RuntimeError(msg)
                 for det in obs.all_detectors:
                     key = focalplane[det][self.focalplane_key]
