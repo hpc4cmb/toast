@@ -348,7 +348,7 @@ try:
                     unit = "% "
                 if comm is None or comm.size == 1:
                     memstr += "{:>12} : {:8.3f} {}\n".format(key, vlist[0], unit)
-                    if np.abs(vlist2[0] - vlist[0]) / vlist[0] > 1e-3:
+                    if vlist[0] > 0 and np.abs(vlist2[0] - vlist[0]) / vlist[0] > 1e-3:
                         memstr += "{:>12} : {:8.3f} {} (after GC)\n".format(
                             key, vlist2[0], unit
                         )
@@ -368,7 +368,7 @@ try:
                         )
                     )
                     med2 = np.median(vlist2)
-                    if np.abs(med2 - med1) / med1 > 1e-3:
+                    if med1 > 0 and np.abs(med2 - med1) / med1 > 1e-3:
                         memstr += (
                             "{:>12} : {:8.3f} {}  < {:8.3f} +- {:8.3f} {}  "
                             "< {:8.3f} {} (after GC)\n".format(
