@@ -3,8 +3,10 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import tempfile
 import warnings
 
+import healpy as hp
 import numpy as np
 import traitlets
 from astropy import units as u
@@ -353,8 +355,11 @@ class SimConviqt(Operator):
         if "psi_uv_deg" in props.colnames:
             psi_uv = props["psi_uv"].to_value(u.radian)
         else:
-            raise RuntimeError(f"focalplane[{det}] does not include psi_uv")
-        return psipol
+            msg = f"focalplane[{det}] does not include psi_uv. "
+            msg += "Valid column names are {props.colnames}"
+            warnings.warn(msg)
+            psi_uv = 0
+        return psi_uv
 
     def _get_epsilon(self, focalplane, det):
         """Parse polarization leakage (epsilon) from the focalplane
@@ -750,30 +755,44 @@ class SimTEBConviqt(SimConviqt):
         for det in all_detectors:
             verbose = self.comm.rank == 0 and self.verbosity > 0
 
+            # Find one process that has focalplane data for this detector
+            # and broadcast the focalplane properties
+
+            for obs in data.obs:
+                focalplane = obs.telescope.focalplane
+                have_det = det in focalplane
+                if have_det:
+                    break
+            have_det_comm = self.comm.allgather(have_det)
+            source = np.argwhere(have_det_comm).ravel()[0]
+            if self.comm.rank == source:
+                det_dict = {}
+                for key in focalplane[det].colnames:
+                    det_dict[key] = focalplane[det][key]
+                det_dict["detector"] = det
+                det_dict["mc"] = self.mc
+                print(f"Det Dict for {det}: {det_dict}")
+            else:
+                det_dict = None
+            det_dict = self.comm.bcast(det_dict, root=source)
+
             # Expand detector pointing
             self.detector_pointing.apply(data, detectors=[det])
 
             if det in self.sky_file_dict:
                 sky_file = self.sky_file_dict[det]
             else:
-                sky_file = self.sky_file.format(detector=det, mc=self.mc)
-            skyT = self.get_sky(
-                sky_file.replace(".fits", "_T.fits"), det, verbose, pol=False
-            )
-            if self.pol:
-                skyEB = self.get_sky(
-                    sky_file.replace(".fits", "_EB.fits"), det, verbose, pol=True
-                )
-                skyBE = self.get_sky(
-                    sky_file.replace(".fits", "_BE.fits"), det, verbose, pol=True
-                )
+                sky_file = self.sky_file.format(**det_dict)
+
+            skyT, skyEB, skyBE = self.get_TEB_sky(sky_file, det, verbose)
 
             if det in self.beam_file_dict:
                 beam_file = self.beam_file_dict[det]
             else:
-                beam_file = self.beam_file.format(detector=det, mc=self.mc)
+                beam_file = self.beam_file.format(**det_dict)
+            print(f"Loading beam for {det} from {beam_file}", flush=True)  # DEBUG
 
-            beam_T, beam_P = self.get_beam(beam_file, det, verbose)
+            beam_T, beam_P = self.get_TP_beam(beam_file, det, verbose)
 
             detector = self.get_detector(det)
 
@@ -818,18 +837,87 @@ class SimTEBConviqt(SimConviqt):
 
         return
 
-    def get_beam(self, beamfile, det, verbose):
+    def get_TEB_sky(self, skyfile, det, verbose):
+        if os.path.isfile(skyfile):
+            skyT = self.get_sky(skyfile, det, verbose, pol=False)
+            # generate temporary files to use libconviqt facilities
+            slmE = hp.read_alm(skyfile, hdu=2)
+            slmB = hp.read_alm(skyfile, hdu=3)
+            with tempfile.TemporaryDirectory() as tempdir:
+                fname_temp = os.path.join(tempdir, "slm.fits")
+                hp.write_alm(
+                    fname_temp,
+                    np.vstack([slmE * 0, slmE, slmB]),
+                    lmax=self.lmax,
+                    overwrite=True,
+                )
+                skyEB = self.get_sky(fname_temp, det, verbose, pol=True)
+                hp.write_alm(
+                    fname_temp,
+                    np.vstack([slmE * 0, slmB, -slmE]),
+                    lmax=self.lmax,
+                    overwrite=True,
+                )
+                skyBE = self.get_sky(fname_temp, det, verbose, pol=True)
+            del slmE, slmB
+        else:
+            # Assume the component files are on disk
+            skyfile_T = skyfile.replace(".fits", "_T.fits")
+            skyfile_EB = skyfile.replace(".fits", "_EB.fits")
+            skyfile_BE = skyfile.replace(".fits", "_BE.fits")
+            for fname in skyfile_T, skyfile_EB, skyfile_BE:
+                if not os.path.isfile(fname):
+                    msg = f"No TEB sky at {skyfile} and no component sky at {fname}"
+                    raise RuntimeError(msg)
+            skyT = self.get_sky(skyfile_T, det, verbose, pol=False)
+            skyEB = self.get_sky(skyfile_EB, det, verbose, pol=True)
+            skyBE = self.get_sky(skyfile_BE, det, verbose, pol=True)
+
+        return skyT, skyEB, skyBE
+
+    def get_TP_beam(self, beamfile, det, verbose):
         timer = Timer()
         timer.start()
-        beam_file_T = beamfile.replace(".fits", "_T.fits")
-        beamT = conviqt.Beam(
-            lmax=self.lmax,
-            mmax=self.beammmax,
-            pol=False,
-            beamfile=beam_file_T,
-            comm=self.comm,
-        )
-        if self.pol:
+        if os.path.isfile(beamfile):
+            beamT = conviqt.Beam(
+                lmax=self.lmax,
+                mmax=self.beammmax,
+                pol=False,
+                beamfile=beamfile,
+                comm=self.comm,
+            )
+            # generate temporary files to use libconviqt facilities
+            blmE, mmaxE = hp.read_alm(beamfile, hdu=2, return_mmax=True)
+            blmB, mmaxB = hp.read_alm(beamfile, hdu=3, return_mmax=True)
+            if mmaxE != mmaxB:
+                msg = f"Mismatch: mmatE={mmaxE}, mmaxB={mmaxB}"
+                raise RuntimeError(msg)
+            with tempfile.TemporaryDirectory() as tempdir:
+                fname_temp = os.path.join(tempdir, "blm.fits")
+                hp.write_alm(
+                    fname_temp,
+                    np.vstack([blmE * 0, blmE, blmB]),
+                    lmax=self.lmax,
+                    mmax_in=mmaxE,
+                    overwrite=True,
+                )
+                beamP = conviqt.Beam(
+                    lmax=self.lmax,
+                    mmax=self.beammmax,
+                    pol=True,
+                    beamfile=fname_temp,
+                    comm=self.comm,
+                )
+            del blmE, blmB
+        else:
+            beam_file_T = beamfile.replace(".fits", "_T.fits")
+            beamT = conviqt.Beam(
+                lmax=self.lmax,
+                mmax=self.beammmax,
+                pol=False,
+                beamfile=beam_file_T,
+                comm=self.comm,
+            )
             beam_file_P = beamfile.replace(".fits", "_P.fits")
             beamP = conviqt.Beam(
                 lmax=self.lmax,
@@ -838,8 +926,6 @@ class SimTEBConviqt(SimConviqt):
                 beamfile=beam_file_P,
                 comm=self.comm,
             )
-        else:
-            beamP = None
 
         if verbose:
             timer.report_clear(f"initialize beam for detector {det}")

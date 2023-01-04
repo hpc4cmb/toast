@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -51,7 +51,7 @@ class SimConviqtTest(MPITestCase):
             # Inputs for the TEB convolution
             # FIXME : the TEB conviqt operator should do this match rather than leave it for the user
             hp.write_alm(
-                self.fname_sky.replace(".fits", "_T.fits"),
+                self.fname_sky.replace(".fits", "_components_T.fits"),
                 self.slm[0],
                 lmax=self.lmax,
                 overwrite=True,
@@ -59,7 +59,7 @@ class SimConviqtTest(MPITestCase):
             slm = self.slm.copy()
             slm[0] = 0
             hp.write_alm(
-                self.fname_sky.replace(".fits", "_EB.fits"),
+                self.fname_sky.replace(".fits", "_components_EB.fits"),
                 slm,
                 lmax=self.lmax,
                 overwrite=True,
@@ -67,7 +67,7 @@ class SimConviqtTest(MPITestCase):
             slm[1] = self.slm[2]
             slm[2] = -self.slm[1]
             hp.write_alm(
-                self.fname_sky.replace(".fits", "_BE.fits"),
+                self.fname_sky.replace(".fits", "_components_BE.fits"),
                 slm,
                 lmax=self.lmax,
                 overwrite=True,
@@ -185,34 +185,33 @@ class SimConviqtTest(MPITestCase):
                 normalize_beam=True,
             )
             hp.write_alm(
-                self.fname_beam.replace(".fits", "_T.fits"),
+                self.fname_beam.replace(".fits", "_components_T.fits"),
                 blm_T,
                 lmax=self.lmax,
                 mmax_in=self.mmax,
                 overwrite=True,
             )
             hp.write_alm(
-                self.fname_beam.replace(".fits", "_bottom_T.fits"),
+                self.fname_beam.replace(".fits", "_bottom_components_T.fits"),
                 blm_Tbot,
                 lmax=self.lmax,
                 mmax_in=self.mmax,
                 overwrite=True,
             )
             hp.write_alm(
-                self.fname_beam.replace(".fits", "_P.fits"),
+                self.fname_beam.replace(".fits", "_components_P.fits"),
                 blm_P,
                 lmax=self.lmax,
                 mmax_in=self.mmax,
                 overwrite=True,
             )
             hp.write_alm(
-                self.fname_beam.replace(".fits", "_bottom_P.fits"),
+                self.fname_beam.replace(".fits", "_bottom_components_P.fits"),
                 blm_Pbot,
                 lmax=self.lmax,
                 mmax_in=self.mmax,
                 overwrite=True,
             )
-            # in
 
         if self.comm is not None:
             self.comm.barrier()
@@ -221,19 +220,31 @@ class SimConviqtTest(MPITestCase):
 
     def make_beam_file_dict(self, data):
         """
-        We make sure that data observed  in each A/B detector within a
-        detector pair will have the right beam associated to it. In particular,
-        Q and U beams of B detector must have a flipped sign wrt  the A one.
+        We make sure that data observed in each A/B detector within a
+        detector pair will have the right beam associated to it.  In particular,
+        Q and U beams of B detector must have a flipped sign wrt the A one.
         """
 
-        fname2 = self.fname_beam.replace(".fits", "_bottom.fits")
+        fname_top = self.fname_beam
+        fname_bottom = fname_top.replace(".fits", "_bottom.fits")
 
         beam_file_dict = {}
         for det in data.obs[0].all_detectors:
-            if det[-1] == "A":
-                beam_file_dict[det] = self.fname_beam
+            try:
+                a_index = det.index("A")
+            except ValueError:
+                a_index = -1
+            try:
+                b_index = det.index("B")
+            except ValueError:
+                b_index = -1
+            if a_index > b_index:
+                beam_file_dict[det] = fname_top
+            elif b_index > a_index:
+                beam_file_dict[det] = fname_bottom
             else:
-                beam_file_dict[det] = fname2
+                msg = f"Cannot determine detector type: {det}"
+                raise RuntimeError(msg)
         return beam_file_dict
 
     def test_sim_conviqt(self):
@@ -805,3 +816,75 @@ class SimConviqtTest(MPITestCase):
 
         close_data(data_w_hwp)
         close_data(data_wo_hwp)
+
+    def test_sim_hwp_precomputed(self):
+        # Test using precomputed TEB components
+        if not ops.conviqt.available():
+            print("libconviqt not available, skipping tests")
+            return
+
+        data = create_satellite_data(
+            self.comm,
+            obs_time=120 * u.min,
+            pixel_per_process=2,
+            hwp_rpm=100,
+        )
+        data_precomputed = create_satellite_data(
+            self.comm,
+            obs_time=120 * u.min,
+            pixel_per_process=2,
+            hwp_rpm=100,
+        )
+        beam_file_dict = self.make_beam_file_dict(data)
+        beam_file_dict_precomputed = self.make_beam_file_dict(data_precomputed)
+        for key, path in beam_file_dict_precomputed.items():
+            beam_file_dict_precomputed[key] = path.replace(".fits", "_components.fits")
+
+        # Generate timestreams
+
+        detpointing = ops.PointingDetectorSimple()
+
+        key = "conviqt"
+        sim_conviqt = ops.SimTEBConviqt(
+            comm=self.comm,
+            detector_pointing=detpointing,
+            sky_file=self.fname_sky,
+            beam_file_dict=beam_file_dict,
+            dxx=False,
+            det_data=key,
+            pol=True,
+            normalize_beam=False,
+            fwhm=self.fwhm_sky,
+            hwp_angle="hwp_angle",
+        )
+
+        sim_conviqt.apply(data)
+
+        key_precomputed = "conviqt_precomputed"
+
+        sim_conviqt_precomputed = ops.SimTEBConviqt(
+            comm=self.comm,
+            detector_pointing=detpointing,
+            sky_file=self.fname_sky.replace(".fits", "_components.fits"),
+            beam_file_dict=beam_file_dict_precomputed,
+            dxx=False,
+            det_data=key_precomputed,
+            pol=True,
+            normalize_beam=False,
+            fwhm=self.fwhm_sky,
+            hwp_angle="hwp_angle",
+        )
+
+        sim_conviqt_precomputed.apply(data_precomputed)
+
+        # Compare the simulated TOD. It should be identical.
+
+        for obs1, obs2 in zip(data.obs, data_precomputed.obs):
+            for det in obs1.local_detectors:
+                sig1 = obs1.detdata[key][det]
+                sig2 = obs2.detdata[key_precomputed][det]
+
+                np.testing.assert_almost_equal(sig1, sig2)
+
+        close_data(data)
+        close_data(data_precomputed)
