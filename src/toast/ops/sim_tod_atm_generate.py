@@ -165,17 +165,12 @@ class GenerateAtmosphere(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        env = Environment.get()
         log = Logger.get()
 
         # Since each process group has the same set of observations, we use the group
         # communicator for collectively simulating the atmosphere slab for each
         # observation.
-        comm = data.comm.comm_group
         group = data.comm.group
-        rank = data.comm.group_rank
-        comm_node = data.comm.comm_group_node
-        comm_node_rank = data.comm.comm_group_node_rank
 
         # The atmosphere sims are created and stored for each observing session.
         # The output data key contains a dictionary of sims, keyed on session name.
@@ -185,184 +180,236 @@ class GenerateAtmosphere(Operator):
         # also checks that every session has a name.
         data_sessions = data.split(obs_session_name=True, require_full=True)
 
-        # Multiple process groups might have observations from the same session
+        # Multiple process groups might have observations from the same session.
+        # If we are caching the data, we only want one group to do that per session.
+        # First we find the unique sessions for every process group and simulate
+        # those.  Then every group will simulate or load the shared sessions.
 
+        group_sessions = [x for x in data_sessions.keys()]
+        session_gen = None
+        if data.comm.ngroups > 1:
+            # We have multiple groups
+            if data.comm.group_rank == 0:
+                # The first processes in all groups do this
+                p_sessions = data.comm.comm_group_rank.gather(group_sessions, root=0)
+                if group == 0:
+                    # One global process builds the lookup
+                    session_gen = dict()
+                    for iproc, ps in enumerate(p_sessions):
+                        for s in ps:
+                            if s not in session_gen:
+                                # The first process to encounter the session will
+                                # generate it.
+                                session_gen[s] = iproc
+            session_gen = data.comm.comm_world.bcast(session_gen, root=0)
+        else:
+            # Only one group
+            session_gen = {x: 0 for x in group_sessions}
+
+        # Find which sessions we have that we are NOT generating
+        shared_sessions = set([x for x in group_sessions if session_gen[x] != group])
+
+        # First generate all sessions we are responsible for
         for sname, sdata in data_sessions.items():
-            # Prefix for logging
-            log_prefix = f"{group} : {sname} : "
+            if session_gen[sname] == group:
+                msg = f"Group {group} Simulate or load session {sname} in first round"
+                log.debug_rank(msg, comm=sdata.comm.comm_group)
+                sim_output[sname] = self._sim_or_load(sname, sdata)
 
-            # List of simulated slabs for each wind interval
-            if not self.cache_only:
-                sim_output[sname] = list()
+        # Wait for all groups to finish
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
 
-            # For each session, check that the observations have the same site.
-            site = None
-            for ob in sdata.obs:
-                if site is None:
-                    site = ob.telescope.site
-                elif ob.telescope.site != site:
-                    msg = f"Different sites found for observations within the same "
-                    msg += f"session: {site} != {ob.telescope.site}"
-                    log.error(msg)
-                    raise RuntimeError(msg)
+        # Now simulate or load any shared sessions
+        for sname, sdata in data_sessions.items():
+            if sname in shared_sessions:
+                msg = f"Group {group} Simulate or load shared session {sname} in second round"
+                log.debug_rank(msg, comm=sdata.comm.comm_group)
+                sim_output[sname] = self._sim_or_load(sname, sdata)
 
-            if not hasattr(site, "weather") or site.weather is None:
-                raise RuntimeError(
-                    "Cannot simulate atmosphere for sites without weather"
-                )
-            weather = site.weather
+        if not self.cache_only:
+            # Add output to data
+            data[self.output] = sim_output
 
-            # The session is by definition the same for all observations in this split.
-            # Use the first observation to compute some quantities common to all.
+    def _sim_or_load(self, sname, sdata):
+        """Simulate or load all atmosphere slabs for a single session."""
+        log = Logger.get()
 
-            first_obs = sdata.obs[0]
+        comm = sdata.comm.comm_group
+        group = sdata.comm.group
+        rank = sdata.comm.group_rank
+        comm_node = sdata.comm.comm_group_node
+        comm_node_rank = sdata.comm.comm_group_node_rank
 
-            # The full time range of this session.  The processes are arranged
-            # in a grid, and processes along the same column have the same timestamps.
-            # So the first process of the group has the earliest times and the last
-            # process of the group has the latest times.
+        # Prefix for logging
+        log_prefix = f"{group} : {sname} : "
 
-            times = first_obs.shared[self.times]
+        # List of simulated slabs for each wind interval
+        if not self.cache_only:
+            output = None
+            output = list()
 
-            tmin_tot = times[0]
-            tmax_tot = times[-1]
-            if comm is not None:
-                tmin_tot = comm.bcast(tmin_tot, root=0)
-                tmax_tot = comm.bcast(tmax_tot, root=(data.comm.group_size - 1))
+        # For each session, check that the observations have the same site.
+        site = None
+        for ob in sdata.obs:
+            if site is None:
+                site = ob.telescope.site
+            elif ob.telescope.site != site:
+                msg = f"Different sites found for observations within the same "
+                msg += f"session: {site} != {ob.telescope.site}"
+                log.error(msg)
+                raise RuntimeError(msg)
 
-            # RNG values
-            key1, key2, counter1, counter2 = self._get_rng_keys(first_obs)
+        if not hasattr(site, "weather") or site.weather is None:
+            raise RuntimeError("Cannot simulate atmosphere for sites without weather")
+        weather = site.weather
 
-            # Path to the cache location
-            cachedir = self._get_cache_dir(first_obs, comm)
+        # The session is by definition the same for all observations in this split.
+        # Use the first observation to compute some quantities common to all.
 
-            log.debug_rank(f"{log_prefix}Setting up atmosphere simulation", comm=comm)
+        first_obs = sdata.obs[0]
 
-            # Although each observation in the session has the same boresight pointing,
-            # they have independent fields of view / extent.  We find the maximal
-            # Az / El range across all observations in the session.
+        # The full time range of this session.  The processes are arranged
+        # in a grid, and processes along the same column have the same timestamps.
+        # So the first process of the group has the earliest times and the last
+        # process of the group has the latest times.
 
-            azmin = None
-            azmax = None
-            elmin = None
-            elmax = None
-            for ob in sdata.obs:
-                ob_azmin, ob_azmax, ob_elmin, ob_elmax = self._get_scan_range(ob)
-                if azmin is None:
-                    azmin = ob_azmin
-                    azmax = ob_azmax
-                    elmin = ob_elmin
-                    elmax = ob_elmax
-                else:
-                    azmin = min(azmin, ob_azmin)
-                    azmax = max(azmax, ob_azmax)
-                    elmin = min(elmin, ob_elmin)
-                    elmax = max(elmax, ob_elmax)
-            scan_range = (azmin * u.rad, azmax * u.rad, elmin * u.rad, elmax * u.rad)
+        times = first_obs.shared[self.times]
 
-            # Loop over the time span in "wind_time"-sized chunks.
-            # wind_time is intended to reflect the correlation length
-            # in the atmospheric noise.
+        tmin_tot = times[0]
+        tmax_tot = times[-1]
+        if comm is not None:
+            tmin_tot = comm.bcast(tmin_tot, root=0)
+            tmax_tot = comm.bcast(tmax_tot, root=(sdata.comm.group_size - 1))
 
-            wind_times = list()
+        # RNG values
+        key1, key2, counter1, counter2 = self._get_rng_keys(first_obs)
 
-            tmr = Timer()
+        # Path to the cache location
+        cachedir = self._get_cache_dir(first_obs, comm)
+
+        log.debug_rank(f"{log_prefix}Setting up atmosphere simulation", comm=comm)
+
+        # Although each observation in the session has the same boresight pointing,
+        # they have independent fields of view / extent.  We find the maximal
+        # Az / El range across all observations in the session.
+
+        azmin = None
+        azmax = None
+        elmin = None
+        elmax = None
+        for ob in sdata.obs:
+            ob_azmin, ob_azmax, ob_elmin, ob_elmax = self._get_scan_range(ob)
+            if azmin is None:
+                azmin = ob_azmin
+                azmax = ob_azmax
+                elmin = ob_elmin
+                elmax = ob_elmax
+            else:
+                azmin = min(azmin, ob_azmin)
+                azmax = max(azmax, ob_azmax)
+                elmin = min(elmin, ob_elmin)
+                elmax = max(elmax, ob_elmax)
+        scan_range = (azmin * u.rad, azmax * u.rad, elmin * u.rad, elmax * u.rad)
+
+        # Loop over the time span in "wind_time"-sized chunks.
+        # wind_time is intended to reflect the correlation length
+        # in the atmospheric noise.
+
+        wind_times = list()
+
+        tmr = Timer()
+        if comm is not None:
+            comm.Barrier()
+        tmr.start()
+
+        tmin = tmin_tot
+        istart = 0
+        counter1start = counter1
+
+        while tmin < tmax_tot:
             if comm is not None:
                 comm.Barrier()
-            tmr.start()
+            istart, istop, tmax = self._get_time_range(
+                tmin, istart, times, tmax_tot, first_obs, weather
+            )
+            wind_times.append((tmin, tmax))
 
-            tmin = tmin_tot
-            istart = 0
-            counter1start = counter1
-
-            while tmin < tmax_tot:
-                if comm is not None:
-                    comm.Barrier()
-                istart, istop, tmax = self._get_time_range(
-                    tmin, istart, times, tmax_tot, first_obs, weather
+            if rank == 0:
+                log.debug(
+                    f"{log_prefix}Instantiating atmosphere for t = "
+                    f"{tmin - tmin_tot:10.1f} s - {tmax - tmin_tot:10.1f} s "
+                    f"out of {tmax_tot - tmin_tot:10.1f} s"
                 )
-                wind_times.append((tmin, tmax))
 
-                if rank == 0:
-                    log.debug(
-                        f"{log_prefix}Instantiating atmosphere for t = "
-                        f"{tmin - tmin_tot:10.1f} s - {tmax - tmin_tot:10.1f} s "
-                        f"out of {tmax_tot - tmin_tot:10.1f} s"
-                    )
+            rmin = 0
+            rmax = 100
+            scale = 10
+            counter2start = counter2
+            counter1 = counter1start
+            xstep_current = u.Quantity(self.xstep)
+            ystep_current = u.Quantity(self.ystep)
+            zstep_current = u.Quantity(self.zstep)
 
-                ind = slice(istart, istop)
-                nind = istop - istart
+            sim_list = list()
 
-                rmin = 0
-                rmax = 100
-                scale = 10
-                counter2start = counter2
-                counter1 = counter1start
-                xstep_current = u.Quantity(self.xstep)
-                ystep_current = u.Quantity(self.ystep)
-                zstep_current = u.Quantity(self.zstep)
+            while rmax < 100000:
+                sim, counter2 = self._simulate_atmosphere(
+                    weather,
+                    scan_range,
+                    tmin,
+                    tmax,
+                    comm,
+                    comm_node,
+                    comm_node_rank,
+                    key1,
+                    key2,
+                    counter1,
+                    counter2start,
+                    cachedir,
+                    log_prefix,
+                    tmin_tot,
+                    tmax_tot,
+                    xstep_current,
+                    ystep_current,
+                    zstep_current,
+                    rmin,
+                    rmax,
+                )
+                if not self.cache_only:
+                    sim_list.append(sim)
 
-                sim_list = list()
-
-                while rmax < 100000:
-                    sim, counter2 = self._simulate_atmosphere(
-                        weather,
+                if self.debug_plots or self.debug_snapshots:
+                    self._plot_snapshots(
+                        sim,
+                        log_prefix,
+                        sname,
                         scan_range,
                         tmin,
                         tmax,
                         comm,
-                        comm_node,
-                        comm_node_rank,
-                        key1,
-                        key2,
-                        counter1,
-                        counter2start,
-                        cachedir,
-                        log_prefix,
-                        tmin_tot,
-                        tmax_tot,
-                        xstep_current,
-                        ystep_current,
-                        zstep_current,
                         rmin,
                         rmax,
                     )
-                    if not self.cache_only:
-                        sim_list.append(sim)
 
-                    if self.debug_plots or self.debug_snapshots:
-                        self._plot_snapshots(
-                            sim,
-                            log_prefix,
-                            sname,
-                            scan_range,
-                            tmin,
-                            tmax,
-                            comm,
-                            rmin,
-                            rmax,
-                        )
-
-                    rmin = rmax
-                    rmax *= scale
-                    xstep_current *= np.sqrt(scale)
-                    ystep_current *= np.sqrt(scale)
-                    zstep_current *= np.sqrt(scale)
-                    counter1 += 1
-
-                if not self.cache_only:
-                    sim_output[sname].append(sim_list)
-                tmin = tmax
+                rmin = rmax
+                rmax *= scale
+                xstep_current *= np.sqrt(scale)
+                ystep_current *= np.sqrt(scale)
+                zstep_current *= np.sqrt(scale)
+                counter1 += 1
 
             if not self.cache_only:
-                # Create the wind intervals
-                for ob in sdata.obs:
-                    ob.intervals.create_col(
-                        self.wind_intervals, wind_times, ob.shared[self.times]
-                    )
+                output.append(sim_list)
+            tmin = tmax
+
         if not self.cache_only:
-            # Add output to data
-            data[self.output] = sim_output
+            # Create the wind intervals
+            for ob in sdata.obs:
+                ob.intervals.create_col(
+                    self.wind_intervals, wind_times, ob.shared[self.times]
+                )
+        return output
 
     def _get_rng_keys(self, obs):
         """Get random number keys and counters for an observing session.
