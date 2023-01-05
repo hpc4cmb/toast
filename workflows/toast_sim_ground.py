@@ -504,6 +504,11 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
 
     log.info_rank("Simulated data in", comm=world_comm, timer=timer_sim)
 
+    # Add gain errors
+
+    ops.gain_scrambler.apply(data)
+    log.info_rank("  Simulated gain errors in", comm=world_comm, timer=timer)
+
     # Optionally write out the data
     if ops.save_hdf5.volume is None:
         ops.save_hdf5.volume = os.path.join(args.out_dir, "data")
@@ -813,6 +818,7 @@ def main():
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, enabled=False
         ),
+        toast.ops.GainScrambler(name="gain_scrambler", enabled=False),
         toast.ops.SaveHDF5(name="save_hdf5", enabled=False),
         toast.ops.SimNoise(name="sim_noise"),
         toast.ops.PixelsHealpix(name="pixels_healpix_radec"),
