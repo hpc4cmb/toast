@@ -373,8 +373,12 @@ class import_obs_meta(object):
                 )
 
                 # Make a fake obs for loading noise models
+                if MPI is None:
+                    fake_comm = None
+                else:
+                    fake_comm = MPI.COMM_SELF
                 fake_obs = Observation(
-                    Comm(world=MPI.COMM_SELF),
+                    Comm(world=fake_comm),
                     telescope,
                     1,
                     process_rows=1,
