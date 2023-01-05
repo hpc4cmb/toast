@@ -738,13 +738,17 @@ class SimGround(Operator):
                 self.sun_close_distance,
             )
 
+            msg = f"Group {data.comm.group} finished observation {obs_name}:\n"
+            msg += f"{ob}"
+            log.verbose_rank(msg, comm=data.comm.comm_group)
+
             obmem = ob.memory_use()
             obmem_gb = obmem / 1024**3
             msg = f"Observation {ob.name} using {obmem_gb:0.2f} GB of total memory"
             log.debug_rank(msg, comm=ob.comm.comm_group)
 
             data.obs.append(ob)
-            # last_session = sname
+            last_session = sname
 
         # For convenience, we additionally create a shared flag field with bits set
         # according to the different intervals.  This basically just saves workflows

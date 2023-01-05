@@ -185,6 +185,8 @@ class GenerateAtmosphere(Operator):
         # also checks that every session has a name.
         data_sessions = data.split(obs_session_name=True, require_full=True)
 
+        # Multiple process groups might have observations from the same session
+
         for sname, sdata in data_sessions.items():
             # Prefix for logging
             log_prefix = f"{group} : {sname} : "
