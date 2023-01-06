@@ -140,11 +140,11 @@ class ElevationNoise(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.net_factors = list()
-        self.total_factors = list()
-        self.weights_in = list()
-        self.weights_out = list()
-        self.rates = list()
+        self.net_factors = []
+        self.total_factors = []
+        self.weights_in = []
+        self.weights_out = []
+        self.rates = []
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):

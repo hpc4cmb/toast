@@ -139,14 +139,15 @@ class AnalyticNoise(Noise):
         return wt.decompose()
 
     def _gather_sim(self, comm, out):
-        # Gather simulation properties to the rank zero process
+        # Gather simulation properties to the rank zero process.
+        # The output data dictionary is modified in place.
         if comm is None or comm.size == 1:
             out["fmin"] = self._fmin
             out["fknee"] = self._fknee
             out["rate"] = self._rate
             out["alpha"] = self._alpha
             out["NET"] = self._NET
-            return out
+            return
 
         pfmin = comm.gather(self._fmin, root=0)
         pfknee = comm.gather(self._fknee, root=0)

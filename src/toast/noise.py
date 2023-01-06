@@ -854,31 +854,31 @@ class Noise(object):
         log = Logger.get()
         fail = 0
         if set(self._dets) != set(other._dets):
-            log.info(f"Noise __eq__:  dets {set(self._dets)} != {set(other._dets)}")
+            log.verbose(f"Noise __eq__:  dets {set(self._dets)} != {set(other._dets)}")
             fail = 1
         elif set(self._keys) != set(other._keys):
-            log.info(f"Noise __eq__:  keys {set(self._keys)} != {set(other._keys)}")
+            log.verbose(f"Noise __eq__:  keys {set(self._keys)} != {set(other._keys)}")
             fail = 1
         elif self._rates != other._rates:
-            log.info(f"Noise __eq__:  rates {self._rates} != {other._rates}")
+            log.verbose(f"Noise __eq__:  rates {self._rates} != {other._rates}")
             fail = 1
         elif self._indices != other._indices:
-            log.info(f"Noise __eq__:  indices {self._indices} != {other._indices}")
+            log.verbose(f"Noise __eq__:  indices {self._indices} != {other._indices}")
             fail = 1
         elif self._mixmatrix != other._mixmatrix:
-            log.info(f"Noise __eq__:  mix {self._mixmatrix} != {other._mixmatrix}")
+            log.verbose(f"Noise __eq__:  mix {self._mixmatrix} != {other._mixmatrix}")
             fail = 1
         else:
             for k, v in self._freqs.items():
                 if not np.allclose(v.to_value(u.Hz), other._freqs[k].to_value(u.Hz)):
-                    log.info(f"Noise __eq__:  freqs[{k}] {v} != {other._freqs[k]}")
+                    log.verbose(f"Noise __eq__:  freqs[{k}] {v} != {other._freqs[k]}")
                     fail = 1
             for k, v in self._psds.items():
                 if not np.allclose(
                     v.to_value(u.K**2 * u.second),
                     other._psds[k].to_value(u.K**2 * u.second),
                 ):
-                    log.info(f"Noise __eq__:  psds[{k}] {v} != {other._psds[k]}")
+                    log.verbose(f"Noise __eq__:  psds[{k}] {v} != {other._psds[k]}")
                     fail = 1
         return fail == 0
 

@@ -294,7 +294,7 @@ class NoiseEstim(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         if detectors is not None:
-            msg = "NoiseEstim cannot be run with"
+            msg = "NoiseEstim cannot be run with subsets of detectors"
             raise RuntimeError(msg)
 
         log = Logger.get()
