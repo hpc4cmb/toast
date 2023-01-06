@@ -14,7 +14,7 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir, fake_flags, close_data
+from ._helpers import close_data, create_ground_data, create_outdir, fake_flags
 from .mpi import MPITestCase
 
 
@@ -72,11 +72,11 @@ class HWPFilterTest(MPITestCase):
                 # Check that the filtered signal is cleaner than the input signal
                 if np.std(new_signal[good]) > np.std(old_signal[good]):
                     import pdb
+
                     import matplotlib.pyplot as plt
+
                     pdb.set_trace()
-                self.assertTrue(
-                    np.std(new_signal[good]) < np.std(old_signal[good])
-                )
+                self.assertTrue(np.std(new_signal[good]) < np.std(old_signal[good]))
                 # Check that the flagged samples were also cleaned and not,
                 # for example, set to zero. Use np.diff() to remove any
                 # residual trend

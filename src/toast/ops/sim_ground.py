@@ -15,7 +15,7 @@ from .. import qarray as qa
 from ..coordinates import azel_to_radec
 from ..dist import distribute_discrete, distribute_uniform
 from ..healpix import ang2vec
-from ..instrument import Session, Telescope, Focalplane
+from ..instrument import Focalplane, Session, Telescope
 from ..intervals import IntervalList, regular_intervals
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
@@ -29,8 +29,8 @@ from ..traits import (
     Int,
     List,
     Quantity,
-    Unit,
     Unicode,
+    Unit,
     trait_docs,
 )
 from ..utils import (

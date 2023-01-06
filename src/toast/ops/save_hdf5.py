@@ -7,7 +7,7 @@ import os
 import numpy as np
 import traitlets
 
-from ..io import save_hdf5, load_hdf5
+from ..io import load_hdf5, save_hdf5
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Dict, Int, List, Unicode, trait_docs

@@ -14,7 +14,7 @@ from ..data import Data
 from ..io import load_hdf5, save_hdf5
 from ..mpi import MPI
 from ..observation_data import DetectorData
-from ._helpers import create_ground_data, create_outdir, close_data
+from ._helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 

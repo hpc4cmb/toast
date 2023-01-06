@@ -17,8 +17,8 @@ from .._libtoast import (
     accumulate_observation_matrix,
     build_template_covariance,
     expand_matrix,
-    legendre,
     fourier,
+    legendre,
 )
 from ..mpi import MPI
 from ..observation import default_values as defaults
@@ -234,7 +234,7 @@ class FilterBin(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid | defaults.det_mask_processing,
-        help="Bit mask value for optional detector flagging"
+        help="Bit mask value for optional detector flagging",
     )
 
     shared_flags = Unicode(

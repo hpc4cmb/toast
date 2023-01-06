@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import traitlets
 from astropy import units as u
-from datetime import datetime, timezone, timedelta
 from scipy.constants import degree
 
 from .. import qarray as qa
@@ -19,7 +18,7 @@ from ..observation import Observation
 from ..observation import default_values as defaults
 from ..schedule import SatelliteSchedule
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger, name_UID, rate_from_times
 from .operator import Operator
 from .sim_hwp import simulate_hwp_response

@@ -14,7 +14,7 @@ from ..observation import default_values as defaults
 from ..ops.mapmaker_solve import SolverLHS, SolverRHS
 from ..templates import AmplitudesMap, Offset
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir, create_satellite_data, close_data
+from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 

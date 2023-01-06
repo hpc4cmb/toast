@@ -4,10 +4,10 @@
 
 import os
 
-from astropy import units as u
 import healpy as hp
 import numpy as np
 import numpy.testing as nt
+from astropy import units as u
 
 from .. import pixels_io_healpix as io
 from ..pixels import PixelData, PixelDistribution

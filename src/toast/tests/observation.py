@@ -18,11 +18,11 @@ from ..observation import DetectorData, Observation
 from ..observation import default_values as defaults
 from ..observation import set_default_values
 from ._helpers import (
+    close_data,
     create_ground_data,
     create_outdir,
     create_satellite_empty,
     fake_flags,
-    close_data,
 )
 from .mpi import MPITestCase
 

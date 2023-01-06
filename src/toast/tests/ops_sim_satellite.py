@@ -20,7 +20,7 @@ from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..schedule_sim_satellite import create_satellite_schedule
 from ..vis import set_matplotlib_backend
-from ._helpers import create_comm, create_outdir, plot_projected_quats, close_data
+from ._helpers import close_data, create_comm, create_outdir, plot_projected_quats
 from .mpi import MPITestCase
 
 

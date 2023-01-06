@@ -30,7 +30,7 @@ from ..spt3g import (
     to_g3_time,
     to_g3_unit,
 )
-from ._helpers import create_ground_data, create_outdir, close_data
+from ._helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 if available:

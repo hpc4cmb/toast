@@ -13,7 +13,7 @@ from .. import rng as rng
 from ..noise import Noise
 from ..ops.sim_tod_noise import sim_noise_timestream
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir, create_satellite_data, close_data
+from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 

@@ -13,7 +13,7 @@ from .. import ops as ops
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir, close_data
+from ._helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 

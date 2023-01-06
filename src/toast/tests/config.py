@@ -33,15 +33,15 @@ from ..traits import (
     Int,
     List,
     Quantity,
-    Unit,
     Set,
     Tuple,
     Unicode,
+    Unit,
     trait_docs,
     trait_scalar_to_string,
 )
 from ..utils import Environment, Logger
-from ._helpers import create_comm, create_outdir, create_space_telescope, close_data
+from ._helpers import close_data, create_comm, create_outdir, create_space_telescope
 from .mpi import MPITestCase
 
 

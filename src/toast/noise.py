@@ -11,7 +11,7 @@ import numpy as np
 from astropy import units as u
 
 from .timing import Timer, function_timer
-from .utils import hdf5_use_serial, name_UID, Logger
+from .utils import Logger, hdf5_use_serial, name_UID
 
 
 class Noise(object):

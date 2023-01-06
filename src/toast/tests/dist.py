@@ -15,12 +15,12 @@ from ..instrument import Session
 from ..mpi import MPI, Comm
 from ..observation import Observation
 from ._helpers import (
+    close_data,
     create_comm,
     create_ground_telescope,
     create_outdir,
     create_satellite_data,
     create_satellite_empty,
-    close_data,
 )
 from .mpi import MPITestCase
 

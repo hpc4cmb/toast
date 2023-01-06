@@ -12,7 +12,7 @@ from .._libtoast import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
 from ..fft import FFTPlanReal1DStore
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, Unit, Unicode, trait_docs
+from ..traits import Bool, Int, Unicode, Unit, trait_docs
 from ..utils import AlignedF64, Logger, rate_from_times, unit_conversion
 from .operator import Operator
 

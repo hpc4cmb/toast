@@ -2,15 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import collections
 import copy
 import re
-import collections
 from collections import OrderedDict
 
 import traitlets
 from astropy import units as u
 from traitlets import (
-    TraitType,
     Bool,
     Callable,
     Dict,
@@ -21,6 +20,7 @@ from traitlets import (
     List,
     Set,
     TraitError,
+    TraitType,
     Tuple,
     Undefined,
     Unicode,

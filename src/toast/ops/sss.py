@@ -24,8 +24,8 @@ from ..traits import (
     Int,
     List,
     Quantity,
-    Unit,
     Unicode,
+    Unit,
     trait_docs,
 )
 from ..utils import Environment, Logger, Timer

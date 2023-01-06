@@ -9,7 +9,7 @@ from astropy import units as u
 from .. import rng
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Callable, Float, Int, Quantity, Unit, Unicode, trait_docs
+from ..traits import Bool, Callable, Float, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 from .sim_tod_noise import sim_noise_timestream

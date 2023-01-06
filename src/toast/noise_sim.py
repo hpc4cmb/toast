@@ -10,7 +10,7 @@ from astropy import units as u
 
 from .noise import Noise
 from .timing import function_timer
-from .utils import hdf5_use_serial, Logger
+from .utils import Logger, hdf5_use_serial
 
 
 class AnalyticNoise(Noise):
