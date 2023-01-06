@@ -11,7 +11,7 @@ from .. import qarray as qa
 from ..dipole import dipole
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, Quantity, Unit, Unicode, trait_docs
+from ..traits import Bool, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger, unit_conversion
 from .operator import Operator
 

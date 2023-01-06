@@ -286,17 +286,22 @@ class NoiseEstim(Operator):
                 comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
+            if self.out_model is not None:
+                obs[self.out_model] = temp_obs[self.out_model]
             self.redistribute = False
         return
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         if detectors is not None:
-            msg = "NoiseEstim cannot be run in batch mode"
+            msg = "NoiseEstim cannot be run with subsets of detectors"
             raise RuntimeError(msg)
 
         log = Logger.get()
 
+        # FIXME:  The common mode filter would be more efficient if we moved
+        # this block of code to working on a data view with a single observation
+        # that is already re-distributed below.
         if self.focalplane_key is not None:
             if self.pairs is not None:
                 msg = "focalplane_key is not compatible with pairs"
@@ -484,23 +489,27 @@ class NoiseEstim(Operator):
                     noise_psds[det1] = nse_psd[1:] * psd_unit
                     noise_indices[det1] = obs.telescope.focalplane[det1]["uid"]
 
-            self._re_redistribute(orig_obs, obs)
-
             if self.out_model is not None:
-                # Create a noise model
+                # Create a noise model.  Our observation is currently distributed
+                # so that every process has all detectors.
                 if data.comm.comm_group is not None:
                     noise_dets = data.comm.comm_group.bcast(noise_dets, root=0)
                     noise_freqs = data.comm.comm_group.bcast(noise_freqs, root=0)
                     noise_psds = data.comm.comm_group.bcast(noise_psds, root=0)
                     noise_indices = data.comm.comm_group.bcast(noise_indices, root=0)
-                orig_obs[self.out_model] = Noise(
+                obs[self.out_model] = Noise(
                     detectors=noise_dets,
                     freqs=noise_freqs,
                     psds=noise_psds,
                     indices=noise_indices,
                 )
 
-        return
+            # Redistribute the observation, replacing the input TOD with the filtered
+            # one and redistributing the noise model.
+            self._re_redistribute(orig_obs, obs)
+
+            # Delete temporary obs
+            del obs
 
     @function_timer
     def highpass_signal(self, obs, intervals):

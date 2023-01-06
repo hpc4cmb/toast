@@ -13,11 +13,11 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io_wcs import write_wcs_fits
 from ._helpers import (
+    close_data,
     create_fake_mask,
     create_fake_sky,
     create_ground_data,
     create_outdir,
-    close_data,
 )
 from .mpi import MPITestCase
 

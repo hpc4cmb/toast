@@ -14,7 +14,7 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir, fake_flags, close_data
+from ._helpers import close_data, create_ground_data, create_outdir, fake_flags
 from .mpi import MPITestCase
 
 

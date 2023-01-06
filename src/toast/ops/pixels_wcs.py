@@ -65,8 +65,7 @@ class PixelsWCS(Operator):
     )
 
     bounds = Tuple(
-        None,
-        allow_none=True,
+        tuple(),
         help="The (lon_min, lon_max, lat_min, lat_max) values (Quantities)",
     )
 
@@ -77,13 +76,11 @@ class PixelsWCS(Operator):
 
     dimensions = Tuple(
         (710, 350),
-        allow_none=True,
         help="The Lon/Lat pixel dimensions of the projection",
     )
 
     resolution = Tuple(
         (0.5 * u.degree, 0.5 * u.degree),
-        allow_none=True,
         help="The Lon/Lat projection resolution (Quantities) along the 2 axes",
     )
 
@@ -177,16 +174,16 @@ class PixelsWCS(Operator):
         # Current values:
         proj = str(self.projection)
         center = self.center
-        if center is not None:
+        if len(center) > 0:
             center = tuple(self.center)
         bounds = self.bounds
-        if bounds is not None:
+        if len(bounds) > 0:
             bounds = tuple(self.bounds)
         dims = self.dimensions
-        if dims is not None:
+        if len(dims) > 0:
             dims = tuple(self.dimensions)
         res = self.resolution
-        if res is not None:
+        if len(res) > 0:
             res = tuple(self.resolution)
 
         # Update to the trait that changed
@@ -194,23 +191,23 @@ class PixelsWCS(Operator):
             proj = change["new"]
         if change["name"] == "center":
             center = change["new"]
-            if center is not None:
-                bounds = None
+            if len(center) > 0:
+                bounds = tuple()
         if change["name"] == "bounds":
             bounds = change["new"]
-            if bounds is not None:
-                center = None
-                if dims is not None and res is not None:
+            if len(bounds) > 0:
+                center = tuple()
+                if len(dims) > 0 and len(res) > 0:
                     # Most likely the user cares about the resolution more...
-                    dims = None
+                    dims = tuple()
         if change["name"] == "dimensions":
             dims = change["new"]
-            if dims is not None and bounds is not None:
-                res = None
+            if len(dims) > 0 and len(bounds) > 0:
+                res = tuple()
         if change["name"] == "resolution":
             res = change["new"]
-            if res is not None and bounds is not None:
-                dims = None
+            if len(res) > 0 and len(bounds) > 0:
+                dims = tuple()
         self._set_wcs(proj, center, bounds, dims, res)
         self.projection = proj
         self.center = center
@@ -221,22 +218,22 @@ class PixelsWCS(Operator):
     def _set_wcs(self, proj, center, bounds, dims, res):
         log = Logger.get()
         log.verbose(f"PixelsWCS: set_wcs {proj}, {center}, {bounds}, {dims}, {res}")
-        if res is not None:
+        if len(res) > 0:
             res = np.array(
                 [
                     res[0].to_value(u.degree),
                     res[1].to_value(u.degree),
                 ]
             )
-        if dims is not None:
+        if len(dims) > 0:
             dims = np.array([self.dimensions[0], self.dimensions[1]])
 
-        if bounds is None:
+        if len(bounds) == 0:
             # Using center, need both resolution and dimensions
-            if center is None:
+            if len(center) == 0:
                 # Cannot calculate yet
                 return
-            if res is None or dims is None:
+            if len(res) == 0 or len(dims) == 0:
                 # Cannot calculate yet
                 return
             pos = np.array(
@@ -247,7 +244,7 @@ class PixelsWCS(Operator):
             )
         else:
             # Using bounds, exactly one of resolution or dimensions specified
-            if res is not None and dims is not None:
+            if len(res) > 0 and len(dims) > 0:
                 # Cannot calculate yet
                 return
 
@@ -265,7 +262,7 @@ class PixelsWCS(Operator):
             )
 
         self.wcs = pixell.wcsutils.build(pos, res, dims, rowmajor=False, system=proj)
-        if dims is None:
+        if len(dims) == 0:
             # Compute from the bounding box corners
             lower_left = self.wcs.wcs_world2pix(np.array([[pos[0, 0], pos[0, 1]]]), 0)[
                 0

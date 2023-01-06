@@ -13,12 +13,12 @@ from .. import qarray as qa
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import (
+    close_data,
     create_fake_beam_alm,
     create_fake_sky_alm,
     create_healpix_ring_satellite,
     create_outdir,
     create_satellite_data,
-    close_data,
 )
 from .mpi import MPITestCase
 

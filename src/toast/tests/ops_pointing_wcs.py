@@ -18,13 +18,13 @@ from ..observation import default_values as defaults
 from ..pixels_io_wcs import write_wcs_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import (
+    close_data,
     create_boresight_telescope,
     create_comm,
     create_fake_sky,
     create_ground_data,
     create_outdir,
     create_space_telescope,
-    close_data,
 )
 from .mpi import MPITestCase
 

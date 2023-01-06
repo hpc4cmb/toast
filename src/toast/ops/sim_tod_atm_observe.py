@@ -16,7 +16,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..observation_dist import global_interval_times
 from ..timing import GlobalTimers, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger, Timer, unit_conversion
 from .operator import Operator
 

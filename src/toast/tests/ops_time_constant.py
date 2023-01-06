@@ -15,11 +15,11 @@ from ..noise import Noise
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
 from ._helpers import (
+    close_data,
     create_fake_sky,
     create_outdir,
     create_satellite_data,
     fake_flags,
-    close_data,
 )
 from .mpi import MPITestCase
 

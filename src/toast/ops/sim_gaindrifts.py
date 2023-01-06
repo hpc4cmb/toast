@@ -9,7 +9,7 @@ from astropy import units as u
 from .. import rng
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Callable, Float, Int, Quantity, Unit, Unicode, trait_docs
+from ..traits import Bool, Callable, Float, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 from .sim_tod_noise import sim_noise_timestream
@@ -245,7 +245,7 @@ class GainDrifter(Operator):
                 # inject the common mode but only an indepedendent slow drift
 
                 if self.detector_mismatch == 1:
-                    gain_common = np.zeros_like(det_group, dtype=np.float_)
+                    gain_common = np.zeros_like(det_group, dtype=np.float64)
                 else:
                     gain_common = []
                     for iw, w in enumerate(det_group):

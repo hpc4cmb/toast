@@ -15,7 +15,7 @@ from ..dipole import dipole
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir, close_data
+from ._helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 
@@ -539,6 +539,12 @@ class SimAtmTest(MPITestCase):
         if self.comm is not None:
             rank = self.comm.rank
 
+        testdir = os.path.join(self.outdir, "sim_split")
+        if rank == 0:
+            os.makedirs(testdir)
+        if self.comm is not None:
+            self.comm.barrier()
+
         # Set up operators
 
         # Simple detector pointing
@@ -588,13 +594,17 @@ class SimAtmTest(MPITestCase):
             pixel_pointing=pixels,
             stokes_weights=weights_radec,
             noise_model=el_model.out_model,
+            inverse_covariance="invcov",
         )
+
+        # HDF5 saving
+        saver = ops.SaveHDF5(detdata_float32=True, verify=True)
 
         # Simulate and process all detectors simultaneously
 
         ppp = 10
 
-        freq_list = [(100 + 10 * x) * u.GHz for x in range(4)]
+        freq_list = [(100 + 10 * x) * u.GHz for x in range(3)]
 
         full_data = create_ground_data(
             self.comm,
@@ -602,7 +612,7 @@ class SimAtmTest(MPITestCase):
             pixel_per_process=ppp,
         )
 
-        print(f"full_data has {len(full_data.obs)} observations")
+        # print(f"full_data has {len(full_data.obs)} observations")
         # full_data.info()
         self.count_mem(full_data, "After full sim ground")
 
@@ -618,6 +628,9 @@ class SimAtmTest(MPITestCase):
         sim_atm.apply(full_data)
         self.count_mem(full_data, "After full sim atm")
 
+        saver.volume = os.path.join(testdir, "data_full")
+        saver.apply(full_data)
+
         cov_and_hits.apply(full_data)
         self.count_mem(full_data, "After full cov and hits")
 
@@ -626,6 +639,7 @@ class SimAtmTest(MPITestCase):
         split_data = create_ground_data(
             self.comm, freqs=freq_list, pixel_per_process=ppp, split=True
         )
+        # print(f"split_data has {len(split_data.obs)} observations")
         # split_data.info()
         self.count_mem(split_data, "After split sim ground")
 
@@ -641,28 +655,34 @@ class SimAtmTest(MPITestCase):
         sim_atm.apply(split_data)
         self.count_mem(split_data, "After split sim atm")
 
+        saver.volume = os.path.join(testdir, "data_split")
+        saver.apply(split_data)
+
         cov_and_hits.apply(split_data)
         self.count_mem(split_data, "After split cov and hits")
 
         # Compare two cases
 
-        for obs in full_data.obs:
-            # Get the session
-            ses = obs.session
-            # Find split observations in this same session
-            for sobs in split_data.obs:
-                if sobs.session.name == ses.name:
-                    # Compare detector timestreams.  The way we created the
-                    # split ensures that... ????
-                    for det in sobs.local_detectors:
-                        stod = sobs.detdata[defaults.det_data][det]
-                        ftod = obs.detdata[defaults.det_data][det]
-                        if not np.allclose(stod, ftod):
-                            msg = f"{ses.name} {det}\n"
-                            msg += f"  full = {ftod}\n"
-                            msg += f"  split = {stod}\n"
-                            print(msg)
-                            self.assertTrue(False)
+        # The following code is useful for debugging, but in general
+        # there is no guarantee that a process has the same detectors
+        # in the monolithic and split cases.
+        #
+        # for obs in full_data.obs:
+        #     # Get the session
+        #     ses = obs.session
+        #     # Find split observations in this same session
+        #     for sobs in split_data.obs:
+        #         if sobs.session.name == ses.name:
+        #             # Compare detector timestreams.
+        #             for det in sobs.local_detectors:
+        #                 stod = sobs.detdata[defaults.det_data][det]
+        #                 ftod = obs.detdata[defaults.det_data][det]
+        #                 if not np.allclose(stod, ftod):
+        #                     msg = f"{ses.name} {det}\n"
+        #                     msg += f"  full = {ftod}\n"
+        #                     msg += f"  split = {stod}\n"
+        #                     print(msg)
+        #                     self.assertTrue(False)
 
         if full_data[cov_and_hits.hits] != split_data[cov_and_hits.hits]:
             hfull = full_data[cov_and_hits.hits]
@@ -676,6 +696,22 @@ class SimAtmTest(MPITestCase):
             msg = f"Proc {full_data.comm.world_rank} full hits: "
             msg += f"{hfull_nz} hit pixels, max = {hfull_max} "
             msg += f"split hits: {hsplit_nz} hit pixels, max = {hsplit_max}"
+            print(msg)
+            self.assertTrue(False)
+
+        if (
+            full_data[cov_and_hits.inverse_covariance]
+            != split_data[cov_and_hits.inverse_covariance]
+        ):
+            ifull = full_data[cov_and_hits.inverse_covariance]
+            isplit = split_data[cov_and_hits.inverse_covariance]
+            hfull = full_data[cov_and_hits.hits]
+            hsplit = split_data[cov_and_hits.hits]
+            full_good = hfull.data != 0
+            split_good = hsplit.data != 0
+            diff = ifull.data[full_good] - isplit.data[split_good]
+            msg = f"Proc {full_data.comm.world_rank} inv cov diff: "
+            msg += f"{diff}"
             print(msg)
             self.assertTrue(False)
 

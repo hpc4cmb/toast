@@ -7,7 +7,7 @@ import os
 import numpy as np
 import traitlets
 
-from ..io import save_hdf5
+from ..io import load_hdf5, save_hdf5
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Dict, Int, List, Unicode, trait_docs
@@ -32,19 +32,17 @@ class SaveHDF5(Operator):
     # FIXME:  We should add a filtering mechanism here to dump a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
 
-    meta = List(None, allow_none=True, help="Only save this list of meta objects")
+    meta = List(list(), allow_none=True, help="Only save this list of meta objects")
 
-    detdata = List(None, allow_none=True, help="Only save this list of detdata objects")
+    detdata = List(list(), help="Only save this list of detdata objects")
 
-    shared = List(None, allow_none=True, help="Only save this list of shared objects")
+    shared = List(list(), help="Only save this list of shared objects")
 
-    intervals = List(
-        None, allow_none=True, help="Only save this list of intervals objects"
-    )
+    intervals = List(list(), help="Only save this list of intervals objects")
 
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
-    config = Dict(None, allow_none=True, help="Write this job config to the file")
+    config = Dict(dict(), help="Write this job config to the file")
 
     force_serial = Bool(
         False, help="Use serial HDF5 operations, even if parallel support available"
@@ -53,6 +51,8 @@ class SaveHDF5(Operator):
     detdata_float32 = Bool(
         False, help="If True, convert any float64 detector data to float32 on write."
     )
+
+    verify = Bool(False, help="If True, immediately load data back in and verify")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -68,19 +68,19 @@ class SaveHDF5(Operator):
             data.comm.comm_world.barrier()
 
         meta_fields = None
-        if self.meta is not None and len(self.meta) > 0:
+        if len(self.meta) > 0:
             meta_fields = list(self.meta)
 
         shared_fields = None
-        if self.shared is not None and len(self.shared) > 0:
+        if len(self.shared) > 0:
             shared_fields = list(self.shared)
 
         detdata_fields = None
-        if self.detdata is not None and len(self.detdata) > 0:
+        if len(self.detdata) > 0:
             detdata_fields = list(self.detdata)
 
         intervals_fields = None
-        if self.intervals is not None and len(self.intervals) > 0:
+        if len(self.intervals) > 0:
             intervals_fields = list(self.intervals)
 
         for ob in data.obs:
@@ -109,6 +109,68 @@ class SaveHDF5(Operator):
                 force_serial=self.force_serial,
                 detdata_float32=self.detdata_float32,
             )
+
+            if self.verify:
+                # We are going to load the data back in, but first we need to make
+                # a modified copy of the input observation for comparison.  This is
+                # because we may have only a portion of the data on disk and we
+                # might have also converted data to 32bit floats.
+
+                loadpath = os.path.join(self.volume, f"{ob.name}_{ob.uid}.h5")
+
+                if self.detdata_float32 and (detdata_fields is not None):
+                    # We want to duplicate everything *except* float64 detdata
+                    # fields.
+                    dup_detdata = list()
+                    conv_detdata = list()
+                    for fld in detdata_fields:
+                        if ob.detdata[fld].dtype == np.float64:
+                            conv_detdata.append(fld)
+                        else:
+                            dup_detdata.append(fld)
+                    original = ob.duplicate(
+                        times=str(self.times),
+                        meta=meta_fields,
+                        shared=shared_fields,
+                        detdata=dup_detdata,
+                        intervals=intervals_fields,
+                    )
+                    for fld in conv_detdata:
+                        original.detdata.create(
+                            fld,
+                            sample_shape=ob.detdata[fld].detector_shape,
+                            dtype=np.float32,
+                            detectors=ob.detdata[fld].detectors,
+                            units=ob.detdata[fld].units,
+                        )
+                        original.detdata[fld][:] = ob.detdata[fld][:].astype(np.float32)
+                else:
+                    # Duplicate detdata
+                    original = ob.duplicate(
+                        times=str(self.times),
+                        meta=meta_fields,
+                        shared=shared_fields,
+                        detdata=detdata_fields,
+                        intervals=intervals_fields,
+                    )
+
+                compare = load_hdf5(
+                    loadpath,
+                    data.comm,
+                    process_rows=ob.comm_col_size,
+                    meta=meta_fields,
+                    detdata=detdata_fields,
+                    shared=shared_fields,
+                    intervals=intervals_fields,
+                    force_serial=self.force_serial,
+                )
+
+                if compare != original:
+                    msg = f"Observation HDF5 verify failed:\n"
+                    msg += f"Input = {original}\n"
+                    msg += f"Loaded = {compare}"
+                    log.error(msg)
+                    raise RuntimeError(msg)
 
         return
 

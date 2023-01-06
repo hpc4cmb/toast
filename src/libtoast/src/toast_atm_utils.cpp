@@ -71,10 +71,8 @@ atm::SkyStatus get_sky_status_vec(double altitude, double temperature,
     double freqstep = 0;
     if (nfreq > 1) freqstep = (freqmax - freqmin) / (nfreq - 1);
 
-    // aatm SpectralGrid seems to have a bug.  The first grid point is
-    // a whole grid step after the reference frequency.
     atm::SpectralGrid grid(nfreq, 0,
-                           atm::Frequency(freqmin - freqstep, "GHz"),
+                           atm::Frequency(freqmin, "GHz"),
                            atm::Frequency(freqstep, "GHz"));
     atm::RefractiveIndexProfile rip(grid, atmo);
     atm::SkyStatus ss(rip);

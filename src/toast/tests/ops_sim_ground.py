@@ -21,7 +21,7 @@ from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import set_matplotlib_backend
-from ._helpers import create_comm, create_outdir, plot_projected_quats, close_data
+from ._helpers import close_data, create_comm, create_outdir, plot_projected_quats
 from .mpi import MPITestCase
 
 

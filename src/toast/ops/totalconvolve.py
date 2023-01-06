@@ -21,8 +21,8 @@ from ..traits import (
     Instance,
     Int,
     Quantity,
-    Unit,
     Unicode,
+    Unit,
     trait_docs,
 )
 from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned

@@ -15,7 +15,7 @@ from .. import qarray as qa
 from ..coordinates import azel_to_radec
 from ..dist import distribute_discrete, distribute_uniform
 from ..healpix import ang2vec
-from ..instrument import Session, Telescope, Focalplane
+from ..instrument import Focalplane, Session, Telescope
 from ..intervals import IntervalList, regular_intervals
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
@@ -29,8 +29,8 @@ from ..traits import (
     Int,
     List,
     Quantity,
-    Unit,
     Unicode,
+    Unit,
     trait_docs,
 )
 from ..utils import (
@@ -220,7 +220,7 @@ class SimGround(Operator):
 
     elnod_end = Bool(False, help="Perform an el-nod after the scan")
 
-    elnods = List(None, allow_none=True, help="List of relative el_nods")
+    elnods = List(list(), help="List of relative el_nods")
 
     elnod_every_scan = Bool(False, help="Perform el nods every scan")
 
@@ -405,16 +405,17 @@ class SimGround(Operator):
 
         # Although there is no requirement that the sampling is contiguous from one
         # session to the next, for simulations there is no need to restart the
-        # sampling clock for each one.
+        # sampling clock for each one.  In order to help with load balancing, we
+        # distribute all observations across all sessions among process groups.
+        # We distribute these in sequence to minimize the number of boresight
+        # scanning calculations need to be done by each group.
 
-        scan_starts = list()
-        scan_stops = list()
-        scan_offsets = list()
-        scan_samples = list()
+        obs_info = list()
 
         rate = self.telescope.focalplane.sample_rate.to_value(u.Hz)
         incr = 1.0 / rate
         off = 0
+
         for scan in self.schedule.scans:
             ffirst = rate * (scan.start - mission_start).total_seconds()
             first = int(ffirst)
@@ -423,10 +424,28 @@ class SimGround(Operator):
             start = first * incr + mission_start.timestamp()
             ns = 1 + int(rate * (scan.stop.timestamp() - start))
             stop = (ns - 1) * incr + mission_start.timestamp()
-            scan_starts.append(start)
-            scan_stops.append(stop)
-            scan_samples.append(ns)
-            scan_offsets.append(off)
+
+            # The session name is the same as the historical observation name,
+            # which allows re-use of previously cached atmosphere sims.
+            sname = f"{scan.name}-{scan.scan_indx}-{scan.subscan_indx}"
+
+            for obkey, (obtele, detsets) in obs_tele.items():
+                if obkey == "ALL":
+                    obs_name = sname
+                else:
+                    obs_name = f"{sname}_{obkey}"
+                obs_info.append(
+                    {
+                        "name": obs_name,
+                        "sname": sname,
+                        "obkey": obkey,
+                        "scan": scan,
+                        "start": start,
+                        "stop": stop,
+                        "samples": ns,
+                        "offset": off,
+                    }
+                )
             off += ns
 
         # FIXME:  Re-enable this when using astropy for coordinate transforms.
@@ -436,179 +455,176 @@ class SimGround(Operator):
         # Distribute the sessions uniformly among groups.  We take each scan and
         # weight it by the duration in samples.
 
-        groupdist = distribute_discrete(scan_samples, comm.ngroups)
+        obs_samples = [x["samples"] for x in obs_info]
+        groupdist = distribute_discrete(obs_samples, comm.ngroups)
 
-        # Every process group creates its observing sessions
+        # Every process group creates its observations
 
-        group_first_session = groupdist[comm.group][0]
-        group_num_session = groupdist[comm.group][1]
+        group_first_obs = groupdist[comm.group][0]
+        group_num_obs = groupdist[comm.group][1]
 
-        for obindx in range(
-            group_first_session, group_first_session + group_num_session
-        ):
-            scan = self.schedule.scans[obindx]
-
-            # The session name is the same as the historical observation name,
-            # which allows re-use of previously cached atmosphere sims.
-            name = f"{scan.name}-{scan.scan_indx}-{scan.subscan_indx}"
+        last_session = None
+        for obindx in range(group_first_obs, group_first_obs + group_num_obs):
+            scan = obs_info[obindx]["scan"]
+            sname = obs_info[obindx]["sname"]
+            obs_name = obs_info[obindx]["name"]
 
             sys_mem_str = memreport(
                 msg="(whole node)", comm=data.comm.comm_group, silent=True
             )
-            msg = f"Group {data.comm.group} begin observing session {name} "
+            msg = f"Group {data.comm.group} begin observation {obs_name} "
             msg += f"with {sys_mem_str}"
             log.debug_rank(msg, comm=data.comm.comm_group)
 
-            # Simulate the boresight pattern
+            # Simulate the boresight pattern.  If this observation is in the same
+            # session as the previous observation, just re-use the pointing.
 
-            (
-                times,
-                az,
-                el,
-                sample_sets,
-                scan_min_az,
-                scan_max_az,
-                scan_min_el,
-                scan_max_el,
-                ival_elnod,
-                ival_scan_leftright,
-                ival_scan_rightleft,
-                ival_throw_leftright,
-                ival_throw_rightleft,
-                ival_turn_leftright,
-                ival_turn_rightleft,
-            ) = self._simulate_scanning(
-                scan, scan_samples[obindx], rate, comm, samp_ranks
+            if sname != last_session:
+                (
+                    times,
+                    az,
+                    el,
+                    sample_sets,
+                    scan_min_az,
+                    scan_max_az,
+                    scan_min_el,
+                    scan_max_el,
+                    ival_elnod,
+                    ival_scan_leftright,
+                    ival_scan_rightleft,
+                    ival_throw_leftright,
+                    ival_throw_rightleft,
+                    ival_turn_leftright,
+                    ival_turn_rightleft,
+                ) = self._simulate_scanning(
+                    scan, obs_info[obindx]["samples"], rate, comm, samp_ranks
+                )
+
+                # Create weather realization common to all observations in the session
+                weather = None
+                site = self.telescope.site
+                if self.weather is not None:
+                    # Every session has a unique site with unique weather
+                    # realization.
+                    site = copy.deepcopy(site)
+                    mid_time = scan.start + (scan.stop - scan.start) / 2
+                    try:
+                        weather = SimWeather(
+                            time=mid_time,
+                            name=self.weather,
+                            site_uid=site.uid,
+                            realization=self.realization,
+                            max_pwv=self.max_pwv,
+                            median_weather=self.median_weather,
+                        )
+                    except RuntimeError:
+                        # must be a file
+                        weather = SimWeather(
+                            time=mid_time,
+                            file=self.weather,
+                            site_uid=site.uid,
+                            realization=self.realization,
+                            max_pwv=self.max_pwv,
+                            median_weather=self.median_weather,
+                        )
+                    site.weather = weather
+
+                session = Session(
+                    sname,
+                    start=datetime.fromtimestamp(times[0]).astimezone(timezone.utc),
+                    end=datetime.fromtimestamp(times[-1]).astimezone(timezone.utc),
+                )
+
+            # Create the observation
+
+            obtele, detsets = obs_tele[obs_info[obindx]["obkey"]]
+
+            # Instantiate new telescope with site that may be unique to this session
+            telescope = Telescope(
+                obtele.name,
+                uid=obtele.uid,
+                focalplane=obtele.focalplane,
+                site=site,
             )
 
-            session = Session(
-                name,
-                start=datetime.fromtimestamp(times[0]).astimezone(timezone.utc),
-                end=datetime.fromtimestamp(times[-1]).astimezone(timezone.utc),
+            ob = Observation(
+                comm,
+                telescope,
+                len(times),
+                name=obs_name,
+                uid=name_UID(obs_name),
+                session=session,
+                detector_sets=detsets,
+                process_rows=det_ranks,
+                sample_sets=sample_sets,
             )
 
-            # Create weather realization common to all observations in the session
-            weather = None
-            site = self.telescope.site
-            if self.weather is not None:
-                # Every session has a unique site with unique weather
-                # realization.
-                site = copy.deepcopy(site)
-                mid_time = scan.start + (scan.stop - scan.start) / 2
-                try:
-                    weather = SimWeather(
-                        time=mid_time,
-                        name=self.weather,
-                        site_uid=site.uid,
-                        realization=self.realization,
-                        max_pwv=self.max_pwv,
-                        median_weather=self.median_weather,
-                    )
-                except RuntimeError:
-                    # must be a file
-                    weather = SimWeather(
-                        time=mid_time,
-                        file=self.weather,
-                        site_uid=site.uid,
-                        realization=self.realization,
-                        max_pwv=self.max_pwv,
-                        median_weather=self.median_weather,
-                    )
-                site.weather = weather
+            # Scan limits
+            ob["scan_el"] = scan.el  # Nominal elevation
+            ob["scan_min_az"] = scan_min_az * u.radian
+            ob["scan_max_az"] = scan_max_az * u.radian
+            ob["scan_min_el"] = scan_min_el * u.radian
+            ob["scan_max_el"] = scan_max_el * u.radian
 
-            # Create all observations in this session
+            # Create and set shared objects for timestamps, position, velocity, and
+            # boresight.
 
-            for obkey, (obtele, detsets) in obs_tele.items():
-                # Instantiate new telescope so that it has a unique site
-                telescope = Telescope(
-                    obtele.name,
-                    uid=obtele.uid,
-                    focalplane=obtele.focalplane,
-                    site=site,
-                )
+            ob.shared.create_column(
+                self.times,
+                shape=(ob.n_local_samples,),
+                dtype=np.float64,
+            )
+            ob.shared.create_column(
+                self.position,
+                shape=(ob.n_local_samples, 3),
+                dtype=np.float64,
+            )
+            ob.shared.create_column(
+                self.velocity,
+                shape=(ob.n_local_samples, 3),
+                dtype=np.float64,
+            )
+            ob.shared.create_column(
+                self.azimuth,
+                shape=(ob.n_local_samples,),
+                dtype=np.float64,
+            )
+            ob.shared.create_column(
+                self.elevation,
+                shape=(ob.n_local_samples,),
+                dtype=np.float64,
+            )
+            ob.shared.create_column(
+                self.boresight_azel,
+                shape=(ob.n_local_samples, 4),
+                dtype=np.float64,
+            )
+            ob.shared.create_column(
+                self.boresight_radec,
+                shape=(ob.n_local_samples, 4),
+                dtype=np.float64,
+            )
 
-                if obkey == "ALL":
-                    obs_name = name
-                else:
-                    obs_name = f"{name}_{obkey}"
+            # Optionally initialize detector data.  Note that the
+            # detectors in each observation have already been pruned
+            # during the splitting.
 
-                ob = Observation(
-                    comm,
-                    telescope,
-                    len(times),
-                    name=obs_name,
-                    uid=name_UID(obs_name),
-                    session=session,
-                    detector_sets=detsets,
-                    process_rows=det_ranks,
-                    sample_sets=sample_sets,
-                )
-
-                # Scan limits
-                ob["scan_el"] = scan.el  # Nominal elevation
-                ob["scan_min_az"] = scan_min_az * u.radian
-                ob["scan_max_az"] = scan_max_az * u.radian
-                ob["scan_min_el"] = scan_min_el * u.radian
-                ob["scan_max_el"] = scan_max_el * u.radian
-
-                # Create and set shared objects for timestamps, position, velocity, and
-                # boresight.
-
-                ob.shared.create_column(
-                    self.times,
-                    shape=(ob.n_local_samples,),
+            if self.det_data is not None:
+                exists_data = ob.detdata.ensure(
+                    self.det_data,
                     dtype=np.float64,
-                )
-                ob.shared.create_column(
-                    self.position,
-                    shape=(ob.n_local_samples, 3),
-                    dtype=np.float64,
-                )
-                ob.shared.create_column(
-                    self.velocity,
-                    shape=(ob.n_local_samples, 3),
-                    dtype=np.float64,
-                )
-                ob.shared.create_column(
-                    self.azimuth,
-                    shape=(ob.n_local_samples,),
-                    dtype=np.float64,
-                )
-                ob.shared.create_column(
-                    self.elevation,
-                    shape=(ob.n_local_samples,),
-                    dtype=np.float64,
-                )
-                ob.shared.create_column(
-                    self.boresight_azel,
-                    shape=(ob.n_local_samples, 4),
-                    dtype=np.float64,
-                )
-                ob.shared.create_column(
-                    self.boresight_radec,
-                    shape=(ob.n_local_samples, 4),
-                    dtype=np.float64,
+                    create_units=self.det_data_units,
                 )
 
-                # Optionally initialize detector data.  Note that the
-                # detectors in each observation have already been pruned
-                # during the splitting.
+            if self.det_flags is not None:
+                exists_flags = ob.detdata.ensure(
+                    self.det_flags,
+                    dtype=np.uint8,
+                )
 
-                if self.det_data is not None:
-                    exists_data = ob.detdata.ensure(
-                        self.det_data,
-                        dtype=np.float64,
-                        create_units=self.det_data_units,
-                    )
+            # Only the first rank of the process grid columns sets / computes these.
 
-                if self.det_flags is not None:
-                    exists_flags = ob.detdata.ensure(
-                        self.det_flags,
-                        dtype=np.uint8,
-                    )
-
-                # Only the first rank of the process grid columns sets / computes these.
-
+            if sname != last_session:
                 stamps = None
                 position = None
                 velocity = None
@@ -649,87 +665,90 @@ class SimGround(Operator):
                     # Convert to RA / DEC.  Use pyephem for now.
                     bore_radec = azel_to_radec(site, stamps, bore_azel, use_ephem=True)
 
-                ob.shared[self.times].set(stamps, offset=(0,), fromrank=0)
-                ob.shared[self.azimuth].set(az_data, offset=(0,), fromrank=0)
-                ob.shared[self.elevation].set(el_data, offset=(0,), fromrank=0)
-                ob.shared[self.position].set(position, offset=(0, 0), fromrank=0)
-                ob.shared[self.velocity].set(velocity, offset=(0, 0), fromrank=0)
-                ob.shared[self.boresight_azel].set(bore_azel, offset=(0, 0), fromrank=0)
-                ob.shared[self.boresight_radec].set(
-                    bore_radec, offset=(0, 0), fromrank=0
-                )
+            ob.shared[self.times].set(stamps, offset=(0,), fromrank=0)
+            ob.shared[self.azimuth].set(az_data, offset=(0,), fromrank=0)
+            ob.shared[self.elevation].set(el_data, offset=(0,), fromrank=0)
+            ob.shared[self.position].set(position, offset=(0, 0), fromrank=0)
+            ob.shared[self.velocity].set(velocity, offset=(0, 0), fromrank=0)
+            ob.shared[self.boresight_azel].set(bore_azel, offset=(0, 0), fromrank=0)
+            ob.shared[self.boresight_radec].set(bore_radec, offset=(0, 0), fromrank=0)
 
-                # Simulate HWP angle
+            # Simulate HWP angle
 
-                simulate_hwp_response(
-                    ob,
-                    ob_time_key=self.times,
-                    ob_angle_key=self.hwp_angle,
-                    ob_mueller_key=None,
-                    hwp_start=scan_starts[obindx] * u.second,
-                    hwp_rpm=self.hwp_rpm,
-                    hwp_step=self.hwp_step,
-                    hwp_step_time=self.hwp_step_time,
-                )
+            simulate_hwp_response(
+                ob,
+                ob_time_key=self.times,
+                ob_angle_key=self.hwp_angle,
+                ob_mueller_key=None,
+                hwp_start=obs_info[obindx]["start"] * u.second,
+                hwp_rpm=self.hwp_rpm,
+                hwp_step=self.hwp_step,
+                hwp_step_time=self.hwp_step_time,
+            )
 
-                # Create interval lists for our motion.  Since we simulated the scan on
-                # every process, we don't need to communicate the global timespans of the
-                # intervals (using create or create_col).  We can just create them directly.
+            # Create interval lists for our motion.  Since we simulated the scan on
+            # every process, we don't need to communicate the global timespans of the
+            # intervals (using create or create_col).  We can just create them directly.
 
-                ob.intervals[self.throw_leftright_interval] = IntervalList(
-                    ob.shared[self.times], timespans=ival_throw_leftright
-                )
-                ob.intervals[self.throw_rightleft_interval] = IntervalList(
-                    ob.shared[self.times], timespans=ival_throw_rightleft
-                )
-                ob.intervals[self.throw_interval] = (
-                    ob.intervals[self.throw_leftright_interval]
-                    | ob.intervals[self.throw_rightleft_interval]
-                )
-                ob.intervals[self.scan_leftright_interval] = IntervalList(
-                    ob.shared[self.times], timespans=ival_scan_leftright
-                )
-                ob.intervals[self.turn_leftright_interval] = IntervalList(
-                    ob.shared[self.times], timespans=ival_turn_leftright
-                )
-                ob.intervals[self.scan_rightleft_interval] = IntervalList(
-                    ob.shared[self.times], timespans=ival_scan_rightleft
-                )
-                ob.intervals[self.turn_rightleft_interval] = IntervalList(
-                    ob.shared[self.times], timespans=ival_turn_rightleft
-                )
-                ob.intervals[self.elnod_interval] = IntervalList(
-                    ob.shared[self.times], timespans=ival_elnod
-                )
-                ob.intervals[self.scanning_interval] = (
-                    ob.intervals[self.scan_leftright_interval]
-                    | ob.intervals[self.scan_rightleft_interval]
-                )
-                ob.intervals[self.turnaround_interval] = (
-                    ob.intervals[self.turn_leftright_interval]
-                    | ob.intervals[self.turn_rightleft_interval]
-                )
+            ob.intervals[self.throw_leftright_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_throw_leftright
+            )
+            ob.intervals[self.throw_rightleft_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_throw_rightleft
+            )
+            ob.intervals[self.throw_interval] = (
+                ob.intervals[self.throw_leftright_interval]
+                | ob.intervals[self.throw_rightleft_interval]
+            )
+            ob.intervals[self.scan_leftright_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_scan_leftright
+            )
+            ob.intervals[self.turn_leftright_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_turn_leftright
+            )
+            ob.intervals[self.scan_rightleft_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_scan_rightleft
+            )
+            ob.intervals[self.turn_rightleft_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_turn_rightleft
+            )
+            ob.intervals[self.elnod_interval] = IntervalList(
+                ob.shared[self.times], timespans=ival_elnod
+            )
+            ob.intervals[self.scanning_interval] = (
+                ob.intervals[self.scan_leftright_interval]
+                | ob.intervals[self.scan_rightleft_interval]
+            )
+            ob.intervals[self.turnaround_interval] = (
+                ob.intervals[self.turn_leftright_interval]
+                | ob.intervals[self.turn_rightleft_interval]
+            )
 
-                # Get the Sun's position in horizontal coordinates and define
-                # "Sun up" and "Sun close" intervals according to it
+            # Get the Sun's position in horizontal coordinates and define
+            # "Sun up" and "Sun close" intervals according to it
 
-                add_solar_intervals(
-                    ob.intervals,
-                    site,
-                    ob.shared[self.times],
-                    ob.shared[self.azimuth].data,
-                    ob.shared[self.elevation].data,
-                    self.sun_up_interval,
-                    self.sun_close_interval,
-                    self.sun_close_distance,
-                )
+            add_solar_intervals(
+                ob.intervals,
+                site,
+                ob.shared[self.times],
+                ob.shared[self.azimuth].data,
+                ob.shared[self.elevation].data,
+                self.sun_up_interval,
+                self.sun_close_interval,
+                self.sun_close_distance,
+            )
 
-                obmem = ob.memory_use()
-                obmem_gb = obmem / 1024**3
-                msg = f"Observation {ob.name} using {obmem_gb:0.2f} GB of total memory"
-                log.debug_rank(msg, comm=ob.comm.comm_group)
+            msg = f"Group {data.comm.group} finished observation {obs_name}:\n"
+            msg += f"{ob}"
+            log.verbose_rank(msg, comm=data.comm.comm_group)
 
-                data.obs.append(ob)
+            obmem = ob.memory_use()
+            obmem_gb = obmem / 1024**3
+            msg = f"Observation {ob.name} using {obmem_gb:0.2f} GB of total memory"
+            log.debug_rank(msg, comm=ob.comm.comm_group)
+
+            data.obs.append(ob)
+            last_session = sname
 
         # For convenience, we additionally create a shared flag field with bits set
         # according to the different intervals.  This basically just saves workflows
