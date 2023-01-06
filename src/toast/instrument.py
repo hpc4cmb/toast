@@ -161,7 +161,11 @@ class GroundSite(Site):
             return False
         if self.uid != other.uid:
             return False
-        if self.earthloc != other.earthloc:
+        if not np.isclose(other.earthloc.lon, self.earthloc.lon):
+            return False
+        if not np.isclose(other.earthloc.lat, self.earthloc.lat):
+            return False
+        if not np.isclose(other.earthloc.height, self.earthloc.height):
             return False
         if self.weather != other.weather:
             return False

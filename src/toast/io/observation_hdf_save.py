@@ -502,13 +502,18 @@ def save_hdf5(
                     if site.weather.max_pwv is None:
                         inst_group.attrs["site_weather_max_pwv"] = "NONE"
                     else:
-                        inst_group.attrs["site_weather_max_pwv"] = site.weather.max_pwv
+                        inst_group.attrs[
+                            "site_weather_max_pwv"
+                        ] = site.weather.max_pwv.to_value(u.mm)
                     inst_group.attrs[
                         "site_weather_time"
                     ] = site.weather.time.timestamp()
                     inst_group.attrs[
                         "site_weather_median"
                     ] = site.weather.median_weather
+                else:
+                    msg = "HDF5 saving currently only supports SimWeather instances"
+                    raise NotImplementedError(msg)
         session = obs.session
         if session is not None:
             inst_group.attrs["session_name"] = session.name

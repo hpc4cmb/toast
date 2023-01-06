@@ -65,23 +65,29 @@ class Weather(object):
     def __eq__(self, other):
         if self._time_val != other._time_val:
             return False
-        if self._ice_water_val != other._ice_water_val:
+        if not np.isclose(self._ice_water_val.value, other._ice_water_val.value):
             return False
-        if self._liquid_water_val != other._liquid_water_val:
+        if not np.isclose(self._liquid_water_val.value, other._liquid_water_val.value):
             return False
-        if self._pwv_val != other._pwv_val:
+        if not np.isclose(self._pwv_val.value, other._pwv_val.value):
             return False
-        if self._humidity_val != other._humidity_val:
+        if not np.isclose(self._humidity_val.value, other._humidity_val.value):
             return False
-        if self._surface_pressure_val != other._surface_pressure_val:
+        if not np.isclose(
+            self._surface_pressure_val.value, other._surface_pressure_val.value
+        ):
             return False
-        if self._surface_temperature_val != other._surface_temperature_val:
+        if not np.isclose(
+            self._surface_temperature_val.value, other._surface_temperature_val.value
+        ):
             return False
-        if self._air_temperature_val != other._air_temperature_val:
+        if not np.isclose(
+            self._air_temperature_val.value, other._air_temperature_val.value
+        ):
             return False
-        if self._west_wind_val != other._west_wind_val:
+        if not np.isclose(self._west_wind_val.value, other._west_wind_val.value):
             return False
-        if self._south_wind_val != other._south_wind_val:
+        if not np.isclose(self._south_wind_val.value, other._south_wind_val.value):
             return False
         return True
 
@@ -489,6 +495,14 @@ class SimWeather(Weather):
             return False
         if self.median_weather != other.median_weather:
             return False
+        if self._max_pwv is None:
+            if other._max_pwv is not None:
+                return False
+        else:
+            if other._max_pwv is None:
+                return False
+            if not np.isclose(self._max_pwv.value, other._max_pwv.value):
+                return False
         return True
 
     def __ne__(self, other):

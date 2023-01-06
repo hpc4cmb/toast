@@ -406,7 +406,9 @@ def load_hdf5(
                 weather_realization = int(inst_group.attrs["site_weather_realization"])
                 weather_max_pwv = None
                 if inst_group.attrs["site_weather_max_pwv"] != "NONE":
-                    weather_max_pwv = float(inst_group.attrs["site_weather_max_pwv"])
+                    weather_max_pwv = u.Quantity(
+                        float(inst_group.attrs["site_weather_max_pwv"]), u.mm
+                    )
                 weather_time = datetime.fromtimestamp(
                     float(inst_group.attrs["site_weather_time"]), tz=timezone.utc
                 )
