@@ -461,26 +461,24 @@ class Observation(MutableMapping):
         fail = 0
         if self.name != other.name:
             fail = 1
-            log.verbose(
+            log.info(
                 f"Proc {self.comm.world_rank}:  Obs names {self.name} != {other.name}"
             )
         if self.uid != other.uid:
             fail = 1
-            log.verbose(
-                f"Proc {self.comm.world_rank}:  Obs uid {self.uid} != {other.uid}"
-            )
+            log.info(f"Proc {self.comm.world_rank}:  Obs uid {self.uid} != {other.uid}")
         if self.telescope != other.telescope:
             fail = 1
-            log.verbose(f"Proc {self.comm.world_rank}:  Obs telescopes not equal")
+            log.info(f"Proc {self.comm.world_rank}:  Obs telescopes not equal")
         if self.session != other.session:
             fail = 1
-            log.verbose(f"Proc {self.comm.world_rank}:  Obs sessions not equal")
+            log.info(f"Proc {self.comm.world_rank}:  Obs sessions not equal")
         if self.dist != other.dist:
             fail = 1
-            log.verbose(f"Proc {self.comm.world_rank}:  Obs distributions not equal")
+            log.info(f"Proc {self.comm.world_rank}:  Obs distributions not equal")
         if self._internal.keys() != other._internal.keys():
             fail = 1
-            log.verbose(f"Proc {self.comm.world_rank}:  Obs metadata keys not equal")
+            log.info(f"Proc {self.comm.world_rank}:  Obs metadata keys not equal")
         for k, v in self._internal.items():
             if v != other._internal[k]:
                 feq = True
@@ -491,19 +489,19 @@ class Observation(MutableMapping):
                     feq = False
                 if not feq:
                     fail = 1
-                    log.verbose(
+                    log.info(
                         f"Proc {self.comm.world_rank}:  Obs metadata[{k}]:  {v} != {other[k]}"
                     )
                     break
         if self.shared != other.shared:
             fail = 1
-            log.verbose(f"Proc {self.comm.world_rank}:  Obs shared data not equal")
+            log.info(f"Proc {self.comm.world_rank}:  Obs shared data not equal")
         if self.detdata != other.detdata:
             fail = 1
-            log.verbose(f"Proc {self.comm.world_rank}:  Obs detdata not equal")
+            log.info(f"Proc {self.comm.world_rank}:  Obs detdata not equal")
         if self.intervals != other.intervals:
             fail = 1
-            log.verbose(f"Proc {self.comm.world_rank}:  Obs intervals not equal")
+            log.info(f"Proc {self.comm.world_rank}:  Obs intervals not equal")
         if self.comm.comm_group is not None:
             fail = self.comm.comm_group.allreduce(fail, op=MPI.SUM)
         return fail == 0
