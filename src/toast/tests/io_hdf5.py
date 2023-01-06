@@ -23,8 +23,19 @@ class IoHdf5Test(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
 
-    def create_data(self):
-        # Create fake observing of a small patch
+    def create_data(self, split=False):
+        # Create fake observing of a small patch.  Use a multifrequency
+        # focalplane so we can test split sessions.
+
+        ppp = 10
+        freq_list = [(100 + 10 * x) * u.GHz for x in range(3)]
+        data = create_ground_data(
+            self.comm,
+            freqs=freq_list,
+            pixel_per_process=ppp,
+            split=split,
+        )
+
         data = create_ground_data(self.comm)
 
         # Simple detector pointing
@@ -166,7 +177,7 @@ class IoHdf5Test(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        data, config = self.create_data()
+        data, config = self.create_data(split=True)
 
         # Make a copy for later comparison.
         original = dict()
@@ -203,7 +214,7 @@ class IoHdf5Test(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        data, config = self.create_data()
+        data, config = self.create_data(split=True)
 
         # Make a copy for later comparison.
         original = dict()

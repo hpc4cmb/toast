@@ -175,7 +175,10 @@ def list_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            val = "None"
+            raise ValueError(
+                "The toast config system does not support None values for List traits."
+            )
+            # val = "None"
         else:
             val = list()
             for item in v:
@@ -199,7 +202,10 @@ def set_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            val = "None"
+            raise ValueError(
+                "The toast config system does not support None values for Set traits."
+            )
+            # val = "None"
         else:
             val = set()
             for item in v:
@@ -223,7 +229,10 @@ def dict_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            val = "None"
+            raise ValueError(
+                "The toast config system does not support None values for Dict traits."
+            )
+            # val = "None"
         else:
             val = dict()
             for k, v in v.items():
@@ -247,7 +256,10 @@ def tuple_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            val = "None"
+            raise ValueError(
+                "The toast config system does not support None values for Tuple traits."
+            )
+            # val = "None"
         else:
             val = list()
             for item in v:

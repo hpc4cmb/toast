@@ -81,7 +81,7 @@ class ConfigOperator(ops.Operator):
     # with allow_none=False.
     instance_none = Instance(allow_none=True, klass=FakeClass, help="Instance none")
 
-    list_none = List(None, allow_none=True, help="List none")
+    list_empty = List(list(), help="List empty")
     list_string = List(["foo", "bar", "blat"], help="List string default")
     list_string_empty = List(["", "", ""], help="List string empty")
     list_float = List([1.23, 4.56, 7.89], help="List float default")
@@ -92,7 +92,7 @@ class ConfigOperator(ops.Operator):
         [None, True, "", "foo", 1.23, 4.56, 7.89 * u.meter], help="list mixed"
     )
 
-    dict_none = Dict(None, allow_none=True, help="Dict none")
+    dict_empty = Dict(dict(), help="Dict empty")
     dict_string = Dict(
         {"a": "foo", "b": "bar", "c": "blat"}, help="Dict string default"
     )
@@ -106,7 +106,7 @@ class ConfigOperator(ops.Operator):
         help="Dict mixed",
     )
 
-    set_none = Set(None, allow_none=True, help="Set none")
+    set_empty = Set(set(), help="Set empty")
     set_string = Set({"a", "b", "c"}, help="Set string default")
     set_string_empty = Set({"", "", ""}, help="Set string empty")
     set_float = Set({1.23, 4.56, 7.89}, help="Set float default")
@@ -115,7 +115,7 @@ class ConfigOperator(ops.Operator):
     )
     set_mixed = Set({None, "", "foo", True, 4.56, 7.89 * u.meter}, help="Set mixed")
 
-    tuple_none = Tuple(None, allow_none=True, help="Tuple string default")
+    tuple_empty = Tuple(tuple(), help="Tuple empty")
     tuple_string = Tuple(("foo", "bar", "blat"), help="Tuple string default")
     tuple_string_empty = Tuple(("", "", ""), help="Tuple string empty")
     tuple_float = Tuple((1.23, 4.56, 7.89), help="Tuple float")

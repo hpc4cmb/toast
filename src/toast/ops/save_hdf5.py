@@ -32,19 +32,17 @@ class SaveHDF5(Operator):
     # FIXME:  We should add a filtering mechanism here to dump a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
 
-    meta = List(None, allow_none=True, help="Only save this list of meta objects")
+    meta = List(list(), allow_none=True, help="Only save this list of meta objects")
 
-    detdata = List(None, allow_none=True, help="Only save this list of detdata objects")
+    detdata = List(list(), help="Only save this list of detdata objects")
 
-    shared = List(None, allow_none=True, help="Only save this list of shared objects")
+    shared = List(list(), help="Only save this list of shared objects")
 
-    intervals = List(
-        None, allow_none=True, help="Only save this list of intervals objects"
-    )
+    intervals = List(list(), help="Only save this list of intervals objects")
 
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
-    config = Dict(None, allow_none=True, help="Write this job config to the file")
+    config = Dict(dict(), help="Write this job config to the file")
 
     force_serial = Bool(
         False, help="Use serial HDF5 operations, even if parallel support available"
@@ -70,19 +68,19 @@ class SaveHDF5(Operator):
             data.comm.comm_world.barrier()
 
         meta_fields = None
-        if self.meta is not None and len(self.meta) > 0:
+        if len(self.meta) > 0:
             meta_fields = list(self.meta)
 
         shared_fields = None
-        if self.shared is not None and len(self.shared) > 0:
+        if len(self.shared) > 0:
             shared_fields = list(self.shared)
 
         detdata_fields = None
-        if self.detdata is not None and len(self.detdata) > 0:
+        if len(self.detdata) > 0:
             detdata_fields = list(self.detdata)
 
         intervals_fields = None
-        if self.intervals is not None and len(self.intervals) > 0:
+        if len(self.intervals) > 0:
             intervals_fields = list(self.intervals)
 
         for ob in data.obs:

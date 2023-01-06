@@ -11,7 +11,7 @@ import numpy as np
 from astropy import units as u
 
 from .timing import Timer, function_timer
-from .utils import hdf5_use_serial, name_UID
+from .utils import hdf5_use_serial, name_UID, Logger
 
 
 class Noise(object):
@@ -851,26 +851,36 @@ class Noise(object):
         return value
 
     def __eq__(self, other):
-        if self._dets != other._dets:
-            return False
-        if self._keys != other._keys:
-            return False
-        if self._rates != other._rates:
-            return False
-        if self._indices != other._indices:
-            return False
-        if self._mixmatrix != other._mixmatrix:
-            return False
-        for k, v in self._freqs.items():
-            if not np.allclose(v.to_value(u.Hz), other._freqs[k].to_value(u.Hz)):
-                return False
-        for k, v in self._psds.items():
-            if not np.allclose(
-                v.to_value(u.K**2 * u.second),
-                other._psds[k].to_value(u.K**2 * u.second),
-            ):
-                return False
-        return True
+        log = Logger.get()
+        fail = 0
+        if set(self._dets) != set(other._dets):
+            log.verbose(f"Noise __eq__:  dets {set(self._dets)} != {set(other._dets)}")
+            fail = 1
+        elif set(self._keys) != set(other._keys):
+            log.verbose(f"Noise __eq__:  keys {set(self._keys)} != {set(other._keys)}")
+            fail = 1
+        elif self._rates != other._rates:
+            log.verbose(f"Noise __eq__:  rates {self._rates} != {other._rates}")
+            fail = 1
+        elif self._indices != other._indices:
+            log.verbose(f"Noise __eq__:  indices {self._indices} != {other._indices}")
+            fail = 1
+        elif self._mixmatrix != other._mixmatrix:
+            log.verbose(f"Noise __eq__:  mix {self._mixmatrix} != {other._mixmatrix}")
+            fail = 1
+        else:
+            for k, v in self._freqs.items():
+                if not np.allclose(v.to_value(u.Hz), other._freqs[k].to_value(u.Hz)):
+                    log.verbose(f"Noise __eq__:  freqs[{k}] {v} != {other._freqs[k]}")
+                    fail = 1
+            for k, v in self._psds.items():
+                if not np.allclose(
+                    v.to_value(u.K**2 * u.second),
+                    other._psds[k].to_value(u.K**2 * u.second),
+                ):
+                    log.verbose(f"Noise __eq__:  psds[{k}] {v} != {other._psds[k]}")
+                    fail = 1
+        return fail == 0
 
     def __ne__(self, other):
         return not self.__eq__(other)

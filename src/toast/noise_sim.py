@@ -10,7 +10,7 @@ from astropy import units as u
 
 from .noise import Noise
 from .timing import function_timer
-from .utils import hdf5_use_serial
+from .utils import hdf5_use_serial, Logger
 
 
 class AnalyticNoise(Noise):
@@ -320,20 +320,27 @@ class AnalyticNoise(Noise):
         return value
 
     def __eq__(self, other):
+        log = Logger.get()
+        fail = 0
         if not super().__eq__(other):
             # Base class values not equal
-            return False
-        if self._rate != other._rate:
-            return False
-        if self._fmin != other._fmin:
-            return False
-        if self._fknee != other._fknee:
-            return False
-        if self._alpha != other._alpha:
-            return False
-        if self._NET != other._NET:
-            return False
-        return True
+            fail = 1
+        elif self._rate != other._rate:
+            log.verbose(f"AnalyticNoise __eq__:  rate {self._rate} != {other._rate}")
+            fail = 1
+        elif self._fmin != other._fmin:
+            log.verbose(f"AnalyticNoise __eq__:  fmin {self._fmin} != {other._fmin}")
+            fail = 1
+        elif self._fknee != other._fknee:
+            log.verbose(f"AnalyticNoise __eq__:  fknee {self._fknee} != {other._fknee}")
+            fail = 1
+        elif self._alpha != other._alpha:
+            log.verbose(f"AnalyticNoise __eq__:  alpha {self._alpha} != {other._alpha}")
+            fail = 1
+        elif self._NET != other._NET:
+            log.verbose(f"AnalyticNoise __eq__:  NET {self._NET} != {other._NET}")
+            fail = 1
+        return fail == 0
 
     def __ne__(self, other):
         return not self.__eq__(other)
