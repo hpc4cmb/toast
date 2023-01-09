@@ -1,3 +1,15 @@
+from ...accelerator import use_accel_jax
+
+# FIXME: In a future cleanup, we should:
+#
+# 1. Name the kernel files after the operator files that use them.  This cleanup
+#    was planned for the compiled kernels, but since the python / jax kernels have
+#    adopted the same names, we need to clean those up too.
+#
+# 2. We can probably automate the namespace imports using attributes of the 
+#    submodules.
+#
+
 from .compiled_kernels import build_noise_weighted as build_noise_weighted_compiled
 from .compiled_kernels import cov_accum_diag_hits as cov_accum_diag_hits_compiled
 from .compiled_kernels import cov_accum_diag_invnpp as cov_accum_diag_invnpp_compiled
@@ -23,26 +35,44 @@ from .implementation_selection import (
     select_implementation,
     select_implementation_cpu,
 )
-from .jax_kernels import build_noise_weighted as build_noise_weighted_jax
-from .jax_kernels import cov_accum_diag_hits as cov_accum_diag_hits_jax
-from .jax_kernels import cov_accum_diag_invnpp as cov_accum_diag_invnpp_jax
-from .jax_kernels import filter_poly2D as filter_poly2D_jax
-from .jax_kernels import filter_polynomial as filter_polynomial_jax
-from .jax_kernels import noise_weight as noise_weight_jax
-from .jax_kernels import pixels_healpix as pixels_healpix_jax
-from .jax_kernels import pointing_detector as pointing_detector_jax
-from .jax_kernels import scan_map as scan_map_jax
-from .jax_kernels import stokes_weights_I as stokes_weights_I_jax
-from .jax_kernels import stokes_weights_IQU as stokes_weights_IQU_jax
-from .jax_kernels import (
-    template_offset_add_to_signal as template_offset_add_to_signal_jax,
-)
-from .jax_kernels import (
-    template_offset_apply_diag_precond as template_offset_apply_diag_precond_jax,
-)
-from .jax_kernels import (
-    template_offset_project_signal as template_offset_project_signal_jax,
-)
+
+if use_accel_jax:
+    from .jax_kernels import build_noise_weighted as build_noise_weighted_jax
+    from .jax_kernels import cov_accum_diag_hits as cov_accum_diag_hits_jax
+    from .jax_kernels import cov_accum_diag_invnpp as cov_accum_diag_invnpp_jax
+    from .jax_kernels import filter_poly2D as filter_poly2D_jax
+    from .jax_kernels import filter_polynomial as filter_polynomial_jax
+    from .jax_kernels import noise_weight as noise_weight_jax
+    from .jax_kernels import pixels_healpix as pixels_healpix_jax
+    from .jax_kernels import pointing_detector as pointing_detector_jax
+    from .jax_kernels import scan_map as scan_map_jax
+    from .jax_kernels import stokes_weights_I as stokes_weights_I_jax
+    from .jax_kernels import stokes_weights_IQU as stokes_weights_IQU_jax
+    from .jax_kernels import (
+        template_offset_add_to_signal as template_offset_add_to_signal_jax,
+    )
+    from .jax_kernels import (
+        template_offset_apply_diag_precond as template_offset_apply_diag_precond_jax,
+    )
+    from .jax_kernels import (
+        template_offset_project_signal as template_offset_project_signal_jax,
+    )
+else:
+    build_noise_weighted_jax = None
+    cov_accum_diag_hits_jax = None
+    cov_accum_diag_invnpp_jax = None
+    filter_poly2D_jax = None
+    filter_polynomial_jax = None
+    noise_weight_jax = None
+    pixels_healpix_jax = None
+    pointing_detector_jax = None
+    scan_map_jax = None
+    stokes_weights_I_jax = None
+    stokes_weights_IQU_jax = None
+    template_offset_add_to_signal_jax = None
+    template_offset_apply_diag_precond_jax = None
+    template_offset_project_signal_jax = None
+
 from .python_kernels import build_noise_weighted as build_noise_weighted_python
 from .python_kernels import cov_accum_diag_hits as cov_accum_diag_hits_python
 from .python_kernels import cov_accum_diag_invnpp as cov_accum_diag_invnpp_python

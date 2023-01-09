@@ -24,7 +24,8 @@ def select_implementation_cpu(f_compiled, f_numpy, f_jax):
     # functions are timed by default
     f_compiled = function_timer(f_compiled)
     f_numpy = function_timer(f_numpy)
-    f_jax = function_timer(f_jax)
+    if f_jax is not None:
+        f_jax = function_timer(f_jax)
     f_default_cpu = f_compiled  # sets the default on CPU
     cpu_functions = [f_default_cpu, f_compiled, f_numpy, f_jax]
     # pick a function at runtime
@@ -32,6 +33,10 @@ def select_implementation_cpu(f_compiled, f_numpy, f_jax):
     def f_wrapped(*args, implementation_type=ImplementationType.DEFAULT, **kwargs):
         # pick a function
         f = cpu_functions[implementation_type]
+        if f is None:
+            msg = f"CPU Kernel implementation '{implementation_type}' is not "
+            msg += "available at runtime."
+            raise RuntimeError(msg)
         # returns the result
         return f(*args, **kwargs)
 
@@ -47,7 +52,8 @@ def select_implementation(f_compiled, f_numpy, f_jax):
     # functions are timed by default
     f_compiled = function_timer(f_compiled)
     f_numpy = function_timer(f_numpy)
-    f_jax = function_timer(f_jax)
+    if f_jax is not None:
+        f_jax = function_timer(f_jax)
     f_default_cpu = f_compiled  # sets the default on CPU
     cpu_functions = [f_default_cpu, f_compiled, f_numpy, f_jax]
     # we also track data movement on GPU functions
@@ -66,8 +72,16 @@ def select_implementation(f_compiled, f_numpy, f_jax):
         # pick a function
         if use_accel:
             f = gpu_functions[implementation_type]
+            if f is None:
+                msg = f"GPU Kernel implementation '{implementation_type}' is not "
+                msg += "available at runtime."
+                raise RuntimeError(msg)
         else:
             f = cpu_functions[implementation_type]
+            if f is None:
+                msg = f"CPU Kernel implementation '{implementation_type}' is not "
+                msg += "available at runtime."
+                raise RuntimeError(msg)
         # returns the result
         return f(*args, **kwargs)
 
