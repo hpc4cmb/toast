@@ -86,7 +86,8 @@ class GroundFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     ground_flag_mask = Int(
@@ -291,12 +292,11 @@ class GroundFilter(Operator):
         if self.detrend:
             trend = np.zeros_like(ref)
             add_templates(trend, legendre_trend, coeff[: self.trend_order])
-            ref[good] -= trend[good]
+            ref -= trend
         # Ground template
         grtemplate = np.zeros_like(ref)
         add_templates(grtemplate, legendre_filter, coeff[self.trend_order :])
-        ref[good] -= grtemplate[good]
-        ref[np.logical_not(good)] = 0
+        ref -= grtemplate
         return
 
     @function_timer

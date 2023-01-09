@@ -774,7 +774,6 @@ class SolveAmplitudes(Operator):
             name=f"{self.name}_rhs",
             det_data=self.det_data,
             det_data_units=det_data_units,
-            overwrite=False,
             binning=self.binning,
             template_matrix=self.template_matrix,
         )

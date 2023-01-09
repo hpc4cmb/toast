@@ -264,9 +264,6 @@ class InstrumentTest(MPITestCase):
         with H5File(fp_file, "r", comm=self.comm) as f:
             newfp.load_hdf5(f.handle, comm=self.comm)
 
-        # Test getting noise PSD
-        psd = newfp.noise.psd(names[-1])
-
         # Test convolving with bandpass
         freqs = np.linspace(50, 150, 100) * u.GHz
         values = np.linspace(0, 1, 100)

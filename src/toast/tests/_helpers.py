@@ -10,7 +10,8 @@ from datetime import datetime
 import healpy as hp
 import numpy as np
 from astropy import units as u
-from astropy.table import Column, QTable
+from astropy.table import Column, QTable, Table
+from astropy.table import vstack as table_vstack
 
 from .. import ops as ops
 from .. import qarray as qa
@@ -160,7 +161,11 @@ def create_boresight_telescope(group_size, sample_rate=10.0 * u.Hz):
 
 
 def create_ground_telescope(
-    group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1, fknee=None
+    group_size,
+    sample_rate=10.0 * u.Hz,
+    pixel_per_process=1,
+    fknee=None,
+    freqs=None,
 ):
     """Create a fake ground telescope with at least one detector per process."""
     npix = 1
@@ -170,13 +175,36 @@ def create_ground_telescope(
         ring += 1
     if fknee is None:
         fknee = sample_rate / 2000.0
-    fp = fake_hexagon_focalplane(
-        n_pix=npix,
-        sample_rate=sample_rate,
-        psd_fmin=1.0e-5 * u.Hz,
-        psd_net=0.05 * u.K * np.sqrt(1 * u.second),
-        psd_fknee=fknee,
-    )
+    if freqs is None:
+        fp = fake_hexagon_focalplane(
+            n_pix=npix,
+            sample_rate=sample_rate,
+            psd_fmin=1.0e-5 * u.Hz,
+            psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+            psd_fknee=fknee,
+        )
+    else:
+        fp_detdata = list()
+        fov = None
+        for freq in freqs:
+            fp_freq = fake_hexagon_focalplane(
+                n_pix=npix,
+                sample_rate=sample_rate,
+                psd_fmin=1.0e-5 * u.Hz,
+                psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+                psd_fknee=fknee,
+                bandcenter=freq,
+            )
+            if fov is None:
+                fov = fp_freq.field_of_view
+            fp_detdata.append(fp_freq.detector_data)
+
+        fp_detdata = table_vstack(fp_detdata)
+        fp = Focalplane(
+            detector_data=fp_detdata,
+            sample_rate=sample_rate,
+            field_of_view=fov,
+        )
 
     site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
     return Telescope("telescope", focalplane=fp, site=site)
@@ -693,6 +721,8 @@ def create_ground_data(
     el_nods=[-1 * u.degree, 1 * u.degree],
     pixel_per_process=1,
     fknee=None,
+    freqs=None,
+    split=False,
 ):
     """Create a data object with a simple ground sim.
 
@@ -717,6 +747,7 @@ def create_ground_data(
         sample_rate=sample_rate,
         pixel_per_process=pixel_per_process,
         fknee=fknee,
+        freqs=freqs,
     )
 
     # Create a schedule.
@@ -761,9 +792,15 @@ def create_ground_data(
     if mpicomm is not None:
         schedule = mpicomm.bcast(schedule, root=0)
 
+    if freqs is None or not split:
+        split_key = None
+    else:
+        split_key = "bandcenter"
+
     sim_ground = ops.SimGround(
         name="sim_ground",
         telescope=tele,
+        session_split_key=split_key,
         schedule=schedule,
         hwp_angle=defaults.hwp_angle,
         hwp_rpm=120.0,

@@ -13,7 +13,7 @@ from .. import rng as rng
 from ..noise import Noise
 from ..ops.sim_tod_noise import sim_noise_timestream
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir, create_satellite_data, close_data
+from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
@@ -183,7 +183,7 @@ class SimNoiseTest(MPITestCase):
                     realization=sim_noise.realization,
                     telescope=ob.telescope.uid,
                     component=sim_noise.component,
-                    obsindx=ob.uid,
+                    sindx=ob.session.uid,
                     detindx=nse.index(det),
                     rate=nse.rate(det).to_value(u.Hz),
                     firstsamp=ob.local_index_offset,
@@ -310,7 +310,7 @@ class SimNoiseTest(MPITestCase):
                     realization=0,
                     telescope=ob.telescope.uid,
                     component=0,
-                    obsindx=ob.uid,
+                    sindx=ob.session.uid,
                     detindx=idet,
                     rate=nse.rate(det).to_value(u.Hz),
                     firstsamp=ob.local_index_offset,

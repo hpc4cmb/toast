@@ -2,14 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from astropy import units as u
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from ..data import Data
 from ..observation import default_values as defaults
 from ..timing import function_timer_stackskip
-from ..traits import Bool, Instance, Int, TraitConfig, Unit, Unicode
+from ..traits import Bool, Instance, Int, TraitConfig, Unicode, Unit
 from ..utils import Logger
 
 

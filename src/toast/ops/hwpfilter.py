@@ -81,7 +81,8 @@ class HWPFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     hwp_flag_mask = Int(
@@ -232,12 +233,11 @@ class HWPFilter(Operator):
         if self.detrend:
             trend = np.zeros_like(ref)
             add_templates(trend, legendre_trend, coeff[: self.trend_order + 1])
-            ref[good] -= trend[good]
+            ref -= trend
         # HWP template
         hwptemplate = np.zeros_like(ref)
         add_templates(hwptemplate, fourier_filter, coeff[self.trend_order + 1 :])
-        ref[good] -= hwptemplate[good]
-        ref[np.logical_not(good)] = 0
+        ref -= hwptemplate
         return
 
     @function_timer

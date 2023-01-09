@@ -107,8 +107,15 @@ def main():
     noiseweighted_sum = None
     invcov_sum = None
     nnz, nnz2, npix = None, None, None
-    nfile = len(args.inmap)
-    for ifile, infile_map in enumerate(args.inmap):
+    if len(args.inmap) == 1:
+        # Only one file provided, assume that it is a text file with a list
+        with open(args.inmap[0], "r") as listfile:
+            infiles = listfile.readlines()
+    else:
+        infiles = args.inmap
+    nfile = len(infiles)
+    for ifile, infile_map in enumerate(infiles):
+        infile_map = infile_map.strip()
         if ntask == 1:
             prefix = ""
         else:

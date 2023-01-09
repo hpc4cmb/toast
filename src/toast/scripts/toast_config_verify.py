@@ -13,7 +13,7 @@ import sys
 import traceback
 
 import toast
-from toast.config import load_config, dump_toml
+from toast.config import dump_toml, load_config
 from toast.mpi import Comm, get_world
 from toast.utils import Environment, Logger, import_from_name, object_fullname
 

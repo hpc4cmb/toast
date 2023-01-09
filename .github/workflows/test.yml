@@ -13,7 +13,7 @@ on:
 
 jobs:
   linux:
-    name: Linux with Python-${{ matrix.python }}
+    name: Linux with CMBenv Docker Python-${{ matrix.python }}
     runs-on: ubuntu-latest
     strategy:
       # Ensure that a test continues even if another fails.  Useful for
@@ -29,12 +29,12 @@ jobs:
           #   pyshort: "310"
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.9.1
+        uses: styfle/cancel-workflow-action@0.11.0
         with:
           access_token: ${{ github.token }}
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Pull Dependency Image
         run: docker pull hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest
@@ -56,14 +56,20 @@ jobs:
             test_runner:py${{ matrix.pyshort }} \
             python -c 'import toast.tests; toast.tests.run()'
 
+      - name: Check MPI Abort
+        run: |
+          docker run -e OMP_NUM_THREADS=2 \
+            test_runner:py${{ matrix.pyshort }} \
+            test_mpi_exit_code.sh 2
+
       - name: Run MPI Tests
         run: |
           docker run -e OMP_NUM_THREADS=2 \
             test_runner:py${{ matrix.pyshort }} \
-            mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+            mpirun -np 2 python -m mpi4py -c 'import toast.tests; toast.tests.run()'
 
   macos:
-    name: MacOS with Python-${{ matrix.python }}
+    name: MacOS with Conda Python-${{ matrix.python }}
     runs-on: macos-latest
     strategy:
       # Ensure that a test continues even if another fails.  Useful for
@@ -73,18 +79,21 @@ jobs:
         include:
           # - python: "3.7"
           #   pyshort: "37"
-          - python: "3.9"
-            pyshort: "39"
-          # - python: "3.10"
-          #   pyshort: "310"
+          #   pyupper: "3.8"
+          # - python: "3.9"
+          #   pyshort: "39"
+          #   pyupper: "3.10"
+          - python: "3.10"
+            pyshort: "310"
+            pyupper: "3.11"
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.9.1
+        uses: styfle/cancel-workflow-action@0.11.0
         with:
           access_token: ${{ github.token }}
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup Conda Base
         run: |
@@ -104,7 +113,7 @@ jobs:
         shell: bash -l {0}
         run: |
           conda activate base
-          ./platforms/conda_dev_setup.sh base
+          ./platforms/conda_dev_setup.sh base ${{ matrix.pyupper }}
           conda install mpi4py
           export TOAST_BUILD_DISABLE_OPENMP=1
           ./platforms/conda.sh base

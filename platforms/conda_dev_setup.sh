@@ -23,6 +23,12 @@
 
 envname=$1
 
+# Upper limit of the python version to use
+pyupper=$2
+if [ "x${pyupper}" = "x" ]; then
+    pyupper=3.11
+fi
+
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
@@ -58,9 +64,9 @@ pkgfile="${scriptdir}/conda_dev_pkgs.txt"
 pkglist=$(cat "${pkgfile}" | xargs -I % echo -n '"%" ')
 platform=$(python -c 'import sys; print(sys.platform)')
 if [ "${platform}" = "darwin" ]; then
-    pkglist="${pkglist} compilers"
+    pkglist="python<${pyupper} ${pkglist} compilers"
 else
-    pkglist="${pkglist} gcc_linux-64 gxx_linux-64"
+    pkglist="python<${pyupper} ${pkglist} gcc_linux-64 gxx_linux-64"
 fi
 
 # Determine whether the environment is a name or a

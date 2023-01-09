@@ -13,7 +13,7 @@ from ..ops.kernels import ImplementationType, healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
-from ._helpers import create_outdir, create_satellite_data, close_data
+from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 

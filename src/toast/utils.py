@@ -348,7 +348,7 @@ try:
                     unit = "% "
                 if comm is None or comm.size == 1:
                     memstr += "{:>12} : {:8.3f} {}\n".format(key, vlist[0], unit)
-                    if np.abs(vlist2[0] - vlist[0]) / vlist[0] > 1e-3:
+                    if vlist[0] > 0 and np.abs(vlist2[0] - vlist[0]) / vlist[0] > 1e-3:
                         memstr += "{:>12} : {:8.3f} {} (after GC)\n".format(
                             key, vlist2[0], unit
                         )
@@ -368,7 +368,7 @@ try:
                         )
                     )
                     med2 = np.median(vlist2)
-                    if np.abs(med2 - med1) / med1 > 1e-3:
+                    if med1 > 0 and np.abs(med2 - med1) / med1 > 1e-3:
                         memstr += (
                             "{:>12} : {:8.3f} {}  < {:8.3f} +- {:8.3f} {}  "
                             "< {:8.3f} {} (after GC)\n".format(
@@ -498,7 +498,7 @@ def ensure_buffer_f64(data):
     #     return np.ascontiguousarray(data, dtype=np.float64)
 
 
-def name_UID(name):
+def name_UID(name, int64=False):
     """Return a unique integer for a specified name string."""
     bdet = name.encode("utf-8")
     dhash = hashlib.md5()
@@ -507,7 +507,15 @@ def name_UID(name):
     uid = None
     try:
         ind = int.from_bytes(bdet, byteorder="little")
-        uid = int(ind & 0xFFFFFFFF)
+        if int64:
+            uid = int(ind & 0x7FFFFFFFFFFFFFFF)
+        else:
+            # FIXME:  This commented out line is the correct thing to use
+            # for signed integers.  However it will change the random seed
+            # values everywhere.  Make this change sometime when it is less
+            # disruptive.
+            # uid = int(ind & 0x7FFFFFFF)
+            uid = int(ind & 0xFFFFFFFF)
     except:
         raise RuntimeError(
             "Cannot convert detector name {} to a unique integer-\
@@ -767,4 +775,4 @@ def unit_conversion(source, target):
     """
     scale = 1.0 * source
     scale.to(target)
-    return scale.value
+    return scale.to(target).value

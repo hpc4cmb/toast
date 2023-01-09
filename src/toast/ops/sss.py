@@ -24,8 +24,8 @@ from ..traits import (
     Int,
     List,
     Quantity,
-    Unit,
     Unicode,
+    Unit,
     trait_docs,
 )
 from ..utils import Environment, Logger, Timer
@@ -139,15 +139,15 @@ class SimScanSynchronousSignal(Operator):
         each made of two 64bit integers.
         Following tod_math.py we set
         key1 = realization * 2^32 + telescope * 2^16 + component
-        key2 = obsindx * 2^32
+        key2 = sindx * 2^32
         counter1 = hierarchical cone counter
         counter2 = sample in stream
         """
         telescope = obs.telescope.uid
         site = obs.telescope.site.uid
-        obsindx = obs.uid
+        sindx = obs.session.uid
         key1 = self.realization * 2**32 + telescope * 2**16 + self.component
-        key2 = site * 2**16 + obsindx
+        key2 = site * 2**16 + sindx
         counter1 = 0
         counter2 = 0
         return key1, key2, counter1, counter2
@@ -185,7 +185,7 @@ class SimScanSynchronousSignal(Operator):
                 ).astype(dtype)
                 sss_map /= np.std(sss_map)
                 lon, lat = hp.pix2ang(
-                    self.nside, np.arange(npix, dtype=np.int), lonlat=True
+                    self.nside, np.arange(npix, dtype=np.int64), lonlat=True
                 )
                 scale = self.scale * (np.abs(lat) / 90 + 0.5) ** self.power
                 sss_map *= scale.to_value(self.units)

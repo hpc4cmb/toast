@@ -685,7 +685,7 @@ def read_healpix(filename, *args, **kwargs):
         else:
             result = mapdata
     else:
-        msg = f"Could not ascertain file type for '{fname}'"
+        msg = f"Could not ascertain file type for '{filename}'"
         raise RuntimeError(msg)
 
     return result

@@ -96,7 +96,7 @@ class MPITestResult(TestResult):
         # output and then abort.
         if self.comm is not None:
             time.sleep(5)
-            self.comm.Abort()
+            self.comm.Abort(1)
         return
 
     def addFailure(self, test, err):

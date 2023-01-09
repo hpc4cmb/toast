@@ -12,7 +12,7 @@ from .kernels import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
 from ..fft import FFTPlanReal1DStore
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, Unit, Unicode, trait_docs
+from ..traits import Bool, Int, Unicode, Unit, trait_docs
 from ..utils import AlignedF64, Logger, rate_from_times, unit_conversion
 from .operator import Operator
 
@@ -22,7 +22,7 @@ def sim_noise_timestream(
     realization=0,
     telescope=0,
     component=0,
-    obsindx=0,
+    sindx=0,
     detindx=0,
     rate=1.0,
     firstsamp=0,
@@ -44,7 +44,7 @@ def sim_noise_timestream(
     those four numbers in the following way:
 
     key1 = realization * 2^32 + telescope * 2^16 + component
-    key2 = obsindx * 2^32 + detindx
+    key2 = sindx * 2^32 + detindx
     counter1 = currently unused (0)
     counter2 = sample in stream
 
@@ -57,7 +57,7 @@ def sim_noise_timestream(
         component (int): a number representing the type of timestream
             we are generating (detector noise, common mode noise,
             atmosphere, etc).
-        obsindx (int): the global index of this observation.
+        sindx (int): the global index of this observing session.
         detindx (int): the global index of this detector.
         rate (float): the sample rate.
         firstsamp (int): the start sample in the stream.
@@ -137,8 +137,12 @@ def sim_noise_timestream(
 
         # gaussian Re/Im randoms, packed into a complex valued array
 
-        key1 = realization * 4294967296 + telescope * 65536 + component
-        key2 = obsindx * 4294967296 + detindx
+        key1 = (
+            int(realization) * int(4294967296)
+            + int(telescope) * int(65536)
+            + int(component)
+        )
+        key2 = int(sindx) * int(4294967296) + int(detindx)
         counter1 = 0
         counter2 = firstsamp * oversample
 
@@ -146,7 +150,7 @@ def sim_noise_timestream(
             fftlen, sampler="gaussian", key=(key1, key2), counter=(counter1, counter2)
         ).array()
 
-        fdata = np.zeros(npsd, dtype=np.complex)
+        fdata = np.zeros(npsd, dtype=np.complex128)
 
         # Set the DC and Nyquist frequency imaginary part to zero
         fdata[0] = rngdata[0] + 0.0j
@@ -172,7 +176,7 @@ def sim_noise_timestream(
             realization,
             telescope,
             component,
-            obsindx,
+            sindx,
             detindx,
             rate,
             firstsamp,
@@ -252,8 +256,8 @@ class SimNoise(Operator):
                 # Nothing to do for this observation
                 continue
 
-            # Unique observation ID
-            obsindx = ob.uid
+            # Unique session ID
+            sindx = ob.session.uid
 
             # Telescope UID
             telescope = ob.telescope.uid
@@ -302,7 +306,7 @@ class SimNoise(Operator):
                         realization=self.realization,
                         telescope=telescope,
                         component=self.component,
-                        obsindx=obsindx,
+                        sindx=sindx,
                         detindx=nse.index(key),
                         rate=rate,
                         firstsamp=ob.local_index_offset,
@@ -367,7 +371,7 @@ class SimNoise(Operator):
                     self.realization,
                     telescope,
                     self.component,
-                    obsindx,
+                    sindx,
                     rate,
                     ob.local_index_offset,
                     self._oversample,

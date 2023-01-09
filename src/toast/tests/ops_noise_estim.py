@@ -18,12 +18,12 @@ from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import (
+    close_data,
     create_fake_sky,
     create_ground_data,
     create_outdir,
     create_satellite_data,
     fake_flags,
-    close_data,
 )
 from .mpi import MPITestCase
 
@@ -431,7 +431,7 @@ class NoiseEstimTest(MPITestCase):
                 hdulist = pf.open(fname)
                 freq, psd = hdulist[2].data.field(0)
                 ax.loglog(freq, psd, label=label)
-            net = obs.telescope.focalplane["D0A"]["psd_net"]
+            net = obs.telescope.focalplane["D0A-150"]["psd_net"]
             net = net.to_value(u.K / u.Hz**0.5)
             ax.axhline(
                 net**2,

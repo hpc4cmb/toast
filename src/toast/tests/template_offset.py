@@ -13,7 +13,7 @@ from ..observation import default_values as defaults
 from ..ops.kernels import ImplementationType
 from ..templates import Offset
 from ..utils import rate_from_times
-from ._helpers import create_outdir, create_satellite_data, close_data
+from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 

@@ -6,6 +6,7 @@
 
 from .arithmetic import Combine
 from .cadence_map import CadenceMap
+from .common_mode_noise import CommonModeNoise
 from .conviqt import SimConviqt, SimTEBConviqt, SimWeightedConviqt
 from .copy import Copy
 from .crosslinking import CrossLinking

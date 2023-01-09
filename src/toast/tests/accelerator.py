@@ -24,7 +24,7 @@ from ..data import Data
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..traits import Int, Unicode, trait_docs
-from ._helpers import create_comm, create_outdir, create_satellite_data, close_data
+from ._helpers import close_data, create_comm, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 

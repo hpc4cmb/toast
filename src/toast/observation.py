@@ -68,6 +68,7 @@ def set_default_values(values=None):
         "shared_mask_irregular": 4,
         "det_mask_invalid": 1,
         "det_mask_sso": 1 + 2,
+        "det_mask_processing": 2,
         #
         # ground-specific flag masks
         #
@@ -460,22 +461,26 @@ class Observation(MutableMapping):
         fail = 0
         if self.name != other.name:
             fail = 1
-            log.verbose(f"Obs names {self.name} != {other.name}")
+            log.verbose(
+                f"Proc {self.comm.world_rank}:  Obs names {self.name} != {other.name}"
+            )
         if self.uid != other.uid:
             fail = 1
-            log.verbose(f"Obs uid {self.uid} != {other.uid}")
+            log.verbose(
+                f"Proc {self.comm.world_rank}:  Obs uid {self.uid} != {other.uid}"
+            )
         if self.telescope != other.telescope:
             fail = 1
-            log.verbose("Obs telescopes not equal")
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs telescopes not equal")
         if self.session != other.session:
             fail = 1
-            log.verbose("Obs sessions not equal")
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs sessions not equal")
         if self.dist != other.dist:
             fail = 1
-            log.verbose("Obs distributions not equal")
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs distributions not equal")
         if self._internal.keys() != other._internal.keys():
             fail = 1
-            log.verbose("Obs metadata keys not equal")
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs metadata keys not equal")
         for k, v in self._internal.items():
             if v != other._internal[k]:
                 feq = True
@@ -486,17 +491,19 @@ class Observation(MutableMapping):
                     feq = False
                 if not feq:
                     fail = 1
-                    log.verbose(f"Obs metadata[{k}]:  {v} != {other[k]}")
+                    log.verbose(
+                        f"Proc {self.comm.world_rank}:  Obs metadata[{k}]:  {v} != {other[k]}"
+                    )
                     break
         if self.shared != other.shared:
             fail = 1
-            log.verbose("Obs shared data not equal")
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs shared data not equal")
         if self.detdata != other.detdata:
             fail = 1
-            log.verbose("Obs detdata not equal")
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs detdata not equal")
         if self.intervals != other.intervals:
             fail = 1
-            log.verbose("Obs intervals not equal")
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs intervals not equal")
         if self.comm.comm_group is not None:
             fail = self.comm.comm_group.allreduce(fail, op=MPI.SUM)
         return fail == 0
@@ -661,8 +668,19 @@ class Observation(MutableMapping):
 
         # Do the actual redistribution
         new_shr_manager, new_det_manager, new_intervals_manager = redistribute_data(
-            self.dist, new_dist, self.shared, self.detdata, self.intervals, times=times
+            self.dist,
+            new_dist,
+            self.shared,
+            self.detdata,
+            self.intervals,
+            times=times,
+            dbg=self.name,
         )
+
+        # Redistribute any metadata objects that support it.
+        for k, v in self._internal.items():
+            if hasattr(v, "redistribute"):
+                v.redistribute(self.dist, new_dist)
 
         # Replace our distribution and data managers with the new ones.
         del self.dist

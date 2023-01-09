@@ -14,11 +14,11 @@ from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import (
+    close_data,
     create_fake_beam_alm,
     create_fake_sky_alm,
     create_outdir,
     create_satellite_data,
-    close_data,
 )
 from .mpi import MPITestCase
 
@@ -803,5 +803,5 @@ class SimConviqtTest(MPITestCase):
 
             np.testing.assert_almost_equal(cl_out_wo_hwp, cl_out_w_hwp, decimal=2)
 
-        close_data(data_wo_hwp)
         close_data(data_w_hwp)
+        close_data(data_wo_hwp)

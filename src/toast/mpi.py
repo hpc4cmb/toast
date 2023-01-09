@@ -503,11 +503,12 @@ class Comm(object):
 
 
 @contextmanager
-def exception_guard(comm=None):
+def exception_guard(comm=None, timeout=30):
     """Ensure that, if one MPI process raises an un-caught exception, the program shuts down properly.
 
     Args:
         comm (mpi4py.MPI.Comm): The MPI communicator or None.
+        timeout (int): The number of seconds to wait before aborting all processes
 
     """
     log = Logger.get()
@@ -531,8 +532,8 @@ def exception_guard(comm=None):
             if comm.size > 1:
                 # gives other processes a bit of time to see whether
                 # they encounter the same error
-                time.sleep(30)
-            comm.Abort()
+                time.sleep(timeout)
+            comm.Abort(1)
 
 
 def comm_equal(comm_a, comm_b):

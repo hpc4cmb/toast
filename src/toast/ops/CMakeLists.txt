@@ -14,12 +14,14 @@ install(FILES
     sim_tod_noise.py
     sim_tod_dipole.py
     sim_tod_atm.py
-    sim_tod_atm_utils.py
+    sim_tod_atm_generate.py
+    sim_tod_atm_observe.py
     sim_satellite.py
     sim_ground.py
     sim_ground_utils.py
     elevation_noise.py
     flag_intervals.py
+    common_mode_noise.py
     noise_model.py
     noise_weight.py
     gainscrambler.py

@@ -235,9 +235,9 @@ class PixelsHealpix(Operator):
                     # but the caller wants the pixel distribution
                     for det in ob.select_local_detectors(detectors):
                         for vslice in view_slices:
-                            good = ob.detdata[self.pixels][det][vslice] >= 0
+                            good = ob.detdata[self.pixels][det, vslice] >= 0
                             self._local_submaps[
-                                ob.detdata[self.pixels][det][vslice][good]
+                                ob.detdata[self.pixels][det, vslice][good]
                                 // self._n_pix_submap
                             ] = True
 

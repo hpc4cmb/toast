@@ -18,7 +18,7 @@ from ..observation import Observation
 from ..observation import default_values as defaults
 from ..schedule import SatelliteSchedule
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unit, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger, name_UID, rate_from_times
 from .operator import Operator
 from .sim_hwp import simulate_hwp_response
@@ -495,10 +495,8 @@ class SimSatellite(Operator):
             q_prec = None
 
             if ob.comm_col_rank == 0:
-
                 start_time = scan_starts[obindx] + float(ob.local_index_offset) / rate
                 stop_time = start_time + float(ob.n_local_samples - 1) / rate
-
                 stamps = np.linspace(
                     start_time,
                     stop_time,

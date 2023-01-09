@@ -73,7 +73,8 @@ class Data(MutableMapping):
             for ob in self.obs:
                 ob.clear()
         self.obs.clear()
-        self._internal.clear()
+        if not self._view:
+            self._internal.clear()
         return
 
     def all_local_detectors(self, selection=None):
@@ -236,6 +237,8 @@ class Data(MutableMapping):
             obs_uid (bool):  If True, split by observation UID.
             obs_session_name (bool):  If True, split by session name.
             obs_key (str):  Split by values of this observation key.
+            require_full (bool):  If True, every observation must be placed in the
+                output.
 
         Returns:
             (OrderedDict):  The dictionary of new Data objects.

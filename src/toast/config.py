@@ -18,7 +18,7 @@ from tomlkit import comment, document, dumps, loads, nl, table
 
 from . import instrument
 from .instrument import Focalplane, Telescope
-from .traits import TraitConfig, trait_string_to_scalar, trait_scalar_to_string
+from .traits import TraitConfig, trait_scalar_to_string, trait_string_to_scalar
 from .utils import Environment, Logger
 
 

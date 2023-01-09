@@ -69,7 +69,8 @@ class PolyFilter2D(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
@@ -171,10 +172,9 @@ class PolyFilter2D(Operator):
 
             detector_position = {}
             for det in detectors:
-                theta, phi, _ = qa.to_iso_angles(
-                    temp_ob.telescope.focalplane[det]["quat"]
-                )
-                detector_position[det] = (theta, phi)
+                x, y, z = qa.rotate(temp_ob.telescope.focalplane[det]["quat"], ZAXIS)
+                theta, phi = np.arcsin([x, y])
+                detector_position[det] = [theta, phi]
 
             # Enumerate detector groups (e.g. wafers) to filter
 
@@ -346,7 +346,7 @@ class PolyFilter2D(Operator):
 
                 for igroup in range(ngroup):
                     local_dets = temp_ob.local_detectors
-                    dets_in_group = np.zeros(len(local_dets), dtype=np.bool)
+                    dets_in_group = np.zeros(len(local_dets), dtype=bool)
                     for idet, det in enumerate(local_dets):
                         if group_index[det] == igroup:
                             dets_in_group[idet] = True
@@ -453,7 +453,8 @@ class PolyFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     poly_flag_mask = Int(
@@ -643,7 +644,8 @@ class CommonModeFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     shared_flags = Unicode(
