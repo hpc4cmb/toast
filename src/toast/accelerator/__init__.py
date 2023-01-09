@@ -29,12 +29,12 @@ if "TOAST_GPU_OPENMP" in os.environ and os.environ["TOAST_GPU_OPENMP"] in enable
 use_accel_jax = False
 if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_vals):
     try:
-        use_accel_jax = True
         import jax
 
         from ..jax.intervals import INTERVALS_JAX
         from ..jax.mutableArray import MutableJaxArray
-    except Exception:
+        use_accel_jax = True
+    except ImportError:
         # There could be many possible exceptions...
         log = Logger.get()
         msg = "TOAST_GPU_JAX enabled at runtime, but jax is not "
