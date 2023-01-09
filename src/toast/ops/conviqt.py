@@ -771,7 +771,6 @@ class SimTEBConviqt(SimConviqt):
                     det_dict[key] = focalplane[det][key]
                 det_dict["detector"] = det
                 det_dict["mc"] = self.mc
-                print(f"Det Dict for {det}: {det_dict}")
             else:
                 det_dict = None
             det_dict = self.comm.bcast(det_dict, root=source)
@@ -790,7 +789,6 @@ class SimTEBConviqt(SimConviqt):
                 beam_file = self.beam_file_dict[det]
             else:
                 beam_file = self.beam_file.format(**det_dict)
-            print(f"Loading beam for {det} from {beam_file}", flush=True)  # DEBUG
 
             beam_T, beam_P = self.get_TP_beam(beam_file, det, verbose)
 
