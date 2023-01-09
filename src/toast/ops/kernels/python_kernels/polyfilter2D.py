@@ -4,6 +4,7 @@
 
 import numpy as np
 
+
 # fails comparison test in polyfilter
 def filter_poly2D(det_groups, templates, signals, masks, coeff):
     """

@@ -8,6 +8,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
+from ..accelerator import use_accel_jax
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
@@ -25,7 +26,6 @@ from .memory_counter import MemoryCounter
 from .operator import Operator
 from .pipeline import Pipeline
 from .scan_map import ScanMask
-from ..accelerator import use_accel_jax
 
 
 @trait_docs

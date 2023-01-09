@@ -5,10 +5,9 @@
 import jax
 import jax.numpy as jnp
 
-from ....utils import Logger
-
-from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals
+from ....jax.mutableArray import MutableJaxArray
+from ....utils import Logger
 
 
 def noise_weight_interval(

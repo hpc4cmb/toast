@@ -11,7 +11,6 @@ import traitlets
 from astropy import units as u
 from traitlets import (
     Bool,
-    UseEnum,
     Callable,
     Dict,
     Float,
@@ -25,6 +24,7 @@ from traitlets import (
     Tuple,
     Undefined,
     Unicode,
+    UseEnum,
     signature_has_traits,
 )
 

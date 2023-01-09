@@ -22,13 +22,11 @@ from .accelerator import (
 )
 from .intervals import IntervalList
 from .mpi import MPI, comm_equivalent
-from .utils import (
-    Logger,
-    dtype_to_aligned,
-)
+from .utils import Logger, dtype_to_aligned
 
 if use_accel_jax:
     import jax
+
     from .jax.mutableArray import MutableJaxArray
 
 

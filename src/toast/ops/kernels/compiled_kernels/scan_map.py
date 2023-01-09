@@ -3,10 +3,9 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-from ...._libtoast import (
-    scan_map_float64 as scan_map_interval_float64_compiled,
-    scan_map_float32 as scan_map_interval_float32_compiled,
-)
+
+from ...._libtoast import scan_map_float32 as scan_map_interval_float32_compiled
+from ...._libtoast import scan_map_float64 as scan_map_interval_float64_compiled
 
 
 def scan_map(

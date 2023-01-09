@@ -8,12 +8,12 @@ import traitlets
 from .. import qarray as qa
 from ..healpix import HealpixPixels
 from ..observation import default_values as defaults
-from .kernels import ImplementationType, stokes_weights_I, stokes_weights_IQU
 from ..pixels import PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, UseEnum, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, UseEnum, trait_docs
 from ..utils import Environment, Logger
 from .delete import Delete
+from .kernels import ImplementationType, stokes_weights_I, stokes_weights_IQU
 from .operator import Operator
 
 

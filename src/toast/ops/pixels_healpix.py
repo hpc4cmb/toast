@@ -9,11 +9,10 @@ from ..healpix import Pixels
 from ..observation import default_values as defaults
 from ..pixels import PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, UseEnum, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, UseEnum, trait_docs
 from ..utils import Environment, Logger
-from .operator import Operator
-
 from .kernels import ImplementationType, pixels_healpix
+from .operator import Operator
 
 
 @trait_docs

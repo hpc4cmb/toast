@@ -12,17 +12,10 @@ import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
-from .kernels import (
-    ImplementationType,
-    subtract_mean,
-    sum_detectors,
-    filter_polynomial,
-    filter_poly2D,
-)
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, UseEnum, Dict, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, UseEnum, trait_docs
 from ..utils import (
     AlignedF64,
     AlignedU8,
@@ -31,6 +24,13 @@ from ..utils import (
     Logger,
     Timer,
     dtype_to_aligned,
+)
+from .kernels import (
+    ImplementationType,
+    filter_poly2D,
+    filter_polynomial,
+    subtract_mean,
+    sum_detectors,
 )
 from .operator import Operator
 

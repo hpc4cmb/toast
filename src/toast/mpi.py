@@ -61,6 +61,7 @@ if use_accel_omp or use_accel_jax:
         accel_assign_device(node_procs, node_rank, False)
     else:
         import jax
+
         devices = jax.local_devices()
         n_devices = len(devices)
         if n_devices == 0:

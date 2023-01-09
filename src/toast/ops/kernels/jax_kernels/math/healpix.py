@@ -3,8 +3,8 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import jax
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
 
 TWOINVPI = 0.63661977236758134308
 MACHINE_EPSILON = np.finfo(np.float).eps

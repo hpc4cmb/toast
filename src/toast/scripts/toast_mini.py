@@ -20,6 +20,7 @@ from astropy import units as u
 
 import toast
 import toast.ops
+from toast.accelerator.data_localization import display_datamovement
 from toast.schedule_sim_satellite import create_satellite_schedule
 from toast.scripts.benchmarking_utilities import (
     default_sim_atmosphere,
@@ -30,7 +31,6 @@ from toast.scripts.benchmarking_utilities import (
     select_case,
 )
 from toast.timing import dump, function_timer, gather_timers
-from toast.accelerator.data_localization import display_datamovement
 
 
 def parse_arguments():

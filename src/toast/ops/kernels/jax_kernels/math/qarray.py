@@ -3,9 +3,9 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 
-import numpy as np
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from .....jax.mutableArray import MutableJaxArray
 

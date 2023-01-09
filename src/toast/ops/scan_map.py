@@ -8,11 +8,11 @@ from astropy import units as u
 
 from ..accelerator import use_accel_jax
 from ..observation import default_values as defaults
-from .kernels import ImplementationType, scan_map
 from ..pixels import PixelData, PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, UseEnum, Int, Unicode, Unit, trait_docs
+from ..traits import Bool, Int, Unicode, Unit, UseEnum, trait_docs
 from ..utils import AlignedF64, Logger, unit_conversion
+from .kernels import ImplementationType, scan_map
 from .operator import Operator
 
 

@@ -14,16 +14,7 @@ from astropy import units as u
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import (
-    Bool,
-    Instance,
-    Int,
-    List,
-    Quantity,
-    Tuple,
-    Unicode,
-    trait_docs,
-)
+from ..traits import Bool, Instance, Int, List, Quantity, Tuple, Unicode, trait_docs
 from ..utils import Logger, Timer
 from .arithmetic import Combine
 from .copy import Copy

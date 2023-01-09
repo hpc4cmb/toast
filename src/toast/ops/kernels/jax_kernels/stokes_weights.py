@@ -6,10 +6,9 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from ....utils import Logger
-
+from ....jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
 from ....jax.mutableArray import MutableJaxArray
-from ....jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ....utils import Logger
 from .math import qarray
 
 

@@ -1,8 +1,10 @@
-import os, sys
+import os
+import sys
 from collections import defaultdict
 from functools import wraps
-from ..utils import Logger
+
 from ..accelerator import accel_data_present
+from ..utils import Logger
 
 # --------------------------------------------------------------------------------------------------
 # RECORDING CLASS

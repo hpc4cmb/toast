@@ -2,13 +2,12 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from ....jax.mutableArray import MutableJaxArray
-from ....utils import AlignedI64, AlignedF64
+from ....utils import AlignedF64, AlignedI64
 
 
 def cov_accum_diag_hits_inner(nsubpix, submap, subpix, hits):

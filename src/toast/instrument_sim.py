@@ -7,7 +7,6 @@ from astropy import units as u
 from astropy.table import Column, QTable
 
 from . import qarray as qa
-
 from .instrument import Focalplane
 from .instrument_coords import quat_to_xieta, xieta_to_quat
 from .vis import set_matplotlib_backend

@@ -2,15 +2,13 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-
 import jax
 import jax.numpy as jnp
+import numpy as np
 
-from ....utils import Logger
-
-from ....jax.mutableArray import MutableJaxArray
 from ....jax.intervals import INTERVALS_JAX, JaxIntervals
+from ....jax.mutableArray import MutableJaxArray
+from ....utils import Logger
 
 
 def template_offset_add_to_signal_intervals(

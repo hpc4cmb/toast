@@ -5,9 +5,9 @@
 import numpy as np
 from scipy.signal import fftconvolve
 
-from .kernels import fod_autosums, fod_crosssums
 from ..mpi import MPI
 from ..timing import function_timer
+from .kernels import fod_autosums, fod_crosssums
 
 
 @function_timer

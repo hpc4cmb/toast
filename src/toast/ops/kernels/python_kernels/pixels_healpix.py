@@ -4,7 +4,7 @@
 
 import numpy as np
 
-from .math import qarray, healpix
+from .math import healpix, qarray
 
 
 def pixels_healpix(

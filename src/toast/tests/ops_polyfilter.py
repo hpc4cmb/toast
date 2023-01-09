@@ -10,10 +10,10 @@ from astropy import units as u
 from astropy.table import Column
 
 from .. import ops as ops
-from ..ops.kernels import ImplementationType
 from .. import qarray as qa
 from ..noise import Noise
 from ..observation import default_values as defaults
+from ..ops.kernels import ImplementationType
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
 from ._helpers import (

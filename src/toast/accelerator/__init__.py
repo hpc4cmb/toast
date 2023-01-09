@@ -31,8 +31,9 @@ if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_va
     try:
         use_accel_jax = True
         import jax
-        from ..jax.mutableArray import MutableJaxArray
+
         from ..jax.intervals import INTERVALS_JAX
+        from ..jax.mutableArray import MutableJaxArray
     except Exception:
         # There could be many possible exceptions...
         log = Logger.get()

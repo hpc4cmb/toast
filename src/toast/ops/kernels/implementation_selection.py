@@ -1,9 +1,10 @@
 from enum import IntEnum
 from functools import wraps
-from ...utils import Logger
-from ...timing import function_timer
+
 from ...accelerator import use_accel_jax, use_accel_omp
 from ...accelerator.data_localization import function_datamovementtracker
+from ...timing import function_timer
+from ...utils import Logger
 
 
 class ImplementationType(IntEnum):

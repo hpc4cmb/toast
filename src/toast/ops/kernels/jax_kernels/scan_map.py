@@ -5,10 +5,9 @@
 import jax
 import jax.numpy as jnp
 
-from ....utils import Logger
-
+from ....jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
 from ....jax.mutableArray import MutableJaxArray
-from ....jax.intervals import INTERVALS_JAX, JaxIntervals, ALL
+from ....utils import Logger
 
 
 def global_to_local(global_pixels, npix_submap, global2local):
