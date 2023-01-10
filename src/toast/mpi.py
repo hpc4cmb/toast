@@ -44,7 +44,7 @@ if use_mpi is None:
 from ._libtoast import accel_assign_device
 
 # Assign each process to an accelerator device
-from .accelerator import jax_local_device, use_accel_jax, use_accel_omp
+from .accelerator import use_accel_jax, use_accel_omp, accel_set_device_jax
 
 if use_accel_omp or use_accel_jax:
     node_procs = 1
@@ -66,11 +66,21 @@ if use_accel_omp or use_accel_jax:
         n_devices = len(devices)
         if n_devices == 0:
             # No device, JAX will display a warning and default to CPU
-            jax_local_device = 0
+            accel_set_device_jax(0)
         else:
-            # NOTE: work under the assumption that consecutive ranks are on the same node
-            # TODO: is `node_rank` a node-local rank?
-            jax_local_device = devices[node_rank % n_devices]
+            # This is designed to match the assignment in accel_assign_device().
+            # we should keep these in sync.  The intention with this code is to
+            # assign consecutive ranks within a node to the same device, under
+            # the assumption that consecutive ranks are close to each other in
+            # a NUMA sense and that (maybe) the GPUs are numbered to be close
+            # to groups of processes.  If none of this matters we could use a
+            # modulus operator here AND in the compiled code.
+            proc_per_dev = node_procs // n_devices
+            if n_devices * proc_per_dev < node_procs:
+                proc_per_dev += 1
+            accel_set_device_jax(devices[node_rank // proc_per_dev])
+            # accel_set_device_jax(devices[node_rank % n_devices])
+            
 else:
     # Disabled == True
     accel_assign_device(1, 0, True)

@@ -13,7 +13,7 @@ install(FILES
     build_noise_weighted.py
     cov_accum.py
     noise_weight.py
-    DESTINATION ${PYTHON_SITE}/toast/ops/kernels/jax_kernels
+    DESTINATION ${PYTHON_SITE}/toast/ops/kernels/python
 )
 
 add_subdirectory(math)

@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2022 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -56,11 +56,14 @@ jax_local_device = None
 # Wrapper functions that work with either numpy arrays mapped to omp device memory
 # or jax arrays.
 
-
 def accel_enabled():
     """Returns True if any accelerator support is enabled."""
     return use_accel_jax or use_accel_omp
 
+def accel_set_device_jax(dev):
+    """Set the jax device in use."""
+    global jax_local_device
+    jax_local_device = dev
 
 def accel_get_device():
     """Return the device ID assigned to this process."""

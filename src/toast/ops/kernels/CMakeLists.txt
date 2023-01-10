@@ -7,6 +7,6 @@ install(FILES
     DESTINATION ${PYTHON_SITE}/toast/ops/kernels
 )
 
-add_subdirectory(jax_kernels)
-add_subdirectory(python_kernels)
-add_subdirectory(compiled_kernels)
+add_subdirectory(jax)
+add_subdirectory(python)
+add_subdirectory(compiled)

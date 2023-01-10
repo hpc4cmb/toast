@@ -10,24 +10,24 @@ from ...accelerator import use_accel_jax
 #    submodules.
 #
 
-from .compiled_kernels import build_noise_weighted as build_noise_weighted_compiled
-from .compiled_kernels import cov_accum_diag_hits as cov_accum_diag_hits_compiled
-from .compiled_kernels import cov_accum_diag_invnpp as cov_accum_diag_invnpp_compiled
-from .compiled_kernels import filter_poly2D as filter_poly2D_compiled
-from .compiled_kernels import filter_polynomial as filter_polynomial_compiled
-from .compiled_kernels import noise_weight as noise_weight_compiled
-from .compiled_kernels import pixels_healpix as pixels_healpix_compiled
-from .compiled_kernels import pointing_detector as pointing_detector_compiled
-from .compiled_kernels import scan_map as scan_map_compiled
-from .compiled_kernels import stokes_weights_I as stokes_weights_I_compiled
-from .compiled_kernels import stokes_weights_IQU as stokes_weights_IQU_compiled
-from .compiled_kernels import (
+from .compiled import build_noise_weighted as build_noise_weighted_compiled
+from .compiled import cov_accum_diag_hits as cov_accum_diag_hits_compiled
+from .compiled import cov_accum_diag_invnpp as cov_accum_diag_invnpp_compiled
+from .compiled import filter_poly2D as filter_poly2D_compiled
+from .compiled import filter_polynomial as filter_polynomial_compiled
+from .compiled import noise_weight as noise_weight_compiled
+from .compiled import pixels_healpix as pixels_healpix_compiled
+from .compiled import pointing_detector as pointing_detector_compiled
+from .compiled import scan_map as scan_map_compiled
+from .compiled import stokes_weights_I as stokes_weights_I_compiled
+from .compiled import stokes_weights_IQU as stokes_weights_IQU_compiled
+from .compiled import (
     template_offset_add_to_signal as template_offset_add_to_signal_compiled,
 )
-from .compiled_kernels import (
+from .compiled import (
     template_offset_apply_diag_precond as template_offset_apply_diag_precond_compiled,
 )
-from .compiled_kernels import (
+from .compiled import (
     template_offset_project_signal as template_offset_project_signal_compiled,
 )
 from .implementation_selection import (
@@ -37,24 +37,24 @@ from .implementation_selection import (
 )
 
 if use_accel_jax:
-    from .jax_kernels import build_noise_weighted as build_noise_weighted_jax
-    from .jax_kernels import cov_accum_diag_hits as cov_accum_diag_hits_jax
-    from .jax_kernels import cov_accum_diag_invnpp as cov_accum_diag_invnpp_jax
-    from .jax_kernels import filter_poly2D as filter_poly2D_jax
-    from .jax_kernels import filter_polynomial as filter_polynomial_jax
-    from .jax_kernels import noise_weight as noise_weight_jax
-    from .jax_kernels import pixels_healpix as pixels_healpix_jax
-    from .jax_kernels import pointing_detector as pointing_detector_jax
-    from .jax_kernels import scan_map as scan_map_jax
-    from .jax_kernels import stokes_weights_I as stokes_weights_I_jax
-    from .jax_kernels import stokes_weights_IQU as stokes_weights_IQU_jax
-    from .jax_kernels import (
+    from .jax import build_noise_weighted as build_noise_weighted_jax
+    from .jax import cov_accum_diag_hits as cov_accum_diag_hits_jax
+    from .jax import cov_accum_diag_invnpp as cov_accum_diag_invnpp_jax
+    from .jax import filter_poly2D as filter_poly2D_jax
+    from .jax import filter_polynomial as filter_polynomial_jax
+    from .jax import noise_weight as noise_weight_jax
+    from .jax import pixels_healpix as pixels_healpix_jax
+    from .jax import pointing_detector as pointing_detector_jax
+    from .jax import scan_map as scan_map_jax
+    from .jax import stokes_weights_I as stokes_weights_I_jax
+    from .jax import stokes_weights_IQU as stokes_weights_IQU_jax
+    from .jax import (
         template_offset_add_to_signal as template_offset_add_to_signal_jax,
     )
-    from .jax_kernels import (
+    from .jax import (
         template_offset_apply_diag_precond as template_offset_apply_diag_precond_jax,
     )
-    from .jax_kernels import (
+    from .jax import (
         template_offset_project_signal as template_offset_project_signal_jax,
     )
 else:
@@ -73,24 +73,24 @@ else:
     template_offset_apply_diag_precond_jax = None
     template_offset_project_signal_jax = None
 
-from .python_kernels import build_noise_weighted as build_noise_weighted_python
-from .python_kernels import cov_accum_diag_hits as cov_accum_diag_hits_python
-from .python_kernels import cov_accum_diag_invnpp as cov_accum_diag_invnpp_python
-from .python_kernels import filter_poly2D as filter_poly2D_python
-from .python_kernels import filter_polynomial as filter_polynomial_python
-from .python_kernels import noise_weight as noise_weight_python
-from .python_kernels import pixels_healpix as pixels_healpix_python
-from .python_kernels import pointing_detector as pointing_detector_python
-from .python_kernels import scan_map as scan_map_python
-from .python_kernels import stokes_weights_I as stokes_weights_I_python
-from .python_kernels import stokes_weights_IQU as stokes_weights_IQU_python
-from .python_kernels import (
+from .python import build_noise_weighted as build_noise_weighted_python
+from .python import cov_accum_diag_hits as cov_accum_diag_hits_python
+from .python import cov_accum_diag_invnpp as cov_accum_diag_invnpp_python
+from .python import filter_poly2D as filter_poly2D_python
+from .python import filter_polynomial as filter_polynomial_python
+from .python import noise_weight as noise_weight_python
+from .python import pixels_healpix as pixels_healpix_python
+from .python import pointing_detector as pointing_detector_python
+from .python import scan_map as scan_map_python
+from .python import stokes_weights_I as stokes_weights_I_python
+from .python import stokes_weights_IQU as stokes_weights_IQU_python
+from .python import (
     template_offset_add_to_signal as template_offset_add_to_signal_python,
 )
-from .python_kernels import (
+from .python import (
     template_offset_apply_diag_precond as template_offset_apply_diag_precond_python,
 )
-from .python_kernels import (
+from .python import (
     template_offset_project_signal as template_offset_project_signal_python,
 )
 
