@@ -5,6 +5,6 @@ install(FILES
     __init__.py
     intervals.py
     mutableArray.py
-    gpu_selection.py 
+    device.py 
     DESTINATION ${PYTHON_SITE}/toast/jax
 )
