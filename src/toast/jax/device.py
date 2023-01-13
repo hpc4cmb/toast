@@ -10,10 +10,11 @@ jax_local_device = None
     Or set globally with: `jax.config.update("jax_default_device", jax_local_device)`
 """
 
+
 def jax_accel_assign_device(node_procs, node_rank, disabled):
     """
     Assign processes to target devices.
-    
+
     Args:
         node_procs (int): number of processes per node
         node_rank (int): rank of the current process, within the node
@@ -35,13 +36,18 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
     default_mem_fraction = 0.99
     process_per_device = math.ceil(node_procs / nb_devices)
     mem_fraction = min(default_mem_fraction, default_mem_fraction / process_per_device)
-    os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = f"{mem_fraction:.2f}"
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = f"{mem_fraction:.2f}"
     # displays information on the device picked
     log = Logger.get()
-    log.debug(f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({jax_local_device})")
+    log.debug(
+        f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({jax_local_device})"
+    )
+
 
 def jax_accel_get_device():
     """Returns the device currenlty used by JAX or errors out."""
     if jax_local_device is None:
-        raise RuntimeError("Jax device is not set, please insure that you have called 'accel_assign_device'")
+        raise RuntimeError(
+            "Jax device is not set, please insure that you have called 'accel_assign_device'"
+        )
     return jax_local_device

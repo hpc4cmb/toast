@@ -51,7 +51,7 @@ def stokes_weights_IQU_inner(eps, cal, pin, hwpang):
 
 
 # maps over samples, intervals and detectors
-#stokes_weights_IQU_inner = jax_xmap(
+# stokes_weights_IQU_inner = jax_xmap(
 #    stokes_weights_IQU_inner,
 #    in_axes=[
 #        ["detectors"],  # epsilon
@@ -60,13 +60,20 @@ def stokes_weights_IQU_inner(eps, cal, pin, hwpang):
 #        ["intervals", "interval_size"],
 #    ],  # hwp
 #    out_axes=["detectors", "intervals", "interval_size", ...],
-#)
-# using vmap as the static arguments triggers the following error: 
+# )
+# using vmap as the static arguments triggers the following error:
 # "ShardingContext cannot be used with xmap"
 # TODO revisit once this issue is solved [bug with static argnum](https://github.com/google/jax/issues/10741)
-stokes_weights_IQU_inner = jax.vmap(stokes_weights_IQU_inner, in_axes=[None, None, 0, 0], out_axes=0) # interval_size
-stokes_weights_IQU_inner = jax.vmap(stokes_weights_IQU_inner, in_axes=[None, None, 0, 0], out_axes=0) # intervals
-stokes_weights_IQU_inner = jax.vmap(stokes_weights_IQU_inner, in_axes=[0, None, 0, None], out_axes=0) # detectors
+stokes_weights_IQU_inner = jax.vmap(
+    stokes_weights_IQU_inner, in_axes=[None, None, 0, 0], out_axes=0
+)  # interval_size
+stokes_weights_IQU_inner = jax.vmap(
+    stokes_weights_IQU_inner, in_axes=[None, None, 0, 0], out_axes=0
+)  # intervals
+stokes_weights_IQU_inner = jax.vmap(
+    stokes_weights_IQU_inner, in_axes=[0, None, 0, None], out_axes=0
+)  # detectors
+
 
 def stokes_weights_IQU_interval(
     quat_index,

@@ -6,7 +6,7 @@ from ...accelerator import use_accel_jax
 #    was planned for the compiled kernels, but since the python / jax kernels have
 #    adopted the same names, we need to clean those up too.
 #
-# 2. We can probably automate the namespace imports using attributes of the 
+# 2. We can probably automate the namespace imports using attributes of the
 #    submodules.
 #
 

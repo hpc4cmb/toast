@@ -34,6 +34,7 @@ if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_va
         from ..jax.intervals import INTERVALS_JAX
         from ..jax.mutableArray import MutableJaxArray
         from ..jax.device import jax_accel_get_device, jax_accel_assign_device
+
         use_accel_jax = True
     except ImportError:
         # There could be many possible exceptions...
@@ -52,6 +53,7 @@ if use_accel_omp and use_accel_jax:
 # Wrapper functions that work with either numpy arrays mapped to omp device memory
 # or jax arrays.
 
+
 def accel_enabled():
     """Returns True if any accelerator support is enabled."""
     return use_accel_jax or use_accel_omp
@@ -68,6 +70,7 @@ def accel_get_device():
         log.warning("Accelerator support not enabled, returning device -1")
         return -1
 
+
 def accel_assign_device(node_procs, node_rank, disabled):
     """
     Assign processes to target devices.
@@ -75,7 +78,7 @@ def accel_assign_device(node_procs, node_rank, disabled):
     NOTE:
     One can pick devices visible to processes using Slurm and teh following commands
     `--gpus-per-task=1 --gpu-bind=single:1`
-    
+
     Args:
         node_procs (int): number of processes per node
         node_rank (int): rank of the current process, within the node
@@ -89,6 +92,7 @@ def accel_assign_device(node_procs, node_rank, disabled):
     omp_accel_assign_device(node_procs, node_rank, disabled)
     if use_accel_jax:
         jax_accel_assign_device(node_procs, node_rank, disabled)
+
 
 def accel_data_present(data):
     """Check if data is present on the device.

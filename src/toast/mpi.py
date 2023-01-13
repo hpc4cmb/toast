@@ -56,7 +56,7 @@ if use_accel_omp or use_accel_jax:
         nodecomm.Free()
         del nodecomm
     else:
-        accel_assign_device(node_procs, node_rank, False)       
+        accel_assign_device(node_procs, node_rank, False)
 else:
     # Disabled == True
     accel_assign_device(1, 0, True)
