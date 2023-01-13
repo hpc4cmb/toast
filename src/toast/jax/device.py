@@ -1,3 +1,4 @@
+import os, math
 import jax
 from .._libtoast import Logger
 
@@ -30,6 +31,11 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
     global jax_local_device
     jax_local_device = devices_available[device_id]
     jax.config.update("jax_default_device", jax_local_device)
+    # sets the size of the preallocated memory pool (if it is still possible)
+    default_mem_fraction = 0.99
+    process_per_device = math.ceil(node_procs / nb_devices)
+    mem_fraction = min(default_mem_fraction, default_mem_fraction / process_per_device)
+    os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = f"{mem_fraction:.2f}"
     # displays information on the device picked
     log = Logger.get()
     log.debug(f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({jax_local_device})")
