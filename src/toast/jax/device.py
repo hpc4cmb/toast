@@ -1,9 +1,9 @@
 import jax
+from .._libtoast import Logger
 
-# the device used by JAX on this process
 jax_local_device = None
 """
-    The device that JAX operators should be using
+    The device that JAX operators should be using on this process.
     Use the function `set_JAX_device` to set this value (this should be done during MPI initialization)
     Use like this in your JAX code: `jax.device_put(data, device=jax_local_device)`
     Or set globally with: `jax.config.update("jax_default_device", jax_local_device)`
@@ -19,7 +19,7 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
         disabled (bool): gpu computing is disabled
 
     Returns:
-        None: the device is stored in a backend specific global variable
+        None: the device is stored in the jax_local_device global variable and jax.config
     """
     # list of GPUs / CPUs available
     devices_available = jax.devices()
@@ -30,8 +30,9 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
     global jax_local_device
     jax_local_device = devices_available[device_id]
     jax.config.update("jax_default_device", jax_local_device)
-    # TODO convert this print to a log verbose
-    print(f"DEBUGGING: JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({jax_local_device})")
+    # displays information on the device picked
+    log = Logger.get()
+    log.debug(f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({jax_local_device})")
 
 def jax_accel_get_device():
     """Returns the device currenlty used by JAX or errors out."""
