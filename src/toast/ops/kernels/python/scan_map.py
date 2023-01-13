@@ -35,6 +35,7 @@ def scan_map_interval(
     data_scale,
     should_zero,
     should_subtract,
+    should_scale,
 ):
     """
     Applies scan_map to a given interval.
@@ -49,6 +50,7 @@ def scan_map_interval(
         data_scale (float): unit scalling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
+        should_scale (bool): should we scale the detector data by the map values
 
     Returns:
         det_data
@@ -92,10 +94,11 @@ def scan_map(
     weight_index,
     intervals,
     map_dist,
-    data_scale,
-    should_zero,
-    should_subtract,
-    use_accel,
+    data_scale=1.0,
+    should_zero=False,
+    should_subtract=True,
+    should_scale=False,
+    use_accel=False,
 ):
     """
     Sample a map into a timestream.
@@ -117,10 +120,12 @@ def scan_map(
         data_scale (float): unit scalling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
+        should_scale (bool): should we scale the detector data by the map values
         use_accel (bool): should we use an accelerator
 
     Returns:
         None: det_data is updated in place
+
     """
     # extracts pixel distribution information
     npix_submap = map_dist._n_pix_submap
@@ -157,5 +162,6 @@ def scan_map(
                 data_scale,
                 should_zero,
                 should_subtract,
+                should_scale,
             )
             det_data[d_index, interval_start:interval_end] = new_det_data_interval

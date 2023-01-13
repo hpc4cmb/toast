@@ -18,8 +18,8 @@ class ImplementationType(IntEnum):
 
 def select_implementation_cpu(f_compiled, f_numpy, f_jax):
     """
-    Builds a new function that will select an implementation at runtime depending on its 'implementation_type' input.
-    Adds timers on all kernels.
+    Builds a new function that will select an implementation at runtime depending on
+    its 'implementation_type' input.  Adds timers on all kernels.
     """
     # functions are timed by default
     f_compiled = function_timer(f_compiled)
@@ -45,8 +45,8 @@ def select_implementation_cpu(f_compiled, f_numpy, f_jax):
 
 def select_implementation(f_compiled, f_numpy, f_jax):
     """
-    Builds a new function that will select an implementation at runtime depending on its 'use_accel' and 'implementation_type' inputs.
-    Adds timers on all kernels.
+    Builds a new function that will select an implementation at runtime depending on 
+    its 'use_accel' and 'implementation_type' inputs.  Adds timers on all kernels.
     Adds movement trackers on the GPU kernels.
     """
     # functions are timed by default

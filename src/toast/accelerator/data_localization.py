@@ -6,7 +6,7 @@ from functools import wraps
 from ..accelerator import accel_data_present
 from ..utils import Logger
 
-# --------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # RECORDING CLASS
 
 use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (
@@ -106,7 +106,7 @@ class DataMovementTracker:
         return result
 
 
-# --------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
 # OPERATIONS
 
 dataMovementTracker = DataMovementTracker()

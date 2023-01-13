@@ -93,7 +93,7 @@ class PixelsHealpix(Operator):
                 if not detpointing.has_trait(trt):
                     msg = f"detector_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
-        return detpointing
+        return detpointing  
 
     @traitlets.validate("nside")
     def _check_nside(self, proposal):

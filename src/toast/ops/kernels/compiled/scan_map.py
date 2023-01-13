@@ -22,6 +22,7 @@ def scan_map(
     data_scale,
     should_zero,
     should_subtract,
+    should_scale,
     use_accel,
 ):
     """
@@ -44,6 +45,7 @@ def scan_map(
         data_scale (float): unit scalling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
+        should_scale (bool): should we scale the detector data by the map values
         use_accel (bool): should we use an accelerator
 
     Returns:
@@ -113,6 +115,8 @@ def scan_map(
                 det_data[d_index, interval_start:interval_end] = 0.0
             if should_subtract:
                 det_data[d_index, interval_start:interval_end] -= maptod
+            elif should_scale:
+                det_data[d_index, interval_start:interval_end] *= maptod
             else:
                 det_data[d_index, interval_start:interval_end] += maptod
 

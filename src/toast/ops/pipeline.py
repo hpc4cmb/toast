@@ -40,9 +40,9 @@ class Pipeline(Operator):
     def _check_detsets(self, proposal):
         detsets = proposal["value"]
         if len(detsets) == 0:
-            raise traitlets.TraitError(
-                "detector_sets must be a list with at least one entry ('ALL' and 'SINGLE' are valid entries)"
-            )
+            msg = "detector_sets must be a list with at least one entry "
+            msg += "('ALL' and 'SINGLE' are valid entries)"
+            raise traitlets.TraitError(msg)
         for dset in detsets:
             if (dset != "ALL") and (dset != "SINGLE"):
                 # Not a built-in name, must be an actual list of detectors
@@ -92,14 +92,14 @@ class Pipeline(Operator):
                 comp_dets = set(detectors)
             if accel_enabled() and self.supports_accel():
                 # All our operators support it.
-                msg = f"{self} fully supports accelerators, data to be staged: {self.requires()}"
+                msg = f"{self} fully supports accelerators, data to "
+                msg += f"be staged: {self.requires()}"
                 log.verbose_rank(msg, comm=data.comm.comm_world)
                 use_accel = True
 
-            # those functions are out of the previoustest to appear on the profile independently of the value of use_accel
-            # deletes leftover intermediate values
+            # Deletes leftover intermediate values
             self._delete_intermediates(data, use_accel)
-            # send the requirements to the device
+            # Send the requirements to the device
             self._stage_requirements_to_device(data, use_accel)
 
         if len(data.obs) == 0:
@@ -212,19 +212,19 @@ class Pipeline(Operator):
 
         # Copy out from accelerator if we did the copy in.
         if self._staged_accel:
-            # copy out the outputs to the CPU
+            # Copy out the outputs to the CPU
             prov = self.provides()
             msg = f"{pstr} {self} copying out accel data outputs: {prov}"
             log.verbose(msg)
             data.accel_update_host(prov)
-            # deletes the intermediates from the GPU
-            # otherwise, they will get REused by other pipelines despite still being on GPU
+            # Delete the intermediate products from the GPU.  Otherwise, they will 
+            # get re-used by other pipelines despite still being on GPU.
             interm = self._get_intermediate()
             msg = f"{pstr} {self} deleting accel data intermediate outputs: {interm}"
             log.verbose(msg)
             data.accel_delete(interm)
-            # deletes the inputs
-            # otherwise, they will get REused by other pipelines despite still being on GPU
+            # Delete the inputs.  Otherwise, they will get re-used by other pipelines 
+            # despite still being on GPU.
             req = self.requires()
             msg = f"{pstr} {self} deleting accel data inputs: {req}"
             log.verbose(msg)
@@ -232,9 +232,8 @@ class Pipeline(Operator):
         return result
 
     def _requires(self):
-        # Work through the operator list in reverse order
-        # and prune intermediate products
-        # (that will be provided by a previous operator).
+        # Work through the operator list in reverse order and prune intermediate 
+        # products (that will be provided by a previous operator).
         if self.operators is None:
             return dict()
         keys = ["global", "meta", "detdata", "shared", "intervals"]
@@ -253,8 +252,7 @@ class Pipeline(Operator):
         return req
 
     def _provides(self):
-        # Work through the operator list
-        # and prune intermediate products
+        # Work through the operator list and prune intermediate products
         # (that are be provided to an intermediate operator).
         # FIXME could a final result also be used by an intermediate operator?
         if self.operators is None:
@@ -275,16 +273,15 @@ class Pipeline(Operator):
 
     def _get_intermediate(self):
         keys = ["global", "meta", "detdata", "shared", "intervals"]
-        # full provide minus intermediate
+        # Full provide minus intermediate
         prov = self.provides()
-        # full provide
         interm = {x: set() for x in keys}
         for op in self.operators:
             oprov = op.provides()
             for k in keys:
                 if k in oprov:
                     interm[k] |= set(oprov[k])
-        # deduce intermediate by subtraction
+        # Deduce intermediate by subtraction
         for k in keys:
             interm[k] -= set(prov[k])
             interm[k] = list(interm[k])

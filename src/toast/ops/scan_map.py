@@ -144,10 +144,11 @@ class ScanMap(Operator):
                 weight_indx,
                 intervals,
                 map_dist,
-                data_scale,
-                self.zero,
-                self.subtract,
-                use_accel,
+                data_scale=data_scale,
+                should_zero=self.zero,
+                should_subtract=self.subtract,
+                should_scale=False,
+                use_accel=use_accel,
                 implementation_type=self.kernel_implementation,
             )
 
@@ -393,8 +394,10 @@ class ScanScale(Operator):
                 det_data_indx,
                 intervals,
                 map_dist,
-                should_zero=True,
+                data_scale=1.0,
+                should_zero=False,
                 should_subtract=False,
+                should_scale=True,
                 use_accel=False,
                 implementation_type=self.kernel_implementation,
             )

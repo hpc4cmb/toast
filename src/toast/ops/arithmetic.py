@@ -143,6 +143,3 @@ class Combine(Operator):
         if (self.result != self.first) and (self.result != self.second):
             prov["detdata"].append(self.result)
         return prov
-
-    def _supports_accel(self):
-        return False

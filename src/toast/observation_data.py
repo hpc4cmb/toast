@@ -482,7 +482,7 @@ class DetectorData(AcceleratorObject):
         if use_accel_omp:
             accel_data_delete(self._raw)
         elif use_accel_jax and self._accel_exists():
-            # insures _data has been properly reset
+            # Ensures _data has been properly reset
             # if we observe that its types is still a GPU types
             # does NOT move data back from GPU
             # using _raw should be equivalent
@@ -745,9 +745,9 @@ class DetDataManager(MutableMapping):
             return False
         log = Logger.get()
         result = self._internal[key].accel_exists()
-        log.verbose(
-            f"DetDataMgr {key} type = {type(self._internal[key])} accel_exists = {result}"
-        )
+        msg = f"DetDataMgr {key} type = {type(self._internal[key])} "
+        msg += f"accel_exists = {result}"
+        log.verbose(msg)
         return result
 
     def accel_in_use(self, key):
@@ -844,7 +844,8 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         if not self._internal[key].accel_exists():
-            msg = f"Detector data '{key}' type = {type(self._internal[key])} is not present on device, cannot delete"
+            msg = f"Detector data '{key}' type = {type(self._internal[key])} "
+            msg += f"is not present on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
         log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete")
@@ -1662,9 +1663,9 @@ class SharedDataManager(MutableMapping):
         off = None
         if myrank == fromrank:
             if value.shape != self._internal[key].shdata.shape:
-                raise ValueError(
-                    "When assigning directly to a shared object, the value must have the same dimensions"
-                )
+                msg = "When assigning directly to a shared object, the value "
+                msg += "must have the same dimensions"
+                raise ValueError(msg)
             off = tuple([0 for x in self._internal[key].shdata.shape])
         self._internal[key].shdata.set(value, offset=off, fromrank=fromrank)
 

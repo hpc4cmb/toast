@@ -90,7 +90,7 @@ class Copy(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         for ob in data.obs:
             if self.meta is not None:
@@ -183,6 +183,3 @@ class Copy(Operator):
         if self.intervals is not None:
             prov["intervals"] = [x[1] for x in self.intervals]
         return prov
-
-    def _supports_accel(self):
-        return False

@@ -223,16 +223,13 @@ class TemplateMatrix(Operator):
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
                 if use_accel:
+                    # We are running on the accelerate, so our output data must exist
+                    # on the device and will be used there.
                     data[self.amplitudes].accel_create()
-                    # FIXME: That data movement is required to insure that the systems knows data is on gpu not host
-                    #        otherwise a test fail when using the gpu flag
                     data[self.amplitudes].accel_update_device()
             elif use_accel and (not data[self.amplitudes].accel_exists()):
-                # deals with the case where amplitudes are already in data but NOT in accel
-                # FIXME this happens in pipeline ['TemplateMatrix', 'PixelsHealpix', 'StokesWeights', 'ScanMap', 'NoiseWeight', 'TemplateMatrix']
-                log.warning(
-                    f"TemplateMatrix: use_accel=True but amplitudes ('{self.amplitudes}') are on CPU."
-                )
+                # Our templates are using the accelerator to accumulate amplitudes.
+                # Ensure that the amplitudes are on the device.
                 data[self.amplitudes].accel_create()
                 data[self.amplitudes].accel_update_device()
             for d in all_dets:

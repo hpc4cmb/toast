@@ -306,7 +306,7 @@ class AcceleratorObject(object):
         self._accel_create()
 
     def _accel_update_device(self):
-        msg = f"The _accel_create function was not defined for this class."
+        msg = f"The _accel_update_device function was not defined for this class."
         raise RuntimeError(msg)
 
     def accel_update_device(self):
@@ -334,7 +334,8 @@ class AcceleratorObject(object):
         self.accel_used(True)
 
     def _accel_update_host(self):
-        pass
+        msg = f"The _accel_update_host function was not defined for this class."
+        raise RuntimeError(msg)
 
     def accel_update_host(self):
         """Copy the data to the host from the accelerator.
@@ -359,7 +360,8 @@ class AcceleratorObject(object):
         self.accel_used(False)
 
     def _accel_delete(self):
-        pass
+        msg = f"The _accel_delete function was not defined for this class."
+        raise RuntimeError(msg)
 
     def accel_delete(self):
         """Delete the data from the accelerator.

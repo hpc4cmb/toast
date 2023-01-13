@@ -38,6 +38,7 @@ def scan_map_inner(
     data_scale,
     should_zero,
     should_subtract,
+    should_scale,
 ):
     """
     Applies scan_map to a given interval.
@@ -52,6 +53,7 @@ def scan_map_inner(
         data_scale (float): unit rescaling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
+        should_scale (bool): should we scale the detector data by the map values
 
     Returns:
         det_data
@@ -71,8 +73,12 @@ def scan_map_inner(
     # updates det_data and returns
     if should_zero:
         det_data = jnp.zeros_like(det_data)
-    return (det_data - update) if should_subtract else (det_data + update)
-
+    if should_subtract:
+        return det_data - update
+    elif should_scale:
+        return det_data * update
+    else:
+        return det_data + update
 
 # maps over intervals and detectors
 # scan_map_inner = jax_xmap(scan_map_inner,
@@ -116,6 +122,7 @@ def scan_map_interval(
     data_scale,
     should_zero,
     should_subtract,
+    should_scale,
 ):
     """
     Process all the intervals as a block.
@@ -137,6 +144,7 @@ def scan_map_interval(
         data_scale (float): unit scaling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
+        should_scale (bool): should we scale the detector data by the map values
 
     Returns:
         det_data (array, float): size ???*n_samp
@@ -180,6 +188,7 @@ def scan_map_interval(
         data_scale,
         should_zero,
         should_subtract,
+        should_scale,
     )
 
     # updates results and returns
@@ -215,10 +224,11 @@ def scan_map(
     weight_index,
     intervals,
     map_dist,
-    data_scale,
-    should_zero,
-    should_subtract,
-    use_accel,
+    data_scale=1.0,
+    should_zero=False,
+    should_subtract=True,
+    should_scale=False,
+    use_accel=False,
 ):
     """
     Sample a map into a timestream.
@@ -278,6 +288,7 @@ def scan_map(
         data_scale,
         should_zero,
         should_subtract,
+        should_scale,
     )
 
 
