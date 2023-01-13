@@ -8,6 +8,7 @@ from .._libtoast import Logger
 from .._libtoast import accel_create as omp_accel_create
 from .._libtoast import accel_delete as omp_accel_delete
 from .._libtoast import accel_enabled as omp_accel_enabled
+from .._libtoast import accel_assign_device as omp_accel_assign_device
 from .._libtoast import accel_get_device as omp_accel_get_device
 from .._libtoast import accel_present as omp_accel_present
 from .._libtoast import accel_update_device as omp_accel_update_device
@@ -30,9 +31,10 @@ use_accel_jax = False
 if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_vals):
     try:
         import jax
-
         from ..jax.intervals import INTERVALS_JAX
         from ..jax.mutableArray import MutableJaxArray
+        from ..jax.device import jax_accel_get_device, jax_accel_assign_device
+
         use_accel_jax = True
     except ImportError:
         # There could be many possible exceptions...
@@ -48,36 +50,48 @@ if use_accel_omp and use_accel_jax:
     log.error(msg)
     raise RuntimeError(msg)
 
-
-# This stores the assigned jax device for this process, computed during
-# MPI initialization.
-jax_local_device = None
-
 # Wrapper functions that work with either numpy arrays mapped to omp device memory
 # or jax arrays.
+
 
 def accel_enabled():
     """Returns True if any accelerator support is enabled."""
     return use_accel_jax or use_accel_omp
 
-def accel_set_device_jax(dev):
-    """Set the jax device in use."""
-    global jax_local_device
-    jax_local_device = dev
 
 def accel_get_device():
     """Return the device ID assigned to this process."""
-    global jax_local_device
     if use_accel_omp:
         return omp_accel_get_device()
     elif use_accel_jax:
-        if jax_local_device is None:
-            raise RuntimeError("Jax device is not set!")
-        return jax_local_device
+        return jax_accel_get_device()
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, returning device -1")
         return -1
+
+
+def accel_assign_device(node_procs, node_rank, disabled):
+    """
+    Assign processes to target devices.
+
+    NOTE:
+    One can pick devices visible to processes using Slurm and teh following commands
+    `--gpus-per-task=1 --gpu-bind=single:1`
+
+    Args:
+        node_procs (int): number of processes per node
+        node_rank (int): rank of the current process, within the node
+        disabled (bool): gpu computing is disabled
+
+    Returns:
+        None: the device is stored in a backend specific global variable
+    """
+    # FIXME some functions (such as poiting_detector) require the omp device to have been assigned
+    # so it should be called even when using JAX or running on CPU
+    omp_accel_assign_device(node_procs, node_rank, disabled)
+    if use_accel_jax:
+        jax_accel_assign_device(node_procs, node_rank, disabled)
 
 
 def accel_data_present(data):

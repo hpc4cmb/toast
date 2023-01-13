@@ -32,16 +32,28 @@ def pointing_detector_inner(focalplane, boresight, flag, mask):
 
 
 # maps over intervals and detectors
-pointing_detector_inner = jax_xmap(
-    pointing_detector_inner,
-    in_axes=[
-        ["detectors", ...],  # focalplane
-        ["intervals", "interval_size", ...],  # boresight
-        ["intervals", "interval_size"],  # flags
-        [...],
-    ],  # mask
-    out_axes=["detectors", "intervals", "interval_size", ...],
-)
+# pointing_detector_inner = jax_xmap(
+#    pointing_detector_inner,
+#    in_axes=[
+#        ["detectors", ...],  # focalplane
+#        ["intervals", "interval_size", ...],  # boresight
+#        ["intervals", "interval_size"],  # flags
+#        [...],
+#    ],  # mask
+#    out_axes=["detectors", "intervals", "interval_size", ...],
+# )
+# using vmap as the static arguments triggers the following error:
+# "ShardingContext cannot be used with xmap"
+# TODO revisit once this issue is solved [bug with static argnum](https://github.com/google/jax/issues/10741)
+pointing_detector_inner = jax.vmap(
+    pointing_detector_inner, in_axes=[None, 0, 0, None], out_axes=0
+)  # interval_size
+pointing_detector_inner = jax.vmap(
+    pointing_detector_inner, in_axes=[None, 0, 0, None], out_axes=0
+)  # intervals
+pointing_detector_inner = jax.vmap(
+    pointing_detector_inner, in_axes=[0, None, None, None], out_axes=0
+)  # detectors
 
 
 def pointing_detector_interval(

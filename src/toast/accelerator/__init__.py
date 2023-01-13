@@ -8,7 +8,7 @@ from .accel import (
     use_accel_omp,
     use_accel_jax,
     accel_enabled,
-    accel_set_device_jax,
+    accel_assign_device,
     accel_get_device,
     accel_data_create,
     accel_data_present,
