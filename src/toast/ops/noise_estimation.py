@@ -173,7 +173,7 @@ class NoiseEstim(Operator):
     )
 
     pairs = List(
-        default_value=None,
+        # default_value=None,
         trait=Tuple,
         allow_none=True,
         help="Detector pairs to estimate noise for.  Overrides `nosingle` and `nocross`",
