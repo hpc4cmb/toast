@@ -550,13 +550,13 @@ class HorizontalPatch(Patch):
         elif azmin >= np.pi and azmax >= np.pi:
             self.rising = False
         else:
-            raise RuntimeError("Horizontal patch must either be rising or setting.")
-        self.az_min = azmin
-        self.az_max = azmax
+            # This patch is being observed across the meridian
+            self.rising = None
+        self.az_min = azmin % (2 * np.pi)
+        self.az_max = azmax % (2 * np.pi)
         self.el = el
         # scan time is the maximum time spent on this scan before targeting again
         self.scantime = scantime  # in minutes.
-        self.scandrift = scantime / 60 * 15 * degree
 
         self.el_min0 = el
         self.el_min = el
@@ -566,7 +566,47 @@ class HorizontalPatch(Patch):
         self._area = 0
         self.el_max = self.el_max0
         self.el_lim = self.el_min0
+        self.time = 0
+        self.hits = 0
         return
+
+    # The HorizontalPatch objects make no distinction between rising and setting scans
+
+    @property
+    def rising_time(self):
+        return self.time
+
+    @rising_time.setter
+    def rising_time(self, value):
+        # self.time += value
+        pass
+
+    @property
+    def setting_time(self):
+        return self.time
+
+    @setting_time.setter
+    def setting_time(self, value):
+        # self.time += value
+        pass
+
+    @property
+    def rising_hits(self):
+        return self.hits
+
+    @rising_hits.setter
+    def rising_hits(self, value):
+        # self.hits += value
+        pass
+
+    @property
+    def setting_hits(self):
+        return self.hits
+
+    @setting_hits.setter
+    def setting_hits(self, value):
+        # self.hits += value
+        pass
 
     def get_area(self, observer, nside=32, equalize=False):
         return 1
@@ -576,17 +616,26 @@ class HorizontalPatch(Patch):
         els = [self.el_min, self.el_max]
         return np.array(azs), np.array(els)
 
-    def in_patch(self, obj, angle=0, el_min=-90):
+    def in_patch(self, obj, angle=0, el_min=-90, observer=None):
         if angle == 0:
             return False
-        azmin = obj.az - angle
-        azmax = obj.az + angle
-        elmin = obj.alt - angle
-        elmax = obj.alt + angle
-        if self.rising:
-            elmax += self.scandrift
-        else:
-            elmin -= self.scandrift
+        azmin = obj.az
+        azmax = obj.az
+        elmin = obj.alt
+        elmax = obj.alt
+        if observer is not None:
+            observer2 = observer.copy()
+            obj2 = obj.copy()
+            observer2.date += self.scantime / 1440
+            obj2.compute(observer2)
+            azmin = min(azmin, obj2.az)
+            azmax = max(azmax, obj2.az)
+            elmin = min(elmin, obj2.alt)
+            elmax = max(elmax, obj2.alt)
+        azmin -= angle / np.sin(obj.alt)
+        azmax += angle / np.sin(obj.alt)
+        elmin -= angle
+        elmax += angle
         if (
             azmin > self.az_min
             and azmax < self.az_max
@@ -617,7 +666,7 @@ class HorizontalPatch(Patch):
                 (sun, sun_avoidance_angle, "Sun"),
                 (moon, moon_avoidance_angle, "Moon"),
             ]:
-                if self.in_patch(sso, angle=angle):
+                if self.in_patch(sso, angle=angle, observer=observer):
                     in_view = False
                     msg += f"{name} too close;"
 
@@ -1667,14 +1716,14 @@ def add_scan(
                 t2 += add_t
         # Add the focal plane radius to the scan width
         fp_radius_eff = fp_radius / np.cos(el)
-        azmin = (azmin - fp_radius_eff) % (2 * np.pi) / degree
-        azmax = (azmax + fp_radius_eff) % (2 * np.pi) / degree
+        azmin = np.degrees((azmin - fp_radius_eff) % (2 * np.pi))
+        azmax = np.degrees((azmax + fp_radius_eff) % (2 * np.pi))
         # Get the Sun and Moon locations at the beginning and end
         observer.date = to_DJD(t1)
         sun.compute(observer)
         moon.compute(observer)
-        sun_az1, sun_el1 = sun.az / degree, sun.alt / degree
-        moon_az1, moon_el1 = moon.az / degree, moon.alt / degree
+        sun_az1, sun_el1 = np.degrees(sun.az), np.degrees(sun.alt)
+        moon_az1, moon_el1 = np.degrees(moon.az), np.degrees(moon.alt)
         moon_phase1 = moon.phase
         # It is possible that the Sun or the Moon gets too close to the
         # scan, even if they are far enough from the actual patch.
@@ -1682,7 +1731,7 @@ def add_scan(
             observer,
             azmin,
             azmax,
-            el / degree,
+            np.degrees(el),
             sun,
             args.sun_avoidance_angle_deg,
             args.sun_avoidance_altitude_deg,
@@ -1693,7 +1742,7 @@ def add_scan(
             observer,
             azmin,
             azmax,
-            el / degree,
+            np.degrees(el),
             moon,
             args.moon_avoidance_angle_deg,
             args.moon_avoidance_altitude_deg,
