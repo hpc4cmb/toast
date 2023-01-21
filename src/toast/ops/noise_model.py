@@ -10,7 +10,7 @@ from scipy.optimize import curve_fit, least_squares
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 

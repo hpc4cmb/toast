@@ -14,7 +14,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Unicode, Unit, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete

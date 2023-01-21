@@ -17,7 +17,7 @@ from ..data import Data
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Dict, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, trait_docs
 from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
 from .operator import Operator
 from .pointing import BuildPixelDistribution

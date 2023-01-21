@@ -5,10 +5,9 @@
 import numpy as np
 import traitlets
 
-from .. import qarray as qa
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, List, Unicode, trait_docs
+from ..traits import Int, List, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 
@@ -28,9 +27,7 @@ class FlagIntervals(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    view_mask = List(
-        None, allow_none=True, help="List of tuples of (view name, bit mask)"
-    )
+    view_mask = List([], help="List of tuples of (view name, bit mask)")
 
     shared_flags = Unicode(
         defaults.shared_flags,
@@ -65,13 +62,16 @@ class FlagIntervals(Operator):
         log = Logger.get()
 
         if self.shared_flags is None:
-            if data.comm.world_rank == 0:
-                log.debug("shared_flags trait is None, nothing to do.")
+            log.debug_rank(
+                "shared_flags trait is None, nothing to do.", comm=data.comm.comm_world
+            )
             return
 
         if self.view_mask is None or len(self.view_mask) == 0:
-            if data.comm.world_rank == 0:
-                log.debug("view_mask trait is empty or not set, nothing to do.")
+            log.debug_rank(
+                "view_mask trait is empty or not set, nothing to do.",
+                comm=data.comm.world_comm,
+            )
             return
 
         fdtype = None

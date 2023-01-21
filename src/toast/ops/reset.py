@@ -7,7 +7,7 @@ import numbers
 import traitlets
 
 from ..timing import function_timer
-from ..traits import Int, List, Unicode, trait_docs
+from ..traits import Int, List, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -28,21 +28,14 @@ class Reset(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    meta = List(
-        None, allow_none=True, help="List of Observation dictionary keys to reset"
-    )
+    meta = List([], help="List of Observation dictionary keys to reset")
 
-    detdata = List(
-        None, allow_none=True, help="List of Observation detdata keys to reset"
-    )
+    detdata = List([], help="List of Observation detdata keys to reset")
 
-    shared = List(
-        None, allow_none=True, help="List of Observation shared keys to reset"
-    )
+    shared = List([], help="List of Observation shared keys to reset")
 
     intervals = List(
-        None,
-        allow_none=True,
+        [],
         help="List of tuples of Observation intervals keys to reset",
     )
 
@@ -53,7 +46,7 @@ class Reset(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         for ob in data.obs:
-            if self.detdata is not None:
+            if len(self.detdata) > 0:
                 # Get the detectors we are using for this observation
                 dets = ob.select_local_detectors(detectors)
                 if len(dets) == 0:
@@ -62,41 +55,38 @@ class Reset(Operator):
                 for key in self.detdata:
                     for d in dets:
                         ob.detdata[key][d, :] = 0
-            if self.shared is not None:
-                for key in self.shared:
-                    scomm = ob.shared[key].nodecomm
-                    if scomm is None:
-                        # No MPI, just set to zero
-                        ob.shared[key].data[:] = 0
-                    else:
-                        # Only rank zero on each node resets
-                        if scomm.rank == 0:
-                            ob.shared[key]._flat[:] = 0
-                        scomm.barrier()
-            if self.intervals is not None:
-                for key in self.intervals:
-                    # This ignores non-existant keys
-                    del ob.intervals[key]
-            if self.meta is not None:
-                for key in self.meta:
-                    if isinstance(ob[key], np.ndarray):
-                        # This is an array, set to zero
-                        ob[key][:] = 0
-                    elif hasattr(ob[key], "clear"):
-                        # This is some kind of container (list, dict, etc).  Clear it.
-                        ob[key].clear()
-                    elif isinstance(ob[key], bool):
-                        # Boolean scalar, set to False
-                        ob[key] = False
-                    elif isinstance(ob[key], numbers.Number):
-                        # This is a scalar numeric value
-                        ob[key] = 0
-                    elif isinstance(ob[key], (str, bytes)):
-                        # This is string-like
-                        ob[key] = ""
-                    else:
-                        # This is something else.  Set to None
-                        ob[key] = None
+            for key in self.shared:
+                scomm = ob.shared[key].nodecomm
+                if scomm is None:
+                    # No MPI, just set to zero
+                    ob.shared[key].data[:] = 0
+                else:
+                    # Only rank zero on each node resets
+                    if scomm.rank == 0:
+                        ob.shared[key]._flat[:] = 0
+                    scomm.barrier()
+            for key in self.intervals:
+                # This ignores non-existant keys
+                del ob.intervals[key]
+            for key in self.meta:
+                if isinstance(ob[key], np.ndarray):
+                    # This is an array, set to zero
+                    ob[key][:] = 0
+                elif hasattr(ob[key], "clear"):
+                    # This is some kind of container (list, dict, etc).  Clear it.
+                    ob[key].clear()
+                elif isinstance(ob[key], bool):
+                    # Boolean scalar, set to False
+                    ob[key] = False
+                elif isinstance(ob[key], numbers.Number):
+                    # This is a scalar numeric value
+                    ob[key] = 0
+                elif isinstance(ob[key], (str, bytes)):
+                    # This is string-like
+                    ob[key] = ""
+                else:
+                    # This is something else.  Set to None
+                    ob[key] = None
         return
 
     def _finalize(self, data, **kwargs):

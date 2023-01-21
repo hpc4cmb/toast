@@ -18,11 +18,9 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import (
-    Bool,
     Float,
     Instance,
     Int,
-    List,
     Quantity,
     Unicode,
     Unit,

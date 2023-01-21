@@ -14,7 +14,7 @@ from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger, name_UID
 from .operator import Operator
 

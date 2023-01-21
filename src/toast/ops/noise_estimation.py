@@ -23,7 +23,6 @@ from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import (
     Bool,
-    Dict,
     Instance,
     Int,
     List,
@@ -173,9 +172,7 @@ class NoiseEstim(Operator):
     )
 
     pairs = List(
-        # default_value=None,
-        trait=Tuple,
-        allow_none=True,
+        [],
         help="Detector pairs to estimate noise for.  Overrides `nosingle` and `nocross`",
     )
 
@@ -303,7 +300,7 @@ class NoiseEstim(Operator):
         # this block of code to working on a data view with a single observation
         # that is already re-distributed below.
         if self.focalplane_key is not None:
-            if self.pairs is not None:
+            if len(self.pairs) > 0:
                 msg = "focalplane_key is not compatible with pairs"
                 raise RuntimeError(msg)
             # Measure the averages of the signal across the focalplane.
@@ -374,7 +371,7 @@ class NoiseEstim(Operator):
                 det2key = None
                 det_names = obs.all_detectors
                 ndet = len(det_names)
-                if self.pairs is not None:
+                if len(self.pairs) > 0:
                     pairs = self.pairs
                 else:
                     # Construct a list of detector pairs

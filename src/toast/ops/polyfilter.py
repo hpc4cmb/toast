@@ -16,7 +16,7 @@ from .._libtoast import filter_poly2D, filter_polynomial, subtract_mean, sum_det
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Int, Unicode, trait_docs
 from ..utils import (
     AlignedF64,
     AlignedU8,
