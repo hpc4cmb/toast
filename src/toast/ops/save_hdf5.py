@@ -32,17 +32,17 @@ class SaveHDF5(Operator):
     # FIXME:  We should add a filtering mechanism here to dump a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
 
-    meta = List(list(), allow_none=True, help="Only save this list of meta objects")
+    meta = List([], allow_none=True, help="Only save this list of meta objects")
 
-    detdata = List(list(), help="Only save this list of detdata objects")
+    detdata = List([], help="Only save this list of detdata objects")
 
-    shared = List(list(), help="Only save this list of shared objects")
+    shared = List([], help="Only save this list of shared objects")
 
-    intervals = List(list(), help="Only save this list of intervals objects")
+    intervals = List([], help="Only save this list of intervals objects")
 
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
-    config = Dict(dict(), help="Write this job config to the file")
+    config = Dict({}, help="Write this job config to the file")
 
     force_serial = Bool(
         False, help="Use serial HDF5 operations, even if parallel support available"

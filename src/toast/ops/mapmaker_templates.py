@@ -37,9 +37,7 @@ class TemplateMatrix(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    templates = List(
-        None, allow_none=True, help="This should be a list of Template instances"
-    )
+    templates = List([], help="This should be a list of Template instances")
 
     amplitudes = Unicode(None, allow_none=True, help="Data key for template amplitudes")
 
@@ -70,8 +68,6 @@ class TemplateMatrix(Operator):
     @traitlets.validate("templates")
     def _check_templates(self, proposal):
         temps = proposal["value"]
-        if temps is None:
-            return temps
         for tp in temps:
             if not isinstance(tp, Template):
                 raise traitlets.TraitError(
@@ -178,6 +174,13 @@ class TemplateMatrix(Operator):
             raise RuntimeError(
                 "You must set the amplitudes trait before calling exec()"
             )
+
+        if len(self.templates) == 0:
+            log.debug_rank(
+                "No templates in TemplateMatrix, nothing to do",
+                comm=data.comm.comm_world,
+            )
+            return
 
         # On the first call, we initialize all templates using the Data instance and
         # the fixed options for view, flagging, etc.

@@ -220,7 +220,7 @@ class SimGround(Operator):
 
     elnod_end = Bool(False, help="Perform an el-nod after the scan")
 
-    elnods = List(list(), help="List of relative el_nods")
+    elnods = List([], help="List of relative el_nods")
 
     elnod_every_scan = Bool(False, help="Perform el nods every scan")
 

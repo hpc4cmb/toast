@@ -51,16 +51,12 @@ class FlagSSO(Operator):
     det_flag_mask = Int(defaults.det_mask_sso, help="Bit mask to raise flags with")
 
     sso_names = List(
-        # default_value=["Sun", "Moon"],
-        trait=Unicode,
-        allow_none=True,
+        [],
         help="Names of the SSOs, must be recognized by pyEphem",
     )
 
     sso_radii = List(
-        # default_value=[45.0 * u.deg, 5.0 * u.deg],
-        trait=Quantity,
-        allow_none=True,
+        [],
         help="Radii around the sources to flag",
     )
 
@@ -99,16 +95,16 @@ class FlagSSO(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        env = Environment.get()
         log = Logger.get()
-
-        for trait in "sso_names", "sso_radii":
-            if getattr(self, trait) is None:
-                msg = f"You must set the '{trait}' trait before calling exec()"
-                raise RuntimeError(msg)
 
         if len(self.sso_names) != len(self.sso_radii):
             raise RuntimeError("Each SSO must have a radius")
+
+        if len(self.sso_names) == 0:
+            log.debug_rank(
+                "Empty sso_names, nothing to flag", comm=data.comm.comm_world
+            )
+            return
 
         self.ssos = []
         for sso_name in self.sso_names:

@@ -37,13 +37,13 @@ class LoadHDF5(Operator):
     # FIXME:  We should add a filtering mechanism here to load a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
 
-    meta = List(list(), help="Only load this list of meta objects")
+    meta = List([], help="Only load this list of meta objects")
 
-    detdata = List(list(), help="Only load this list of detdata objects")
+    detdata = List([], help="Only load this list of detdata objects")
 
-    shared = List(list(), help="Only load this list of shared objects")
+    shared = List([], help="Only load this list of shared objects")
 
-    intervals = List(list(), help="Only load this list of intervals objects")
+    intervals = List([], help="Only load this list of intervals objects")
 
     sort_by_size = Bool(
         False, help="If True, sort observations by size before load balancing"

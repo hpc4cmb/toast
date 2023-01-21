@@ -5,7 +5,7 @@
 import traitlets
 
 from ..timing import function_timer
-from ..traits import Int, List, Unicode, trait_docs
+from ..traits import Int, List, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -23,21 +23,14 @@ class Delete(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    meta = List(
-        None, allow_none=True, help="List of Observation dictionary keys to delete"
-    )
+    meta = List([], help="List of Observation dictionary keys to delete")
 
-    detdata = List(
-        None, allow_none=True, help="List of Observation detdata keys to delete"
-    )
+    detdata = List([], help="List of Observation detdata keys to delete")
 
-    shared = List(
-        None, allow_none=True, help="List of Observation shared keys to delete"
-    )
+    shared = List([], help="List of Observation shared keys to delete")
 
     intervals = List(
-        None,
-        allow_none=True,
+        [],
         help="List of tuples of Observation intervals keys to delete",
     )
 
@@ -48,24 +41,20 @@ class Delete(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         for ob in data.obs:
-            if self.detdata is not None:
-                for key in self.detdata:
-                    # This ignores non-existant keys
-                    del ob.detdata[key]
-            if self.shared is not None:
-                for key in self.shared:
-                    # This ignores non-existant keys
-                    del ob.shared[key]
-            if self.intervals is not None:
-                for key in self.intervals:
-                    # This ignores non-existant keys
-                    del ob.intervals[key]
-            if self.meta is not None:
-                for key in self.meta:
-                    try:
-                        del ob[key]
-                    except KeyError:
-                        pass
+            for key in self.detdata:
+                # This ignores non-existant keys
+                del ob.detdata[key]
+            for key in self.shared:
+                # This ignores non-existant keys
+                del ob.shared[key]
+            for key in self.intervals:
+                # This ignores non-existant keys
+                del ob.intervals[key]
+            for key in self.meta:
+                try:
+                    del ob[key]
+                except KeyError:
+                    pass
         return
 
     def _finalize(self, data, **kwargs):

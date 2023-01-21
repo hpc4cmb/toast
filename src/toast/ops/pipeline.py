@@ -9,7 +9,7 @@ import traitlets
 from ..accelerator import use_accel_jax, use_accel_omp
 from ..data import Data
 from ..timing import function_timer
-from ..traits import Int, List, Unicode, trait_docs
+from ..traits import Int, List, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -29,7 +29,7 @@ class Pipeline(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    operators = List(allow_none=True, help="List of Operator instances to run.")
+    operators = List([], help="List of Operator instances to run.")
 
     detector_sets = List(
         ["ALL"],
@@ -60,8 +60,6 @@ class Pipeline(Operator):
     @traitlets.validate("operators")
     def _check_operators(self, proposal):
         ops = proposal["value"]
-        if ops is None:
-            return ops
         for op in ops:
             if not isinstance(op, Operator):
                 raise traitlets.TraitError(
@@ -71,12 +69,19 @@ class Pipeline(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._staged_accel = False
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
+
+        if len(self.operators) == 0:
+            log.debug_rank(
+                "Pipeline has no operators, nothing to do", comm=data.comm.comm_world
+            )
+            return
 
         # By default, if the calling code passed use_accel=True, then we assume the
         # data staging is being handled at a higher level.

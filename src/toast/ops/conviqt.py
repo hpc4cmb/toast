@@ -190,8 +190,7 @@ class SimConviqt(Operator):
     )
 
     sky_file_dict = Dict(
-        None,
-        allow_none=True,
+        {},
         help="Dictionary of files containing the sky a_lm expansions. An entry for "
         "each detector name must be present. If provided, supersedes `sky_file`.",
     )
@@ -204,8 +203,7 @@ class SimConviqt(Operator):
     )
 
     beam_file_dict = Dict(
-        None,
-        allow_none=True,
+        {},
         help="Dictionary of files containing the beam a_lm expansions. An entry for "
         "each detector name must be present. If provided, supersedes `beam_file`.",
     )
