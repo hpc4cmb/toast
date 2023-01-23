@@ -24,7 +24,7 @@ from ._helpers import (
     create_fake_sky,
     create_ground_data,
     create_outdir,
-    create_space_telescope,
+    plot_wcs_maps,
 )
 from .mpi import MPITestCase
 
@@ -34,7 +34,7 @@ class PointingWCSTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         # For debugging, change this to True
-        self.write_extra = True
+        self.write_extra = False
 
     def check_hits(self, prefix, pixels):
         wcs = pixels.wcs
@@ -151,59 +151,6 @@ class PointingWCSTest(MPITestCase):
                 if self.comm is not None:
                     self.comm.barrier()
 
-    def plot_maps(self, hitfile=None, mapfile=None):
-        figsize = (8, 8)
-        figdpi = 100
-
-        def plot_single(wcs, hdata, hindx, vmin, vmax, out):
-            set_matplotlib_backend()
-
-            import matplotlib.pyplot as plt
-
-            fig = plt.figure(figsize=figsize, dpi=figdpi)
-            ax = fig.add_subplot(projection=wcs, slices=("x", "y", hindx))
-            im = ax.imshow(np.transpose(hdu.data[hindx, :, :]), cmap="jet")
-            ax.grid(color="white", ls="solid")
-            ax.set_xlabel("Longitude")
-            ax.set_ylabel("Latitude")
-            plt.colorbar(im, orientation="vertical")
-            plt.savefig(out, format="pdf")
-            plt.close()
-
-        def map_range(hdata):
-            minval = np.amin(hdata)
-            maxval = np.amax(hdata)
-            margin = 0.1 * (maxval - minval)
-            if margin == 0:
-                margin = -1
-            minval += margin
-            maxval -= margin
-            return minval, maxval
-
-        if hitfile is not None:
-            hdu = af.open(hitfile)[0]
-            wcs = WCS(hdu.header)
-            maxhits = np.amax(hdu.data[0, :, :])
-            plot_single(wcs, hdu, 0, 0, maxhits, f"{hitfile}.pdf")
-
-        if mapfile is not None:
-            hdu = af.open(mapfile)[0]
-            wcs = WCS(hdu.header)
-
-            mmin, mmax = map_range(hdu.data[0, :, :])
-            plot_single(wcs, hdu, 0, mmin, mmax, f"{mapfile}_I.pdf")
-            try:
-                mmin, mmax = map_range(hdu.data[1, :, :])
-                plot_single(wcs, hdu, 1, mmin, mmax, f"{mapfile}_Q.pdf")
-            except:
-                pass
-
-            try:
-                mmin, mmax = map_range(hdu.data[2, :, :])
-                plot_single(wcs, hdu, 2, mmin, mmax, f"{mapfile}_U.pdf")
-            except:
-                pass
-
     def test_mapmaking(self):
         rank = 0
         if self.comm is not None:
@@ -252,7 +199,7 @@ class PointingWCSTest(MPITestCase):
                 outfile = os.path.join(self.outdir, f"mapmaking_{proj}_input.fits")
                 write_wcs_fits(data["fake_map"], outfile)
                 if rank == 0:
-                    self.plot_maps(mapfile=outfile)
+                    plot_wcs_maps(mapfile=outfile)
             if data.comm.comm_world is not None:
                 data.comm.comm_world.barrier()
 
@@ -335,10 +282,10 @@ class PointingWCSTest(MPITestCase):
 
                 if rank == 0:
                     outfile = os.path.join(self.outdir, f"mapmaking_{proj}_hits.fits")
-                    self.plot_maps(hitfile=outfile)
+                    plot_wcs_maps(hitfile=outfile)
 
                     outfile = os.path.join(self.outdir, f"mapmaking_{proj}_map.fits")
-                    self.plot_maps(mapfile=outfile)
+                    plot_wcs_maps(mapfile=outfile)
 
             close_data(data)
 
@@ -383,7 +330,7 @@ class PointingWCSTest(MPITestCase):
             outfile = os.path.join(self.outdir, f"source_{proj}_input.fits")
             write_wcs_fits(data["fake_map"], outfile)
             if data.comm.world_rank == 0:
-                self.plot_maps(mapfile=outfile)
+                plot_wcs_maps(mapfile=outfile)
 
         weights = ops.StokesWeights(
             mode="IQU",
@@ -513,9 +460,9 @@ class PointingWCSTest(MPITestCase):
             mapper.apply(data)
             if data.comm.world_rank == 0:
                 outfile = os.path.join(self.outdir, f"source_{proj}_notrack_hits.fits")
-                self.plot_maps(hitfile=outfile)
+                plot_wcs_maps(hitfile=outfile)
                 outfile = os.path.join(self.outdir, f"source_{proj}_notrack_map.fits")
-                self.plot_maps(mapfile=outfile)
+                plot_wcs_maps(mapfile=outfile)
 
         # Cleanup our temp objects
         ops.Delete(
@@ -617,10 +564,10 @@ class PointingWCSTest(MPITestCase):
 
             if rank == 0:
                 outfile = os.path.join(self.outdir, f"source_{proj}_hits.fits")
-                self.plot_maps(hitfile=outfile)
+                plot_wcs_maps(hitfile=outfile)
                 outfile = os.path.join(self.outdir, f"source_{proj}_map.fits")
-                self.plot_maps(mapfile=outfile)
+                plot_wcs_maps(mapfile=outfile)
                 outfile = os.path.join(self.outdir, f"source_{proj}_binmap.fits")
-                self.plot_maps(mapfile=outfile)
+                plot_wcs_maps(mapfile=outfile)
 
             close_data(data)

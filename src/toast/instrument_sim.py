@@ -1018,7 +1018,7 @@ def plot_focalplane(
             boresight X/Y/Z.
 
     Returns:
-        None
+        (Figure):  The figure.
 
     """
     if focalplane is None:

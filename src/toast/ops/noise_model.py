@@ -2,15 +2,18 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import types
+
 import numpy as np
 import traitlets
 from astropy import units as u
-from scipy.optimize import curve_fit, least_squares
+from scipy.optimize import Bounds, curve_fit, least_squares
 
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
+from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Int, Quantity, Unicode, trait_docs
+from ..traits import Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 
@@ -109,6 +112,10 @@ class FitNoiseModel(Operator):
 
     If the output model is not specified, then the input is modified in place.
 
+    If the data has been filtered with a low-pass, then the high frequency spectral
+    points are not representative of the actual white noise plateau.  In this case,
+    The min / max frequencies to consider can be specified.
+
     """
 
     # Class traits
@@ -125,6 +132,18 @@ class FitNoiseModel(Operator):
 
     f_min = Quantity(1.0e-5 * u.Hz, help="Low-frequency rolloff of model in the fit")
 
+    white_noise_min = Quantity(
+        None,
+        allow_none=True,
+        help="The minimum frequency to consider for the white noise plateau",
+    )
+
+    white_noise_max = Quantity(
+        None,
+        allow_none=True,
+        help="The maximum frequency to consider for the white noise plateau",
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -136,33 +155,51 @@ class FitNoiseModel(Operator):
             msg = "FitNoiseModel will fit all detectors- ignoring input detector list"
             log.warning(msg)
 
+        if self.white_noise_max is not None:
+            # Ensure that the min is also set
+            if self.white_noise_min is None:
+                msg = "You must set both of the min / max values or none of them"
+                raise RuntimeError(msg)
+
         for ob in data.obs:
             in_model = ob[self.noise_model]
             # We will use the best fit parameters from each detector as
             # the starting guess for the next detector.
             params = None
-            nse_freqs = dict()
-            nse_psds = dict()
+            nse_rate = dict()
+            nse_fmin = dict()
+            nse_fknee = dict()
+            nse_alpha = dict()
+            nse_NET = dict()
+            nse_indx = dict()
             for det in ob.local_detectors:
                 freqs = in_model.freq(det)
                 in_psd = in_model.psd(det)
-                fitted, result = self._fit_log_psd(freqs, in_psd, guess=params)
-                if result.success:
+                props = self._fit_log_psd(freqs, in_psd, guess=params)
+                if props["fit_result"].success:
                     # This was a good fit
-                    params = result.x
+                    params = props["fit_result"].x
                 else:
-                    msg = f"FitNoiseModel observation {ob.name}, det {det} failed."
+                    msg = f"FitNoiseModel observation {ob.name}, det {det} failed, "
+                    msg += f"using white noise with NET = {props['NET']}"
                     log.warning(msg)
-                    msg = f"  Best Result = {result}"
+                    msg = f"  Best Result = {props['fit_result']}"
                     log.verbose(msg)
-                nse_freqs[det] = freqs
-                nse_psds[det] = fitted
+                nse_indx[det] = in_model.index(det)
+                nse_rate[det] = 2.0 * freqs[-1]
+                nse_fmin[det] = props["fmin"]
+                nse_fknee[det] = props["fknee"]
+                nse_alpha[det] = props["alpha"]
+                nse_NET[det] = props["NET"]
 
-            new_model = Noise(
-                detectors=in_model.detectors,
-                freqs=nse_freqs,
-                psds=nse_psds,
-                indices={x: in_model.index(x) for x in in_model.detectors},
+            new_model = AnalyticNoise(
+                detectors=ob.local_detectors,
+                rate=nse_rate,
+                fmin=nse_fmin,
+                fknee=nse_fknee,
+                alpha=nse_alpha,
+                NET=nse_NET,
+                indices=nse_indx,
             )
 
             if self.out_model is None or self.noise_model == self.out_model:
@@ -314,14 +351,15 @@ class FitNoiseModel(Operator):
 
         # Weight the difference so that low frequencies do not impact the fit.  This is
         # basically a high-pass butterworth.
-        n_freq = len(freqs)
-        hp = np.arange(n_freq, dtype=np.float64)
-        hp *= 2.0 / n_freq
-        weights = 0.1 + 2.0 / np.sqrt(1.0 + np.power(hp, -4))
-        resid = np.multiply(weights, current - logdata)
+        # n_freq = len(freqs)
+        # hp = np.arange(n_freq, dtype=np.float64)
+        # hp *= 2.0 / n_freq
+        # weights = 0.1 + 2.0 / np.sqrt(1.0 + np.power(hp, -4))
+        # resid = np.multiply(weights, current - logdata)
         # print(
         #     f"      current-data = {current - logdata}, weights = {weights}, resid = {resid}"
         # )
+        resid = current - logdata
         return resid
 
     def _fit_log_jac(self, x, *args, **kwargs):
@@ -372,22 +410,54 @@ class FitNoiseModel(Operator):
             guess (array):  Optional starting point guess
 
         Returns:
-            (array):  The best fit PSD model or the input if the fit fails
+            (dict):  Dictionary of fit parameters
 
         """
         log = Logger.get()
         psd_unit = data.unit
+        ret = dict()
+
+        def _get_err_ret():
+            eret = dict()
+            eret["fit_result"] = types.SimpleNamespace()
+            eret["fit_result"].success = False
+            eret["NET"] = 0.0 * np.sqrt(1.0 * psd_unit)
+            eret["fmin"] = 0.0 * u.Hz
+            eret["fknee"] = 0.0 * u.Hz
+            eret["alpha"] = 0.0
+            return eret
 
         # We cut the lowest frequency bin value, and any leading negative values,
-        # since these are usually due to poor estimation.
+        # since these are usually due to poor estimation.  If the user has specified
+        # a maximum frequency for the white noise plateau, then we also stop our
+        # fit at that point.
         raw_freqs = freqs.to_value(u.Hz)
         raw_data = data.value
+        n_raw = len(raw_data)
         n_skip = 1
-        while raw_data[n_skip] <= 0:
+        while n_skip < n_raw and raw_data[n_skip] <= 0:
             n_skip += 1
+        if n_skip == n_raw:
+            msg = f"All {n_raw} PSD values were negative.  Giving up."
+            log.warning(msg)
+            ret = _get_err_ret()
+            return ret
 
-        input_freqs = raw_freqs[n_skip:]
-        input_data = raw_data[n_skip:]
+        n_trim = 0
+        if self.white_noise_max is not None:
+            max_hz = self.white_noise_max.to_value(u.Hz)
+            for f in raw_freqs:
+                if f > max_hz:
+                    n_trim += 1
+
+        if n_skip + n_trim >= n_raw:
+            msg = f"All {n_raw} PSD values either negative or above plateau."
+            log.warning(msg)
+            ret = _get_err_ret()
+            return ret
+
+        input_freqs = raw_freqs[n_skip : n_raw - n_trim]
+        input_data = raw_data[n_skip : n_raw - n_trim]
         # Force all points to be positive
         bad = input_data <= 0
         n_bad = np.count_nonzero(bad)
@@ -398,18 +468,32 @@ class FitNoiseModel(Operator):
         input_data[bad] = 1.0e-6
         input_log_data = np.log(input_data)
 
+        # print(f"FIT: input {input_freqs} {input_data} {input_log_data}")
+
         raw_fmin = self.f_min.to_value(u.Hz)
 
-        net = self._estimate_net(input_freqs, input_data)
+        if self.white_noise_max is None:
+            net = self._estimate_net(input_freqs, input_data)
+            # print(f"FIT:  estimated NET = {net}")
+        else:
+            plateau_samples = np.logical_and(
+                (input_freqs > self.white_noise_min.to_value(u.Hz)),
+                (input_freqs < self.white_noise_max.to_value(u.Hz)),
+            )
+            net = np.sqrt(np.mean(input_data[plateau_samples]))
+            # print(f"FIT:  NET from plateau = {net}")
 
         midfreq = 0.5 * input_freqs[-1]
+
         bounds = (
-            [input_freqs[0] / 2.0, 0.01],
-            [input_freqs[-1], 10.0],
+            np.array([input_freqs[0], 0.1]),
+            np.array([input_freqs[-1], 10.0]),
         )
         x_0 = guess
         if x_0 is None:
             x_0 = np.array([midfreq, 1.0])
+
+        # print(f"FIT:  starting guess = {x_0}")
 
         result = least_squares(
             self._fit_log_fun,
@@ -420,6 +504,7 @@ class FitNoiseModel(Operator):
             gtol=1.0e-10,
             ftol=1.0e-10,
             max_nfev=500,
+            verbose=0,
             kwargs={
                 "freqs": input_freqs,
                 "logdata": input_log_data,
@@ -427,14 +512,23 @@ class FitNoiseModel(Operator):
                 "net": net,
             },
         )
-        log.verbose(f"PSD fit NET={net}, bounds={bounds}, guess={x_0}, result={result}")
+
+        # print(f"FIT:  [{n_skip}:{n_raw}-{n_trim}] {result}")
+
+        ret["fit_result"] = result
+        ret["NET"] = net * np.sqrt(1.0 * psd_unit)
+        ret["fmin"] = self.f_min
         if result.success:
-            best_fit = self._evaluate_model(
-                raw_freqs, raw_fmin, net, result.x[0], result.x[1]
-            )
-            return best_fit * psd_unit, result
+            ret["fknee"] = result.x[0] * u.Hz
+            ret["alpha"] = result.x[1]
         else:
-            return data, result
+            ret["fknee"] = 0.0 * u.Hz
+            ret["alpha"] = 1.0
+
+        # print(f"FIT ret = {ret}")
+
+        log.verbose(f"PSD fit NET={net}, bounds={bounds}, guess={x_0}, result={result}")
+        return ret
 
     def _finalize(self, data, **kwargs):
         return
@@ -444,4 +538,158 @@ class FitNoiseModel(Operator):
 
     def _provides(self):
         prov = {"meta": [self.noise_model]}
+        return prov
+
+
+@trait_docs
+class FlagNoiseFit(Operator):
+    """Operator which flags detectors that have outlier noise properties."""
+
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    noise_model = Unicode(
+        "noise_model", help="The observation key containing the noise model"
+    )
+
+    det_flags = Unicode(
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
+    )
+
+    det_flag_mask = Int(
+        defaults.det_mask_processing, help="Bit mask to raise flags with"
+    )
+
+    sigma_NET = Float(5.0, help="Flag detectors with NET values outside this range")
+
+    sigma_fknee = Float(
+        None,
+        allow_none=True,
+        help="Flag detectors with knee frequency values outside this range",
+    )
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        log = Logger.get()
+
+        if self.det_flags is None:
+            raise RuntimeError("You must set det_flags before calling exec()")
+
+        for obs in data.obs:
+            dets = obs.select_local_detectors(detectors)
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
+
+            if self.noise_model not in obs:
+                msg = f"Observation {obs.name} does not contain noise model {self.noise_model}"
+                raise RuntimeError(msg)
+
+            exists = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
+
+            model = obs[self.noise_model]
+
+            local_net = list()
+            local_fknee = list()
+
+            # If we have an analytic noise model from a simulation or fit, then we can access
+            # the properties directly.  If not, we will use the detector weight as a proxy
+            # for the NET and make a crude estimate of the knee frequency.
+
+            for det in dets:
+                try:
+                    NET = model.NET(det)
+                except AttributeError:
+                    wt = model.detector_weight(det)
+                    NET = np.sqrt(1.0 / (wt * model.rate(det)))
+                local_net.append(NET.to_value(u.K * np.sqrt(1.0 * u.second)))
+                if self.sigma_fknee is not None:
+                    try:
+                        fknee = model.fknee(det)
+                        local_fknee.append(fknee.to_value(u.Hz))
+                    except AttributeError:
+                        msg = f"Observation {obs.name}, noise model {self.noise_model} "
+                        msg += "has no f_knee estimate.  Use FitNoiseModel before flagging."
+
+            # Gather data across the process column
+
+            net_mean = None
+            net_std = None
+            fknee_mean = None
+            fknee_std = None
+            if obs.comm_col is None:
+                all_net = np.array(local_net)
+                net_mean = np.mean(all_net)
+                net_std = np.std(all_net)
+                if self.sigma_fknee is not None:
+                    all_fknee = np.array(local_fknee)
+                    fknee_mean = np.mean(all_fknee)
+                    fknee_std = np.std(all_fknee)
+            else:
+                all_net = obs.comm_col.gather(local_net, root=0)
+                if obs.comm_col_rank == 0:
+                    all_net = np.array([val for plist in all_net for val in plist])
+                    net_mean = np.mean(all_net)
+                    net_std = np.std(all_net)
+                net_mean = obs.comm_col.bcast(net_mean, root=0)
+                net_std = obs.comm_col.bcast(net_std, root=0)
+                if self.sigma_fknee is not None:
+                    all_fknee = obs.comm_col.gather(local_fknee, root=0)
+                    if obs.comm_col_rank == 0:
+                        all_fknee = np.array(
+                            [val for plist in all_fknee for val in plist]
+                        )
+                        fknee_mean = np.mean(all_fknee)
+                        fknee_std = np.std(all_fknee)
+                    fknee_mean = obs.comm_col.bcast(fknee_mean, root=0)
+                    fknee_std = obs.comm_col.bcast(fknee_std, root=0)
+
+            # Flag outlier detectors
+
+            local_cut_NET = list()
+            local_cut_fknee = list()
+            new_flags = dict()
+            for idet, det in enumerate(dets):
+                if np.absolute(local_net[idet] - net_mean) > net_std * self.sigma_NET:
+                    msg = f"obs {obs.name}, det {det} has NET {local_net[idet]} "
+                    msg += f" that is > {self.sigma_NET} x {net_std} from {net_mean}"
+                    log.info(msg)
+                    obs.detdata[self.det_flags][det, :] |= self.det_flag_mask
+                    new_flags[det] = self.det_flag_mask
+                if self.sigma_fknee is not None:
+                    if (
+                        np.absolute(local_fknee[idet] - fknee_mean)
+                        > fknee_std * self.sigma_fknee
+                    ):
+                        msg = f"obs {obs.name}, det {det} has fknee "
+                        msg += f"{local_fknee[idet]} that is > {self.sigma_fknee} "
+                        msg += f"x {fknee_std} from {fknee_mean}"
+                        log.info(msg)
+                        obs.detdata[self.det_flags][det, :] |= self.det_flag_mask
+                        new_flags[det] = self.det_flag_mask
+            obs.update_local_detector_flags(new_flags)
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "meta": [
+                self.noise_model,
+            ],
+            "shared": [],
+            "detdata": [],
+            "intervals": [],
+        }
+        return req
+
+    def _provides(self):
+        prov = {
+            "meta": [],
+            "shared": [],
+            "detdata": [self.det_flags],
+        }
         return prov

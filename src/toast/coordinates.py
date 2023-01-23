@@ -221,11 +221,8 @@ def azel_to_radec(site, times, azel, use_ephem=False):
 
     sparse_quat = qa.norm(sparse_quat)
 
-    # Construnct dense transform
-
+    # Construct dense transform
     transform = qa.slerp(times, sparse_times, sparse_quat)
-
-    # Rotate the input quaternions
 
     # return qa.mult(azel, transform)
     # return qa.mult(azel, qa.inv(transform))

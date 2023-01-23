@@ -700,14 +700,14 @@ class CommonModeFilter(Operator):
             )
             log.debug_rank(
                 f"{data.comm.group:4} : Duplicated observation in",
-                comm=temp_ob.comm,
+                comm=temp_ob.comm.comm_group,
                 timer=timer,
             )
             # Redistribute this temporary observation to be distributed by sample sets
             temp_ob.redistribute(1, times=self.times, override_sample_sets=None)
             log.debug_rank(
                 f"{data.comm.group:4} : Redistributed observation in",
-                comm=temp_ob.comm,
+                comm=temp_ob.comm.comm_group,
                 timer=timer,
             )
             comm = None
@@ -729,14 +729,14 @@ class CommonModeFilter(Operator):
             )
             log.debug_rank(
                 f"{data.comm.group:4} : Re-redistributed observation in",
-                comm=temp_ob.comm,
+                comm=temp_ob.comm.comm_group,
                 timer=timer,
             )
             # Copy data to original observation
             obs.detdata[self.det_data][:] = temp_ob.detdata[self.det_data][:]
             log.debug_rank(
                 f"{data.comm.group:4} : Copied observation data in",
-                comm=temp_ob.comm,
+                comm=temp_ob.comm.comm_group,
                 timer=timer,
             )
         return

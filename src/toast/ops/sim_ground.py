@@ -1119,6 +1119,17 @@ class SimGround(Operator):
                 self.velocity,
             ],
             "detdata": list(),
+            "intervals": [
+                self.scanning_interval,
+                self.turnaround_interval,
+                self.scan_leftright_interval,
+                self.scan_rightleft_interval,
+                self.turn_leftright_interval,
+                self.turn_rightleft_interval,
+                self.throw_interval,
+                self.throw_leftright_interval,
+                self.throw_rightleft_interval,
+            ],
         }
         if self.det_data is not None:
             prov["detdata"].append(self.det_data)
