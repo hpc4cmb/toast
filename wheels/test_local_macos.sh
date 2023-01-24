@@ -40,13 +40,17 @@ brew_root=$(dirname $(dirname ${brew_com}))
 echo "Using homebrew installation in ${brew_root}"
 
 # Export compiler information
-export CC=clang
-export CXX=clang++
+# export CC=clang
+# export CXX=clang++
+# export CFLAGS="-O3 -fPIC"
+# export CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
+export CC=gcc-12
+export CXX=g++-12
 export CFLAGS="-O3 -fPIC"
-export CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
+export CXXFLAGS="-O3 -fPIC -std=c++11"
 
-# Use homebrew python for development files
-eval ${brew_com} install python3
+# Use homebrew python for development files and compiler
+eval ${brew_com} install python3 gcc@12
 
 brew_py="${brew_root}/opt/python@3/bin/python3"
 brew_py_ver=$(eval ${brew_py} --version | awk '{print $2}')
@@ -81,10 +85,9 @@ export CPATH="${venv_path}/include"
 # Set up toast build options
 export TOAST_BUILD_CMAKE_C_COMPILER="${CC}"
 export TOAST_BUILD_CMAKE_CXX_COMPILER="${CXX}"
-export TOAST_BUILD_DISABLE_OPENMP=1
 export TOAST_BUILD_CMAKE_C_FLAGS="${CFLAGS} -I${venv_path}/include"
-export TOAST_BUILD_BLAS_LIBRARIES="${venv_path}/lib/libopenblas.dylib"
-export TOAST_BUILD_LAPACK_LIBRARIES="${venv_path}/lib/libopenblas.dylib"
+export TOAST_BUILD_BLAS_LIBRARIES="-L${venv_path}/lib -lopenblas -fopenmp -lm -lgfortran"
+export TOAST_BUILD_LAPACK_LIBRARIES="-L${venv_path}/lib -lopenblas -fopenmp -lm -lgfortran"
 export TOAST_BUILD_CMAKE_CXX_FLAGS="${CXXFLAGS} -I${venv_path}/include"
 export TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
 export TOAST_BUILD_AATM_ROOT="${venv_path}"
@@ -92,6 +95,7 @@ export TOAST_BUILD_FFTW_ROOT="${venv_path}"
 export TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS="${venv_path}/include"
 export TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS="${venv_path}/lib"
 export TOAST_BUILD_CMAKE_LIBRARY_PATH="${venv_path}/lib"
+export TOAST_BUILD_TOAST_STATIC_DEPS=ON
 
 # Now build a wheel
 pushd "${topdir}" >/dev/null 2>&1

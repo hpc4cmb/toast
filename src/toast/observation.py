@@ -478,7 +478,7 @@ class Observation(MutableMapping):
         if self.dist != other.dist:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs distributions not equal")
-        if self._internal.keys() != other._internal.keys():
+        if set(self._internal.keys()) != set(other._internal.keys()):
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs metadata keys not equal")
         for k, v in self._internal.items():

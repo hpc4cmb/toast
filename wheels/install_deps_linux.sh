@@ -25,6 +25,8 @@ CFLAGS="-O3 -fPIC -pthread"
 FCFLAGS="-O3 -fPIC -pthread"
 CXXFLAGS="-O3 -fPIC -pthread -std=c++11"
 
+# For testing locally
+# MAKEJ=8
 MAKEJ=2
 
 PREFIX=/usr
@@ -42,9 +44,6 @@ pip install -v cmake wheel
 # In order to maximize ABI compatibility with numpy, build with the newest numpy
 # version containing the oldest ABI version compatible with the python we are using.
 pyver=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
-if [ ${pyver} == "3.7" ]; then
-    numpy_ver="1.20"
-fi
 if [ ${pyver} == "3.8" ]; then
     numpy_ver="1.20"
 fi
@@ -54,72 +53,35 @@ fi
 if [ ${pyver} == "3.10" ]; then
     numpy_ver="1.22"
 fi
+if [ ${pyver} == "3.11" ]; then
+    numpy_ver="1.24"
+fi
 
 # Install build requirements.
 CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
 
-# Install openblas from the multilib package- the same one numpy uses.
+# Install Openblas
 
-openblas_pkg="openblas-v0.3.20-manylinux2014_x86_64.tar.gz"
-openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.20/download/${openblas_pkg}"
+openblas_version=0.3.21
+openblas_dir=OpenBLAS-${openblas_version}
+openblas_pkg=${openblas_dir}.tar.gz
 
 if [ ! -e ${openblas_pkg} ]; then
     echo "Fetching OpenBLAS..."
-    curl -SL ${openblas_url} -o ${openblas_pkg}
+    curl -SL https://github.com/xianyi/OpenBLAS/archive/v${openblas_version}.tar.gz -o ${openblas_pkg}
 fi
 
-echo "Extracting OpenBLAS"
-tar -x -z -v -C "${PREFIX}" --strip-components 2 -f ${openblas_pkg}
+echo "Building OpenBLAS..."
 
-# libgmp
-
-gmp_version=6.2.1
-gmp_dir=gmp-${gmp_version}
-gmp_pkg=${gmp_dir}.tar.xz
-
-echo "Fetching libgmp"
-
-if [ ! -e ${gmp_pkg} ]; then
-    curl -SL https://ftp.gnu.org/gnu/gmp/${gmp_pkg} -o ${gmp_pkg}
-fi
-
-echo "Building libgmp..."
-
-rm -rf ${gmp_dir}
-tar xf ${gmp_pkg} \
-    && pushd ${gmp_dir} >/dev/null 2>&1 \
-    && CC="${CC}" CFLAGS="${CFLAGS}" \
-    ./configure \
-    --with-pic \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install \
-    && popd >/dev/null 2>&1
-
-# libmpfr
-
-mpfr_version=4.1.0
-mpfr_dir=mpfr-${mpfr_version}
-mpfr_pkg=${mpfr_dir}.tar.xz
-
-echo "Fetching libmpfr"
-
-if [ ! -e ${mpfr_pkg} ]; then
-    curl -SL https://www.mpfr.org/mpfr-current/${mpfr_pkg} -o ${mpfr_pkg}
-fi
-
-echo "Building libmpfr..."
-
-rm -rf ${mpfr_dir}
-tar xf ${mpfr_pkg} \
-    && pushd ${mpfr_dir} >/dev/null 2>&1 \
-    && CC="${CC}" CFLAGS="${CFLAGS}" \
-    ./configure \
-    --with-pic \
-    --with-gmp="${PREFIX}" \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install \
+rm -rf ${openblas_dir}
+tar xzf ${openblas_pkg} \
+    && pushd ${openblas_dir} >/dev/null 2>&1 \
+    && make USE_OPENMP=1 NO_SHARED=1 \
+    MAKE_NB_JOBS=${MAKEJ} \
+    CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
+    COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
+    LDFLAGS="-fopenmp -lm" libs netlib \
+    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
     && popd >/dev/null 2>&1
 
 # Install FFTW
@@ -143,7 +105,8 @@ tar xzf ${fftw_pkg} \
     ./configure \
     --disable-fortran \
     --enable-openmp \
-    --enable-shared \
+    --enable-static \
+    --disable-shared \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
@@ -182,7 +145,7 @@ tar xzf ${aatm_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=5.12.0
+ssparse_version=6.0.3
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
@@ -198,52 +161,24 @@ rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
     && pushd ${ssparse_dir} >/dev/null 2>&1 \
     && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && make library JOBS=${MAKEJ} INSTALL="${PREFIX}" \
-    CC="${CC}" CXX="${CXX}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -lm" \
-    LAPACK="-lopenblas -lm" \
-    && make install INSTALL="${PREFIX}" \
-    CC="${CC}" CXX="${CXX}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" AUTOCC=no \
-    GPU_CONFIG="" CFOPENMP="${OPENMP_CXXFLAGS}" BLAS="-lopenblas -lm" \
-    LAPACK="-lopenblas -lm" \
+    && CC="${CC}" CX="${CXX}" JOBS=${MAKEJ} \
+    CMAKE_OPTIONS=" \
+    -DCMAKE_C_COMPILER=\"${CC}\" \
+    -DCMAKE_CXX_COMPILER=\"${CXX}\" \
+    -DCMAKE_Fortran_COMPILER=\"${FC}\" \
+    -DCMAKE_C_FLAGS=\"${CFLAGS}\" \
+    -DCMAKE_CXX_FLAGS=\"${CXXFLAGS}\" \
+    -DCMAKE_Fortran_FLAGS=\"${FCFLAGS}\" \
+    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+    -DCMAKE_INSTALL_PATH=\"${PREFIX}\" \
+    -DNSTATIC:BOOL=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBLA_VENDOR=OpenBLAS \
+    -DBLA_STATIC:BOOL=ON \
+    -DBLAS_LIBRARIES=\"-L${PREFIX}/lib -lopenblas -lgomp -lm -lgfortran\" \
+    -DLAPACK_LIBRARIES=\"-L${PREFIX}/lib -lopenblas -lgomp -lm -lgfortran\" \
+    " make local \
+    && make install \
+    && cp ./lib/*.a "${PREFIX}/lib/" \
+    && cp ./include/* "${PREFIX}/include/" \
     && popd >/dev/null 2>&1
-
-# MPI for testing.  Although we do not bundle MPI with toast, we need
-# to install it in order to run mpi-enabled tests on the produced
-# wheel.
-
-mpich_version=3.4
-mpich_dir=mpich-${mpich_version}
-mpich_pkg=${mpich_dir}.tar.gz
-
-echo "Fetching MPICH..."
-
-if [ ! -e ${mpich_pkg} ]; then
-    curl -SL https://www.mpich.org/static/downloads/${mpich_version}/${mpich_pkg} -o ${mpich_pkg}
-fi
-
-echo "Building MPICH..."
-
-tar xzf ${mpich_pkg} \
-    && cd ${mpich_dir} \
-    && CC="${CC}" CXX="${CXX}" FC="${FC}" F77="${FC}" \
-    CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" \
-    FFLAGS="${FCFLAGS}" FCFLAGS="${FCFLAGS}" \
-    MPICH_MPICC_CFLAGS="${CFLAGS}" \
-    MPICH_MPICXX_CXXFLAGS="${CXXFLAGS}" \
-    MPICH_MPIF77_FFLAGS="${FCFLAGS}" \
-    MPICH_MPIFORT_FCFLAGS="${FCFLAGS}" \
-    ./configure --disable-fortran \
-    --with-device=ch3 \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install
-
-# Install mpi4py for running tests
-
-echo "mpicc = $(which mpicc)"
-echo "mpicxx = $(which mpicxx)"
-echo "mpirun = $(which mpirun)"
-python3 -m pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
