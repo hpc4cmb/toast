@@ -73,7 +73,8 @@ jobs:
         TOAST_BUILD_TOAST_STATIC_DEPS=ON
         TOAST_BUILD_BLAS_LIBRARIES='-L/usr/lib -lopenblas -fopenmp -lm -lgfortran'
         TOAST_BUILD_LAPACK_LIBRARIES='-L/usr/lib -lopenblas -fopenmp -lm -lgfortran'
-        TOAST_BUILD_FFTW_ROOT=/usr TOAST_BUILD_AATM_ROOT=/usr
+        TOAST_BUILD_FFTW_ROOT=/usr
+        TOAST_BUILD_AATM_ROOT=/usr
         TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/include
         TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/lib
       CIBW_ENVIRONMENT_MACOS: >
@@ -82,17 +83,17 @@ jobs:
         TOAST_BUILD_CMAKE_C_FLAGS='-O3 -g -fPIC'
         TOAST_BUILD_CMAKE_CXX_FLAGS='-O3 -g -fPIC -std=c++11 -stdlib=libc++'
         TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
-        TOAST_BUILD_TOAST_STATIC_DEPS=ON
-        TOAST_BUILD_BLAS_LIBRARIES="-L\$(head -1 $(pwd)/wheels/link_gfortran) -L/usr/local/lib -lopenblas -lm -lgfortran"
-        TOAST_BUILD_LAPACK_LIBRARIES='-L/usr/local/lib -lopenblas -lm -lgfortran'
+        TOAST_BUILD_DISABLE_OPENMP=1
+        TOAST_BUILD_BLAS_LIBRARIES='/usr/local/lib/libopenblas.dylib'
+        TOAST_BUILD_LAPACK_LIBRARIES='/usr/local/lib/libopenblas.dylib'
         TOAST_BUILD_FFTW_ROOT=/usr/local
         TOAST_BUILD_AATM_ROOT=/usr/local
         TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
         TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh ${{ matrix.platform_id }}
-      CIBW_BEFORE_TEST: export OMP_NUM_THREADS=2
-      CIBW_TEST_COMMAND: python -c 'import toast.tests; toast.tests.run()'
+      CIBW_BEFORE_TEST: export OMP_NUM_THREADS=1
+      CIBW_TEST_COMMAND: source {project}/wheels/cibw_run_tests.sh
       CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
     steps:
       - name: Cancel Previous Runs
