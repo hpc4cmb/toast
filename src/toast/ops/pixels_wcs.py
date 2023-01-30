@@ -287,7 +287,7 @@ class PixelsWCS(Operator):
         elif proj == "CEA":
             self.wcs.wcs.ctype = ["RA---CEA", "DEC--CEA"]
             self.wcs.wcs.crval = np.array([mid[0], 0])
-            lam = np.cos(np.deg2rad(mid[1]))**2
+            lam = np.cos(np.deg2rad(mid[1])) ** 2
             self.wcs.wcs.set_pv([(2, 1, lam)])
         elif proj == "MER":
             self.wcs.wcs.ctype = ["RA---MER", "DEC--MER"]
@@ -305,12 +305,12 @@ class PixelsWCS(Operator):
 
         if len(dims) == 0:
             # Compute from the bounding box corners
-            lower_left = self.wcs.wcs_world2pix(
-                np.array([[pos[0, 0], pos[0, 1]]]), 0
-            )[0]
-            upper_right = self.wcs.wcs_world2pix(
-                np.array([[pos[1, 0], pos[1, 1]]]), 0
-            )[0]
+            lower_left = self.wcs.wcs_world2pix(np.array([[pos[0, 0], pos[0, 1]]]), 0)[
+                0
+            ]
+            upper_right = self.wcs.wcs_world2pix(np.array([[pos[1, 0], pos[1, 1]]]), 0)[
+                0
+            ]
             self.wcs_shape = tuple(
                 np.round(np.abs(upper_right - lower_left)).astype(int)
             )

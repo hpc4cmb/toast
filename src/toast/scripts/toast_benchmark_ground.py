@@ -32,6 +32,8 @@ from toast.scripts.benchmarking_utilities import (
     run_mapmaker,
     scan_map,
     select_case,
+    get_standard_ground_args,
+    compare_output_stats,
 )
 from toast.timing import dump, function_timer, gather_timers
 
@@ -130,6 +132,7 @@ def parse_arguments():
         toast.ops.SimGround(
             name="sim_ground",
             detset_key="pixel",
+            median_weather=True,
         ),
         toast.ops.DefaultNoiseModel(name="default_model"),
         toast.ops.ElevationNoise(name="elevation_model", out_model="el_noise_model"),
@@ -162,13 +165,15 @@ def parse_arguments():
         toast.ops.BinMap(name="binner", pixel_dist="pix_dist"),
         toast.ops.MapMaker(
             name="mapmaker",
-            solve_rcond_threshold=1e-3,
+            solve_rcond_threshold=1.0e-3,
+            map_rcond_threshold=1.0e-3,
             write_map=True,
             write_noiseweighted_map=False,
             write_hits=True,
             write_cov=False,
             write_invcov=False,
             write_rcond=False,
+            keep_final_products=True,
         ),
         toast.ops.PixelsHealpix(name="pixels_final", view="scanning", enabled=False),
         toast.ops.BinMap(
@@ -188,19 +193,7 @@ def parse_arguments():
         parser, operators=operators, templates=templates
     )
 
-    # hardcoded arguments
-    # focal plane
-    args.sample_rate = 100  # sample_rate is nb sample per second.
-    args.max_detector = 2054
-    if args.max_n_det is not None:
-        args.max_detector = args.max_n_det
-
-    args.width = 10.0
-    args.psd_net = 50.0e-6
-    args.psd_fmin = 1.0e-5
-
-    # scan map
-    args.nside = 4096
+    get_standard_ground_args(args)
 
     return config, args, jobargs
 
@@ -303,10 +296,19 @@ def main():
     job = toast.create_from_config(config)
     job_ops = job.operators
 
-    # gets the MPI parameters
+    # Get the MPI parameters
     world_comm, n_procs, rank, n_nodes, avail_node_bytes = get_mpi_settings(
         args, log, env
     )
+
+    # Check the input map
+    args.input_map = os.path.join(
+        args.input_dir, f"fake_input_sky_nside{args.nside}.fits"
+    )
+    if rank == 0 and not os.path.isfile(args.input_map):
+        msg = f"Input simulated sky map {args.input_map} does not exist."
+        msg += f"  Did you run toast_benchmark_ground_setup?"
+        raise RuntimeError(msg)
 
     # Log the config
     if rank == 0:
@@ -329,13 +331,12 @@ def main():
     # Check that we have the atmosphere cache directory set up.
     atm_cache = os.path.join(args.input_dir, "atmosphere")
     if job_ops.sim_atmosphere.enabled:
-        if job_ops.sim_atmosphere.cache_dir is None:
+        if os.path.isdir(atm_cache):
+            msg = f"Using cached atmosphere from {atm_cache}."
             job_ops.sim_atmosphere.cache_dir = atm_cache
-        if rank == 0:
-            if not os.path.isdir(job_ops.sim_atmosphere.cache_dir):
-                msg = f"Atmosphere cache {job_ops.sim_atmosphere.cache_dir} does "
-                msg += "not exist- did you run toast_benchmark_ground_setup?"
-                raise RuntimeError(msg)
+        else:
+            msg = f"Generating atmosphere on the fly."
+        log.info_rank(msg, comm=world_comm)
 
     # Estimate per-process memory use from map domain objects and
     # other sources.
@@ -451,9 +452,6 @@ def main():
     job_ops.mem_count.apply(data)
 
     # Simulate sky signal from a map.
-    args.input_map = os.path.join(
-        args.input_dir, f"fake_input_sky_nside{args.nside}.fits"
-    )
     args.print_input_map = False
     scan_map(args, rank, job_ops, data, log)
     log.info_rank("Simulated sky signal in", comm=world_comm, timer=timer)
@@ -542,6 +540,11 @@ def main():
         world_comm.barrier()
     runtime = global_timer.seconds("toast_benchmark_ground (science work)")
     compute_science_metric(args, runtime, n_nodes, rank, log)
+
+    # Check values against previously computed ones
+    compare_output_stats(
+        "ground", args, rank, log, data["mapmaker_hits"], data["mapmaker_map"]
+    )
 
     # dumps all the timing information
     timer.stop()

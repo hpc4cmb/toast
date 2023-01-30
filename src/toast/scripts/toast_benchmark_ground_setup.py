@@ -27,6 +27,8 @@ from toast.scripts.benchmarking_utilities import (
     default_sim_atmosphere,
     get_mpi_settings,
     python_startup_time,
+    get_standard_ground_args,
+    make_focalplane,
 )
 from toast.timing import dump, function_timer, gather_timers
 
@@ -63,6 +65,14 @@ def parse_arguments():
         help="Overwrite files if they already exist",
     )
 
+    parser.add_argument(
+        "--atmosphere",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Pre-simulate the atmosphere as well",
+    )
+
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
     # The "name" of each operator instance controls what the commandline and config
@@ -70,8 +80,11 @@ def parse_arguments():
     operators = [
         toast.ops.SimGround(
             name="sim_ground",
+            detset_key="pixel",
+            median_weather=True,
         ),
         toast.ops.DefaultNoiseModel(name="default_model"),
+        toast.ops.ElevationNoise(name="elevation_model", out_model="el_noise_model"),
         toast.ops.PointingDetectorSimple(name="det_pointing_azel", quats="quats_azel"),
         toast.ops.PointingDetectorSimple(
             name="det_pointing_radec", quats="quats_radec"
@@ -86,69 +99,14 @@ def parse_arguments():
     config, args, jobargs = toast.parse_config(parser, operators=operators)
 
     # hardcoded arguments
-
     args.dry_run = None
+    args.max_n_det = None
 
-    # Focal plane- we will use a dummy focalplane with just 2 detectors.
-    args.sample_rate = 100.0  # sample_rate is nb sample per second.
-    args.width = 10.0
-    args.psd_net = 50.0e-6
-    args.psd_fmin = 1.0e-5
+    get_standard_ground_args(args)
 
-    # schedule, site and telescope parameters
-    args.telescope_name = "LAT"
-    args.site_name = "atacama"
-    args.site_lon = " -67:47:10"
-    args.site_lat = " -22:57:30"
-    args.site_alt = 5200.0 * u.meter
-    args.patch_coord = "C"
-    args.el_min = 30.0
-    args.el_max = 70.0
-    args.sun_el_max = 90.0
-    args.sun_avoidance_angle = 0.0
-    args.moon_avoidance_angle = 0.0
-    args.gap_s = 60.0
-    args.gap_small_s = 0.0
-    args.ces_max_time = 1200.0
-    args.boresight_angle_step = 180.0
-    args.boresight_angle_time = 1440.0
-    args.schedule_patches = [
-        "RISING_SCAN_35,HORIZONTAL,1.00,30.00,150.00,35.00,1500",
-        "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
-    ]
-    args.schedule_start = "2027-01-01 00:00:00"
-
-    # This length should be sufficient for the "x-large" case.
-    # args.schedule_stop = "2027-04-01 00:00:00"
-
-    # This produces about 26000 scans, and is sufficient for even the "heroic" case:
-    args.schedule_stop = "2027-12-31 00:00:00"
-
-    # This produces 75 scans:
-    # args.schedule_stop = "2027-01-01 01:00:00"
-
-    # scan map
-    args.nside = 4096
-    args.input_map = f"fake_input_sky_nside{args.nside}.fits"
+    args.n_detector = args.max_detector
 
     return config, args, jobargs
-
-
-def make_boresight_focalplane(args, world_comm):
-    """Make a tiny focalplane with 2 boresight detectors."""
-    # creates the focalplane
-    focalplane = None
-    if (world_comm is None) or (world_comm.rank == 0):
-        focalplane = fake_hexagon_focalplane(
-            n_pix=1,
-            width=args.width * u.degree,
-            sample_rate=args.sample_rate * u.Hz,
-            psd_net=args.psd_net * u.K * np.sqrt(1 * u.second),
-            psd_fmin=args.psd_fmin * u.Hz,
-        )
-    if world_comm is not None:
-        focalplane = world_comm.bcast(focalplane, root=0)
-    return focalplane
 
 
 def make_schedule(args, world_comm, site):
@@ -266,7 +224,7 @@ def main():
     log.info_rank("Create input sky maps in", comm=world_comm, timer=timer)
 
     # Creates the focalplane file.
-    focalplane = make_boresight_focalplane(args, world_comm)
+    focalplane = make_focalplane(args, world_comm, log)
 
     # Create a telescope for the simulation.
     telescope = toast.instrument.Telescope(
@@ -283,78 +241,90 @@ def main():
     job_ops.mem_count.prefix = "Before Simulation"
     job_ops.mem_count.apply(data)
 
-    # Loop over observations in the schedule and simulate one observation
-    # at a time to reduce the memory overhead.
+    if args.atmosphere:
+        # Loop over observations in the schedule and simulate one observation
+        # at a time to reduce the memory overhead.
 
-    n_scan = len(args.schedule.scans)
+        n_scan = len(args.schedule.scans)
 
-    scan_offset = 0
-    while scan_offset < n_scan:
-        n_scan_batch = comm.ngroups
-        if scan_offset + 2 * n_scan_batch > n_scan:
-            # Finish off the remaining observations, so that we are not
-            # left with fewer scans than the number of groups.
-            n_scan_batch = n_scan - scan_offset
-        batch = [
-            args.schedule.scans[x]
-            for x in range(scan_offset, scan_offset + n_scan_batch)
-        ]
-        batch_str = f"{scan_offset} - {scan_offset + n_scan_batch - 1}"
-        log.info_rank(
-            f"Caching simulated atmosphere for observation batch {batch_str}",
-            comm=world_comm,
-        )
-        batch_schedule = toast.schedule.GroundSchedule(
-            scans=batch,
-            site_name=args.schedule.site_name,
-            telescope_name=args.schedule.telescope_name,
-            site_lat=args.schedule.site_lat,
-            site_lon=args.schedule.site_lon,
-            site_alt=args.schedule.site_alt,
-        )
+        scan_offset = 0
+        while scan_offset < n_scan:
+            n_scan_batch = comm.ngroups
+            if scan_offset + 2 * n_scan_batch > n_scan:
+                # Finish off the remaining observations, so that we are not
+                # left with fewer scans than the number of groups.
+                n_scan_batch = n_scan - scan_offset
+            batch = [
+                args.schedule.scans[x]
+                for x in range(scan_offset, scan_offset + n_scan_batch)
+            ]
+            batch_str = f"{scan_offset} - {scan_offset + n_scan_batch - 1}"
+            log.info_rank(
+                f"Caching simulated atmosphere for observation batch {batch_str}",
+                comm=world_comm,
+            )
+            batch_schedule = toast.schedule.GroundSchedule(
+                scans=batch,
+                site_name=args.schedule.site_name,
+                telescope_name=args.schedule.telescope_name,
+                site_lat=args.schedule.site_lat,
+                site_lon=args.schedule.site_lon,
+                site_alt=args.schedule.site_alt,
+            )
 
-        # Simulate the telescope pointing
-        job_ops.sim_ground.telescope = telescope
-        job_ops.sim_ground.schedule = batch_schedule
-        job_ops.sim_ground.weather = telescope.site.name
-        job_ops.sim_ground.median_weather = True
-        job_ops.sim_ground.apply(data)
-        log.info_rank("  Simulated telescope pointing in", comm=world_comm, timer=timer)
+            # Simulate the telescope pointing
+            job_ops.sim_ground.telescope = telescope
+            job_ops.sim_ground.schedule = batch_schedule
+            job_ops.sim_ground.weather = telescope.site.name
+            job_ops.sim_ground.apply(data)
+            log.info_rank(
+                "  Simulated telescope pointing in", comm=world_comm, timer=timer
+            )
 
-        # Set up detector pointing in both Az/El and RA/DEC
-        job_ops.det_pointing_azel.boresight = job_ops.sim_ground.boresight_azel
-        job_ops.det_pointing_radec.boresight = job_ops.sim_ground.boresight_radec
+            # Set up detector pointing in both Az/El and RA/DEC
+            job_ops.det_pointing_azel.boresight = job_ops.sim_ground.boresight_azel
+            job_ops.det_pointing_radec.boresight = job_ops.sim_ground.boresight_radec
 
-        # Construct a "perfect" noise model just from the focalplane parameters
-        job_ops.default_model.apply(data)
-        log.info_rank("  Created default noise model in", comm=world_comm, timer=timer)
+            # Construct a "perfect" noise model just from the focalplane parameters
+            job_ops.default_model.apply(data)
+            log.info_rank(
+                "  Created default noise model in", comm=world_comm, timer=timer
+            )
 
-        # Set the pointing matrix operators to use the detector pointing
-        job_ops.pixels.nside = args.nside
-        job_ops.pixels.detector_pointing = job_ops.det_pointing_radec
-        job_ops.weights.detector_pointing = job_ops.det_pointing_radec
+            # Create the Elevation modulated noise model
+            job_ops.elevation_model.noise_model = job_ops.default_model.noise_model
+            job_ops.elevation_model.detector_pointing = job_ops.det_pointing_azel
+            job_ops.elevation_model.view = job_ops.det_pointing_azel.view
+            job_ops.elevation_model.apply(data)
+            log.info_rank(
+                "Created elevation noise model in", comm=world_comm, timer=timer
+            )
 
-        # Simulate atmosphere signal
-        cache_dir = os.path.join(args.work_dir, "atmosphere")
-        if rank == 0:
-            if os.path.isdir(cache_dir) and args.overwrite:
-                os.shutil.rmtree(cache_dir)
-        if world_comm is not None:
-            world_comm.barrier()
-        job_ops.sim_atmosphere.detector_pointing = job_ops.det_pointing_azel
-        job_ops.sim_atmosphere.field_of_view = telescope.focalplane.field_of_view
-        job_ops.sim_atmosphere.cache_dir = cache_dir
-        job_ops.sim_atmosphere.cache_only = True
-        job_ops.sim_atmosphere.apply(data)
-        log.info_rank("  Simulated atmosphere in", comm=world_comm, timer=timer)
+            # Set the pointing matrix operators to use the detector pointing
+            job_ops.pixels.nside = args.nside
+            job_ops.pixels.detector_pointing = job_ops.det_pointing_radec
+            job_ops.weights.detector_pointing = job_ops.det_pointing_radec
 
-        job_ops.mem_count.prefix = f"After observation batch {batch_str}"
-        job_ops.mem_count.apply(data)
+            # Simulate atmosphere signal
+            cache_dir = os.path.join(args.work_dir, "atmosphere")
+            if rank == 0:
+                if os.path.isdir(cache_dir) and args.overwrite:
+                    os.shutil.rmtree(cache_dir)
+            if world_comm is not None:
+                world_comm.barrier()
+            job_ops.sim_atmosphere.detector_pointing = job_ops.det_pointing_azel
+            job_ops.sim_atmosphere.cache_dir = cache_dir
+            job_ops.sim_atmosphere.cache_only = True
+            job_ops.sim_atmosphere.apply(data)
+            log.info_rank("  Simulated atmosphere in", comm=world_comm, timer=timer)
 
-        # Clear data for this observation
-        data.clear()
+            job_ops.mem_count.prefix = f"After observation batch {batch_str}"
+            job_ops.mem_count.apply(data)
 
-        scan_offset += n_scan_batch
+            # Clear data for this observation
+            data.clear()
+
+            scan_offset += n_scan_batch
 
     # dumps all the timing information
     timer.stop()
