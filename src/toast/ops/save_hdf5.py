@@ -118,13 +118,23 @@ class SaveHDF5(Operator):
 
                 loadpath = os.path.join(self.volume, f"{ob.name}_{ob.uid}.h5")
 
-                if self.detdata_float32 and (detdata_fields is not None):
+                if detdata_fields is None:
+                    # We saved everything
+                    verify_fields = list(ob.detdata.keys())
+                else:
+                    # There might be compression info
+                    if isinstance(detdata_fields[0], (tuple, list)):
+                        verify_fields = [x[0] for x in detdata_fields]
+                    else:
+                        verify_fields = list(detdata_fields)
+
+                if self.detdata_float32:
                     # We want to duplicate everything *except* float64 detdata
                     # fields.
                     dup_detdata = list()
                     conv_detdata = list()
-                    for fld in detdata_fields:
-                        if ob.detdata[fld].dtype == np.float64:
+                    for fld in verify_fields:
+                        if ob.detdata[fld].dtype == np.dtype(np.float64):
                             conv_detdata.append(fld)
                         else:
                             dup_detdata.append(fld)
@@ -136,9 +146,13 @@ class SaveHDF5(Operator):
                         intervals=intervals_fields,
                     )
                     for fld in conv_detdata:
+                        if len(ob.detdata[fld].detector_shape) == 1:
+                            sample_shape = None
+                        else:
+                            sample_shape = ob.detdata[fld].detector_shape[1:]
                         original.detdata.create(
                             fld,
-                            sample_shape=ob.detdata[fld].detector_shape,
+                            sample_shape=sample_shape,
                             dtype=np.float32,
                             detectors=ob.detdata[fld].detectors,
                             units=ob.detdata[fld].units,
@@ -150,7 +164,7 @@ class SaveHDF5(Operator):
                         times=str(self.times),
                         meta=meta_fields,
                         shared=shared_fields,
-                        detdata=detdata_fields,
+                        detdata=verify_fields,
                         intervals=intervals_fields,
                     )
 
@@ -159,7 +173,7 @@ class SaveHDF5(Operator):
                     data.comm,
                     process_rows=ob.comm_col_size,
                     meta=meta_fields,
-                    detdata=detdata_fields,
+                    detdata=verify_fields,
                     shared=shared_fields,
                     intervals=intervals_fields,
                     force_serial=self.force_serial,

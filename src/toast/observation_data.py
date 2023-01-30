@@ -439,7 +439,13 @@ class DetectorData(AcceleratorObject):
             return False
         if self.units != other.units:
             return False
-        if not np.allclose(self.data, other.data):
+        if self.dtype == np.dtype(np.float64):
+            if not np.allclose(self.data, other.data, rtol=1.0e-5, atol=1.0e-8):
+                return False
+        elif self.dtype == np.dtype(np.float32):
+            if not np.allclose(self.data, other.data, rtol=1.0e-3, atol=1.0e-5):
+                return False
+        elif not np.array_equal(self.data, other.data):
             return False
         return True
 
@@ -1065,8 +1071,7 @@ class DetDataManager(MutableMapping):
             log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
             return False
         for k in self._internal.keys():
-            # if self._internal[k] != other._internal[k]:
-            if not np.allclose(self._internal[k], other._internal[k]):
+            if self._internal[k] != other._internal[k]:
                 msg = f"  detector data {k} not equal:  "
                 msg += f"{self._internal[k]} != {other._internal[k]}"
                 log.verbose(msg)
