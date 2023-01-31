@@ -853,7 +853,8 @@ def get_benchmark_stats(jobtype, case):
     """Load bundled benchmark stats and return the specified case
 
     Args:
-        key (str):  The job case identifier.
+        jobtype (str):  ground, satellite, etc
+        case (str):  small, medium, large, etc
 
     Returns:
         (dict):  The stats for this job.

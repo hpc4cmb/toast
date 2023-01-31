@@ -966,7 +966,7 @@ class PixelData(AcceleratorObject):
                 comm_submap * dist.n_pix_submap * self._n_value,
                 dtype=self._dtype,
             ).reshape((comm_submap, dist.n_pix_submap, self._n_value))
-            # Variables for running variance calc
+            # Variables for variance calc
             accum_sum = np.zeros(self._n_value, dtype=np.float64)
             accum_count = np.zeros(self._n_value, dtype=np.int64)
             accum_mean = np.zeros(self._n_value, dtype=np.float64)
