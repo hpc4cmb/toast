@@ -9,17 +9,17 @@ total_sample = num_obs * obs_minutes * sample_rate * n_detector
 """
 
 import copy
+import json
 import math
 import os
 from datetime import datetime
-from pkg_resources import resource_filename
-import json
 
 import healpy
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u
 from astropy.table import QTable
+from pkg_resources import resource_filename
 
 import toast
 import toast.ops
@@ -714,7 +714,7 @@ def create_input_maps(
         np.zeros(3 * nside - 1, dtype=np.float32),
         np.zeros(3 * nside - 1, dtype=np.float32),
     )
-    np.random.seed(123456789) 
+    np.random.seed(123456789)
     maps = healpy.synfast(
         cls,
         nside,
@@ -725,12 +725,12 @@ def create_input_maps(
         fwhm=np.radians(3.0 / 60.0),
     )
     healpy.write_map(
-        input_map_path, 
-        maps, 
+        input_map_path,
+        maps,
         nest=True,
-        column_units="K", 
-        fits_IDL=False, 
-        dtype=np.float32
+        column_units="K",
+        fits_IDL=False,
+        dtype=np.float32,
     )
 
     # displays the map as a picture on file
@@ -917,10 +917,6 @@ def compare_output_stats(jobname, args, rank, log, out_hits, out_map):
             f.write(msg)
             f.write("\n\n")
         # Dump out to json for easy combining later
-        dump_result = {
-            jobname: {
-                args.case: result
-            }
-        }
+        dump_result = {jobname: {args.case: result}}
         with open(os.path.join(args.out_dir, "stats.json"), "w") as f:
             json.dump(dump_result, f)

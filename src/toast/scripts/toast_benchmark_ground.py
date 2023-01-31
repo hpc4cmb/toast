@@ -22,18 +22,18 @@ import toast.ops
 from toast import spt3g as t3g
 from toast.schedule_sim_ground import run_scheduler
 from toast.scripts.benchmarking_utilities import (
+    compare_output_stats,
     compute_science_metric,
     default_sim_atmosphere,
     estimate_memory_overhead,
     get_mpi_settings,
+    get_standard_ground_args,
     make_focalplane,
     python_startup_time,
     run_madam,
     run_mapmaker,
     scan_map,
     select_case,
-    get_standard_ground_args,
-    compare_output_stats,
 )
 from toast.timing import dump, function_timer, gather_timers
 

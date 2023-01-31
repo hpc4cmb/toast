@@ -1023,7 +1023,7 @@ class PixelData(AcceleratorObject):
                 for sm in range(ncomm):
                     for v in range(self._n_value):
                         accum_var[v] += np.sum(
-                            (recv_buf[sm, :, v] - accum_mean[v])**2
+                            (recv_buf[sm, :, v] - accum_mean[v]) ** 2
                         )
             dist.comm.barrier()
             submap_off += ncomm
@@ -1033,7 +1033,7 @@ class PixelData(AcceleratorObject):
                 "sum": [accum_sum[x] for x in range(self._n_value)],
                 "mean": [accum_mean[x] for x in range(self._n_value)],
                 "rms": [
-                    np.sqrt(accum_var[x] / (accum_count[x] - 1)) 
+                    np.sqrt(accum_var[x] / (accum_count[x] - 1))
                     for x in range(self._n_value)
                 ],
             }

@@ -26,9 +26,9 @@ from toast.scripts.benchmarking_utilities import (
     create_input_maps,
     default_sim_atmosphere,
     get_mpi_settings,
-    python_startup_time,
     get_standard_ground_args,
     make_focalplane,
+    python_startup_time,
 )
 from toast.timing import dump, function_timer, gather_timers
 

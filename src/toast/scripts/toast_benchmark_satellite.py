@@ -22,6 +22,7 @@ import toast
 import toast.ops
 from toast.schedule_sim_satellite import create_satellite_schedule
 from toast.scripts.benchmarking_utilities import (
+    compare_output_stats,
     compute_science_metric,
     estimate_memory_overhead,
     get_mpi_settings,
@@ -31,7 +32,6 @@ from toast.scripts.benchmarking_utilities import (
     run_mapmaker,
     scan_map,
     select_case,
-    compare_output_stats,
 )
 from toast.timing import dump, function_timer, gather_timers
 
