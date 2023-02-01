@@ -21,16 +21,7 @@ from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import (
-    Bool,
-    Instance,
-    Int,
-    List,
-    Quantity,
-    Tuple,
-    Unicode,
-    trait_docs,
-)
+from ..traits import Bool, Instance, Int, List, Quantity, Tuple, Unicode, trait_docs
 from ..utils import (
     AlignedF64,
     AlignedU8,

@@ -114,6 +114,8 @@ fi
 
 echo "Installing conda packages:  ${pkglist}"
 conda install --yes --update-all ${pkglist}
+# The "cc" symlink breaks Crays...
+rm -f "${CONDA_PREFIX}/bin/cc"
 
 if [ "x${pip_list}" != "x" ]; then
     echo "Installing pip packages:  ${pip_list}"

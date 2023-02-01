@@ -922,6 +922,125 @@ class PixelData(AcceleratorObject):
         return
 
     @function_timer
+    def stats(self, comm_bytes=10000000):
+        """Compute some simple statistics of the pixel data.
+
+        The map should already be consistent across all processes with overlapping
+        submaps.
+
+        Args:
+            comm_bytes (int): The approximate message size to use.
+
+        Returns:
+            (dict):  The computed properties on rank zero, None on other ranks.
+
+        """
+        dist = self._dist
+        nsub = dist.n_submap
+
+        if dist.comm is None:
+            return {
+                "sum": [np.sum(self.data[:, :, x]) for x in range(self._n_value)],
+                "mean": [np.mean(self.data[:, :, x]) for x in range(self._n_value)],
+                "rms": [np.std(self.data[:, :, x]) for x in range(self._n_value)],
+            }
+
+        # The lowest rank with a locally-hit submap will contribute to the reduction
+        local_hit_submaps = dist.comm.size * np.ones(nsub, dtype=np.int32)
+        local_hit_submaps[dist.local_submaps] = dist.comm.rank
+        hit_submaps = np.zeros_like(local_hit_submaps)
+        dist.comm.Allreduce(local_hit_submaps, hit_submaps, op=MPI.MIN)
+        del local_hit_submaps
+
+        comm_submap = self.comm_nsubmap(comm_bytes)
+
+        send_buf = np.zeros(
+            comm_submap * dist.n_pix_submap * self._n_value,
+            dtype=self._dtype,
+        ).reshape((comm_submap, dist.n_pix_submap, self._n_value))
+
+        recv_buf = None
+        if dist.comm.rank == 0:
+            # Alloc receive buffer
+            recv_buf = np.zeros(
+                comm_submap * dist.n_pix_submap * self._n_value,
+                dtype=self._dtype,
+            ).reshape((comm_submap, dist.n_pix_submap, self._n_value))
+            # Variables for variance calc
+            accum_sum = np.zeros(self._n_value, dtype=np.float64)
+            accum_count = np.zeros(self._n_value, dtype=np.int64)
+            accum_mean = np.zeros(self._n_value, dtype=np.float64)
+            accum_var = np.zeros(self._n_value, dtype=np.float64)
+
+        # Doing a two-pass variance calculation is faster than looping
+        # over individual samples in python.
+
+        submap_off = 0
+        ncomm = comm_submap
+
+        while submap_off < nsub:
+            if submap_off + ncomm > nsub:
+                ncomm = nsub - submap_off
+            send_buf[:, :, :] = 0
+            for sm in range(ncomm):
+                abs_sm = submap_off + sm
+                if hit_submaps[abs_sm] == dist.comm.rank:
+                    # Contribute
+                    loc = dist.global_submap_to_local[abs_sm]
+                    send_buf[sm, :, :] = self.data[loc, :, :]
+
+            dist.comm.Reduce(send_buf, recv_buf, op=MPI.SUM, root=0)
+
+            if dist.comm.rank == 0:
+                for sm in range(ncomm):
+                    for v in range(self._n_value):
+                        accum_sum[v] += np.sum(recv_buf[sm, :, v])
+                        accum_count[v] += dist.n_pix_submap
+            dist.comm.barrier()
+            submap_off += ncomm
+
+        if dist.comm.rank == 0:
+            for v in range(self._n_value):
+                accum_mean[v] = accum_sum[v] / accum_count[v]
+
+        submap_off = 0
+        ncomm = comm_submap
+
+        while submap_off < nsub:
+            if submap_off + ncomm > nsub:
+                ncomm = nsub - submap_off
+            send_buf[:, :, :] = 0
+            for sm in range(ncomm):
+                abs_sm = submap_off + sm
+                if hit_submaps[abs_sm] == dist.comm.rank:
+                    # Contribute
+                    loc = dist.global_submap_to_local[abs_sm]
+                    send_buf[sm, :, :] = self.data[loc, :, :]
+
+            dist.comm.Reduce(send_buf, recv_buf, op=MPI.SUM, root=0)
+
+            if dist.comm.rank == 0:
+                for sm in range(ncomm):
+                    for v in range(self._n_value):
+                        accum_var[v] += np.sum(
+                            (recv_buf[sm, :, v] - accum_mean[v]) ** 2
+                        )
+            dist.comm.barrier()
+            submap_off += ncomm
+
+        if dist.comm.rank == 0:
+            return {
+                "sum": [accum_sum[x] for x in range(self._n_value)],
+                "mean": [accum_mean[x] for x in range(self._n_value)],
+                "rms": [
+                    np.sqrt(accum_var[x] / (accum_count[x] - 1))
+                    for x in range(self._n_value)
+                ],
+            }
+        else:
+            return None
+
+    @function_timer
     def broadcast_map(self, fdata, comm_bytes=10000000):
         """Distribute a map located on a single process.
 

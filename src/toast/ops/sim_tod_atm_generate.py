@@ -245,8 +245,8 @@ class GenerateAtmosphere(Operator):
         log_prefix = f"{group} : {sname} : "
 
         # List of simulated slabs for each wind interval
+        output = None
         if not self.cache_only:
-            output = None
             output = list()
 
         # For each session, check that the observations have the same site.
