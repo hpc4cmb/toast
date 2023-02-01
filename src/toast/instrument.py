@@ -13,7 +13,7 @@ import numpy as np
 from astropy import units as u
 from astropy.io.misc.hdf5 import read_table_hdf5, write_table_hdf5
 from astropy.table import Column, QTable
-from scipy.constants import h, k
+from scipy.constants import h, k, c
 
 try:
     from scipy.integrate import simpson
@@ -323,8 +323,10 @@ class Bandpass(object):
         # The interpolated bandpasses will be cached as needed
         self.fmin_tot = None
         self.fmax_tot = None
-        self.freqs = {}
-        self.bandpass = {}
+        self._freqs = {}
+        self._bandpass = {}
+        self._kcmb2mjysr = {}
+        self._kcmb2krj = {}
 
     @function_timer
     def get_range(self, det=None):
@@ -335,6 +337,99 @@ class Bandpass(object):
             self.fmin_tot = min(self.fmin.values())
             self.fmax_tot = max(self.fmax.values())
         return self.fmin_tot, self.fmax_tot
+
+    @function_timer
+    def center_frequency(self, det, alpha=-1):
+        """Return the effective central frequency for a given spectral index"""
+
+        # Which delta function bandpass would produce the same flux density
+        freqs = self.freqs(det)
+        if alpha == 0:
+            # The equation is singular at alpha == 0. Evaluate it on both sides
+            # and return the average
+            delta = 1e-6
+            alpha1 = alpha - delta
+            eff1 = self.convolve(det, freqs, freqs.to_value(u.Hz)**alpha1)**(1 / alpha1)
+            alpha2 = alpha + delta
+            eff2 = self.convolve(det, freqs, freqs.to_value(u.Hz)**alpha2)**(1 / alpha2)
+            eff = 0.5 * (eff1 + eff2)
+        else:
+            # Very simple closed form
+            eff = self.convolve(det, freqs, freqs.to_value(u.Hz)**alpha)**(1 / alpha)
+
+        return eff * u.Hz
+
+    @function_timer
+    def _get_unit_conversion(self, det):
+        """Compute and cache the unit conversion coefficients for one detector"""
+
+        if det not in self._kcmb2mjysr or det not in self._kcmb2krj:
+            # The calculation is a copy from the Hildebrandt and Macias-Perez IDL module for Planck
+
+            nu_cmb = k * TCMB / h
+            alpha = 2 * k**3 * TCMB**2 / h**2 / c**2
+
+            cfreq = self.center_frequency(det).to_value(u.Hz)
+            freqs = self.freqs(det).to_value(u.Hz)
+            bandpass = self.bandpass(det)
+
+            x = freqs / nu_cmb
+            db_dt = alpha * x**4 * np.exp(x) / (np.exp(x) - 1)**2
+            db_dt_rj = 2 * freqs**2 * k / c**2
+
+            self._kcmb2mjysr[det] = (
+                1e20
+                * integrate_simpson(freqs, db_dt * bandpass)
+                / integrate_simpson(freqs, cfreq / freqs * bandpass)
+            )
+            self._kcmb2krj[det] = integrate_simpson(
+                freqs, db_dt * bandpass
+            ) / integrate_simpson(freqs, db_dt_rj * bandpass)
+
+        return
+
+    @function_timer
+    def freqs(self, det):
+        if det not in self._freqs:
+            fmin = self._fmin[det].to_value(u.Hz)
+            fmax = self._fmax[det].to_value(u.Hz)
+            self._freqs[det] = np.linspace(fmin, fmax, self.nstep) * u.Hz
+        return self._freqs[det]
+
+    @function_timer
+    def bandpass(self, det):
+        if det not in self._bandpass:
+            # Normalize and interpolate the bandpass
+            freqs = self.freqs(det)
+            try:
+                # If we have a tabulated bandpass, interpolate it
+                self._bandpass[det] = np.interp(
+                    freqs.to_value(u.Hz),
+                    self._bins[det].to_value(u.Hz),
+                    self._values[det],
+                )
+            except AttributeError:
+                self._bandpass[det] = np.ones(self.nstep)
+
+            # norm = simpson(self.bandpass[det], x=self.freqs[det])
+            norm = integrate_simpson(freqs.to_value(u.Hz), self._bandpass[det])
+            if norm == 0:
+                raise RuntimeError("Bandpass cannot be normalized")
+            self._bandpass[det] /= norm
+
+        return self._bandpass[det]
+
+    @function_timer
+    def kcmb2mjysr(self, det):
+        """Return the unit conversion between K_CMB and MJy/sr"""
+        self._get_unit_conversion_coefficients(det)
+        return self._kcmb2mjysr[det]
+
+    @function_timer
+    def kcmb2krj(self, det):
+        """Return the unit conversion between K_CMB and K_RJ"""
+        self._get_unit_conversion_coefficients(det)
+        return self._kcmb2krj[det]
 
     @function_timer
     def convolve(self, det, freqs, spectrum, rj=False):
@@ -350,40 +445,20 @@ class Bandpass(object):
         Returns:
             (array):  The bandpass-convolved spectrum
         """
-        if det not in self.bandpass:
-            # Normalize and interpolate the bandpass
-            fmin_det = self.fmin[det].to_value(u.GHz)
-            fmax_det = self.fmax[det].to_value(u.GHz)
-            self.freqs[det] = np.linspace(fmin_det, fmax_det, self.nstep)
-            try:
-                # If we have a tabulated bandpass, interpolate it
-                self.bandpass[det] = np.interp(
-                    self.freqs[det], self.bins[det].to_value(u.GHz), self.values[det]
-                )
-            except AttributeError:
-                self.bandpass[det] = np.ones(self.nstep)
-
-            # norm = simpson(self.bandpass[det], x=self.freqs[det])
-            norm = integrate_simpson(self.freqs[det], self.bandpass[det])
-            if norm == 0:
-                raise RuntimeError("Bandpass cannot be normalized")
-            self.bandpass[det] /= norm
-
-        freqs_det = self.freqs[det]
-        bandpass_det = self.bandpass[det]
+        freqs_det = self.freqs(det)
+        bandpass_det = self.bandpass(det)
 
         # Interpolate spectrum values to bandpass frequencies
-        spectrum_det = np.interp(freqs_det, freqs.to_value(u.GHz), spectrum)
+        spectrum_det = np.interp(freqs_det.to_value(u.Hz), freqs.to_value(u.Hz), spectrum)
 
         if rj:
             # From brightness to thermodynamic units
-            x = h * freqs_det * 1e9 / k / TCMB
+            x = h * freqs_det.to_value(u.Hz) / k / TCMB
             rj2cmb = (x / (np.exp(x / 2) - np.exp(-x / 2))) ** -2
             spectrum_det *= rj2cmb
 
         # Average across the bandpass
-        # convolved = simpson(spectrum_det * bandpass_det, x=freqs_det)
-        convolved = integrate_simpson(freqs_det, spectrum_det * bandpass_det)
+        convolved = integrate_simpson(freqs_det.to_value(u.Hz), spectrum_det * bandpass_det)
 
         return convolved
 
