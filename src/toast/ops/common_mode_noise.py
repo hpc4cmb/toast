@@ -14,7 +14,7 @@ from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger, name_UID
 from .operator import Operator
 
@@ -114,8 +114,6 @@ class CommonModeNoise(Operator):
                 raise RuntimeError(msg)
             focalplane = obs.telescope.focalplane
             fsample = focalplane.sample_rate.to_value(u.Hz)
-            freqs = np.linspace(0, fsample / 2, 10000)
-            freqs[0] = 1e-6
 
             # Check that the noise model exists
             if self.noise_model not in obs:
@@ -126,6 +124,8 @@ class CommonModeNoise(Operator):
                 raise RuntimeError(msg)
 
             noise = obs[self.noise_model]
+            # The noise simulation tools require frequencies to agree
+            freqs = noise.freq(noise.keys[0]).to_value(u.Hz)
 
             # Find the unique values of focalplane keys
 

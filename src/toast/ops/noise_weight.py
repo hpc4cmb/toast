@@ -8,7 +8,7 @@ import traitlets
 from ..accelerator import use_accel_jax
 from ..noise_sim import AnalyticNoise
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, UseEnum, trait_docs
+from ..traits import Int, Unicode, UseEnum, trait_docs
 from ..utils import Environment, Logger
 from .kernels import ImplementationType, noise_weight
 from .operator import Operator

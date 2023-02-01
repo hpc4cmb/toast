@@ -7,6 +7,7 @@ import sys
 from datetime import datetime
 
 import dateutil
+import dateutil.parser
 import numpy as np
 from astropy import units as u
 from astropy.table import Column, QTable

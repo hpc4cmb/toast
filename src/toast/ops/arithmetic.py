@@ -6,7 +6,7 @@ import traitlets
 
 from ..mpi import MPI
 from ..timing import function_timer
-from ..traits import Int, List, Unicode, trait_docs
+from ..traits import Int, Unicode, trait_docs
 from ..utils import Logger, unit_conversion
 from .operator import Operator
 

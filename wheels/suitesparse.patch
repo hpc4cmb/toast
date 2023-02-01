@@ -1,357 +1,75 @@
-diff -urN SuiteSparse-5.12.0_orig/CHOLMOD/Lib/Makefile SuiteSparse-5.12.0/CHOLMOD/Lib/Makefile
---- SuiteSparse-5.12.0_orig/CHOLMOD/Lib/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/CHOLMOD/Lib/Makefile	2022-07-09 20:10:58.000000000 -0700
-@@ -22,7 +22,7 @@
- #-------------------------------------------------------------------------------
- # With the CUDA BLAS:
- ifneq ($(GPU_CONFIG),)
--LDLIBS += $(CUDART_LIB) $(CUBLAS_LIB)
-+LDLIBS += $(CUBLAS_LIB) $(CUDART_LIB)
- endif
- #-------------------------------------------------------------------------------
+diff -urN SuiteSparse-6.0.3_orig/Makefile SuiteSparse-6.0.3/Makefile
+--- SuiteSparse-6.0.3_orig/Makefile	2022-12-24 19:37:26.000000000 -0800
++++ SuiteSparse-6.0.3/Makefile	2023-01-17 09:08:51.599056620 -0800
+@@ -39,8 +39,6 @@
+ 	( cd SuiteSparse_GPURuntime && $(MAKE) )
+ 	( cd GPUQREngine && $(MAKE) )
+ 	( cd SPQR && $(MAKE) )
+-	( cd GraphBLAS && $(MAKE) )
+-	( cd SPEX && $(MAKE) )
  
-@@ -106,7 +106,7 @@
- endif
+ # compile; "make install" only in  SuiteSparse/lib and SuiteSparse/include
+ local:
+@@ -61,8 +59,6 @@
+ 	( cd SuiteSparse_GPURuntime && $(MAKE) local )
+ 	( cd GPUQREngine && $(MAKE) local )
+ 	( cd SPQR && $(MAKE) local )
+-	( cd GraphBLAS && $(MAKE) local )
+-	( cd SPEX && $(MAKE) local )
  
- DI = $(CORE) $(CHECK) $(CHOLESKY) $(MATRIXOPS) $(MODIFY) $(SUPERNODAL) \
--	$(GPU) $(PARTITION) 
-+	$(GPU) $(PARTITION)
+ # compile; "sudo make install" will install only in /usr/local
+ # (or whatever your CMAKE_INSTALL_PREFIX is)
+@@ -84,8 +80,6 @@
+ 	( cd SuiteSparse_GPURuntime && $(MAKE) global )
+ 	( cd GPUQREngine && $(MAKE) global )
+ 	( cd SPQR && $(MAKE) global )
+-	( cd GraphBLAS && $(MAKE) global )
+-	( cd SPEX && $(MAKE) global )
  
- #-------------------------------------------------------------------------------
- # CHOLMOD library modules (long, double)
-@@ -526,10 +526,10 @@
- cholmod_gpu_kernels.o: ../GPU/cholmod_gpu_kernels.cu
- 	$(NVCC) $(I) $(NVCCFLAGS) -c ../GPU/cholmod_gpu_kernels.cu
+ # compile; "sudo make install" will install only in /usr/local
+ # (or whatever your CMAKE_INSTALL_PREFIX is)
+@@ -107,8 +101,6 @@
+ 	( cd SuiteSparse_GPURuntime && $(MAKE) both )
+ 	( cd GPUQREngine && $(MAKE) both )
+ 	( cd SPQR && $(MAKE) both )
+-	( cd GraphBLAS && $(MAKE) both )
+-	( cd SPEX && $(MAKE) both )
  
--cholmod_gpu.o: ../GPU/cholmod_gpu.c 
-+cholmod_gpu.o: ../GPU/cholmod_gpu.c
- 	$(C) -c $(I) $<
- 
--cholmod_l_gpu.o: ../GPU/cholmod_gpu.c 
-+cholmod_l_gpu.o: ../GPU/cholmod_gpu.c
- 	$(C) -DDLONG -c $(I) $< -o $@
- 
- #-------------------------------------------------------------------------------
-diff -urN SuiteSparse-5.12.0_orig/GraphBLAS/Tcov/Makefile SuiteSparse-5.12.0/GraphBLAS/Tcov/Makefile
---- SuiteSparse-5.12.0_orig/GraphBLAS/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/GraphBLAS/Tcov/Makefile	2022-07-09 20:10:58.000000000 -0700
-@@ -21,7 +21,7 @@
-     CFLAGS  = -g -Xclang -fopenmp -std=c11 -fPIC -Wno-pragmas -fno-common
-     LDFLAGS = -Xclang -fopenmp
- else
--    CFLAGS  = -g -std=c11 -fopenmp -fexceptions -fPIC -Wno-pragmas
-+    CFLAGS  = -g -std=c11 -fopenmp -fPIC -Wno-pragmas
-     LDFLAGS = -fopenmp
- endif
- 
-@@ -29,7 +29,7 @@
- INC = tmp_include/*
- SRC2 = $(notdir $(wildcard $(SRC)))
- OBJ = $(SRC2:.c=.o)
--LIBS = 
-+LIBS =
- CPPFLAGS = -Itmp_include -DGBNCPUFEAT -I../rmm_wrap -DGBCOVER $(RENAME)
- SO_OPTS = $(LDFLAGS)
- 
-diff -urN SuiteSparse-5.12.0_orig/KLU/Tcov/Makefile SuiteSparse-5.12.0/KLU/Tcov/Makefile
---- SuiteSparse-5.12.0_orig/KLU/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/KLU/Tcov/Makefile	2022-07-09 20:10:58.000000000 -0700
-@@ -18,9 +18,8 @@
- 
- # for statement coverage, picky tests
- CF = -Wall -W -Wshadow -Wmissing-prototypes -Wstrict-prototypes \
--   	-Wredundant-decls -Wnested-externs -Wdisabled-optimization \
-- 	-ansi -g -ftest-coverage -fprofile-arcs -fexceptions \
--	-fopenmp
-+     -Wredundant-decls -Wnested-externs -Wdisabled-optimization \
-+     -ansi -g -ftest-coverage -fprofile-arcs -fopenmp
- 
- C = $(CC) $(CF)
- 
-diff -urN SuiteSparse-5.12.0_orig/Makefile SuiteSparse-5.12.0/Makefile
---- SuiteSparse-5.12.0_orig/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/Makefile	2022-07-09 20:08:41.000000000 -0700
-@@ -16,7 +16,7 @@
- # installs all libraries SuiteSparse/lib.
- go: metis
- 	( cd SuiteSparse_config && $(MAKE) )
--	( cd Mongoose && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' )
-+	# ( cd Mongoose && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' )
- 	( cd AMD && $(MAKE) )
- 	( cd BTF && $(MAKE) )
- 	( cd CAMD && $(MAKE) )
-@@ -44,7 +44,7 @@
- #       sudo make install INSTALL=/usr/local
- # See SuiteSparse/README.md for more details.
- # (note that CSparse is not installed; CXSparse is installed instead)
--install: metisinstall gbinstall moninstall
-+install: metisinstall
- 	( cd SuiteSparse_config && $(MAKE) install )
- 	# ( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' install )
- 	( cd AMD && $(MAKE) install )
-@@ -63,7 +63,7 @@
+ # install all packages.  Location depends on prior "make", "make global" etc
+ install:
+@@ -128,8 +120,6 @@
+ 	( cd SuiteSparse_GPURuntime && $(MAKE) install )
  	( cd GPUQREngine && $(MAKE) install )
- endif
  	( cd SPQR && $(MAKE) install )
--	# ( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' install )
-+#	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' install )
- #	( cd PIRO_BAND && $(MAKE) install )
- #	( cd SKYLINE_SVD && $(MAKE) install )
- 	( cd SLIP_LU && $(MAKE) install )
-@@ -79,8 +79,8 @@
- 	- $(CP) lib/libmetis.* $(INSTALL_LIB)
- 	- $(CP) metis-5.1.0/manual/manual.pdf $(INSTALL_DOC)/METIS_manual.pdf
- 	- $(CP) metis-5.1.0/README.txt $(INSTALL_DOC)/METIS_README.txt
--        # the following is needed only on the Mac, so *.dylib is hardcoded:
--	$(SO_INSTALL_NAME) $(INSTALL_LIB)/libmetis.dylib $(INSTALL_LIB)/libmetis.dylib
-+	# the following is needed only on the Mac, so *.dylib is hardcoded:
-+	$(SO_INSTALL_NAME) "@rpath/libmetis.dylib" $(INSTALL_LIB)/libmetis.dylib
- 	- $(CP) include/metis.h $(INSTALL_INCLUDE)
- 	chmod 755 $(INSTALL_LIB)/libmetis.*
- 	chmod 644 $(INSTALL_INCLUDE)/metis.h
-@@ -114,7 +114,7 @@
- #	( cd PIRO_BAND && $(MAKE) uninstall )
- #	( cd SKYLINE_SVD && $(MAKE) uninstall )
- ifeq (,$(MY_METIS_LIB))
--        # uninstall METIS, which came from SuiteSparse/metis-5.1.0
-+	# uninstall METIS, which came from SuiteSparse/metis-5.1.0
- 	$(RM) $(INSTALL_LIB)/libmetis.*
- 	$(RM) $(INSTALL_INCLUDE)/metis.h
- 	$(RM) $(INSTALL_DOC)/METIS_manual.pdf
-@@ -126,7 +126,7 @@
- # the static library
- library: metis
- 	( cd SuiteSparse_config && $(MAKE) )
--	( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' library )
-+	# ( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' library )
- 	( cd AMD && $(MAKE) library )
- 	( cd BTF && $(MAKE) library )
- 	( cd CAMD && $(MAKE) library )
-@@ -144,7 +144,7 @@
- 	( cd GPUQREngine && $(MAKE) library )
- endif
- 	( cd SPQR && $(MAKE) library )
--	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' library )
-+#	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' library )
- 	( cd SLIP_LU && $(MAKE) library )
- #	( cd PIRO_BAND && $(MAKE) library )
- #	( cd SKYLINE_SVD && $(MAKE) library )
-@@ -154,7 +154,7 @@
- # both the dynamic and static libraries.
- static: metis
- 	( cd SuiteSparse_config && $(MAKE) static )
--	( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' static )
-+	# ( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' static )
- 	( cd AMD && $(MAKE) static )
- 	( cd BTF && $(MAKE) static )
- 	( cd CAMD && $(MAKE) static )
-@@ -172,7 +172,7 @@
- 	( cd GPUQREngine && $(MAKE) static )
- endif
- 	( cd SPQR && $(MAKE) static )
--	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' static )
-+#	( cd GraphBLAS && $(MAKE) JOBS=$(JOBS) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' static )
- 	( cd SLIP_LU && $(MAKE) static )
- #	( cd PIRO_BAND && $(MAKE) static )
- #	( cd SKYLINE_SVD && $(MAKE) static )
-@@ -282,10 +282,13 @@
- # hardcoded below.
- include/metis.h:
- ifeq (,$(MY_METIS_LIB))
-+	- ( cd metis-5.1.0 && $(MAKE) config prefix=$(SUITESPARSE) cc=$(CC) )
-+	- ( cd metis-5.1.0 && $(MAKE) )
-+	- ( cd metis-5.1.0 && $(MAKE) install )
- 	- ( cd metis-5.1.0 && $(MAKE) config shared=1 prefix=$(SUITESPARSE) cc=$(CC) )
- 	- ( cd metis-5.1.0 && $(MAKE) )
- 	- ( cd metis-5.1.0 && $(MAKE) install )
--	- $(SO_INSTALL_NAME) $(SUITESPARSE)/lib/libmetis.dylib \
-+	- $(SO_INSTALL_NAME) "@rpath/libmetis.dylib" \
-                              $(SUITESPARSE)/lib/libmetis.dylib
- else
- 	@echo 'Using pre-installed METIS 5.1.0 library at ' '[$(MY_METIS_LIB)]'
-@@ -314,4 +317,3 @@
- # compile and install Mongoose
- moninstall: mon
- 	( cd Mongoose  && $(MAKE) CMAKE_OPTIONS='$(CMAKE_OPTIONS)' install )
--
-diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Demo/Makefile SuiteSparse-5.12.0/SLIP_LU/Demo/Makefile
---- SuiteSparse-5.12.0_orig/SLIP_LU/Demo/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/SLIP_LU/Demo/Makefile	2022-07-09 20:10:58.000000000 -0700
-@@ -20,7 +20,7 @@
+-	( cd GraphBLAS && $(MAKE) install )
+-	( cd SPEX && $(MAKE) install )
  
- # LDFLAGS = -L../../lib
+ # uninstall all packages
+ uninstall:
+@@ -149,8 +139,6 @@
+ 	( cd SuiteSparse_GPURuntime && $(MAKE) uninstall )
+ 	( cd GPUQREngine && $(MAKE) uninstall )
+ 	( cd SPQR && $(MAKE) uninstall )
+-	( cd GraphBLAS && $(MAKE) uninstall )
+-	( cd SPEX && $(MAKE) uninstall )
  
--LDLIBS += -lm -lgmp -lmpfr -lcolamd -lamd -lsliplu
-+LDLIBS += -lsliplu -lcolamd -lamd -lmpfr -lgmp -lm
- CS = $(LDLIBS)
+ # Remove all files not in the original distribution
+ distclean: purge
+@@ -177,8 +165,6 @@
+ 	- $(RM) MATLAB_Tools/*/*.mex* MATLAB_Tools/*/*/*.mex*
+ 	- $(RM) MATLAB_Tools/*/*.o    MATLAB_Tools/*/*/*.o
+ 	- $(RM) -r include/* bin/* lib/* Example/build/*
+-	- ( cd GraphBLAS && $(MAKE) purge )
+-	- ( cd SPEX && $(MAKE) purge )
  
+ clean: purge
  
-diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Lib/Makefile SuiteSparse-5.12.0/SLIP_LU/Lib/Makefile
---- SuiteSparse-5.12.0_orig/SLIP_LU/Lib/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/SLIP_LU/Lib/Makefile	2022-07-09 20:10:58.000000000 -0700
-@@ -20,7 +20,7 @@
- # CFLAGS += -Wall -Wextra -Wpedantic -Werror
+@@ -199,8 +185,6 @@
+ 	- ( cd CXSparse && $(MAKE) demos )
+ 	- ( cd RBio && $(MAKE) demos )
+ 	- ( cd SPQR && $(MAKE) demos )
+-	- ( cd GraphBLAS && $(MAKE) demos )
+-	- ( cd SPEX && $(MAKE) demos )
  
- # SLIP_LU depends on SuiteSparse_config, AMD, COLAMD, M, GMP, and MPFR
--LDLIBS += -lsuitesparseconfig -lamd -lcolamd -lm -lgmp -lmpfr
-+LDLIBS += -lsuitesparseconfig -lamd -lcolamd -lmpfr -lgmp -lm
- 
- C = $(CC) $(CF) -I../Include -I../../COLAMD/Include -I../../AMD/Include -I../../SuiteSparse_config
- 
-diff -urN SuiteSparse-5.12.0_orig/SLIP_LU/Tcov/Makefile SuiteSparse-5.12.0/SLIP_LU/Tcov/Makefile
---- SuiteSparse-5.12.0_orig/SLIP_LU/Tcov/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/SLIP_LU/Tcov/Makefile	2022-07-09 20:10:58.000000000 -0700
-@@ -21,7 +21,7 @@
-         -I../../SuiteSparse_config -I../../COLAMD/Include -I../../AMD/Include \
-         -DSLIP_GMP_LIST_INIT=2 -DSLIP_LU_TCOV
- 
--LDLIBS += -lm -lgmp -lmpfr -lcolamd -lamd -lsuitesparseconfig
-+LDLIBS += -lsuitesparseconfig -lcolamd -lamd -lmpfr -lgmp -lm
- 
- # run all statement coverage tests, and then check for 100% coverage
- run: runtests
-diff -urN SuiteSparse-5.12.0_orig/SuiteSparse_config/SuiteSparse_config.mk SuiteSparse-5.12.0/SuiteSparse_config/SuiteSparse_config.mk
---- SuiteSparse-5.12.0_orig/SuiteSparse_config/SuiteSparse_config.mk	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/SuiteSparse_config/SuiteSparse_config.mk	2022-07-09 20:10:58.000000000 -0700
-@@ -154,7 +154,7 @@
- 
-     # The CF macro is used by SuiteSparse Makefiles as a combination of
-     # CFLAGS, CPPFLAGS, TARGET_ARCH, and system-dependent settings.
--    CF ?= $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(OPTIMIZATION) -fexceptions -fPIC
-+    CF ?= $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(OPTIMIZATION) -fPIC
- 
-     #---------------------------------------------------------------------------
-     # code formatting (for Tcov on Linux only)
-@@ -224,15 +224,51 @@
-     #---------------------------------------------------------------------------
- 
-     # CUDA is detected automatically, and used if found.  To disable CUDA,
--    # use CUDA=no
--    CUDA = auto
-+    # use CUDA_ROOT=no
-+    CUDA_ROOT ?= auto
-+    CUDA_ROOT_INC ?= auto
-+    CUDA_ROOT_LIB ?= auto
- 
--    ifneq ($(CUDA),no)
-+    ifneq ($(CUDA_ROOT),no)
-         CUDA_PATH = $(shell which nvcc 2>/dev/null | sed "s/\/bin\/nvcc//")
-+        ifeq ($(CUDA_ROOT_INC),auto)
-+            CUDA_PATH_INC = $(CUDA_PATH)/include
-+        else
-+            CUDA_PATH_INC = $(CUDA_ROOT_INC)
-+        endif
-+        ifeq ($(CUDA_ROOT_LIB),auto)
-+            CUDA_PATH_LIB = $(CUDA_PATH)/lib64
-+        else
-+            CUDA_PATH_LIB = $(CUDA_ROOT_LIB)
-+        endif
-     else
-         CUDA_PATH =
-+        CUDA_PATH_INC =
-+        CUDA_PATH_LIB =
-+    endif
-+
-+    $(info CUDA_PATH = $(CUDA_PATH) CUDA_PATH_INC = $(CUDA_PATH_INC) CUDA_PATH_LIB = $(CUDA_PATH_LIB))
-+
-+    # Support HPC style install with math libraries in a separate directory.  By
-+    # default just point to the same location as CUDA_PATH.
-+    CUDA_MATH ?= auto
-+    CUDA_MATH_INC ?= auto
-+    CUDA_MATH_LIB ?= auto
-+    ifeq ($(CUDA_MATH),auto)
-+        CUDA_MATH = $(CUDA_PATH)
-+        CUDA_MATH_INC = $(CUDA_PATH_INC)
-+        CUDA_MATH_LIB = $(CUDA_PATH_LIB)
-+    else
-+        ifeq ($(CUDA_MATH_INC),auto)
-+            CUDA_MATH_INC = $(CUDA_MATH)/include
-+        endif
-+        ifeq ($(CUDA_MATH_LIB),auto)
-+            CUDA_MATH_LIB = $(CUDA_MATH)/lib64
-+        endif
-     endif
- 
-+    $(info CUDA_MATH = $(CUDA_MATH) CUDA_MATH_INC = $(CUDA_MATH_INC) CUDA_MATH_LIB = $(CUDA_MATH_LIB))
-+
-     ifeq ($(wildcard $(CUDA_PATH)),)
-         # CUDA is not present
-         CUDA_PATH     =
-@@ -240,7 +276,6 @@
-         GPU_CONFIG    =
-         CUDART_LIB    =
-         CUBLAS_LIB    =
--        CUDA_INC_PATH =
-         CUDA_INC      =
-         NVCC          = echo
-         NVCCFLAGS     =
-@@ -253,10 +288,9 @@
-         GPU_CONFIG    = -DGPU_BLAS
-         # For example, to compile CHOLMOD for 10 CPU cores when using the GPU:
-         # GPU_CONFIG  = -DGPU_BLAS -DCHOLMOD_OMP_NUM_THREADS=10
--        CUDART_LIB    = $(CUDA_PATH)/lib64/libcudart.so
--        CUBLAS_LIB    = $(CUDA_PATH)/lib64/libcublas.so
--        CUDA_INC_PATH = $(CUDA_PATH)/include/
--        CUDA_INC      = -I$(CUDA_INC_PATH)
-+        CUDART_LIB    = $(CUDA_PATH_LIB)/libcudart.so
-+        CUBLAS_LIB    = $(CUDA_MATH_LIB)/libcublas.so
-+        CUDA_INC      = -I$(CUDA_PATH_INC) -I$(CUDA_MATH_INC)
-                 MAGMA_INC     = -I/opt/magma-2.4.0/include/
-                 MAGMA_LIB     = -L/opt/magma-2.4.0/lib/ -lmagma
-         NVCC          = $(CUDA_PATH)/bin/nvcc
-@@ -357,15 +391,20 @@
-     #---------------------------------------------------------------------------
- 
-     ifeq ($(UNAME), Darwin)
--        # To compile on the Mac, you must install Xcode.  Then do this at the
--        # command line in the Terminal, before doing 'make':
--        # xcode-select --install
--        CF += -fno-common
--        BLAS ?= -framework Accelerate
--        LAPACK ?= -framework Accelerate
--        # OpenMP is not yet supported by default in clang
--        CFOPENMP =
--        LDLIBS += -rpath $(INSTALL_LIB)
-+        ifeq ($(DARWIN_GCC), 1)
-+            # We are building with gcc on mac
-+            LDLIBS += -Wl,-rpath,$(INSTALL_LIB)
-+        else
-+            # To compile on the Mac, you must install Xcode.  Then do this at the
-+            # command line in the Terminal, before doing 'make':
-+            # xcode-select --install
-+            CF += -fno-common
-+            BLAS ?= -framework Accelerate
-+            LAPACK ?= -framework Accelerate
-+            # OpenMP is not yet supported by default in clang
-+            CFOPENMP =
-+            LDLIBS += -rpath $(INSTALL_LIB)
-+        endif
-     endif
- 
-     #---------------------------------------------------------------------------
-@@ -518,7 +557,7 @@
-                     # the compiler.  The latter can be empty if you have METIS
-                     # installed in a place where the compiler can find the
-                     # metis.h include file by itself without any -I option
--                    # (/usr/local/include/metis.h for example). 
-+                    # (/usr/local/include/metis.h for example).
-                     LIB_WITH_PARTITION += $(MY_METIS_LIB)
-                     ifneq (,$(MY_METIS_INC))
-                         I_WITH_PARTITION += -I$(MY_METIS_INC)
-@@ -617,4 +656,3 @@
- ifeq ($(TCOV),yes)
- 	@echo 'TCOV=yes, for extensive testing only (gcc, g++, vanilla BLAS)'
- endif
--
-diff -urN SuiteSparse-5.12.0_orig/metis-5.1.0/Makefile SuiteSparse-5.12.0/metis-5.1.0/Makefile
---- SuiteSparse-5.12.0_orig/metis-5.1.0/Makefile	2022-04-10 13:44:14.000000000 -0700
-+++ SuiteSparse-5.12.0/metis-5.1.0/Makefile	2022-07-09 20:10:58.000000000 -0700
-@@ -19,7 +19,7 @@
- BUILDDIR = build/$(systype)-$(cputype)
- 
- # Process configuration options.
--CONFIG_FLAGS = 
-+CONFIG_FLAGS =
- ifeq ($(gklib_path), not-set)
-     gklib_path = GKlib
- endif
+ # Create the PDF documentation
+ docs:

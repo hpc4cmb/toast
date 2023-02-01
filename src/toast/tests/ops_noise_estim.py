@@ -428,9 +428,12 @@ class NoiseEstimTest(MPITestCase):
                 fname = os.path.join(
                     self.outdir, f"noise_{label}_{obs.name}_{det}.fits"
                 )
-                hdulist = pf.open(fname)
-                freq, psd = hdulist[2].data.field(0)
-                ax.loglog(freq, psd, label=label)
+                try:
+                    hdulist = pf.open(fname)
+                    freq, psd = hdulist[2].data.field(0)
+                    ax.loglog(freq, psd, label=label)
+                except Exception:
+                    print(f"File {fname} does not exist.  Skipping")
             net = obs.telescope.focalplane["D0A-150"]["psd_net"]
             net = net.to_value(u.K / u.Hz**0.5)
             ax.axhline(

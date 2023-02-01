@@ -12,7 +12,7 @@ from ..fft import FFTPlanReal1DStore
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Dict, Float, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
 from .operator import Operator
 
@@ -52,7 +52,6 @@ class TimeConstant(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._oversample = 1
 
     def _get_tau(self, obs, det):
         focalplane = obs.telescope.focalplane
@@ -97,13 +96,11 @@ class TimeConstant(Operator):
 
             # Compute the radix-2 FFT length to use
             fftlen = 2
-            while fftlen <= (self._oversample * nsample):
+            while fftlen <= 2 * nsample:
                 fftlen *= 2
             npsd = fftlen // 2 + 1
-
-            # Compute the time domain offset that centers our data within the
-            # buffer
-            padded_start = (fftlen - nsample) // 2
+            npad = fftlen - nsample
+            nhalf = nsample // 2
 
             freqs = np.fft.rfftfreq(fftlen, 1 / fsample.to_value(u.Hz))
 
@@ -111,12 +108,18 @@ class TimeConstant(Operator):
             fplan = store.forward(fftlen, len(dets))
             rplan = store.backward(fftlen, len(dets))
 
-            # Fill the forward buffers
+            # Fill the forward buffers.  To avoid boundary effects, we continue
+            # the signal with a time-reversed copy of itself
             for idet, det in enumerate(dets):
-                fplan.tdata(idet)[:] = 0
-                fplan.tdata(idet)[padded_start : padded_start + nsample] = obs.detdata[
-                    self.det_data
-                ][det]
+                signal = obs.detdata[self.det_data][det]
+                # Original signal
+                fplan.tdata(idet)[:nsample] = signal
+                # Continue with time-reversed second half
+                fplan.tdata(idet)[nsample : nsample + nhalf] = signal[: nhalf - 1 : -1]
+                # Pad with the center value
+                fplan.tdata(idet)[nsample + nhalf:-nsample-nhalf] = signal[nhalf]
+                # End with the time-reversed first half
+                fplan.tdata(idet)[-nhalf:] = signal[nhalf - 1 : : -1]
 
             # Do the forward transforms
             fplan.exec()
@@ -175,9 +178,7 @@ class TimeConstant(Operator):
 
             # Copy timestreams back
             for idet, det in enumerate(dets):
-                obs.detdata[self.det_data][det] = rplan.tdata(idet)[
-                    padded_start : padded_start + nsample
-                ]
+                obs.detdata[self.det_data][det] = rplan.tdata(idet)[: nsample]
 
             # Clear the FFT plans after each observation to save memory.  This means
             # we are just using the plan store for convenience and not re-using the

@@ -17,7 +17,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..observation_dist import global_interval_times
 from ..timing import GlobalTimers, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger, Timer
 from .operator import Operator
 
@@ -245,8 +245,8 @@ class GenerateAtmosphere(Operator):
         log_prefix = f"{group} : {sname} : "
 
         # List of simulated slabs for each wind interval
+        output = None
         if not self.cache_only:
-            output = None
             output = list()
 
         # For each session, check that the observations have the same site.

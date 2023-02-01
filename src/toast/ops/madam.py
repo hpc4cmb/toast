@@ -117,7 +117,7 @@ class Madam(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    params = Dict(dict(), help="Parameters to pass to madam")
+    params = Dict({}, help="Parameters to pass to madam")
 
     paramfile = Unicode(
         None, allow_none=True, help="Read madam parameters from this file"

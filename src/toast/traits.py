@@ -178,9 +178,12 @@ def list_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            raise ValueError(
-                "The toast config system does not support None values for List traits."
+            msg = (
+                f"The toast config system does not support None values for "
+                f"List traits. "
+                f"Failed to parse '{self.name}' : '{self.help}'"
             )
+            raise ValueError(msg)
             # val = "None"
         else:
             val = list()

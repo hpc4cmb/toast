@@ -34,7 +34,7 @@ class PointingWCSTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         # For debugging, change this to True
-        self.write_extra = False
+        self.write_extra = True
 
     def check_hits(self, prefix, pixels):
         wcs = pixels.wcs
@@ -61,6 +61,7 @@ class PointingWCSTest(MPITestCase):
             )
         px = np.array(px, dtype=np.float64)
         coord = wcs.wcs_pix2world(px, 0)
+        checkpx = wcs.wcs_world2pix(coord, 0)
         coord *= np.pi / 180.0
         phi = np.array(coord[:, 0], dtype=np.float64)
         half_pi = np.pi / 2
@@ -85,7 +86,7 @@ class PointingWCSTest(MPITestCase):
         # Hitmap
 
         build_hits = ops.BuildHitMap(
-            pixel_dist="dist",
+            pixel_dist=pixels.create_dist,
             pixels=pixels.pixels,
             det_flags=None,
         )

@@ -11,7 +11,7 @@ import traitlets
 from ..dist import distribute_discrete
 from ..spt3g import available
 from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..traits import Instance, Int, Unicode, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
