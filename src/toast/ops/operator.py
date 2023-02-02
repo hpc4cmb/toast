@@ -169,18 +169,6 @@ class Operator(TraitConfig):
                 prov[key] = list()
         return prov
 
-    def _supports_accel(self):
-        return False
-
-    def supports_accel(self):
-        """Query whether the operator supports GPU computing
-
-        Returns:
-            (bool):  True if the operator can use GPU computing, else False.
-
-        """
-        return self._supports_accel()
-
     def accel_have_requires(self, data):
         # Helper function to determine if all requirements are met to use accelerator
         # for a data object.

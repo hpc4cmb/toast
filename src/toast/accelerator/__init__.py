@@ -17,3 +17,5 @@ from .accel import (
     accel_data_delete,
     AcceleratorObject,
 )
+
+from .kernel_registry import kernel, ImplementationType

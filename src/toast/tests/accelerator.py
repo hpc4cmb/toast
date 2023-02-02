@@ -19,6 +19,8 @@ from ..accelerator import (
     accel_enabled,
     use_accel_jax,
     use_accel_omp,
+    kernel,
+    ImplementationType,
 )
 from ..data import Data
 from ..observation import default_values as defaults
@@ -89,6 +91,30 @@ class AcceleratorTest(MPITestCase):
             "i8": np.int8,
             "u8": np.uint8,
         }
+
+    def test_kernel_registry(self):
+        @kernel(ImplementationType.DEFAULT)
+        def my_kernel(foo):
+            print(f"DEFAULT:  {foo}")
+
+        @kernel(ImplementationType.COMPILED, name="my_kernel")
+        def super_compiled(foo):
+            print(f"COMPILED:  {foo}")
+
+        @kernel(ImplementationType.NUMPY, name="my_kernel")
+        def super_numpy(foo):
+            print(f"NUMPY:  {foo}")
+
+        @kernel(ImplementationType.JAX, name="my_kernel")
+        def awesome_jax(foo):
+            print(f"JAX:  {foo}")
+
+        bar = "yes"
+        my_kernel(bar, impl=ImplementationType.DEFAULT)
+        my_kernel(bar, impl=ImplementationType.COMPILED)
+        my_kernel(bar, impl=ImplementationType.NUMPY)
+        my_kernel(bar, impl=ImplementationType.JAX)
+        
 
     def test_memory(self):
         if not (use_accel_omp or use_accel_jax):
