@@ -6,7 +6,6 @@ install(FILES
     polyfilter1D.py
     polyfilter2D.py
     scan_map.py
-    pixels_healpix.py
     stokes_weights.py
     template_offset.py
     build_noise_weighted.py

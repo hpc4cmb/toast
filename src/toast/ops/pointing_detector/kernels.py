@@ -13,7 +13,8 @@ if use_accel_jax:
     from .kernels_jax import pointing_detector_jax
 
 @kernel(impl=ImplementationType.COMPILED, name="pointing_detector")
-def pointing_detector_compiled(focalplane,
+def pointing_detector_compiled(
+    focalplane,
     boresight,
     quat_index,
     quats,

@@ -9,10 +9,11 @@ import numpy as np
 
 from .. import ops as ops
 from .. import qarray as qa
+from .._libtoast import healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
-from ..ops.kernels import ImplementationType, healpix_pixels, stokes_weights
+from ..accelerator import ImplementationType
 from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 

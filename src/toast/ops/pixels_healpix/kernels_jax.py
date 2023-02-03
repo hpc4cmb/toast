@@ -5,10 +5,12 @@
 import jax
 import jax.numpy as jnp
 
-from ....jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
-from ....jax.mutableArray import MutableJaxArray
-from ....utils import Logger
-from .math import healpix, qarray
+from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
+from ...jax.mutableArray import MutableJaxArray
+from ...utils import Logger
+from ...jax.math import healpix, qarray
+
+from ...accelerator import kernel, ImplementationType
 
 
 def pixels_healpix_inner(hpix, quats, nest):
@@ -162,7 +164,8 @@ pixels_healpix_interval = jax.jit(
 )  # donates pixels and hit_submap
 
 
-def pixels_healpix(
+@kernel(impl=ImplementationType.JAX, name="pixels_healpix")
+def pixels_healpix_jax(
     quat_index,
     quats,
     flags,

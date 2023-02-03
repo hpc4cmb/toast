@@ -55,7 +55,6 @@ install(FILES
     sss.py
     demodulation.py
     stokes_weights.py
-    pixels_healpix.py
     pixels_wcs.py
     filterbin.py
     save_hdf5.py
@@ -67,4 +66,6 @@ install(FILES
 )
 
 add_subdirectory(pointing_detector)
+add_subdirectory(pixels_healpix)
+
 add_subdirectory(kernels)

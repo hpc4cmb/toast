@@ -5,14 +5,14 @@
 import numpy as np
 import traitlets
 
-from ..healpix import Pixels
-from ..observation import default_values as defaults
-from ..pixels import PixelDistribution
-from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, UseEnum, trait_docs
-from ..utils import Environment, Logger
-from .kernels import ImplementationType, pixels_healpix
-from .operator import Operator
+from ...healpix import Pixels
+from ...observation import default_values as defaults
+from ...pixels import PixelDistribution
+from ...timing import function_timer
+from ...traits import Bool, Instance, Int, Unicode, UseEnum, trait_docs
+from ...utils import Environment, Logger
+from .kernels import pixels_healpix
+from ..operator import Operator
 
 
 @trait_docs
@@ -142,9 +142,12 @@ class PixelsHealpix(Operator):
         self._local_submaps = None
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
@@ -265,8 +268,8 @@ class PixelsHealpix(Operator):
                 self._n_pix_submap,
                 self.nside,
                 self.nest,
-                use_accel,
-                implementation_type=self.kernel_implementation,
+                impl=implementation,
+                use_accel=use_accel,
             )
 
             if self._local_submaps is not None:
