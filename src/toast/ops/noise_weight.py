@@ -39,12 +39,6 @@ class NoiseWeight(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
-    )
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

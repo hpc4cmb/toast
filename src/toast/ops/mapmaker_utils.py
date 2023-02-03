@@ -84,12 +84,6 @@ class BuildHitMap(Operator):
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
-    )
-
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
         check = proposal["value"]
@@ -295,12 +289,6 @@ class BuildInverseCovariance(Operator):
 
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
-    )
-
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("det_flag_mask")
@@ -580,12 +568,6 @@ class BuildNoiseWeighted(Operator):
 
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
-    )
-
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("det_flag_mask")

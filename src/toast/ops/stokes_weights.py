@@ -106,12 +106,6 @@ class StokesWeights(Operator):
 
     IAU = Bool(False, help="If True, use the IAU convention rather than COSMO")
 
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
-    )
-
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
         detpointing = proposal["value"]

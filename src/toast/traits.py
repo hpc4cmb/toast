@@ -463,6 +463,12 @@ class TraitConfig(HasTraits):
 
     enabled = Bool(True, help="If True, this class instance is marked as enabled")
 
+    kernel_implementation = UseEnum(
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
+    )
+
     use_accel = Bool(False, help="If True, use the accelerator")
 
     def __init__(self, **kwargs):

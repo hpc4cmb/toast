@@ -93,12 +93,6 @@ class PolyFilter2D(Operator):
         None, allow_none=True, help="Which focalplane key to match"
     )
 
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
-    )
-
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -474,12 +468,6 @@ class PolyFilter(Operator):
 
     view = Unicode(
         "throw", allow_none=True, help="Use this view of the data in all observations"
-    )
-
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
     @traitlets.validate("shared_flag_mask")

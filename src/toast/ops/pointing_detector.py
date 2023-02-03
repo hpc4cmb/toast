@@ -58,12 +58,6 @@ class PointingDetectorSimple(Operator):
         help="The output coordinate system ('C', 'E', 'G')",
     )
 
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
-    )
-
     @traitlets.validate("coord_in")
     def _check_coord_in(self, proposal):
         check = proposal["value"]
