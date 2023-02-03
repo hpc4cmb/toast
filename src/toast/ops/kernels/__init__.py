@@ -17,7 +17,6 @@ from .compiled import filter_poly2D as filter_poly2D_compiled
 from .compiled import filter_polynomial as filter_polynomial_compiled
 from .compiled import noise_weight as noise_weight_compiled
 from .compiled import pixels_healpix as pixels_healpix_compiled
-from .compiled import pointing_detector as pointing_detector_compiled
 from .compiled import scan_map as scan_map_compiled
 from .compiled import stokes_weights_I as stokes_weights_I_compiled
 from .compiled import stokes_weights_IQU as stokes_weights_IQU_compiled
@@ -80,7 +79,6 @@ from .python import filter_poly2D as filter_poly2D_python
 from .python import filter_polynomial as filter_polynomial_python
 from .python import noise_weight as noise_weight_python
 from .python import pixels_healpix as pixels_healpix_python
-from .python import pointing_detector as pointing_detector_python
 from .python import scan_map as scan_map_python
 from .python import stokes_weights_I as stokes_weights_I_python
 from .python import stokes_weights_IQU as stokes_weights_IQU_python
@@ -119,9 +117,6 @@ template_offset_apply_diag_precond = select_implementation(
     template_offset_apply_diag_precond_compiled,
     template_offset_apply_diag_precond_python,
     template_offset_apply_diag_precond_jax,
-)
-pointing_detector = select_implementation(
-    pointing_detector_compiled, pointing_detector_python, pointing_detector_jax
 )
 build_noise_weighted = select_implementation(
     build_noise_weighted_compiled, build_noise_weighted_python, build_noise_weighted_jax

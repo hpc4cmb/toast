@@ -507,8 +507,16 @@ class TraitConfig(HasTraits):
         """
         return self._supports_accel()
     
-    def get_impl(self):
-        """Return the currently selected kernel implementation."""
+    def select_kernels(self):
+        """Return the currently selected kernel implementation.
+        
+        This returns both the current implementation AND whether to use the accelerator
+        or not.  This is needed since some implementations support both CPU and GPU.
+
+        Returns:
+            (tuple):  The (implementation, use_accel) information.
+        
+        """
         impls = self.implementations()
         if self.use_accel:
             if use_accel_jax:
@@ -516,15 +524,15 @@ class TraitConfig(HasTraits):
                     msg = f"JAX accelerator use is enabled, "
                     msg += f"but not supported by {self.name}"
                     raise RuntimeError(msg)
-                return ImplementationType.JAX
+                return (ImplementationType.JAX, True)
             else:
                 if ImplementationType.COMPILED not in impls:
                     msg = f"OpenMP accelerator use is enabled, "
                     msg += f"but not supported by {self.name}"
                     raise RuntimeError(msg)
-                return ImplementationType.COMPILED
+                return (ImplementationType.COMPILED, True)
         else:
-            return ImplementationType.DEFAULT
+            return (ImplementationType.DEFAULT, False)
 
 
     def __eq__(self, other):

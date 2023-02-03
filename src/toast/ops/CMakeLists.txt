@@ -26,7 +26,6 @@ install(FILES
     noise_weight.py
     gainscrambler.py
     pointing.py
-    pointing_detector.py
     scan_map.py
     scan_healpix.py
     scan_wcs.py
@@ -67,4 +66,5 @@ install(FILES
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
 
+add_subdirectory(pointing_detector)
 add_subdirectory(kernels)

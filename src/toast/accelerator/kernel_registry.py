@@ -54,8 +54,8 @@ def kernel(impl, name=None):
             # This is the first occurence of this kernel.  Set up the dictionary of
             # implementations and create a dispatch function.
             registry[name] = dict()
-            def dispatch(*args, impl=ImplementationType.DEFAULT, **kwargs):
-                return registry[name][impl](*args, **kwargs)
+            def dispatch(*args, impl=ImplementationType.DEFAULT, use_accel=False, **kwargs):
+                return registry[name][impl](*args, use_accel=use_accel, **kwargs)
             registry[name]["dispatch"] = dispatch
 
         if impl in registry[name]:

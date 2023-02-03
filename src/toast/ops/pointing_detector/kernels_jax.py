@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -6,10 +6,12 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from ....jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
-from ....jax.mutableArray import MutableJaxArray
-from ....utils import Logger
-from .math import qarray
+from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
+from ...jax.mutableArray import MutableJaxArray
+from ...utils import Logger
+from ...jax.math import qarray
+
+from ...accelerator import kernel, ImplementationType
 
 
 def pointing_detector_inner(focalplane, boresight, flag, mask):
@@ -117,7 +119,8 @@ pointing_detector_interval = jax.jit(
 )  # donates quats
 
 
-def pointing_detector(
+@kernel(impl=ImplementationType.JAX, name="pointing_detector")
+def pointing_detector_jax(
     focalplane,
     boresight,
     quat_index,
@@ -125,7 +128,7 @@ def pointing_detector(
     intervals,
     shared_flags,
     shared_flag_mask,
-    use_accel,
+    use_accel=False,
 ):
     """
     Args:

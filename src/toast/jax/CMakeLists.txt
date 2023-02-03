@@ -8,3 +8,5 @@ install(FILES
     device.py 
     DESTINATION ${PYTHON_SITE}/toast/jax
 )
+
+add_subdirectory(math)

@@ -5,13 +5,13 @@
 import numpy as np
 import traitlets
 
-from .. import qarray as qa
-from ..observation import default_values as defaults
-from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, UseEnum, trait_docs
-from ..utils import Logger
-from .kernels import ImplementationType, pointing_detector
-from .operator import Operator
+from ... import qarray as qa
+from ...observation import default_values as defaults
+from ...timing import function_timer
+from ...traits import Bool, Int, Unicode, UseEnum, trait_docs
+from ...utils import Logger
+from .kernels import pointing_detector
+from ..operator import Operator
 
 
 @trait_docs
@@ -85,8 +85,11 @@ class PointingDetectorSimple(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         coord_rot = None
         if self.coord_in is None:
@@ -169,8 +172,8 @@ class PointingDetectorSimple(Operator):
                 ob.intervals[self.view].data,
                 flags,
                 self.shared_flag_mask,
-                use_accel,
-                implementation_type=self.kernel_implementation,
+                impl=implementation,
+                use_accel=use_accel,
             )
 
         return

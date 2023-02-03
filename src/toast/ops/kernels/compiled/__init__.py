@@ -7,7 +7,6 @@ from ...._libtoast import (  # use_accel operators; operators with no use_accel
     filter_poly2D,
     filter_polynomial,
     pixels_healpix,
-    pointing_detector,
     stokes_weights_I,
     stokes_weights_IQU,
     template_offset_add_to_signal,
