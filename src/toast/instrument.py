@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2019-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -312,31 +312,31 @@ class Bandpass(object):
         """
         self.nstep = nstep
         self.dets = []
-        self.fmin = {}
-        self.fmax = {}
+        self._fmin = {}
+        self._fmax = {}
         for name in bandcenters:
             self.dets.append(name)
             center = bandcenters[name]
             width = bandwidths[name]
-            self.fmin[name] = center - 0.5 * width
-            self.fmax[name] = center + 0.5 * width
+            self._fmin[name] = center - 0.5 * width
+            self._fmax[name] = center + 0.5 * width
         # The interpolated bandpasses will be cached as needed
-        self.fmin_tot = None
-        self.fmax_tot = None
+        self._fmin_tot = None
+        self._fmax_tot = None
         self._freqs = {}
         self._bandpass = {}
-        self._kcmb2mjysr = {}
+        self._kcmb2jysr = {}
         self._kcmb2krj = {}
 
     @function_timer
     def get_range(self, det=None):
         """Return the maximum range of frequencies needed for convolution."""
         if det is not None:
-            return self.fmin[det], self.fmax[det]
-        elif self.fmin_tot is None:
-            self.fmin_tot = min(self.fmin.values())
-            self.fmax_tot = max(self.fmax.values())
-        return self.fmin_tot, self.fmax_tot
+            return self._fmin[det], self._fmax[det]
+        elif self._fmin_tot is None:
+            self._fmin_tot = min(self._fmin.values())
+            self._fmax_tot = max(self._fmax.values())
+        return self._fmin_tot, self._fmax_tot
 
     @function_timer
     def center_frequency(self, det, alpha=-1):
@@ -360,10 +360,10 @@ class Bandpass(object):
         return eff * u.Hz
 
     @function_timer
-    def _get_unit_conversion(self, det):
+    def _get_unit_conversion_coefficients(self, det):
         """Compute and cache the unit conversion coefficients for one detector"""
 
-        if det not in self._kcmb2mjysr or det not in self._kcmb2krj:
+        if det not in self._kcmb2jysr or det not in self._kcmb2krj:
             # The calculation is a copy from the Hildebrandt and Macias-Perez IDL module for Planck
 
             nu_cmb = k * TCMB / h
@@ -377,8 +377,8 @@ class Bandpass(object):
             db_dt = alpha * x**4 * np.exp(x) / (np.exp(x) - 1)**2
             db_dt_rj = 2 * freqs**2 * k / c**2
 
-            self._kcmb2mjysr[det] = (
-                1e20
+            self._kcmb2jysr[det] = (
+                1e26
                 * integrate_simpson(freqs, db_dt * bandpass)
                 / integrate_simpson(freqs, cfreq / freqs * bandpass)
             )
@@ -420,10 +420,10 @@ class Bandpass(object):
         return self._bandpass[det]
 
     @function_timer
-    def kcmb2mjysr(self, det):
-        """Return the unit conversion between K_CMB and MJy/sr"""
+    def kcmb2jysr(self, det):
+        """Return the unit conversion between K_CMB and Jy/sr"""
         self._get_unit_conversion_coefficients(det)
-        return self._kcmb2mjysr[det]
+        return self._kcmb2jysr[det]
 
     @function_timer
     def kcmb2krj(self, det):
