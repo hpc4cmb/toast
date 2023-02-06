@@ -7,8 +7,6 @@ install(FILES
     polyfilter2D.py
     scan_map.py
     template_offset.py
-    build_noise_weighted.py
-    cov_accum.py
     noise_weight.py
     DESTINATION ${PYTHON_SITE}/toast/ops/kernels/jax
 )

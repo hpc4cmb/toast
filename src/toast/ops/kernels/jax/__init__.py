@@ -2,7 +2,6 @@
 from .build_noise_weighted import build_noise_weighted
 
 # operators ported but not using the use_accel input:
-from .cov_accum import cov_accum_diag_hits, cov_accum_diag_invnpp
 from .noise_weight import noise_weight
 from .polyfilter1D import filter_polynomial
 from .polyfilter2D import filter_poly2D

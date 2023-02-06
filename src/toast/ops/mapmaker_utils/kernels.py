@@ -25,118 +25,165 @@ if use_accel_jax:
     )
 
 
-@kernel(impl=ImplementationType.COMPILED, name="stokes_weights_I")
-def stokes_weights_I_compiled(
-    weight_index, 
-    weights, 
-    intervals, 
-    cal, 
-    use_accel=False,
-):
-    return libtoast_stokes_weights_I(
-        weight_index,
-        weights,
-        intervals,
-        cal,
-        use_accel,
-    )
+@kernel(impl=ImplementationType.COMPILED, name="build_noise_weighted")
+def build_noise_weighted_compiled(use_accel=False):
+    return libtoast_build_noise_weighted(*args, use_accel)
 
+@kernel(impl=ImplementationType.COMPILED, name="cov_accum_diag_hits")
+def cov_accum_diag_hits_compiled(*args, use_accel=False):
+    return libtoast_cov_accum_diag_hits(*args, use_accel)
 
-@kernel(impl=ImplementationType.COMPILED, name="stokes_weights_IQU")
-def stokes_weights_IQU_compiled(
-    quat_index, 
-    quats, 
-    weight_index, 
-    weights, 
-    hwp, 
-    intervals, 
-    epsilon, 
-    cal, 
-    use_accel=False,
-):
-    return libtoast_stokes_weights_IQU(
-        quat_index, 
-        quats, 
-        weight_index, 
-        weights, 
-        hwp, 
-        intervals, 
-        epsilon, 
-        cal, 
-        use_accel,
-    )
+@kernel(impl=ImplementationType.COMPILED, name="cov_accum_diag_invnpp")
+def cov_accum_diag_invnpp_compiled(*args, use_accel=False):
+    return libtoast_cov_accum_diag_invnpp(*args, use_accel)
+
 
 @kernel(impl=ImplementationType.DEFAULT)
-def stokes_weights_I(
-    weight_index, 
-    weights, 
-    intervals, 
-    cal, 
+def build_noise_weighted(
+    global2local,
+    zmap,
+    pixel_index,
+    pixels,
+    weight_index,
+    weights,
+    data_index,
+    det_data,
+    flag_index,
+    det_flags,
+    det_scale,
+    det_flag_mask,
+    intervals,
+    shared_flags,
+    shared_flag_mask,
     use_accel=False,
 ):
-    """Kernel for computing trivial intensity-only Stokes pointing weights.
+    """Kernel for accumulating the noise weighted map.
 
     Args:
+        global2local (array):  The mapping from global submap to local submap index.
+        zmap (array):  The local piece of the noise weighted map, indexed by submap,
+            then pixel, then value.
+        pixel_index (array):  The index into the detector pixel array for each
+            detector.
+        pixels (array):  The array of detector pixels for each sample.
         weight_index (array):  The index into the weights array for each detector.
         weights (array):  The array of I, Q, and U weights at each sample for each 
             detector.
+        data_index (array):  The index into the data array for each detector.
+        det_data (array):  The detector data at each sample for each detector.
+        flag_index (array):  The index into the flag array for each detector.
+        det_flags (array):  The detector flag at each sample for each detector.
+        det_scale (float):  Scale factor for each detector, applied before accumulating.
+        det_flag_mask (int):  The flag mask to apply to the detector flags.
         intervals (array):  The array of sample intervals.
+        shared_flags (array):  The array of common flags for each sample.
+        shared_flag_mask (int):  The flag mask to apply.
         use_accel (bool):  Whether to use the accelerator for this call (if supported).
 
     Returns:
         None
 
     """
-    return stokes_weights_I(
-        weight_index, 
-        weights, 
-        intervals, 
-        cal,
+    return build_noise_weighted(
+        global2local,
+        zmap,
+        pixel_index,
+        pixels,
+        weight_index,
+        weights,
+        data_index,
+        det_data,
+        flag_index,
+        det_flags,
+        det_scale,
+        det_flag_mask,
+        intervals,
+        shared_flags,
+        shared_flag_mask,
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
     )
 
 
 @kernel(impl=ImplementationType.DEFAULT)
-def stokes_weights_IQU(
-    quat_index, 
-    quats, 
-    weight_index, 
+def cov_accum_diag_invnpp(
+    nsub, 
+    nsubpix, 
+    nnz, 
+    submap, 
+    subpix, 
     weights, 
-    hwp, 
-    intervals, 
-    epsilon, 
-    cal,
+    scale, 
+    invnpp,
     use_accel=False,
 ):
-    """Kernel for computing the I/Q/U Stokes pointing weights.
+    """Kernel for accumulating the inverse diagonal pixel noise covariance.
 
     Args:
-        quat_index (array):  The index into the detector quaternion array for each
-            detector.
-        quats (array):  The array of detector quaternions for each sample.
-        weight_index (array):  The index into the weights array for each detector.
-        weights (array):  The array of I, Q, and U weights at each sample for each 
-            detector.
-        hwp (array):  The array of orientation angles for an ideal half wave plate.
-        intervals (array):  The array of sample intervals.
-        epsilon (float):  The cross polar leakage.
-        cal (float):  Calibration factor to apply to the weights.
-        use_accel (bool):  Whether to use the accelerator for this call (if supported).
+        nsub (int):  The number of locally stored submaps.
+        nsubpix (int):  The number of pixels in each submap.
+        nnz (int):  The number of non-zeros in each row of the pointing matrix.
+        submap (array, int64):  For each time domain sample, the submap index
+            within the local map (i.e. including only locally stored submaps)
+        subpix (array, int64):  For each time domain sample, the pixel index
+            within the submap.
+        weights (array, float64):  The pointing matrix weights for each time
+            sample and map.
+        scale (float):  Optional scaling factor.
+        invnpp (array, float64):  The local buffer of diagonal inverse pixel
+            covariances, stored as the lower triangle for each pixel.
 
     Returns:
         None
 
     """
-    return stokes_weights_IQU(
-        quat_index, 
-        quats, 
-        weight_index, 
+    return cov_accum_diag_invnpp(
+        nsub, 
+        nsubpix, 
+        nnz, 
+        submap, 
+        subpix, 
         weights, 
-        hwp, 
-        intervals, 
-        epsilon, 
-        cal,
+        scale, 
+        invnpp,
+        impl=ImplementationType.COMPILED,
+        use_accel=use_accel,
+    )
+
+
+@kernel(impl=ImplementationType.DEFAULT)
+def cov_accum_diag_hits(
+    nsub, 
+    nsubpix, 
+    nnz, 
+    submap, 
+    subpix, 
+    hits,
+    use_accel=False,
+):
+    """Kernel for accumulating the hits.
+
+    Args:
+        nsub (int):  The number of locally stored submaps.
+        nsubpix (int):  The number of pixels in each submap.
+        nnz (int):  The number of non-zeros in each row of the pointing matrix.
+        submap (array, int64):  For each time domain sample, the submap index
+            within the local map (i.e. including only locally stored submaps)
+        subpix (array, int64):  For each time domain sample, the pixel index
+            within the submap.
+        hits (array, int64):  The local hitmap buffer to accumulate.
+
+    Returns:
+        None
+
+    """
+    return cov_accum_diag_hits(
+        nsub, 
+        nsubpix, 
+        nnz, 
+        submap, 
+        subpix, 
+        hits,
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
     )

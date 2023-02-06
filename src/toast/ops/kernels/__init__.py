@@ -10,9 +10,6 @@ from ...accelerator import use_accel_jax
 #    submodules.
 #
 
-from .compiled import build_noise_weighted as build_noise_weighted_compiled
-from .compiled import cov_accum_diag_hits as cov_accum_diag_hits_compiled
-from .compiled import cov_accum_diag_invnpp as cov_accum_diag_invnpp_compiled
 from .compiled import filter_poly2D as filter_poly2D_compiled
 from .compiled import filter_polynomial as filter_polynomial_compiled
 from .compiled import noise_weight as noise_weight_compiled
@@ -33,9 +30,6 @@ from .implementation_selection import (
 )
 
 if use_accel_jax:
-    from .jax import build_noise_weighted as build_noise_weighted_jax
-    from .jax import cov_accum_diag_hits as cov_accum_diag_hits_jax
-    from .jax import cov_accum_diag_invnpp as cov_accum_diag_invnpp_jax
     from .jax import filter_poly2D as filter_poly2D_jax
     from .jax import filter_polynomial as filter_polynomial_jax
     from .jax import noise_weight as noise_weight_jax
@@ -50,9 +44,6 @@ if use_accel_jax:
         template_offset_project_signal as template_offset_project_signal_jax,
     )
 else:
-    build_noise_weighted_jax = None
-    cov_accum_diag_hits_jax = None
-    cov_accum_diag_invnpp_jax = None
     filter_poly2D_jax = None
     filter_polynomial_jax = None
     noise_weight_jax = None
@@ -61,9 +52,6 @@ else:
     template_offset_apply_diag_precond_jax = None
     template_offset_project_signal_jax = None
 
-from .python import build_noise_weighted as build_noise_weighted_python
-from .python import cov_accum_diag_hits as cov_accum_diag_hits_python
-from .python import cov_accum_diag_invnpp as cov_accum_diag_invnpp_python
 from .python import filter_poly2D as filter_poly2D_python
 from .python import filter_polynomial as filter_polynomial_python
 from .python import noise_weight as noise_weight_python
@@ -96,22 +84,11 @@ template_offset_apply_diag_precond = select_implementation(
     template_offset_apply_diag_precond_python,
     template_offset_apply_diag_precond_jax,
 )
-build_noise_weighted = select_implementation(
-    build_noise_weighted_compiled, build_noise_weighted_python, build_noise_weighted_jax
-)
 noise_weight = select_implementation(
     noise_weight_compiled, noise_weight_python, noise_weight_jax
 )
 
 # kernels with no use_accel
-cov_accum_diag_hits = select_implementation_cpu(
-    cov_accum_diag_hits_compiled, cov_accum_diag_hits_python, cov_accum_diag_hits_jax
-)
-cov_accum_diag_invnpp = select_implementation_cpu(
-    cov_accum_diag_invnpp_compiled,
-    cov_accum_diag_invnpp_python,
-    cov_accum_diag_invnpp_jax,
-)
 filter_polynomial = select_implementation_cpu(
     filter_polynomial_compiled, filter_polynomial_python, filter_polynomial_jax
 )

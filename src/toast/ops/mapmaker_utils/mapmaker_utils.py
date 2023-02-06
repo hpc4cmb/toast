@@ -103,6 +103,9 @@ class BuildHitMap(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
+
         if self.pixel_dist is None:
             raise RuntimeError(
                 "You must set the 'pixel_dist' trait before calling exec()"
@@ -183,7 +186,8 @@ class BuildHitMap(Operator):
                         local_sm.astype(np.int64),
                         local_pix.astype(np.int64),
                         hits.raw,
-                        implementation_type=self.kernel_implementation,
+                        impl=implementation,
+                        use_accel=use_accel,
                     )
         return
 
@@ -309,6 +313,9 @@ class BuildInverseCovariance(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -455,7 +462,8 @@ class BuildInverseCovariance(Operator):
                         wview[det].reshape(-1),
                         detweight.to_value(invcov_units),
                         invcov.raw,
-                        implementation_type=self.kernel_implementation,
+                        impl=implementation,
+                        use_accel=use_accel,
                     )
         return
 
@@ -588,6 +596,9 @@ class BuildNoiseWeighted(Operator):
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -742,8 +753,8 @@ class BuildNoiseWeighted(Operator):
                 ob.intervals[self.view].data,
                 shared_flag_data,
                 self.shared_flag_mask,
-                use_accel,
-                implementation_type=self.kernel_implementation,
+                impl=implementation,
+                use_accel=use_accel,
             )
             zmap.data = zmap_data.reshape(zmap.data.shape)
         return

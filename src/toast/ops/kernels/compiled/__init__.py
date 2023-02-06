@@ -1,9 +1,6 @@
 # Python shims used while we wait for full C++ implementations
 # imports from compiled package
 from ...._libtoast import (  # use_accel operators; operators with no use_accel
-    build_noise_weighted,
-    cov_accum_diag_hits,
-    cov_accum_diag_invnpp,
     filter_poly2D,
     filter_polynomial,
     template_offset_add_to_signal,

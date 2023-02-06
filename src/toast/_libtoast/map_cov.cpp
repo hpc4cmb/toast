@@ -85,7 +85,7 @@ void init_map_cov(py::module & m) {
 
     m.def("cov_accum_diag_hits",
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer submap,
-             py::buffer subpix, py::buffer hits) {
+             py::buffer subpix, py::buffer hits, bool use_accel) {
               auto & gt = toast::GlobalTimers::get();
               gt.start("cov_accum_diag_hits");
               pybuffer_check_1D <int64_t> (submap);
@@ -111,7 +111,7 @@ void init_map_cov(py::module & m) {
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg(
-              "hits"), R"(
+              "hits"), py::arg("use_accel"), R"(
         Accumulate hit map.
 
         This uses a pointing matrix to accumulate the local pieces of the hit map.
@@ -133,7 +133,7 @@ void init_map_cov(py::module & m) {
 
     m.def("cov_accum_diag_invnpp",
           [](int64_t nsub, int64_t nsubpix, int64_t nnz, py::buffer submap,
-             py::buffer subpix, py::buffer weights, double scale, py::buffer invnpp) {
+             py::buffer subpix, py::buffer weights, double scale, py::buffer invnpp, bool use_accel) {
               auto & gt = toast::GlobalTimers::get();
               gt.start("cov_accum_diag_invnpp");
               pybuffer_check_1D <int64_t> (submap);
@@ -165,7 +165,7 @@ void init_map_cov(py::module & m) {
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg(
-              "invnpp"), R"(
+              "invnpp"), py::arg("use_accel"), R"(
         Accumulate block diagonal noise covariance.
 
         This uses a pointing matrix to accumulate the local pieces

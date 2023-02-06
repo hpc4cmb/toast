@@ -29,7 +29,6 @@ install(FILES
     scan_map.py
     scan_healpix.py
     scan_wcs.py
-    mapmaker_utils.py
     mapmaker_binning.py
     mapmaker_solve.py
     mapmaker_templates.py
@@ -67,5 +66,6 @@ install(FILES
 add_subdirectory(pointing_detector)
 add_subdirectory(pixels_healpix)
 add_subdirectory(stokes_weights)
+add_subdirectory(mapmaker_utils)
 
 add_subdirectory(kernels)
