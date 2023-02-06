@@ -5,16 +5,13 @@
 import numpy as np
 import traitlets
 
-from .. import qarray as qa
-from ..healpix import HealpixPixels
-from ..observation import default_values as defaults
-from ..pixels import PixelDistribution
-from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, UseEnum, trait_docs
-from ..utils import Environment, Logger
-from .delete import Delete
-from .kernels import ImplementationType, stokes_weights_I, stokes_weights_IQU
-from .operator import Operator
+from ... import qarray as qa
+from ...observation import default_values as defaults
+from ...timing import function_timer
+from ...traits import Bool, Instance, Int, Unicode, trait_docs
+from ...utils import Environment, Logger
+from .kernels import stokes_weights_I, stokes_weights_IQU
+from ..operator import Operator
 
 
 @trait_docs
@@ -146,6 +143,9 @@ class StokesWeights(Operator):
 
         self._nnz = len(self.mode)
 
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
+
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
 
@@ -255,8 +255,8 @@ class StokesWeights(Operator):
                     ob.intervals[self.view].data,
                     det_epsilon,
                     cal,
-                    use_accel,
-                    implementation_type=self.kernel_implementation,
+                    impl=implementation,
+                    use_accel=use_accel,
                 )
             else:
                 stokes_weights_I(
@@ -264,8 +264,8 @@ class StokesWeights(Operator):
                     ob.detdata[self.weights].data,
                     ob.intervals[self.view].data,
                     cal,
-                    use_accel,
-                    implementation_type=self.kernel_implementation,
+                    impl=implementation,
+                    use_accel=use_accel,
                 )
         return
 

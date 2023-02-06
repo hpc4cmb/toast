@@ -7,7 +7,6 @@ from .noise_weight import noise_weight
 from .polyfilter1D import filter_polynomial
 from .polyfilter2D import filter_poly2D
 from .scan_map import scan_map
-from .stokes_weights import stokes_weights_I, stokes_weights_IQU
 from .template_offset import (
     template_offset_add_to_signal,
     template_offset_apply_diag_precond,

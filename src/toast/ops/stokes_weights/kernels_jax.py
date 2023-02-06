@@ -6,10 +6,11 @@ import jax
 import jax.numpy as jnp
 from jax.experimental.maps import xmap as jax_xmap
 
-from ....jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
-from ....jax.mutableArray import MutableJaxArray
-from ....utils import Logger
-from .math import qarray
+from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
+from ...jax.mutableArray import MutableJaxArray
+from ...utils import Logger
+from ...jax.math import qarray
+from ...accelerator import kernel, ImplementationType
 
 
 def stokes_weights_IQU_inner(eps, cal, pin, hwpang):
@@ -145,7 +146,8 @@ stokes_weights_IQU_interval = jax.jit(
 )  # donates weights
 
 
-def stokes_weights_IQU(
+@kernel(impl=ImplementationType.JAX, name="stokes_weights_IQU")
+def stokes_weights_IQU_jax(
     quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel
 ):
     """
@@ -189,7 +191,8 @@ def stokes_weights_IQU(
     )
 
 
-def stokes_weights_I(weight_index, weights, intervals, cal, use_accel):
+@kernel(impl=ImplementationType.JAX, name="stokes_weights_I")
+def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     """
     Compute the Stokes weights for the "I" mode.
     NOTE this does not use JAX as there is too little computation

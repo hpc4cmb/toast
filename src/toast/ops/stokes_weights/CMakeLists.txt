@@ -3,9 +3,9 @@
 
 install(FILES
     __init__.py
-    pointing_detector.py
+    stokes_weights.py
     kernels.py
     kernels_numpy.py
     kernels_jax.py
-    DESTINATION ${PYTHON_SITE}/toast/ops/pointing_detector
+    DESTINATION ${PYTHON_SITE}/toast/ops/stokes_weights
 )

@@ -54,7 +54,6 @@ install(FILES
     crosslinking.py
     sss.py
     demodulation.py
-    stokes_weights.py
     pixels_wcs.py
     filterbin.py
     save_hdf5.py
@@ -67,5 +66,6 @@ install(FILES
 
 add_subdirectory(pointing_detector)
 add_subdirectory(pixels_healpix)
+add_subdirectory(stokes_weights)
 
 add_subdirectory(kernels)

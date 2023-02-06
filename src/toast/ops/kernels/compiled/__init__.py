@@ -6,8 +6,6 @@ from ...._libtoast import (  # use_accel operators; operators with no use_accel
     cov_accum_diag_invnpp,
     filter_poly2D,
     filter_polynomial,
-    stokes_weights_I,
-    stokes_weights_IQU,
     template_offset_add_to_signal,
     template_offset_apply_diag_precond,
     template_offset_project_signal,
