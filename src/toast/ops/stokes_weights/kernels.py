@@ -19,45 +19,13 @@ if use_accel_jax:
 
 
 @kernel(impl=ImplementationType.COMPILED, name="stokes_weights_I")
-def stokes_weights_I_compiled(
-    weight_index, 
-    weights, 
-    intervals, 
-    cal, 
-    use_accel=False,
-):
-    return libtoast_stokes_weights_I(
-        weight_index,
-        weights,
-        intervals,
-        cal,
-        use_accel,
-    )
-
+def stokes_weights_I_compiled(*args, use_accel=False):
+    return libtoast_stokes_weights_I(*args, use_accel)
 
 @kernel(impl=ImplementationType.COMPILED, name="stokes_weights_IQU")
-def stokes_weights_IQU_compiled(
-    quat_index, 
-    quats, 
-    weight_index, 
-    weights, 
-    hwp, 
-    intervals, 
-    epsilon, 
-    cal, 
-    use_accel=False,
-):
-    return libtoast_stokes_weights_IQU(
-        quat_index, 
-        quats, 
-        weight_index, 
-        weights, 
-        hwp, 
-        intervals, 
-        epsilon, 
-        cal, 
-        use_accel,
-    )
+def stokes_weights_IQU_compiled(*args, use_accel=False):
+    return libtoast_stokes_weights_IQU(*args, use_accel)
+
 
 @kernel(impl=ImplementationType.DEFAULT)
 def stokes_weights_I(

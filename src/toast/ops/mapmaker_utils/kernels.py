@@ -26,7 +26,7 @@ if use_accel_jax:
 
 
 @kernel(impl=ImplementationType.COMPILED, name="build_noise_weighted")
-def build_noise_weighted_compiled(use_accel=False):
+def build_noise_weighted_compiled(*args, use_accel=False):
     return libtoast_build_noise_weighted(*args, use_accel)
 
 @kernel(impl=ImplementationType.COMPILED, name="cov_accum_diag_hits")

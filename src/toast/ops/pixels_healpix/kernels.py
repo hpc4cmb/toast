@@ -17,34 +17,8 @@ if use_accel_jax:
 
 
 @kernel(impl=ImplementationType.COMPILED, name="pixels_healpix")
-def pixels_healpix_compiled(
-    quat_index,
-    quats,
-    shared_flags,
-    shared_flag_mask,
-    pixel_index,
-    pixels,
-    intervals,
-    hit_submaps,
-    n_pix_submap,
-    nside,
-    nest,
-    use_accel=False,
-):
-    return libtoast_pixels_healpix(
-        quat_index,
-        quats,
-        shared_flags,
-        shared_flag_mask,
-        pixel_index,
-        pixels,
-        intervals,
-        hit_submaps,
-        n_pix_submap,
-        nside,
-        nest,
-        use_accel,
-    )
+def pixels_healpix_compiled(*args, use_accel=False):
+    return libtoast_pixels_healpix(*args, use_accel)
 
 
 @kernel(impl=ImplementationType.DEFAULT)

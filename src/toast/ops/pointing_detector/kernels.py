@@ -13,27 +13,10 @@ from .kernels_numpy import pointing_detector_numpy
 if use_accel_jax:
     from .kernels_jax import pointing_detector_jax
 
+
 @kernel(impl=ImplementationType.COMPILED, name="pointing_detector")
-def pointing_detector_compiled(
-    focalplane,
-    boresight,
-    quat_index,
-    quats,
-    intervals,
-    shared_flags,
-    shared_flag_mask,
-    use_accel=False,
-):
-    return libtoast_pointing_detector(
-        focalplane,
-        boresight,
-        quat_index,
-        quats,
-        intervals,
-        shared_flags,
-        shared_flag_mask,
-        use_accel,
-    )
+def pointing_detector_compiled(*args, use_accel=False):
+    return libtoast_pointing_detector(*args, use_accel)
 
 
 @kernel(impl=ImplementationType.DEFAULT)
