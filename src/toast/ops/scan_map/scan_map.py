@@ -6,14 +6,14 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from ..accelerator import use_accel_jax
-from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
-from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, Unit, UseEnum, trait_docs
-from ..utils import AlignedF64, Logger, unit_conversion
+from ...accelerator import use_accel_jax
+from ...observation import default_values as defaults
+from ...pixels import PixelData, PixelDistribution
+from ...timing import function_timer
+from ...traits import Bool, Int, Unicode, Unit, UseEnum, trait_docs
+from ...utils import AlignedF64, Logger, unit_conversion
 from .kernels import ImplementationType, scan_map
-from .operator import Operator
+from ..operator import Operator
 
 
 @trait_docs
@@ -66,8 +66,11 @@ class ScanMap(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         # Check that the detector data is set
         if self.det_data is None:
@@ -123,13 +126,17 @@ class ScanMap(Operator):
                 map_data.units, ob.detdata[self.det_data].units
             )
             if self.weights is None:
-                weights, weight_indx = None, None
+                # Use empty arrays, rather than None, so that we can pass that more
+                # easily to compiled kernels that expect a buffer.
+                weights = np.array([], dtype=np.float64)
+                weight_indx = np.array([], dtype=np.int32)
             else:
                 weights = ob.detdata[self.weights].data
                 weight_indx = ob.detdata[self.weights].indices(dets)
             scan_map(
-                map_data,
-                map_data.n_value,
+                map_dist.global_submap_to_local,
+                map_dist.n_pix_submap,
+                map_data.data,
                 det_data,
                 det_data_indx,
                 pixels,
@@ -137,13 +144,12 @@ class ScanMap(Operator):
                 weights,
                 weight_indx,
                 intervals,
-                map_dist,
                 data_scale=data_scale,
                 should_zero=self.zero,
                 should_subtract=self.subtract,
                 should_scale=False,
+                impl=implementation,
                 use_accel=use_accel,
-                implementation_type=self.kernel_implementation,
             )
 
         return
@@ -221,6 +227,9 @@ class ScanMask(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         # Check that the detector data is set
         if self.det_flags is None:
@@ -331,6 +340,9 @@ class ScanScale(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
+
         # Check that the detector data is set
         if self.det_data is None:
             raise RuntimeError("You must set the det_data trait before calling exec()")
@@ -371,23 +383,31 @@ class ScanScale(Operator):
             det_data_indx = ob.detdata[self.det_data].indices(dets)
             pixels = ob.detdata[self.pixels].data
             pixels_indx = ob.detdata[self.pixels].indices(dets)
+            if self.weights is None:
+                # Use empty arrays, rather than None, so that we can pass that more
+                # easily to compiled kernels that expect a buffer.
+                weights = np.array([], dtype=np.float64)
+                weight_indx = np.array([], dtype=np.int32)
+            else:
+                weights = ob.detdata[self.weights].data
+                weight_indx = ob.detdata[self.weights].indices(dets)
             scan_map(
-                map_data,
-                1,
+                map_dist.global_submap_to_local,
+                map_dist.n_pix_submap,
+                map_data.data,
                 det_data,
                 det_data_indx,
                 pixels,
                 pixels_indx,
-                det_data,
-                det_data_indx,
+                weights,
+                weight_indx,
                 intervals,
-                map_dist,
                 data_scale=1.0,
                 should_zero=False,
                 should_subtract=False,
                 should_scale=True,
-                use_accel=False,
-                implementation_type=self.kernel_implementation,
+                impl=implementation,
+                use_accel=use_accel,
             )
 
         return

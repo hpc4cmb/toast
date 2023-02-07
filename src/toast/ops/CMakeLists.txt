@@ -26,7 +26,6 @@ install(FILES
     noise_weight.py
     gainscrambler.py
     pointing.py
-    scan_map.py
     scan_healpix.py
     scan_wcs.py
     mapmaker_binning.py
@@ -67,5 +66,6 @@ add_subdirectory(pointing_detector)
 add_subdirectory(pixels_healpix)
 add_subdirectory(stokes_weights)
 add_subdirectory(mapmaker_utils)
+add_subdirectory(scan_map)
 
 add_subdirectory(kernels)

@@ -8,4 +8,3 @@ from ...._libtoast import (  # use_accel operators; operators with no use_accel
     template_offset_project_signal,
 )
 from .noise_weight import noise_weight
-from .scan_map import scan_map

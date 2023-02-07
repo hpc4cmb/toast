@@ -5,7 +5,6 @@ install(FILES
     __init__.py
     polyfilter1D.py
     polyfilter2D.py
-    scan_map.py
     template_offset.py
     noise_weight.py
     DESTINATION ${PYTHON_SITE}/toast/ops/kernels/jax

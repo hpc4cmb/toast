@@ -5,9 +5,11 @@
 import jax
 import jax.numpy as jnp
 
-from ....jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
-from ....jax.mutableArray import MutableJaxArray
-from ....utils import Logger
+from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
+from ...jax.mutableArray import MutableJaxArray
+from ...utils import Logger
+
+from ...accelerator import kernel, ImplementationType
 
 
 def global_to_local(global_pixels, npix_submap, global2local):
@@ -213,9 +215,11 @@ scan_map_interval = jax.jit(
 )  # donates det_data
 
 
-def scan_map(
+@kernel(impl=ImplementationType.JAX, name="scan_map")
+def scan_map_jax(
+    global2local,
+    n_pix_submap,
     mapdata,
-    nmap,
     det_data,
     det_data_index,
     pixels,
@@ -223,10 +227,9 @@ def scan_map(
     weights,
     weight_index,
     intervals,
-    map_dist,
     data_scale=1.0,
     should_zero=False,
-    should_subtract=True,
+    should_subtract=False,
     should_scale=False,
     use_accel=False,
 ):
@@ -255,10 +258,8 @@ def scan_map(
     Returns:
         None: det_data is updated in place
     """
-    # extracts pixel distribution information
-    npix_submap = map_dist._n_pix_submap
-    global2local = map_dist._glob2loc
-
+    nmap = weights.shape[-1]
+    
     # prepares inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     mapdata = MutableJaxArray.to_array(mapdata.data)
@@ -274,7 +275,7 @@ def scan_map(
     det_data[:] = scan_map_interval(
         mapdata,
         nmap,
-        npix_submap,
+        n_pix_submap,
         global2local,
         det_data_input,
         det_data_index,
