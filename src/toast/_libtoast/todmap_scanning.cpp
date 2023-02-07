@@ -27,6 +27,8 @@ void register_scan_map(py::module & m, char const * name) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
                   o << "Buffer sizes are not consistent.";
+                  o << " submap array (" << info_submap.size;
+                  o << ") != tod nsamp (" << nsamp << ")";
                   log.error(o.str().c_str());
                   throw std::runtime_error(o.str().c_str());
               }
@@ -35,6 +37,8 @@ void register_scan_map(py::module & m, char const * name) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
                   o << "Buffer sizes are not consistent.";
+                  o << " weights (" << info_weights.size << " / " << nmap;
+                  o << ") != tod nsamp (" << nsamp << ")";
                   log.error(o.str().c_str());
                   throw std::runtime_error(o.str().c_str());
               }

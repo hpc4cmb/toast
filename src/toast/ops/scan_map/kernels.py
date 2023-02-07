@@ -120,7 +120,9 @@ def scan_map_compiled(
         msg += f"type '{mapdata.dtype.char}'"
         raise NotImplementedError(msg)
     
-    nmap = weights.shape[-1]
+    nmap = 1
+    if len(weights.shape) > 2:
+        nmap = weights.shape[2]
     for idet in range(len(det_data_index)):
         pix = pixels[pixels_index[idet]]
         wts = weights[weight_index[idet]]
