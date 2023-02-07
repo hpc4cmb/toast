@@ -158,11 +158,11 @@ def scan_map_compiled(
             if should_zero:
                 tod[vslice] = 0
             if should_subtract:
-                tod[vslice][good] -= local_tod
+                tod[vslice][good] -= local_tod[good]
             elif should_scale:
-                tod[vslice][good] *= local_tod
+                tod[vslice][good] *= local_tod[good]
             else:
-                tod[vslice][good] += local_tod
+                tod[vslice][good] += local_tod[good]
 
             del local_submap
             del local_submap_raw

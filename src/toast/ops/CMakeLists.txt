@@ -37,7 +37,6 @@ install(FILES
     sim_gaindrifts.py
     sim_crosstalk.py
     totalconvolve.py
-    polyfilter.py
     groundfilter.py
     hwpfilter.py
     statistics.py
@@ -67,5 +66,6 @@ add_subdirectory(stokes_weights)
 add_subdirectory(mapmaker_utils)
 add_subdirectory(scan_map)
 add_subdirectory(noise_weight)
+add_subdirectory(polyfilter)
 
 add_subdirectory(kernels)

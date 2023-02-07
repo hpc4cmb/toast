@@ -10,8 +10,6 @@ from ...accelerator import use_accel_jax
 #    submodules.
 #
 
-from .compiled import filter_poly2D as filter_poly2D_compiled
-from .compiled import filter_polynomial as filter_polynomial_compiled
 from .compiled import (
     template_offset_add_to_signal as template_offset_add_to_signal_compiled,
 )
@@ -28,8 +26,6 @@ from .implementation_selection import (
 )
 
 if use_accel_jax:
-    from .jax import filter_poly2D as filter_poly2D_jax
-    from .jax import filter_polynomial as filter_polynomial_jax
     from .jax import (
         template_offset_add_to_signal as template_offset_add_to_signal_jax,
     )
@@ -40,14 +36,10 @@ if use_accel_jax:
         template_offset_project_signal as template_offset_project_signal_jax,
     )
 else:
-    filter_poly2D_jax = None
-    filter_polynomial_jax = None
     template_offset_add_to_signal_jax = None
     template_offset_apply_diag_precond_jax = None
     template_offset_project_signal_jax = None
 
-from .python import filter_poly2D as filter_poly2D_python
-from .python import filter_polynomial as filter_polynomial_python
 from .python import (
     template_offset_add_to_signal as template_offset_add_to_signal_python,
 )
@@ -77,12 +69,6 @@ template_offset_apply_diag_precond = select_implementation(
 )
 
 # kernels with no use_accel
-filter_polynomial = select_implementation_cpu(
-    filter_polynomial_compiled, filter_polynomial_python, filter_polynomial_jax
-)
-filter_poly2D = select_implementation_cpu(
-    filter_poly2D_compiled, filter_poly2D_python, filter_poly2D_jax
-)
 
 # kernels that have not been ported
 from ..._libtoast import (

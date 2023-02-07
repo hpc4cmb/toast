@@ -334,7 +334,8 @@ class PolyFilter2D(Operator):
                     signals,
                     masks,
                     coeff,
-                    implementation_type=self.kernel_implementation,
+                    impl=implementation,
+                    use_accel=use_accel,
                 )
                 gt.stop("Poly2D:  Solve templates")
 
@@ -558,7 +559,8 @@ class PolyFilter(Operator):
                         signals,
                         local_starts,
                         local_stops,
-                        implementation_type=self.kernel_implementation,
+                        impl=implementation,
+                        use_accel=use_accel,
                     )
                     signals = [signal]
                 last_flags = flags.copy()
@@ -570,7 +572,8 @@ class PolyFilter(Operator):
                     signals,
                     local_starts,
                     local_stops,
-                    implementation_type=self.kernel_implementation,
+                    impl=implementation,
+                    use_accel=use_accel,
                 )
 
             # Optionally flag unfiltered data

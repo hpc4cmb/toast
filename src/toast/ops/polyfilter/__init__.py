@@ -4,4 +4,4 @@
 
 # Namespace imports
 
-from .stokes_weights import StokesWeights
+from .polyfilter import PolyFilter, PolyFilter2D, CommonModeFilter
