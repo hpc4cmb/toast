@@ -1,11 +1,14 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
 
+from ...accelerator import kernel, ImplementationType
 
-def template_offset_add_to_signal(
+
+@kernel(impl=ImplementationType.NUMPY, name="offset_add_to_signal")
+def offset_add_to_signal_numpy(
     step_length,
     amp_offset,
     n_amp_views,
@@ -41,7 +44,8 @@ def template_offset_add_to_signal(
         offset += view_offset
 
 
-def template_offset_project_signal(
+@kernel(impl=ImplementationType.NUMPY, name="offset_project_signal")
+def offset_project_signal_numpy(
     data_index,
     det_data,
     flag_index,
@@ -96,7 +100,8 @@ def template_offset_project_signal(
         offset += view_offset
 
 
-def template_offset_apply_diag_precond(
+@kernel(impl=ImplementationType.NUMPY, name="offset_apply_diag_precond")
+def offset_apply_diag_precond_numpy(
     offset_var, amplitudes_in, amplitudes_out, use_accel
 ):
     """

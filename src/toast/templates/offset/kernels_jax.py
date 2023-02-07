@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -6,9 +6,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ....jax.intervals import INTERVALS_JAX, JaxIntervals
-from ....jax.mutableArray import MutableJaxArray
-from ....utils import Logger
+from ...jax.intervals import INTERVALS_JAX, JaxIntervals
+from ...jax.mutableArray import MutableJaxArray
+from ...utils import Logger
+
+from ...accelerator import kernel, ImplementationType
 
 
 def template_offset_add_to_signal_intervals(
@@ -96,7 +98,8 @@ template_offset_add_to_signal_intervals = jax.jit(
 )  # det_data
 
 
-def template_offset_add_to_signal(
+@kernel(impl=ImplementationType.JAX, name="offset_add_to_signal")
+def offset_add_to_signal_jax(
     step_length,
     amp_offset,
     n_amp_views,
@@ -260,7 +263,8 @@ template_offset_project_signal_intervals = jax.jit(
 )  # donate amplitude
 
 
-def template_offset_project_signal(
+@kernel(impl=ImplementationType.JAX, name="offset_project_signal")
+def offset_project_signal_jax(
     data_index,
     det_data,
     flag_index,
@@ -329,7 +333,8 @@ def template_offset_project_signal(
     )
 
 
-def template_offset_apply_diag_precond(
+@kernel(impl=ImplementationType.JAX, name="offset_apply_diag_precond")
+def offset_apply_diag_precond_jax(
     offset_var, amplitudes_in, amplitudes_out, use_accel
 ):
     """

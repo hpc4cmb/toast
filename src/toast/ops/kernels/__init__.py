@@ -10,63 +10,54 @@ from ...accelerator import use_accel_jax
 #    submodules.
 #
 
-from .compiled import (
-    template_offset_add_to_signal as template_offset_add_to_signal_compiled,
-)
-from .compiled import (
-    template_offset_apply_diag_precond as template_offset_apply_diag_precond_compiled,
-)
-from .compiled import (
-    template_offset_project_signal as template_offset_project_signal_compiled,
-)
 from .implementation_selection import (
     ImplementationType,
     select_implementation,
     select_implementation_cpu,
 )
 
-if use_accel_jax:
-    from .jax import (
-        template_offset_add_to_signal as template_offset_add_to_signal_jax,
-    )
-    from .jax import (
-        template_offset_apply_diag_precond as template_offset_apply_diag_precond_jax,
-    )
-    from .jax import (
-        template_offset_project_signal as template_offset_project_signal_jax,
-    )
-else:
-    template_offset_add_to_signal_jax = None
-    template_offset_apply_diag_precond_jax = None
-    template_offset_project_signal_jax = None
+# if use_accel_jax:
+#     from .jax import (
+#         template_offset_add_to_signal as template_offset_add_to_signal_jax,
+#     )
+#     from .jax import (
+#         template_offset_apply_diag_precond as template_offset_apply_diag_precond_jax,
+#     )
+#     from .jax import (
+#         template_offset_project_signal as template_offset_project_signal_jax,
+#     )
+# else:
+#     template_offset_add_to_signal_jax = None
+#     template_offset_apply_diag_precond_jax = None
+#     template_offset_project_signal_jax = None
 
-from .python import (
-    template_offset_add_to_signal as template_offset_add_to_signal_python,
-)
-from .python import (
-    template_offset_apply_diag_precond as template_offset_apply_diag_precond_python,
-)
-from .python import (
-    template_offset_project_signal as template_offset_project_signal_python,
-)
+# from .python import (
+#     template_offset_add_to_signal as template_offset_add_to_signal_python,
+# )
+# from .python import (
+#     template_offset_apply_diag_precond as template_offset_apply_diag_precond_python,
+# )
+# from .python import (
+#     template_offset_project_signal as template_offset_project_signal_python,
+# )
 
 # kernels with use_accel
 
-template_offset_add_to_signal = select_implementation(
-    template_offset_add_to_signal_compiled,
-    template_offset_add_to_signal_python,
-    template_offset_add_to_signal_jax,
-)
-template_offset_project_signal = select_implementation(
-    template_offset_project_signal_compiled,
-    template_offset_project_signal_python,
-    template_offset_project_signal_jax,
-)
-template_offset_apply_diag_precond = select_implementation(
-    template_offset_apply_diag_precond_compiled,
-    template_offset_apply_diag_precond_python,
-    template_offset_apply_diag_precond_jax,
-)
+# template_offset_add_to_signal = select_implementation(
+#     template_offset_add_to_signal_compiled,
+#     template_offset_add_to_signal_python,
+#     template_offset_add_to_signal_jax,
+# )
+# template_offset_project_signal = select_implementation(
+#     template_offset_project_signal_compiled,
+#     template_offset_project_signal_python,
+#     template_offset_project_signal_jax,
+# )
+# template_offset_apply_diag_precond = select_implementation(
+#     template_offset_apply_diag_precond_compiled,
+#     template_offset_apply_diag_precond_python,
+#     template_offset_apply_diag_precond_jax,
+# )
 
 # kernels with no use_accel
 

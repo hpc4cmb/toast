@@ -10,19 +10,18 @@ import scipy.signal
 import traitlets
 from astropy import units as u
 
-from ..mpi import MPI
-from ..observation import default_values as defaults
-from ..ops.kernels import (
-    ImplementationType,
-    template_offset_add_to_signal,
-    template_offset_apply_diag_precond,
-    template_offset_project_signal,
+from ...mpi import MPI
+from ...observation import default_values as defaults
+from .kernels import (
+    offset_add_to_signal,
+    offset_apply_diag_precond,
+    offset_project_signal,
 )
-from ..timing import function_timer
-from ..traits import Bool, Float, Int, Quantity, Unicode, UseEnum, trait_docs
-from ..utils import AlignedF64, Logger, rate_from_times
-from .amplitudes import Amplitudes
-from .template import Template
+from ...timing import function_timer
+from ...traits import Bool, Float, Int, Quantity, Unicode, UseEnum, trait_docs
+from ...utils import AlignedF64, Logger, rate_from_times
+from ..amplitudes import Amplitudes
+from ..template import Template
 
 
 @trait_docs
@@ -67,12 +66,6 @@ class Offset(Template):
     )
 
     precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
-
-    kernel_implementation = UseEnum(
-        ImplementationType,
-        default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
-    )
 
     @traitlets.validate("precond_width")
     def _check_precond_width(self, proposal):
@@ -498,6 +491,10 @@ class Offset(Template):
     @function_timer
     def _add_to_signal(self, detector, amplitudes):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
+
         amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
@@ -511,7 +508,7 @@ class Offset(Template):
             # The number of amplitudes in each view
             n_amp_views = self._obs_views[iob]
 
-            template_offset_add_to_signal(
+            offset_add_to_signal(
                 step_length,
                 amp_offset,
                 n_amp_views,
@@ -519,8 +516,8 @@ class Offset(Template):
                 det_indx[0],
                 ob.detdata[self.det_data].data,
                 ob.intervals[self.view].data,
-                self.use_accel,
-                implementation_type=self.kernel_implementation,
+                impl=implementation,
+                use_accel=use_accel,
             )
 
             amp_offset += np.sum(n_amp_views)
@@ -528,6 +525,10 @@ class Offset(Template):
     @function_timer
     def _project_signal(self, detector, amplitudes):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
+
         amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
@@ -547,7 +548,7 @@ class Offset(Template):
             # The number of amplitudes in each view
             n_amp_views = self._obs_views[iob]
 
-            template_offset_project_signal(
+            offset_project_signal(
                 det_indx[0],
                 ob.detdata[self.det_data].data,
                 flag_indx[0],
@@ -558,8 +559,8 @@ class Offset(Template):
                 n_amp_views,
                 amplitudes.local,
                 ob.intervals[self.view].data,
-                self.use_accel,
-                implementation_type=self.kernel_implementation,
+                impl=implementation,
+                use_accel=use_accel,
             )
 
             amp_offset += np.sum(n_amp_views)
@@ -638,12 +639,16 @@ class Offset(Template):
         else:
             # Since we do not have a noise filter term in our LHS, our diagonal
             # preconditioner is just the application of offset variance.
-            template_offset_apply_diag_precond(
+            
+            # Kernel selection
+            implementation, use_accel = self.select_kernels()
+
+            offset_apply_diag_precond(
                 self._offsetvar,
                 amplitudes_in.local,
                 amplitudes_out.local,
-                self.use_accel,
-                implementation_type=self.kernel_implementation,
+                impl=implementation,
+                use_accel=use_accel,
             )
         return
 

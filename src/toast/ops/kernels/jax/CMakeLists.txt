@@ -3,6 +3,5 @@
 
 install(FILES
     __init__.py
-    template_offset.py
     DESTINATION ${PYTHON_SITE}/toast/ops/kernels/jax
 )
