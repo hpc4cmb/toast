@@ -5,9 +5,11 @@
 import jax
 import jax.numpy as jnp
 
-from ....jax.intervals import INTERVALS_JAX, JaxIntervals
-from ....jax.mutableArray import MutableJaxArray
-from ....utils import Logger
+from ...jax.intervals import INTERVALS_JAX, JaxIntervals
+from ...jax.mutableArray import MutableJaxArray
+from ...utils import Logger
+
+from ...accelerator import kernel, ImplementationType
 
 
 def noise_weight_interval(
@@ -68,7 +70,8 @@ noise_weight_interval = jax.jit(
 )  # donates det_data
 
 
-def noise_weight(det_data, det_data_index, intervals, detector_weights, use_accel):
+@kernel(impl=ImplementationType.JAX, name="noise_weight")
+def noise_weight_jax(det_data, det_data_index, intervals, detector_weights, use_accel):
     """
     multiplies det_data by the weighs in detector_weights
 

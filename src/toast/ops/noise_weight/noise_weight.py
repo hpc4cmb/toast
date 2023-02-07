@@ -5,13 +5,12 @@
 import numpy as np
 import traitlets
 
-from ..accelerator import use_accel_jax
-from ..noise_sim import AnalyticNoise
-from ..timing import Timer, function_timer
-from ..traits import Int, Unicode, UseEnum, trait_docs
-from ..utils import Environment, Logger
-from .kernels import ImplementationType, noise_weight
-from .operator import Operator
+from ...noise_sim import AnalyticNoise
+from ...timing import Timer, function_timer
+from ...traits import Int, Unicode, UseEnum, trait_docs
+from ...utils import Environment, Logger
+from .kernels import noise_weight
+from ..operator import Operator
 
 
 @trait_docs
@@ -43,8 +42,11 @@ class NoiseWeight(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -64,16 +66,14 @@ class NoiseWeight(Operator):
                 )
                 raise RuntimeError(msg)
 
-            # computes the noise for each detector (using the correct unit)
+            # Compute the noise for each detector (using the correct units)
             noise = ob[self.noise_model]
             detector_weights = [
                 noise.detector_weight(detector).to(data_invcov_units).value
                 for detector in dets
             ]
 
-            w1 = detector_weights[0]
-
-            # multiplies detectors by their respective noise
+            # Multiply detectors by their respective noise weight
             intervals = ob.intervals[self.view].data
             det_data = ob.detdata[self.det_data].data
             det_data_indx = ob.detdata[self.det_data].indices(dets)
@@ -82,11 +82,11 @@ class NoiseWeight(Operator):
                 det_data_indx,
                 intervals,
                 detector_weights,
-                use_accel,
-                implementation_type=self.kernel_implementation,
+                impl=implementation,
+                use_accel=use_accel,
             )
 
-            # updates the unit for the output
+            # Update the units of the output
             ob.detdata[self.det_data].update_units(data_output_units)
 
         return

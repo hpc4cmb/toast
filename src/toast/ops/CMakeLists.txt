@@ -23,7 +23,6 @@ install(FILES
     flag_intervals.py
     common_mode_noise.py
     noise_model.py
-    noise_weight.py
     gainscrambler.py
     pointing.py
     scan_healpix.py
@@ -67,5 +66,6 @@ add_subdirectory(pixels_healpix)
 add_subdirectory(stokes_weights)
 add_subdirectory(mapmaker_utils)
 add_subdirectory(scan_map)
+add_subdirectory(noise_weight)
 
 add_subdirectory(kernels)

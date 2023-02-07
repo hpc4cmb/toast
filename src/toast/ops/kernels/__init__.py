@@ -12,7 +12,6 @@ from ...accelerator import use_accel_jax
 
 from .compiled import filter_poly2D as filter_poly2D_compiled
 from .compiled import filter_polynomial as filter_polynomial_compiled
-from .compiled import noise_weight as noise_weight_compiled
 from .compiled import (
     template_offset_add_to_signal as template_offset_add_to_signal_compiled,
 )
@@ -31,7 +30,6 @@ from .implementation_selection import (
 if use_accel_jax:
     from .jax import filter_poly2D as filter_poly2D_jax
     from .jax import filter_polynomial as filter_polynomial_jax
-    from .jax import noise_weight as noise_weight_jax
     from .jax import (
         template_offset_add_to_signal as template_offset_add_to_signal_jax,
     )
@@ -44,14 +42,12 @@ if use_accel_jax:
 else:
     filter_poly2D_jax = None
     filter_polynomial_jax = None
-    noise_weight_jax = None
     template_offset_add_to_signal_jax = None
     template_offset_apply_diag_precond_jax = None
     template_offset_project_signal_jax = None
 
 from .python import filter_poly2D as filter_poly2D_python
 from .python import filter_polynomial as filter_polynomial_python
-from .python import noise_weight as noise_weight_python
 from .python import (
     template_offset_add_to_signal as template_offset_add_to_signal_python,
 )
@@ -78,9 +74,6 @@ template_offset_apply_diag_precond = select_implementation(
     template_offset_apply_diag_precond_compiled,
     template_offset_apply_diag_precond_python,
     template_offset_apply_diag_precond_jax,
-)
-noise_weight = select_implementation(
-    noise_weight_compiled, noise_weight_python, noise_weight_jax
 )
 
 # kernels with no use_accel
