@@ -14,11 +14,6 @@ if use_accel_jax:
     from .kernels_jax import pointing_detector_jax
 
 
-@kernel(impl=ImplementationType.COMPILED, name="pointing_detector")
-def pointing_detector_compiled(*args, use_accel=False):
-    return libtoast_pointing_detector(*args, use_accel)
-
-
 @kernel(impl=ImplementationType.DEFAULT)
 def pointing_detector(
     focalplane,
@@ -58,4 +53,9 @@ def pointing_detector(
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
     )
+
+
+@kernel(impl=ImplementationType.COMPILED, name="pointing_detector")
+def pointing_detector_compiled(*args, use_accel=False):
+    return libtoast_pointing_detector(*args, use_accel)
 

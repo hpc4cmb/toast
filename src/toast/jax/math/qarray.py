@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .....jax.mutableArray import MutableJaxArray
+from ..mutableArray import MutableJaxArray
 
 
 def rotate_one_one(q, v_in):
