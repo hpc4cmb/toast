@@ -4,26 +4,21 @@
 
 import numpy as np
 
-from ..._libtoast import stokes_weights_I as libtoast_stokes_weights_I
-from ..._libtoast import stokes_weights_IQU as libtoast_stokes_weights_IQU
+from ..._libtoast import filter_poly2D as libtoast_filter_poly2D
+from ..._libtoast import filter_polynomial as libtoast_filter_polynomial
 
 from ...accelerator import kernel, ImplementationType, use_accel_jax
 
-from ... import qarray as qa
-
-from .kernels_numpy import stokes_weights_I_numpy, stokes_weights_IQU_numpy
+from .kernels_numpy import (
+    filter_poly2D_numpy,
+    filter_polynomial_numpy,
+)
 
 if use_accel_jax:
-    from .kernels_jax import stokes_weights_IQU_jax, stokes_weights_I_jax
-
-
-@kernel(impl=ImplementationType.COMPILED, name="stokes_weights_I")
-def stokes_weights_I_compiled(*args, use_accel=False):
-    return libtoast_stokes_weights_I(*args, use_accel)
-
-@kernel(impl=ImplementationType.COMPILED, name="stokes_weights_IQU")
-def stokes_weights_IQU_compiled(*args, use_accel=False):
-    return libtoast_stokes_weights_IQU(*args, use_accel)
+    from .kernels_jax import (
+        filter_poly2D_jax,
+        filter_polynomial_jax,
+    )
 
 
 @kernel(impl=ImplementationType.DEFAULT)
@@ -100,4 +95,14 @@ def stokes_weights_IQU(
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
     )
+
+
+
+@kernel(impl=ImplementationType.COMPILED, name="stokes_weights_I")
+def stokes_weights_I_compiled(*args, use_accel=False):
+    return libtoast_stokes_weights_I(*args, use_accel)
+
+@kernel(impl=ImplementationType.COMPILED, name="stokes_weights_IQU")
+def stokes_weights_IQU_compiled(*args, use_accel=False):
+    return libtoast_stokes_weights_IQU(*args, use_accel)
 

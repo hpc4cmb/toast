@@ -11,12 +11,13 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from .. import qarray as qa
-from ..mpi import MPI, Comm, MPI_Comm, use_mpi
-from ..observation import default_values as defaults
-from ..timing import function_timer
-from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, UseEnum, trait_docs
-from ..utils import (
+from ... import qarray as qa
+from ..._libtoast import subtract_mean, sum_detectors
+from ...mpi import MPI, Comm, MPI_Comm, use_mpi
+from ...observation import default_values as defaults
+from ...timing import function_timer
+from ...traits import Bool, Dict, Instance, Int, Quantity, Unicode, UseEnum, trait_docs
+from ...utils import (
     AlignedF64,
     AlignedU8,
     Environment,
@@ -26,13 +27,11 @@ from ..utils import (
     dtype_to_aligned,
 )
 from .kernels import (
-    ImplementationType,
     filter_poly2D,
     filter_polynomial,
-    subtract_mean,
-    sum_detectors,
 )
-from .operator import Operator
+
+from ..operator import Operator
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
@@ -114,6 +113,9 @@ class PolyFilter2D(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         gt = GlobalTimers.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         if detectors is not None:
             raise RuntimeError("PolyFilter2D cannot be run on subsets of detectors")
@@ -492,6 +494,9 @@ class PolyFilter(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
+
         if self.pattern is None:
             pat = None
         else:
@@ -751,6 +756,9 @@ class CommonModeFilter(Operator):
         timer = Timer()
         timer.start()
         pat = re.compile(self.pattern)
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         for obs in data.obs:
             comm, temp_ob = self._redistribute(data, obs, timer, log)
