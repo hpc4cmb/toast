@@ -13,7 +13,7 @@ from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Int, Unicode, Unit, trait_docs
 from ..utils import AlignedF64, Logger, rate_from_times, unit_conversion
-from .kernels import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
+from .._libtoast import tod_sim_noise_timestream, tod_sim_noise_timestream_batch
 from .operator import Operator
 
 

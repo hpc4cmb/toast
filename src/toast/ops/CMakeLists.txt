@@ -67,5 +67,3 @@ add_subdirectory(mapmaker_utils)
 add_subdirectory(scan_map)
 add_subdirectory(noise_weight)
 add_subdirectory(polyfilter)
-
-add_subdirectory(kernels)

@@ -29,7 +29,7 @@ from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
-from .kernels import (
+from .._libtoast import (
     accumulate_observation_matrix,
     build_template_covariance,
     expand_matrix,

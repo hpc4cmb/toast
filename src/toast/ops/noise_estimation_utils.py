@@ -7,7 +7,7 @@ from scipy.signal import fftconvolve
 
 from ..mpi import MPI
 from ..timing import function_timer
-from .kernels import fod_autosums, fod_crosssums
+from .._libtoast import fod_autosums, fod_crosssums
 
 
 @function_timer
