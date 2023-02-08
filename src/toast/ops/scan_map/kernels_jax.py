@@ -110,7 +110,6 @@ scan_map_inner = jax.vmap(
 
 def scan_map_interval(
     mapdata,
-    nmap,
     npix_submap,
     global2local,
     det_data,
@@ -132,7 +131,6 @@ def scan_map_interval(
 
     Args:
         mapdata (array, ?):  The local piece of the map (size ?*npix_submap*nmap).
-        nmap (int): number of valid pixels
         npix_submap (int):  The number of pixels in each submap.
         global2local (array, int64):  The local submap for each global submap.
         det_data (array, float): size ???*n_samp
@@ -155,9 +153,6 @@ def scan_map_interval(
     # debugging information
     log = Logger.get()
     log.debug(f"scan_map: jit-compiling.")
-
-    # turns mapdata into a numpy array of shape ?*npix_submap*nmap
-    mapdata = jnp.reshape(mapdata, newshape=(-1, npix_submap, nmap))
 
     # extract interval slices
     intervals = JaxIntervals(
@@ -206,14 +201,13 @@ def scan_map_interval(
 scan_map_interval = jax.jit(
     scan_map_interval,
     static_argnames=[
-        "nmap",
         "npix_submap",
         "intervals_max_length",
         "should_zero",
         "should_subtract",
         "should_scale",
     ],
-    donate_argnums=[4],
+    donate_argnums=[3],
 )  # donates det_data
 
 
@@ -236,14 +230,15 @@ def scan_map_jax(
     use_accel=False,
 ):
     """
-    Sample a map into a timestream.
+    Kernel for scanning a map into timestreams.
 
-    This uses a distributed map and the pointing matrix
-    to generate timestream values.
+    This uses a local piece of a distributed map and the pointing matrix for local
+    detectors to generate timestream values.
 
     Args:
+        global2local (array):  The mapping from global submap to local submap index.
+        n_pix_submap (int):  The number of pixels per submap.
         mapdata (Pixels):  The local piece of the map.
-        nmap (int): number of valid pixels
         det_data (array, float): size ???*n_samp
         det_data_index (array, int): The indexes of the det_data (size n_det)
         pixels (array, int): pixels (size ???*n_samp)
@@ -260,8 +255,6 @@ def scan_map_jax(
     Returns:
         None: det_data is updated in place
     """
-    nmap = weights.shape[-1]
-
     # prepares inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     mapdata = MutableJaxArray.to_array(mapdata.data)
@@ -276,7 +269,6 @@ def scan_map_jax(
     # performs computation and updates det_data in place
     det_data[:] = scan_map_interval(
         mapdata,
-        nmap,
         n_pix_submap,
         global2local,
         det_data_input,
