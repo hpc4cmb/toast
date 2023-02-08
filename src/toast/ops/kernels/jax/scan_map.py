@@ -74,11 +74,12 @@ def scan_map_inner(
     if should_zero:
         det_data = jnp.zeros_like(det_data)
     if should_subtract:
-        return det_data - update
+        result = det_data - update
     elif should_scale:
-        return det_data * update
+        result = det_data * update
     else:
-        return det_data + update
+        result = det_data + update
+    return jnp.where(valid_samples, result, det_data)
 
 # maps over intervals and detectors
 # scan_map_inner = jax_xmap(scan_map_inner,
@@ -228,7 +229,7 @@ def scan_map(
     map_dist,
     data_scale=1.0,
     should_zero=False,
-    should_subtract=True,
+    should_subtract=False,
     should_scale=False,
     use_accel=False,
 ):
