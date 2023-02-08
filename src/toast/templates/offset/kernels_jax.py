@@ -12,7 +12,7 @@ from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
 
-def template_offset_add_to_signal_intervals(
+def offset_add_to_signal_intervals(
     step_length,
     amplitudes,
     data_index,
@@ -48,7 +48,7 @@ def template_offset_add_to_signal_intervals(
     """
     # debugging information
     log = Logger.get()
-    log.debug(f"template_offset_add_to_signal: jit-compiling.")
+    log.debug(f"offset_add_to_signal: jit-compiling.")
 
     # split data to separate the final amplitude from the rest
     # as it is the only one that does not have step_length samples
@@ -90,8 +90,8 @@ def template_offset_add_to_signal_intervals(
 
 
 # jit compilation
-template_offset_add_to_signal_intervals = jax.jit(
-    template_offset_add_to_signal_intervals,
+offset_add_to_signal_intervals = jax.jit(
+    offset_add_to_signal_intervals,
     static_argnames=["step_length", "intervals_max_length", "offsets_max_length"],
     donate_argnums=[3],
 )  # det_data
@@ -141,7 +141,7 @@ def offset_add_to_signal_jax(
     offsets_max_length = int(np.max(1 + offsets_end - offsets_start))
 
     # run computation
-    det_data[:] = template_offset_add_to_signal_intervals(
+    det_data[:] = offset_add_to_signal_intervals(
         step_length,
         amplitudes,
         data_index,
@@ -155,7 +155,7 @@ def offset_add_to_signal_jax(
     )
 
 
-def template_offset_project_signal_intervals(
+def offset_project_signal_intervals(
     data_index,
     det_data,
     use_flag,
@@ -199,7 +199,7 @@ def template_offset_project_signal_intervals(
     """
     # debugging information
     log = Logger.get()
-    log.debug(f"template_offset_project_signal: jit-compiling.")
+    log.debug(f"offset_project_signal: jit-compiling.")
 
     # gets interval information
     nb_amplitudes = offsets_max_length
@@ -249,8 +249,8 @@ def template_offset_project_signal_intervals(
 
 
 # jit compilation
-template_offset_project_signal_intervals = jax.jit(
-    template_offset_project_signal_intervals,
+offset_project_signal_intervals = jax.jit(
+    offset_project_signal_intervals,
     static_argnames=[
         "use_flag",
         "flag_mask",
@@ -314,7 +314,7 @@ def offset_project_signal_jax(
     offsets_max_length = int(np.max(1 + offsets_end - offsets_start))
 
     # run computation
-    amplitudes[:] = template_offset_project_signal_intervals(
+    amplitudes[:] = offset_project_signal_intervals(
         data_index,
         det_data,
         use_flag,

@@ -61,26 +61,25 @@ def scan_map_inner(
     """
     # Get local submap and pixels
     submap, subpix = global_to_local(pixels, npix_submap, global2local)
-
-    # gets the local mapdata
-    # zero-out samples with invalid indices
     # by default JAX will put any value where the indices were invalid instead of erroring out
-    valid_samples = (subpix >= 0) & (submap >= 0)
-    mapdata = jnp.where(valid_samples[:, jnp.newaxis], mapdata[submap, subpix, :], 0.0)
+    mapdata = mapdata[submap, subpix, :]
 
     # computes the update term
     update = jnp.sum(mapdata * weights, axis=1) * data_scale
 
-    # updates det_data and returns
+    # updates det_data
     if should_zero:
         det_data = jnp.zeros_like(det_data)
     if should_subtract:
-        return det_data - update
+        new_det_data = det_data - update
     elif should_scale:
-        return det_data * update
+        new_det_data = det_data * update
     else:
-        return det_data + update
+        new_det_data = det_data + update
 
+    # mask invalid values and returns
+    valid_samples = (subpix >= 0) & (submap >= 0)
+    return jnp.where(valid_samples, new_det_data, det_data)
 
 # maps over intervals and detectors
 # scan_map_inner = jax_xmap(scan_map_inner,
@@ -285,7 +284,6 @@ def scan_map_jax(
         should_subtract,
         should_scale,
     )
-
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve", "ops_scan_map")'
