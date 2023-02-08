@@ -6,7 +6,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from ...accelerator import use_accel_jax
+from ...accelerator import ImplementationType
 from ...observation import default_values as defaults
 from ...pixels import PixelData, PixelDistribution
 from ...timing import function_timer
@@ -174,10 +174,17 @@ class ScanMap(Operator):
     def _provides(self):
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
+    
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
     def _supports_accel(self):
-        # TODO set this to True in all cases once there is an OpenMP implementation
-        return use_accel_jax
+        return True
 
 
 @trait_docs

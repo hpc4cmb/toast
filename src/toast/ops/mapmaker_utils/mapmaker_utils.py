@@ -6,6 +6,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
+from ...accelerator import ImplementationType
 from ...covariance import covariance_invert
 from ...mpi import MPI
 from ...observation import default_values as defaults
@@ -217,9 +218,17 @@ class BuildHitMap(Operator):
     def _provides(self):
         prov = {"global": [self.hits]}
         return prov
+    
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
     def _supports_accel(self):
-        return False
+        return True
 
 
 @trait_docs
@@ -494,9 +503,17 @@ class BuildInverseCovariance(Operator):
     def _provides(self):
         prov = {"global": [self.inverse_covariance]}
         return prov
+    
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
     def _supports_accel(self):
-        return False
+        return True
 
 
 @trait_docs
@@ -594,7 +611,7 @@ class BuildNoiseWeighted(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -819,6 +836,14 @@ class BuildNoiseWeighted(Operator):
             "global": [self.zmap],
         }
         return prov
+    
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
     def _supports_accel(self):
         return True

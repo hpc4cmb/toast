@@ -5,6 +5,7 @@
 import numpy as np
 import traitlets
 
+from ...accelerator import ImplementationType
 from ...noise_sim import AnalyticNoise
 from ...timing import Timer, function_timer
 from ...traits import Int, Unicode, UseEnum, trait_docs
@@ -106,7 +107,14 @@ class NoiseWeight(Operator):
 
     def _provides(self):
         return dict()
+    
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
     def _supports_accel(self):
-        # TODO set this to True in all cases once there is an OpenMP implementation
-        return use_accel_jax
+        return True

@@ -8,7 +8,6 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from ..accelerator import use_accel_jax
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
@@ -161,8 +160,11 @@ class TemplateMatrix(Operator):
         self._initialized = False
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation, use_accel = self.select_kernels()
 
         # Check that the detector data is set
         if self.det_data is None:
@@ -226,7 +228,7 @@ class TemplateMatrix(Operator):
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
                 if use_accel:
-                    # We are running on the accelerate, so our output data must exist
+                    # We are running on the accelerator, so our output data must exist
                     # on the device and will be used there.
                     data[self.amplitudes].accel_create()
                     data[self.amplitudes].accel_update_device()
@@ -271,16 +273,16 @@ class TemplateMatrix(Operator):
                     tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
         return
 
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, **kwargs):
         if self.transpose:
             # move amplitudes to host as sync is CPU only
-            if use_accel:
+            if self.use_accel:
                 data[self.amplitudes].accel_update_host()
             # Synchronize the result
             for tmpl in self.templates:
                 data[self.amplitudes][tmpl.name].sync()
             # move amplitudes back to GPU as it is NOT finalize's job to move data to host
-            if use_accel:
+            if self.use_accel:
                 data[self.amplitudes].accel_update_device()
         # Set the internal initialization to False, so that we are ready to process
         # completely new data sets.
@@ -313,7 +315,11 @@ class TemplateMatrix(Operator):
         return prov
 
     def _supports_accel(self):
-        return True
+        val = True
+        for tmpl in self.templates:
+            if not tmpl.supports_accel():
+                val = False
+        return val
 
 
 @trait_docs

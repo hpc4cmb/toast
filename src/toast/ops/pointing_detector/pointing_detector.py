@@ -6,6 +6,7 @@ import numpy as np
 import traitlets
 
 from ... import qarray as qa
+from ...accelerator import ImplementationType
 from ...observation import default_values as defaults
 from ...timing import function_timer
 from ...traits import Bool, Int, Unicode, UseEnum, trait_docs
@@ -201,6 +202,17 @@ class PointingDetectorSimple(Operator):
             "detdata": [self.quats],
         }
         return prov
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
+
+    def _supports_accel(self):
+        return True
 
     def _supports_accel(self):
         return True

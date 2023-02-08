@@ -5,6 +5,7 @@
 import numpy as np
 import traitlets
 
+from ...accelerator import ImplementationType
 from ...healpix import Pixels
 from ...observation import default_values as defaults
 from ...pixels import PixelDistribution
@@ -171,7 +172,8 @@ class PixelsHealpix(Operator):
 
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
+        self.detector_pointing.use_accel = use_accel
+        self.detector_pointing.apply(data, detectors=detectors)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -277,9 +279,9 @@ class PixelsHealpix(Operator):
 
         return
 
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, **kwargs):
         if self.create_dist is not None:
-            if use_accel:
+            if self.use_accel:
                 log = Logger.get()
                 log.verbose_rank(
                     f"Operator {self.name} finalize local submap update self",
@@ -305,7 +307,7 @@ class PixelsHealpix(Operator):
                 comm=data.comm.comm_world,
             )
 
-            if use_accel:
+            if self.use_accel:
                 log = Logger.get()
                 log.verbose_rank(
                     f"Operator {self.name} finalize local submaps update device",
@@ -329,6 +331,14 @@ class PixelsHealpix(Operator):
         if self.create_dist is not None:
             prov["global"].append(self.create_dist)
         return prov
+    
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
     def _supports_accel(self):
-        return self.detector_pointing.supports_accel()
+        return True

@@ -5,7 +5,7 @@
 import numpy as np
 import traitlets
 
-from ... import qarray as qa
+from ...accelerator import ImplementationType
 from ...observation import default_values as defaults
 from ...timing import function_timer
 from ...traits import Bool, Instance, Int, Unicode, trait_docs
@@ -137,7 +137,7 @@ class StokesWeights(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
@@ -165,7 +165,8 @@ class StokesWeights(Operator):
 
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
+        self.detector_pointing.use_accel = use_accel
+        self.detector_pointing.apply(data, detectors=detectors)
 
         cal = self.cal
         if cal is None:
@@ -285,6 +286,15 @@ class StokesWeights(Operator):
     def _provides(self):
         prov = {"detdata": [self.weights]}
         return prov
+    
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
     def _supports_accel(self):
-        return self.detector_pointing.supports_accel()
+        return True
+

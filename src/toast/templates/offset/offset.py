@@ -10,6 +10,7 @@ import scipy.signal
 import traitlets
 from astropy import units as u
 
+from ...accelerator import ImplementationType
 from ...mpi import MPI
 from ...observation import default_values as defaults
 from .kernels import (
@@ -651,6 +652,14 @@ class Offset(Template):
                 use_accel=use_accel,
             )
         return
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
     def _supports_accel(self):
         return True
