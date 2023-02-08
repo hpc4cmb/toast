@@ -224,7 +224,8 @@ class BuildHitMap(Operator):
         ]
 
     def _supports_accel(self):
-        return True
+        # NOTE: the kernels called do not follow the proper pattern yet
+        return False
 
 
 @trait_docs
@@ -509,7 +510,8 @@ class BuildInverseCovariance(Operator):
         ]
 
     def _supports_accel(self):
-        return True
+        # NOTE: the kernels called do not follow the proper pattern yet
+        return False
 
 
 @trait_docs

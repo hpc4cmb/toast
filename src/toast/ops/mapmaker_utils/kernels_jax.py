@@ -9,7 +9,7 @@ from jax.experimental.maps import xmap as jax_xmap
 from ...accelerator import ImplementationType, kernel
 from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
 from ...jax.mutableArray import MutableJaxArray
-from ...utils import Logger
+from ...utils import Logger, AlignedI64, AlignedF64
 
 
 def build_noise_weighted_interval(

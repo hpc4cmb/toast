@@ -173,8 +173,7 @@ class PixelDistribution(AcceleratorObject):
         """(array): The mapping from global submap to local."""
         return self._glob2loc
 
-    # TODO remover timer to keep a match between the number of lines in the compiled and jax profiles
-    # @function_timer
+    @function_timer
     def global_pixel_to_submap(self, gl):
         """Convert global pixel indices into the local submap and pixel.
 
