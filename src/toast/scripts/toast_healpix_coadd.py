@@ -190,6 +190,8 @@ def main():
             log.info(f"{prefix}Applying inverse matrix")
             invcov = invcov.T.ravel().astype(float).copy()
             inmap = inmap.T.ravel().astype(float).copy()
+            nsubmap = npix
+            npix_submap = 1
             cov_apply_diag(nsubmap, npix_submap, nnz, invcov.data, inmap.data)
             inmap = inmap.reshape(npix, -1).T.copy()
             invcov = invcov.reshape(npix, -1).T.copy()
