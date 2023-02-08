@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 import traitlets
 
-from ..accelerator import accel_enabled
+from ..accelerator import accel_enabled, ImplementationType
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Int, List, trait_docs
@@ -300,19 +300,13 @@ class Pipeline(Operator):
         return interm
 
     def _implementations(self):
-        # Find implementations supported by all the operators
-        all_impl = [
-            ImplementationType.DEFAULT,
-            ImplementationType.COMPILED,
-            ImplementationType.NUMPY,
-            ImplementationType.JAX,
-        ]
-        impl = set(all_impl)
+        """
+        Find implementations supported by all the operators
+        """
+        implementations = {ImplementationType.DEFAULT, ImplementationType.COMPILED, ImplementationType.NUMPY, ImplementationType.JAX}
         for op in self.operators:
-            for im in all_impl:
-                if im not in op.implementations():
-                    impl.remove(im)
-        return list(impl)
+            implementations.intersection_update(op.implementations())
+        return list(implementations)
 
     def _supports_accel(self):
         """

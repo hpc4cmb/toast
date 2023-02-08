@@ -17,6 +17,7 @@ from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
 from ..utils import Logger
+from ..accelerator import ImplementationType
 from .arithmetic import Combine
 from .copy import Copy
 from .mapmaker_solve import SolverLHS, SolverRHS, solve
@@ -314,12 +315,26 @@ class TemplateMatrix(Operator):
             prov["detdata"] = [self.det_data]
         return prov
 
+    def _implementations(self):
+        """
+        Find implementations supported by all the templates
+        """
+        implementations = {ImplementationType.DEFAULT, ImplementationType.COMPILED, ImplementationType.NUMPY, ImplementationType.JAX}
+        for tmpl in self.templates:
+            implementations.intersection_update(tmpl.implementations())
+        return list(implementations)
+
     def _supports_accel(self):
-        val = True
+        """
+        Returns True if all the templates are GPU compatible.
+        """
         for tmpl in self.templates:
             if not tmpl.supports_accel():
-                val = False
-        return val
+                log = Logger.get()
+                msg = f"{self} does not support accel because of '{tmpl}'"
+                log.debug(msg)
+                return False
+        return True
 
 
 @trait_docs
