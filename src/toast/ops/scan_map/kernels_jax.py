@@ -93,16 +93,17 @@ def scan_map_inner(
 #                                       [...], # data_scale
 #                                       [...], # should_zero
 #                                       [...]], # should_subtract
+#                                       [...]], # should_scale
 #                              out_axes=['detectors','intervals',...])
 # TODO xmap is commented out for now due to a [bug with static argnum](https://github.com/google/jax/issues/10741)
 scan_map_inner = jax.vmap(
     scan_map_inner,
-    in_axes=[None, None, None, 0, 0, 0, None, None, None],
+    in_axes=[None, None, None, 0, 0, 0, None, None, None, None],
     out_axes=0,
 )  # loop on intervals
 scan_map_inner = jax.vmap(
     scan_map_inner,
-    in_axes=[None, None, None, 0, 0, 0, None, None, None],
+    in_axes=[None, None, None, 0, 0, 0, None, None, None, None],
     out_axes=0,
 )  # loop on detectors
 
@@ -210,6 +211,7 @@ scan_map_interval = jax.jit(
         "intervals_max_length",
         "should_zero",
         "should_subtract",
+        "should_scale",
     ],
     donate_argnums=[4],
 )  # donates det_data
