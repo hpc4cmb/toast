@@ -20,9 +20,10 @@ class ImplementationType(IntEnum):
 
 registry = dict()
 
+
 def kernel(impl, name=None):
     """Decorator which registers a kernel function.
-    
+
     This will associate the function with a particular implementation of a kernel name.
     It checks the inputs and ensures that multiple functions are not registered for
     the same name / implementation.
@@ -37,12 +38,14 @@ def kernel(impl, name=None):
 
     Returns:
         (function):  The dispatch function.
-    
+
     """
     global registry
 
     if not isinstance(impl, ImplementationType):
-        raise ValueError("kernel decorator second argument should be ImplementationType")
+        raise ValueError(
+            "kernel decorator second argument should be ImplementationType"
+        )
 
     def _kernel(f):
         nonlocal impl
@@ -54,22 +57,27 @@ def kernel(impl, name=None):
             # This is the first occurence of this kernel.  Set up the dictionary of
             # implementations and create a dispatch function.
             registry[name] = dict()
-            def dispatch(*args, impl=ImplementationType.DEFAULT, use_accel=False, **kwargs):
+
+            def dispatch(
+                *args, impl=ImplementationType.DEFAULT, use_accel=False, **kwargs
+            ):
                 return registry[name][impl](*args, use_accel=use_accel, **kwargs)
+
             registry[name]["dispatch"] = dispatch
 
         if impl in registry[name]:
             msg = f"Implementation {impl} for kernel {name} already exists."
             raise RuntimeError(msg)
-        
+
         if impl == ImplementationType.DEFAULT:
             # When we register the default implementation, assign its docstring to
             # the dispatch function
             registry[name]["dispatch"].__doc__ = f.__doc__
-        
+
         # Register the function with timer
         registry[name][impl] = function_timer(f)
 
         # Return the dispatch function in place of the original
         return registry[name]["dispatch"]
+
     return _kernel

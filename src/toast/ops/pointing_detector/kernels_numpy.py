@@ -4,9 +4,8 @@
 
 import numpy as np
 
-from ...accelerator import kernel, ImplementationType
-
 from ... import qarray as qa
+from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="pointing_detector")

@@ -6,27 +6,19 @@ import numpy as np
 
 from ..._libtoast import filter_poly2D as libtoast_filter_poly2D
 from ..._libtoast import filter_polynomial as libtoast_filter_polynomial
-
-from ...accelerator import kernel, ImplementationType, use_accel_jax
-
-from .kernels_numpy import (
-    filter_poly2D_numpy,
-    filter_polynomial_numpy,
-)
+from ...accelerator import ImplementationType, kernel, use_accel_jax
+from .kernels_numpy import filter_poly2D_numpy, filter_polynomial_numpy
 
 if use_accel_jax:
-    from .kernels_jax import (
-        filter_poly2D_jax,
-        filter_polynomial_jax,
-    )
+    from .kernels_jax import filter_poly2D_jax, filter_polynomial_jax
 
 
 @kernel(impl=ImplementationType.DEFAULT)
 def filter_polynomial(
-    order, 
-    flags, 
-    signals_list, 
-    starts, 
+    order,
+    flags,
+    signals_list,
+    starts,
     stops,
     use_accel=False,
 ):
@@ -44,21 +36,22 @@ def filter_polynomial(
 
     """
     return filter_polynomial(
-        order, 
-        flags, 
-        signals_list, 
-        starts, 
+        order,
+        flags,
+        signals_list,
+        starts,
         stops,
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
     )
 
+
 @kernel(impl=ImplementationType.DEFAULT)
 def filter_poly2D(
-    det_groups, 
-    templates, 
-    signals, 
-    masks, 
+    det_groups,
+    templates,
+    signals,
+    masks,
     coeff,
     use_accel=False,
 ):
@@ -76,10 +69,10 @@ def filter_poly2D(
 
     """
     return filter_poly2D(
-        det_groups, 
-        templates, 
-        signals, 
-        masks, 
+        det_groups,
+        templates,
+        signals,
+        masks,
         coeff,
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
@@ -90,7 +83,7 @@ def filter_poly2D(
 def filter_polynomial_compiled(*args, use_accel=False):
     return libtoast_filter_polynomial(*args, use_accel)
 
+
 @kernel(impl=ImplementationType.COMPILED, name="filter_poly2D")
 def filter_poly2D_compiled(*args, use_accel=False):
     return libtoast_filter_poly2D(*args, use_accel)
-

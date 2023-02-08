@@ -9,8 +9,8 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops
-from ..observation import default_values as defaults
 from ..accelerator import ImplementationType
+from ..observation import default_values as defaults
 from ..templates import Offset
 from ..utils import rate_from_times
 from ._helpers import close_data, create_outdir, create_satellite_data

@@ -2,12 +2,11 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
 import healpy as hp
-
-from ...accelerator import kernel, ImplementationType
+import numpy as np
 
 from ... import qarray as qa
+from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="pixels_healpix")
@@ -33,7 +32,7 @@ def pixels_healpix_numpy(
             samples = slice(vw.first, vw.last + 1, 1)
             dir = qa.rotate(quats[qidx][samples], zaxis)
             pixels[pidx][samples] = hp.vec2pix(
-                nside, 
+                nside,
                 dir[:, 0],
                 dir[:, 1],
                 dir[:, 2],
@@ -44,4 +43,3 @@ def pixels_healpix_numpy(
             sub_maps = pixels[pidx][samples][good] // n_pix_submap
             hit_submaps[sub_maps] = 1
             pixels[pidx][samples][bad] = -1
-

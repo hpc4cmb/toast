@@ -2,17 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
 import healpy as hp
+import numpy as np
 
 from ..._libtoast import build_noise_weighted as libtoast_build_noise_weighted
-from ..._libtoast import cov_accum_diag_invnpp as libtoast_cov_accum_diag_invnpp
 from ..._libtoast import cov_accum_diag_hits as libtoast_cov_accum_diag_hits
-
-from ...accelerator import kernel, ImplementationType, use_accel_jax
-
+from ..._libtoast import cov_accum_diag_invnpp as libtoast_cov_accum_diag_invnpp
+from ...accelerator import ImplementationType, kernel, use_accel_jax
 from .kernels_numpy import (
-    build_noise_weighted_numpy, 
+    build_noise_weighted_numpy,
     cov_accum_diag_hits_numpy,
     cov_accum_diag_invnpp_numpy,
 )
@@ -29,9 +27,11 @@ if use_accel_jax:
 def build_noise_weighted_compiled(*args, use_accel=False):
     return libtoast_build_noise_weighted(*args, use_accel)
 
+
 @kernel(impl=ImplementationType.COMPILED, name="cov_accum_diag_hits")
 def cov_accum_diag_hits_compiled(*args, use_accel=False):
     return libtoast_cov_accum_diag_hits(*args, use_accel)
+
 
 @kernel(impl=ImplementationType.COMPILED, name="cov_accum_diag_invnpp")
 def cov_accum_diag_invnpp_compiled(*args, use_accel=False):
@@ -67,7 +67,7 @@ def build_noise_weighted(
             detector.
         pixels (array):  The array of detector pixels for each sample.
         weight_index (array):  The index into the weights array for each detector.
-        weights (array):  The array of I, Q, and U weights at each sample for each 
+        weights (array):  The array of I, Q, and U weights at each sample for each
             detector.
         data_index (array):  The index into the data array for each detector.
         det_data (array):  The detector data at each sample for each detector.
@@ -107,13 +107,13 @@ def build_noise_weighted(
 
 @kernel(impl=ImplementationType.DEFAULT)
 def cov_accum_diag_invnpp(
-    nsub, 
-    nsubpix, 
-    nnz, 
-    submap, 
-    subpix, 
-    weights, 
-    scale, 
+    nsub,
+    nsubpix,
+    nnz,
+    submap,
+    subpix,
+    weights,
+    scale,
     invnpp,
     use_accel=False,
 ):
@@ -138,13 +138,13 @@ def cov_accum_diag_invnpp(
 
     """
     return cov_accum_diag_invnpp(
-        nsub, 
-        nsubpix, 
-        nnz, 
-        submap, 
-        subpix, 
-        weights, 
-        scale, 
+        nsub,
+        nsubpix,
+        nnz,
+        submap,
+        subpix,
+        weights,
+        scale,
         invnpp,
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
@@ -153,11 +153,11 @@ def cov_accum_diag_invnpp(
 
 @kernel(impl=ImplementationType.DEFAULT)
 def cov_accum_diag_hits(
-    nsub, 
-    nsubpix, 
-    nnz, 
-    submap, 
-    subpix, 
+    nsub,
+    nsubpix,
+    nnz,
+    submap,
+    subpix,
     hits,
     use_accel=False,
 ):
@@ -178,13 +178,12 @@ def cov_accum_diag_hits(
 
     """
     return cov_accum_diag_hits(
-        nsub, 
-        nsubpix, 
-        nnz, 
-        submap, 
-        subpix, 
+        nsub,
+        nsubpix,
+        nnz,
+        submap,
+        subpix,
         hits,
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
     )
-

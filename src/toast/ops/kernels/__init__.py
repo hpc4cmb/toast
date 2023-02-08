@@ -1,4 +1,29 @@
+# kernels that have not been ported
+from ..._libtoast import (
+    accumulate_observation_matrix,
+    add_templates,
+    bin_invcov,
+    bin_proj,
+    build_template_covariance,
+    cov_apply_diag,
+    cov_eigendecompose_diag,
+    expand_matrix,
+    fod_autosums,
+    fod_crosssums,
+    fourier,
+    integrate_simpson,
+    legendre,
+    subtract_mean,
+    sum_detectors,
+    tod_sim_noise_timestream,
+    tod_sim_noise_timestream_batch,
+)
 from ...accelerator import use_accel_jax
+from .implementation_selection import (
+    ImplementationType,
+    select_implementation,
+    select_implementation_cpu,
+)
 
 # FIXME: In a future cleanup, we should:
 #
@@ -10,11 +35,6 @@ from ...accelerator import use_accel_jax
 #    submodules.
 #
 
-from .implementation_selection import (
-    ImplementationType,
-    select_implementation,
-    select_implementation_cpu,
-)
 
 # if use_accel_jax:
 #     from .jax import (
@@ -60,24 +80,3 @@ from .implementation_selection import (
 # )
 
 # kernels with no use_accel
-
-# kernels that have not been ported
-from ..._libtoast import (
-    accumulate_observation_matrix,
-    add_templates,
-    bin_invcov,
-    bin_proj,
-    build_template_covariance,
-    cov_apply_diag,
-    cov_eigendecompose_diag,
-    expand_matrix,
-    fod_autosums,
-    fod_crosssums,
-    fourier,
-    integrate_simpson,
-    legendre,
-    subtract_mean,
-    sum_detectors,
-    tod_sim_noise_timestream,
-    tod_sim_noise_timestream_batch,
-)

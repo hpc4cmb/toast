@@ -14,14 +14,10 @@ from ...pixels import PixelData
 from ...timing import function_timer
 from ...traits import Bool, Float, Instance, Int, Unicode, Unit, UseEnum, trait_docs
 from ...utils import Logger, unit_conversion
-from .kernels import (
-    build_noise_weighted,
-    cov_accum_diag_hits,
-    cov_accum_diag_invnpp,
-)
 from ..operator import Operator
 from ..pipeline import Pipeline
 from ..pointing import BuildPixelDistribution
+from .kernels import build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
 
 
 @trait_docs
@@ -218,7 +214,7 @@ class BuildHitMap(Operator):
     def _provides(self):
         prov = {"global": [self.hits]}
         return prov
-    
+
     def _implementations(self):
         return [
             ImplementationType.DEFAULT,
@@ -503,7 +499,7 @@ class BuildInverseCovariance(Operator):
     def _provides(self):
         prov = {"global": [self.inverse_covariance]}
         return prov
-    
+
     def _implementations(self):
         return [
             ImplementationType.DEFAULT,
@@ -836,7 +832,7 @@ class BuildNoiseWeighted(Operator):
             "global": [self.zmap],
         }
         return prov
-    
+
     def _implementations(self):
         return [
             ImplementationType.DEFAULT,

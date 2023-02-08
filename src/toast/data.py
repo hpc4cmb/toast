@@ -472,7 +472,9 @@ class Data(MutableMapping):
                     log.verbose(f"ob {ob.name} shared: accel_create '{key}'")
                     ob.shared.accel_create(key)
                 else:
-                    log.verbose(f"ob {ob.name} shared: accel_create '{key}' already on device")
+                    log.verbose(
+                        f"ob {ob.name} shared: accel_create '{key}' already on device"
+                    )
             for key in names["intervals"]:
                 if not ob.intervals.accel_exists(key):
                     log.verbose(f"ob {ob.name} intervals: accel_create '{key}'")
@@ -489,9 +491,7 @@ class Data(MutableMapping):
                     log.verbose(f"Data accel_create: '{key}'")
                     val.accel_create()
                 else:
-                    log.verbose(
-                        f"Data accel_create: '{key}' already on device"
-                    )
+                    log.verbose(f"Data accel_create: '{key}' already on device")
             else:
                 log.verbose(
                     f"Data accel_create: '{key}' ({type(val)}) is not an AcceleratorObject"
@@ -665,9 +665,7 @@ class Data(MutableMapping):
                     log.verbose(msg)
             for key in names["shared"]:
                 if ob.shared.accel_exists(key):
-                    log.verbose(
-                        f"Calling ob {ob.name} shared accel_delete for '{key}'"
-                    )
+                    log.verbose(f"Calling ob {ob.name} shared accel_delete for '{key}'")
                     ob.shared.accel_delete(key)
                 else:
                     msg = f"Skip delete for ob {ob.name} shared '{key}', "

@@ -12,8 +12,8 @@ from ...pixels import PixelDistribution
 from ...timing import function_timer
 from ...traits import Bool, Instance, Int, Unicode, UseEnum, trait_docs
 from ...utils import Environment, Logger
-from .kernels import pixels_healpix
 from ..operator import Operator
+from .kernels import pixels_healpix
 
 
 @trait_docs
@@ -88,7 +88,7 @@ class PixelsHealpix(Operator):
                 if not detpointing.has_trait(trt):
                     msg = f"detector_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
-        return detpointing  
+        return detpointing
 
     @traitlets.validate("nside")
     def _check_nside(self, proposal):
@@ -331,7 +331,7 @@ class PixelsHealpix(Operator):
         if self.create_dist is not None:
             prov["global"].append(self.create_dist)
         return prov
-    
+
     def _implementations(self):
         return [
             ImplementationType.DEFAULT,

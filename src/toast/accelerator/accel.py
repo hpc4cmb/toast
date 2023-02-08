@@ -5,10 +5,10 @@
 import os
 
 from .._libtoast import Logger
+from .._libtoast import accel_assign_device as omp_accel_assign_device
 from .._libtoast import accel_create as omp_accel_create
 from .._libtoast import accel_delete as omp_accel_delete
 from .._libtoast import accel_enabled as omp_accel_enabled
-from .._libtoast import accel_assign_device as omp_accel_assign_device
 from .._libtoast import accel_get_device as omp_accel_get_device
 from .._libtoast import accel_present as omp_accel_present
 from .._libtoast import accel_update_device as omp_accel_update_device
@@ -31,9 +31,10 @@ use_accel_jax = False
 if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_vals):
     try:
         import jax
+
+        from ..jax.device import jax_accel_assign_device, jax_accel_get_device
         from ..jax.intervals import INTERVALS_JAX
         from ..jax.mutableArray import MutableJaxArray
-        from ..jax.device import jax_accel_get_device, jax_accel_assign_device
 
         use_accel_jax = True
     except ImportError:

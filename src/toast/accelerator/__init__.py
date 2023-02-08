@@ -5,17 +5,16 @@
 import os
 
 from .accel import (
-    use_accel_omp,
-    use_accel_jax,
-    accel_enabled,
+    AcceleratorObject,
     accel_assign_device,
-    accel_get_device,
     accel_data_create,
+    accel_data_delete,
     accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
-    accel_data_delete,
-    AcceleratorObject,
+    accel_enabled,
+    accel_get_device,
+    use_accel_jax,
+    use_accel_omp,
 )
-
-from .kernel_registry import kernel, ImplementationType
+from .kernel_registry import ImplementationType, kernel

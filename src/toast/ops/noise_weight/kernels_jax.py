@@ -5,11 +5,10 @@
 import jax
 import jax.numpy as jnp
 
+from ...accelerator import ImplementationType, kernel
 from ...jax.intervals import INTERVALS_JAX, JaxIntervals
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
-
-from ...accelerator import kernel, ImplementationType
 
 
 def noise_weight_interval(

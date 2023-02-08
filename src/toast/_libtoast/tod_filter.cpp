@@ -359,7 +359,8 @@ void init_tod_filter(py::module & m) {
               return;
           }, py::arg("order"), py::arg("flags"), py::arg("signals"), py::arg("starts"),
           py::arg(
-              "stops"), py::arg("use_accel"), R"(
+              "stops"), py::arg(
+              "use_accel"), R"(
         Fit and subtract a polynomial from one or more signals.
 
         Args:
@@ -465,7 +466,8 @@ void init_tod_filter(py::module & m) {
           }, py::arg("det_groups"), py::arg("templates"), py::arg("signals"),
           py::arg("masks"),
           py::arg(
-              "coeff"), py::arg("use_accel"), R"(
+              "coeff"), py::arg(
+              "use_accel"), R"(
         Solves for 2D polynomial coefficients at each sample.
 
         Args:

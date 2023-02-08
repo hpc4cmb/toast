@@ -13,16 +13,16 @@ from astropy import units as u
 from ...accelerator import ImplementationType
 from ...mpi import MPI
 from ...observation import default_values as defaults
-from .kernels import (
-    offset_add_to_signal,
-    offset_apply_diag_precond,
-    offset_project_signal,
-)
 from ...timing import function_timer
 from ...traits import Bool, Float, Int, Quantity, Unicode, UseEnum, trait_docs
 from ...utils import AlignedF64, Logger, rate_from_times
 from ..amplitudes import Amplitudes
 from ..template import Template
+from .kernels import (
+    offset_add_to_signal,
+    offset_apply_diag_precond,
+    offset_project_signal,
+)
 
 
 @trait_docs
@@ -640,7 +640,7 @@ class Offset(Template):
         else:
             # Since we do not have a noise filter term in our LHS, our diagonal
             # preconditioner is just the application of offset variance.
-            
+
             # Kernel selection
             implementation, use_accel = self.select_kernels()
 

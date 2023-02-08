@@ -6,11 +6,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from ...accelerator import ImplementationType, kernel
 from ...jax.intervals import INTERVALS_JAX, JaxIntervals
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
-
-from ...accelerator import kernel, ImplementationType
 
 
 def template_offset_add_to_signal_intervals(
@@ -334,9 +333,7 @@ def offset_project_signal_jax(
 
 
 @kernel(impl=ImplementationType.JAX, name="offset_apply_diag_precond")
-def offset_apply_diag_precond_jax(
-    offset_var, amplitudes_in, amplitudes_out, use_accel
-):
+def offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes_out, use_accel):
     """
     NOTE this does not use JAX as there is too little computation
 

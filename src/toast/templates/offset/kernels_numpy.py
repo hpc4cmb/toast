@@ -4,7 +4,7 @@
 
 import numpy as np
 
-from ...accelerator import kernel, ImplementationType
+from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="offset_add_to_signal")

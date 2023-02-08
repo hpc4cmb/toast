@@ -4,7 +4,7 @@
 
 import numpy as np
 
-from ...accelerator import kernel, ImplementationType
+from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="scan_map")
@@ -33,7 +33,7 @@ def scan_map_numpy(
         tod = det_data[det_data_index[idet]]
         for view in intervals:
             vslice = slice(view.first, view.last + 1)
-            
+
             # Get local submaps and pixel indices within each submap
             good = pix[vslice] >= 0
             local_submap_pix = pix[vslice] % n_pix_submap
@@ -54,4 +54,3 @@ def scan_map_numpy(
                 tod[vslice][good] *= local_tod
             else:
                 tod[vslice][good] += local_tod
-

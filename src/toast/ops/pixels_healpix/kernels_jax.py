@@ -5,12 +5,11 @@
 import jax
 import jax.numpy as jnp
 
+from ...accelerator import ImplementationType, kernel
 from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
+from ...jax.math import healpix, qarray
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
-from ...jax.math import healpix, qarray
-
-from ...accelerator import kernel, ImplementationType
 
 
 def pixels_healpix_inner(hpix, quats, nest):

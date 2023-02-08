@@ -9,13 +9,13 @@ import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
+from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Int, Unicode, trait_docs
 from ..utils import Environment, Logger, Timer
-from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
 from .operator import Operator
 
 # Wrappers for more precise timing

@@ -4,7 +4,7 @@
 
 import numpy as np
 
-from ...accelerator import kernel, ImplementationType
+from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="filter_polynomial")
@@ -20,7 +20,7 @@ def filter_polynomial_numpy(order, flags, signals_list, starts, stops, use_accel
     # converts signal into a numpy array to avoid having to loop over them
     signals = np.array(signals_list).T  # n*nsignal
 
-    for (start, stop) in zip(starts, stops):
+    for start, stop in zip(starts, stops):
         # validates interval
         start = np.maximum(0, start)
         stop = np.minimum(n - 1, stop)
@@ -98,6 +98,4 @@ def filter_poly2D_numpy(det_groups, templates, signals, masks, coeff, use_accel=
             t = templates[good].T.copy() * mask
             proj = np.dot(t, signals[isample, good] * mask)
             ccinv = np.dot(t, t.T)
-            coeff[isample, igroup] = np.linalg.lstsq(
-                ccinv, proj, rcond=1.0e-6
-            )[0]
+            coeff[isample, igroup] = np.linalg.lstsq(ccinv, proj, rcond=1.0e-6)[0]

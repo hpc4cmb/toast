@@ -5,22 +5,24 @@
 import numpy as np
 
 from ..._libtoast import template_offset_add_to_signal as libtoast_offset_add_to_signal
-from ..._libtoast import template_offset_project_signal as libtoast_offset_project_signal
-from ..._libtoast import template_offset_apply_diag_precond as libtoast_offset_apply_diag_precond
-
-from ...accelerator import kernel, ImplementationType, use_accel_jax
-
+from ..._libtoast import (
+    template_offset_apply_diag_precond as libtoast_offset_apply_diag_precond,
+)
+from ..._libtoast import (
+    template_offset_project_signal as libtoast_offset_project_signal,
+)
+from ...accelerator import ImplementationType, kernel, use_accel_jax
 from .kernels_numpy import (
     offset_add_to_signal_numpy,
-    offset_project_signal_numpy,
     offset_apply_diag_precond_numpy,
+    offset_project_signal_numpy,
 )
 
 if use_accel_jax:
     from .kernels_jax import (
         offset_add_to_signal_jax,
-        offset_project_signal_jax,
         offset_apply_diag_precond_jax,
+        offset_project_signal_jax,
     )
 
 
@@ -82,7 +84,7 @@ def offset_project_signal(
 ):
     """Kernel to accumulate timestream data into offset amplitudes.
 
-    Chunks of `step_length` number of samples from one detector are accumulated 
+    Chunks of `step_length` number of samples from one detector are accumulated
     into the offset amplitudes.
 
     Args:
@@ -121,7 +123,10 @@ def offset_project_signal(
 
 @kernel(impl=ImplementationType.DEFAULT)
 def offset_apply_diag_precond(
-    offset_var, amplitudes_in, amplitudes_out, use_accel=False,
+    offset_var,
+    amplitudes_in,
+    amplitudes_out,
+    use_accel=False,
 ):
     """
     Args:
@@ -135,9 +140,9 @@ def offset_apply_diag_precond(
 
     """
     return offset_apply_diag_precond(
-        offset_var, 
-        amplitudes_in, 
-        amplitudes_out, 
+        offset_var,
+        amplitudes_in,
+        amplitudes_out,
         impl=ImplementationType.COMPILED,
         use_accel=False,
     )
@@ -147,9 +152,11 @@ def offset_apply_diag_precond(
 def offset_add_to_signal_compiled(*args, use_accel=False):
     return libtoast_offset_add_to_signal(*args, use_accel)
 
+
 @kernel(impl=ImplementationType.COMPILED, name="offset_project_signal")
 def offset_project_signal_compiled(*args, use_accel=False):
     return libtoast_offset_project_signal(*args, use_accel)
+
 
 @kernel(impl=ImplementationType.COMPILED, name="offset_apply_diag_precond")
 def offset_apply_diag_precond_compiled(*args, use_accel=False):

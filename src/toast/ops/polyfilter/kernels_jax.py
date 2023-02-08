@@ -7,9 +7,8 @@ import jax.numpy as jnp
 import numpy as np
 from jax.experimental.maps import xmap as jax_xmap
 
+from ...accelerator import ImplementationType, kernel
 from ...jax.mutableArray import MutableJaxArray
-
-from ...accelerator import kernel, ImplementationType
 
 
 def filter_poly2D_sample_group(
@@ -200,7 +199,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
 
     # loop over intervals, this is fine as long as there are only few intervals
     # TODO port to JaxIntervals, could be done with vmap and setting padding of flags_interval to 1
-    for (start, stop) in zip(starts, stops):
+    for start, stop in zip(starts, stops):
         # validates interval
         start = np.maximum(0, start)
         stop = np.minimum(flags.size - 1, stop) + 1
@@ -217,4 +216,3 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
     # puts new signals back into the list
     for isignal, signal in enumerate(signals_list):
         signal[:] = signals[:, isignal]
-

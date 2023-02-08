@@ -2,14 +2,12 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
 import healpy as hp
-
-from ..._libtoast import pixels_healpix as libtoast_pixels_healpix
-from ...accelerator import kernel, ImplementationType, use_accel_jax
+import numpy as np
 
 from ... import qarray as qa
-
+from ..._libtoast import pixels_healpix as libtoast_pixels_healpix
+from ...accelerator import ImplementationType, kernel, use_accel_jax
 from .kernels_numpy import pixels_healpix_numpy
 
 if use_accel_jax:
@@ -52,7 +50,7 @@ def pixels_healpix(
             and zero if not hit.
         n_pix_submap (int):  The number of pixels in a submap.
         nside (int):  The Healpix NSIDE of the pixelization.
-        nest (bool):  If true, use NESTED ordering, else use RING.        
+        nest (bool):  If true, use NESTED ordering, else use RING.
         use_accel (bool):  Whether to use the accelerator for this call (if supported).
 
     Returns:
@@ -74,4 +72,3 @@ def pixels_healpix(
         impl=ImplementationType.COMPILED,
         use_accel=use_accel,
     )
-

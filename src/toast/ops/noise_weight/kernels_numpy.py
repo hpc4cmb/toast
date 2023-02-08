@@ -4,15 +4,15 @@
 
 import numpy as np
 
-from ...accelerator import kernel, ImplementationType
+from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="noise_weight")
 def noise_weight_numpy(
-    det_data, 
-    det_data_index, 
-    intervals, 
-    detector_weights, 
+    det_data,
+    det_data_index,
+    intervals,
+    detector_weights,
     use_accel,
 ):
     # Iterates over detectors and intervals

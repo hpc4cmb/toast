@@ -4,7 +4,7 @@
 
 import numpy as np
 
-from ...accelerator import kernel, ImplementationType
+from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="build_noise_weighted")
@@ -121,7 +121,9 @@ def cov_accum_diag_hits_numpy(nsub, nsubpix, nnz, submap, subpix, hits):
 
 
 @kernel(impl=ImplementationType.NUMPY, name="cov_accum_diag_invnpp")
-def cov_accum_diag_invnpp_numpy(nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp):
+def cov_accum_diag_invnpp_numpy(
+    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp
+):
     """
     Accumulate block diagonal noise covariance.
     This uses a pointing matrix to accumulate the local pieces

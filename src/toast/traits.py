@@ -28,8 +28,8 @@ from traitlets import (
     signature_has_traits,
 )
 
-from .utils import import_from_name, object_fullname
 from .accelerator import ImplementationType, use_accel_jax, use_accel_omp
+from .utils import import_from_name, object_fullname
 
 
 def trait_string_to_scalar(val):
@@ -482,9 +482,11 @@ class TraitConfig(HasTraits):
             val += "\n  {} = {} # {}".format(trait_name, trait.get(self), trait.help)
         val += "\n>"
         return val
-    
+
     def _implementations(self):
-        return [ImplementationType.DEFAULT,]
+        return [
+            ImplementationType.DEFAULT,
+        ]
 
     def implementations(self):
         """Query which kernel implementations are supported.
@@ -494,7 +496,7 @@ class TraitConfig(HasTraits):
 
         """
         return self._implementations()
-    
+
     def _supports_accel(self):
         return False
 
@@ -506,16 +508,16 @@ class TraitConfig(HasTraits):
 
         """
         return self._supports_accel()
-    
+
     def select_kernels(self):
         """Return the currently selected kernel implementation.
-        
+
         This returns both the current implementation AND whether to use the accelerator
         or not.  This is needed since some implementations support both CPU and GPU.
 
         Returns:
             (tuple):  The (implementation, use_accel) information.
-        
+
         """
         impls = self.implementations()
         if self.use_accel:
@@ -533,7 +535,6 @@ class TraitConfig(HasTraits):
                 return (ImplementationType.COMPILED, True)
         else:
             return (ImplementationType.DEFAULT, False)
-
 
     def __eq__(self, other):
         if len(self.traits()) != len(other.traits()):

@@ -5,8 +5,7 @@
 import numpy as np
 
 from ... import qarray as qa
-
-from ...accelerator import kernel, ImplementationType
+from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="stokes_weights_IQU")
@@ -68,4 +67,3 @@ def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel):
         for vw in intervals:
             samples = slice(vw.first, vw.last + 1, 1)
             weights[widx][samples] = cal
-

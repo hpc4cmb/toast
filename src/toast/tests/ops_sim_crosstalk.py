@@ -27,7 +27,6 @@ class SimCrossTalkTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
 
     def test_xtalk_matrices(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data_big(self.comm)
 
@@ -58,7 +57,6 @@ class SimCrossTalkTest(MPITestCase):
         close_data(data)
 
     def test_xtalk(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
@@ -83,7 +81,6 @@ class SimCrossTalkTest(MPITestCase):
         close_data(data)
 
     def test_xtalk_big(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data_big(self.comm, pixel_per_process=7)
 
@@ -111,7 +108,6 @@ class SimCrossTalkTest(MPITestCase):
         close_data(data)
 
     def test_xtalk_errors(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 

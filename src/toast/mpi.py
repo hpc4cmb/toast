@@ -9,6 +9,8 @@ from ._libtoast import Logger
 
 use_mpi = None
 MPI = None
+
+
 # traitlets require the MPI communicator type to be an actual class,
 # even if None is a valid value
 class MPI_Comm:

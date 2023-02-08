@@ -12,8 +12,8 @@ import traitlets
 from astropy import units as u
 
 from ... import qarray as qa
-from ...accelerator import ImplementationType
 from ..._libtoast import subtract_mean, sum_detectors
+from ...accelerator import ImplementationType
 from ...mpi import MPI, Comm, MPI_Comm, use_mpi
 from ...observation import default_values as defaults
 from ...timing import function_timer
@@ -27,12 +27,8 @@ from ...utils import (
     Timer,
     dtype_to_aligned,
 )
-from .kernels import (
-    filter_poly2D,
-    filter_polynomial,
-)
-
 from ..operator import Operator
+from .kernels import filter_poly2D, filter_polynomial
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 

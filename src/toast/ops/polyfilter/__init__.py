@@ -4,4 +4,4 @@
 
 # Namespace imports
 
-from .polyfilter import PolyFilter, PolyFilter2D, CommonModeFilter
+from .polyfilter import CommonModeFilter, PolyFilter, PolyFilter2D

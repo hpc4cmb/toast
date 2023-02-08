@@ -10,8 +10,8 @@ from ...observation import default_values as defaults
 from ...timing import function_timer
 from ...traits import Bool, Instance, Int, Unicode, trait_docs
 from ...utils import Environment, Logger
-from .kernels import stokes_weights_I, stokes_weights_IQU
 from ..operator import Operator
+from .kernels import stokes_weights_I, stokes_weights_IQU
 
 
 @trait_docs
@@ -286,7 +286,7 @@ class StokesWeights(Operator):
     def _provides(self):
         prov = {"detdata": [self.weights]}
         return prov
-    
+
     def _implementations(self):
         return [
             ImplementationType.DEFAULT,
@@ -297,4 +297,3 @@ class StokesWeights(Operator):
 
     def _supports_accel(self):
         return True
-

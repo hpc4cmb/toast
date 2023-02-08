@@ -10,8 +10,8 @@ from ...noise_sim import AnalyticNoise
 from ...timing import Timer, function_timer
 from ...traits import Int, Unicode, UseEnum, trait_docs
 from ...utils import Environment, Logger
-from .kernels import noise_weight
 from ..operator import Operator
+from .kernels import noise_weight
 
 
 @trait_docs
@@ -107,7 +107,7 @@ class NoiseWeight(Operator):
 
     def _provides(self):
         return dict()
-    
+
     def _implementations(self):
         return [
             ImplementationType.DEFAULT,

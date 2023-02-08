@@ -11,8 +11,8 @@ from ...observation import default_values as defaults
 from ...timing import function_timer
 from ...traits import Bool, Int, Unicode, UseEnum, trait_docs
 from ...utils import Logger
-from .kernels import pointing_detector
 from ..operator import Operator
+from .kernels import pointing_detector
 
 
 @trait_docs

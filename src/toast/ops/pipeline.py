@@ -229,13 +229,13 @@ class Pipeline(Operator):
             msg = f"{pstr} {self} copying out accel data outputs: {prov}"
             log.verbose(msg)
             data.accel_update_host(prov)
-            # Delete the intermediate products from the GPU.  Otherwise, they will 
+            # Delete the intermediate products from the GPU.  Otherwise, they will
             # get re-used by other pipelines despite still being on GPU.
             interm = self._get_intermediate()
             msg = f"{pstr} {self} deleting accel data intermediate outputs: {interm}"
             log.verbose(msg)
             data.accel_delete(interm)
-            # Delete the inputs.  Otherwise, they will get re-used by other pipelines 
+            # Delete the inputs.  Otherwise, they will get re-used by other pipelines
             # despite still being on GPU.
             req = self.requires()
             msg = f"{pstr} {self} deleting accel data inputs: {req}"
@@ -244,7 +244,7 @@ class Pipeline(Operator):
         return result
 
     def _requires(self):
-        # Work through the operator list in reverse order and prune intermediate 
+        # Work through the operator list in reverse order and prune intermediate
         # products (that will be provided by a previous operator).
         if self.operators is None:
             return dict()
@@ -298,7 +298,7 @@ class Pipeline(Operator):
             interm[k] -= set(prov[k])
             interm[k] = list(interm[k])
         return interm
-    
+
     def _implementations(self):
         # Find implementations supported by all the operators
         all_impl = [

@@ -5,11 +5,10 @@
 import jax
 import jax.numpy as jnp
 
+from ...accelerator import ImplementationType, kernel
 from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
-
-from ...accelerator import kernel, ImplementationType
 
 
 def global_to_local(global_pixels, npix_submap, global2local):
@@ -81,6 +80,7 @@ def scan_map_inner(
         return det_data * update
     else:
         return det_data + update
+
 
 # maps over intervals and detectors
 # scan_map_inner = jax_xmap(scan_map_inner,
@@ -259,7 +259,7 @@ def scan_map_jax(
         None: det_data is updated in place
     """
     nmap = weights.shape[-1]
-    
+
     # prepares inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
     mapdata = MutableJaxArray.to_array(mapdata.data)

@@ -28,6 +28,7 @@ def select_implementation_cpu(f_compiled, f_numpy, f_jax):
         f_jax = function_timer(f_jax)
     f_default_cpu = f_compiled  # sets the default on CPU
     cpu_functions = [f_default_cpu, f_compiled, f_numpy, f_jax]
+
     # pick a function at runtime
     @wraps(f_compiled)
     def f_wrapped(*args, implementation_type=ImplementationType.DEFAULT, **kwargs):
@@ -45,7 +46,7 @@ def select_implementation_cpu(f_compiled, f_numpy, f_jax):
 
 def select_implementation(f_compiled, f_numpy, f_jax):
     """
-    Builds a new function that will select an implementation at runtime depending on 
+    Builds a new function that will select an implementation at runtime depending on
     its 'use_accel' and 'implementation_type' inputs.  Adds timers on all kernels.
     Adds movement trackers on the GPU kernels.
     """
@@ -64,6 +65,7 @@ def select_implementation(f_compiled, f_numpy, f_jax):
         f_jax_gpu if use_accel_jax else f_compiled_gpu
     )  # picks a GPU default depending on flags
     gpu_functions = [f_default_gpu, f_compiled_gpu, f_numpy_gpu, f_jax_gpu]
+
     # pick a function at runtime
     @wraps(f_compiled)
     def f_wrapped(*args, implementation_type=ImplementationType.DEFAULT, **kwargs):

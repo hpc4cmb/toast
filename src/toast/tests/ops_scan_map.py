@@ -70,7 +70,9 @@ class ScanMapTest(MPITestCase):
                             continue
                         val = 0.0
                         for j in range(3):
-                            val += wt[i, j] * map_data.data[local_sm[i], local_pix[i], j]
+                            val += (
+                                wt[i, j] * map_data.data[local_sm[i], local_pix[i], j]
+                            )
                         np.testing.assert_almost_equal(
                             val, ob.detdata[defaults.det_data][det, i]
                         )

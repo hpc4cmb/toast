@@ -4,12 +4,11 @@
 
 import numpy as np
 
-from ..._libtoast import pointing_detector as libtoast_pointing_detector
-from ...accelerator import kernel, ImplementationType, use_accel_jax
-
 from ... import qarray as qa
-
+from ..._libtoast import pointing_detector as libtoast_pointing_detector
+from ...accelerator import ImplementationType, kernel, use_accel_jax
 from .kernels_numpy import pointing_detector_numpy
+
 if use_accel_jax:
     from .kernels_jax import pointing_detector_jax
 
@@ -58,4 +57,3 @@ def pointing_detector(
 @kernel(impl=ImplementationType.COMPILED, name="pointing_detector")
 def pointing_detector_compiled(*args, use_accel=False):
     return libtoast_pointing_detector(*args, use_accel)
-

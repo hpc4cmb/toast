@@ -32,7 +32,7 @@ def filter_polynomial(order, flags, signals_list, starts, stops):
     # converts signal into a numpy array to avoid having to loop over them
     signals = np.array(signals_list).T  # n*nsignal
 
-    for (start, stop) in zip(starts, stops):
+    for start, stop in zip(starts, stops):
         # validates interval
         start = np.maximum(0, start)
         stop = np.minimum(n - 1, stop)

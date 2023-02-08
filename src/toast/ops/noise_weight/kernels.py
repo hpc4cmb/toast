@@ -5,8 +5,7 @@
 import numpy as np
 
 # from ..._libtoast import noise_weight as libtoast_noise_weight
-from ...accelerator import kernel, ImplementationType, use_accel_jax
-
+from ...accelerator import ImplementationType, kernel, use_accel_jax
 from .kernels_numpy import noise_weight_numpy
 
 if use_accel_jax:
@@ -15,10 +14,10 @@ if use_accel_jax:
 
 @kernel(impl=ImplementationType.DEFAULT)
 def noise_weight(
-    det_data, 
-    det_data_index, 
-    intervals, 
-    detector_weights, 
+    det_data,
+    det_data_index,
+    intervals,
+    detector_weights,
     use_accel=False,
 ):
     """Kernel for applying noise weights to detector timestreams.
