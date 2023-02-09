@@ -8,6 +8,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
+from ..accelerator import ImplementationType
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
@@ -17,7 +18,6 @@ from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
 from ..utils import Logger
-from ..accelerator import ImplementationType
 from .arithmetic import Combine
 from .copy import Copy
 from .mapmaker_solve import SolverLHS, SolverRHS, solve

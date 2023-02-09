@@ -7,6 +7,8 @@ from enum import IntEnum
 from functools import wraps
 
 from ..timing import function_timer
+from .accel import accel_enabled
+from .data_localization import function_datamovementtracker
 
 
 class ImplementationType(IntEnum):
@@ -74,8 +76,13 @@ def kernel(impl, name=None):
             # the dispatch function
             registry[name]["dispatch"].__doc__ = f.__doc__
 
-        # Register the function with timer
-        registry[name][impl] = function_timer(f)
+        # Register the function with timer and data movement tracker
+        if (
+            (impl == ImplementationType.JAX) or (impl == ImplementationType.COMPILED)
+        ) and accel_enabled():
+            registry[name][impl] = function_timer(function_datamovementtracker(f))
+        else:
+            registry[name][impl] = function_timer(f)
 
         # Return the dispatch function in place of the original
         return registry[name]["dispatch"]

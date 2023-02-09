@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 import traitlets
 
-from ..accelerator import accel_enabled, ImplementationType
+from ..accelerator import ImplementationType, accel_enabled
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Int, List, trait_docs
