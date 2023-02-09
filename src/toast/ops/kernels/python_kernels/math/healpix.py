@@ -5,7 +5,7 @@
 import numpy as np
 
 TWOINVPI = 0.63661977236758134308
-MACHINE_EPSILON = np.finfo(np.float).eps
+MACHINE_EPSILON = np.finfo(np.cfloat).eps
 
 
 class HPIX_PYTHON:
