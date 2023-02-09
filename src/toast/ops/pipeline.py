@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 import traitlets
 
-from ..accelerator import accel_enabled
+from ..accelerator import ImplementationType, accel_enabled
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Int, List, trait_docs
@@ -72,7 +72,7 @@ class Pipeline(Operator):
         self._staged_accel = False
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
@@ -83,11 +83,11 @@ class Pipeline(Operator):
             )
             return
 
-        # By default, if the calling code passed use_accel=True, then we assume the
-        # data staging is being handled at a higher level.
+        # By default, if our own pipeline instance has use_accel set to True, then
+        # it means that the calling code has already staged data to the device.
         self._staged_accel = False
 
-        if not use_accel:
+        if not self.use_accel:
             # The calling code determined that we do not have all the data present to
             # use the accelerator.  HOWEVER, if our operators support it, we can stage
             # the data to and from the device.
@@ -100,12 +100,18 @@ class Pipeline(Operator):
                 msg = f"{self} fully supports accelerators, data to "
                 msg += f"be staged: {self.requires()}"
                 log.verbose_rank(msg, comm=data.comm.comm_world)
-                use_accel = True
+                self.use_accel = True
+                # Save state of accel use in all operators, then enable them
+                self._save_op_accel = list()
+                for op in self.operators:
+                    self._save_op_accel.append(op.use_accel)
+                    op.use_accel = True
 
             # Deletes leftover intermediate values
-            self._delete_intermediates(data, use_accel)
+            self._delete_intermediates(data, self.use_accel)
+
             # Send the requirements to the device
-            self._stage_requirements_to_device(data, use_accel)
+            self._stage_requirements_to_device(data, self.use_accel)
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -117,7 +123,7 @@ class Pipeline(Operator):
             for op in self.operators:
                 msg = f"{pstr} {self} calling operator '{op.name}' exec() with ALL dets"
                 log.verbose(msg)
-                op.exec(data, detectors=None, use_accel=use_accel)
+                op.exec(data, detectors=None)
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
             all_local_dets = data.all_local_detectors(selection=detectors)
@@ -128,7 +134,7 @@ class Pipeline(Operator):
                 for op in self.operators:
                     msg = f"{pstr} {self} calling operator '{op.name}' exec()"
                     log.verbose(msg)
-                    op.exec(data, detectors=[det], use_accel=use_accel)
+                    op.exec(data, detectors=[det])
         else:
             # We have explicit detector sets
             det_check = set(detectors)
@@ -147,7 +153,7 @@ class Pipeline(Operator):
                 for op in self.operators:
                     msg = f"{pstr} {self} calling operator '{op.name}' exec()"
                     log.verbose(msg)
-                    op.exec(data, detectors=selected_set, use_accel=use_accel)
+                    op.exec(data, detectors=selected_set)
 
         return
 
@@ -195,7 +201,7 @@ class Pipeline(Operator):
             self._staged_accel = True
 
     @function_timer
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, **kwargs):
         log = Logger.get()
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
@@ -207,28 +213,29 @@ class Pipeline(Operator):
         # outputs should remain on the device so that they can be copied
         # out at the end automatically.
 
-        if not use_accel and self._staged_accel:
-            use_accel = True
-
         if self.operators is not None:
             for op in self.operators:
                 log.verbose(msg)
-                result.append(op.finalize(data, use_accel=use_accel))
+                result.append(op.finalize(data))
 
         # Copy out from accelerator if we did the copy in.
         if self._staged_accel:
+            # Restore operator state
+            for op, original in zip(self.operators, self._save_op_accel):
+                op.use_accel = original
+
             # Copy out the outputs to the CPU
             prov = self.provides()
             msg = f"{pstr} {self} copying out accel data outputs: {prov}"
             log.verbose(msg)
             data.accel_update_host(prov)
-            # Delete the intermediate products from the GPU.  Otherwise, they will 
+            # Delete the intermediate products from the GPU.  Otherwise, they will
             # get re-used by other pipelines despite still being on GPU.
             interm = self._get_intermediate()
             msg = f"{pstr} {self} deleting accel data intermediate outputs: {interm}"
             log.verbose(msg)
             data.accel_delete(interm)
-            # Delete the inputs.  Otherwise, they will get re-used by other pipelines 
+            # Delete the inputs.  Otherwise, they will get re-used by other pipelines
             # despite still being on GPU.
             req = self.requires()
             msg = f"{pstr} {self} deleting accel data inputs: {req}"
@@ -237,7 +244,7 @@ class Pipeline(Operator):
         return result
 
     def _requires(self):
-        # Work through the operator list in reverse order and prune intermediate 
+        # Work through the operator list in reverse order and prune intermediate
         # products (that will be provided by a previous operator).
         if self.operators is None:
             return dict()
@@ -291,6 +298,20 @@ class Pipeline(Operator):
             interm[k] -= set(prov[k])
             interm[k] = list(interm[k])
         return interm
+
+    def _implementations(self):
+        """
+        Find implementations supported by all the operators
+        """
+        implementations = {
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        }
+        for op in self.operators:
+            implementations.intersection_update(op.implementations())
+        return list(implementations)
 
     def _supports_accel(self):
         """

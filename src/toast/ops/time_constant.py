@@ -117,9 +117,9 @@ class TimeConstant(Operator):
                 # Continue with time-reversed second half
                 fplan.tdata(idet)[nsample : nsample + nhalf] = signal[: nhalf - 1 : -1]
                 # Pad with the center value
-                fplan.tdata(idet)[nsample + nhalf:-nsample-nhalf] = signal[nhalf]
+                fplan.tdata(idet)[nsample + nhalf : -nsample - nhalf] = signal[nhalf]
                 # End with the time-reversed first half
-                fplan.tdata(idet)[-nhalf:] = signal[nhalf - 1 : : -1]
+                fplan.tdata(idet)[-nhalf:] = signal[nhalf - 1 :: -1]
 
             # Do the forward transforms
             fplan.exec()
@@ -178,7 +178,7 @@ class TimeConstant(Operator):
 
             # Copy timestreams back
             for idet, det in enumerate(dets):
-                obs.detdata[self.det_data][det] = rplan.tdata(idet)[: nsample]
+                obs.detdata[self.det_data][det] = rplan.tdata(idet)[:nsample]
 
             # Clear the FFT plans after each observation to save memory.  This means
             # we are just using the plan store for convenience and not re-using the

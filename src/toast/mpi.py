@@ -9,6 +9,8 @@ from ._libtoast import Logger
 
 use_mpi = None
 MPI = None
+
+
 # traitlets require the MPI communicator type to be an actual class,
 # even if None is a valid value
 class MPI_Comm:
@@ -42,7 +44,7 @@ if use_mpi is None:
                 use_mpi = False
 
 # Assign each process to an accelerator device
-from .accelerator import use_accel_jax, use_accel_omp, accel_assign_device
+from .accelerator import accel_assign_device, use_accel_jax, use_accel_omp
 
 if use_accel_omp or use_accel_jax:
     node_procs = 1

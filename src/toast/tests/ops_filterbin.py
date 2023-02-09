@@ -35,7 +35,6 @@ class FilterBinTest(MPITestCase):
         self.nside = 64
 
     def test_filterbin(self):
-
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 

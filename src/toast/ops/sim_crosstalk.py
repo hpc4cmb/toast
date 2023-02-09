@@ -198,7 +198,6 @@ class CrossTalk(Operator):
             procs = procs[procs != rank]
             tmp = np.zeros_like(ob.detdata[self.det_data].data)
             for idet, det in enumerate(dets):
-
                 xtalklist = list(self.xtalk_mat[det].keys())
                 # we firstly xtalk local detectors in each rank
                 intersect_local = np.intersect1d(
@@ -396,7 +395,6 @@ class MitigateCrossTalk(Operator):
         if self.xtalk_mat_file is None:
             self.xtalk_mat = init_xtalk_matrix(data, realization=self.realization)
         else:
-
             self.xtalk_mat = read_xtalk_matrix(self.xtalk_mat_file, data)
 
         ## Inject an error to the matrix coefficients
@@ -408,7 +406,6 @@ class MitigateCrossTalk(Operator):
         self.inv_xtalk_mat = invert_xtalk_mat(self.xtalk_mat)
 
         for ob in data.obs:
-
             # Get the detectors we are using for this observation
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank

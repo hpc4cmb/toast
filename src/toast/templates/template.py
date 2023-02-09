@@ -62,8 +62,6 @@ class Template(TraitConfig):
         defaults.det_mask_invalid, help="Bit mask value for solver flags"
     )
 
-    use_accel = Bool(False, help="If True, use the accelerator")
-
     @traitlets.validate("data")
     def _check_data(self, proposal):
         dat = proposal["value"]
@@ -232,18 +230,6 @@ class Template(TraitConfig):
         """
         if self._check_enabled():
             return self._apply_precond(amplitudes_in, amplitudes_out)
-
-    def _supports_accel(self):
-        return False
-
-    def supports_accel(self):
-        """Query whether the template supports OpenACC
-
-        Returns:
-            (bool):  True if the template can use OpenACC, else False.
-
-        """
-        return self._supports_accel()
 
     @classmethod
     def get_class_config_path(cls):

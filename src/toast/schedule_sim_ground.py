@@ -43,7 +43,6 @@ class MoonTooClose(TooClose):
 
 
 class Patch(object):
-
     hits = 0
     partial_hits = 0
     rising_hits = 0
@@ -658,7 +657,6 @@ class HorizontalPatch(Patch):
         moon_avoidance_angle,
         check_sso,
     ):
-
         in_view = True
         msg = ""
         if check_sso:

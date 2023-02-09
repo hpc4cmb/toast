@@ -11,9 +11,9 @@ from astropy.table import Column
 
 from .. import ops as ops
 from .. import qarray as qa
+from ..accelerator import ImplementationType
 from ..noise import Noise
 from ..observation import default_values as defaults
-from ..ops.kernels import ImplementationType
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
 from ._helpers import (
@@ -36,7 +36,6 @@ class PolyFilterTest(MPITestCase):
         np.random.seed(123456)
 
     def test_polyfilter(self):
-
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
@@ -127,7 +126,6 @@ class PolyFilterTest(MPITestCase):
         close_data(data)
 
     def test_polyfilter_trend(self):
-
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
@@ -409,7 +407,9 @@ class PolyFilterTest(MPITestCase):
                     ob.detdata[defaults.det_data][det], ob.detdata["pyfilter"][det]
                 )
                 if not check:
-                    print(f"{ob.detdata[defaults.det_data][det]} != {ob.detdata['pyfilter'][det]}")
+                    print(
+                        f"{ob.detdata[defaults.det_data][det]} != {ob.detdata['pyfilter'][det]}"
+                    )
                     self.assertTrue(False)
                 self.assertTrue(
                     np.all(
@@ -437,7 +437,6 @@ class PolyFilterTest(MPITestCase):
         close_data(data)
 
     def test_common_mode_filter(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 

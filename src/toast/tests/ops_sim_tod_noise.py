@@ -340,7 +340,6 @@ class SimNoiseTest(MPITestCase):
         # Perform noise realizations and accumulation statistics.
 
         for realization in range(self.nmc):
-
             # Simulate noise using the model, with a different realization each time
             sim_noise = ops.SimNoise(realization=realization)
 

@@ -9,10 +9,11 @@ import numpy as np
 
 from .. import ops as ops
 from .. import qarray as qa
+from .._libtoast import healpix_pixels, stokes_weights
+from ..accelerator import ImplementationType
 from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
-from ..ops.kernels import ImplementationType, healpix_pixels, stokes_weights
 from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
@@ -227,7 +228,9 @@ class PointingHealpixTest(MPITestCase):
         pixels.apply(data)
 
         for ob in data.obs:
-            np.testing.assert_array_equal(ob.detdata[defaults.pixels], ob.detdata["pypix"])
+            np.testing.assert_array_equal(
+                ob.detdata[defaults.pixels], ob.detdata["pypix"]
+            )
 
         rank = 0
         if self.comm is not None:

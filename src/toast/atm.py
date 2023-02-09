@@ -976,7 +976,6 @@ class AtmSim(object):
             raise RuntimeError("Cannot save realization: not loaded or generated")
 
         if self._rank == 0:
-
             log = Logger.get()
 
             rname = "{}_{}_{}_{}".format(

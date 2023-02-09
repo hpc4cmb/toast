@@ -25,7 +25,6 @@ from .mpi import MPITestCase
 
 class SimConviqtTest(MPITestCase):
     def setUp(self):
-
         np.random.seed(777)
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)

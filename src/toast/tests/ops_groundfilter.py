@@ -26,7 +26,6 @@ class GroundFilterTest(MPITestCase):
         self.shared_flag_mask = 1
 
     def test_groundfilter(self):
-
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
@@ -87,7 +86,6 @@ class GroundFilterTest(MPITestCase):
         close_data(data)
 
     def test_groundfilter_split(self):
-
         # Create a fake satellite data set for testing
         data = create_ground_data(self.comm)
 

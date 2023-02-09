@@ -28,6 +28,7 @@ from traitlets import (
     signature_has_traits,
 )
 
+from .accelerator import ImplementationType, use_accel_jax, use_accel_omp
 from .utils import import_from_name, object_fullname
 
 
@@ -462,6 +463,14 @@ class TraitConfig(HasTraits):
 
     enabled = Bool(True, help="If True, this class instance is marked as enabled")
 
+    kernel_implementation = UseEnum(
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
+    )
+
+    use_accel = Bool(False, help="If True, use the accelerator")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.name is None:
@@ -473,6 +482,59 @@ class TraitConfig(HasTraits):
             val += "\n  {} = {} # {}".format(trait_name, trait.get(self), trait.help)
         val += "\n>"
         return val
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+        ]
+
+    def implementations(self):
+        """Query which kernel implementations are supported.
+
+        Returns:
+            (list):  List of implementations.
+
+        """
+        return self._implementations()
+
+    def _supports_accel(self):
+        return False
+
+    def supports_accel(self):
+        """Query whether the operator supports accelerator kernels
+
+        Returns:
+            (bool):  True if the operator can use accelerators, else False.
+
+        """
+        return self._supports_accel()
+
+    def select_kernels(self):
+        """Return the currently selected kernel implementation.
+
+        This returns both the current implementation AND whether to use the accelerator
+        or not.  This is needed since some implementations support both CPU and GPU.
+
+        Returns:
+            (tuple):  The (implementation, use_accel) information.
+
+        """
+        impls = self.implementations()
+        if self.use_accel:
+            if use_accel_jax:
+                if ImplementationType.JAX not in impls:
+                    msg = f"JAX accelerator use is enabled, "
+                    msg += f"but not supported by {self.name}"
+                    raise RuntimeError(msg)
+                return (ImplementationType.JAX, True)
+            else:
+                if ImplementationType.COMPILED not in impls:
+                    msg = f"OpenMP accelerator use is enabled, "
+                    msg += f"but not supported by {self.name}"
+                    raise RuntimeError(msg)
+                return (ImplementationType.COMPILED, True)
+        else:
+            return (ImplementationType.DEFAULT, False)
 
     def __eq__(self, other):
         if len(self.traits()) != len(other.traits()):

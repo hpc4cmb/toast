@@ -85,9 +85,7 @@ def main():
         return outfile
 
     for infile in args.inmap:
-
         if filename_is_fits(infile):
-
             # Convert a FITS map to HDF5
 
             outfile = get_outfile(infile, ".h5")
@@ -102,7 +100,6 @@ def main():
             log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
 
         elif filename_is_hdf5(infile):
-
             # Convert an HDF5 map to FITS
 
             outfile = get_outfile(infile, ".fits")
@@ -122,7 +119,6 @@ def main():
             log.info_rank(f"Wrote {outfile} in", timer=timer, comm=comm)
 
         else:
-
             msg = f"Cannot guess input map file type from {args.inmap}"
             raise RuntimeError(msg)
 

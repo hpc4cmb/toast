@@ -1,5 +1,8 @@
-import os, math
+import math
+import os
+
 import jax
+
 from .._libtoast import Logger
 
 jax_local_device = None
