@@ -81,6 +81,7 @@ def scan_map_inner(
     valid_samples = (subpix >= 0) & (submap >= 0)
     return jnp.where(valid_samples, new_det_data, det_data)
 
+
 # maps over intervals and detectors
 # scan_map_inner = jax_xmap(scan_map_inner,
 #                              in_axes=[[...], # mapdata
@@ -284,6 +285,7 @@ def scan_map_jax(
         should_subtract,
         should_scale,
     )
+
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve", "ops_scan_map")'

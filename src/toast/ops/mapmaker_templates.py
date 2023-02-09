@@ -319,7 +319,12 @@ class TemplateMatrix(Operator):
         """
         Find implementations supported by all the templates
         """
-        implementations = {ImplementationType.DEFAULT, ImplementationType.COMPILED, ImplementationType.NUMPY, ImplementationType.JAX}
+        implementations = {
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        }
         for tmpl in self.templates:
             implementations.intersection_update(tmpl.implementations())
         return list(implementations)

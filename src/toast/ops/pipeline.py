@@ -303,7 +303,12 @@ class Pipeline(Operator):
         """
         Find implementations supported by all the operators
         """
-        implementations = {ImplementationType.DEFAULT, ImplementationType.COMPILED, ImplementationType.NUMPY, ImplementationType.JAX}
+        implementations = {
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        }
         for op in self.operators:
             implementations.intersection_update(op.implementations())
         return list(implementations)
