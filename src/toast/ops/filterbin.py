@@ -13,13 +13,6 @@ import scipy.io
 import scipy.sparse
 import traitlets
 
-from .kernels import (
-    accumulate_observation_matrix,
-    build_template_covariance,
-    expand_matrix,
-    legendre,
-    fourier,
-)
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
@@ -36,6 +29,13 @@ from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
+from .kernels import (
+    accumulate_observation_matrix,
+    build_template_covariance,
+    expand_matrix,
+    fourier,
+    legendre,
+)
 from .mapmaker_solve import SolverLHS, SolverRHS, solve
 from .mapmaker_utils import CovarianceAndHits
 from .memory_counter import MemoryCounter
@@ -233,7 +233,8 @@ class FilterBin(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     shared_flags = Unicode(

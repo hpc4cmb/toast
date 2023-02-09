@@ -7,7 +7,7 @@ import traitlets
 
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
 from .delete import Delete
 from .operator import Operator

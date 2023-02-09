@@ -6,8 +6,6 @@ import os
 
 import astropy.io.fits as af
 import numpy as np
-import pixell
-import pixell.enmap
 from astropy import units as u
 
 from .mpi import MPI, use_mpi
@@ -15,11 +13,11 @@ from .timing import Timer, function_timer
 from .utils import Logger, memreport
 
 
-def submap_to_enmap(dist, submap, sdata, endata):
-    """Helper function to unpack our data into pixell format
+def submap_to_image(dist, submap, sdata, image):
+    """Helper function to unpack our data into a 3D image.
 
     This takes a single submap of data with flat pixels x n_values and unpacks
-    that into an ndmap with n_values x 2D pixels.  The ndmaps are column
+    that into an ndarray with n_values x 2D pixels.  The images are column
     major, like a FITS image:
 
         | OOXXXOO
@@ -34,16 +32,16 @@ def submap_to_enmap(dist, submap, sdata, endata):
         dist (PixelDistribution):  The pixel dist
         submap (int):  The global submap index
         sdata (array):  The data for a single submap
-        endata (ndmap):  The pixell array
+        image (array):  The 3D image array
 
     Returns:
         None
 
     """
-    enshape = endata.shape
-    n_value = enshape[0]
-    n_cols = enshape[1]
-    n_rows = enshape[2]
+    imshape = image.shape
+    n_value = imshape[0]
+    n_cols = imshape[1]
+    n_rows = imshape[2]
 
     # Global pixel range of this submap
     s_offset = submap * dist.n_pix_submap
@@ -56,7 +54,6 @@ def submap_to_enmap(dist, submap, sdata, endata):
         last_col = n_cols - 1
 
     # Loop over output rows and assign data
-    # print(f"endata shape = {endata.shape}")
     for ival in range(n_value):
         for col in range(first_col, last_col + 1):
             pix_offset = col * n_rows
@@ -67,24 +64,20 @@ def submap_to_enmap(dist, submap, sdata, endata):
             if pix_offset + n_copy > s_end:
                 n_copy = s_end - pix_offset
             sbuf_offset = pix_offset + row_offset - s_offset
-            # print(
-            #     f"endata[{ival}, {col}, {row_offset}:{row_offset+n_copy}] = sdata[{sbuf_offset}:{sbuf_offset+n_copy}, {ival}]",
-            #     flush=True,
-            # )
-            endata[ival, col, row_offset : row_offset + n_copy] = sdata[
+            image[ival, col, row_offset : row_offset + n_copy] = sdata[
                 sbuf_offset : sbuf_offset + n_copy, ival
             ]
 
 
-def enmap_to_submap(dist, endata, submap, sdata, scale=1.0):
-    """Helper function to fill our data from pixell format
+def image_to_submap(dist, image, submap, sdata, scale=1.0):
+    """Helper function to fill our data from a 3D image.
 
     This takes a single submap of data with flat pixels x n_values and fills
-    it from an ndmap with n_values x 2D pixels.
+    it from an ndarray with n_values x 2D pixels.
 
     Args:
         dist (PixelDistribution):  The pixel dist
-        endata (ndmap):  The pixell array
+        image (array):  The image array
         submap (int):  The global submap index
         sdata (array):  The data for a single submap
         scale (float):  Scale factor.
@@ -93,10 +86,10 @@ def enmap_to_submap(dist, endata, submap, sdata, scale=1.0):
         None
 
     """
-    enshape = endata.shape
-    n_value = enshape[0]
-    n_cols = enshape[1]
-    n_rows = enshape[2]
+    imshape = image.shape
+    n_value = imshape[0]
+    n_cols = imshape[1]
+    n_rows = imshape[2]
 
     # Global pixel range of this submap
     s_offset = submap * dist.n_pix_submap
@@ -119,12 +112,8 @@ def enmap_to_submap(dist, endata, submap, sdata, scale=1.0):
             if pix_offset + n_copy > s_end:
                 n_copy = s_end - pix_offset
             sbuf_offset = pix_offset + row_offset - s_offset
-            # print(
-            #     f"sdata[{sbuf_offset}:{sbuf_offset+n_copy}, {ival}] = endata[{ival}, {col}, {row_offset}:{row_offset+n_copy}]",
-            #     flush=True,
-            # )
             sdata[sbuf_offset : sbuf_offset + n_copy, ival] = (
-                scale * endata[ival, col, row_offset : row_offset + n_copy]
+                scale * image[ival, col, row_offset : row_offset + n_copy]
             )
 
 
@@ -164,17 +153,17 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
         allowners = np.zeros_like(owners)
         dist.comm.Allreduce(owners, allowners, op=MPI.MIN)
 
-    # Create a pixell map structure for the output
-    endata = None
+    # Create an image array for the output
+    image = None
     if rank == 0:
-        endata = pixell.enmap.zeros((pix.n_value,) + dist.wcs_shape, wcs=dist.wcs)
+        image = np.zeros((pix.n_value,) + dist.wcs_shape, dtype=pix.dtype)
 
     n_val_submap = dist.n_pix_submap * pix.n_value
 
     if dist.comm is None:
-        # Just copy our local submaps into the pixell buffer
+        # Just copy our local submaps into the image buffer
         for lc, sm in enumerate(dist.local_submaps):
-            submap_to_enmap(dist, sm, pix.data[lc], endata)
+            submap_to_image(dist, sm, pix.data[lc], image)
     else:
         sendbuf = np.zeros(comm_submap * n_val_submap, dtype=pix.dtype)
         sendview = sendbuf.reshape(comm_submap, dist.n_pix_submap, pix.n_value)
@@ -200,14 +189,14 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
                         ]
                 dist.comm.Reduce(sendbuf, recvbuf, op=MPI.SUM, root=0)
                 if rank == 0:
-                    # copy into pixell buffer
+                    # copy into image buffer
                     for c in range(ncomm):
-                        submap_to_enmap(dist, (submap_off + c), recvview[c], endata)
+                        submap_to_image(dist, (submap_off + c), recvview[c], image)
                 sendbuf.fill(0)
                 if rank == 0:
                     recvbuf.fill(0)
             submap_off += ncomm
-    return endata
+    return image
 
 
 @function_timer
@@ -244,23 +233,23 @@ def write_wcs_fits(pix, path, comm_bytes=10000000, report_memory=False):
     if dist.comm is not None:
         rank = dist.comm.rank
 
-    endata = collect_wcs_submaps(pix, comm_bytes=comm_bytes)
+    image = collect_wcs_submaps(pix, comm_bytes=comm_bytes)
 
     if rank == 0:
         if os.path.isfile(path):
             os.remove(path)
         # Basic wcs header
-        header = endata.wcs.to_header(relax=True)
+        header = dist.wcs.to_header(relax=True)
         # Add map dimensions
-        header["NAXIS"] = endata.ndim
-        for i, n in enumerate(endata.shape[::-1]):
+        header["NAXIS"] = image.ndim
+        for i, n in enumerate(image.shape[::-1]):
             header[f"NAXIS{i+1}"] = n
         # Add units
         header["BUNIT"] = str(pix.units)
-        hdus = af.HDUList([af.PrimaryHDU(endata, header)])
+        hdus = af.HDUList([af.PrimaryHDU(image, header)])
         hdus.writeto(path)
 
-    del endata
+    del image
     return
 
 
@@ -287,11 +276,10 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
     if dist.comm is not None:
         rank = dist.comm.rank
 
-    endata = None
+    image = None
     fscale = 1.0
     if rank == 0:
-        # Separately read the units, since there is no way to get at this
-        # information through pixell.
+        # Separately read the units.
         with af.open(path, mode="readonly") as hdul:
             if "BUNIT" in hdul[0].header:
                 if hdul[0].header["BUNIT"] == "":
@@ -307,17 +295,16 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
                 scale = 1.0 * funits
                 scale.to(pix.units)
                 fscale = scale.value
+            image = np.array(hdul[0].data)
 
-        # Load from disk
-        endata = pixell.enmap.read_map(path, fmt="fits")
         # Check dimensions
-        enpix = 1
-        for s in endata.shape:
-            enpix *= s
+        impix = 1
+        for s in image.shape:
+            impix *= s
         tot_pix = dist.n_pix * pix.n_value
-        if tot_pix != enpix:
+        if tot_pix != impix:
             raise RuntimeError(
-                f"Input file has {enpix} pixel values instead of {tot_pix}"
+                f"Input file has {impix} pixel values instead of {tot_pix}"
             )
 
     n_val_submap = dist.n_pix_submap * pix.n_value
@@ -327,7 +314,7 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
         for sm in range(dist.n_submap):
             if sm in dist.local_submaps:
                 loc = dist.global_submap_to_local[sm]
-                enmap_to_submap(dist, endata, sm, pix.data[loc], scale=fscale)
+                image_to_submap(dist, image, sm, pix.data[loc], scale=fscale)
     else:
         # One reader broadcasts
         fscale = dist.comm.bcast(fscale, root=0)
@@ -343,8 +330,8 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
             if rank == 0:
                 # Fill the bcast buffer
                 for c in range(ncomm):
-                    enmap_to_submap(
-                        dist, endata, (submap_off + c), view[c], scale=fscale
+                    image_to_submap(
+                        dist, image, (submap_off + c), view[c], scale=fscale
                     )
             # Broadcast
             dist.comm.Bcast(buf, root=0)

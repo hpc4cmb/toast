@@ -2,17 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import collections
 import copy
 import re
-import collections
 from collections import OrderedDict
 
 import traitlets
 from astropy import units as u
 from traitlets import (
-    TraitType,
     Bool,
-    UseEnum,
     Callable,
     Dict,
     Float,
@@ -22,9 +20,11 @@ from traitlets import (
     List,
     Set,
     TraitError,
+    TraitType,
     Tuple,
     Undefined,
     Unicode,
+    UseEnum,
     signature_has_traits,
 )
 
@@ -178,7 +178,13 @@ def list_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            val = "None"
+            msg = (
+                f"The toast config system does not support None values for "
+                f"List traits. "
+                f"Failed to parse '{self.name}' : '{self.help}'"
+            )
+            raise ValueError(msg)
+            # val = "None"
         else:
             val = list()
             for item in v:
@@ -202,7 +208,10 @@ def set_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            val = "None"
+            raise ValueError(
+                "The toast config system does not support None values for Set traits."
+            )
+            # val = "None"
         else:
             val = set()
             for item in v:
@@ -226,7 +235,10 @@ def dict_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            val = "None"
+            raise ValueError(
+                "The toast config system does not support None values for Dict traits."
+            )
+            # val = "None"
         else:
             val = dict()
             for k, v in v.items():
@@ -250,7 +262,10 @@ def tuple_get_conf(self, obj=None):
     else:
         v = self.get(obj)
         if v is None:
-            val = "None"
+            raise ValueError(
+                "The toast config system does not support None values for Tuple traits."
+            )
+            # val = "None"
         else:
             val = list()
             for item in v:

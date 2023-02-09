@@ -1,4 +1,9 @@
 # Use pre-built docker containers to run our unit tests on different python versions.
+#
+# In general, we try to run on:
+# - The oldest supported python
+# - The latest stable python that is the common default on most systems and conda
+# - (During transitions) The newly released bleeding edge python
 
 name:  Run Test Suite
 
@@ -12,113 +17,88 @@ on:
       - toast3
 
 jobs:
-  linux:
-    name: Linux with Python-${{ matrix.python }}
-    runs-on: ubuntu-latest
+  test:
+    name: Tests on ${{ matrix.arch }} with Conda Python-${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -l {0}
     strategy:
-      # Ensure that a test continues even if another fails.  Useful for
-      # debugging multiple problems in parallel.
       fail-fast: false
       matrix:
         include:
-          - python: "3.7"
-            pyshort: "37"
-          - python: "3.9"
-            pyshort: "39"
-          # - python: "3.10"
-          #   pyshort: "310"
+          - os: ubuntu-latest
+            python: "3.8"
+            arch: Linux-x86_64
+            ompdisable: 0
+          - os: ubuntu-latest
+            python: "3.10"
+            arch: Linux-x86_64
+            ompdisable: 0
+          - os: ubuntu-latest
+            python: "3.11"
+            arch: Linux-x86_64
+            ompdisable: 0
+          - os: macos-latest
+            python: "3.9"
+            arch: MacOSX-x86_64
+            ompdisable: 1
+          - os: macos-latest
+            python: "3.10"
+            arch: MacOSX-x86_64
+            ompdisable: 1
+          - os: macos-latest
+            python: "3.11"
+            arch: MacOSX-x86_64
+            ompdisable: 1
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.9.1
+        uses: styfle/cancel-workflow-action@0.11.0
         with:
           access_token: ${{ github.token }}
 
       - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Pull Dependency Image
-        run: docker pull hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest
-
-      - name: Install
-        run: |
-          docker run -v "$(pwd)":/home/toast --name="test_py${{ matrix.pyshort }}" \
-            hpc4cmb/toast-deps-py${{ matrix.pyshort }}:latest \
-            /home/toast/platforms/install_test_runner_linux.sh
-          docker commit -m "test runner" test_py${{ matrix.pyshort }} \
-            test_runner:py${{ matrix.pyshort }}
-
-      # - name: Test Documentation Build
-      #   run: docker run -v "$(pwd)":/home/toast test_runner:py${{ matrix.pyshort }} /home/toast/docs/build_docs.sh
-
-      - name: Run Serial Tests
-        run: |
-          docker run -e MPI_DISABLE=1 -e OMP_NUM_THREADS=2 \
-            test_runner:py${{ matrix.pyshort }} \
-            python -c 'import toast.tests; toast.tests.run()'
-
-      - name: Run MPI Tests
-        run: |
-          docker run -e OMP_NUM_THREADS=2 \
-            test_runner:py${{ matrix.pyshort }} \
-            mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
-
-  macos:
-    name: MacOS with Python-${{ matrix.python }}
-    runs-on: macos-latest
-    strategy:
-      # Ensure that a test continues even if another fails.  Useful for
-      # debugging multiple problems in parallel.
-      fail-fast: false
-      matrix:
-        include:
-          # - python: "3.7"
-          #   pyshort: "37"
-          - python: "3.9"
-            pyshort: "39"
-          # - python: "3.10"
-          #   pyshort: "310"
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.9.1
-        with:
-          access_token: ${{ github.token }}
-
-      - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup Conda Base
-        run: |
-          curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-$(uname -m).sh
-          bash miniforge.sh -b -f -p ${HOME}/conda
-          ${HOME}/conda/bin/conda init bash
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+          channels: conda-forge
+          use-only-tar-bz2: true  # IMPORTANT: Needs for caching to work properly!
+          auto-update-conda: true
+          auto-activate-base: true
 
       - name: Check Conda Config
-        shell: bash -l {0}
         run: |
           conda info
           conda list
           conda config --show-sources
           conda config --show
 
-      - name: Install
-        shell: bash -l {0}
+      - name: Create Conda Env
         run: |
-          conda activate base
-          ./platforms/conda_dev_setup.sh base
-          conda install mpi4py
-          export TOAST_BUILD_DISABLE_OPENMP=1
-          ./platforms/conda.sh base
+          ./platforms/conda_dev_setup.sh toast yes ${{ matrix.python }}
+
+      - name: Install
+        run: |
+          conda activate toast
+          export TOAST_BUILD_DISABLE_OPENMP=${{ matrix.ompdisable }}
+          ./platforms/conda.sh
 
       - name: Run Serial Tests
-        shell: bash -l {0}
         run: |
-          conda activate base
+          conda activate toast
+          export OMP_NUM_THREADS=2
           export MPI_DISABLE=1
           python3 -c 'import toast.tests; toast.tests.run()'
           unset MPI_DISABLE
+          unset OMP_NUM_THREADS
 
-      # - name: Run MPI Tests
-      #   shell: bash -l {0}
-      #   run: |
-      #     conda activate base
-      #     mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+      - name: Run MPI Tests
+        run: |
+          conda activate toast
+          export OMP_NUM_THREADS=1
+          mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
+          unset OMP_NUM_THREADS
+

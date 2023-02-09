@@ -6,7 +6,7 @@ import traitlets
 
 from ..mpi import MPI
 from ..timing import function_timer
-from ..traits import Int, List, Unicode, trait_docs
+from ..traits import Int, List, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -26,29 +26,20 @@ class Copy(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    meta = List(
-        None, allow_none=True, help="List of tuples of Observation meta keys to copy"
-    )
+    meta = List([], help="List of tuples of Observation meta keys to copy")
 
-    detdata = List(
-        None, allow_none=True, help="List of tuples of Observation detdata keys to copy"
-    )
+    detdata = List([], help="List of tuples of Observation detdata keys to copy")
 
-    shared = List(
-        None, allow_none=True, help="List of tuples of Observation shared keys to copy"
-    )
+    shared = List([], help="List of tuples of Observation shared keys to copy")
 
     intervals = List(
-        None,
-        allow_none=True,
+        [],
         help="List of tuples of Observation intervals keys to copy",
     )
 
     @traitlets.validate("meta")
     def _check_meta(self, proposal):
         val = proposal["value"]
-        if val is None:
-            return val
         for v in val:
             if not isinstance(v, (tuple, list)):
                 raise traitlets.TraitError("trait should be a list of tuples")
@@ -61,8 +52,6 @@ class Copy(Operator):
     @traitlets.validate("detdata")
     def _check_detdata(self, proposal):
         val = proposal["value"]
-        if val is None:
-            return val
         for v in val:
             if not isinstance(v, (tuple, list)):
                 raise traitlets.TraitError("trait should be a list of tuples")
@@ -75,8 +64,6 @@ class Copy(Operator):
     @traitlets.validate("shared")
     def _check_shared(self, proposal):
         val = proposal["value"]
-        if val is None:
-            return val
         for v in val:
             if not isinstance(v, (tuple, list)):
                 raise traitlets.TraitError("trait should be a list of tuples")
@@ -90,28 +77,26 @@ class Copy(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         for ob in data.obs:
-            if self.meta is not None:
-                for in_key, out_key in self.meta:
-                    if out_key in ob:
-                        # The key exists- issue a warning before overwriting.
-                        msg = "Observation key {} already exists- overwriting".format(
-                            out_key
-                        )
-                        log.warning(msg)
-                    ob[out_key] = ob[in_key]
-
-            if self.shared is not None:
-                for in_key, out_key in self.shared:
-                    # Although this is an internal function, the input arguments come
-                    # from existing shared objects and so should already be valid.
-                    ob.shared.assign_mpishared(
-                        out_key, ob.shared[in_key], ob.shared.comm_type(in_key)
+            for in_key, out_key in self.meta:
+                if out_key in ob:
+                    # The key exists- issue a warning before overwriting.
+                    msg = "Observation key {} already exists- overwriting".format(
+                        out_key
                     )
+                    log.warning(msg)
+                ob[out_key] = ob[in_key]
 
-            if self.detdata is not None:
+            for in_key, out_key in self.shared:
+                # Although this is an internal function, the input arguments come
+                # from existing shared objects and so should already be valid.
+                ob.shared.assign_mpishared(
+                    out_key, ob.shared[in_key], ob.shared.comm_type(in_key)
+                )
+
+            if len(self.detdata) > 0:
                 # Get the detectors we are using for this observation
                 dets = ob.select_local_detectors(detectors)
                 if len(dets) == 0:
@@ -183,6 +168,3 @@ class Copy(Operator):
         if self.intervals is not None:
             prov["intervals"] = [x[1] for x in self.intervals]
         return prov
-
-    def _supports_accel(self):
-        return False

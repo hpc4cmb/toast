@@ -20,6 +20,7 @@ from astropy import units as u
 
 import toast
 import toast.ops
+from toast.accelerator.data_localization import display_datamovement
 from toast.schedule_sim_satellite import create_satellite_schedule
 from toast.scripts.benchmarking_utilities import (
     default_sim_atmosphere,
@@ -30,7 +31,6 @@ from toast.scripts.benchmarking_utilities import (
     select_case,
 )
 from toast.timing import dump, function_timer, gather_timers
-from toast.accelerator.data_localization import display_datamovement
 
 
 def parse_arguments():
@@ -107,10 +107,11 @@ def parse_arguments():
 
     # Focalplane
     args.sample_rate = 100
-    # args.max_detector = (
-    #     2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
-    # )
-    args.max_detector = 4
+    args.max_detector = (
+        2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
+    )
+    # For debugging:
+    # args.max_detector = 4
     args.width = 10
     args.obs_minutes = 60
     args.num_obs = 4380

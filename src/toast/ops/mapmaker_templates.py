@@ -8,6 +8,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
+from ..accelerator import use_accel_jax
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
@@ -25,7 +26,6 @@ from .memory_counter import MemoryCounter
 from .operator import Operator
 from .pipeline import Pipeline
 from .scan_map import ScanMask
-from ..accelerator import use_accel_jax
 
 
 @trait_docs
@@ -36,9 +36,7 @@ class TemplateMatrix(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    templates = List(
-        None, allow_none=True, help="This should be a list of Template instances"
-    )
+    templates = List([], help="This should be a list of Template instances")
 
     amplitudes = Unicode(None, allow_none=True, help="Data key for template amplitudes")
 
@@ -69,8 +67,6 @@ class TemplateMatrix(Operator):
     @traitlets.validate("templates")
     def _check_templates(self, proposal):
         temps = proposal["value"]
-        if temps is None:
-            return temps
         for tp in temps:
             if not isinstance(tp, Template):
                 raise traitlets.TraitError(
@@ -178,6 +174,13 @@ class TemplateMatrix(Operator):
                 "You must set the amplitudes trait before calling exec()"
             )
 
+        if len(self.templates) == 0:
+            log.debug_rank(
+                "No templates in TemplateMatrix, nothing to do",
+                comm=data.comm.comm_world,
+            )
+            return
+
         # On the first call, we initialize all templates using the Data instance and
         # the fixed options for view, flagging, etc.
         if not self._initialized:
@@ -223,16 +226,13 @@ class TemplateMatrix(Operator):
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
                 if use_accel:
+                    # We are running on the accelerate, so our output data must exist
+                    # on the device and will be used there.
                     data[self.amplitudes].accel_create()
-                    # FIXME: That data movement is required to insure that the systems knows data is on gpu not host
-                    #        otherwise a test fail when using the gpu flag
                     data[self.amplitudes].accel_update_device()
             elif use_accel and (not data[self.amplitudes].accel_exists()):
-                # deals with the case where amplitudes are already in data but NOT in accel
-                # FIXME this happens in pipeline ['TemplateMatrix', 'PixelsHealpix', 'StokesWeights', 'ScanMap', 'NoiseWeight', 'TemplateMatrix']
-                log.warning(
-                    f"TemplateMatrix: use_accel=True but amplitudes ('{self.amplitudes}') are on CPU."
-                )
+                # Our templates are using the accelerator to accumulate amplitudes.
+                # Ensure that the amplitudes are on the device.
                 data[self.amplitudes].accel_create()
                 data[self.amplitudes].accel_update_device()
             for d in all_dets:
@@ -774,7 +774,6 @@ class SolveAmplitudes(Operator):
             name=f"{self.name}_rhs",
             det_data=self.det_data,
             det_data_units=det_data_units,
-            overwrite=False,
             binning=self.binning,
             template_matrix=self.template_matrix,
         )

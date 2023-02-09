@@ -1,9 +1,11 @@
+from typing import Tuple
+
 import jax
 import jax.numpy as jnp
 import numpy as np
-from typing import Tuple
 from pshmem import MPIShared
-from ..utils import AlignedI64, AlignedF64
+
+from ..utils import AlignedF64, AlignedI64
 
 
 class MutableJaxArray:

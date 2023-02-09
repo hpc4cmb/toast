@@ -19,9 +19,9 @@ import numpy as np
 
 import toast
 from toast import PixelData, PixelDistribution
-from toast.ops.kernels import cov_apply_diag, cov_eigendecompose_diag
 from toast.covariance import covariance_apply, covariance_invert
 from toast.mpi import MPI, Comm, get_world
+from toast.ops.kernels import cov_apply_diag, cov_eigendecompose_diag
 from toast.pixels_io_healpix import (
     filename_is_fits,
     filename_is_hdf5,
@@ -107,8 +107,15 @@ def main():
     noiseweighted_sum = None
     invcov_sum = None
     nnz, nnz2, npix = None, None, None
-    nfile = len(args.inmap)
-    for ifile, infile_map in enumerate(args.inmap):
+    if len(args.inmap) == 1:
+        # Only one file provided, assume that it is a text file with a list
+        with open(args.inmap[0], "r") as listfile:
+            infiles = listfile.readlines()
+    else:
+        infiles = args.inmap
+    nfile = len(infiles)
+    for ifile, infile_map in enumerate(infiles):
+        infile_map = infile_map.strip()
         if ntask == 1:
             prefix = ""
         else:

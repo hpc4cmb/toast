@@ -10,19 +10,25 @@ from astropy import units as u
 
 from .. import qarray as qa
 from .. import rng
-from .kernels import add_templates, bin_invcov, bin_proj, legendre
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Unicode, trait_docs
 from ..utils import Environment, Logger, Timer, name_UID
+from .kernels import add_templates, bin_invcov, bin_proj, legendre
 from .operator import Operator
 
 
 @trait_docs
 class YieldCut(Operator):
-    """Operator that flags detector data"""
+    """Operator that simulates non-perfect yield.
+
+    When TES detectors have their bias tuned, not all detectors have sufficient
+    responsivity to be useful for science.  This can be a temporary problem.  This
+    operator simulates a random loss in detector yield.
+
+    """
 
     # Class traits
 
@@ -70,6 +76,12 @@ class YieldCut(Operator):
         for obs in data.obs:
             focalplane = obs.telescope.focalplane
             dets = obs.select_local_detectors(detectors)
+
+            # For reproducibility, generate the random cut across all detectors
+            # in the observation.  This means that a given process might have more
+            # or less detectors cut than the target fraction, but the overall
+            # value should be close for a large enough number of detectors.
+
             exists = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
             for det in dets:
                 key1 = obs.telescope.uid
@@ -78,7 +90,7 @@ class YieldCut(Operator):
                     counter1 = 0
                 else:
                     key2 = self.realization
-                    counter1 = obs.uid
+                    counter1 = obs.session.uid
                 if self.focalplane_key is not None:
                     value = focalplane[det][self.focalplane_key]
                     counter2 = name_UID(value)
@@ -92,7 +104,6 @@ class YieldCut(Operator):
                 )[0]
                 if x > self.keep_frac:
                     obs.detdata[self.det_flags][det] |= self.det_flag_mask
-
         return
 
     def _finalize(self, data, **kwargs):

@@ -6,11 +6,11 @@ import numpy as np
 import traitlets
 
 from .. import qarray as qa
-from .kernels import ImplementationType, pointing_detector
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, UseEnum, Int, Unicode, trait_docs
+from ..traits import Bool, Int, Unicode, UseEnum, trait_docs
 from ..utils import Logger
+from .kernels import ImplementationType, pointing_detector
 from .operator import Operator
 
 

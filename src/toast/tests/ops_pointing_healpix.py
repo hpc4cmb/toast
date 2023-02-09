@@ -9,11 +9,11 @@ import numpy as np
 
 from .. import ops as ops
 from .. import qarray as qa
-from ..ops.kernels import ImplementationType, healpix_pixels, stokes_weights
 from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
-from ._helpers import create_outdir, create_satellite_data, close_data
+from ..ops.kernels import ImplementationType, healpix_pixels, stokes_weights
+from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
@@ -207,41 +207,40 @@ class PointingHealpixTest(MPITestCase):
         self.assertFalse(failed)
         return
 
+    def test_hpix_simple(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
 
-def test_hpix_simple(self):
-    # Create a fake satellite data set for testing
-    data = create_satellite_data(self.comm)
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
 
-    detpointing = ops.PointingDetectorSimple()
-    pixels = ops.PixelsHealpix(
-        nside=64,
-        detector_pointing=detpointing,
-    )
-    pixels.apply(data)
+        # Also make a copy using a python codepath
+        detpointing.kernel_implementation = ImplementationType.NUMPY
+        detpointing.quats = "pyquat"
+        pixels.kernel_implementation = ImplementationType.NUMPY
+        pixels.quats = "pyquat"
+        pixels.pixels = "pypix"
+        pixels.apply(data)
 
-    # Also make a copy using a python codepath
-    detpointing.kernel_implementation = ImplementationType.NUMPY
-    detpointing.quats = "pyquat"
-    pixels.kernel_implementation = ImplementationType.NUMPY
-    pixels.quats = "pyquat"
-    pixels.pixels = "pypix"
-    pixels.apply(data)
+        for ob in data.obs:
+            np.testing.assert_array_equal(ob.detdata[defaults.pixels], ob.detdata["pypix"])
 
-    for ob in data.obs:
-        np.testing.assert_array_equal(ob.detdata[defaults.pixels], ob.detdata["pypix"])
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
 
-    rank = 0
-    if self.comm is not None:
-        rank = self.comm.rank
+        handle = None
+        if rank == 0:
+            handle = open(os.path.join(self.outdir, "out_test_hpix_simple_info"), "w")
+        data.info(handle=handle)
+        if rank == 0:
+            handle.close()
 
-    handle = None
-    if rank == 0:
-        handle = open(os.path.join(self.outdir, "out_test_hpix_simple_info"), "w")
-    data.info(handle=handle)
-    if rank == 0:
-        handle.close()
-
-    close_data(data)
+        close_data(data)
 
     def test_pixweight_pipe(self):
         # Create a fake satellite data set for testing

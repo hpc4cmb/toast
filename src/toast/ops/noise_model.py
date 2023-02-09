@@ -10,7 +10,7 @@ from scipy.optimize import curve_fit, least_squares
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 
@@ -40,12 +40,54 @@ class DefaultNoiseModel(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        for ob in data.obs:
-            if ob.telescope.focalplane.noise is None:
-                raise RuntimeError("Focalplane does not have a noise model")
-            ob[self.noise_model] = ob.telescope.focalplane.noise
+        noise_keys = set(["psd_fmin", "psd_fknee", "psd_alpha", "psd_net"])
 
-        return
+        for ob in data.obs:
+            fp_data = ob.telescope.focalplane.detector_data
+            has_parameters = False
+            for key in noise_keys:
+                if key not in fp_data.colnames:
+                    break
+            else:
+                has_parameters = True
+            if not has_parameters:
+                msg = f"Observation {ob.name} does not have a focalplane with "
+                msg += "noise parameters.  Skipping."
+                log.warning(msg)
+                ob[self.noise_model] = None
+                continue
+
+            local_dets = set(ob.local_detectors)
+
+            dets = []
+            fmin = {}
+            fknee = {}
+            alpha = {}
+            NET = {}
+            rates = {}
+            indices = {}
+
+            for row in fp_data:
+                name = row["name"]
+                if name not in local_dets:
+                    continue
+                dets.append(name)
+                rates[name] = ob.telescope.focalplane.sample_rate
+                fmin[name] = row["psd_fmin"]
+                fknee[name] = row["psd_fknee"]
+                alpha[name] = row["psd_alpha"]
+                NET[name] = row["psd_net"]
+                indices[name] = row["uid"]
+
+            ob[self.noise_model] = AnalyticNoise(
+                rate=rates,
+                fmin=fmin,
+                detectors=dets,
+                fknee=fknee,
+                alpha=alpha,
+                NET=NET,
+                indices=indices,
+            )
 
     def _finalize(self, data, **kwargs):
         return
@@ -115,33 +157,12 @@ class FitNoiseModel(Operator):
                     log.verbose(msg)
                 nse_freqs[det] = freqs
                 nse_psds[det] = fitted
-            if ob.comm.comm_group is not None:
-                all_nse_freqs = ob.comm.comm_group.gather(nse_freqs, root=0)
-                all_nse_psds = ob.comm.comm_group.gather(nse_psds, root=0)
-                nse_indx = None
-                if ob.comm.group_rank == 0:
-                    nse_freqs = dict()
-                    nse_psds = dict()
-                    for pval in all_nse_freqs:
-                        nse_freqs.update(pval)
-                    for pval in all_nse_psds:
-                        nse_psds.update(pval)
-                    nse_indx = dict()
-                    for det in in_model.detectors:
-                        nse_indx[det] = in_model.index(det)
-                nse_indx = ob.comm.comm_group.bcast(nse_indx, root=0)
-                nse_freqs = ob.comm.comm_group.bcast(nse_freqs, root=0)
-                nse_psds = ob.comm.comm_group.bcast(nse_psds, root=0)
-            else:
-                nse_indx = dict()
-                for det in in_model.detectors:
-                    nse_indx[det] = in_model.index(det)
 
             new_model = Noise(
                 detectors=in_model.detectors,
                 freqs=nse_freqs,
                 psds=nse_psds,
-                indices=nse_indx,
+                indices={x: in_model.index(x) for x in in_model.detectors},
             )
 
             if self.out_model is None or self.noise_model == self.out_model:

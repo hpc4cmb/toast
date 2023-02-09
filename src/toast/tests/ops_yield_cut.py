@@ -10,9 +10,10 @@ import scipy.stats as stats
 from astropy import units as u
 
 from .. import ops as ops
+from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
-from ._helpers import create_ground_data, create_outdir, close_data
+from ._helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 
@@ -23,7 +24,7 @@ class YieldCutTest(MPITestCase):
 
     def test_yield_cut(self):
 
-        # Create a fake satellite data set for testing
+        # Create a fake ground data set for testing
         data = create_ground_data(self.comm, pixel_per_process=100)
 
         cut = ops.YieldCut(
@@ -43,6 +44,9 @@ class YieldCutTest(MPITestCase):
                 good = (det_flags & cut.det_flag_mask) == 0
                 ngood += np.sum(good)
                 ntotal += good.size
+        if data.comm.comm_world is not None:
+            ngood = data.comm.comm_world.allreduce(ngood, op=MPI.SUM)
+            ntotal = data.comm.comm_world.allreduce(ntotal, op=MPI.SUM)
         keep_frac = ngood / ntotal
         assert np.abs(cut.keep_frac - keep_frac) < 0.1
 

@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import ops as ops
 from ..data import Data
 from ..mpi import MPI
-from ._helpers import create_ground_data, create_outdir, close_data
+from ._helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 

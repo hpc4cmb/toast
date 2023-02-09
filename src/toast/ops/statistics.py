@@ -16,7 +16,7 @@ from .. import qarray as qa
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Int, Unicode, trait_docs
 from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
 from .operator import Operator
 
@@ -89,6 +89,8 @@ class Statistics(Operator):
         nstat = 3  # Variance, Skewness, Kurtosis
 
         for obs in data.obs:
+            # NOTE:  We could use the session name / uid in the filename
+            # too for easy sorting.
             if obs.name is None:
                 fname_out = f"{self.name}_{obs.uid}.h5"
             else:

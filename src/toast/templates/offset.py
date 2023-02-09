@@ -10,16 +10,16 @@ import scipy.signal
 import traitlets
 from astropy import units as u
 
+from ..mpi import MPI
+from ..observation import default_values as defaults
 from ..ops.kernels import (
     ImplementationType,
     template_offset_add_to_signal,
-    template_offset_project_signal,
     template_offset_apply_diag_precond,
+    template_offset_project_signal,
 )
-from ..mpi import MPI
-from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, UseEnum, Float, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, UseEnum, trait_docs
 from ..utils import AlignedF64, Logger, rate_from_times
 from .amplitudes import Amplitudes
 from .template import Template

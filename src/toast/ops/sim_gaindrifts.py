@@ -9,7 +9,7 @@ from astropy import units as u
 from .. import rng
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Callable, Float, Int, Quantity, Unit, Unicode, trait_docs
+from ..traits import Bool, Callable, Float, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 from .sim_tod_noise import sim_noise_timestream
@@ -131,7 +131,7 @@ class GainDrifter(Operator):
             exists = ob.detdata.ensure(
                 self.det_data, detectors=dets, create_units=self.det_data_units
             )
-            obsindx = ob.uid
+            sindx = ob.session.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane
             size = ob.detdata[self.det_data][dets[0]].size
@@ -145,7 +145,7 @@ class GainDrifter(Operator):
 
                 for det in dets:
                     detindx = focalplane[det]["uid"]
-                    key2 = obsindx
+                    key2 = sindx
                     counter1 = detindx
 
                     rngdata = rng.random(
@@ -175,7 +175,7 @@ class GainDrifter(Operator):
                         realization=self.realization,
                         telescope=ob.telescope.uid,
                         component=self.component,
-                        obsindx=ob.uid,
+                        sindx=sindx,
                         # we generate the same timestream for the
                         # detectors in the same group
                         detindx=iw,
@@ -199,7 +199,7 @@ class GainDrifter(Operator):
                         )
                         counter1 = detindx
                         counter2 = 0
-                        key2 = obsindx
+                        key2 = sindx
                         rngdata = rng.random(
                             1,
                             sampler="gaussian",
@@ -245,7 +245,7 @@ class GainDrifter(Operator):
                 # inject the common mode but only an indepedendent slow drift
 
                 if self.detector_mismatch == 1:
-                    gain_common = np.zeros_like(det_group, dtype=np.float_)
+                    gain_common = np.zeros_like(det_group, dtype=np.float64)
                 else:
                     gain_common = []
                     for iw, w in enumerate(det_group):
@@ -253,7 +253,7 @@ class GainDrifter(Operator):
                             realization=self.realization,
                             telescope=ob.telescope.uid,
                             component=self.component,
-                            obsindx=ob.uid,
+                            sindx=sindx,
                             detindx=iw,  # drift common to all detectors
                             rate=fsampl,
                             firstsamp=ob.local_index_offset,
@@ -277,7 +277,7 @@ class GainDrifter(Operator):
                         realization=self.realization,
                         telescope=ob.telescope.uid,
                         component=self.component,
-                        obsindx=ob.uid,
+                        sindx=sindx,
                         detindx=detindx,
                         rate=fsampl,
                         firstsamp=ob.local_index_offset,

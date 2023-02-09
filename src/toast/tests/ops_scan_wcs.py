@@ -13,11 +13,11 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io_wcs import write_wcs_fits
 from ._helpers import (
+    close_data,
     create_fake_mask,
     create_fake_sky,
     create_ground_data,
     create_outdir,
-    close_data,
 )
 from .mpi import MPITestCase
 
@@ -141,7 +141,7 @@ class ScanWCSTest(MPITestCase):
         scan_wcs = ops.ScanWCSMask(
             file=input_file,
             det_flags="test_flags",
-            det_flags_mask=defaults.det_mask_invalid,
+            det_flags_value=defaults.det_mask_invalid,
             pixel_pointing=pixels,
         )
         scan_wcs.apply(data)

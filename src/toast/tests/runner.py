@@ -26,9 +26,9 @@ from . import math_misc as test_math_misc
 from . import noise as test_noise
 from . import observation as test_observation
 from . import ops_cadence_map as test_ops_cadence_map
+from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
-from . import ops_perturbhwp as test_ops_perturbhwp
 from . import ops_elevation_noise as test_ops_elevation_noise
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
@@ -42,6 +42,7 @@ from . import ops_mapmaker_solve as test_ops_mapmaker_solve
 from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 from . import ops_memory_counter as test_ops_memory_counter
 from . import ops_noise_estim as test_ops_noise_estim
+from . import ops_perturbhwp as test_ops_perturbhwp
 from . import ops_pointing_healpix as test_ops_pointing_healpix
 from . import ops_pointing_wcs as test_ops_pointing_wcs
 from . import ops_polyfilter as test_ops_polyfilter
@@ -270,7 +271,8 @@ def test(name=None, verbosity=2):
         ret = comm.allreduce(ret, op=MPI.SUM)
 
     if ret > 0:
-        sys.exit(ret)
+        print(f"{ret} Processes had failures")
+        sys.exit(6)
 
     # alltimers = timing.gather_timers(comm=comm)
     # if rank == 0:

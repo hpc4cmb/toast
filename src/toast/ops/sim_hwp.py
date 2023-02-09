@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import rng
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Dict, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Int, Quantity, Unicode, trait_docs
 from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, name_UID
 from .operator import Operator
 
@@ -171,7 +171,7 @@ class PerturbHWP(Operator):
 
             # Get an RNG seed
             key1 = self.realization * 1543343 + obs.telescope.uid
-            key2 = obs.uid
+            key2 = obs.session.uid
             counter1 = 0
 
             # The times and hwp_angle are shared among columns of the process

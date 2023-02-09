@@ -7,7 +7,7 @@ import traitlets
 
 from ..spt3g import available
 from ..timing import function_timer
-from ..traits import Bool, Instance, Int, List, Unicode, trait_docs
+from ..traits import Instance, Int, List, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -45,7 +45,7 @@ class RunSpt3g(Operator):
     )
 
     modules = List(
-        list(),
+        [],
         help="List of tuples of (callable, **kwargs) that will passed to G3Pipeline.Add()",
     )
 
@@ -89,7 +89,9 @@ class RunSpt3g(Operator):
             )
 
         if len(self.modules) == 0:
-            # Nothing to do!
+            log.debug_rank(
+                "No modules specified, nothing to do.", comm=data.comm.comm_world
+            )
             return
 
         n_obs = len(data.obs)

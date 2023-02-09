@@ -13,7 +13,7 @@ from .. import qarray as qa
 from ..dipole import dipole
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_healpix_ring_satellite, create_outdir, close_data
+from ._helpers import close_data, create_healpix_ring_satellite, create_outdir
 from .mpi import MPITestCase
 
 

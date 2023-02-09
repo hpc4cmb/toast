@@ -7,7 +7,7 @@ import traitlets
 from ..accelerator import accel_enabled
 from ..data import Data
 from ..timing import function_timer
-from ..traits import Int, List, Unicode, trait_docs
+from ..traits import Int, List, trait_docs
 from ..utils import Logger, SetDict
 from .operator import Operator
 
@@ -27,7 +27,7 @@ class Pipeline(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    operators = List(allow_none=True, help="List of Operator instances to run.")
+    operators = List([], help="List of Operator instances to run.")
 
     detector_sets = List(
         ["ALL"],
@@ -38,9 +38,9 @@ class Pipeline(Operator):
     def _check_detsets(self, proposal):
         detsets = proposal["value"]
         if len(detsets) == 0:
-            raise traitlets.TraitError(
-                "detector_sets must be a list with at least one entry ('ALL' and 'SINGLE' are valid entries)"
-            )
+            msg = "detector_sets must be a list with at least one entry "
+            msg += "('ALL' and 'SINGLE' are valid entries)"
+            raise traitlets.TraitError(msg)
         for dset in detsets:
             if (dset != "ALL") and (dset != "SINGLE"):
                 # Not a built-in name, must be an actual list of detectors
@@ -58,8 +58,6 @@ class Pipeline(Operator):
     @traitlets.validate("operators")
     def _check_operators(self, proposal):
         ops = proposal["value"]
-        if ops is None:
-            return ops
         for op in ops:
             if not isinstance(op, Operator):
                 raise traitlets.TraitError(
@@ -69,6 +67,7 @@ class Pipeline(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._staged_accel = False
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):

@@ -29,10 +29,6 @@ jobs:
         include:
           # Linux 64 bit manylinux2014
           - os: ubuntu-latest
-            python: 37
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux2014
-          - os: ubuntu-latest
             python: 38
             platform_id: manylinux_x86_64
             manylinux_image: manylinux2014
@@ -44,19 +40,20 @@ jobs:
             python: 310
             platform_id: manylinux_x86_64
             manylinux_image: manylinux2014
+          - os: ubuntu-latest
+            python: 311
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux2014
 
-          # MacOS x86_64
-          # - os: macos-latest
-          #   python: 37
-          #   platform_id: macosx_x86_64
-          # - os: macos-latest
-          #   python: 38
-          #   platform_id: macosx_x86_64
+          # MacOS x86_64.
           - os: macos-latest
             python: 39
             platform_id: macosx_x86_64
           - os: macos-latest
             python: 310
+            platform_id: macosx_x86_64
+          - os: macos-latest
+            python: 311
             platform_id: macosx_x86_64
 
           # MacOS arm64 - Re-enable after github CI supports M1 runners:
@@ -68,36 +65,68 @@ jobs:
           # - os: macos-latest
           #   python: 310
           #   platform_id: macosx_arm64
+          # - os: macos-latest
+          #   python: 311
+          #   platform_id: macosx_arm64
     env:
       CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
       CIBW_ARCHS_MACOS: "x86_64 arm64"
       CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux_image }}
       CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.manylinux_image }}
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "TOAST_BUILD_BLAS_LIBRARIES='-lopenblas -fopenmp -lm' TOAST_BUILD_LAPACK_LIBRARIES='-lopenblas -fopenmp -lm' TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
-      CIBW_ENVIRONMENT_MACOS: "TOAST_BUILD_CMAKE_C_COMPILER=clang TOAST_BUILD_CMAKE_CXX_COMPILER=clang++ TOAST_BUILD_CMAKE_C_FLAGS='-O3 -g -fPIC' TOAST_BUILD_BLAS_LIBRARIES='/usr/local/lib/libopenblas.dylib' TOAST_BUILD_LAPACK_LIBRARIES='/usr/local/lib/libopenblas.dylib' TOAST_BUILD_CMAKE_CXX_FLAGS='-O3 -g -fPIC -std=c++11 -stdlib=libc++' TOAST_BUILD_DISABLE_OPENMP=1 TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON"
+      CIBW_ENVIRONMENT_LINUX: >
+        TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
+        TOAST_BUILD_TOAST_STATIC_DEPS=ON
+        TOAST_BUILD_BLAS_LIBRARIES='-L/usr/lib -lopenblas -fopenmp -lm -lgfortran'
+        TOAST_BUILD_LAPACK_LIBRARIES='-L/usr/lib -lopenblas -fopenmp -lm -lgfortran'
+        TOAST_BUILD_FFTW_ROOT=/usr
+        TOAST_BUILD_AATM_ROOT=/usr
+        TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/include
+        TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/lib
+      CIBW_ENVIRONMENT_MACOS: >
+        TOAST_BUILD_CMAKE_C_COMPILER=clang
+        TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
+        TOAST_BUILD_CMAKE_C_FLAGS='-O3 -g -fPIC'
+        TOAST_BUILD_CMAKE_CXX_FLAGS='-O3 -g -fPIC -std=c++11 -stdlib=libc++'
+        TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
+        TOAST_BUILD_DISABLE_OPENMP=1
+        TOAST_BUILD_BLAS_LIBRARIES='/usr/local/lib/libopenblas.dylib'
+        TOAST_BUILD_LAPACK_LIBRARIES='/usr/local/lib/libopenblas.dylib'
+        TOAST_BUILD_FFTW_ROOT=/usr/local
+        TOAST_BUILD_AATM_ROOT=/usr/local
+        TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
+        TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
       CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh ${{ matrix.platform_id }}
       CIBW_BEFORE_TEST: export OMP_NUM_THREADS=2
-      CIBW_TEST_COMMAND: . {project}/wheels/cibw_run_tests.sh
+      CIBW_TEST_COMMAND_LINUX: >
+        tst=$(dirname $(python -c 'import toast; print(toast.__file__)')) &&
+        echo "Toast test install at ${tst}" &&
+        ldd ${tst}/_libtoast.cpython* &&
+        source {project}/wheels/cibw_run_tests.sh
+      CIBW_TEST_COMMAND_MACOS: >
+        tst=$(dirname $(python -c 'import toast; print(toast.__file__)')) &&
+        echo "Toast test install at ${tst}" &&
+        otool -L ${tst}/_libtoast.cpython* &&
+        source {project}/wheels/cibw_run_tests.sh
       CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.9.1
+        uses: styfle/cancel-workflow-action@0.11.0
         with:
           access_token: ${{ github.token }}
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         name: Install Python
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
       - name: Install cibuildwheel
         run: |
-          python -m pip install cibuildwheel==2.8.0
+          python -m pip install cibuildwheel==2.11.4
 
       - name: Build wheel
         run: |

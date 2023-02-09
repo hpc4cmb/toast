@@ -9,11 +9,10 @@ from ..healpix import Pixels
 from ..observation import default_values as defaults
 from ..pixels import PixelDistribution
 from ..timing import function_timer
-from ..traits import Bool, UseEnum, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, Unicode, UseEnum, trait_docs
 from ..utils import Environment, Logger
-from .operator import Operator
-
 from .kernels import ImplementationType, pixels_healpix
+from .operator import Operator
 
 
 @trait_docs
@@ -94,7 +93,7 @@ class PixelsHealpix(Operator):
                 if not detpointing.has_trait(trt):
                     msg = f"detector_pointing operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
-        return detpointing
+        return detpointing  
 
     @traitlets.validate("nside")
     def _check_nside(self, proposal):
@@ -235,9 +234,9 @@ class PixelsHealpix(Operator):
                     # but the caller wants the pixel distribution
                     for det in ob.select_local_detectors(detectors):
                         for vslice in view_slices:
-                            good = ob.detdata[self.pixels][det][vslice] >= 0
+                            good = ob.detdata[self.pixels][det, vslice] >= 0
                             self._local_submaps[
-                                ob.detdata[self.pixels][det][vslice][good]
+                                ob.detdata[self.pixels][det, vslice][good]
                                 // self._n_pix_submap
                             ] = True
 

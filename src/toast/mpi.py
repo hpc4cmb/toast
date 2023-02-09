@@ -41,10 +41,8 @@ if use_mpi is None:
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-from ._libtoast import accel_assign_device
-
 # Assign each process to an accelerator device
-from .accelerator import jax_local_device, use_accel_jax, use_accel_omp
+from .accelerator import use_accel_jax, use_accel_omp, accel_assign_device
 
 if use_accel_omp or use_accel_jax:
     node_procs = 1
@@ -57,20 +55,8 @@ if use_accel_omp or use_accel_jax:
         accel_assign_device(node_procs, node_rank, False)
         nodecomm.Free()
         del nodecomm
-    if use_accel_omp:
-        accel_assign_device(node_procs, node_rank, False)
     else:
-        import jax
-
-        devices = jax.local_devices()
-        n_devices = len(devices)
-        if n_devices == 0:
-            # No device, JAX will display a warning and default to CPU
-            jax_local_device = 0
-        else:
-            # NOTE: work under the assumption that consecutive ranks are on the same node
-            # TODO: is `node_rank` a node-local rank?
-            jax_local_device = devices[node_rank % n_devices]
+        accel_assign_device(node_procs, node_rank, False)
 else:
     # Disabled == True
     accel_assign_device(1, 0, True)
@@ -504,11 +490,12 @@ class Comm(object):
 
 
 @contextmanager
-def exception_guard(comm=None):
+def exception_guard(comm=None, timeout=30):
     """Ensure that, if one MPI process raises an un-caught exception, the program shuts down properly.
 
     Args:
         comm (mpi4py.MPI.Comm): The MPI communicator or None.
+        timeout (int): The number of seconds to wait before aborting all processes
 
     """
     log = Logger.get()
@@ -532,8 +519,8 @@ def exception_guard(comm=None):
             if comm.size > 1:
                 # gives other processes a bit of time to see whether
                 # they encounter the same error
-                time.sleep(30)
-            comm.Abort()
+                time.sleep(timeout)
+            comm.Abort(1)
 
 
 def comm_equal(comm_a, comm_b):

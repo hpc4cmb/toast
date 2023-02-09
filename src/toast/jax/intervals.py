@@ -1,6 +1,6 @@
 import jax
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
 
 # TODO we need to clean up the two very similar interval type names
 

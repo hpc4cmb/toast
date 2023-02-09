@@ -16,7 +16,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir, create_satellite_data, close_data
+from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
@@ -46,6 +46,7 @@ class CadenceMapTest(MPITestCase):
         cadence_map = ops.CadenceMap(
             pixel_dist="pixel_dist",
             pixel_pointing=pixelpointing,
+            output_dir=self.outdir,
         )
 
         cadence_map.apply(data)

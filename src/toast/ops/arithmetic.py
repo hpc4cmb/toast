@@ -6,7 +6,7 @@ import traitlets
 
 from ..mpi import MPI
 from ..timing import function_timer
-from ..traits import Int, List, Unicode, trait_docs
+from ..traits import Int, Unicode, trait_docs
 from ..utils import Logger, unit_conversion
 from .operator import Operator
 
@@ -143,6 +143,3 @@ class Combine(Operator):
         if (self.result != self.first) and (self.result != self.second):
             prov["detdata"].append(self.result)
         return prov
-
-    def _supports_accel(self):
-        return False

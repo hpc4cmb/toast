@@ -14,16 +14,7 @@ from astropy import units as u
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import (
-    Bool,
-    Instance,
-    Int,
-    List,
-    Quantity,
-    Tuple,
-    Unicode,
-    trait_docs,
-)
+from ..traits import Bool, Instance, Int, List, Quantity, Tuple, Unicode, trait_docs
 from ..utils import Logger, Timer
 from .arithmetic import Combine
 from .copy import Copy
@@ -157,9 +148,7 @@ class NoiseEstim(Operator):
     )
 
     pairs = List(
-        default_value=None,
-        trait=Tuple,
-        allow_none=True,
+        [],
         help="Detector pairs to estimate noise for.  Overrides `nosingle` and `nocross`",
     )
 
@@ -270,19 +259,24 @@ class NoiseEstim(Operator):
                 comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
+            if self.out_model is not None:
+                obs[self.out_model] = temp_obs[self.out_model]
             self.redistribute = False
         return
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         if detectors is not None:
-            msg = "NoiseEstim cannot be run in batch mode"
+            msg = "NoiseEstim cannot be run with subsets of detectors"
             raise RuntimeError(msg)
 
         log = Logger.get()
 
+        # FIXME:  The common mode filter would be more efficient if we moved
+        # this block of code to working on a data view with a single observation
+        # that is already re-distributed below.
         if self.focalplane_key is not None:
-            if self.pairs is not None:
+            if len(self.pairs) > 0:
                 msg = "focalplane_key is not compatible with pairs"
                 raise RuntimeError(msg)
             # Measure the averages of the signal across the focalplane.
@@ -353,7 +347,7 @@ class NoiseEstim(Operator):
                 det2key = None
                 det_names = obs.all_detectors
                 ndet = len(det_names)
-                if self.pairs is not None:
+                if len(self.pairs) > 0:
                     pairs = self.pairs
                 else:
                     # Construct a list of detector pairs
@@ -412,6 +406,7 @@ class NoiseEstim(Operator):
             noise_dets = list()
             noise_freqs = dict()
             noise_psds = dict()
+            noise_indices = dict()
 
             for det1, det2 in pairs:
                 if det1 not in det_names or det2 not in det_names:
@@ -465,20 +460,29 @@ class NoiseEstim(Operator):
                     noise_dets.append(det1)
                     noise_freqs[det1] = nse_freqs[1:] * u.Hz
                     noise_psds[det1] = nse_psd[1:] * psd_unit
-
-            self._re_redistribute(orig_obs, obs)
+                    noise_indices[det1] = obs.telescope.focalplane[det1]["uid"]
 
             if self.out_model is not None:
-                # Create a noise model
+                # Create a noise model.  Our observation is currently distributed
+                # so that every process has all detectors.
                 if data.comm.comm_group is not None:
                     noise_dets = data.comm.comm_group.bcast(noise_dets, root=0)
                     noise_freqs = data.comm.comm_group.bcast(noise_freqs, root=0)
                     noise_psds = data.comm.comm_group.bcast(noise_psds, root=0)
-                orig_obs[self.out_model] = Noise(
-                    detectors=noise_dets, freqs=noise_freqs, psds=noise_psds
+                    noise_indices = data.comm.comm_group.bcast(noise_indices, root=0)
+                obs[self.out_model] = Noise(
+                    detectors=noise_dets,
+                    freqs=noise_freqs,
+                    psds=noise_psds,
+                    indices=noise_indices,
                 )
 
-        return
+            # Redistribute the observation, replacing the input TOD with the filtered
+            # one and redistributing the noise model.
+            self._re_redistribute(orig_obs, obs)
+
+            # Delete temporary obs
+            del obs
 
     @function_timer
     def highpass_signal(self, obs, intervals):
@@ -642,7 +646,7 @@ class NoiseEstim(Operator):
 
                 psdvalues = np.array([x[col] for x in all_psds])
                 smooth_values = scipy.signal.medfilt(psdvalues, 11)
-                good = np.ones(psdvalues.size, dtype=np.bool)
+                good = np.ones(psdvalues.size, dtype=bool)
                 good[psdvalues == 0] = False
 
                 for i in range(10):

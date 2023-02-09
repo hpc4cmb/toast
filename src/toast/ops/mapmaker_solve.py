@@ -2,22 +2,20 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from astropy import units as u
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
 from ..templates import AmplitudesMap
 from ..timing import Timer, function_timer
-from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
+from ..traits import Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
 from .noise_weight import NoiseWeight
 from .operator import Operator
 from .pipeline import Pipeline
-from .reset import Reset
 from .scan_map import ScanMap
 
 

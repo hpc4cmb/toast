@@ -249,7 +249,7 @@ class Patch(object):
             az2 = unwind_angle(az1, azs[j])
             el2 = els[j]
             azmean = 0.5 * (az1 + az2)
-            az0 = unwind_angle(azmean, np.float(obj.az), np.pi)
+            az0 = unwind_angle(azmean, float(obj.az), np.pi)
             if (az1 - az0) * (az2 - az0) > 0:
                 # the constant meridian is not between the two corners
                 continue
@@ -278,7 +278,7 @@ class Patch(object):
                 els_cross[:i] += 2 * np.pi
                 els_cross = np.sort(els_cross)
         el_mean = np.mean(els_cross)
-        el0 = unwind_angle(el_mean, np.float(obj.alt))
+        el0 = unwind_angle(el_mean, float(obj.alt))
 
         ncross = np.sum(els_cross > el0)
 
@@ -550,13 +550,13 @@ class HorizontalPatch(Patch):
         elif azmin >= np.pi and azmax >= np.pi:
             self.rising = False
         else:
-            raise RuntimeError("Horizontal patch must either be rising or setting.")
-        self.az_min = azmin
-        self.az_max = azmax
+            # This patch is being observed across the meridian
+            self.rising = None
+        self.az_min = azmin % (2 * np.pi)
+        self.az_max = azmax % (2 * np.pi)
         self.el = el
         # scan time is the maximum time spent on this scan before targeting again
         self.scantime = scantime  # in minutes.
-        self.scandrift = scantime / 60 * 15 * degree
 
         self.el_min0 = el
         self.el_min = el
@@ -566,7 +566,47 @@ class HorizontalPatch(Patch):
         self._area = 0
         self.el_max = self.el_max0
         self.el_lim = self.el_min0
+        self.time = 0
+        self.hits = 0
         return
+
+    # The HorizontalPatch objects make no distinction between rising and setting scans
+
+    @property
+    def rising_time(self):
+        return self.time
+
+    @rising_time.setter
+    def rising_time(self, value):
+        # self.time += value
+        pass
+
+    @property
+    def setting_time(self):
+        return self.time
+
+    @setting_time.setter
+    def setting_time(self, value):
+        # self.time += value
+        pass
+
+    @property
+    def rising_hits(self):
+        return self.hits
+
+    @rising_hits.setter
+    def rising_hits(self, value):
+        # self.hits += value
+        pass
+
+    @property
+    def setting_hits(self):
+        return self.hits
+
+    @setting_hits.setter
+    def setting_hits(self, value):
+        # self.hits += value
+        pass
 
     def get_area(self, observer, nside=32, equalize=False):
         return 1
@@ -576,17 +616,26 @@ class HorizontalPatch(Patch):
         els = [self.el_min, self.el_max]
         return np.array(azs), np.array(els)
 
-    def in_patch(self, obj, angle=0, el_min=-90):
+    def in_patch(self, obj, angle=0, el_min=-90, observer=None):
         if angle == 0:
             return False
-        azmin = obj.az - angle
-        azmax = obj.az + angle
-        elmin = obj.alt - angle
-        elmax = obj.alt + angle
-        if self.rising:
-            elmax += self.scandrift
-        else:
-            elmin -= self.scandrift
+        azmin = obj.az
+        azmax = obj.az
+        elmin = obj.alt
+        elmax = obj.alt
+        if observer is not None:
+            observer2 = observer.copy()
+            obj2 = obj.copy()
+            observer2.date += self.scantime / 1440
+            obj2.compute(observer2)
+            azmin = min(azmin, obj2.az)
+            azmax = max(azmax, obj2.az)
+            elmin = min(elmin, obj2.alt)
+            elmax = max(elmax, obj2.alt)
+        azmin -= angle / np.sin(obj.alt)
+        azmax += angle / np.sin(obj.alt)
+        elmin -= angle
+        elmax += angle
         if (
             azmin > self.az_min
             and azmax < self.az_max
@@ -617,7 +666,7 @@ class HorizontalPatch(Patch):
                 (sun, sun_avoidance_angle, "Sun"),
                 (moon, moon_avoidance_angle, "Moon"),
             ]:
-                if self.in_patch(sso, angle=angle):
+                if self.in_patch(sso, angle=angle, observer=observer):
                     in_view = False
                     msg += f"{name} too close;"
 
@@ -905,7 +954,7 @@ def check_sso(observer, az1, az2, el, sso, angle, el_min, tstart, tstop):
     """
     if az2 < az1:
         az2 += 360
-    naz = max(3, np.int(0.25 * (az2 - az1) * np.cos(np.radians(el))))
+    naz = max(3, int(0.25 * (az2 - az1) * np.cos(np.radians(el))))
     quats = []
     for az in np.linspace(az1, az2, naz):
         quats.append(from_angles(az % 360, el))
@@ -1227,7 +1276,7 @@ def scan_patch(
     # and now track when all corners are past the elevation
     tstop = t
     tstep = 60
-    to_cross = np.ones(len(patch.corners), dtype=np.bool)
+    to_cross = np.ones(len(patch.corners), dtype=bool)
     scan_started = False
     while True:
         if tstop > stop_timestamp or tstop - t > 86400:
@@ -1606,7 +1655,7 @@ def add_scan(
     log = Logger.get()
     ces_time = tstop - tstart
     if ces_time > args.ces_max_time_s:  # and not args.pole_mode:
-        nsub = np.int(np.ceil(ces_time / args.ces_max_time_s))
+        nsub = int(np.ceil(ces_time / args.ces_max_time_s))
         ces_time /= nsub
     aztimes = np.array(aztimes)
     azmins = np.array(azmins)
@@ -1667,14 +1716,14 @@ def add_scan(
                 t2 += add_t
         # Add the focal plane radius to the scan width
         fp_radius_eff = fp_radius / np.cos(el)
-        azmin = (azmin - fp_radius_eff) % (2 * np.pi) / degree
-        azmax = (azmax + fp_radius_eff) % (2 * np.pi) / degree
+        azmin = np.degrees((azmin - fp_radius_eff) % (2 * np.pi))
+        azmax = np.degrees((azmax + fp_radius_eff) % (2 * np.pi))
         # Get the Sun and Moon locations at the beginning and end
         observer.date = to_DJD(t1)
         sun.compute(observer)
         moon.compute(observer)
-        sun_az1, sun_el1 = sun.az / degree, sun.alt / degree
-        moon_az1, moon_el1 = moon.az / degree, moon.alt / degree
+        sun_az1, sun_el1 = np.degrees(sun.az), np.degrees(sun.alt)
+        moon_az1, moon_el1 = np.degrees(moon.az), np.degrees(moon.alt)
         moon_phase1 = moon.phase
         # It is possible that the Sun or the Moon gets too close to the
         # scan, even if they are far enough from the actual patch.
@@ -1682,7 +1731,7 @@ def add_scan(
             observer,
             azmin,
             azmax,
-            el / degree,
+            np.degrees(el),
             sun,
             args.sun_avoidance_angle_deg,
             args.sun_avoidance_altitude_deg,
@@ -1693,7 +1742,7 @@ def add_scan(
             observer,
             azmin,
             azmax,
-            el / degree,
+            np.degrees(el),
             moon,
             args.moon_avoidance_angle_deg,
             args.moon_avoidance_altitude_deg,
@@ -2055,7 +2104,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         el_min = 90
         el_max = 0
         for el in args.elevations_deg.split(","):
-            el = np.float(el)
+            el = float(el)
             el_min = min(el * 0.9, el_min)
             el_max = max(el * 1.1, el_max)
     el_min *= degree
@@ -2286,14 +2335,14 @@ def parse_args(opts=None):
         "--site-alt",
         required=False,
         default=100,
-        type=np.float,
+        type=float,
         help="Observing site altitude [meters]",
     )
     parser.add_argument(
         "--scan-margin",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Random fractional margin [0..1] added to the "
         "scans to smooth out edge effects",
     )
@@ -2301,49 +2350,49 @@ def parse_args(opts=None):
         "--ra-period",
         required=False,
         default=10,
-        type=np.int,
+        type=int,
         help="Period of patch position oscillations in RA [visits]",
     )
     parser.add_argument(
         "--ra-amplitude-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Amplitude of patch position oscillations in RA [deg]",
     )
     parser.add_argument(
         "--dec-period",
         required=False,
         default=10,
-        type=np.int,
+        type=int,
         help="Period of patch position oscillations in DEC [visits]",
     )
     parser.add_argument(
         "--dec-amplitude-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Amplitude of patch position oscillations in DEC [deg]",
     )
     parser.add_argument(
         "--elevation-penalty-limit",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Assign a penalty to observing elevations below this limit [degrees]",
     )
     parser.add_argument(
         "--elevation-penalty-power",
         required=False,
         default=2,
-        type=np.float,
+        type=float,
         help="Power in the elevation penalty function [> 0]",
     )
     parser.add_argument(
         "--elevation-change-limit-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Assign a penalty to changes in elevation larger than this limit [degrees].  "
         "See --elevation-change-penalty and --elevation-change-time-s",
     )
@@ -2351,7 +2400,7 @@ def parse_args(opts=None):
         "--elevation-change-penalty",
         required=False,
         default=1,
-        type=np.float,
+        type=float,
         help="Multiplicative elevation change penalty triggered by "
         "--elevation-change-limit-deg",
     )
@@ -2359,7 +2408,7 @@ def parse_args(opts=None):
         "--elevation-change-time-s",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Time it takes for the telescope to stabilize after a change in observing "
         "elevation [seconds].  Triggered by --elevation-change-limit-deg",
     )
@@ -2403,21 +2452,21 @@ def parse_args(opts=None):
         "--el-min-deg",
         required=False,
         default=30,
-        type=np.float,
+        type=float,
         help="Minimum elevation for a CES",
     )
     parser.add_argument(
         "--el-max-deg",
         required=False,
         default=80,
-        type=np.float,
+        type=float,
         help="Maximum elevation for a CES",
     )
     parser.add_argument(
         "--el-step-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Optional step to apply to minimum elevation",
     )
     parser.add_argument(
@@ -2431,70 +2480,70 @@ def parse_args(opts=None):
         "--fp-radius-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Focal plane radius [deg]",
     )
     parser.add_argument(
         "--sun-avoidance-angle-deg",
         required=False,
         default=30,
-        type=np.float,
+        type=float,
         help="Minimum distance between the Sun and the bore sight [deg]",
     )
     parser.add_argument(
         "--sun-avoidance-altitude-deg",
         required=False,
         default=-18,
-        type=np.float,
+        type=float,
         help="Minimum altitude to apply Solar avoidance [deg]",
     )
     parser.add_argument(
         "--moon-avoidance-angle-deg",
         required=False,
         default=20,
-        type=np.float,
+        type=float,
         help="Minimum distance between the Moon and the bore sight [deg]",
     )
     parser.add_argument(
         "--moon-avoidance-altitude-deg",
         required=False,
         default=-18,
-        type=np.float,
+        type=float,
         help="Minimum altitude to apply Lunar avoidance [deg]",
     )
     parser.add_argument(
         "--sun-el-max-deg",
         required=False,
         default=90,
-        type=np.float,
+        type=float,
         help="Maximum allowed sun elevation [deg]",
     )
     parser.add_argument(
         "--boresight-angle-step-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Boresight rotation step size [deg]",
     )
     parser.add_argument(
         "--boresight-angle-min-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Boresight rotation angle minimum [deg]",
     )
     parser.add_argument(
         "--boresight-angle-max-deg",
         required=False,
         default=360,
-        type=np.float,
+        type=float,
         help="Boresight rotation angle maximum [deg]",
     )
     parser.add_argument(
         "--boresight-angle-time-min",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Boresight rotation step interval [minutes]",
     )
     parser.add_argument(
@@ -2516,13 +2565,13 @@ def parse_args(opts=None):
     parser.add_argument(
         "--operational-days",
         required=False,
-        type=np.int,
+        type=int,
         help="Number of operational days to schedule (empty days do not count)",
     )
     parser.add_argument(
         "--timezone",
         required=False,
-        type=np.int,
+        type=int,
         default=0,
         help="Offset to apply to MJD to separate operational days [hours]",
     )
@@ -2530,21 +2579,21 @@ def parse_args(opts=None):
         "--gap-s",
         required=False,
         default=100,
-        type=np.float,
+        type=float,
         help="Gap between CES:es [seconds]",
     )
     parser.add_argument(
         "--gap-small-s",
         required=False,
         default=10,
-        type=np.float,
+        type=float,
         help="Gap between split CES:es [seconds]",
     )
     parser.add_argument(
         "--time-step-s",
         required=False,
         default=600,
-        type=np.float,
+        type=float,
         help="Time step after failed target acquisition [seconds]",
     )
     parser.add_argument(
@@ -2558,7 +2607,7 @@ def parse_args(opts=None):
         "--ces-max-time-s",
         required=False,
         default=900,
-        type=np.float,
+        type=float,
         help="Maximum length of a CES [seconds]",
     )
     parser.add_argument(
@@ -2576,13 +2625,13 @@ def parse_args(opts=None):
     parser.add_argument(
         "--pol-min",
         required=False,
-        type=np.float,
+        type=float,
         help="Lower plotting range for polarization map",
     )
     parser.add_argument(
         "--pol-max",
         required=False,
-        type=np.float,
+        type=float,
         help="Upper plotting range for polarization map",
     )
     parser.add_argument(
@@ -2603,14 +2652,14 @@ def parse_args(opts=None):
         "--pole-el-step-deg",
         required=False,
         default=0.25,
-        type=np.float,
+        type=float,
         help="Elevation step in pole scheduling mode [deg]",
     )
     parser.add_argument(
         "--pole-ces-time-s",
         required=False,
         default=3000,
-        type=np.float,
+        type=float,
         help="Time to scan at constant elevation in pole mode",
     )
     parser.add_argument(
@@ -2620,14 +2669,14 @@ def parse_args(opts=None):
         "--boresight-offset-el-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Optional offset added to every observing elevation",
     )
     parser.add_argument(
         "--boresight-offset-az-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=float,
         help="Optional offset added to every observing azimuth",
     )
     parser.add_argument(
@@ -2662,35 +2711,35 @@ def parse_args(opts=None):
         "--pole-raster-el-step-deg",
         required=False,
         default=1 / 60,
-        type=np.float,
+        type=float,
         help="Elevation step in pole raster scheduling mode [deg]",
     )
     parser.add_argument(
         "--az-rate-sky-deg",
         required=False,
         default=1.0,
-        type=np.float,
+        type=float,
         help="Azimuthal rate in pole raster scheduling mode [deg]",
     )
     parser.add_argument(
         "--az-accel-mount-deg",
         required=False,
         default=1.0,
-        type=np.float,
+        type=float,
         help="Azimuthal accleration in pole raster scheduling mode [deg]",
     )
     parser.add_argument(
         "--el-rate-deg",
         required=False,
         default=1.0,
-        type=np.float,
+        type=float,
         help="Elevation rate in pole raster scheduling mode [deg]",
     )
     parser.add_argument(
         "--el-accel-deg",
         required=False,
         default=1.0,
-        type=np.float,
+        type=float,
         help="Elevation accleration in pole raster scheduling mode [deg]",
     )
 
@@ -3051,8 +3100,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         moon_avoidance_color = "gray"
         alpha = 0.5
         avoidance_alpha = 0.01
-        sun_step = np.int(86400 * 1)
-        moon_step = np.int(86400 * 0.1)
+        sun_step = int(86400 * 1)
+        moon_step = int(86400 * 0.1)
         for iplot, coord in enumerate("CEG"):
             scoord = {"C": "Equatorial", "E": "Ecliptic", "G": "Galactic"}[coord]
             title = scoord  # + ' patch locations'
@@ -3102,7 +3151,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     moon_lw,
                 ),
             ]:
-                for t in range(np.int(start_timestamp), np.int(stop_timestamp), step):
+                for t in range(int(start_timestamp), int(stop_timestamp), step):
                     observer.date = to_DJD(t)
                     sso.compute(observer)
                     lon.append(np.degrees(sso.a_ra))

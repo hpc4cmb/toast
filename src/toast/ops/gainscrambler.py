@@ -66,14 +66,14 @@ class GainScrambler(Operator):
             comm = obs.comm.comm_group
             rank = obs.comm.group_rank
 
-            obsindx = obs.uid
+            sindx = obs.session.uid
             telescope = obs.telescope.uid
 
             focalplane = obs.telescope.focalplane
 
             # key1 = realization * 2^32 + telescope * 2^16 + component
             key1 = self.realization * 4294967296 + telescope * 65536 + self.component
-            key2 = obsindx
+            key2 = sindx
             counter1 = 0
             counter2 = 0
 

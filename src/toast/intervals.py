@@ -401,7 +401,7 @@ class IntervalList(Sequence, AcceleratorObject):
         if use_accel_omp:
             accel_data_delete(self.data)
         elif use_accel_jax and self._accel_exists():
-            # insures data has been properly reset
+            # Ensures data has been properly reset
             # if we observe that its type is still a GPU type
             # does NOT move data back from GPU
             self.data = self.data.host_data

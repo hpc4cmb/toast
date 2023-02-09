@@ -14,7 +14,7 @@ from ..data import Data
 from ..io import load_hdf5, save_hdf5
 from ..mpi import MPI
 from ..observation_data import DetectorData
-from ._helpers import create_ground_data, create_outdir, close_data
+from ._helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 
@@ -23,8 +23,19 @@ class IoHdf5Test(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
 
-    def create_data(self):
-        # Create fake observing of a small patch
+    def create_data(self, split=False):
+        # Create fake observing of a small patch.  Use a multifrequency
+        # focalplane so we can test split sessions.
+
+        ppp = 10
+        freq_list = [(100 + 10 * x) * u.GHz for x in range(3)]
+        data = create_ground_data(
+            self.comm,
+            freqs=freq_list,
+            pixel_per_process=ppp,
+            split=split,
+        )
+
         data = create_ground_data(self.comm)
 
         # Simple detector pointing
@@ -166,14 +177,14 @@ class IoHdf5Test(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        data, config = self.create_data()
+        data, config = self.create_data(split=True)
 
         # Make a copy for later comparison.
         original = dict()
         for ob in data.obs:
             original[ob.name] = ob.duplicate(times="times")
 
-        saver = ops.SaveHDF5(volume=datadir, config=config)
+        saver = ops.SaveHDF5(volume=datadir, config=config, verify=True)
         saver.apply(data)
 
         if data.comm.comm_world is not None:
@@ -189,5 +200,33 @@ class IoHdf5Test(MPITestCase):
             if ob != orig:
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
+
+        close_data(data)
+
+    def test_save_load_ops_f32(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        datadir = os.path.join(self.outdir, "save_load_ops_f32")
+        if rank == 0:
+            os.makedirs(datadir)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        data, config = self.create_data(split=True)
+
+        # Make a copy for later comparison.
+        original = dict()
+        for ob in data.obs:
+            original[ob.name] = ob.duplicate(times="times")
+
+        saver = ops.SaveHDF5(
+            volume=datadir, config=config, detdata_float32=True, verify=True
+        )
+        saver.apply(data)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
 
         close_data(data)

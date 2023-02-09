@@ -1,10 +1,12 @@
-import os, sys
+import os
+import sys
 from collections import defaultdict
 from functools import wraps
-from ..utils import Logger
-from ..accelerator import accel_data_present
 
-# --------------------------------------------------------------------------------------------------
+from ..accelerator import accel_data_present
+from ..utils import Logger
+
+# ---------------------------------------------------------------------------
 # RECORDING CLASS
 
 use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (
@@ -104,7 +106,7 @@ class DataMovementTracker:
         return result
 
 
-# --------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
 # OPERATIONS
 
 dataMovementTracker = DataMovementTracker()

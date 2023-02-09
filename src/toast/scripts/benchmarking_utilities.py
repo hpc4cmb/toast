@@ -9,6 +9,7 @@ total_sample = num_obs * obs_minutes * sample_rate * n_detector
 """
 
 import copy
+import json
 import math
 import os
 from datetime import datetime
@@ -18,12 +19,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u
 from astropy.table import QTable
+from pkg_resources import resource_filename
 
 import toast
 import toast.ops
 from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
 from toast.job import get_node_mem, job_size
+from toast.timing import function_timer
 
 from ..utils import Environment, Logger, Timer
 
@@ -592,6 +595,60 @@ def estimate_memory_overhead(
     return overhead
 
 
+def get_standard_ground_args(args):
+    # Sample rate in Hz
+    args.sample_rate = 100
+
+    args.max_detector = 2054
+    if args.max_n_det is not None:
+        args.max_detector = args.max_n_det
+
+    # Width of the hexagon focalplane in degrees
+    args.width = 10.0
+
+    # Detector NET in K*sqrt(s)
+    args.psd_net = 50.0e-6
+
+    # Detector frequency of low-f rolloff
+    args.psd_fmin = 1.0e-5
+
+    # scan map
+    args.nside = 4096
+    args.input_map = f"fake_input_sky_nside{args.nside}.fits"
+
+    # schedule, site and telescope parameters
+    args.telescope_name = "LAT"
+    args.site_name = "atacama"
+    args.site_lon = " -67:47:10"
+    args.site_lat = " -22:57:30"
+    args.site_alt = 5200.0 * u.meter
+    args.patch_coord = "C"
+    args.el_min = 30.0
+    args.el_max = 70.0
+    args.sun_el_max = 90.0
+    args.sun_avoidance_angle = 0.0
+    args.moon_avoidance_angle = 0.0
+    args.gap_s = 60.0
+    args.gap_small_s = 0.0
+    args.ces_max_time = 1200.0
+    args.boresight_angle_step = 180.0
+    args.boresight_angle_time = 1440.0
+    args.schedule_patches = [
+        "RISING_SCAN_35,HORIZONTAL,1.00,30.00,150.00,35.00,1500",
+        "SETTING_SCAN_35,HORIZONTAL,1.00,210.00,330.00,35.00,1500",
+    ]
+    args.schedule_start = "2027-01-01 00:00:00"
+
+    # This length should be sufficient for the "x-large" case.
+    # args.schedule_stop = "2027-04-01 00:00:00"
+
+    # This produces about 26000 scans, and is sufficient for even the "heroic" case:
+    args.schedule_stop = "2027-12-31 00:00:00"
+
+    # This produces 75 scans:
+    # args.schedule_stop = "2027-01-01 01:00:00"
+
+
 def make_focalplane(args, world_comm, log):
     """
     Creates a fake focalplane
@@ -614,7 +671,9 @@ def make_focalplane(args, world_comm, log):
             # Truncate number of detectors to our desired value
             trunc_dets = QTable(focalplane.detector_data[0 : args.n_detector])
             focalplane = Focalplane(
-                detector_data=trunc_dets, sample_rate=args.sample_rate * u.Hz
+                detector_data=trunc_dets,
+                sample_rate=args.sample_rate * u.Hz,
+                field_of_view=focalplane.field_of_view,
             )
 
     if world_comm is not None:
@@ -655,6 +714,7 @@ def create_input_maps(
         np.zeros(3 * nside - 1, dtype=np.float32),
         np.zeros(3 * nside - 1, dtype=np.float32),
     )
+    np.random.seed(123456789)
     maps = healpy.synfast(
         cls,
         nside,
@@ -664,7 +724,14 @@ def create_input_maps(
         new=True,
         fwhm=np.radians(3.0 / 60.0),
     )
-    healpy.write_map(input_map_path, maps, nest=True, fits_IDL=False, dtype=np.float32)
+    healpy.write_map(
+        input_map_path,
+        maps,
+        nest=True,
+        column_units="K",
+        fits_IDL=False,
+        dtype=np.float32,
+    )
 
     # displays the map as a picture on file
     if should_print_input_map_png:
@@ -777,3 +844,80 @@ def compute_science_metric(args, runtime, n_nodes, rank, log):
         with open(os.path.join(args.out_dir, "log"), "a") as f:
             f.write(msg)
             f.write("\n\n")
+
+
+benchmark_stats_data = None
+
+
+def get_benchmark_stats(jobtype, case):
+    """Load bundled benchmark stats and return the specified case
+
+    Args:
+        jobtype (str):  ground, satellite, etc
+        case (str):  small, medium, large, etc
+
+    Returns:
+        (dict):  The stats for this job.
+
+    """
+    global benchmark_stats_data
+
+    if benchmark_stats_data is None:
+        # Load the data
+        benchmark_stats_data = dict()
+        bench_dir = resource_filename("toast", os.path.join("aux", "benchmarks"))
+        bench_file = os.path.join(bench_dir, "stats.json")
+        if not os.path.isfile(bench_file):
+            msg = f"benchmark stats file {bench_file} does not exist"
+            raise RuntimeError(msg)
+        with open(bench_file, "r") as f:
+            stats = json.load(f)
+            benchmark_stats_data.update(stats)
+
+    if jobtype in benchmark_stats_data:
+        if case in benchmark_stats_data[jobtype]:
+            return benchmark_stats_data[jobtype][case]
+    return None
+
+
+def compare_output_stats(jobname, args, rank, log, out_hits, out_map):
+    """Compare job outputs to bundled versions."""
+
+    hit_stats = out_hits.stats()
+    map_stats = out_map.stats()
+    comp = get_benchmark_stats(jobname, args.case)
+    if rank == 0:
+        result = {
+            "totalhits": hit_stats["sum"][0],
+            "rms_I": map_stats["rms"][0],
+            "mean_Q": map_stats["mean"][1],
+            "rms_Q": map_stats["rms"][1],
+            "mean_U": map_stats["mean"][2],
+            "rms_U": map_stats["rms"][2],
+        }
+        if comp is None:
+            msg = f"Output statistics for case '{args.case}':\n"
+            msg += f"  Total map hits = {result['totalhits']}\n"
+            msg += f"  Intensity map RMS = {result['rms_I']}\n"
+            msg += f"  Stokes Q map RMS = {result['rms_Q']}\n"
+            msg += f"  Stokes U map RMS = {result['rms_U']}"
+        else:
+            msg = f"Output statistics for case '{args.case}':\n"
+            msg += f"  Total map hits = {result['totalhits']} "
+            msg += f"(expected {comp['totalhits']})\n"
+            msg += f"  Intensity map RMS = {result['rms_I']} "
+            msg += f"(expected {comp['rms_I']})\n"
+            msg += f"  Stokes Q map RMS = {result['rms_Q']} "
+            msg += f"(expected {comp['rms_Q']})\n"
+            msg += f"  Stokes U map RMS = {result['rms_U']} "
+            msg += f"(expected {comp['rms_U']})"
+        log.info("")
+        log.info(msg)
+        log.info("")
+        with open(os.path.join(args.out_dir, "log"), "a") as f:
+            f.write(msg)
+            f.write("\n\n")
+        # Dump out to json for easy combining later
+        dump_result = {jobname: {args.case: result}}
+        with open(os.path.join(args.out_dir, "stats.json"), "w") as f:
+            json.dump(dump_result, f)

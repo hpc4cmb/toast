@@ -35,6 +35,7 @@ class MemoryCounter(Operator):
 
     def __init__(self, **kwargs):
         self.total_bytes = 0
+        self.sys_mem_str = ""
         super().__init__(**kwargs)
 
     @function_timer

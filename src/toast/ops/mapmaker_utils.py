@@ -2,28 +2,27 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-from astropy import units as u
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from ..covariance import covariance_invert
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..timing import function_timer
-from ..traits import Bool, UseEnum, Float, Instance, Int, Unicode, Unit, trait_docs
+from ..traits import Bool, Float, Instance, Int, Unicode, Unit, UseEnum, trait_docs
 from ..utils import Logger, unit_conversion
 from .delete import Delete
-from .operator import Operator
-from .pipeline import Pipeline
-from .pointing import BuildPixelDistribution
-
 from .kernels import (
     ImplementationType,
     build_noise_weighted,
     cov_accum_diag_hits,
     cov_accum_diag_invnpp,
 )
+from .operator import Operator
+from .pipeline import Pipeline
+from .pointing import BuildPixelDistribution
 
 
 @trait_docs

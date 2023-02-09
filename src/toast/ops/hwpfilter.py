@@ -8,13 +8,13 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from .kernels import add_templates, bin_invcov, bin_proj, legendre, fourier
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Int, Unicode, trait_docs
 from ..utils import Environment, Logger, Timer
+from .kernels import add_templates, bin_invcov, bin_proj, fourier, legendre
 from .operator import Operator
 
 # Wrappers for more precise timing
@@ -81,7 +81,8 @@ class HWPFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for optional detector flagging",
     )
 
     hwp_flag_mask = Int(
@@ -232,12 +233,11 @@ class HWPFilter(Operator):
         if self.detrend:
             trend = np.zeros_like(ref)
             add_templates(trend, legendre_trend, coeff[: self.trend_order + 1])
-            ref[good] -= trend[good]
+            ref -= trend
         # HWP template
         hwptemplate = np.zeros_like(ref)
         add_templates(hwptemplate, fourier_filter, coeff[self.trend_order + 1 :])
-        ref[good] -= hwptemplate[good]
-        ref[np.logical_not(good)] = 0
+        ref -= hwptemplate
         return
 
     @function_timer

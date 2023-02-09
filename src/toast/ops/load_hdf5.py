@@ -37,15 +37,13 @@ class LoadHDF5(Operator):
     # FIXME:  We should add a filtering mechanism here to load a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
 
-    meta = List(None, allow_none=True, help="Only load this list of meta objects")
+    meta = List([], help="Only load this list of meta objects")
 
-    detdata = List(None, allow_none=True, help="Only load this list of detdata objects")
+    detdata = List([], help="Only load this list of detdata objects")
 
-    shared = List(None, allow_none=True, help="Only load this list of shared objects")
+    shared = List([], help="Only load this list of shared objects")
 
-    intervals = List(
-        None, allow_none=True, help="Only load this list of intervals objects"
-    )
+    intervals = List([], help="Only load this list of intervals objects")
 
     sort_by_size = Bool(
         False, help="If True, sort observations by size before load balancing"
@@ -69,19 +67,19 @@ class LoadHDF5(Operator):
         log = Logger.get()
 
         meta_fields = None
-        if self.meta is not None and len(self.meta) > 0:
+        if len(self.meta) > 0:
             meta_fields = list(self.meta)
 
         shared_fields = None
-        if self.shared is not None and len(self.shared) > 0:
+        if len(self.shared) > 0:
             shared_fields = list(self.shared)
 
         detdata_fields = None
-        if self.detdata is not None and len(self.detdata) > 0:
+        if len(self.detdata) > 0:
             detdata_fields = list(self.detdata)
 
         intervals_fields = None
-        if self.intervals is not None and len(self.intervals) > 0:
+        if len(self.intervals) > 0:
             intervals_fields = list(self.intervals)
 
         # FIXME:  Eventually we will use the volume index / DB to select observations

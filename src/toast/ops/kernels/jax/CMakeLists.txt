@@ -1,0 +1,19 @@
+
+# Install the python files
+
+install(FILES
+    __init__.py
+    polyfilter1D.py
+    polyfilter2D.py
+    scan_map.py
+    pixels_healpix.py
+    stokes_weights.py
+    template_offset.py
+    pointing_detector.py
+    build_noise_weighted.py
+    cov_accum.py
+    noise_weight.py
+    DESTINATION ${PYTHON_SITE}/toast/ops/kernels/jax
+)
+
+add_subdirectory(math)

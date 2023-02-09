@@ -117,7 +117,7 @@ class Madam(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    params = Dict(dict(), help="Parameters to pass to madam")
+    params = Dict({}, help="Parameters to pass to madam")
 
     paramfile = Unicode(
         None, allow_none=True, help="Read madam parameters from this file"
@@ -721,7 +721,7 @@ class Madam(Operator):
                     if det not in ob.local_detectors:
                         continue
                     psd = nse.psd(det).to_value(u.K**2 * u.second) * nse_scale**2
-                    detw = nse.detector_weight(det)
+                    detw = nse.detector_weight(det).to_value(1.0 / u.K**2)
                     if det not in psds:
                         psds[det] = [(0.0, psd, detw)]
                     else:

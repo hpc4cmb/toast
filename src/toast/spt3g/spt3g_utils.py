@@ -9,11 +9,20 @@ from astropy import units as u
 
 from ..utils import Environment, Logger
 
-available = True
 try:
+    # First see if we are using spt3g bundled with so3g
+    import so3g
     from spt3g import core as c3g
+
+    available = True
 except ImportError:
-    available = False
+    # Try plain spt3g import
+    try:
+        from spt3g import core as c3g
+
+        available = True
+    except ImportError:
+        available = False
 
 
 def from_g3_scalar_type(val, unit=None):

@@ -1,6 +1,3 @@
-conda-build
-libopenblas=*=*openmp*
-libblas=*=*openblas
 cmake
 psutil
 cython
@@ -19,3 +16,4 @@ coverage
 pytest
 coveralls
 pytest-cov
+ducc0
