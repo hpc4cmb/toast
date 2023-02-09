@@ -66,7 +66,7 @@ def kernel(impl, name=None):
             registry[name]["dispatch"] = dispatch
 
         if impl in registry[name]:
-            msg = f"Implementation {impl} for kernel {name} already exists."
+            msg = f"Implementation {impl.name} for kernel {name} already exists."
             raise RuntimeError(msg)
 
         if impl == ImplementationType.DEFAULT:
