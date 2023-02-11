@@ -177,7 +177,7 @@ def make_schedule(args, world_comm):
     if (world_comm is None) or (world_comm.rank == 0):
         schedule = create_satellite_schedule(
             prefix="",
-            mission_start=datetime.now(),
+            mission_start=mission_start,
             observation_time=args.obs_minutes * u.minute,
             num_observations=args.num_obs,
             prec_period=args.prec_period * u.minute,
