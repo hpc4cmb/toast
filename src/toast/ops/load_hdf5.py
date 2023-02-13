@@ -1,9 +1,10 @@
-# Copyright (c) 2021-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import glob
 import os
+import re
 
 import h5py
 import numpy as np
@@ -33,6 +34,10 @@ class LoadHDF5(Operator):
     volume = Unicode(
         None, allow_none=True, help="Top-level directory containing the data volume"
     )
+
+    pattern = Unicode(".*h5", help="Regexp pattern to match files against")
+
+    files = List([], help="Override `volume` and load a list of files")
 
     # FIXME:  We should add a filtering mechanism here to load a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
@@ -66,6 +71,17 @@ class LoadHDF5(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        pattern = re.compile(self.pattern)
+
+        filenames = None
+        if len(self.files) > 0:
+            if self.volume is not None:
+                log.warning(
+                    f'LoadHDF5: volume="{self.volume}" trait overridden by '
+                    f"files={self.files}"
+                )
+            filenames = list(self.files)
+
         meta_fields = None
         if len(self.meta) > 0:
             meta_fields = list(self.meta)
@@ -97,23 +113,29 @@ class LoadHDF5(Operator):
 
         obs_props = list()
         if data.comm.world_rank == 0:
-            for root, dirs, files in os.walk(self.volume):
-                # Process top-level files
-                obsfiles = glob.glob(os.path.join(root, "*.h5"))
-                if len(obsfiles) > 0:
-                    # Root directory contains observations
-                    for ofile in sorted(obsfiles):
-                        fsize = _get_obs_samples(ofile)
-                        obs_props.append((fsize, ofile))
-                # Also process sub-directories one level deep
-                for d in dirs:
-                    obsfiles = glob.glob(os.path.join(root, d, "*.h5"))
-                    if len(obsfiles) > 0:
-                        # This directory contains observations
-                        for ofile in sorted(obsfiles):
-                            fsize = _get_obs_samples(ofile)
-                            obs_props.append((fsize, ofile))
-                break
+            if filenames is None:
+                filenames = []
+                for root, dirs, files in os.walk(self.volume):
+                    # Process top-level files
+                    filenames += [
+                        os.path.join(root, fname)
+                        for fname in files
+                        if pattern.search(fname) is not None
+                    ]
+                    # Also process sub-directories one level deep
+                    for d in dirs:
+                        for root2, dirs2, files2 in os.walk(os.path.join(root, d)):
+                            filenames += [
+                                os.path.join(roo2, fname)
+                                for fname in files2
+                                if pattern.search(fname) is not None
+                            ]
+                    break
+
+            for ofile in sorted(filenames):
+                fsize = _get_obs_samples(ofile)
+                obs_props.append((fsize, ofile))
+
         if self.sort_by_size:
             obs_props.sort(key=lambda x: x[0])
         else:
