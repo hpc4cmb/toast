@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -108,9 +108,13 @@ def main():
     invcov_sum = None
     nnz, nnz2, npix = None, None, None
     if len(args.inmap) == 1:
-        # Only one file provided, assume that it is a text file with a list
-        with open(args.inmap[0], "r") as listfile:
-            infiles = listfile.readlines()
+        # Only one file provided, try interpreting it is a text file with a list
+        try:
+            with open(args.inmap[0], "r") as listfile:
+                infiles = listfile.readlines()
+        except UnicodeDecodeError:
+            # Didn't work. Assume that user supplied a single map file
+            infiles = args.inmap
     else:
         infiles = args.inmap
     nfile = len(infiles)
