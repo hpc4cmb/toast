@@ -97,6 +97,14 @@ def main():
         help="Output in double precision",
     )
 
+    parser.add_argument(
+        "--scale",
+        required=False,
+        default=None,
+        type=float,
+        help="Scale the output map with the provided factor",
+    )
+
     args = parser.parse_args()
 
     if args.double_precision:
@@ -214,6 +222,8 @@ def main():
     if args.invcov is not None:
         log.info_rank(f"Writing {args.invcov}", comm=comm)
         if rank == 0:
+            if args.scale is not None:
+                invcov_sum /= args.scale**2
             write_healpix(
                 args.invcov, invcov_sum, nest=True, overwrite=True, dtype=dtype
             )
@@ -263,6 +273,8 @@ def main():
 
     if args.cov is not None:
         log.info_rank(f"Writing {args.cov}", comm=comm)
+        if args.scale is not None:
+            dist_cov.data *= args.scale**2
         if filename_is_fits(args.cov):
             write_healpix_fits(dist_cov, args.cov, nest=True)
         else:
@@ -277,6 +289,8 @@ def main():
     del dist_cov
 
     log.info_rank(f"Writing {args.outmap}", comm=comm)
+    if args.scale is not None:
+        dist_map.data *= args.scale
     if filename_is_fits(args.outmap):
         write_healpix_fits(dist_map, args.outmap, nest=True)
     else:
