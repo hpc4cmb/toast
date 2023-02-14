@@ -82,15 +82,23 @@ class Pipeline(Operator):
                 "Pipeline has no operators, nothing to do", comm=data.comm.comm_world
             )
             return
+        
+        # There are 2 scenarios we handle here:  If the use_accel trait has already
+        # been set to True, it means that the calling code has already queried the
+        # supports_accel() method and it returned True, and the calling code has
+        # ensured that all requirements are staged to the accelerator.  If the
+        # use_accel trait is False, then we still may be able to run on the accelerator
+        # if our operators support it and if we stage the data ourselves.
 
-        # By default, if our own pipeline instance has use_accel set to True, then
-        # it means that the calling code has already staged data to the device.
+        # This is used to track whether we are handling the data staging internally.
+        # If this is set to True in the finalize method, then we copy data back out
+        # and restore our state.
         self._staged_accel = False
 
         if not self.use_accel:
             # The calling code determined that we do not have all the data present to
-            # use the accelerator.  HOWEVER, if our operators support it, we can stage
-            # the data to and from the device.
+            # use the accelerator.  However, if all of our operators support it, we 
+            # can stage the data to and from the device.
             if detectors is None:
                 comp_dets = set(data.all_local_detectors(selection=None))
             else:
@@ -100,18 +108,20 @@ class Pipeline(Operator):
                 msg = f"{self} fully supports accelerators, data to "
                 msg += f"be staged: {self.requires()}"
                 log.verbose_rank(msg, comm=data.comm.comm_world)
+
+                # Enable our own use of the accelerator
                 self.use_accel = True
-                # Save state of accel use in all operators, then enable them
-                self._save_op_accel = list()
-                for op in self.operators:
-                    self._save_op_accel.append(op.use_accel)
-                    op.use_accel = True
 
-            # Deletes leftover intermediate values
-            self._delete_intermediates(data, self.use_accel)
+                # Deletes leftover intermediate values
+                self._delete_intermediates(data)
+                
+                # Send the requirements to the device
+                self._stage_requirements_to_device(data)
+                self._staged_accel = True
 
-            # Send the requirements to the device
-            self._stage_requirements_to_device(data, self.use_accel)
+        # Set our sub-operators to use the same accelerator state
+        for op in self.operators:
+            op.use_accel = self.use_accel
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -154,51 +164,47 @@ class Pipeline(Operator):
                     msg = f"{pstr} {self} calling operator '{op.name}' exec()"
                     log.verbose(msg)
                     op.exec(data, detectors=selected_set)
-
         return
 
     @function_timer
-    def _delete_intermediates(self, data, use_accel):
+    def _delete_intermediates(self, data):
         """
         Deals with data existing on the host from a previous call, but
         not on the device.  Delete the host copy so that it will
         be re-created consistently.
         """
-        if use_accel:
-            log = Logger.get()
-            interm = self._get_intermediate()
-            log.verbose(f"intermediate = {interm}")
-            for ob in data.obs:
-                for obj in interm["detdata"]:
-                    if obj in ob.detdata and not ob.detdata.accel_exists(obj):
-                        msg = f"Pipeline intermediate detdata '{obj}' in "
-                        msg += f"observation '{ob.name}' exists on "
-                        msg += f"the host but not the device.  Deleting."
-                        log.verbose_rank(msg, comm=data.comm.comm_group)
-                        del ob.detdata[obj]
-                for obj in interm["shared"]:
-                    if obj in ob.shared and not ob.shared.accel_exists(obj):
-                        msg = f"Pipeline intermediate shared data '{obj}' in "
-                        msg += f"observation '{ob.name}' exists on "
-                        msg += f"the host but not the device.  Deleting."
-                        log.verbose_rank(msg, comm=data.comm.comm_group)
-                        del ob.shared[obj]
-                for obj in interm["intervals"]:
-                    if obj in ob.intervals and not ob.intervals.accel_exists(obj):
-                        msg = f"Pipeline intermediate intervals '{obj}' in "
-                        msg += f"observation '{ob.name}' exists on "
-                        msg += f"the host but not the device.  Deleting."
-                        log.verbose_rank(msg, comm=data.comm.comm_group)
-                        del ob.intervals[obj]
+        log = Logger.get()
+        interm = self._get_intermediate()
+        log.verbose(f"intermediate = {interm}")
+        for ob in data.obs:
+            for obj in interm["detdata"]:
+                if obj in ob.detdata and not ob.detdata.accel_exists(obj):
+                    msg = f"Pipeline intermediate detdata '{obj}' in "
+                    msg += f"observation '{ob.name}' exists on "
+                    msg += f"the host but not the device.  Deleting."
+                    log.verbose_rank(msg, comm=data.comm.comm_group)
+                    del ob.detdata[obj]
+            for obj in interm["shared"]:
+                if obj in ob.shared and not ob.shared.accel_exists(obj):
+                    msg = f"Pipeline intermediate shared data '{obj}' in "
+                    msg += f"observation '{ob.name}' exists on "
+                    msg += f"the host but not the device.  Deleting."
+                    log.verbose_rank(msg, comm=data.comm.comm_group)
+                    del ob.shared[obj]
+            for obj in interm["intervals"]:
+                if obj in ob.intervals and not ob.intervals.accel_exists(obj):
+                    msg = f"Pipeline intermediate intervals '{obj}' in "
+                    msg += f"observation '{ob.name}' exists on "
+                    msg += f"the host but not the device.  Deleting."
+                    log.verbose_rank(msg, comm=data.comm.comm_group)
+                    del ob.intervals[obj]
 
     @function_timer
-    def _stage_requirements_to_device(self, data, use_accel):
-        """move required data to the device"""
-        if use_accel:
-            requires = self.requires()
-            data.accel_create(requires)
-            data.accel_update_device(requires)
-            self._staged_accel = True
+    def _stage_requirements_to_device(self, data):
+        """Move required data to the device"""
+        requires = self.requires()
+        data.accel_create(requires)
+        data.accel_update_device(requires)
 
     @function_timer
     def _finalize(self, data, **kwargs):
@@ -218,12 +224,12 @@ class Pipeline(Operator):
                 log.verbose(msg)
                 result.append(op.finalize(data))
 
+        # Restore state of our operators
+        for op in self.operators:
+            _ = op.pop_accel()
+
         # Copy out from accelerator if we did the copy in.
         if self._staged_accel:
-            # Restore operator state
-            for op, original in zip(self.operators, self._save_op_accel):
-                op.use_accel = original
-
             # Copy out the outputs to the CPU
             prov = self.provides()
             msg = f"{pstr} {self} copying out accel data outputs: {prov}"
@@ -241,6 +247,10 @@ class Pipeline(Operator):
             msg = f"{pstr} {self} deleting accel data inputs: {req}"
             log.verbose(msg)
             data.accel_delete(req)
+
+            # Restore our own state, since we changed it.
+            _ = self.pop_accel()
+
         return result
 
     def _requires(self):
