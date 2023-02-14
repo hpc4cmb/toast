@@ -115,6 +115,7 @@ class Pipeline(Operator):
                 # Send the requirements to the device
                 self._stage_requirements_to_device(data)
                 self._staged_accel = True
+                use_accel = True
 
         if len(data.obs) == 0:
             # No observations for this group
