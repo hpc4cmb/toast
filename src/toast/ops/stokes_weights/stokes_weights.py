@@ -137,14 +137,14 @@ class StokesWeights(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
         self._nnz = len(self.mode)
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
@@ -165,8 +165,7 @@ class StokesWeights(Operator):
 
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.use_accel = use_accel
-        self.detector_pointing.apply(data, detectors=detectors)
+        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
         cal = self.cal
         if cal is None:

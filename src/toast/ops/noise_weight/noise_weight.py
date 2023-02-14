@@ -43,11 +43,11 @@ class NoiseWeight(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation

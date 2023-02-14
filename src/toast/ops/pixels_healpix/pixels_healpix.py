@@ -143,12 +143,12 @@ class PixelsHealpix(Operator):
         self._local_submaps = None
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
@@ -172,8 +172,7 @@ class PixelsHealpix(Operator):
 
         # Expand detector pointing
         self.detector_pointing.quats = quats_name
-        self.detector_pointing.use_accel = use_accel
-        self.detector_pointing.apply(data, detectors=detectors)
+        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -279,9 +278,9 @@ class PixelsHealpix(Operator):
 
         return
 
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_accel=False, **kwargs):
         if self.create_dist is not None:
-            if self.use_accel:
+            if use_accel:
                 log = Logger.get()
                 log.verbose_rank(
                     f"Operator {self.name} finalize local submap update self",
@@ -307,7 +306,7 @@ class PixelsHealpix(Operator):
                 comm=data.comm.comm_world,
             )
 
-            if self.use_accel:
+            if use_accel:
                 log = Logger.get()
                 log.verbose_rank(
                     f"Operator {self.name} finalize local submaps update device",

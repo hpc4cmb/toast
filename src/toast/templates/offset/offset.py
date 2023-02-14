@@ -490,11 +490,11 @@ class Offset(Template):
         return int(stime * rate + 0.5)
 
     @function_timer
-    def _add_to_signal(self, detector, amplitudes):
+    def _add_to_signal(self, detector, amplitudes, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
@@ -524,11 +524,11 @@ class Offset(Template):
             amp_offset += np.sum(n_amp_views)
 
     @function_timer
-    def _project_signal(self, detector, amplitudes):
+    def _project_signal(self, detector, amplitudes, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
@@ -567,11 +567,11 @@ class Offset(Template):
             amp_offset += np.sum(n_amp_views)
 
     @function_timer
-    def _add_prior(self, amplitudes_in, amplitudes_out):
+    def _add_prior(self, amplitudes_in, amplitudes_out, use_accel=False, **kwargs):
         if not self.use_noise_prior:
             # Not using the noise prior term, nothing to accumulate to output.
             return
-        if self.use_accel:
+        if use_accel:
             raise NotImplementedError(
                 "offset template add_prior on accelerator not implemented"
             )
@@ -591,9 +591,9 @@ class Offset(Template):
                     offset += n_amp_view
 
     @function_timer
-    def _apply_precond(self, amplitudes_in, amplitudes_out):
+    def _apply_precond(self, amplitudes_in, amplitudes_out, use_accel=False, **kwargs):
         if self.use_noise_prior:
-            if self.use_accel:
+            if use_accel:
                 raise NotImplementedError(
                     "offset template precond on accelerator not implemented"
                 )
@@ -642,7 +642,7 @@ class Offset(Template):
             # preconditioner is just the application of offset variance.
 
             # Kernel selection
-            implementation, use_accel = self.select_kernels()
+            implementation = self.select_kernels(use_accel=use_accel)
 
             offset_apply_diag_precond(
                 self._offsetvar,

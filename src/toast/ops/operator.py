@@ -22,7 +22,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def exec(self, data, detectors=None, **kwargs):
+    def exec(self, data, detectors=None, use_accel=False, **kwargs):
         """Perform operations on a Data object.
 
         If a list of detectors is specified, only process these detectors.  Any extra
@@ -39,7 +39,7 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if self.use_accel and not self.accel_have_requires(data):
+            if use_accel and not self.accel_have_requires(data):
                 msg = f"Operator {self.name} exec: required inputs not on device. "
                 msg += "There is likely a problem with a Pipeline or the "
                 msg += "operator dependencies."
@@ -47,6 +47,7 @@ class Operator(TraitConfig):
             self._exec(
                 data,
                 detectors=detectors,
+                use_accel=use_accel,
                 **kwargs,
             )
         else:
@@ -58,7 +59,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def finalize(self, data, **kwargs):
+    def finalize(self, data, use_accel=False, **kwargs):
         """Perform any final operations / communication.
 
         A call to this function indicates that all calls to the 'exec()' method are
@@ -74,19 +75,19 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if self.use_accel and not self.accel_have_requires(data):
+            if use_accel and not self.accel_have_requires(data):
                 msg = f"Operator {self.name} finalize: required inputs not on device. "
                 msg += "There is likely a problem with a Pipeline or the "
                 msg += "operator dependencies."
                 raise RuntimeError(msg)
-            return self._finalize(data, **kwargs)
+            return self._finalize(data, use_accel=use_accel, **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
                 log.debug(msg)
 
     @function_timer_stackskip
-    def apply(self, data, detectors=None, **kwargs):
+    def apply(self, data, detectors=None, use_accel=False, **kwargs):
         """Run exec() and finalize().
 
         This is a convenience wrapper that calls exec() exactly once with an optional
@@ -106,8 +107,8 @@ class Operator(TraitConfig):
             (value):  None or an Operator-dependent result.
 
         """
-        self.exec(data, detectors, **kwargs)
-        return self.finalize(data, **kwargs)
+        self.exec(data, detectors, use_accel=use_accel, **kwargs)
+        return self.finalize(data, use_accel=use_accel, **kwargs)
 
     def _requires(self):
         raise NotImplementedError("Fell through to Operator base class")

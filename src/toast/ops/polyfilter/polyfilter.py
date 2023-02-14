@@ -108,11 +108,11 @@ class PolyFilter2D(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         gt = GlobalTimers.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if detectors is not None:
             raise RuntimeError("PolyFilter2D cannot be run on subsets of detectors")
@@ -489,11 +489,11 @@ class PolyFilter(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.pattern is None:
             pat = None
@@ -742,7 +742,7 @@ class CommonModeFilter(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         """Apply the common mode filter to the signal.
 
         Args:
@@ -758,7 +758,7 @@ class CommonModeFilter(Operator):
         pat = re.compile(self.pattern)
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         for obs in data.obs:
             comm, temp_ob = self._redistribute(data, obs, timer, log)

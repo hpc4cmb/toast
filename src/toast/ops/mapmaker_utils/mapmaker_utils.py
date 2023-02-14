@@ -97,11 +97,11 @@ class BuildHitMap(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -317,11 +317,11 @@ class BuildInverseCovariance(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -609,11 +609,11 @@ class BuildNoiseWeighted(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         # Kernel selection
-        implementation, use_accel = self.select_kernels()
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -774,11 +774,11 @@ class BuildNoiseWeighted(Operator):
             zmap.data = zmap_data.reshape(zmap.data.shape)
         return
 
-    def _finalize(self, data, use_acc=False, **kwargs):
+    def _finalize(self, data, use_accel=False, **kwargs):
         if self.zmap in data:
             log = Logger.get()
             # We have called exec() at least once
-            if use_acc:
+            if use_accel:
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update self",
                     comm=data.comm.comm_group,
@@ -788,7 +788,7 @@ class BuildNoiseWeighted(Operator):
                 data[self.zmap].sync_alltoallv()
             else:
                 data[self.zmap].sync_allreduce()
-            if use_acc:
+            if use_accel:
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update device",
                     comm=data.comm.comm_group,

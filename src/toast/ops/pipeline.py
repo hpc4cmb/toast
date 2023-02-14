@@ -72,7 +72,7 @@ class Pipeline(Operator):
         self._staged_accel = False
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
@@ -95,7 +95,7 @@ class Pipeline(Operator):
         # and restore our state.
         self._staged_accel = False
 
-        if not self.use_accel:
+        if not use_accel:
             # The calling code determined that we do not have all the data present to
             # use the accelerator.  However, if all of our operators support it, we 
             # can stage the data to and from the device.
@@ -109,19 +109,12 @@ class Pipeline(Operator):
                 msg += f"be staged: {self.requires()}"
                 log.verbose_rank(msg, comm=data.comm.comm_world)
 
-                # Enable our own use of the accelerator
-                self.use_accel = True
-
                 # Deletes leftover intermediate values
                 self._delete_intermediates(data)
                 
                 # Send the requirements to the device
                 self._stage_requirements_to_device(data)
                 self._staged_accel = True
-
-        # Set our sub-operators to use the same accelerator state
-        for op in self.operators:
-            op.use_accel = self.use_accel
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -133,7 +126,7 @@ class Pipeline(Operator):
             for op in self.operators:
                 msg = f"{pstr} {self} calling operator '{op.name}' exec() with ALL dets"
                 log.verbose(msg)
-                op.exec(data, detectors=None)
+                op.exec(data, detectors=None, use_accel=use_accel)
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
             all_local_dets = data.all_local_detectors(selection=detectors)
@@ -144,7 +137,7 @@ class Pipeline(Operator):
                 for op in self.operators:
                     msg = f"{pstr} {self} calling operator '{op.name}' exec()"
                     log.verbose(msg)
-                    op.exec(data, detectors=[det])
+                    op.exec(data, detectors=[det], use_accel=use_accel)
         else:
             # We have explicit detector sets
             det_check = set(detectors)
@@ -163,7 +156,7 @@ class Pipeline(Operator):
                 for op in self.operators:
                     msg = f"{pstr} {self} calling operator '{op.name}' exec()"
                     log.verbose(msg)
-                    op.exec(data, detectors=selected_set)
+                    op.exec(data, detectors=selected_set, use_accel=use_accel)
         return
 
     @function_timer
@@ -207,7 +200,7 @@ class Pipeline(Operator):
         data.accel_update_device(requires)
 
     @function_timer
-    def _finalize(self, data, **kwargs):
+    def _finalize(self, data, use_accel=False, **kwargs):
         log = Logger.get()
         result = list()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
@@ -222,11 +215,7 @@ class Pipeline(Operator):
         if self.operators is not None:
             for op in self.operators:
                 log.verbose(msg)
-                result.append(op.finalize(data))
-
-        # Restore state of our operators
-        for op in self.operators:
-            _ = op.pop_accel()
+                result.append(op.finalize(data, use_accel=use_accel, **kwargs))
 
         # Copy out from accelerator if we did the copy in.
         if self._staged_accel:
@@ -247,10 +236,6 @@ class Pipeline(Operator):
             msg = f"{pstr} {self} deleting accel data inputs: {req}"
             log.verbose(msg)
             data.accel_delete(req)
-
-            # Restore our own state, since we changed it.
-            _ = self.pop_accel()
-
         return result
 
     def _requires(self):

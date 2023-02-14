@@ -469,21 +469,6 @@ class TraitConfig(HasTraits):
         help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
     )
 
-    use_accel = Bool(False, help="If True, use the accelerator")
-
-    @traitlets.validate("use_accel")
-    def _validate_use_accel(self, proposal):
-        # If the proposed value is True, but we do not support accelerators,
-        # then it is an error.
-        new_val = proposal["value"]
-        if new_val and not self.supports_accel():
-            raise traitlets.TraitError("Object does not support accelerators")
-        return new_val
-
-    @traitlets.observe("use_accel")
-    def _push_accel(self, change):
-        self._accel_stack.append(change["new"])
-
     def __init__(self, **kwargs):
         self._accel_stack = list()
         super().__init__(**kwargs)
@@ -522,53 +507,32 @@ class TraitConfig(HasTraits):
 
         """
         return self._supports_accel()
-    
-    def pop_accel(self):
-        """Pop the use_accel state and restore the previous one
-        
-        Returns:
-            (bool):  The current state.
 
-        """
-        if len(self._accel_stack) == 0:
-            log = Logger.get()
-            msg = "Calling pop_accel() on object with no previous values.  "
-            msg += "Did you previously set the use_accel trait?"
-            log.warning(msg)
-            return False
-        cur_val = bool(self.use_accel)
-        old_val = self._accel_stack.pop()
-        # Restore state, pausing notifications
-        with self.hold_trait_notifications():
-            self.use_accel = old_val
-        return cur_val
-
-    def select_kernels(self):
+    def select_kernels(self, use_accel=False):
         """Return the currently selected kernel implementation.
 
-        This returns both the current implementation AND whether to use the accelerator
-        or not.  This is needed since some implementations support both CPU and GPU.
+        This returns the kernel implementation that should be used
 
         Returns:
-            (tuple):  The (implementation, use_accel) information.
+            (ImplementationType):  The implementation type.
 
         """
         impls = self.implementations()
-        if self.use_accel:
+        if use_accel:
             if use_accel_jax:
                 if ImplementationType.JAX not in impls:
                     msg = f"JAX accelerator use is enabled, "
                     msg += f"but not supported by {self.name}"
                     raise RuntimeError(msg)
-                return (ImplementationType.JAX, True)
+                return ImplementationType.JAX
             else:
                 if ImplementationType.COMPILED not in impls:
                     msg = f"OpenMP accelerator use is enabled, "
                     msg += f"but not supported by {self.name}"
                     raise RuntimeError(msg)
-                return (ImplementationType.COMPILED, True)
+                return ImplementationType.COMPILED
         else:
-            return (ImplementationType.DEFAULT, False)
+            return ImplementationType.DEFAULT
 
     def __eq__(self, other):
         if len(self.traits()) != len(other.traits()):

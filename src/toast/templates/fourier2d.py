@@ -326,7 +326,7 @@ class Fourier2D(Template):
         # z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
-    def _add_to_signal(self, detector, amplitudes):
+    def _add_to_signal(self, detector, amplitudes, **kwargs):
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
                 continue
@@ -344,7 +344,7 @@ class Fourier2D(Template):
                     1,
                 )
 
-    def _project_signal(self, detector, amplitudes):
+    def _project_signal(self, detector, amplitudes, **kwargs):
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
                 continue
@@ -362,7 +362,7 @@ class Fourier2D(Template):
                     self._templates[iob][ivw][detector],
                 )
 
-    def _add_prior(self, amplitudes_in, amplitudes_out):
+    def _add_prior(self, amplitudes_in, amplitudes_out, **kwargs):
         for iob, ob in enumerate(self.data.obs):
             views = ob.view[self.view]
             for ivw, vw in enumerate(views):
@@ -382,6 +382,6 @@ class Fourier2D(Template):
                         mode="same",
                     )
 
-    def _apply_precond(self, amplitudes_in, amplitudes_out):
+    def _apply_precond(self, amplitudes_in, amplitudes_out, **kwargs):
         amplitudes_out.local[:] = amplitudes_in.local
         amplitudes_out.local *= self._norms
