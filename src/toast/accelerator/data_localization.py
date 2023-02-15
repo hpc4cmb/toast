@@ -85,9 +85,14 @@ class DataMovementTracker:
         if display:
             print(f"DATA MOVEMENT ({functionname}):")
         some_gpu_input = self.records[functionname].add(args, kwargs, display)
-        # sends a warning if no GPU input has been detected
-        if not some_gpu_input:
-            msg = f"function '{functionname}' has NO input on GPU!"
+        # send a warning in case of suspicious data movement
+        use_accel = kwargs.get("use_accel", False)
+        if use_accel and (not some_gpu_input):
+            msg = f"function '{functionname}' has NO input on GPU despite use_accel=True!"
+            log = Logger.get()
+            log.warning(msg)
+        elif some_gpu_input and (not use_accel):
+            msg = f"function '{functionname}' has inputs on GPU despite use_accel=False!"
             log = Logger.get()
             log.warning(msg)
 
