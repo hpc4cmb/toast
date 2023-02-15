@@ -236,6 +236,7 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
             full_shape = obs.comm.comm_group.bcast(full_shape, root=0)
             dtype = obs.comm.comm_group.bcast(dtype, root=0)
             if compressed:
+                comp_params = obs.comm.comm_group.bcast(comp_params, root=0)
                 comp_nbytes = obs.comm.comm_group.bcast(comp_nbytes, root=0)
                 comp_ranges = obs.comm.comm_group.bcast(comp_ranges, root=0)
                 comp_offsets = obs.comm.comm_group.bcast(comp_offsets, root=0)

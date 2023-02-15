@@ -59,19 +59,9 @@ def load_hdf5_detdata_v0(obs, hgrp, fields, log_prefix, parallel):
             full_shape = obs.comm.comm_group.bcast(full_shape, root=0)
             dtype = obs.comm.comm_group.bcast(dtype, root=0)
 
-        detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
-        hf_slice = [
-            slice(det_off, det_off + det_nelem, 1),
-            slice(samp_off, samp_off + samp_nelem, 1),
-        ]
         sample_shape = None
         if len(full_shape) > 2:
             sample_shape = full_shape[2:]
-            for dim in full_shape[2:]:
-                detdata_slice.append(slice(0, dim))
-                hf_slice.append(slice(0, dim))
-        detdata_slice = tuple(detdata_slice)
-        hf_slice = tuple(hf_slice)
 
         # All processes create their local detector data
         obs.detdata.create(
@@ -88,16 +78,46 @@ def load_hdf5_detdata_v0(obs, hgrp, fields, log_prefix, parallel):
         # data for each process is not contiguous in the dataset.
 
         if serial_load:
-            full_slice = tuple([slice(0, x) for x in full_shape])
-            buffer = None
-            if ds is not None:
-                buffer = np.zeros(full_shape, dtype=dtype)
-                ds.read_direct(buffer, full_slice, full_slice)
-            if obs.comm.comm_group is not None:
-                buffer = obs.comm.comm_group.bcast(buffer, root=0)
-            obs.detdata[field].data[detdata_slice] = buffer[hf_slice]
-            del buffer
+            for proc, detrange in enumerate(dist_dets):
+                first_det = detrange.offset
+                end_det = detrange.offset + detrange.n_elem
+                n_local_det = detrange.n_elem
+                pslice = (slice(0, n_local_det, 1), slice(0, obs.n_all_samples, 1))
+                hslice = (
+                    slice(first_det, end_det, 1),
+                    slice(0, obs.n_all_samples, 1),
+                )
+                if obs.comm.group_rank == 0:
+                    buffer = np.zeros((n_local_det, obs.n_all_samples), dtype=dtype)
+                    ds.read_direct(buffer, hslice, pslice)
+                    if proc == 0:
+                        # Copy data into place
+                        obs.detdata[field][:] = buffer
+                    else:
+                        # Send
+                        obs.comm.comm_group.Send(
+                            buffer.reshape(-1), dest=proc, tag=proc
+                        )
+                        del buffer
+                elif obs.comm.group_rank == proc:
+                    # Receive and store
+                    buffer = np.zeros((n_local_det, obs.n_all_samples), dtype=dtype)
+                    obs.comm.comm_group.Recv(buffer, source=0, tag=proc)
+                    obs.detdata[field][:] = buffer
+                    del buffer
+
         else:
+            detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
+            hf_slice = [
+                slice(det_off, det_off + det_nelem, 1),
+                slice(samp_off, samp_off + samp_nelem, 1),
+            ]
+            if len(full_shape) > 2:
+                for dim in full_shape[2:]:
+                    detdata_slice.append(slice(0, dim))
+                    hf_slice.append(slice(0, dim))
+            detdata_slice = tuple(detdata_slice)
+            hf_slice = tuple(hf_slice)
             msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
             check_dataset_buffer_size(msg, hf_slice, dtype, parallel)
             ds.read_direct(obs.detdata[field].data, hf_slice, detdata_slice)
