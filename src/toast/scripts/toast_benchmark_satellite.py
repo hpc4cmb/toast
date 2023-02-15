@@ -15,6 +15,7 @@ import argparse
 import os
 import sys
 from datetime import datetime
+import dateutil
 
 from astropy import units as u
 
@@ -170,11 +171,13 @@ def make_schedule(args, world_comm):
     """
     Creates a satellite schedule
     """
+    start_str = "2027-01-01 00:00:00"
+    mission_start = dateutil.parser.parse(start_str)
     schedule = None
     if (world_comm is None) or (world_comm.rank == 0):
         schedule = create_satellite_schedule(
             prefix="",
-            mission_start=datetime.now(),
+            mission_start=mission_start,
             observation_time=args.obs_minutes * u.minute,
             num_observations=args.num_obs,
             prec_period=args.prec_period * u.minute,
