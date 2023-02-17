@@ -1,3 +1,12 @@
+# Copied without modification from libsndfile 
+# (https://github.com/libsndfile/libsndfile)
+#
+# (C) Erik de Castro Lopo <erikd@mega-nerd.com>
+#
+# Released under LGPL v2.1
+# https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+#
+#
 # - Find FLAC
 # Find the native FLAC includes and libraries
 #

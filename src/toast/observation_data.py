@@ -443,7 +443,7 @@ class DetectorData(AcceleratorObject):
             if not np.allclose(self.data, other.data, rtol=1.0e-5, atol=1.0e-8):
                 return False
         elif self.dtype == np.dtype(np.float32):
-            if not np.allclose(self.data, other.data, rtol=1.0e-3, atol=1.0e-5):
+            if not np.allclose(self.data, other.data, rtol=1.0e-4, atol=1.0e-7):
                 return False
         elif not np.array_equal(self.data, other.data):
             return False
