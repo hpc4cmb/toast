@@ -34,6 +34,8 @@ class LoadHDF5(Operator):
         None, allow_none=True, help="Top-level directory containing the data volume"
     )
 
+    files = List([], help="Explicit list of files to load")
+
     # FIXME:  We should add a filtering mechanism here to load a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
 
@@ -97,23 +99,30 @@ class LoadHDF5(Operator):
 
         obs_props = list()
         if data.comm.world_rank == 0:
-            for root, dirs, files in os.walk(self.volume):
-                # Process top-level files
-                obsfiles = glob.glob(os.path.join(root, "*.h5"))
-                if len(obsfiles) > 0:
-                    # Root directory contains observations
-                    for ofile in sorted(obsfiles):
-                        fsize = _get_obs_samples(ofile)
-                        obs_props.append((fsize, ofile))
-                # Also process sub-directories one level deep
-                for d in dirs:
-                    obsfiles = glob.glob(os.path.join(root, d, "*.h5"))
+            if self.volume is not None:
+                # We have a whole directory of files
+                for root, dirs, files in os.walk(self.volume):
+                    # Process top-level files
+                    obsfiles = glob.glob(os.path.join(root, "*.h5"))
                     if len(obsfiles) > 0:
-                        # This directory contains observations
+                        # Root directory contains observations
                         for ofile in sorted(obsfiles):
                             fsize = _get_obs_samples(ofile)
                             obs_props.append((fsize, ofile))
-                break
+                    # Also process sub-directories one level deep
+                    for d in dirs:
+                        obsfiles = glob.glob(os.path.join(root, d, "*.h5"))
+                        if len(obsfiles) > 0:
+                            # This directory contains observations
+                            for ofile in sorted(obsfiles):
+                                fsize = _get_obs_samples(ofile)
+                                obs_props.append((fsize, ofile))
+                    break
+            if len(self.files) > 0:
+                # We have explicit files to load
+                for ofile in self.files:
+                    fsize = _get_obs_samples(ofile)
+                    obs_props.append((fsize, ofile))
         if self.sort_by_size:
             obs_props.sort(key=lambda x: x[0])
         else:

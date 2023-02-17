@@ -5,6 +5,7 @@
 import os
 import sys
 
+import glob
 import numpy as np
 from astropy import units as u
 
@@ -201,6 +202,20 @@ class IoHdf5Test(MPITestCase):
             if ob != orig:
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
             self.assertTrue(ob == orig)
+        del check_data
+
+        # Also test loading explicit files
+        check_data = Data(data.comm)
+        loader.volume = None
+        loader.files = glob.glob(f"{datadir}/*.h5")
+        loader.apply(check_data)
+
+        for ob in check_data.obs:
+            orig = original[ob.name]
+            if ob != orig:
+                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
+            self.assertTrue(ob == orig)
+        del check_data
 
         close_data(data)
 
