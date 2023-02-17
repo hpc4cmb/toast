@@ -49,6 +49,7 @@ PYBIND11_MODULE(_libtoast, m) {
     init_ops_stokes_weights(m);
     init_ops_pixels_healpix(m);
     init_ops_mapmaker_utils(m);
+    init_io_compression_flac(m);
 
     // Internal unit test runner
     m.def(

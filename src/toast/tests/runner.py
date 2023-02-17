@@ -22,6 +22,7 @@ from . import healpix as test_healpix
 from . import instrument as test_instrument
 from . import intervals as test_intervals
 from . import io_hdf5 as test_io_hdf5
+from . import io_compression as test_io_compression
 from . import math_misc as test_math_misc
 from . import noise as test_noise
 from . import observation as test_observation
@@ -217,6 +218,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_template_gain))
 
         suite.addTest(loader.loadTestsFromModule(test_io_hdf5))
+        suite.addTest(loader.loadTestsFromModule(test_io_compression))
 
         suite.addTest(loader.loadTestsFromModule(test_accelerator))
 

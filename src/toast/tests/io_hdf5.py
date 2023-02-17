@@ -36,8 +36,6 @@ class IoHdf5Test(MPITestCase):
             split=split,
         )
 
-        data = create_ground_data(self.comm)
-
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
             boresight="boresight_azel", quats="quats_azel"
@@ -142,7 +140,10 @@ class IoHdf5Test(MPITestCase):
                 if ddata.dtype.char == "d":
                     # Hack in a replacement
                     new_dd = DetectorData(
-                        ddata.detectors, ddata.shape, np.float32, units=ddata.units
+                        ddata.detectors,
+                        ddata.detector_shape,
+                        np.float32,
+                        units=ddata.units,
                     )
                     new_dd[:] = original[ob.name].detdata[field][:]
                     original[ob.name].detdata._internal[field] = new_dd
