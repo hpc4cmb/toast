@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2019-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -49,17 +49,6 @@ class GroundScan(Scan):
         az_min (Quantity):  The minimum Azimuth value of each sweep.
         az_max (Quantity):  The maximum Azimuth value of each sweep.
         el (Quantity):  The nominal Elevation of the scan.
-        rising (bool):  If True, the patch is rising, else it is setting.
-        sun_az_begin (Quantity):  The Sun Azimuth value at the beginning of the scan.
-        sun_az_end (Quantity):  The Sun Azimuth value at the end of the scan.
-        sun_el_begin (Quantity):  The Sun Elevation value at the beginning of the scan.
-        sun_el_end (Quantity):  The Sun Elevation value at the end of the scan.
-        moon_az_begin (Quantity):  The Moon Azimuth value at the beginning of the scan.
-        moon_az_end (Quantity):  The Moon Azimuth value at the end of the scan.
-        moon_el_begin (Quantity):  The Moon Elevation value at the beginning of the
-            scan.
-        moon_el_end (Quantity):  The Moon Elevation value at the end of the scan.
-        moon_phase (float):  The phase of the moon as a value from 0 to 1.
         scan_indx (int):  The current pass of this patch in the overall schedule.
         subscan_indx (int):  The current sub-pass of this patch in the overall schedule.
 
@@ -74,16 +63,6 @@ class GroundScan(Scan):
         az_min=0 * u.degree,
         az_max=0 * u.degree,
         el=0 * u.degree,
-        rising=False,
-        sun_az_begin=0 * u.degree,
-        sun_az_end=0 * u.degree,
-        sun_el_begin=0 * u.degree,
-        sun_el_end=0 * u.degree,
-        moon_az_begin=0 * u.degree,
-        moon_az_end=0 * u.degree,
-        moon_el_begin=0 * u.degree,
-        moon_el_end=0 * u.degree,
-        moon_phase=0.0,
         scan_indx=0,
         subscan_indx=0,
     ):
@@ -92,16 +71,7 @@ class GroundScan(Scan):
         self.az_min = az_min
         self.az_max = az_max
         self.el = el
-        self.rising = rising
-        self.sun_az_begin = sun_az_begin
-        self.sun_az_end = sun_az_end
-        self.sun_el_begin = sun_el_begin
-        self.sun_el_end = sun_el_end
-        self.moon_az_begin = moon_az_begin
-        self.moon_az_end = moon_az_end
-        self.moon_el_begin = moon_el_begin
-        self.moon_el_end = moon_el_end
-        self.moon_phase = moon_phase
+        self.rising = az_min.to_value(u.degree) % 360 < 180
         self.scan_indx = scan_indx
         self.subscan_indx = subscan_indx
 
@@ -275,35 +245,23 @@ class GroundSchedule(object):
                 return None
             fields = line.split()
             nfield = len(fields)
-            if nfield == 22:
-                # Deprecated prior to 2020-02 schedule format without boresight rotation field
+            if nfield == 11:
+                # Concise schedule format is default after 2023-02-13
                 (
                     start_date,
                     start_time,
                     stop_date,
                     stop_time,
-                    mjdstart,
-                    mjdstop,
+                    boresight_angle,
                     name,
                     azmin,
                     azmax,
                     el,
-                    rs,
-                    sun_el1,
-                    sun_az1,
-                    sun_el2,
-                    sun_az2,
-                    moon_el1,
-                    moon_az1,
-                    moon_el2,
-                    moon_az2,
-                    moon_phase,
                     scan,
                     subscan,
                 ) = line.split()
-                boresight_angle = 0
             else:
-                # 2020-02 schedule format with boresight rotation field
+                # Optional (old) verbose format
                 (
                     start_date,
                     start_time,
@@ -345,16 +303,6 @@ class GroundSchedule(object):
                 float(azmin) * u.degree,
                 float(azmax) * u.degree,
                 float(el) * u.degree,
-                (rs.upper() == "R"),
-                float(sun_az1) * u.degree,
-                float(sun_az2) * u.degree,
-                float(sun_el1) * u.degree,
-                float(sun_el2) * u.degree,
-                float(moon_az1) * u.degree,
-                float(moon_az2) * u.degree,
-                float(moon_el1) * u.degree,
-                float(moon_el2) * u.degree,
-                float(moon_phase),
                 scan,
                 subscan,
             )
