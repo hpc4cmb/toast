@@ -295,20 +295,6 @@ class GroundSchedule(object):
             except Exception:
                 start_time = dateutil.parser.parse(start_time)
                 stop_time = dateutil.parser.parse(stop_time)
-            # DEBUG begin
-            print(f"PARSED ground scan with \n"
-                  f"PARSED name = {name} \n"
-                  f"PARSED start_time = {start_time} \n"
-                  f"PARSED stop_time = {stop_time} \n"
-                  f"PARSED boresight_angle = {boresight_angle} \n"
-                  f"PARSED azmin = {azmin} \n"
-                  f"PARSED azmax = {azmax} \n"
-                  f"PARSED el = {el} \n"
-                  f"PARSED scan = {scan} \n"
-                  f"PARSED subscan = {subscan} \n",
-                  flush=True,
-            )
-            # DEBUG end
             return GroundScan(
                 name,
                 start_time,
