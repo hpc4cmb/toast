@@ -3,13 +3,13 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import gzip
+
 import numpy as np
 from astropy import units as u
 
-from ..timing import function_timer
-from ..utils import Logger, AlignedU8
 from ..observation_data import DetectorData
-
+from ..timing import function_timer
+from ..utils import AlignedU8, Logger
 from .compression_flac import compress_detdata_flac, decompress_detdata_flac
 
 

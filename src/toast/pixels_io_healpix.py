@@ -627,12 +627,10 @@ def read_healpix(filename, *args, **kwargs):
     filename = filename.strip()
 
     if filename_is_fits(filename):
-
         # Load a FITS map with healpy
         result = hp.read_map(filename, *args, **kwargs)
 
     elif filename_is_hdf5(filename):
-
         if "verbose" in kwargs and kwargs["verbose"] == False:
             verbose = False
         else:
@@ -709,12 +707,10 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
     """
 
     if filename_is_fits(filename):
-
         # Write a FITS map with healpy
         return hp.write_map(filename, mapdata, *args, **kwargs)
 
     elif filename_is_hdf5(filename):
-
         # Write an HDF5 map
         mapdata = np.atleast_2d(mapdata)
         n_value, n_pix = mapdata.shape

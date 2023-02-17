@@ -349,13 +349,19 @@ class Bandpass(object):
             # and return the average
             delta = 1e-6
             alpha1 = alpha - delta
-            eff1 = self.convolve(det, freqs, freqs.to_value(u.Hz)**alpha1)**(1 / alpha1)
+            eff1 = self.convolve(det, freqs, freqs.to_value(u.Hz) ** alpha1) ** (
+                1 / alpha1
+            )
             alpha2 = alpha + delta
-            eff2 = self.convolve(det, freqs, freqs.to_value(u.Hz)**alpha2)**(1 / alpha2)
+            eff2 = self.convolve(det, freqs, freqs.to_value(u.Hz) ** alpha2) ** (
+                1 / alpha2
+            )
             eff = 0.5 * (eff1 + eff2)
         else:
             # Very simple closed form
-            eff = self.convolve(det, freqs, freqs.to_value(u.Hz)**alpha)**(1 / alpha)
+            eff = self.convolve(det, freqs, freqs.to_value(u.Hz) ** alpha) ** (
+                1 / alpha
+            )
 
         return eff * u.Hz
 
@@ -374,7 +380,7 @@ class Bandpass(object):
             bandpass = self.bandpass(det)
 
             x = freqs / nu_cmb
-            db_dt = alpha * x**4 * np.exp(x) / (np.exp(x) - 1)**2
+            db_dt = alpha * x**4 * np.exp(x) / (np.exp(x) - 1) ** 2
             db_dt_rj = 2 * freqs**2 * k / c**2
 
             self._kcmb2jysr[det] = (
@@ -449,7 +455,9 @@ class Bandpass(object):
         bandpass_det = self.bandpass(det)
 
         # Interpolate spectrum values to bandpass frequencies
-        spectrum_det = np.interp(freqs_det.to_value(u.Hz), freqs.to_value(u.Hz), spectrum)
+        spectrum_det = np.interp(
+            freqs_det.to_value(u.Hz), freqs.to_value(u.Hz), spectrum
+        )
 
         if rj:
             # From brightness to thermodynamic units
@@ -458,7 +466,9 @@ class Bandpass(object):
             spectrum_det *= rj2cmb
 
         # Average across the bandpass
-        convolved = integrate_simpson(freqs_det.to_value(u.Hz), spectrum_det * bandpass_det)
+        convolved = integrate_simpson(
+            freqs_det.to_value(u.Hz), spectrum_det * bandpass_det
+        )
 
         return convolved
 

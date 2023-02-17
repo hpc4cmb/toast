@@ -23,8 +23,8 @@ from ..utils import (
     hdf5_use_serial,
     object_fullname,
 )
-from .hdf_utils import check_dataset_buffer_size, hdf5_open
 from .compression import compress_detdata, decompress_detdata
+from .hdf_utils import check_dataset_buffer_size, hdf5_open
 
 
 @function_timer

@@ -10,23 +10,23 @@ from astropy import units as u
 
 from .. import ops as ops
 from ..data import Data
-from ..io import compress_detdata, decompress_detdata, save_hdf5, load_hdf5
+from ..io import compress_detdata, decompress_detdata, load_hdf5, save_hdf5
 from ..io.compression_flac import (
-    have_flac_support,
+    compress_detdata_flac,
+    compress_flac,
+    compress_flac_2D,
+    decompress_detdata_flac,
+    decompress_flac,
+    decompress_flac_2D,
     float2int,
+    have_flac_support,
     int2float,
     int64to32,
-    compress_detdata_flac,
-    decompress_detdata_flac,
-    compress_flac,
-    decompress_flac,
-    compress_flac_2D,
-    decompress_flac_2D,
 )
-from ..observation_data import DetectorData
 from ..observation import default_values as defaults
-from ..utils import AlignedU8, AlignedI32
+from ..observation_data import DetectorData
 from ..timing import Timer
+from ..utils import AlignedI32, AlignedU8
 from ._helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 

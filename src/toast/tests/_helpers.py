@@ -611,7 +611,6 @@ def create_fake_beam_alm(
     detB_beam=False,
     normalize_beam=False,
 ):
-
     # pick an nside >= lmax to be sure that the a_lm will be fairly accurate
     nside = 2
     while nside < lmax:

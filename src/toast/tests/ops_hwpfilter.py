@@ -26,7 +26,6 @@ class HWPFilterTest(MPITestCase):
         self.shared_flag_mask = 1
 
     def test_hwpfilter(self):
-
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 

@@ -22,7 +22,6 @@ class StatisticsTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
 
     def test_statistics(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 

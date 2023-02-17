@@ -32,7 +32,6 @@ class TimeConstantTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
 
     def test_time_constant(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
@@ -115,7 +114,6 @@ class TimeConstantTest(MPITestCase):
         close_data(data)
 
     def test_time_constant_error(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
