@@ -7,8 +7,8 @@
 
 
 #ifdef HAVE_FLAC
-#include <FLAC/stream_encoder.h>
-#include <FLAC/stream_decoder.h>
+# include <FLAC/stream_encoder.h>
+# include <FLAC/stream_decoder.h>
 
 
 typedef struct {
@@ -17,29 +17,28 @@ typedef struct {
 
 
 FLAC__StreamEncoderWriteStatus enc_write_callback(
-    const FLAC__StreamEncoder *encoder, 
-    const FLAC__byte buffer[], 
-    size_t bytes, 
-    uint32_t samples, 
-    uint32_t current_frame, 
-    void *client_data
+    const FLAC__StreamEncoder * encoder,
+    const FLAC__byte buffer[],
+    size_t bytes,
+    uint32_t samples,
+    uint32_t current_frame,
+    void * client_data
 ) {
     enc_write_callback_data * data = (enc_write_callback_data *)client_data;
     data->compressed->insert(
-        data->compressed->end(), 
-        buffer, 
+        data->compressed->end(),
+        buffer,
         buffer + bytes
     );
     return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
 }
 
-
 void encode_flac(
     int32_t * const data,
-    size_t n_data, 
+    size_t n_data,
     toast::AlignedU8 & bytes,
     toast::AlignedI64 & offsets,
-    uint32_t level, 
+    uint32_t level,
     int64_t stride
 ) {
     // If stride is specified, check consistency.
@@ -70,12 +69,13 @@ void encode_flac(
     for (int64_t sub = 0; sub < n_sub; ++sub) {
         offsets[sub] = bytes.size();
 
-        // std::cerr << "Encoding " << stride << " samples at byte offset " << offsets[sub] << " starting at data element " << (sub * stride) << std::endl;
+        // std::cerr << "Encoding " << stride << " samples at byte offset " <<
+        // offsets[sub] << " starting at data element " << (sub * stride) << std::endl;
 
         encoder = FLAC__stream_encoder_new();
 
         success = FLAC__stream_encoder_set_compression_level(encoder, level);
-        if (! success) {
+        if (!success) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Failed to set compression level to " << level;
@@ -84,7 +84,7 @@ void encode_flac(
         }
 
         success = FLAC__stream_encoder_set_blocksize(encoder, 0);
-        if (! success) {
+        if (!success) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Failed to set encoder blocksize to " << 0;
@@ -93,7 +93,7 @@ void encode_flac(
         }
 
         success = FLAC__stream_encoder_set_channels(encoder, 1);
-        if (! success) {
+        if (!success) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Failed to set encoder channels to " << 1;
@@ -102,7 +102,7 @@ void encode_flac(
         }
 
         success = FLAC__stream_encoder_set_bits_per_sample(encoder, 32);
-        if (! success) {
+        if (!success) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Failed to set encoder bits per sample to " << 32;
@@ -111,11 +111,11 @@ void encode_flac(
         }
 
         status = FLAC__stream_encoder_init_stream(
-            encoder, 
-            enc_write_callback, 
-            NULL, 
-            NULL, 
-            NULL, 
+            encoder,
+            enc_write_callback,
+            NULL,
+            NULL,
+            NULL,
             (void *)&write_callback_data
         );
         if (status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
@@ -131,17 +131,17 @@ void encode_flac(
             &(data[sub * stride]),
             stride
         );
-        if (! success) {
+        if (!success) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Failed on encoder_process_interleaved for chunk " << sub;
-            o << ", elements " << sub*stride << " - " << (sub+1)*stride;
+            o << ", elements " << sub * stride << " - " << (sub + 1) * stride;
             o << ", at byte offset " << offsets[sub];
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
         success = FLAC__stream_encoder_finish(encoder);
-        if (! success) {
+        if (!success) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Failed on encoder_finish";
@@ -155,7 +155,6 @@ void encode_flac(
     return;
 }
 
-
 typedef struct {
     uint8_t const * input;
     size_t in_nbytes;
@@ -166,15 +165,16 @@ typedef struct {
 
 
 FLAC__StreamDecoderReadStatus dec_read_callback(
-    const FLAC__StreamDecoder * decoder, 
-    FLAC__byte buffer[], 
-    size_t * bytes, 
+    const FLAC__StreamDecoder * decoder,
+    FLAC__byte buffer[],
+    size_t * bytes,
     void * client_data
 ) {
-    dec_callback_data * callback_data = (dec_callback_data*)client_data;
+    dec_callback_data * callback_data = (dec_callback_data *)client_data;
     uint8_t const * input = callback_data->input;
     size_t offset = callback_data->in_offset;
     size_t remaining = callback_data->in_end - offset;
+
     // std::cerr << "Decode read:  " << remaining << " bytes remaining" << std::endl;
 
     // The bytes requested by the decoder
@@ -183,6 +183,7 @@ FLAC__StreamDecoderReadStatus dec_read_callback(
     if (remaining == 0) {
         // No data left
         (*bytes) = 0;
+
         // std::cerr << "Decode read:  0 bytes remaining, END_OF_STREAM" << std::endl;
         return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
     } else {
@@ -194,12 +195,14 @@ FLAC__StreamDecoderReadStatus dec_read_callback(
             o << "Stream decoder gave us zero length buffer, but we have ";
             o << remaining << " bytes left";
             log.error(o.str().c_str());
+
             // std::cerr << "Decode read:  0 bytes in buffer, ABORT" << std::endl;
             return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
         } else {
             if (remaining > n_buffer) {
                 // Only copy in what there is space for
-                // std::cerr << "Decode read:  putting " << n_buffer << " bytes at offset " << offset << " into buffer, CONTINUE" << std::endl;
+                // std::cerr << "Decode read:  putting " << n_buffer << " bytes at
+                // offset " << offset << " into buffer, CONTINUE" << std::endl;
                 for (size_t i = 0; i < n_buffer; ++i) {
                     buffer[i] = input[offset + i];
                 }
@@ -207,7 +210,8 @@ FLAC__StreamDecoderReadStatus dec_read_callback(
                 return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
             } else {
                 // Copy in the rest of the buffer and reset the number of bytes
-                //std::cerr << "Decode read:  putting remainder of " << remaining << " bytes at offset " << offset << " into buffer, CONTINUE" << std::endl;
+                // std::cerr << "Decode read:  putting remainder of " << remaining << "
+                // bytes at offset " << offset << " into buffer, CONTINUE" << std::endl;
                 for (size_t i = 0; i < remaining; ++i) {
                     buffer[i] = input[offset + i];
                 }
@@ -217,15 +221,15 @@ FLAC__StreamDecoderReadStatus dec_read_callback(
             }
         }
     }
+
     // Should never get here...
     return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
 }
 
-
 FLAC__StreamDecoderWriteStatus dec_write_callback(
-    const FLAC__StreamDecoder * decoder, 
-    const FLAC__Frame * frame, 
-    const FLAC__int32 * const buffer[], 
+    const FLAC__StreamDecoder * decoder,
+    const FLAC__Frame * frame,
+    const FLAC__int32 * const buffer[],
     void * client_data
 ) {
     dec_callback_data * data = (dec_callback_data *)client_data;
@@ -238,11 +242,10 @@ FLAC__StreamDecoderWriteStatus dec_write_callback(
     return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 
-
 void dec_err_callback(
     const FLAC__StreamDecoder * decoder,
     FLAC__StreamDecoderErrorStatus status,
-    void *client_data
+    void * client_data
 ) {
     dec_callback_data * data = (dec_callback_data *)client_data;
 
@@ -255,7 +258,6 @@ void dec_err_callback(
     throw std::runtime_error(o.str().c_str());
     return;
 }
-
 
 void decode_flac(
     uint8_t * const bytes,
@@ -272,7 +274,7 @@ void decode_flac(
     FLAC__StreamDecoder * decoder;
     bool success;
     FLAC__StreamDecoderInitStatus status;
-    
+
     size_t n_sub = n_offset;
 
     for (size_t sub = 0; sub < n_sub; ++sub) {
@@ -282,16 +284,19 @@ void decode_flac(
         } else {
             callback_data.in_end = offsets[sub + 1];
         }
-        //std::cerr << "Decoding chunk " << sub << " at byte offset " << callback_data.in_offset << " with " << (callback_data.in_end - callback_data.in_offset) << " bytes" << std::endl;
-        
+
+        // std::cerr << "Decoding chunk " << sub << " at byte offset " <<
+        // callback_data.in_offset << " with " << (callback_data.in_end -
+        // callback_data.in_offset) << " bytes" << std::endl;
+
         decoder = FLAC__stream_decoder_new();
 
         status = FLAC__stream_decoder_init_stream(
-            decoder, 
-            dec_read_callback, 
-            NULL, 
-            NULL, 
-            NULL, 
+            decoder,
+            dec_read_callback,
+            NULL,
+            NULL,
+            NULL,
             NULL,
             dec_write_callback,
             NULL,
@@ -305,9 +310,9 @@ void decode_flac(
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
-        
+
         success = FLAC__stream_decoder_process_until_end_of_stream(decoder);
-        if (! success) {
+        if (!success) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Failed on decoder_process_until_end_of_stream for chunk " << sub;
@@ -319,7 +324,7 @@ void decode_flac(
         }
 
         success = FLAC__stream_decoder_finish(decoder);
-        if (! success) {
+        if (!success) {
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "Failed on decoder_finish";
@@ -333,7 +338,7 @@ void decode_flac(
     return;
 }
 
-#endif
+#endif // ifdef HAVE_FLAC
 
 
 void init_io_compression_flac(py::module & m) {
@@ -343,9 +348,11 @@ void init_io_compression_flac(py::module & m) {
         "have_flac_support", []() {
             #ifdef HAVE_FLAC
             return true;
-            #else
+
+            #else // ifdef HAVE_FLAC
             return false;
-            #endif
+
+            #endif // ifdef HAVE_FLAC
         }, R"(
         Return True if TOAST is compiled with FLAC support.
     )");
@@ -370,24 +377,26 @@ void init_io_compression_flac(py::module & m) {
             #ifdef HAVE_FLAC
             encode_flac(
                 raw_data,
-                n_chunk * n_chunk_elem, 
+                n_chunk * n_chunk_elem,
                 bytes,
                 offsets,
-                level, 
+                level,
                 n_chunk_elem
             );
-            #else
+            #else // ifdef HAVE_FLAC
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "TOAST was not built with libFLAC support";
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
-            #endif
+            #endif // ifdef HAVE_FLAC
 
-            // std::cout << "compress_flac_2D returning buffer @ " << (int64_t)bytes.data() << std::endl;
-            
+            // std::cout << "compress_flac_2D returning buffer @ " <<
+            // (int64_t)bytes.data() << std::endl;
+
             return py::make_tuple(py::cast(bytes), py::cast(offsets));
-        }, py::arg("data"), py::arg("level"), R"(
+        }, py::arg("data"), py::arg(
+            "level"), R"(
         Compress 2D 32bit integer data with FLAC.
 
         Each row of the input is compressed separately, and the byte offset
@@ -430,18 +439,20 @@ void init_io_compression_flac(py::module & m) {
                 n_offset,
                 output
             );
-            #else
+            #else // ifdef HAVE_FLAC
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "TOAST was not built with libFLAC support";
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
-            #endif
+            #endif // ifdef HAVE_FLAC
 
-            // std::cout << "decompress_flac_2D returning buffer @ " << (int64_t)output.data() << std::endl;
-            
+            // std::cout << "decompress_flac_2D returning buffer @ " <<
+            // (int64_t)output.data() << std::endl;
+
             return py::cast(output);
-        }, py::arg("data"), py::arg("offsets"), R"(
+        }, py::arg("data"), py::arg(
+            "offsets"), R"(
         Decompress FLAC bytes into 2D 32bit integer data.
 
         The array of bytes is decompressed and returned.
@@ -474,24 +485,26 @@ void init_io_compression_flac(py::module & m) {
             #ifdef HAVE_FLAC
             encode_flac(
                 raw_data,
-                n, 
+                n,
                 bytes,
                 offsets,
-                level, 
+                level,
                 0
             );
-            #else
+            #else // ifdef HAVE_FLAC
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "TOAST was not built with libFLAC support";
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
-            #endif
+            #endif // ifdef HAVE_FLAC
 
-            // std::cout << "compress_flac returning buffer @ " << (int64_t)bytes.data() << std::endl;
-            
+            // std::cout << "compress_flac returning buffer @ " << (int64_t)bytes.data()
+            // << std::endl;
+
             return py::cast(bytes);
-        }, py::arg("data"), py::arg("level"), R"(
+        }, py::arg("data"), py::arg(
+            "level"), R"(
         Compress 1D 32bit integer data with FLAC.
 
         The 1D array is compressed and the byte array is returned.
@@ -529,18 +542,20 @@ void init_io_compression_flac(py::module & m) {
                 1,
                 output
             );
-            #else
+            #else // ifdef HAVE_FLAC
             auto log = toast::Logger::get();
             std::ostringstream o;
             o << "TOAST was not built with libFLAC support";
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
-            #endif
+            #endif // ifdef HAVE_FLAC
 
-            // std::cout << "decompress_flac returning buffer @ " << (int64_t)output.data() << std::endl;
-            
+            // std::cout << "decompress_flac returning buffer @ " <<
+            // (int64_t)output.data() << std::endl;
+
             return py::cast(output);
-        }, py::arg("data"), R"(
+        }, py::arg(
+            "data"), R"(
         Decompress FLAC bytes into 1D 32bit integer data.
 
         The array of bytes is decompressed and returned.

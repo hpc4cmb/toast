@@ -3,16 +3,17 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import time
+
 import numpy as np
 
 from .._libtoast import (
-    have_flac_support,
     compress_flac,
-    decompress_flac,
     compress_flac_2D,
+    decompress_flac,
     decompress_flac_2D,
+    have_flac_support,
 )
-from ..utils import Logger, AlignedU8, dtype_to_aligned
+from ..utils import AlignedU8, Logger, dtype_to_aligned
 
 
 def float2int(data, quanta=None):

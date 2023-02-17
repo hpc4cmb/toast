@@ -19,9 +19,9 @@ from ..observation import Observation
 from ..timing import GlobalTimers, Timer, function_timer
 from ..utils import Environment, Logger, dtype_to_aligned, import_from_name
 from ..weather import SimWeather
+from .compression import decompress_detdata
 from .hdf_utils import check_dataset_buffer_size, hdf5_config, hdf5_open
 from .observation_hdf_load_v0 import load_hdf5_detdata_v0
-from .compression import decompress_detdata
 
 
 @function_timer

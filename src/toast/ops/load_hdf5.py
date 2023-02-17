@@ -126,7 +126,7 @@ class LoadHDF5(Operator):
                     for d in dirs:
                         for root2, dirs2, files2 in os.walk(os.path.join(root, d)):
                             filenames += [
-                                os.path.join(roo2, fname)
+                                os.path.join(root2, fname)
                                 for fname in files2
                                 if pattern.search(fname) is not None
                             ]

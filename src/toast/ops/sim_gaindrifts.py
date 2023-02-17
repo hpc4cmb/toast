@@ -105,7 +105,6 @@ class GainDrifter(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-
         """
         Generate gain timestreams.
 

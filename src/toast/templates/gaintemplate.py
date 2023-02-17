@@ -62,7 +62,6 @@ class GainTemplate(Template):
         return L
 
     def _initialize(self, new_data):
-
         self.norder = self.order + 1
         # Use this as an "Ordered Set".  We want the unique detectors on this process,
         # but sorted in order of occurrence.

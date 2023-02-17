@@ -35,7 +35,6 @@ class PolyFilterTest(MPITestCase):
         np.random.seed(123456)
 
     def test_polyfilter(self):
-
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
@@ -126,7 +125,6 @@ class PolyFilterTest(MPITestCase):
         close_data(data)
 
     def test_polyfilter_trend(self):
-
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
@@ -435,7 +433,6 @@ class PolyFilterTest(MPITestCase):
         close_data(data)
 
     def test_common_mode_filter(self):
-
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 

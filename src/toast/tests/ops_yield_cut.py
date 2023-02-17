@@ -23,7 +23,6 @@ class YieldCutTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
 
     def test_yield_cut(self):
-
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm, pixel_per_process=100)
 

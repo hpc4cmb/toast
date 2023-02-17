@@ -15,8 +15,8 @@ import argparse
 import os
 import sys
 from datetime import datetime
-import dateutil
 
+import dateutil
 from astropy import units as u
 
 import toast
