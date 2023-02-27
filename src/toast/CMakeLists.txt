@@ -50,6 +50,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/template_offset.cpp
     _libtoast/accelerator.cpp
     _libtoast/qarray_core.cpp
+    _libtoast/io_compression_flac.cpp
     _libtoast/ops_pointing_detector.cpp
     _libtoast/ops_stokes_weights.cpp
     _libtoast/ops_pixels_healpix.cpp
@@ -83,6 +84,13 @@ if(CHOLMOD_FOUND)
     target_compile_definitions(_libtoast PRIVATE HAVE_CHOLMOD=1)
     target_include_directories(_libtoast PUBLIC "${CHOLMOD_INCLUDE_DIR}")
 endif(CHOLMOD_FOUND)
+
+if(USE_FLAC)
+    target_compile_definitions(_libtoast PRIVATE HAVE_FLAC=1)
+    target_compile_options(_libtoast PRIVATE "${FLAC_DEFINITIONS}")
+    target_include_directories(_libtoast PUBLIC "${FLAC_INCLUDE_DIRS}")
+    target_link_libraries(_libtoast PRIVATE "${FLAC_LIBRARIES}")
+endif(USE_FLAC)
 
 if(CUDAToolkit_FOUND AND NOT CUDA_DISABLED)
     target_compile_definitions(_libtoast PRIVATE HAVE_CUDALIBS=1)

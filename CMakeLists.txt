@@ -180,6 +180,31 @@ find_package(AATM)
 
 find_package(SuiteSparse)
 
+# We require libFLAC >= 1.4.0 for 32bit integer support
+set(USE_FLAC FALSE)
+if(DISABLE_FLAC)
+    message(STATUS "FLAC support disabled")
+else()
+    find_package(FLAC)
+    if(FLAC_FOUND)
+        string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\..*" "\\1" FLAC_MAJ_VERSION "${FLAC_VERSION}")
+        string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\..*" "\\1" FLAC_MIN_VERSION "${FLAC_VERSION}")
+        if(FLAC_MAJ_VERSION GREATER 1)
+            # Future proofing
+            message(STATUS "Found FLAC version ${FLAC_VERSION}, enabling support")
+            set(USE_FLAC TRUE)
+        else()
+            if(FLAC_MIN_VERSION GREATER_EQUAL 4)
+                message(STATUS "Found FLAC version ${FLAC_VERSION}, enabling support")
+                set(USE_FLAC TRUE)
+            endif()
+        endif()
+    endif()
+    if(NOT USE_FLAC)
+        message(STATUS "Did not find FLAC >= 1.4.0")
+    endif()
+endif()
+
 find_package(PythonInterp REQUIRED)
 
 # Internal products

@@ -17,3 +17,4 @@ pytest
 coveralls
 pytest-cov
 ducc0
+libflac

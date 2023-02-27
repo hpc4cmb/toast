@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -97,6 +97,14 @@ def main():
         help="Output in double precision",
     )
 
+    parser.add_argument(
+        "--scale",
+        required=False,
+        default=None,
+        type=float,
+        help="Scale the output map with the provided factor",
+    )
+
     args = parser.parse_args()
 
     if args.double_precision:
@@ -108,9 +116,13 @@ def main():
     invcov_sum = None
     nnz, nnz2, npix = None, None, None
     if len(args.inmap) == 1:
-        # Only one file provided, assume that it is a text file with a list
-        with open(args.inmap[0], "r") as listfile:
-            infiles = listfile.readlines()
+        # Only one file provided, try interpreting it is a text file with a list
+        try:
+            with open(args.inmap[0], "r") as listfile:
+                infiles = listfile.readlines()
+        except UnicodeDecodeError:
+            # Didn't work. Assume that user supplied a single map file
+            infiles = args.inmap
     else:
         infiles = args.inmap
     nfile = len(infiles)
@@ -178,6 +190,8 @@ def main():
             log.info(f"{prefix}Applying inverse matrix")
             invcov = invcov.T.ravel().astype(float).copy()
             inmap = inmap.T.ravel().astype(float).copy()
+            nsubmap = npix
+            npix_submap = 1
             cov_apply_diag(nsubmap, npix_submap, nnz, invcov.data, inmap.data)
             inmap = inmap.reshape(npix, -1).T.copy()
             invcov = invcov.reshape(npix, -1).T.copy()
@@ -210,6 +224,8 @@ def main():
     if args.invcov is not None:
         log.info_rank(f"Writing {args.invcov}", comm=comm)
         if rank == 0:
+            if args.scale is not None:
+                invcov_sum /= args.scale**2
             write_healpix(
                 args.invcov, invcov_sum, nest=True, overwrite=True, dtype=dtype
             )
@@ -259,6 +275,8 @@ def main():
 
     if args.cov is not None:
         log.info_rank(f"Writing {args.cov}", comm=comm)
+        if args.scale is not None:
+            dist_cov.data *= args.scale**2
         if filename_is_fits(args.cov):
             write_healpix_fits(dist_cov, args.cov, nest=True)
         else:
@@ -273,6 +291,8 @@ def main():
     del dist_cov
 
     log.info_rank(f"Writing {args.outmap}", comm=comm)
+    if args.scale is not None:
+        dist_map.data *= args.scale
     if filename_is_fits(args.outmap):
         write_healpix_fits(dist_map, args.outmap, nest=True)
     else:

@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import ast
 import json
 import os
 import re
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 import h5py
 import numpy as np
 from astropy import units as u
+from astropy.table import QTable
 
 from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
 from ..mpi import MPI
@@ -17,7 +19,9 @@ from ..observation import Observation
 from ..timing import GlobalTimers, Timer, function_timer
 from ..utils import Environment, Logger, dtype_to_aligned, import_from_name
 from ..weather import SimWeather
+from .compression import decompress_detdata
 from .hdf_utils import check_dataset_buffer_size, hdf5_config, hdf5_open
+from .observation_hdf_load_v0 import load_hdf5_detdata_v0
 
 
 @function_timer
@@ -176,29 +180,71 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
         units = None
         full_shape = None
         dtype = None
+
+        compressed = False
+        cgrp = None
+        comp_params = dict()
+        comp_ranges = None
+        comp_offsets = None
+        comp_gains = None
+        comp_nbytes = None
+
         if hgrp is not None:
-            ds = hgrp[field]
-            full_shape = ds.shape
-            dtype = ds.dtype
-            units = u.Unit(str(ds.attrs["units"]))
+            if isinstance(hgrp[field], h5py.Dataset):
+                # This is uncompressed data
+                ds = hgrp[field]
+                full_shape = ds.shape
+                dtype = ds.dtype
+                units = u.Unit(str(ds.attrs["units"]))
+            else:
+                # This must be a group of datasets containing compressed data
+                cgrp = hgrp[field]
+                ds = cgrp["compressed"]
+                units = u.Unit(str(ds.attrs["units"]))
+                comp_params["units"] = units
+                dtype = np.dtype(ds.attrs["dtype"])
+                comp_params["dtype"] = dtype
+                det_shape = tuple(ast.literal_eval(ds.attrs["det_shape"]))
+                comp_params["det_shape"] = det_shape
+                comp_nbytes = len(ds)
+
+                ds_ranges = cgrp["ranges"]
+                n_det = len(ds_ranges)
+                comp_ranges = np.zeros((n_det, 2), dtype=np.int64)
+                slc = (slice(0, n_det, 1), slice(0, 2, 1))
+                ds_ranges.read_direct(comp_ranges, slc, slc)
+
+                if "offsets" in cgrp:
+                    ds_offsets = cgrp["offsets"]
+                    comp_offsets = np.zeros(n_det, np.float64)
+                    slc = (slice(0, n_det, 1),)
+                    ds_offsets.read_direct(comp_offsets, slc, slc)
+
+                if "gains" in cgrp:
+                    ds_gains = cgrp["gains"]
+                    comp_gains = np.zeros(n_det, np.float64)
+                    slc = (slice(0, n_det, 1),)
+                    ds_gains.read_direct(comp_gains, slc, slc)
+
+                full_shape = (n_det,) + det_shape
+                comp_params["type"] = ds.attrs["comp_type"]
+                compressed = True
+
         if serial_load:
+            compressed = obs.comm.comm_group.bcast(compressed, root=0)
             units = obs.comm.comm_group.bcast(units, root=0)
             full_shape = obs.comm.comm_group.bcast(full_shape, root=0)
             dtype = obs.comm.comm_group.bcast(dtype, root=0)
+            if compressed:
+                comp_params = obs.comm.comm_group.bcast(comp_params, root=0)
+                comp_nbytes = obs.comm.comm_group.bcast(comp_nbytes, root=0)
+                comp_ranges = obs.comm.comm_group.bcast(comp_ranges, root=0)
+                comp_offsets = obs.comm.comm_group.bcast(comp_offsets, root=0)
+                comp_gains = obs.comm.comm_group.bcast(comp_gains, root=0)
 
-        detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
-        hf_slice = [
-            slice(det_off, det_off + det_nelem, 1),
-            slice(samp_off, samp_off + samp_nelem, 1),
-        ]
         sample_shape = None
         if len(full_shape) > 2:
             sample_shape = full_shape[2:]
-            for dim in full_shape[2:]:
-                detdata_slice.append(slice(0, dim))
-                hf_slice.append(slice(0, dim))
-        detdata_slice = tuple(detdata_slice)
-        hf_slice = tuple(hf_slice)
 
         # All processes create their local detector data
         obs.detdata.create(
@@ -209,25 +255,137 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
             units=units,
         )
 
-        # All processes independently load their data if running in
-        # parallel.  If loading serially, one process reads ands broadcasts.
-        # We implement it this way instead of using a scatter, since the
-        # data for each process is not contiguous in the dataset.
+        # All processes independently load their data if running in parallel.
+        # If loading serially, one process reads and sends blocks of detector
+        # data.  We can do this since we previously checked that for serial loads
+        # the data is distributed by detector.
 
         if serial_load:
-            full_slice = tuple([slice(0, x) for x in full_shape])
-            buffer = None
-            if ds is not None:
-                buffer = np.zeros(full_shape, dtype=dtype)
-                ds.read_direct(buffer, full_slice, full_slice)
-            if obs.comm.comm_group is not None:
-                buffer = obs.comm.comm_group.bcast(buffer, root=0)
-            obs.detdata[field].data[detdata_slice] = buffer[hf_slice]
-            del buffer
+            if compressed:
+                # Each process has the information about all detectors' byte
+                # range and compression parameters.  We just need to send
+                # the bytes.
+                for proc, detrange in enumerate(dist_dets):
+                    first_det = detrange.offset
+                    last_det = detrange.offset + detrange.n_elem - 1
+
+                    first_byte = comp_ranges[first_det][0]
+                    end_byte = comp_ranges[last_det][1]
+                    local_ranges = np.zeros(
+                        (detrange.n_elem, 2),
+                        dtype=np.int64,
+                    )
+                    for d in range(detrange.n_elem):
+                        local_ranges[d, 0] = comp_ranges[first_det + d][0] - first_byte
+                        local_ranges[d, 1] = comp_ranges[first_det + d][1] - first_byte
+
+                    if comp_offsets is not None:
+                        comp_params["data_offsets"] = comp_offsets[
+                            first_det : last_det + 1
+                        ]
+                    if comp_gains is not None:
+                        comp_params["data_gains"] = comp_gains[first_det : last_det + 1]
+
+                    pbytes = end_byte - first_byte
+                    pslice = (slice(0, pbytes, 1),)
+                    hslice = (slice(first_byte, end_byte, 1),)
+
+                    if obs.comm.group_rank == 0:
+                        buffer = np.zeros(pbytes, dtype=np.uint8)
+                        ds.read_direct(buffer, hslice, pslice)
+                        if proc == 0:
+                            # Decompress our own data
+                            decompress_detdata(
+                                buffer,
+                                local_ranges,
+                                comp_params,
+                                detdata=obs.detdata[field],
+                            )
+                        else:
+                            # Send
+                            obs.comm.comm_group.Send(buffer, dest=proc, tag=proc)
+                    elif obs.comm.group_rank == proc:
+                        # Receive and decompress
+                        buffer = np.zeros(pbytes, dtype=np.uint8)
+                        obs.comm.comm_group.Recv(buffer, source=0, tag=proc)
+                        decompress_detdata(
+                            buffer,
+                            local_ranges,
+                            comp_params,
+                            detdata=obs.detdata[field],
+                        )
+            else:
+                for proc, detrange in enumerate(dist_dets):
+                    first_det = detrange.offset
+                    end_det = detrange.offset + detrange.n_elem
+                    n_local_det = detrange.n_elem
+                    pslice = (slice(0, n_local_det, 1), slice(0, obs.n_all_samples, 1))
+                    hslice = (
+                        slice(first_det, end_det, 1),
+                        slice(0, obs.n_all_samples, 1),
+                    )
+                    if obs.comm.group_rank == 0:
+                        buffer = np.zeros((n_local_det, obs.n_all_samples), dtype=dtype)
+                        ds.read_direct(buffer, hslice, pslice)
+                        if proc == 0:
+                            # Copy data into place
+                            obs.detdata[field][:] = buffer
+                        else:
+                            # Send
+                            obs.comm.comm_group.Send(
+                                buffer.reshape(-1), dest=proc, tag=proc
+                            )
+                            del buffer
+                    elif obs.comm.group_rank == proc:
+                        # Receive and store
+                        buffer = np.zeros((n_local_det, obs.n_all_samples), dtype=dtype)
+                        obs.comm.comm_group.Recv(buffer, source=0, tag=proc)
+                        obs.detdata[field][:] = buffer
+                        del buffer
         else:
-            msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
-            check_dataset_buffer_size(msg, hf_slice, dtype, parallel)
-            ds.read_direct(obs.detdata[field].data, hf_slice, detdata_slice)
+            if compressed:
+                last_det = det_off + det_nelem - 1
+                first_byte = comp_ranges[det_off][0]
+                end_byte = comp_ranges[last_det][1]
+                local_ranges = np.zeros(
+                    (det_nelem, 2),
+                    dtype=np.int64,
+                )
+                for d in range(det_nelem):
+                    local_ranges[d, 0] = comp_ranges[det_off + d][0] - first_byte
+                    local_ranges[d, 1] = comp_ranges[det_off + d][1] - first_byte
+
+                if comp_offsets is not None:
+                    comp_params["data_offsets"] = comp_offsets[det_off : last_det + 1]
+                if comp_gains is not None:
+                    comp_params["data_gains"] = comp_gains[det_off : last_det + 1]
+
+                pbytes = end_byte - first_byte
+                pslice = (slice(0, pbytes, 1),)
+                hslice = (slice(first_byte, end_byte, 1),)
+                buffer = np.zeros(pbytes, dtype=np.uint8)
+                ds.read_direct(buffer, hslice, pslice)
+                decompress_detdata(
+                    buffer,
+                    local_ranges,
+                    comp_params,
+                    detdata=obs.detdata[field],
+                )
+            else:
+                detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
+                hf_slice = [
+                    slice(det_off, det_off + det_nelem, 1),
+                    slice(samp_off, samp_off + samp_nelem, 1),
+                ]
+                if len(full_shape) > 2:
+                    for dim in full_shape[2:]:
+                        detdata_slice.append(slice(0, dim))
+                        hf_slice.append(slice(0, dim))
+                detdata_slice = tuple(detdata_slice)
+                hf_slice = tuple(hf_slice)
+                msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
+                check_dataset_buffer_size(msg, hf_slice, dtype, parallel)
+                ds.read_direct(obs.detdata[field].data, hf_slice, detdata_slice)
 
         if obs.comm.comm_group is not None:
             obs.comm.comm_group.barrier()
@@ -284,9 +442,6 @@ def load_hdf5_intervals(obs, hgrp, times, fields, log_prefix, parallel):
         )
 
 
-# FIXME:  Add options here to prune detectors on load.
-
-
 @function_timer
 def load_hdf5(
     path,
@@ -296,6 +451,7 @@ def load_hdf5(
     detdata=None,
     shared=None,
     intervals=None,
+    detectors=None,
     force_serial=False,
 ):
     """Load an HDF5 observation.
@@ -310,10 +466,12 @@ def load_hdf5(
         process_rows (int):  (Optional) The size of the rectangular process grid
             in the detector direction.  This number must evenly divide into the size of
             comm.  If not specified, defaults to the size of the communicator.
-        meta (list):  Only save this list of metadata objects.
-        detdata (list):  Only save this list of detdata objects.
-        shared (list):  Only save this list of shared objects.
-        intervals (list):  Only save this list of intervals objects.
+        meta (list):  Only load this list of metadata objects.
+        detdata (list):  Only load this list of detdata objects.
+        shared (list):  Only load this list of shared objects.
+        intervals (list):  Only load this list of intervals objects.
+        detectors (list):  Only load this list of detectors from all detector data
+            objects.
         force_serial (bool):  If True, do not use HDF5 parallel support,
             even if it is available.
 
@@ -339,6 +497,16 @@ def load_hdf5(
     hfgroup = None
 
     parallel, _, _ = hdf5_config(comm=comm.comm_group, force_serial=force_serial)
+    if (
+        (not parallel)
+        and (process_rows is not None)
+        and (process_rows != comm.group_size)
+    ):
+        msg = f"When loading observations with serial HDF5, process_rows must equal "
+        msg += "the group size"
+        log.error(msg)
+        raise RuntimeError(msg)
+
     hf = hdf5_open(path, "r", comm=comm.comm_group, force_serial=force_serial)
     hgroup = hf
 
@@ -347,6 +515,39 @@ def load_hdf5(
         comm=comm.comm_group,
         timer=timer,
     )
+
+    # The rank zero process gets the file format version and communicates to all
+    # processes in the group, regardless of whether they are participating in
+    # the load.
+    file_version = None
+    if rank == 0:
+        # Data format version check
+        file_version = int(hgroup.attrs["toast_format_version"])
+    if comm.comm_group is not None:
+        file_version = comm.comm_group.bcast(file_version, root=0)
+
+    # As the file format evolves, we might close the file at this point and call
+    # an earlier version of the loader.  However, v0 and v1 only differ in the
+    # detector data loading, so we can just branch at that point.
+    #
+    # Example for future:
+    # if file_version == 12345:
+    #     # Close file and call older version
+    #     del hgroup
+    #     if hf is not None:
+    #         hf.close()
+    #     del hf
+    #     return load_hdf5_v12345(...)
+    #
+    if file_version == 0 and detectors is not None:
+        msg = f"HDF5 file '{path}' uses format v0 which does not support loading"
+        msg = " a subset of detectors"
+        log.error(msg)
+        raise RuntimeError(msg)
+    if file_version > 1:
+        msg = f"HDF5 file '{path}' using unsupported data format {file_version}"
+        log.error(msg)
+        raise RuntimeError(msg)
 
     telescope = None
     obs_samples = None
@@ -357,13 +558,6 @@ def load_hdf5(
     obs_sample_sets = None
 
     if hgroup is not None:
-        # Data format version check
-        file_version = int(hgroup.attrs["toast_format_version"])
-        if file_version != 0:
-            msg = f"HDF5 file '{path}' using unsupported data format {file_version}"
-            log.error(msg)
-            raise RuntimeError(msg)
-
         # Observation properties
         obs_name = str(hgroup.attrs["observation_name"])
         obs_uid = int(hgroup.attrs["observation_uid"])
@@ -457,8 +651,43 @@ def load_hdf5(
                 session_name, uid=session_uid, start=session_start, end=session_end
             )
 
-        focalplane = Focalplane()
-        focalplane.load_hdf5(inst_group, comm=None)
+        raw_focalplane = Focalplane()
+        raw_focalplane.load_hdf5(inst_group, comm=None)
+
+        if detectors is None:
+            focalplane = raw_focalplane
+        else:
+            # Slice focalplane to include only these detectors.  Also modify
+            # detector sets to include only these detectors.
+            keep = set(detectors)
+            fp_rows = [x["name"] in keep for x in raw_focalplane.detector_data]
+            fp_data = QTable(raw_focalplane.detector_data[fp_rows])
+
+            focalplane = Focalplane(
+                detector_data=fp_data,
+                sample_rate=raw_focalplane.sample_rate,
+                field_of_view=raw_focalplane.field_of_view,
+            )
+            new_detsets = list()
+            if isinstance(obs_det_sets, list):
+                # List of lists
+                for ds in obs_det_sets:
+                    new_ds = list()
+                    for d in ds:
+                        if d in keep:
+                            new_ds.append(d)
+                    if len(new_ds) > 0:
+                        new_detsets.append(new_ds)
+            else:
+                # Must be a dictionary
+                for dskey, ds in obs_det_sets.items():
+                    new_ds = list()
+                    for d in ds:
+                        if d in keep:
+                            new_ds.append(d)
+                    if len(new_ds) > 0:
+                        new_detsets.append(new_ds)
+            obs_det_sets = new_detsets
 
         telescope = telescope_class(
             telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
@@ -624,7 +853,10 @@ def load_hdf5(
     detdata_group = None
     if hgroup is not None:
         detdata_group = hgroup["detdata"]
-    load_hdf5_detdata(obs, detdata_group, detdata, log_prefix, parallel)
+    if file_version == 0:
+        load_hdf5_detdata_v0(obs, detdata_group, detdata, log_prefix, parallel)
+    else:
+        load_hdf5_detdata(obs, detdata_group, detdata, log_prefix, parallel)
     del detdata_group
     log.debug_rank(
         f"{log_prefix} Finished detector data in",

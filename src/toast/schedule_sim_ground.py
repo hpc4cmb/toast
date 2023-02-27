@@ -1810,30 +1810,48 @@ def add_scan(
                 azmax += az_offset
             else:
                 el_observe = np.degrees(el)
+            # ensure azimuth is increasing
+            azmin = azmin % 360
+            azmax = azmax % 360
+            if azmax < azmin:
+                azmax += 360
             # Create an entry in the schedule
-            entry = fout_fmt.format(
-                to_UTC(t1),
-                to_UTC(t2),
-                to_MJD(t1),
-                to_MJD(t2),
-                boresight_angle,
-                patch.name,
-                azmin % 360,
-                azmax % 360,
-                el_observe,
-                rising_string,
-                sun_el1,
-                sun_az1,
-                sun_el2,
-                sun_az2,
-                moon_el1,
-                moon_az1,
-                moon_el2,
-                moon_az2,
-                0.005 * (moon_phase1 + moon_phase2),
-                -1 - patch.partial_hits if partial_scan else patch.hits,
-                subscan,
-            )
+            if args.verbose_schedule:
+                entry = fout_fmt.format(
+                    to_UTC(t1),
+                    to_UTC(t2),
+                    to_MJD(t1),
+                    to_MJD(t2),
+                    boresight_angle,
+                    patch.name,
+                    azmin,
+                    azmax,
+                    el_observe,
+                    rising_string,
+                    sun_el1,
+                    sun_az1,
+                    sun_el2,
+                    sun_az2,
+                    moon_el1,
+                    moon_az1,
+                    moon_el2,
+                    moon_az2,
+                    0.005 * (moon_phase1 + moon_phase2),
+                    -1 - patch.partial_hits if partial_scan else patch.hits,
+                    subscan,
+                )
+            else:
+                entry = fout_fmt.format(
+                    to_UTC(t1),
+                    to_UTC(t2),
+                    boresight_angle,
+                    patch.name,
+                    azmin,
+                    azmax,
+                    el_observe,
+                    -1 - patch.partial_hits if partial_scan else patch.hits,
+                    subscan,
+                )
             entries.append(entry)
 
         if too_short or sun_too_close or moon_too_close or partial_scan:
@@ -2131,47 +2149,65 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         )
     )
 
-    fout_fmt0 = (
-        "#{:>20} {:>20} {:>14} {:>14} {:>8} "
-        "{:35} {:>8} {:>8} {:>8} {:>5} "
-        "{:>8} {:>8} {:>8} {:>8} "
-        "{:>8} {:>8} {:>8} {:>8} {:>5} "
-        "{:>5} {:>3}\n"
-    )
-
-    fout_fmt = (
-        " {:20} {:20} {:14.6f} {:14.6f} {:8.2f} "
-        "{:35} {:8.2f} {:8.2f} {:8.2f} {:5} "
-        "{:8.2f} {:8.2f} {:8.2f} {:8.2f} "
-        "{:8.2f} {:8.2f} {:8.2f} {:8.2f} {:5.2f} "
-        "{:5} {:3}\n"
-    )
-
-    fout.write(
-        fout_fmt0.format(
-            "Start time UTC",
-            "Stop time UTC",
-            "Start MJD",
-            "Stop MJD",
-            "Rotation",
-            "Patch name",
-            "Az min",
-            "Az max",
-            "El",
-            "R/S",
-            "Sun el1",
-            "Sun az1",
-            "Sun el2",
-            "Sun az2",
-            "Moon el1",
-            "Moon az1",
-            "Moon el2",
-            "Moon az2",
-            "Phase",
-            "Pass",
-            "Sub",
+    if args.verbose_schedule:
+        fout_fmt0 = (
+            "#{:>20} {:>20} {:>14} {:>14} {:>8} "
+            "{:35} {:>8} {:>8} {:>8} {:>5} "
+            "{:>8} {:>8} {:>8} {:>8} "
+            "{:>8} {:>8} {:>8} {:>8} {:>5} "
+            "{:>5} {:>3}\n"
         )
-    )
+
+        fout_fmt = (
+            " {:20} {:20} {:14.6f} {:14.6f} {:8.2f} "
+            "{:35} {:8.2f} {:8.2f} {:8.2f} {:5} "
+            "{:8.2f} {:8.2f} {:8.2f} {:8.2f} "
+            "{:8.2f} {:8.2f} {:8.2f} {:8.2f} {:5.2f} "
+            "{:5} {:3}\n"
+        )
+        fout.write(
+            fout_fmt0.format(
+                "Start time UTC",
+                "Stop time UTC",
+                "Start MJD",
+                "Stop MJD",
+                "Rotation",
+                "Patch name",
+                "Az min",
+                "Az max",
+                "El",
+                "R/S",
+                "Sun el1",
+                "Sun az1",
+                "Sun el2",
+                "Sun az2",
+                "Moon el1",
+                "Moon az1",
+                "Moon el2",
+                "Moon az2",
+                "Phase",
+                "Pass",
+                "Sub",
+            )
+        )
+    else:
+        # Concise schedule format
+        fout_fmt0 = "#{:>20} {:>20} {:>8} {:35} {:>8} {:>8} {:>8} {:>5} {:>3}\n"
+
+        fout_fmt = " {:>20} {:>20} {:8.2f} {:35} {:8.2f} {:8.2f} {:8.2f} {:5} {:3}\n"
+        fout.write(
+            fout_fmt0.format(
+                "Start time UTC",
+                "Stop time UTC",
+                "Rotation",
+                "Patch name",
+                "Az min",
+                "Az max",
+                "El",
+                "Pass",
+                "Sub",
+            )
+        )
 
     # Operational days
     ods = set()
@@ -2409,6 +2445,14 @@ def parse_args(opts=None):
         type=float,
         help="Time it takes for the telescope to stabilize after a change in observing "
         "elevation [seconds].  Triggered by --elevation-change-limit-deg",
+    )
+    parser.add_argument(
+        "--verbose-schedule",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Write a 24-field verbose schedule "
+        "instead of the concise 11-field schedule",
     )
     parser.add_argument(
         "--equalize-area",
