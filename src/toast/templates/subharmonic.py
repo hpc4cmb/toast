@@ -169,7 +169,7 @@ class SubHarmonic(Template):
         # z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
-    def _add_to_signal(self, detector, amplitudes):
+    def _add_to_signal(self, detector, amplitudes, **kwargs):
         norder = self.order + 1
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
@@ -181,7 +181,7 @@ class SubHarmonic(Template):
                     vw[detector] += self._templates[iob][ivw][order] * amp_view[order]
                 offset += norder
 
-    def _project_signal(self, detector, amplitudes):
+    def _project_signal(self, detector, amplitudes, **kwargs):
         norder = self.order + 1
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
@@ -193,16 +193,16 @@ class SubHarmonic(Template):
                     amp_view[order] = np.dot(vw[detector], template)
                 offset += norder
 
-    def _add_prior(self, amplitudes_in, amplitudes_out):
+    def _add_prior(self, amplitudes_in, amplitudes_out, **kwargs):
         # No prior for this template, nothing to accumulate to output.
         return
 
-    def _apply_precond(self, amplitudes_in, amplitudes_out):
+    def _apply_precond(self, amplitudes_in, amplitudes_out, **kwargs):
         norder = self.order + 1
         for det in self._all_dets:
-            offset = self._det_start[detector]
+            offset = self._det_start[det]
             for iob, ob in enumerate(self.data.obs):
-                if detector not in ob.local_detectors:
+                if det not in ob.local_detectors:
                     continue
                 views = ob.view[self.view]
                 for ivw, vw in enumerate(views):

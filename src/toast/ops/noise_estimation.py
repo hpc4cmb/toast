@@ -4,9 +4,6 @@
 
 import copy
 import os
-import re
-import warnings
-from time import time
 
 import astropy.io.fits as pf
 import numpy as np
@@ -14,23 +11,11 @@ import scipy.signal
 import traitlets
 from astropy import units as u
 
-from .. import qarray as qa
-from .._libtoast import filter_poly2D, filter_polynomial, subtract_mean, sum_detectors
-from ..intervals import interval_dtype
-from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, List, Quantity, Tuple, Unicode, trait_docs
-from ..utils import (
-    AlignedF64,
-    AlignedU8,
-    Environment,
-    GlobalTimers,
-    Logger,
-    Timer,
-    dtype_to_aligned,
-)
+from ..utils import Logger, Timer
 from .arithmetic import Combine
 from .copy import Copy
 from .delete import Delete

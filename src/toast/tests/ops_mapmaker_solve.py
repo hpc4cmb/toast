@@ -245,7 +245,6 @@ class MapmakerSolveTest(MPITestCase):
         binner.binned = "lhs_binned"
         out_amps = "out_amplitudes"
         data[out_amps] = data["amplitudes"].duplicate()
-
         lhs_calc = SolverLHS(
             det_temp=defaults.det_data,
             binning=binner,

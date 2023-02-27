@@ -9,6 +9,7 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops
+from ..accelerator import ImplementationType
 from ..observation import default_values as defaults
 from ..templates import Offset
 from ..utils import rate_from_times
@@ -119,7 +120,7 @@ class TemplateOffsetTest(MPITestCase):
             times=defaults.times,
             noise_model=noise_model.noise_model,
             step_time=step_seconds * u.second,
-            use_python=True,
+            kernel_implementation=ImplementationType.NUMPY,
         )
 
         # Set the data

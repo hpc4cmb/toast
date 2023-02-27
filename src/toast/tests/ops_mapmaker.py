@@ -7,13 +7,11 @@ import sys
 
 import healpy as hp
 import numpy as np
-import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops as ops
 from .. import templates
 from ..accelerator import accel_enabled
-from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
@@ -541,7 +539,6 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -614,7 +611,6 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
@@ -771,7 +767,6 @@ class MapmakerTest(MPITestCase):
         step_seconds = 5.0
         tmpl = templates.Offset(
             times=defaults.times,
-            det_flags=None,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
@@ -844,7 +839,6 @@ class MapmakerTest(MPITestCase):
         madam = ops.Madam(
             params=pars,
             det_data=defaults.det_data,
-            det_flags=None,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",

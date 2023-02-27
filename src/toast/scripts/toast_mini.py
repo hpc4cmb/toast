@@ -20,6 +20,7 @@ from astropy import units as u
 
 import toast
 import toast.ops
+from toast.accelerator.data_localization import display_datamovement
 from toast.schedule_sim_satellite import create_satellite_schedule
 from toast.scripts.benchmarking_utilities import (
     default_sim_atmosphere,
@@ -109,6 +110,8 @@ def parse_arguments():
     args.max_detector = (
         2054  # Hex-packed 1027 pixels (18 rings) times two dets per pixel.
     )
+    # For debugging:
+    # args.max_detector = 4
     args.width = 10
     args.obs_minutes = 60
     args.num_obs = 4380
@@ -256,7 +259,6 @@ def main():
     log.info_rank("Finished map-making in", comm=world_comm, timer=timer)
 
     # Dump all the timing information
-
     timer.stop()
     timer.clear()
     timer.start()
@@ -268,6 +270,9 @@ def main():
         timer.report("toast_mini (gathering and dumping timing info)")
     else:
         timer.stop()
+
+    # display information on GPU data movement
+    display_datamovement()
 
 
 if __name__ == "__main__":

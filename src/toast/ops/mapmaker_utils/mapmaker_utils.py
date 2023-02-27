@@ -6,23 +6,18 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from .._libtoast import (
-    build_noise_weighted,
-    cov_accum_diag_hits,
-    cov_accum_diag_invnpp,
-    cov_accum_zmap,
-)
-from ..covariance import covariance_invert
-from ..mpi import MPI
-from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
-from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, Unicode, Unit, trait_docs
-from ..utils import Logger, unit_conversion
-from .delete import Delete
-from .operator import Operator
-from .pipeline import Pipeline
-from .pointing import BuildPixelDistribution
+from ...accelerator import ImplementationType
+from ...covariance import covariance_invert
+from ...mpi import MPI
+from ...observation import default_values as defaults
+from ...pixels import PixelData
+from ...timing import function_timer
+from ...traits import Bool, Float, Instance, Int, Unicode, Unit, UseEnum, trait_docs
+from ...utils import Logger, unit_conversion
+from ..operator import Operator
+from ..pipeline import Pipeline
+from ..pointing import BuildPixelDistribution
+from .kernels import build_noise_weighted, cov_accum_diag_hits, cov_accum_diag_invnpp
 
 
 @trait_docs
@@ -102,8 +97,11 @@ class BuildHitMap(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -185,6 +183,8 @@ class BuildHitMap(Operator):
                         local_sm.astype(np.int64),
                         local_pix.astype(np.int64),
                         hits.raw,
+                        impl=implementation,
+                        use_accel=use_accel,
                     )
         return
 
@@ -200,7 +200,7 @@ class BuildHitMap(Operator):
         req = {
             "global": [self.pixel_dist],
             "shared": list(),
-            "detdata": [self.pixels, self.weights],
+            "detdata": [self.pixels],
             "intervals": list(),
         }
         if self.shared_flags is not None:
@@ -214,6 +214,18 @@ class BuildHitMap(Operator):
     def _provides(self):
         prov = {"global": [self.hits]}
         return prov
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
+
+    def _supports_accel(self):
+        # NOTE: the kernels called do not follow the proper pattern yet
+        return False
 
 
 @trait_docs
@@ -305,8 +317,11 @@ class BuildInverseCovariance(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -453,6 +468,8 @@ class BuildInverseCovariance(Operator):
                         wview[det].reshape(-1),
                         detweight.to_value(invcov_units),
                         invcov.raw,
+                        impl=implementation,
+                        use_accel=use_accel,
                     )
         return
 
@@ -483,6 +500,18 @@ class BuildInverseCovariance(Operator):
     def _provides(self):
         prov = {"global": [self.inverse_covariance]}
         return prov
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
+
+    def _supports_accel(self):
+        # NOTE: the kernels called do not follow the proper pattern yet
+        return False
 
 
 @trait_docs
@@ -562,8 +591,6 @@ class BuildNoiseWeighted(Operator):
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
-    use_python = Bool(False, help="If True, use python implementation")
-
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
         check = proposal["value"]
@@ -585,6 +612,9 @@ class BuildNoiseWeighted(Operator):
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
 
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
+
         if self.pixel_dist is None:
             raise RuntimeError(
                 "You must set the 'pixel_dist' trait before calling exec()"
@@ -599,9 +629,6 @@ class BuildNoiseWeighted(Operator):
         # Check that the detector data is set
         if self.det_data is None:
             raise RuntimeError("You must set the det_data trait before calling exec()")
-
-        if self.use_python and use_accel:
-            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         dist = data[self.pixel_dist]
         if data.comm.world_rank == 0:
@@ -719,56 +746,39 @@ class BuildNoiseWeighted(Operator):
             else:
                 shared_flag_data = np.zeros(1, dtype=np.uint8)
 
-            if self.use_python:
-                self._py_build_noise_weighted(
-                    zmap,
-                    pix_indx,
-                    ob.detdata[self.pixels].data,
-                    weight_indx,
-                    ob.detdata[self.weights].data.reshape(
-                        (n_weight_dets, ob.n_local_samples, -1)
-                    ),
-                    data_indx,
-                    ob.detdata[self.det_data].data,
-                    flag_indx,
-                    flag_data,
-                    self.det_flag_mask,
-                    ob.intervals[self.view].data,
-                    shared_flag_data,
-                    self.shared_flag_mask,
-                    detweights,
-                )
-            else:
-                build_noise_weighted(
-                    zmap.distribution.global_submap_to_local.array(),
-                    zmap.data.reshape(
-                        (zmap.distribution.n_local_submap, -1, weight_nnz)
-                    ),
-                    pix_indx,
-                    ob.detdata[self.pixels].data,
-                    weight_indx,
-                    ob.detdata[self.weights].data.reshape(
-                        (n_weight_dets, ob.n_local_samples, -1)
-                    ),
-                    data_indx,
-                    ob.detdata[self.det_data].data,
-                    flag_indx,
-                    flag_data,
-                    detweights,
-                    self.det_flag_mask,
-                    ob.intervals[self.view].data,
-                    shared_flag_data,
-                    self.shared_flag_mask,
-                    use_accel,
-                )
-
+            # uses a separate variable in case the reshaping copies the data
+            zmap_data = zmap.data.reshape(
+                (zmap.distribution.n_local_submap, -1, weight_nnz)
+            )
+            build_noise_weighted(
+                zmap.distribution.global_submap_to_local,
+                zmap_data,
+                pix_indx,
+                ob.detdata[self.pixels].data,
+                weight_indx,
+                ob.detdata[self.weights].data.reshape(
+                    (n_weight_dets, ob.n_local_samples, -1)
+                ),
+                data_indx,
+                ob.detdata[self.det_data].data,
+                flag_indx,
+                flag_data,
+                detweights,
+                self.det_flag_mask,
+                ob.intervals[self.view].data,
+                shared_flag_data,
+                self.shared_flag_mask,
+                impl=implementation,
+                use_accel=use_accel,
+            )
+            zmap.data = zmap_data.reshape(zmap.data.shape)
         return
 
-    def _finalize(self, data, use_acc=False, **kwargs):
+    def _finalize(self, data, use_accel=False, **kwargs):
         if self.zmap in data:
             log = Logger.get()
             # We have called exec() at least once
-            if use_acc:
+            if use_accel:
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update self",
                     comm=data.comm.comm_group,
@@ -778,7 +788,7 @@ class BuildNoiseWeighted(Operator):
                 data[self.zmap].sync_alltoallv()
             else:
                 data[self.zmap].sync_allreduce()
-            if use_acc:
+            if use_accel:
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update device",
                     comm=data.comm.comm_group,
@@ -825,58 +835,16 @@ class BuildNoiseWeighted(Operator):
         }
         return prov
 
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
+
     def _supports_accel(self):
         return True
-
-    def _py_build_noise_weighted(
-        self,
-        zmap,
-        pixel_indx,
-        pixel_data,
-        weight_indx,
-        weight_data,
-        det_indx,
-        det_data,
-        flag_indx,
-        flag_data,
-        flag_mask,
-        intr_data,
-        shared_flags,
-        shared_mask,
-        det_scale,
-    ):
-        """Internal python implementation for comparison tests."""
-        global2local = zmap.distribution.global_submap_to_local.array()
-        npix_submap = zmap.distribution.n_pix_submap
-        nnz = zmap.n_value
-        for idet in range(len(det_indx)):
-            didx = det_indx[idet]
-            pidx = pixel_indx[idet]
-            widx = weight_indx[idet]
-            fidx = flag_indx[idet]
-            for vw in intr_data:
-                samples = slice(vw.first, vw.last + 1, 1)
-                good = np.logical_and(
-                    ((flag_data[fidx][samples] & flag_mask) == 0),
-                    ((shared_flags[samples] & shared_mask) == 0),
-                )
-                pixel_buffer = pixel_data[pidx][samples]
-                det_buffer = det_data[didx][samples]
-                weight_buffer = weight_data[widx][samples]
-                global_submap = pixel_buffer[good] // npix_submap
-                submap_pix = pixel_buffer[good] - global_submap * npix_submap
-                local_submap = np.array(
-                    [global2local[x] for x in global_submap], dtype=np.int64
-                )
-                tempdata = np.multiply(
-                    weight_buffer[good],
-                    np.multiply(det_scale[idet], det_buffer[good])[:, np.newaxis],
-                )
-                np.add.at(
-                    zmap.data,
-                    (local_submap, submap_pix),
-                    tempdata,
-                )
 
 
 @trait_docs

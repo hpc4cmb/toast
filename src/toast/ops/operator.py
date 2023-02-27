@@ -28,11 +28,6 @@ class Operator(TraitConfig):
         If a list of detectors is specified, only process these detectors.  Any extra
         kwargs are passed to the derived class internal method.
 
-        Accelerator use:  If the derived class supports OpenACC and all the required
-        data objects exist on the device, then the `_exec()` method will be called
-        with the "use_accel=True" option.  Any operator that returns "True" from its
-        _supports_accel() method should also accept the "use_accel" keyword argument.
-
         Args:
             data (toast.Data):  The distributed data.
             detectors (list):  A list of detector names or indices.  If None, this
@@ -169,18 +164,6 @@ class Operator(TraitConfig):
                 prov[key] = list()
         return prov
 
-    def _supports_accel(self):
-        return False
-
-    def supports_accel(self):
-        """Query whether the operator supports OpenACC
-
-        Returns:
-            (bool):  True if the operator can use OpenACC, else False.
-
-        """
-        return self._supports_accel()
-
     def accel_have_requires(self, data):
         # Helper function to determine if all requirements are met to use accelerator
         # for a data object.
@@ -213,11 +196,9 @@ class Operator(TraitConfig):
                     msg = f"{self.name}:  obs {ob.name}, intervals {key} is on device"
                 log.verbose(msg)
         if all_present:
-            log.verbose(f"{self.name}:  obs {ob.name} all required inputs on device")
+            log.verbose(f"{self.name}:  all required inputs on device")
         else:
-            log.verbose(
-                f"{self.name}:  obs {ob.name} some required inputs not on device"
-            )
+            log.verbose(f"{self.name}:  some required inputs not on device")
         return all_present
 
     @classmethod
@@ -276,3 +257,10 @@ class Operator(TraitConfig):
         if "API" in props:
             del props["API"]
         return props
+
+    def __str__(self):
+        """
+        Converts the operator into a short human readable string
+        returns only its class name (for example: 'Operator')
+        """
+        return str(self.__class__).split(".")[-1][:-2]

@@ -6,13 +6,14 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from .._libtoast import scan_map_float32, scan_map_float64
-from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
-from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, Unit, trait_docs
-from ..utils import AlignedF64, Logger, unit_conversion
-from .operator import Operator
+from ...accelerator import ImplementationType
+from ...observation import default_values as defaults
+from ...pixels import PixelData, PixelDistribution
+from ...timing import function_timer
+from ...traits import Bool, Int, Unicode, Unit, UseEnum, trait_docs
+from ...utils import AlignedF64, Logger, unit_conversion
+from ..operator import Operator
+from .kernels import ImplementationType, scan_map
 
 
 @trait_docs
@@ -65,8 +66,11 @@ class ScanMap(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         # Check that the detector data is set
         if self.det_data is None:
@@ -106,86 +110,47 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            exists = ob.detdata.ensure(
-                self.det_data, detectors=dets, create_units=self.det_data_units
+            ob.detdata.ensure(
+                self.det_data,
+                detectors=dets,
+                create_units=self.det_data_units,
+                accel=use_accel,
             )
 
+            intervals = ob.intervals[self.view].data
+            det_data = ob.detdata[self.det_data].data
+            det_data_indx = ob.detdata[self.det_data].indices(dets)
+            pixels = ob.detdata[self.pixels].data
+            pixels_indx = ob.detdata[self.pixels].indices(dets)
             data_scale = unit_conversion(
                 map_data.units, ob.detdata[self.det_data].units
             )
-
-            views = ob.view[self.view]
-            for ivw, vw in enumerate(views):
-                view_samples = None
-                if vw.start is None:
-                    # This is a view of the whole obs
-                    view_samples = ob.n_local_samples
-                else:
-                    view_samples = vw.stop - vw.start
-
-                # Temporary array, re-used for all detectors
-                maptod_raw = AlignedF64.zeros(view_samples)
-                maptod = maptod_raw.array()
-
-                for det in dets:
-                    # The pixels, weights, and data.
-                    pix = views.detdata[self.pixels][ivw][det]
-                    if self.weights is None:
-                        wts = np.ones(pix.size, dtype=np.float64)
-                    else:
-                        wts = views.detdata[self.weights][ivw][det]
-                    ddata = views.detdata[self.det_data][ivw][det]
-
-                    # Get local submap and pixels
-                    local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
-
-                    # We support projecting from either float64 or float32 maps.
-
-                    maptod[:] = 0.0
-
-                    if map_data.dtype.char == "d":
-                        scan_map_float64(
-                            map_data.distribution.n_pix_submap,
-                            map_data.n_value,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            map_data.raw,
-                            wts.astype(np.float64).reshape(-1),
-                            maptod,
-                        )
-                    elif map_data.dtype.char == "f":
-                        scan_map_float32(
-                            map_data.distribution.n_pix_submap,
-                            map_data.n_value,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            map_data.raw,
-                            wts.astype(np.float64).reshape(-1),
-                            maptod,
-                        )
-                    else:
-                        raise RuntimeError(
-                            "Projection supports only float32 and float64 binned maps"
-                        )
-
-                    maptod *= data_scale
-
-                    # zero-out if needed
-                    if self.zero:
-                        ddata[:] = 0.0
-
-                    # Add or subtract.  Note that the map scanned timestream will have
-                    # zeros anywhere that the pointing is bad, but those samples (and
-                    # any other detector flags) should be handled at other steps of the
-                    # processing.
-                    if self.subtract:
-                        ddata[:] -= maptod
-                    else:
-                        ddata[:] += maptod
-
-                del maptod
-                maptod_raw.clear()
-                del maptod_raw
+            if self.weights is None:
+                # Use empty arrays, rather than None, so that we can pass that more
+                # easily to compiled kernels that expect a buffer.
+                weights = np.array([], dtype=np.float64)
+                weight_indx = np.array([], dtype=np.int32)
+            else:
+                weights = ob.detdata[self.weights].data
+                weight_indx = ob.detdata[self.weights].indices(dets)
+            scan_map(
+                map_dist.global_submap_to_local,
+                map_dist.n_pix_submap,
+                map_data.data,
+                det_data,
+                det_data_indx,
+                pixels,
+                pixels_indx,
+                weights,
+                weight_indx,
+                intervals,
+                data_scale=data_scale,
+                should_zero=self.zero,
+                should_subtract=self.subtract,
+                should_scale=False,
+                impl=implementation,
+                use_accel=use_accel,
+            )
 
         return
 
@@ -209,6 +174,17 @@ class ScanMap(Operator):
     def _provides(self):
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
+
+    def _supports_accel(self):
+        return True
 
 
 @trait_docs
@@ -256,8 +232,11 @@ class ScanMask(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         # Check that the detector data is set
         if self.det_flags is None:
@@ -308,6 +287,7 @@ class ScanMask(Operator):
 
     def _requires(self):
         req = {
+            "meta": list(),
             "global": [self.mask_key],
             "shared": list(),
             "detdata": [self.pixels, self.det_flags],
@@ -318,8 +298,12 @@ class ScanMask(Operator):
         return req
 
     def _provides(self):
+        # TODO shouldn't self.det_flags be in provide rather than require since it can be created here?
         prov = {"meta": list(), "shared": list(), "detdata": list()}
         return prov
+
+    def _supports_accel(self):
+        return False
 
 
 @trait_docs
@@ -360,8 +344,11 @@ class ScanScale(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         # Check that the detector data is set
         if self.det_data is None:
@@ -398,64 +385,37 @@ class ScanScale(Operator):
                 log.error(msg)
                 raise RuntimeError(msg)
 
-            views = ob.view[self.view]
-            for ivw, vw in enumerate(views):
-                view_samples = None
-                if vw.start is None:
-                    # This is a view of the whole obs
-                    view_samples = ob.n_local_samples
-                else:
-                    view_samples = vw.stop - vw.start
-
-                # Temporary array, re-used for all detectors
-                maptod_raw = AlignedF64.zeros(view_samples)
-                maptod = maptod_raw.array()
-
-                for det in dets:
-                    # The pixels, weights, and data.
-                    pix = views.detdata[self.pixels][ivw][det]
-                    ddata = views.detdata[self.det_data][ivw][det]
-
-                    # Get local submap and pixels
-                    local_sm, local_pix = map_dist.global_pixel_to_submap(pix)
-
-                    # We support projecting from either float64 or float32 maps.  We
-                    # use a shortcut here by passing the original timestream values
-                    # as the pointing "weights", so that the output is equal to the
-                    # pixel values times the original timestream.
-
-                    maptod[:] = 0.0
-
-                    if map_data.dtype.char == "d":
-                        scan_map_float64(
-                            map_data.distribution.n_pix_submap,
-                            1,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            map_data.raw,
-                            ddata.astype(np.float64).reshape(-1),
-                            maptod,
-                        )
-                    elif map_data.dtype.char == "f":
-                        scan_map_float32(
-                            map_data.distribution.n_pix_submap,
-                            1,
-                            local_sm.astype(np.int64),
-                            local_pix.astype(np.int64),
-                            map_data.raw,
-                            ddata.astype(np.float64).reshape(-1),
-                            maptod,
-                        )
-                    else:
-                        raise RuntimeError(
-                            "Projection supports only float32 and float64 binned maps"
-                        )
-
-                    ddata[:] = maptod
-
-                del maptod
-                maptod_raw.clear()
-                del maptod_raw
+            intervals = ob.intervals[self.view].data
+            det_data = ob.detdata[self.det_data].data
+            det_data_indx = ob.detdata[self.det_data].indices(dets)
+            pixels = ob.detdata[self.pixels].data
+            pixels_indx = ob.detdata[self.pixels].indices(dets)
+            if self.weights is None:
+                # Use empty arrays, rather than None, so that we can pass that more
+                # easily to compiled kernels that expect a buffer.
+                weights = np.array([], dtype=np.float64)
+                weight_indx = np.array([], dtype=np.int32)
+            else:
+                weights = ob.detdata[self.weights].data
+                weight_indx = ob.detdata[self.weights].indices(dets)
+            scan_map(
+                map_dist.global_submap_to_local,
+                map_dist.n_pix_submap,
+                map_data.data,
+                det_data,
+                det_data_indx,
+                pixels,
+                pixels_indx,
+                weights,
+                weight_indx,
+                intervals,
+                data_scale=1.0,
+                should_zero=False,
+                should_subtract=False,
+                should_scale=True,
+                impl=implementation,
+                use_accel=use_accel,
+            )
 
         return
 
@@ -464,6 +424,7 @@ class ScanScale(Operator):
 
     def _requires(self):
         req = {
+            "meta": list(),
             "global": [self.map_key],
             "shared": list(),
             "detdata": [self.pixels, self.weights, self.det_data],

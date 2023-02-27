@@ -11,13 +11,14 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from .. import qarray as qa
-from .._libtoast import filter_poly2D, filter_polynomial, subtract_mean, sum_detectors
-from ..mpi import MPI, Comm, MPI_Comm, use_mpi
-from ..observation import default_values as defaults
-from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, trait_docs
-from ..utils import (
+from ... import qarray as qa
+from ..._libtoast import subtract_mean, sum_detectors
+from ...accelerator import ImplementationType
+from ...mpi import MPI, Comm, MPI_Comm, use_mpi
+from ...observation import default_values as defaults
+from ...timing import function_timer
+from ...traits import Bool, Dict, Instance, Int, Quantity, Unicode, UseEnum, trait_docs
+from ...utils import (
     AlignedF64,
     AlignedU8,
     Environment,
@@ -26,7 +27,8 @@ from ..utils import (
     Timer,
     dtype_to_aligned,
 )
-from .operator import Operator
+from ..operator import Operator
+from .kernels import filter_poly2D, filter_polynomial
 
 XAXIS, YAXIS, ZAXIS = np.eye(3)
 
@@ -87,10 +89,6 @@ class PolyFilter2D(Operator):
         None, allow_none=True, help="Which focalplane key to match"
     )
 
-    use_python = Bool(
-        False, help="If True, use a pure python implementation for testing."
-    )
-
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -110,8 +108,11 @@ class PolyFilter2D(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         gt = GlobalTimers.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if detectors is not None:
             raise RuntimeError("PolyFilter2D cannot be run on subsets of detectors")
@@ -323,23 +324,17 @@ class PolyFilter2D(Operator):
 
                 gt.stop("Poly2D:  Accumulate templates")
 
-                if self.use_python:
-                    gt.start("Poly2D:  Solve templates (with python)")
-                    for isample in range(nsample):
-                        for group, igroup in group_ids.items():
-                            good = group_det == igroup
-                            mask = masks[isample, good]
-                            t = templates[good].T.copy() * mask
-                            proj = np.dot(t, signals[isample, good] * mask)
-                            ccinv = np.dot(t, t.T)
-                            coeff[isample, igroup] = np.linalg.lstsq(
-                                ccinv, proj, rcond=1.0e-6
-                            )[0]
-                    gt.stop("Poly2D:  Solve templates (with python)")
-                else:
-                    gt.start("Poly2D:  Solve templates")
-                    filter_poly2D(det_groups, templates, signals, masks, coeff)
-                    gt.stop("Poly2D:  Solve templates")
+                gt.start("Poly2D:  Solve templates")
+                filter_poly2D(
+                    det_groups,
+                    templates,
+                    signals,
+                    masks,
+                    coeff,
+                    impl=implementation,
+                    use_accel=use_accel,
+                )
+                gt.stop("Poly2D:  Solve templates")
 
                 gt.start("Poly2D:  Update detector flags")
 
@@ -494,8 +489,11 @@ class PolyFilter(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         if self.pattern is None:
             pat = None
@@ -553,14 +551,26 @@ class PolyFilter(Operator):
                     signals.append(signal)
                 else:
                     filter_polynomial(
-                        self.order, last_flags, signals, local_starts, local_stops
+                        self.order,
+                        last_flags,
+                        signals,
+                        local_starts,
+                        local_stops,
+                        impl=implementation,
+                        use_accel=use_accel,
                     )
                     signals = [signal]
                 last_flags = flags.copy()
 
             if len(signals) > 0:
                 filter_polynomial(
-                    self.order, last_flags, signals, local_starts, local_stops
+                    self.order,
+                    last_flags,
+                    signals,
+                    local_starts,
+                    local_stops,
+                    impl=implementation,
+                    use_accel=use_accel,
                 )
 
             # Optionally flag unfiltered data
@@ -732,7 +742,7 @@ class CommonModeFilter(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         """Apply the common mode filter to the signal.
 
         Args:
@@ -746,6 +756,9 @@ class CommonModeFilter(Operator):
         timer = Timer()
         timer.start()
         pat = re.compile(self.pattern)
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         for obs in data.obs:
             comm, temp_ob = self._redistribute(data, obs, timer, log)

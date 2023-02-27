@@ -11,6 +11,7 @@ from astropy.table import Column
 
 from .. import ops as ops
 from .. import qarray as qa
+from ..accelerator import ImplementationType
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
@@ -358,7 +359,7 @@ class PolyFilterTest(MPITestCase):
             shared_flag_mask=255,
             focalplane_key="wafer",
         )
-        polyfilter.use_python = True
+        polyfilter.kernel_implementation = ImplementationType.NUMPY
         polyfilter.apply(data)
 
         # Plot filtered TOD
@@ -380,8 +381,8 @@ class PolyFilterTest(MPITestCase):
         # Do the same with C++ implementation
 
         polyfilter.det_data = defaults.det_data
+        polyfilter.kernel_implementation = ImplementationType.DEFAULT
         polyfilter.det_flags = defaults.det_flags
-        polyfilter.use_python = False
         polyfilter.apply(data)
 
         if data.comm.world_rank == 0:
@@ -402,11 +403,14 @@ class PolyFilterTest(MPITestCase):
         # Check for consistency
         for ob in data.obs:
             for det in ob.local_detectors:
-                self.assertTrue(
-                    np.allclose(
-                        ob.detdata[defaults.det_data][det], ob.detdata["pyfilter"][det]
-                    )
+                check = np.allclose(
+                    ob.detdata[defaults.det_data][det], ob.detdata["pyfilter"][det]
                 )
+                if not check:
+                    print(
+                        f"{ob.detdata[defaults.det_data][det]} != {ob.detdata['pyfilter'][det]}"
+                    )
+                    self.assertTrue(False)
                 self.assertTrue(
                     np.all(
                         np.equal(

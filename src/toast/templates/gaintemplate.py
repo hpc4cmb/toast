@@ -7,10 +7,8 @@ from collections import OrderedDict
 import numpy as np
 import scipy
 
-from ..data import Data
 from ..mpi import MPI
-from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
-from ..utils import Logger
+from ..traits import Int, Unicode, trait_docs
 from .amplitudes import Amplitudes
 from .template import Template
 
@@ -163,7 +161,7 @@ class GainTemplate(Template):
         # z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
-    def _add_to_signal(self, detector, amplitudes):
+    def _add_to_signal(self, detector, amplitudes, **kwargs):
         norder = self.order + 1
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
@@ -177,7 +175,7 @@ class GainTemplate(Template):
                 gain_fluctuation = signal_estimate * delta_gain
                 vw[detector] += gain_fluctuation
 
-    def _project_signal(self, detector, amplitudes):
+    def _project_signal(self, detector, amplitudes, **kwargs):
         norder = self.order + 1
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
@@ -197,11 +195,11 @@ class GainTemplate(Template):
                 poly_amps = amplitudes.local[offset : offset + norder]
                 poly_amps += np.dot(LT, vw[detector] * mask)
 
-    def _add_prior(self, amplitudes_in, amplitudes_out):
+    def _add_prior(self, amplitudes_in, amplitudes_out, **kwargs):
         # No prior for this template, nothing to accumulate to output.
         return
 
-    def _apply_precond(self, amplitudes_in, amplitudes_out):
+    def _apply_precond(self, amplitudes_in, amplitudes_out, **kwargs):
         norder = self.order + 1
         for det in self._all_dets:
             offset = self._det_start[det]

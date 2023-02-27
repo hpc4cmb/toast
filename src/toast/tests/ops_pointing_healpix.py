@@ -10,6 +10,7 @@ import numpy as np
 from .. import ops as ops
 from .. import qarray as qa
 from .._libtoast import healpix_pixels, stokes_weights
+from ..accelerator import ImplementationType
 from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
@@ -219,9 +220,9 @@ class PointingHealpixTest(MPITestCase):
         pixels.apply(data)
 
         # Also make a copy using a python codepath
-        detpointing.use_python = True
+        detpointing.kernel_implementation = ImplementationType.NUMPY
         detpointing.quats = "pyquat"
-        pixels.use_python = True
+        pixels.kernel_implementation = ImplementationType.NUMPY
         pixels.quats = "pyquat"
         pixels.pixels = "pypix"
         pixels.apply(data)
@@ -262,13 +263,13 @@ class PointingHealpixTest(MPITestCase):
         pipe.apply(data)
 
         # Also make a copy using a python codepath
-        detpointing.use_python = True
+        detpointing.kernel_implementation = ImplementationType.NUMPY
         detpointing.quats = "pyquat"
-        pixels.use_python = True
+        pixels.kernel_implementation = ImplementationType.NUMPY
         pixels.quats = "pyquat"
         pixels.pixels = "pypixels"
         pixels.apply(data)
-        weights.use_python = True
+        weights.kernel_implementation = ImplementationType.NUMPY
         weights.quats = "pyquat"
         weights.weights = "pyweight"
         weights.apply(data)

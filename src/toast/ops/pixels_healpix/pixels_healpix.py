@@ -5,19 +5,15 @@
 import numpy as np
 import traitlets
 
-from .. import qarray as qa
-
-# This is just wrong- will be confusing until cleanup of
-# libtoast / _libtoast...
-from .._libtoast import healpix_pixels, pixels_healpix
-from ..healpix import Pixels
-from ..observation import default_values as defaults
-from ..pixels import PixelDistribution
-from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, trait_docs
-from ..utils import Environment, Logger
-from .delete import Delete
-from .operator import Operator
+from ...accelerator import ImplementationType
+from ...healpix import Pixels
+from ...observation import default_values as defaults
+from ...pixels import PixelDistribution
+from ...timing import function_timer
+from ...traits import Bool, Instance, Int, Unicode, UseEnum, trait_docs
+from ...utils import Environment, Logger
+from ..operator import Operator
+from .kernels import pixels_healpix
 
 
 @trait_docs
@@ -70,8 +66,6 @@ class PixelsHealpix(Operator):
     )
 
     single_precision = Bool(False, help="If True, use 32bit int in output")
-
-    use_python = Bool(False, help="If True, use python implementation")
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
@@ -153,11 +147,11 @@ class PixelsHealpix(Operator):
         env = Environment.get()
         log = Logger.get()
 
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
+
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
-
-        if self.use_python and use_accel:
-            raise RuntimeError("Cannot use accelerator with pure python implementation")
 
         if self._local_submaps is None and self.create_dist is not None:
             self._local_submaps = np.zeros(self._n_submap, dtype=np.uint8)
@@ -205,7 +199,6 @@ class PixelsHealpix(Operator):
                         raise RuntimeError(msg)
 
             # Create (or re-use) output data for the pixels.
-
             if self.single_precision:
                 exists = ob.detdata.ensure(
                     self.pixels,
@@ -259,36 +252,27 @@ class PixelsHealpix(Operator):
 
             # Get the flags if needed.  Use the same flags as
             # detector pointing.  Use empty array in absence of flags
-            flags = np.array([], dtype=np.uint8)
-            if self.detector_pointing.shared_flags is not None:
-                flags = np.array(ob.shared[self.detector_pointing.shared_flags])
-
-            if self.use_python:
-                self._py_pixels_healpix(
-                    quat_indx,
-                    ob.detdata[quats_name].data,
-                    flags,
-                    self.detector_pointing.shared_flag_mask,
-                    pix_indx,
-                    ob.detdata[self.pixels].data,
-                    ob.intervals[self.view].data,
-                    hit_submaps,
-                )
+            if self.detector_pointing.shared_flags is None:
+                flags = np.array([], dtype=np.uint8)
             else:
-                pixels_healpix(
-                    quat_indx,
-                    ob.detdata[quats_name].data,
-                    flags,
-                    self.detector_pointing.shared_flag_mask,
-                    pix_indx,
-                    ob.detdata[self.pixels].data,
-                    ob.intervals[self.view].data,
-                    hit_submaps,
-                    self._n_pix_submap,
-                    self.nside,
-                    self.nest,
-                    use_accel,
-                )
+                flags = ob.shared[self.detector_pointing.shared_flags].data
+
+            pixels_healpix(
+                quat_indx,
+                ob.detdata[quats_name].data,
+                flags,
+                self.detector_pointing.shared_flag_mask,
+                pix_indx,
+                ob.detdata[self.pixels].data,
+                ob.intervals[self.view].data,
+                hit_submaps,
+                self._n_pix_submap,
+                self.nside,
+                self.nest,
+                impl=implementation,
+                use_accel=use_accel,
+            )
+
             if self._local_submaps is not None:
                 self._local_submaps[:] |= hit_submaps
 
@@ -338,53 +322,22 @@ class PixelsHealpix(Operator):
         return req
 
     def _provides(self):
+        # FIXME quats generated are keyed in self.detector_pointing.quats (and not self.quats)
         prov = {
-            "detdata": [self.pixels],
+            "detdata": [self.pixels, self.detector_pointing.quats],
             "global": list(),
         }
         if self.create_dist is not None:
             prov["global"].append(self.create_dist)
         return prov
 
-    def _supports_accel(self):
-        return self.detector_pointing.supports_accel()
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
 
-    def _py_pixels_healpix(
-        self,
-        quat_indx,
-        quat_data,
-        flag_data,
-        flag_mask,
-        pix_indx,
-        pix_data,
-        intr_data,
-        hit_submaps,
-    ):
-        """Internal python implementation for comparison tests."""
-        zaxis = np.array([0, 0, 1], dtype=np.float64)
-        if self.nest:
-            for idet in range(len(quat_indx)):
-                qidx = quat_indx[idet]
-                pidx = pix_indx[idet]
-                for vw in intr_data:
-                    samples = slice(vw.first, vw.last + 1, 1)
-                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
-                    pix_data[pidx][samples] = self.hpix.vec2nest(dir)
-                    good = (flag_data[samples] & flag_mask) == 0
-                    bad = np.logical_not(good)
-                    sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
-                    hit_submaps[sub_maps] = 1
-                    pix_data[pidx][samples][bad] = -1
-        else:
-            for idet in range(len(quat_indx)):
-                qidx = quat_indx[idet]
-                pidx = pix_indx[idet]
-                for vw in intr_data:
-                    samples = slice(vw.first, vw.last + 1, 1)
-                    dir = qa.rotate(quat_data[qidx][samples], zaxis)
-                    pix_data[pidx][samples] = self.hpix.vec2ring(dir)
-                    good = (flag_data[samples] & flag_mask) == 0
-                    bad = np.logical_not(good)
-                    sub_maps = pix_data[pidx][samples][good] // self._n_pix_submap
-                    hit_submaps[sub_maps] = 1
-                    pix_data[pidx][samples][bad] = -1
+    def _supports_accel(self):
+        return True

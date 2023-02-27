@@ -319,7 +319,7 @@ void init_tod_filter(py::module & m) {
 
     m.def("filter_polynomial",
           [](int64_t order, py::buffer flags, py::list signals, py::buffer starts,
-             py::buffer stops) {
+             py::buffer stops, bool use_accel) {
               pybuffer_check_1D <uint8_t> (flags);
               pybuffer_check_1D <int64_t> (starts);
               pybuffer_check_1D <int64_t> (stops);
@@ -359,7 +359,8 @@ void init_tod_filter(py::module & m) {
               return;
           }, py::arg("order"), py::arg("flags"), py::arg("signals"), py::arg("starts"),
           py::arg(
-              "stops"), R"(
+              "stops"), py::arg(
+              "use_accel"), R"(
         Fit and subtract a polynomial from one or more signals.
 
         Args:
@@ -376,7 +377,7 @@ void init_tod_filter(py::module & m) {
 
     m.def("filter_poly2D",
           [](py::buffer det_groups, py::buffer templates, py::buffer signals,
-             py::buffer masks, py::buffer coeff) {
+             py::buffer masks, py::buffer coeff, bool use_accel) {
               pybuffer_check <uint8_t> (masks);
               pybuffer_check <int32_t> (det_groups);
               pybuffer_check <double> (templates);
@@ -465,7 +466,8 @@ void init_tod_filter(py::module & m) {
           }, py::arg("det_groups"), py::arg("templates"), py::arg("signals"),
           py::arg("masks"),
           py::arg(
-              "coeff"), R"(
+              "coeff"), py::arg(
+              "use_accel"), R"(
         Solves for 2D polynomial coefficients at each sample.
 
         Args:

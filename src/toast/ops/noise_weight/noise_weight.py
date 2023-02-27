@@ -5,11 +5,13 @@
 import numpy as np
 import traitlets
 
-from ..noise_sim import AnalyticNoise
-from ..timing import Timer, function_timer
-from ..traits import Int, Unicode, trait_docs
-from ..utils import Environment, Logger
-from .operator import Operator
+from ...accelerator import ImplementationType
+from ...noise_sim import AnalyticNoise
+from ...timing import Timer, function_timer
+from ...traits import Int, Unicode, UseEnum, trait_docs
+from ...utils import Environment, Logger
+from ..operator import Operator
+from .kernels import noise_weight
 
 
 @trait_docs
@@ -41,8 +43,11 @@ class NoiseWeight(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -62,17 +67,29 @@ class NoiseWeight(Operator):
                 )
                 raise RuntimeError(msg)
 
+            # Compute the noise for each detector (using the correct units)
             noise = ob[self.noise_model]
+            detector_weights = [
+                noise.detector_weight(detector).to(data_invcov_units).value
+                for detector in dets
+            ]
 
-            for vw in ob.view[self.view].detdata[self.det_data]:
-                for d in dets:
-                    # Get the detector weight from the noise model.
-                    detweight = noise.detector_weight(d).to(data_invcov_units)
+            # Multiply detectors by their respective noise weight
+            intervals = ob.intervals[self.view].data
+            det_data = ob.detdata[self.det_data].data
+            det_data_indx = ob.detdata[self.det_data].indices(dets)
+            noise_weight(
+                det_data,
+                det_data_indx,
+                intervals,
+                detector_weights,
+                impl=implementation,
+                use_accel=use_accel,
+            )
 
-                    # Apply
-                    vw[d] *= detweight.value
-
+            # Update the units of the output
             ob.detdata[self.det_data].update_units(data_output_units)
+
         return
 
     def _finalize(self, data, **kwargs):
@@ -90,3 +107,14 @@ class NoiseWeight(Operator):
 
     def _provides(self):
         return dict()
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        ]
+
+    def _supports_accel(self):
+        return True

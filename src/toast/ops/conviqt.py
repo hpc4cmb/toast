@@ -261,9 +261,12 @@ class SimConviqt(Operator):
         timer = Timer()
         timer.start()
 
-        all_detectors = self._get_all_detectors(data, detectors)
-
         self.units = data.detector_units(self.det_data)
+        if self.units is None:
+            # This means that the data does not yet exist
+            self.units = self.det_data_units
+
+        all_detectors = self._get_all_detectors(data, detectors)
 
         for det in all_detectors:
             verbose = self.comm.rank == 0 and self.verbosity > 0
@@ -315,7 +318,7 @@ class SimConviqt(Operator):
                 my_dets.add(det)
             # Make sure detector data output exists
             exists = obs.detdata.ensure(
-                self.det_data, detectors=detectors, create_units=self.det_data_units
+                self.det_data, detectors=detectors, create_units=self.units
             )
         all_dets = self.comm.gather(my_dets, root=0)
         if self.comm.rank == 0:
@@ -554,7 +557,7 @@ class SimConviqt(Operator):
             epsilon = self._get_epsilon(focalplane, det)
             # Make sure detector data output exists
             exists = obs.detdata.ensure(
-                self.det_data, detectors=[det], create_units=self.det_data_units
+                self.det_data, detectors=[det], create_units=self.units
             )
             # Loop over views
             views = obs.view[self.view]
@@ -571,7 +574,7 @@ class SimConviqt(Operator):
         timer = Timer()
         timer.start()
         offset = 0
-        scale = unit_conversion(u.K, self.det_data_units)
+        scale = unit_conversion(u.K, self.units)
         for obs in data.obs:
             if det not in obs.local_detectors:
                 continue
@@ -629,6 +632,11 @@ class SimWeightedConviqt(SimConviqt):
 
         timer = Timer()
         timer.start()
+
+        self.units = data.detector_units(self.det_data)
+        if self.units is None:
+            # This means that the data does not yet exist
+            self.units = self.det_data_units
 
         # Expand detector pointing
         self.detector_pointing.apply(data, detectors=detectors)
@@ -744,6 +752,11 @@ class SimTEBConviqt(SimConviqt):
 
         timer = Timer()
         timer.start()
+
+        self.units = data.detector_units(self.det_data)
+        if self.units is None:
+            # This means that the data does not yet exist
+            self.units = self.det_data_units
 
         # Expand detector pointing
         self.detector_pointing.apply(data, detectors=detectors)

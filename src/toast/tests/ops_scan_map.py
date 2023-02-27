@@ -9,6 +9,7 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops as ops
+from ..accelerator import ImplementationType
 from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ._helpers import close_data, create_fake_sky, create_outdir, create_satellite_data
@@ -42,6 +43,7 @@ class ScanMapTest(MPITestCase):
 
         # Create fake polarized sky pixel values locally
         create_fake_sky(data, "pixel_dist", "fake_map")
+        map_data = data["fake_map"]
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
@@ -50,26 +52,30 @@ class ScanMapTest(MPITestCase):
             weights=weights.weights,
             map_key="fake_map",
         )
-        scanner.apply(data)
 
-        # Manual check of the projection of map values to timestream
+        for impl in [ImplementationType.DEFAULT, ImplementationType.NUMPY]:
+            scanner.zero = True
+            scanner.kernel_implementation = impl
+            scanner.apply(data)
 
-        map_data = data["fake_map"]
-        for ob in data.obs:
-            for det in ob.local_detectors:
-                wt = ob.detdata[weights.weights][det]
-                local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
-                    ob.detdata[pixels.pixels][det]
-                )
-                for i in range(ob.n_local_samples):
-                    if local_pix[i] < 0:
-                        continue
-                    val = 0.0
-                    for j in range(3):
-                        val += wt[i, j] * map_data.data[local_sm[i], local_pix[i], j]
-                    np.testing.assert_almost_equal(
-                        val, ob.detdata[defaults.det_data][det, i]
+            # Manual check of the projection of map values to timestream
+            for ob in data.obs:
+                for det in ob.local_detectors:
+                    wt = ob.detdata[weights.weights][det]
+                    local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
+                        ob.detdata[pixels.pixels][det]
                     )
+                    for i in range(ob.n_local_samples):
+                        if local_pix[i] < 0:
+                            continue
+                        val = 0.0
+                        for j in range(3):
+                            val += (
+                                wt[i, j] * map_data.data[local_sm[i], local_pix[i], j]
+                            )
+                        np.testing.assert_almost_equal(
+                            val, ob.detdata[defaults.det_data][det, i]
+                        )
 
         close_data(data)
 

@@ -3,12 +3,12 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-from collections import OrderedDict
 
 import numpy as np
 import traitlets
 from astropy import units as u
 
+from ..accelerator import ImplementationType
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
@@ -20,13 +20,12 @@ from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .arithmetic import Combine
 from .copy import Copy
-from .delete import Delete
 from .mapmaker_solve import SolverLHS, SolverRHS, solve
 from .mapmaker_utils import CovarianceAndHits
 from .memory_counter import MemoryCounter
 from .operator import Operator
 from .pipeline import Pipeline
-from .scan_map import ScanMap, ScanMask
+from .scan_map import ScanMask
 
 
 @trait_docs
@@ -107,7 +106,7 @@ class TemplateMatrix(Operator):
         ret._initialized = self._initialized
         return ret
 
-    def apply_precond(self, amps_in, amps_out):
+    def apply_precond(self, amps_in, amps_out, use_accel=False, **kwargs):
         """Apply the preconditioner from all templates to the amplitudes.
 
         This can only be called after the operator has been used at least once so that
@@ -126,9 +125,9 @@ class TemplateMatrix(Operator):
                 "You must call exec() once before applying preconditioners"
             )
         for tmpl in self.templates:
-            tmpl.apply_precond(amps_in[tmpl.name], amps_out[tmpl.name])
+            tmpl.apply_precond(amps_in[tmpl.name], amps_out[tmpl.name], use_accel=use_accel, **kwargs)
 
-    def add_prior(self, amps_in, amps_out):
+    def add_prior(self, amps_in, amps_out, use_accel=False, **kwargs):
         """Apply the noise prior from all templates to the amplitudes.
 
         This can only be called after the operator has been used at least once so that
@@ -147,7 +146,7 @@ class TemplateMatrix(Operator):
                 "You must call exec() once before applying the noise prior"
             )
         for tmpl in self.templates:
-            tmpl.add_prior(amps_in[tmpl.name], amps_out[tmpl.name])
+            tmpl.add_prior(amps_in[tmpl.name], amps_out[tmpl.name], use_accel=use_accel, **kwargs)
 
     @property
     def n_enabled_templates(self):
@@ -164,6 +163,9 @@ class TemplateMatrix(Operator):
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         log = Logger.get()
+
+        # Kernel selection
+        implementation = self.select_kernels(use_accel=use_accel)
 
         # Check that the detector data is set
         if self.det_data is None:
@@ -195,10 +197,6 @@ class TemplateMatrix(Operator):
                 tmpl.data = data
             self._initialized = True
 
-        # Set template accelerator use
-        for tmpl in self.templates:
-            tmpl.use_accel = use_accel
-
         # Set the data we are using for this execution
         for tmpl in self.templates:
             tmpl.det_data = self.det_data
@@ -221,22 +219,28 @@ class TemplateMatrix(Operator):
                     raise RuntimeError(msg)
 
             if self.amplitudes not in data:
-                # The output template amplitudes do not yet exist.  Create these with
-                # all zero values.
+                # The output template amplitudes do not yet exist.
+                # Create these with all zero values.
                 data[self.amplitudes] = AmplitudesMap()
                 for tmpl in self.templates:
                     data[self.amplitudes][tmpl.name] = tmpl.zeros()
                 if use_accel:
+                    # We are running on the accelerator, so our output data must exist
+                    # on the device and will be used there.
                     data[self.amplitudes].accel_create()
+                    data[self.amplitudes].accel_update_device()
+            elif use_accel and (not data[self.amplitudes].accel_exists()):
+                # Our templates are using the accelerator to accumulate amplitudes.
+                # Ensure that the amplitudes are on the device.
+                data[self.amplitudes].accel_create()
+                data[self.amplitudes].accel_update_device()
             for d in all_dets:
                 for tmpl in self.templates:
                     log.verbose(f"TemplateMatrix {d} project_signal {tmpl.name}")
-                    tmpl.project_signal(d, data[self.amplitudes][tmpl.name])
+                    tmpl.project_signal(d, data[self.amplitudes][tmpl.name], use_accel=use_accel, **kwargs)
         else:
             if self.amplitudes not in data:
-                msg = "Template amplitudes '{}' do not exist in data".format(
-                    self.amplitudes
-                )
+                msg = f"Template amplitudes '{self.amplitudes}' do not exist in data"
                 log.error(msg)
                 raise RuntimeError(msg)
             # Ensure that our output detector data exists in each observation
@@ -257,22 +261,24 @@ class TemplateMatrix(Operator):
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
                 if use_accel:
-                    if not exists and not ob.detdata.accel_present(self.det_data):
+                    if not ob.detdata.accel_exists(self.det_data):
                         ob.detdata.accel_create(self.det_data)
 
             for d in all_dets:
                 for tmpl in self.templates:
                     log.verbose(f"TemplateMatrix {d} add to signal {tmpl.name}")
-                    tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name])
+                    tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name], use_accel=use_accel, **kwargs)
         return
 
     def _finalize(self, data, use_accel=False, **kwargs):
         if self.transpose:
-            # Synchronize the result
+            # move amplitudes to host as sync is CPU only
             if use_accel:
                 data[self.amplitudes].accel_update_host()
+            # Synchronize the result
             for tmpl in self.templates:
                 data[self.amplitudes][tmpl.name].sync()
+            # move amplitudes back to GPU as it is NOT finalize's job to move data to host
             if use_accel:
                 data[self.amplitudes].accel_update_device()
         # Set the internal initialization to False, so that we are ready to process
@@ -304,6 +310,32 @@ class TemplateMatrix(Operator):
         else:
             prov["detdata"] = [self.det_data]
         return prov
+
+    def _implementations(self):
+        """
+        Find implementations supported by all the templates
+        """
+        implementations = {
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+        }
+        for tmpl in self.templates:
+            implementations.intersection_update(tmpl.implementations())
+        return list(implementations)
+
+    def _supports_accel(self):
+        """
+        Returns True if all the templates are GPU compatible.
+        """
+        for tmpl in self.templates:
+            if not tmpl.supports_accel():
+                log = Logger.get()
+                msg = f"{self} does not support accel because of '{tmpl}'"
+                log.debug(msg)
+                return False
+        return True
 
 
 @trait_docs

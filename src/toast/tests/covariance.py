@@ -149,6 +149,7 @@ class CovarianceTest(MPITestCase):
                             npp.data[sm, spix, elem], chk, rtol=1e-5, atol=1e-8
                         ):
                             failed = True
+                            print(f"{npp.data[sm, spix, elem]} differs from {chk}")
             if comm is not None:
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)

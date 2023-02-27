@@ -5,7 +5,7 @@
 import os
 import time
 
-from ._libtoast import Environment, Logger
+from ._libtoast import Logger
 
 use_mpi = None
 MPI = None
@@ -43,10 +43,8 @@ if use_mpi is None:
                 log.debug("mpi4py not found- using serial operations only")
                 use_mpi = False
 
-from ._libtoast import accel_assign_device
-
 # Assign each process to an accelerator device
-from .accelerator import jax_local_device, use_accel_jax, use_accel_omp
+from .accelerator import accel_assign_device, use_accel_jax, use_accel_omp
 
 if use_accel_omp or use_accel_jax:
     node_procs = 1
@@ -59,20 +57,8 @@ if use_accel_omp or use_accel_jax:
         accel_assign_device(node_procs, node_rank, False)
         nodecomm.Free()
         del nodecomm
-    if use_accel_omp:
-        accel_assign_device(node_procs, node_rank, False)
     else:
-        import jax
-
-        n_target = len(jax.devices())
-        if n_target == 0:
-            jax_local_device = 0
-        else:
-            proc_per_dev = node_procs // n_target
-            if n_target * proc_per_dev < node_procs:
-                proc_per_dev += 1
-            target_dev = node_rank // proc_per_dev
-            jax_local_device = jax.devices()[target_dev]
+        accel_assign_device(node_procs, node_rank, False)
 else:
     # Disabled == True
     accel_assign_device(1, 0, True)

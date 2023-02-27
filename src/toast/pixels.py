@@ -37,12 +37,8 @@ from .utils import (
     Logger,
 )
 
-if use_accel_jax:
-    import jax
-    import jax.numpy as jnp
 
-
-class PixelDistribution(object):
+class PixelDistribution(AcceleratorObject):
     """Class representing the distribution of submaps.
 
     This object is used to describe the properties of a pixelization scheme and which
@@ -89,6 +85,8 @@ class PixelDistribution(object):
         self._owned_submaps = None
         self._alltoallv_info = None
         self._all_hit_submaps = None
+
+        super().__init__()
 
     def __eq__(self, other):
         local_eq = True
@@ -405,6 +403,39 @@ class PixelDistribution(object):
 
         return self._alltoallv_info
 
+    def _accel_exists(self):
+        if use_accel_omp or use_accel_jax:
+            return accel_data_present(self._glob2loc)
+        else:
+            return False
+
+    def _accel_create(self):
+        if use_accel_omp:
+            accel_data_create(self._glob2loc)
+        elif use_accel_jax:
+            self._glob2loc = accel_data_create(self._glob2loc)
+
+    def _accel_update_device(self):
+        if use_accel_omp:
+            _ = accel_data_update_device(self._glob2loc)
+        elif use_accel_jax:
+            self._glob2loc = accel_data_update_device(self._glob2loc)
+
+    def _accel_update_host(self):
+        if use_accel_omp:
+            _ = accel_data_update_host(self._glob2loc)
+        elif use_accel_jax:
+            self._glob2loc = accel_data_update_host(self._glob2loc)
+
+    def _accel_delete(self):
+        if use_accel_omp:
+            accel_data_delete(self._glob2loc)
+        elif use_accel_jax and self._accel_exists():
+            # insures glob2loc has been properly reset
+            # if we observe that its types is still a GPU types
+            # does NOT move data back from GPU
+            self._glob2loc = self._glob2loc.host_data
+
 
 class PixelData(AcceleratorObject):
     """Distributed map-domain data.
@@ -486,7 +517,6 @@ class PixelData(AcceleratorObject):
 
         self.raw = self.storage_class.zeros(self._flatshape)
         self.data = self.raw.array().reshape(self._shape)
-        self.data_jax = None
 
         # Allreduce quantities
         self._all_comm_submap = None
@@ -517,7 +547,8 @@ class PixelData(AcceleratorObject):
 
         """
         if hasattr(self, "data"):
-            del self.data
+            # we keep the attribute to avoid errors in _accel_exists
+            self.data = None
         if hasattr(self, "raw"):
             if self.accel_exists():
                 self.accel_delete()
@@ -1133,7 +1164,7 @@ class PixelData(AcceleratorObject):
         if use_accel_omp:
             return accel_data_present(self.raw)
         elif use_accel_jax:
-            return accel_data_present(self.data_jax)
+            return accel_data_present(self.data)
         else:
             return False
 
@@ -1141,24 +1172,25 @@ class PixelData(AcceleratorObject):
         if use_accel_omp:
             accel_data_create(self.raw)
         elif use_accel_jax:
-            accel_data_create(self.data_jax)
+            self.data = accel_data_create(self.data)
 
     def _accel_update_device(self):
         if use_accel_omp:
             _ = accel_data_update_device(self.raw)
         elif use_accel_jax:
-            self.data_jax = accel_data_update_device(self.data)
+            self.data = accel_data_update_device(self.data)
 
     def _accel_update_host(self):
         if use_accel_omp:
             _ = accel_data_update_host(self.raw)
         elif use_accel_jax:
-            self.data[:] = accel_data_update_host(self.data_jax)
-            self.data_jax = None
+            self.data = accel_data_update_host(self.data)
 
     def _accel_delete(self):
         if use_accel_omp:
             accel_data_delete(self.raw)
-        elif use_accel_jax:
-            del self.data_jax
-            self.data_jax = None
+        elif use_accel_jax and self._accel_exists():
+            # insures data has been properly reset
+            # if we observe that its types is still a GPU types
+            # does NOT move data back from GPU
+            self.data = self.data.host_data

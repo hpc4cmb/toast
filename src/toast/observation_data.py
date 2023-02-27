@@ -2,7 +2,6 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import sys
 from collections.abc import Mapping, MutableMapping
 from typing import NamedTuple
 
@@ -22,26 +21,13 @@ from .accelerator import (
     use_accel_omp,
 )
 from .intervals import IntervalList
-from .mpi import MPI, comm_equal, comm_equivalent
-from .timing import function_timer
-from .utils import (
-    AlignedF32,
-    AlignedF64,
-    AlignedI8,
-    AlignedI16,
-    AlignedI32,
-    AlignedI64,
-    AlignedU8,
-    AlignedU16,
-    AlignedU32,
-    AlignedU64,
-    Logger,
-    dtype_to_aligned,
-)
+from .mpi import MPI, comm_equivalent
+from .utils import Logger, dtype_to_aligned
 
 if use_accel_jax:
     import jax
-    import jax.numpy as jnp
+
+    from .jax.mutableArray import MutableJaxArray
 
 
 class DetectorData(AcceleratorObject):
@@ -106,7 +92,6 @@ class DetectorData(AcceleratorObject):
         self._fullsize = 0
         self._memsize = 0
         self._raw = None
-        self._raw_jax = None
 
         if view_data is None:
             # Allocate the data
@@ -271,12 +256,21 @@ class DetectorData(AcceleratorObject):
             # We can re-use the existing memory
             self._shape = shp
             self._flatshape = flatshape
+            # reinitialise _data
+            should_update_GPU = self.accel_exists()
             self._flatdata = self._raw.array()[: self._flatshape]
             self._flatdata[:] = 0
             self._data = self._flatdata.reshape(self._shape)
-            if self.accel_exists():
-                # Should we zero the device memory?
-                pass
+            # move things to GPU if needed
+            if should_update_GPU:
+                if use_accel_jax:
+                    # NOTE: we create an array of zeroes directly on GPU to avoid useless data movement
+                    self._data = MutableJaxArray(
+                        self._data, gpu_data=jax.numpy.zeros_like(self._data)
+                    )
+                else:
+                    # FIXME: Should we zero the device memory?
+                    pass
             realloced = False
         return realloced
 
@@ -290,6 +284,7 @@ class DetectorData(AcceleratorObject):
         """
         if hasattr(self, "_data"):
             del self._data
+            self._data = None
         if hasattr(self, "_is_view") and not self._is_view:
             if hasattr(self, "_flatdata"):
                 del self._flatdata
@@ -303,9 +298,6 @@ class DetectorData(AcceleratorObject):
                     # since that function also manipulates self._raw.
                     if use_accel_omp:
                         accel_data_delete(self._raw)
-                    elif use_accel_jax:
-                        del self._raw_jax
-                        self._raw_jax = None
                 if self._raw is not None:
                     self._raw.clear()
                 del self._raw
@@ -453,6 +445,8 @@ class DetectorData(AcceleratorObject):
         return not self.__eq__(other)
 
     def _accel_exists(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_exists")
         if self._raw is None:
             # We have a view
             return False
@@ -460,40 +454,45 @@ class DetectorData(AcceleratorObject):
             if use_accel_omp:
                 return accel_data_present(self._raw)
             elif use_accel_jax:
-                return accel_data_present(self._raw_jax)
+                return accel_data_present(self._data)
             else:
                 return False
 
     def _accel_create(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_create")
         if use_accel_omp:
             accel_data_create(self._raw)
         elif use_accel_jax:
-            accel_data_create(self._raw_jax)
+            self._data = accel_data_create(self._data)
 
     def _accel_update_device(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_update_device")
         if use_accel_omp:
             _ = accel_data_update_device(self._raw)
         elif use_accel_jax:
-            self._raw_jax = accel_data_update_device(self._raw.array())
-            self._flatdata = self._raw_jax[: self._flatshape]
-            self._data = self._flatdata.reshape(self._shape)
+            self._data = accel_data_update_device(self._data)
 
     def _accel_update_host(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_update_host")
         if use_accel_omp:
             _ = accel_data_update_host(self._raw)
         elif use_accel_jax:
-            self._raw[:] = accel_data_update_host(self._raw_jax)
-            self._flatdata = self._raw.array()[: self._flatshape]
-            self._data = self._flatdata.reshape(self._shape)
+            self._data = accel_data_update_host(self._data)
 
     def _accel_delete(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_delete")
         if use_accel_omp:
             accel_data_delete(self._raw)
-        elif use_accel_jax:
-            del self._raw_jax
-            self._raw_jax = None
-            self._flatdata = self._raw.array()[: self._flatshape]
-            self._data = self._flatdata.reshape(self._shape)
+        elif use_accel_jax and self._accel_exists():
+            # Ensures _data has been properly reset
+            # if we observe that its types is still a GPU types
+            # does NOT move data back from GPU
+            # using _raw should be equivalent
+            self._data = self._data.host_data
 
 
 class DetDataManager(MutableMapping):
@@ -752,7 +751,9 @@ class DetDataManager(MutableMapping):
             return False
         log = Logger.get()
         result = self._internal[key].accel_exists()
-        log.verbose(f"DetDataMgr {key} accel_exists = {result}")
+        msg = f"DetDataMgr {key} type = {type(self._internal[key])} "
+        msg += f"accel_exists = {result}"
+        log.verbose(msg)
         return result
 
     def accel_in_use(self, key):
@@ -796,7 +797,7 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        log.verbose(f"DetDataMgr {key} accel_create")
+        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_create")
         self._internal[key].accel_create()
 
     def accel_update_device(self, key):
@@ -812,7 +813,9 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        log.verbose(f"DetDataMgr {key} accel_update_device")
+        log.verbose(
+            f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_device"
+        )
         self._internal[key].accel_update_device()
 
     def accel_update_host(self, key):
@@ -828,7 +831,9 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         log = Logger.get()
-        log.verbose(f"DetDataMgr {key} accel_update_host")
+        log.verbose(
+            f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_host"
+        )
         self._internal[key].accel_update_host()
 
     def accel_delete(self, key):
@@ -845,10 +850,11 @@ class DetDataManager(MutableMapping):
         if not accel_enabled():
             return
         if not self._internal[key].accel_exists():
-            msg = f"Detector data '{key}' is not present on device, cannot delete"
+            msg = f"Detector data '{key}' type = {type(self._internal[key])} "
+            msg += f"is not present on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
-        log.verbose(f"DetDataMgr {key} accel_delete")
+        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete")
         self._internal[key].accel_delete()
 
     def accel_clear(self):
@@ -863,7 +869,9 @@ class DetDataManager(MutableMapping):
         log = Logger.get()
         for key in self._internal:
             if self._internal[key].accel_exists():
-                log.verbose(f"DetDataMgr {key} accel_delete")
+                log.verbose(
+                    f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete"
+                )
                 self._internal[key].accel_delete()
 
     # Mapping methods
@@ -1151,7 +1159,6 @@ class SharedDataManager(MutableMapping):
         # data object and a string specifying which communicator it
         # is distributed over:  "group", "row", or "column".
         self._internal = dict()
-        self.jax = dict()
         self._accel_used = dict()
 
     def create_group(self, name, shape, dtype=None):
@@ -1389,7 +1396,7 @@ class SharedDataManager(MutableMapping):
         if use_accel_omp:
             result = accel_data_present(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            result = key in self.jax
+            result = accel_data_present(self._internal[key].shdata.data)
         else:
             result = False
 
@@ -1455,6 +1462,10 @@ class SharedDataManager(MutableMapping):
         log.verbose(f"SharedDataMgr {key} accel_create")
         if use_accel_omp:
             accel_data_create(self._internal[key].shdata._flat)
+        elif use_accel_jax:
+            self._internal[key].shdata.data = MutableJaxArray(
+                self._internal[key].shdata.data
+            )
 
     def accel_update_device(self, key):
         """Copy the named shared data to the accelerator.
@@ -1488,8 +1499,9 @@ class SharedDataManager(MutableMapping):
         if use_accel_omp:
             _ = accel_data_update_device(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            # FIXME: add device ID here
-            self.jax[key] = jax.device_put(self._internal[key].shdata._flat)
+            self._internal[key].shdata.data = MutableJaxArray(
+                self._internal[key].shdata.data
+            )
 
         self._accel_used[key] = True
 
@@ -1525,13 +1537,9 @@ class SharedDataManager(MutableMapping):
         if use_accel_omp:
             _ = accel_data_update_host(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            rnk = 0
-            if self._internal[key].shdata.comm is not None:
-                rnk = self._internal[key].shdata.comm.rank
-            dt = None
-            if rnk == 0:
-                dt = self.jax[key].copy()
-            self._internal[key].shdata.set(dt, fromrank=0)
+            self._internal[key].shdata.data = accel_data_update_host(
+                self._internal[key].shdata.data
+            )
 
         self._accel_used[key] = False
 
@@ -1561,7 +1569,9 @@ class SharedDataManager(MutableMapping):
         if use_accel_omp:
             accel_data_delete(self._internal[key].shdata._flat)
         elif use_accel_jax:
-            del self.jax[key]
+            self._internal[key].shdata.data = accel_data_delete(
+                self._internal[key].shdata.data
+            )
 
         self._accel_used[key] = False
 
@@ -1581,7 +1591,9 @@ class SharedDataManager(MutableMapping):
                 if use_accel_omp:
                     accel_data_delete(self._internal[key].shdata._flat)
                 elif use_accel_jax:
-                    del self.jax[key]
+                    self._internal[key].shdata.data = accel_data_delete(
+                        self._internal[key].shdata.data
+                    )
             self._accel_used[key] = False
 
     # Mapping methods
@@ -1656,9 +1668,9 @@ class SharedDataManager(MutableMapping):
         off = None
         if myrank == fromrank:
             if value.shape != self._internal[key].shdata.shape:
-                raise ValueError(
-                    "When assigning directly to a shared object, the value must have the same dimensions"
-                )
+                msg = "When assigning directly to a shared object, the value "
+                msg += "must have the same dimensions"
+                raise ValueError(msg)
             off = tuple([0 for x in self._internal[key].shdata.shape])
         self._internal[key].shdata.set(value, offset=off, fromrank=fromrank)
 

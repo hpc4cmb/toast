@@ -62,8 +62,6 @@ class Template(TraitConfig):
         defaults.det_mask_invalid, help="Bit mask value for solver flags"
     )
 
-    use_accel = Bool(False, help="If True, use the accelerator")
-
     @traitlets.validate("data")
     def _check_data(self, proposal):
         dat = proposal["value"]
@@ -86,12 +84,16 @@ class Template(TraitConfig):
         # computing the number of amplitudes) whenever the data changes.
         raise NotImplementedError("Derived class must implement _initialize()")
 
-    def _check_enabled(self):
+    def _check_enabled(self, use_accel=False):
         if self.data is None:
             raise RuntimeError(
                 "You must set the data trait before calling template methods"
             )
         if self.enabled:
+            if use_accel and not self.supports_accel():
+                msg = f"Template {self.name} does not support accelerator, "
+                msg += "cannot specify use_accel=True"
+                raise RuntimeError(msg)
             return True
         else:
             log = Logger.get()
@@ -134,11 +136,11 @@ class Template(TraitConfig):
         if self._check_enabled():
             return self._zeros()
 
-    def _add_to_signal(self, detector, amplitudes):
+    def _add_to_signal(self, detector, amplitudes, **kwargs):
         raise NotImplementedError("Derived class must implement _add_to_signal()")
 
     @function_timer_stackskip
-    def add_to_signal(self, detector, amplitudes):
+    def add_to_signal(self, detector, amplitudes, use_accel=False, **kwargs):
         """Accumulate the projected amplitudes to a timestream.
 
         This performs the operation:
@@ -156,14 +158,14 @@ class Template(TraitConfig):
             None
 
         """
-        if self._check_enabled():
-            return self._add_to_signal(detector, amplitudes)
+        if self._check_enabled(use_accel=use_accel):
+            self._add_to_signal(detector, amplitudes, use_accel=use_accel, **kwargs)
 
-    def _project_signal(self, detector, amplitudes):
+    def _project_signal(self, detector, amplitudes, **kwargs):
         raise NotImplementedError("Derived class must implement _project_signal()")
 
     @function_timer_stackskip
-    def project_signal(self, detector, amplitudes):
+    def project_signal(self, detector, amplitudes, use_accel=False, **kwargs):
         """Project a timestream into template amplitudes.
 
         This performs:
@@ -181,15 +183,15 @@ class Template(TraitConfig):
             None
 
         """
-        if self._check_enabled():
-            return self._project_signal(detector, amplitudes)
+        if self._check_enabled(use_accel=use_accel):
+            self._project_signal(detector, amplitudes, use_accel=use_accel, **kwargs)
 
-    def _add_prior(self, amplitudes_in, amplitudes_out):
+    def _add_prior(self, amplitudes_in, amplitudes_out, **kwargs):
         # Not all Templates implement the prior
         return
 
     @function_timer_stackskip
-    def add_prior(self, amplitudes_in, amplitudes_out):
+    def add_prior(self, amplitudes_in, amplitudes_out, use_accel=False, **kwargs):
         """Apply the inverse amplitude covariance as a prior.
 
         This performs:
@@ -205,14 +207,14 @@ class Template(TraitConfig):
             None
 
         """
-        if self._check_enabled():
-            return self._add_prior(amplitudes_in, amplitudes_out)
+        if self._check_enabled(use_accel=use_accel):
+            self._add_prior(amplitudes_in, amplitudes_out, use_accel=use_accel, **kwargs)
 
-    def _apply_precond(self, amplitudes_in, amplitudes_out):
+    def _apply_precond(self, amplitudes_in, amplitudes_out, **kwargs):
         raise NotImplementedError("Derived class must implement _apply_precond()")
 
     @function_timer_stackskip
-    def apply_precond(self, amplitudes_in, amplitudes_out):
+    def apply_precond(self, amplitudes_in, amplitudes_out, use_accel=False, **kwargs):
         """Apply the template preconditioner.
 
         Formally, the preconditioner "M" is an approximation to the "design matrix"
@@ -230,20 +232,8 @@ class Template(TraitConfig):
             None
 
         """
-        if self._check_enabled():
-            return self._apply_precond(amplitudes_in, amplitudes_out)
-
-    def _supports_accel(self):
-        return False
-
-    def supports_accel(self):
-        """Query whether the template supports OpenACC
-
-        Returns:
-            (bool):  True if the template can use OpenACC, else False.
-
-        """
-        return self._supports_accel()
+        if self._check_enabled(use_accel=use_accel):
+            self._apply_precond(amplitudes_in, amplitudes_out, use_accel=use_accel, **kwargs)
 
     @classmethod
     def get_class_config_path(cls):

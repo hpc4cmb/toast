@@ -8,8 +8,7 @@ from collections.abc import MutableMapping
 
 import numpy as np
 
-from ._libtoast import accel_enabled
-from .accelerator import AcceleratorObject
+from .accelerator import AcceleratorObject, accel_enabled
 from .mpi import Comm
 from .utils import Logger
 
@@ -454,30 +453,49 @@ class Data(MutableMapping):
             None
 
         """
-        if not accel_enabled():
-            return
         log = Logger.get()
+        if not accel_enabled():
+            log.verbose(f"accel_enabled is False, canceling accel_create.")
+            return
+
         for ob in self.obs:
             for key in names["detdata"]:
                 if not ob.detdata.accel_exists(key):
-                    log.verbose(f"Calling ob {ob.name} detdata accel_create for {key}")
+                    log.verbose(f"ob {ob.name} detdata: accel_create '{key}'")
                     ob.detdata.accel_create(key)
+                else:
+                    log.verbose(
+                        f"ob {ob.name} detdata: accel_create '{key}' already on device"
+                    )
             for key in names["shared"]:
                 if not ob.shared.accel_exists(key):
-                    log.verbose(f"Calling ob {ob.name} shared accel_create for {key}")
+                    log.verbose(f"ob {ob.name} shared: accel_create '{key}'")
                     ob.shared.accel_create(key)
+                else:
+                    log.verbose(
+                        f"ob {ob.name} shared: accel_create '{key}' already on device"
+                    )
             for key in names["intervals"]:
                 if not ob.intervals.accel_exists(key):
-                    log.verbose(
-                        f"Calling ob {ob.name} intervals accel_create for {key}"
-                    )
+                    log.verbose(f"ob {ob.name} intervals: accel_create '{key}'")
                     ob.intervals.accel_create(key)
+                else:
+                    log.verbose(
+                        f"ob {ob.name} intervals: accel_create '{key}' already on device"
+                    )
+
         for key in names["global"]:
             val = self._internal[key]
             if isinstance(val, AcceleratorObject):
                 if not val.accel_exists():
-                    log.verbose(f"Calling Data accel_create for {key}")
+                    log.verbose(f"Data accel_create: '{key}'")
                     val.accel_create()
+                else:
+                    log.verbose(f"Data accel_create: '{key}' already on device")
+            else:
+                log.verbose(
+                    f"Data accel_create: '{key}' ({type(val)}) is not an AcceleratorObject"
+                )
 
     def accel_update_device(self, names):
         """Copy a set of data objects to the device.
@@ -498,40 +516,48 @@ class Data(MutableMapping):
         for ob in self.obs:
             for key in names["detdata"]:
                 if ob.detdata.accel_in_use(key):
-                    msg = f"Skipping {ob.name} detdata update_device for {key}, "
-                    msg += "device data in use"
-                    log.verbose(msg)
-                else:
-                    log.verbose(f"Calling ob {ob.name} detdata update_device for {key}")
-                    ob.detdata.accel_update_device(key)
-            for key in names["shared"]:
-                if ob.shared.accel_in_use(key):
-                    msg = f"Skipping {ob.name} shared update_device for {key}, "
-                    msg += "device data in use"
-                    log.verbose(msg)
-                else:
-                    log.verbose(f"Calling ob {ob.name} shared update_device for {key}")
-                    ob.shared.accel_update_device(key)
-            for key in names["intervals"]:
-                if ob.intervals.accel_in_use(key):
-                    msg = f"Skipping {ob.name} intervals update_device for {key}, "
+                    msg = f"Skipping {ob.name} detdata update_device for '{key}', "
                     msg += "device data in use"
                     log.verbose(msg)
                 else:
                     log.verbose(
-                        f"Calling ob {ob.name} intervals update_device for {key}"
+                        f"Calling ob {ob.name} detdata update_device for '{key}'"
+                    )
+                    ob.detdata.accel_update_device(key)
+            for key in names["shared"]:
+                if ob.shared.accel_in_use(key):
+                    msg = f"Skipping {ob.name} shared update_device for '{key}', "
+                    msg += "device data in use"
+                    log.verbose(msg)
+                else:
+                    log.verbose(
+                        f"Calling ob {ob.name} shared update_device for '{key}'"
+                    )
+                    ob.shared.accel_update_device(key)
+            for key in names["intervals"]:
+                if ob.intervals.accel_in_use(key):
+                    msg = f"Skipping {ob.name} intervals update_device for '{key}', "
+                    msg += "device data in use"
+                    log.verbose(msg)
+                else:
+                    log.verbose(
+                        f"Calling ob {ob.name} intervals update_device for '{key}'"
                     )
                     ob.intervals.accel_update_device(key)
         for key in names["global"]:
             val = self._internal[key]
             if isinstance(val, AcceleratorObject):
                 if val.accel_in_use():
-                    msg = f"Skipping update_device for {key}, "
+                    msg = f"Skipping update_device for '{key}', "
                     msg += "device data in use"
                     log.verbose(msg)
                 else:
-                    log.verbose(f"Calling Data update_device for {key}")
+                    log.verbose(f"Calling Data update_device for '{key}'")
                     val.accel_update_device()
+            else:
+                msg = f"Data accel_update_device: '{key}' ({type(val)}) "
+                msg += "is not an AcceleratorObject"
+                log.verbose(msg)
 
     def accel_update_host(self, names):
         """Copy a set of data objects to the host.
@@ -553,58 +579,62 @@ class Data(MutableMapping):
             for key in names["detdata"]:
                 if ob.detdata.accel_exists(key):
                     if not ob.detdata.accel_in_use(key):
-                        msg = f"Skipping {ob.name} detdata update_host for {key}, "
+                        msg = f"Skipping {ob.name} detdata update_host for '{key}', "
                         msg += "host data in use"
                         log.verbose(msg)
                     else:
                         log.verbose(
-                            f"Calling ob {ob.name} detdata update_host for {key}"
+                            f"Calling ob {ob.name} detdata update_host for '{key}'"
                         )
                         ob.detdata.accel_update_host(key)
                 else:
-                    log.verbose(
-                        f"Skip update_host for ob {ob.name} detdata {key}, data not present"
-                    )
+                    msg = f"Skip update_host for ob {ob.name} detdata '{key}', "
+                    msg += "data not present"
+                    log.verbose(msg)
             for key in names["shared"]:
                 if ob.shared.accel_exists(key):
                     if not ob.shared.accel_in_use(key):
-                        msg = f"Skipping {ob.name} shared update_host for {key}, "
+                        msg = f"Skipping {ob.name} shared update_host for '{key}', "
                         msg += "host data in use"
                         log.verbose(msg)
                     else:
                         log.verbose(
-                            f"Calling ob {ob.name} shared update_host for {key}"
+                            f"Calling ob {ob.name} shared update_host for '{key}'"
                         )
                         ob.shared.accel_update_host(key)
                 else:
-                    log.verbose(
-                        f"Skip update_host for ob {ob.name} shared {key}, data not present"
-                    )
+                    msg = f"Skip update_host for ob {ob.name} shared '{key}', "
+                    msg += "data not present"
+                    log.verbose(msg)
             for key in names["intervals"]:
                 if ob.intervals.accel_exists(key):
                     if not ob.intervals.accel_in_use(key):
-                        msg = f"Skipping {ob.name} intervals update_host for {key}, "
+                        msg = f"Skipping {ob.name} intervals update_host for '{key}', "
                         msg += "host data in use"
                         log.verbose(msg)
                     else:
                         log.verbose(
-                            f"Calling ob {ob.name} intervals update_host for {key}"
+                            f"Calling ob {ob.name} intervals update_host for '{key}'"
                         )
                         ob.intervals.accel_update_host(key)
                 else:
                     log.verbose(
-                        f"Skip update_host for ob {ob.name} intervals {key}, data not present"
+                        f"Skip update_host for ob {ob.name} intervals '{key}', data not present"
                     )
         for key in names["global"]:
             val = self._internal[key]
             if isinstance(val, AcceleratorObject):
                 if not val.accel_in_use():
-                    msg = f"Skipping update_host for {key}, "
-                    msg += "host data in use"
+                    msg = f"Skipping update_host for '{key}', "
+                    msg += "host data already in use"
                     log.verbose(msg)
                 else:
-                    log.verbose(f"Calling Data update_host for {key}")
+                    log.verbose(f"Calling Data update_host for '{key}'")
                     val.accel_update_host()
+            else:
+                msg = f"Data accel_update_host: '{key}' ({type(val)}) "
+                msg += "is not an AcceleratorObject"
+                log.verbose(msg)
 
     def accel_delete(self, names):
         """Delete a specific set of device objects
@@ -625,35 +655,41 @@ class Data(MutableMapping):
         for ob in self.obs:
             for key in names["detdata"]:
                 if ob.detdata.accel_exists(key):
-                    log.verbose(f"Calling ob {ob.name} detdata accel_delete for {key}")
+                    log.verbose(
+                        f"Calling ob {ob.name} detdata accel_delete for '{key}'"
+                    )
                     ob.detdata.accel_delete(key)
                 else:
-                    log.verbose(
-                        f"Skip delete for ob {ob.name} detdata {key}, data not present"
-                    )
+                    msg = f"Skip delete for ob {ob.name} detdata '{key}', "
+                    msg += "data not present"
+                    log.verbose(msg)
             for key in names["shared"]:
                 if ob.shared.accel_exists(key):
-                    log.verbose(f"Calling ob {ob.name} shared accel_delete for {key}")
+                    log.verbose(f"Calling ob {ob.name} shared accel_delete for '{key}'")
                     ob.shared.accel_delete(key)
                 else:
-                    log.verbose(
-                        f"Skip delete for ob {ob.name} shared {key}, data not present"
-                    )
+                    msg = f"Skip delete for ob {ob.name} shared '{key}', "
+                    msg += "data not present"
+                    log.verbose(msg)
             for key in names["intervals"]:
                 if ob.intervals.accel_exists(key):
                     log.verbose(
-                        f"Calling ob {ob.name} intervals accel_delete for {key}"
+                        f"Calling ob {ob.name} intervals accel_delete for '{key}'"
                     )
                     ob.intervals.accel_delete(key)
                 else:
-                    log.verbose(
-                        f"Skip delete for ob {ob.name} intervals {key}, data not present"
-                    )
+                    msg = f"Skip delete for ob {ob.name} intervals '{key}', "
+                    msg += "data not present"
+                    log.verbose(msg)
         for key in names["global"]:
             val = self._internal[key]
             if isinstance(val, AcceleratorObject):
-                log.verbose(f"Calling Data accel_delete for {key}")
+                log.verbose(f"Calling Data accel_delete for '{key}'")
                 val.accel_delete()
+            else:
+                msg = f"Data accel_delete: '{key}' ({type(val)}) "
+                msg += "is not an AcceleratorObject"
+                log.verbose(msg)
 
     def accel_clear(self):
         """Delete all accelerator data."""
@@ -665,3 +701,7 @@ class Data(MutableMapping):
         for key, val in self._internal.items():
             if isinstance(val, AcceleratorObject):
                 val.accel_delete()
+            else:
+                msg = f"Data accel_clear: '{key}' ({type(val)}) "
+                msg += "is not an AcceleratorObject"
+                log.verbose(msg)

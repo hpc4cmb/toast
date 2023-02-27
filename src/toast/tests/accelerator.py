@@ -11,12 +11,14 @@ import numpy.testing as nt
 from .. import ops
 from .._libtoast import test_accel_op_array, test_accel_op_buffer
 from ..accelerator import (
+    ImplementationType,
     accel_data_create,
     accel_data_delete,
     accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
     accel_enabled,
+    kernel,
     use_accel_jax,
     use_accel_omp,
 )
@@ -90,6 +92,31 @@ class AcceleratorTest(MPITestCase):
             "u8": np.uint8,
         }
 
+    def test_kernel_registry(self):
+        @kernel(ImplementationType.DEFAULT)
+        def my_kernel(foo, use_accel=False):
+            print(f"DEFAULT (accel={use_accel}):  {foo}")
+
+        @kernel(ImplementationType.COMPILED, name="my_kernel")
+        def super_compiled(foo, use_accel=False):
+            print(f"COMPILED (accel={use_accel}):  {foo}")
+
+        @kernel(ImplementationType.NUMPY, name="my_kernel")
+        def super_numpy(foo, use_accel=False):
+            print(f"NUMPY (accel={use_accel}):  {foo}")
+
+        @kernel(ImplementationType.JAX, name="my_kernel")
+        def awesome_jax(foo, use_accel=False):
+            print(f"JAX (accel={use_accel}):  {foo}")
+
+        bar = "yes"
+        my_kernel(bar, impl=ImplementationType.DEFAULT)
+        my_kernel(bar, impl=ImplementationType.NUMPY)
+        my_kernel(bar, impl=ImplementationType.COMPILED)
+        my_kernel(bar, impl=ImplementationType.COMPILED, use_accel=True)
+        my_kernel(bar, impl=ImplementationType.JAX)
+        my_kernel(bar, impl=ImplementationType.JAX, use_accel=True)
+
     def test_memory(self):
         if not (use_accel_omp or use_accel_jax):
             if self.rank == 0:
@@ -107,7 +134,7 @@ class AcceleratorTest(MPITestCase):
 
         # Copy to device
         for tname, buffer in data.items():
-            accel_data_create(buffer)
+            accel_data_create(buffer)  # TODO buffer = acel... in the jax case?
             accel_data_update_device(buffer)
 
         # Check that it is present

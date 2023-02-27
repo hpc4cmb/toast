@@ -12,6 +12,7 @@ cmake \
     -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
     -DOPENMP_TARGET_FLAGS="-Minfo=mp" \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
+    -DUSE_OPENMP_TARGET=TRUE \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
     ${opts} \
     ..

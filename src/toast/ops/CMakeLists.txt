@@ -23,14 +23,10 @@ install(FILES
     flag_intervals.py
     common_mode_noise.py
     noise_model.py
-    noise_weight.py
     gainscrambler.py
     pointing.py
-    pointing_detector.py
-    scan_map.py
     scan_healpix.py
     scan_wcs.py
-    mapmaker_utils.py
     mapmaker_binning.py
     mapmaker_solve.py
     mapmaker_templates.py
@@ -41,7 +37,6 @@ install(FILES
     sim_gaindrifts.py
     sim_crosstalk.py
     totalconvolve.py
-    polyfilter.py
     groundfilter.py
     hwpfilter.py
     statistics.py
@@ -55,8 +50,6 @@ install(FILES
     crosslinking.py
     sss.py
     demodulation.py
-    stokes_weights.py
-    pixels_healpix.py
     pixels_wcs.py
     filterbin.py
     save_hdf5.py
@@ -66,3 +59,11 @@ install(FILES
     yield_cut.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
+
+add_subdirectory(pointing_detector)
+add_subdirectory(pixels_healpix)
+add_subdirectory(stokes_weights)
+add_subdirectory(mapmaker_utils)
+add_subdirectory(scan_map)
+add_subdirectory(noise_weight)
+add_subdirectory(polyfilter)

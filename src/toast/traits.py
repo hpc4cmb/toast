@@ -24,10 +24,12 @@ from traitlets import (
     Tuple,
     Undefined,
     Unicode,
+    UseEnum,
     signature_has_traits,
 )
 
-from .utils import import_from_name, object_fullname
+from .accelerator import ImplementationType, use_accel_jax, use_accel_omp
+from .utils import import_from_name, object_fullname, Logger
 
 
 def trait_string_to_scalar(val):
@@ -134,6 +136,7 @@ def trait_scalar_to_string(val):
 # Scalar base types
 
 Bool.py_type = lambda self: bool
+UseEnum.py_type = lambda self: self.enum_class
 Float.py_type = lambda self: float
 Int.py_type = lambda self: int
 Unicode.py_type = lambda self: str
@@ -158,6 +161,7 @@ def _create_scalar_trait_get_conf(conf_type):
 
 
 Bool.get_conf = _create_scalar_trait_get_conf("bool")
+UseEnum.get_conf = _create_scalar_trait_get_conf("enum")
 Float.get_conf = _create_scalar_trait_get_conf("float")
 Int.get_conf = _create_scalar_trait_get_conf("int")
 Unicode.get_conf = _create_scalar_trait_get_conf("str")
@@ -459,7 +463,14 @@ class TraitConfig(HasTraits):
 
     enabled = Bool(True, help="If True, this class instance is marked as enabled")
 
+    kernel_implementation = UseEnum(
+        ImplementationType,
+        default_value=ImplementationType.DEFAULT,
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
+    )
+
     def __init__(self, **kwargs):
+        self._accel_stack = list()
         super().__init__(**kwargs)
         if self.name is None:
             self.name = self.__class__.__qualname__
@@ -470,6 +481,58 @@ class TraitConfig(HasTraits):
             val += "\n  {} = {} # {}".format(trait_name, trait.get(self), trait.help)
         val += "\n>"
         return val
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+        ]
+
+    def implementations(self):
+        """Query which kernel implementations are supported.
+
+        Returns:
+            (list):  List of implementations.
+
+        """
+        return self._implementations()
+
+    def _supports_accel(self):
+        return False
+
+    def supports_accel(self):
+        """Query whether the operator supports accelerator kernels
+
+        Returns:
+            (bool):  True if the operator can use accelerators, else False.
+
+        """
+        return self._supports_accel()
+
+    def select_kernels(self, use_accel=False):
+        """Return the currently selected kernel implementation.
+
+        This returns the kernel implementation that should be used
+
+        Returns:
+            (ImplementationType):  The implementation type.
+
+        """
+        impls = self.implementations()
+        if use_accel:
+            if use_accel_jax:
+                if ImplementationType.JAX not in impls:
+                    msg = f"JAX accelerator use is enabled, "
+                    msg += f"but not supported by {self.name}"
+                    raise RuntimeError(msg)
+                return ImplementationType.JAX
+            else:
+                if ImplementationType.COMPILED not in impls:
+                    msg = f"OpenMP accelerator use is enabled, "
+                    msg += f"but not supported by {self.name}"
+                    raise RuntimeError(msg)
+                return ImplementationType.COMPILED
+        else:
+            return ImplementationType.DEFAULT
 
     def __eq__(self, other):
         if len(self.traits()) != len(other.traits()):
