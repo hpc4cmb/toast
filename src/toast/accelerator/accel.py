@@ -137,11 +137,12 @@ def accel_data_create(data):
         data (array):  The host array.
 
     Returns:
-        None for OpenMP target offload and a JAX array for JAX
+        (object):  Either the original input (for OpenMP) or a new jax array.
 
     """
     if use_accel_omp:
         omp_accel_create(data)
+        return data
     elif use_accel_jax:
         return MutableJaxArray(data)
     else:

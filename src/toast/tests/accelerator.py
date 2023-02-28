@@ -134,8 +134,9 @@ class AcceleratorTest(MPITestCase):
 
         # Copy to device
         for tname, buffer in data.items():
-            accel_data_create(buffer)  # TODO buffer = acel... in the jax case?
-            accel_data_update_device(buffer)
+            buffer = accel_data_create(buffer)
+            buffer = accel_data_update_device(buffer)
+            data[tname] = buffer
 
         # Check that it is present
         for tname, buffer in data.items():
@@ -143,19 +144,23 @@ class AcceleratorTest(MPITestCase):
 
         # Change host copy
         for tname, buffer in data.items():
+            # FIXME we are changing the host copy while data is on device
+            #       is it legal?!
             buffer[:] *= 2
 
         # Update device copy
         for tname, buffer in data.items():
-            accel_data_update_device(buffer)
+            data[tname] = accel_data_update_device(buffer)
 
         # Reset host copy
         for tname, buffer in data.items():
-            buffer[:] = 0
+            # does not apply to JAX as it would modify the device copy invalidating the test
+            if not use_accel_jax:
+                buffer[:] = 0
 
         # Update host copy from device
         for tname, buffer in data.items():
-            accel_data_update_host(buffer)
+            data[tname] = accel_data_update_host(buffer)
 
         # Check Values
         for tname, buffer in data.items():
@@ -163,7 +168,7 @@ class AcceleratorTest(MPITestCase):
 
         # Delete device copy
         for tname, buffer in data.items():
-            accel_data_delete(buffer)
+            data[tname] = accel_data_delete(buffer)
 
         # Verify that data is not on the device
         for tname, buffer in data.items():
@@ -239,10 +244,9 @@ class AcceleratorTest(MPITestCase):
         data.accel_create(dnames)
         data.accel_update_device(dnames)
 
+        # Clear host buffers (should not impact device data)
         if not use_accel_jax:
-            # This test does not apply to JAX as the clear operation *does* touch device data
-
-            # Clear host buffers (should not impact device data)
+            # This test is not valid with JAX as the clear operation *will* touch device data
             for ob in data.obs:
                 for itp, (tname, tp) in enumerate(self.types.items()):
                     for sname, sshape in zip(["1", "2"], [None, (2,)]):
@@ -256,54 +260,55 @@ class AcceleratorTest(MPITestCase):
                         else:
                             ob.shared[name].set(None)
 
-            # print("Purge original:")
-            # for ob in check_data.obs:
-            #     for itp, (tname, tp) in enumerate(self.types.items()):
-            #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
-            #             name = f"{tname}_{sname}"
-            #             print(ob.detdata[name])
-            #             print(ob.shared[name])
-            # print("Purge current:")
-            # for ob in data.obs:
-            #     for itp, (tname, tp) in enumerate(self.types.items()):
-            #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
-            #             name = f"{tname}_{sname}"
-            #             print(ob.detdata[name])
-            #             print(ob.shared[name])
+        # print("Purge original:")
+        # for ob in check_data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
+        # print("Purge current:")
+        # for ob in data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
 
-            # Copy back from device
-            data.accel_update_host(dnames)
+        # Copy back from device
+        data.accel_update_host(dnames)
 
-            # print("Check original:")
-            # for ob in check_data.obs:
-            #     for itp, (tname, tp) in enumerate(self.types.items()):
-            #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
-            #             name = f"{tname}_{sname}"
-            #             print(ob.detdata[name])
-            #             print(ob.shared[name])
-            # print("Check current:")
-            # for ob in data.obs:
-            #     for itp, (tname, tp) in enumerate(self.types.items()):
-            #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
-            #             name = f"{tname}_{sname}"
-            #             print(ob.detdata[name])
-            #             print(ob.shared[name])
+        # print("Check original:")
+        # for ob in check_data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
+        # print("Check current:")
+        # for ob in data.obs:
+        #     for itp, (tname, tp) in enumerate(self.types.items()):
+        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+        #             name = f"{tname}_{sname}"
+        #             print(ob.detdata[name])
+        #             print(ob.shared[name])
 
-            # Compare
-            for check, ob in zip(check_data.obs, data.obs):
-                if ob != check:
-                    print(f"Original: {check}")
-                    print(f"Roundtrip:  {ob}")
-                self.assertEqual(ob, check)
-            if data["test_pix"] != check_data["test_pix"]:
-                print(
-                    f"Original: {check_data['test_pix']} {np.array(check_data['test_pix'].raw)[:]}"
-                )
-                print(f"Roundtrip: {data['test_pix']} {np.array(data['test_pix'].raw)[:]}")
-            self.assertEqual(data["test_pix"], check_data["test_pix"])
+        # Compare
+        for check, ob in zip(check_data.obs, data.obs):
+            if ob != check:
+                print(f"Original: {check}")
+                print(f"Roundtrip:  {ob}")
+            self.assertEqual(ob, check)
+        if data["test_pix"] != check_data["test_pix"]:
+            print(
+                f"Original: {check_data['test_pix']} {np.array(check_data['test_pix'].raw)[:]}"
+            )
+            print(f"Roundtrip: {data['test_pix']} {np.array(data['test_pix'].raw)[:]}")
+        self.assertEqual(data["test_pix"], check_data["test_pix"])
 
         # Now go and shrink the detector buffers
 
+        data.accel_create(dnames)
         data.accel_update_device(dnames)
 
         for check, ob in zip(check_data.obs, data.obs):
