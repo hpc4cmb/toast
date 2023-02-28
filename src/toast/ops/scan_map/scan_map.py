@@ -172,8 +172,7 @@ class ScanMap(Operator):
         return req
 
     def _provides(self):
-        prov = {"meta": list(), "shared": list(), "detdata": list()}
-        return prov
+        return {"detdata": [self.det_data]}
 
     def _implementations(self):
         return [
