@@ -143,7 +143,7 @@ class Operator(TraitConfig):
         return dict()
 
     def provides(self):
-        """Dictionary of Observation keys created by this Operator.
+        """Dictionary of Observation keys created or modified by this Operator.
 
         This dictionary should have 5 keys, each containing a list of "global",
         "metadata", "detdata", "shared", and "intervals" fields.  Global keys are

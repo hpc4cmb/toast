@@ -106,7 +106,7 @@ class NoiseWeight(Operator):
         return req
 
     def _provides(self):
-        return dict()
+        return {"detdata": [self.det_data]}
 
     def _implementations(self):
         return [
