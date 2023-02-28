@@ -203,7 +203,7 @@ class AcceleratorTest(MPITestCase):
         # Duplicate for future comparison
         check_data = Data(comm=data.comm)
         for ob in data.obs:
-            check_data.obs.append(ob.duplicate())
+            check_data.obs.append(ob.duplicate(times=defaults.times))
         check_data["test_pix"] = data["test_pix"].duplicate()
 
         # print("Start original:")
