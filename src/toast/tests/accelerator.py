@@ -239,65 +239,68 @@ class AcceleratorTest(MPITestCase):
         data.accel_create(dnames)
         data.accel_update_device(dnames)
 
-        # Clear buffers
-        for ob in data.obs:
-            for itp, (tname, tp) in enumerate(self.types.items()):
-                for sname, sshape in zip(["1", "2"], [None, (2,)]):
-                    name = f"{tname}_{sname}"
-                    ob.detdata[name][:] = 0
-                    shp = (ob.n_local_samples,)
-                    if sshape is not None:
-                        shp += sshape
-                    if ob.comm_col_rank == 0:
-                        ob.shared[name].set(np.zeros(shp, dtype=tp))
-                    else:
-                        ob.shared[name].set(None)
+        if not use_accel_jax:
+            # This test does not apply to JAX as the clear operation *does* touch device data
 
-        # print("Purge original:")
-        # for ob in check_data.obs:
-        #     for itp, (tname, tp) in enumerate(self.types.items()):
-        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
-        #             name = f"{tname}_{sname}"
-        #             print(ob.detdata[name])
-        #             print(ob.shared[name])
-        # print("Purge current:")
-        # for ob in data.obs:
-        #     for itp, (tname, tp) in enumerate(self.types.items()):
-        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
-        #             name = f"{tname}_{sname}"
-        #             print(ob.detdata[name])
-        #             print(ob.shared[name])
+            # Clear host buffers (should not impact device data)
+            for ob in data.obs:
+                for itp, (tname, tp) in enumerate(self.types.items()):
+                    for sname, sshape in zip(["1", "2"], [None, (2,)]):
+                        name = f"{tname}_{sname}"
+                        ob.detdata[name][:] = 0
+                        shp = (ob.n_local_samples,)
+                        if sshape is not None:
+                            shp += sshape
+                        if ob.comm_col_rank == 0:
+                            ob.shared[name].set(np.zeros(shp, dtype=tp))
+                        else:
+                            ob.shared[name].set(None)
 
-        # Copy back from device
-        data.accel_update_host(dnames)
+            # print("Purge original:")
+            # for ob in check_data.obs:
+            #     for itp, (tname, tp) in enumerate(self.types.items()):
+            #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+            #             name = f"{tname}_{sname}"
+            #             print(ob.detdata[name])
+            #             print(ob.shared[name])
+            # print("Purge current:")
+            # for ob in data.obs:
+            #     for itp, (tname, tp) in enumerate(self.types.items()):
+            #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+            #             name = f"{tname}_{sname}"
+            #             print(ob.detdata[name])
+            #             print(ob.shared[name])
 
-        # print("Check original:")
-        # for ob in check_data.obs:
-        #     for itp, (tname, tp) in enumerate(self.types.items()):
-        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
-        #             name = f"{tname}_{sname}"
-        #             print(ob.detdata[name])
-        #             print(ob.shared[name])
-        # print("Check current:")
-        # for ob in data.obs:
-        #     for itp, (tname, tp) in enumerate(self.types.items()):
-        #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
-        #             name = f"{tname}_{sname}"
-        #             print(ob.detdata[name])
-        #             print(ob.shared[name])
+            # Copy back from device
+            data.accel_update_host(dnames)
 
-        # Compare
-        for check, ob in zip(check_data.obs, data.obs):
-            if ob != check:
-                print(f"Original: {check}")
-                print(f"Roundtrip:  {ob}")
-            self.assertEqual(ob, check)
-        if data["test_pix"] != check_data["test_pix"]:
-            print(
-                f"Original: {check_data['test_pix']} {np.array(check_data['test_pix'].raw)[:]}"
-            )
-            print(f"Roundtrip: {data['test_pix']} {np.array(data['test_pix'].raw)[:]}")
-        self.assertEqual(data["test_pix"], check_data["test_pix"])
+            # print("Check original:")
+            # for ob in check_data.obs:
+            #     for itp, (tname, tp) in enumerate(self.types.items()):
+            #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+            #             name = f"{tname}_{sname}"
+            #             print(ob.detdata[name])
+            #             print(ob.shared[name])
+            # print("Check current:")
+            # for ob in data.obs:
+            #     for itp, (tname, tp) in enumerate(self.types.items()):
+            #         for sname, sshape in zip(["1", "2"], [None, (2,)]):
+            #             name = f"{tname}_{sname}"
+            #             print(ob.detdata[name])
+            #             print(ob.shared[name])
+
+            # Compare
+            for check, ob in zip(check_data.obs, data.obs):
+                if ob != check:
+                    print(f"Original: {check}")
+                    print(f"Roundtrip:  {ob}")
+                self.assertEqual(ob, check)
+            if data["test_pix"] != check_data["test_pix"]:
+                print(
+                    f"Original: {check_data['test_pix']} {np.array(check_data['test_pix'].raw)[:]}"
+                )
+                print(f"Roundtrip: {data['test_pix']} {np.array(data['test_pix'].raw)[:]}")
+            self.assertEqual(data["test_pix"], check_data["test_pix"])
 
         # Now go and shrink the detector buffers
 
