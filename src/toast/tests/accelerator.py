@@ -48,10 +48,13 @@ class AccelOperator(ops.Operator):
         for ob in data.obs:
             if use_accel:
                 # Base class has checked that data listed in our requirements
-                # is present.  Call compiled code that uses OpenACC to work
-                # with this data.
-                test_accel_op_buffer(ob.detdata[self.det_data].data)
-                test_accel_op_array(ob.detdata[self.det_data].data)
+                # is present.
+                if use_accel_omp:
+                    # Call compiled code that uses OpenMP target offload to work with this data.
+                    test_accel_op_buffer(ob.detdata[self.det_data].data)
+                    test_accel_op_array(ob.detdata[self.det_data].data)
+                else:
+                    ob.detdata[self.det_data].data[:] *= 4
             else:
                 # Just use python
                 for d in ob.detdata[self.det_data].detectors:
@@ -66,7 +69,7 @@ class AccelOperator(ops.Operator):
     def _provides(self):
         return {"detdata": [self.det_data]}
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         return True
 
 
@@ -362,7 +365,7 @@ class AcceleratorTest(MPITestCase):
         data.accel_update_device(accel_op.requires())
 
         # Run with staged data
-        accel_op.apply(data)
+        accel_op.apply(data, use_accel=True)
 
         # Copy out
         data.accel_update_host(accel_op.provides())
