@@ -137,17 +137,21 @@ class MapmakerTest(MPITestCase):
         mapper.apply(data)
 
         # Check that we can also run in full-memory mode
-        if accel_enabled():
+        use_accel = False
+        if accel_enabled() and (pixels.supports_accel() and weights.supports_accel() and mapper.supports_accel()):
+            use_accel = True
             data.accel_create(pixels.requires())
             data.accel_create(weights.requires())
+            data.accel_create(mapper.requires())
             data.accel_update_device(pixels.requires())
             data.accel_update_device(weights.requires())
+            data.accel_update_device(mapper.requires())
 
-        pixels.apply(data)
-        weights.apply(data)
+        pixels.apply(data, use_accel=use_accel)
+        weights.apply(data, use_accel=use_accel)
         binner.full_pointing = True
         mapper.name = "test2"
-        mapper.apply(data)
+        mapper.apply(data, use_accel=use_accel)
 
         close_data(data)
 

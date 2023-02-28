@@ -168,8 +168,8 @@ def scan_map_interval(
         weights_interval = jnp.ones_like(pixels_interval)
     elif weights.ndim == 2:
         weights_interval = JaxIntervals.get(
-            weights, (weight_index, intervals)
-        )  # weights[weight_index, intervals]
+            weights, (weight_index, intervals, jnp.newaxis)
+        )  # weights[weight_index, intervals, np.newaxis]
     else:
         weights_interval = JaxIntervals.get(
             weights, (weight_index, intervals, ALL)

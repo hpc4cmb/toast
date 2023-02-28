@@ -169,7 +169,7 @@ class Operator(TraitConfig):
         # for a data object.
         log = Logger.get()
         if not self.supports_accel():
-            # No support for OpenACC
+            # No support for OpenMP target offload
             return False
         all_present = True
         req = self.requires()
