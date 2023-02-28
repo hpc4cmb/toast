@@ -32,6 +32,8 @@ class INTERVALS_JAX:
         """
         if isinstance(intervals, INTERVALS_JAX):
             return intervals.intervals_max_length
+        elif intervals.size == 0:
+            return 1
         else:
             # end+1 as TOAST intervals are inclusive
             return np.max(1 + intervals.last - intervals.first)
