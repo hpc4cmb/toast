@@ -28,6 +28,11 @@ class Operator(TraitConfig):
         If a list of detectors is specified, only process these detectors.  Any extra
         kwargs are passed to the derived class internal method.
 
+        Accelerator use:  If the derived class supports OpenACC and all the required
+        data objects exist on the device, then the `_exec()` method will be called
+        with the "use_accel=True" option.  Any operator that returns "True" from its
+        _supports_accel() method should also accept the "use_accel" keyword argument.
+
         Args:
             data (toast.Data):  The distributed data.
             detectors (list):  A list of detector names or indices.  If None, this
@@ -39,11 +44,6 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if use_accel and not self.accel_have_requires(data):
-                msg = f"Operator {self.name} exec: required inputs not on device. "
-                msg += "There is likely a problem with a Pipeline or the "
-                msg += "operator dependencies."
-                raise RuntimeError(msg)
             self._exec(
                 data,
                 detectors=detectors,
@@ -75,11 +75,8 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if use_accel and not self.accel_have_requires(data):
-                msg = f"Operator {self.name} finalize: required inputs not on device. "
-                msg += "There is likely a problem with a Pipeline or the "
-                msg += "operator dependencies."
-                raise RuntimeError(msg)
+            msg = f"Calling finalize() for operator {self.name}"
+            log.verbose(msg)
             return self._finalize(data, use_accel=use_accel, **kwargs)
         else:
             if data.comm.world_rank == 0:
@@ -164,42 +161,15 @@ class Operator(TraitConfig):
                 prov[key] = list()
         return prov
 
-    def accel_have_requires(self, data):
-        # Helper function to determine if all requirements are met to use accelerator
-        # for a data object.
-        log = Logger.get()
-        if not self.supports_accel():
-            # No support for OpenMP target offload
-            return False
-        all_present = True
-        req = self.requires()
-        for ob in data.obs:
-            for key in req["detdata"]:
-                if not ob.detdata.accel_exists(key):
-                    msg = f"{self.name}:  obs {ob.name}, detdata {key} not on device"
-                    all_present = False
-                else:
-                    msg = f"{self.name}:  obs {ob.name}, detdata {key} is on device"
-                log.verbose(msg)
-            for key in req["shared"]:
-                if not ob.shared.accel_exists(key):
-                    msg = f"{self.name}:  obs {ob.name}, shared {key} not on device"
-                    all_present = False
-                else:
-                    msg = f"{self.name}:  obs {ob.name}, shared {key} is on device"
-                log.verbose(msg)
-            for key in req["intervals"]:
-                if not ob.intervals.accel_exists(key):
-                    msg = f"{self.name}:  obs {ob.name}, intervals {key} not on device"
-                    all_present = False
-                else:
-                    msg = f"{self.name}:  obs {ob.name}, intervals {key} is on device"
-                log.verbose(msg)
-        if all_present:
-            log.verbose(f"{self.name}:  all required inputs on device")
-        else:
-            log.verbose(f"{self.name}:  some required inputs not on device")
-        return all_present
+    def _supports_accel(self):
+        return False
+
+    def supports_accel(self):
+        """Query whether the operator supports GPU computing
+        Returns:
+            (bool):  True if the operator can use GPU computing, else False.
+        """
+        return self._supports_accel()
 
     @classmethod
     def get_class_config_path(cls):
