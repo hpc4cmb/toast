@@ -48,10 +48,13 @@ class AccelOperator(ops.Operator):
         for ob in data.obs:
             if use_accel:
                 # Base class has checked that data listed in our requirements
-                # is present.  Call compiled code that uses OpenACC to work
-                # with this data.
-                test_accel_op_buffer(ob.detdata[self.det_data].data)
-                test_accel_op_array(ob.detdata[self.det_data].data)
+                # is present.
+                if use_accel_omp:
+                    # Call compiled code that uses OpenMP target offload to work with this data.
+                    test_accel_op_buffer(ob.detdata[self.det_data].data)
+                    test_accel_op_array(ob.detdata[self.det_data].data)
+                else:
+                    ob.detdata[self.det_data].data[:] *= 4
             else:
                 # Just use python
                 for d in ob.detdata[self.det_data].detectors:
@@ -66,7 +69,7 @@ class AccelOperator(ops.Operator):
     def _provides(self):
         return {"detdata": [self.det_data]}
 
-    def _supports_acc(self):
+    def _supports_accel(self):
         return True
 
 
@@ -134,8 +137,9 @@ class AcceleratorTest(MPITestCase):
 
         # Copy to device
         for tname, buffer in data.items():
-            accel_data_create(buffer)  # TODO buffer = acel... in the jax case?
-            accel_data_update_device(buffer)
+            buffer = accel_data_create(buffer)
+            buffer = accel_data_update_device(buffer)
+            data[tname] = buffer
 
         # Check that it is present
         for tname, buffer in data.items():
@@ -147,15 +151,17 @@ class AcceleratorTest(MPITestCase):
 
         # Update device copy
         for tname, buffer in data.items():
-            accel_data_update_device(buffer)
+            data[tname] = accel_data_update_device(buffer)
 
         # Reset host copy
         for tname, buffer in data.items():
-            buffer[:] = 0
+            # does not apply to JAX as it would modify the device copy invalidating the test
+            if not use_accel_jax:
+                buffer[:] = 0
 
         # Update host copy from device
         for tname, buffer in data.items():
-            accel_data_update_host(buffer)
+            data[tname] = accel_data_update_host(buffer)
 
         # Check Values
         for tname, buffer in data.items():
@@ -163,7 +169,7 @@ class AcceleratorTest(MPITestCase):
 
         # Delete device copy
         for tname, buffer in data.items():
-            accel_data_delete(buffer)
+            data[tname] = accel_data_delete(buffer)
 
         # Verify that data is not on the device
         for tname, buffer in data.items():
@@ -203,7 +209,7 @@ class AcceleratorTest(MPITestCase):
         # Duplicate for future comparison
         check_data = Data(comm=data.comm)
         for ob in data.obs:
-            check_data.obs.append(ob.duplicate())
+            check_data.obs.append(ob.duplicate(times=defaults.times))
         check_data["test_pix"] = data["test_pix"].duplicate()
 
         # print("Start original:")
@@ -239,19 +245,21 @@ class AcceleratorTest(MPITestCase):
         data.accel_create(dnames)
         data.accel_update_device(dnames)
 
-        # Clear buffers
-        for ob in data.obs:
-            for itp, (tname, tp) in enumerate(self.types.items()):
-                for sname, sshape in zip(["1", "2"], [None, (2,)]):
-                    name = f"{tname}_{sname}"
-                    ob.detdata[name][:] = 0
-                    shp = (ob.n_local_samples,)
-                    if sshape is not None:
-                        shp += sshape
-                    if ob.comm_col_rank == 0:
-                        ob.shared[name].set(np.zeros(shp, dtype=tp))
-                    else:
-                        ob.shared[name].set(None)
+        # Clear host buffers (should not impact device data)
+        if not use_accel_jax:
+            # This test is not valid with JAX as the clear operation *will* touch device data
+            for ob in data.obs:
+                for itp, (tname, tp) in enumerate(self.types.items()):
+                    for sname, sshape in zip(["1", "2"], [None, (2,)]):
+                        name = f"{tname}_{sname}"
+                        ob.detdata[name][:] = 0
+                        shp = (ob.n_local_samples,)
+                        if sshape is not None:
+                            shp += sshape
+                        if ob.comm_col_rank == 0:
+                            ob.shared[name].set(np.zeros(shp, dtype=tp))
+                        else:
+                            ob.shared[name].set(None)
 
         # print("Purge original:")
         # for ob in check_data.obs:
@@ -301,6 +309,7 @@ class AcceleratorTest(MPITestCase):
 
         # Now go and shrink the detector buffers
 
+        data.accel_create(dnames)
         data.accel_update_device(dnames)
 
         for check, ob in zip(check_data.obs, data.obs):
@@ -354,7 +363,7 @@ class AcceleratorTest(MPITestCase):
         data.accel_update_device(accel_op.requires())
 
         # Run with staged data
-        accel_op.apply(data)
+        accel_op.apply(data, use_accel=True)
 
         # Copy out
         data.accel_update_host(accel_op.provides())

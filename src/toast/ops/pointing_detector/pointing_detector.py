@@ -213,6 +213,3 @@ class PointingDetectorSimple(Operator):
 
     def _supports_accel(self):
         return True
-
-    def _supports_accel(self):
-        return True

@@ -357,9 +357,7 @@ class IntervalList(Sequence, AcceleratorObject):
     def _accel_exists(self):
         log = Logger.get()
         log.verbose(f"IntervalList _accel_exists")
-        if len(self.data) == 0:
-            return False
-        elif use_accel_omp:
+        if use_accel_omp:
             return accel_data_present(self.data)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
