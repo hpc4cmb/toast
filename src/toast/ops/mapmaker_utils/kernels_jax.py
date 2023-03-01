@@ -239,7 +239,7 @@ cov_accum_diag_hits_inner = jax.jit(
 
 
 @kernel(impl=ImplementationType.JAX, name="cov_accum_diag_hits")
-def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits):
+def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits, use_accel):
     """
     Accumulate hit map.
     This uses a pointing matrix to accumulate the local pieces of the hit map.
@@ -251,6 +251,7 @@ def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits):
         submap (array, int64):  For each time domain sample, the submap index within the local map (i.e. including only locally stored submaps) (size nsamp)
         subpix (array, int64):  For each time domain sample, the pixel index within the submap (size nsamp).
         hits (array, int64):  The local hitmap buffer to accumulate (size ???).
+        use_accel (bool): should we use an accelerator
 
     Returns:
         None (result is put in hits).
@@ -321,7 +322,7 @@ cov_accum_diag_invnpp_inner = jax.jit(
 
 @kernel(impl=ImplementationType.JAX, name="cov_accum_diag_invnpp")
 def cov_accum_diag_invnpp_jax(
-    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp
+    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp, use_accel
 ):
     """
     Accumulate block diagonal noise covariance.
@@ -342,6 +343,7 @@ def cov_accum_diag_invnpp_jax(
         scale (float):  Optional scaling factor.
         invnpp (array, float64):  The local buffer of diagonal inverse pixel
             covariances, stored as the lower triangle for each pixel (shape ?*nsubpix*block with block=(nnz * (nnz + 1))/2).
+        use_accel (bool): should we use an accelerator
 
     Returns:
         None (stores the result in invnpp).

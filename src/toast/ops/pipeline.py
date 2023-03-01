@@ -173,12 +173,15 @@ class Pipeline(Operator):
                 requires &= self._staged_data  # intersection
                 data.accel_update_host(requires)
                 # displays a message to push users to keep their operators device-able
-                log = Logger.get()
-                log.debug(
-                    f"Had to move {requires} back to host as '{op}' does not support accel."
-                )
+                if not requires.is_empty():
+                    log = Logger.get()
+                    log.debug(
+                        f"Had to move {requires} back to host as '{op}' does not support accel."
+                    )
                 # updates our record of data on device
                 self._staged_data -= requires
+                # runs operator on host
+                use_accel = False
         # runs operator
         op.exec(data, detectors=detectors, use_accel=use_accel)
 

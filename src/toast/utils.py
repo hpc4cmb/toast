@@ -819,10 +819,17 @@ class SetDict(UserDict):
         return self
 
     def __str__(self):
-        """prints only the non-empty sets for brevity sake"""
+        """prints only the non-empty/None sets for brevity sake"""
         result = "{ "
         for (k, v) in self.items():
-            if len(v) > 0:
+            if (len(v) > 0) and not all(x is None for x in v):
                 result += f"{k}:{list(v)} "
         result += "}"
         return result
+    
+    def is_empty(self):
+        """returns True if the container is empty or contains only None"""
+        for (k, v) in self.items():
+            if (len(v) > 0) and not all(x is None for x in v):
+                return False
+        return True
