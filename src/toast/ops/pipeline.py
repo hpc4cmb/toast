@@ -68,6 +68,7 @@ class Pipeline(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._staged_data = None
+        self._unstaged_data = None
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, use_hybrid=True, **kwargs):
@@ -93,6 +94,7 @@ class Pipeline(Operator):
         # If the calling code passed use_accel=True, we assume that it will move the data for us
         # otherwise, if possible / allowed, use the accelerator and deal with data movement ourselves
         self._staged_data = None
+        self._unstaged_data = None
         if (not use_accel) and accel_enabled():
             # only allows hybrid pipelines if the environement variable and input agree to it
             # (they both default to True)
@@ -106,6 +108,14 @@ class Pipeline(Operator):
                 use_accel = True
                 # keeps track of the data that we are moving to device
                 self._staged_data = SetDict(
+                    {
+                        key: set()
+                        for key in ["global", "meta", "detdata", "shared", "intervals"]
+                    }
+                )
+                # keep track of the data that had to move back from device
+                # (for display / debugging purposes)
+                self._unstaged_data = SetDict(
                     {
                         key: set()
                         for key in ["global", "meta", "detdata", "shared", "intervals"]
@@ -147,6 +157,13 @@ class Pipeline(Operator):
                 log.verbose(msg)
                 for op in self.operators:
                     self._exec_operator(op, data, detectors=selected_set, use_accel=use_accel)
+        
+        # notify user of device->host data movements introduced by CPU operators
+        if (self._unstaged_data is not None) and (not self._unstaged_data.is_empty()):
+            cpu_ops = [str(op) for op in self.operators if not op.supports_accel()]
+            log.debug(
+                f"{pstr} {self}, had to move {self._unstaged_data} back to host as {cpu_ops} do not support accel."
+            )
 
     @function_timer
     def _exec_operator(self, op, data, detectors, use_accel):
@@ -172,12 +189,8 @@ class Pipeline(Operator):
                 # get inputs not already on host
                 requires &= self._staged_data  # intersection
                 data.accel_update_host(requires)
-                # displays a message to push users to keep their operators device-able
-                if not requires.is_empty():
-                    log = Logger.get()
-                    log.debug(
-                        f"Had to move {requires} back to host as '{op}' does not support accel."
-                    )
+                # updates our record of data that had to come back from device
+                self._unstaged_data |= requires # union
                 # updates our record of data on device
                 self._staged_data -= requires
                 # runs operator on host
@@ -219,6 +232,7 @@ class Pipeline(Operator):
             log.verbose(f"{pstr} {self} deleting accel data: {self._staged_data}")
             data.accel_delete(self._staged_data)
             self._staged_data = None
+            self._unstaged_data = None
 
         return result
 
