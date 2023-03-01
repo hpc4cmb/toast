@@ -121,6 +121,9 @@ class Pipeline(Operator):
                         for key in ["global", "meta", "detdata", "shared", "intervals"]
                     }
                 )
+                # keep track of the operators that caused the data movement
+                # (for display / debugging purposes)
+                self._unstaging_operators = []
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -160,9 +163,8 @@ class Pipeline(Operator):
         
         # notify user of device->host data movements introduced by CPU operators
         if (self._unstaged_data is not None) and (not self._unstaged_data.is_empty()):
-            cpu_ops = [str(op) for op in self.operators if not op.supports_accel()]
             log.debug(
-                f"{pstr} {self}, had to move {self._unstaged_data} back to host as {cpu_ops} do not support accel."
+                f"{pstr} {self}, had to move {self._unstaged_data} back to host as {self._unstaging_operators} do not support accel."
             )
 
     @function_timer
@@ -191,6 +193,7 @@ class Pipeline(Operator):
                 data.accel_update_host(requires)
                 # updates our record of data that had to come back from device
                 self._unstaged_data |= requires # union
+                self._unstaging_operators.append(str(op))
                 # updates our record of data on device
                 self._staged_data -= requires
                 # runs operator on host
