@@ -28,7 +28,7 @@ class Operator(TraitConfig):
         If a list of detectors is specified, only process these detectors.  Any extra
         kwargs are passed to the derived class internal method.
 
-        Accelerator use:  If the derived class supports OpenACC and all the required
+        Accelerator use:  If the derived class supports OpenMP target offload and all the required
         data objects exist on the device, then the `_exec()` method will be called
         with the "use_accel=True" option.  Any operator that returns "True" from its
         _supports_accel() method should also accept the "use_accel" keyword argument.

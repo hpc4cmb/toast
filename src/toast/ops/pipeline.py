@@ -4,7 +4,7 @@
 
 import traitlets
 
-from ..accelerator import ImplementationType, accel_enabled
+from ..accelerator import ImplementationType, accel_enabled, use_hybrid_pipelines
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Int, List, trait_docs
@@ -70,7 +70,19 @@ class Pipeline(Operator):
         self._staged_data = None
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, use_hybrid=True, **kwargs):
+        """Perform a list of operations on a Data object.
+
+        Args:
+            data (toast.Data): The distributed data.
+            detectors (list): A list of detector names or indices.  
+                              If None, this indicates a list of all detectors.
+            use_accel (bool): If True, run on device and assumes that data movement is taken care of
+            use_hybrid (bool): If True, allows pipelines containing non accel enabled operators
+
+        Returns:
+            None
+        """
         log = Logger.get()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
@@ -79,20 +91,26 @@ class Pipeline(Operator):
             return
 
         # If the calling code passed use_accel=True, we assume that it will move the data for us
-        # otherwise, if possible, use the accelerator and deal with data movement ourselves
+        # otherwise, if possible / allowed, use the accelerator and deal with data movement ourselves
         self._staged_data = None
-        if (not use_accel) and accel_enabled() and self._supports_accel_partial():
-            # some of our operators support using the accelerator
-            msg = f"{self} supports accelerators."
-            log.verbose_rank(msg, comm=data.comm.comm_world)
-            use_accel = True
-            # keeps track of the data that we are moving to device
-            self._staged_data = SetDict(
-                {
-                    key: set()
-                    for key in ["global", "meta", "detdata", "shared", "intervals"]
-                }
-            )
+        if (not use_accel) and accel_enabled():
+            # only allows hybrid pipelines if the environement variable and input agree to it
+            # (they both default to True)
+            use_hybrid = use_hybrid and use_hybrid_pipelines
+            # can we run this pipelines on accelerator
+            supports_accel = self._supports_accel_partial() if use_hybrid else self._supports_accel()
+            if supports_accel:
+                # some of our operators support using the accelerator
+                msg = f"{self} supports accelerators."
+                log.verbose_rank(msg, comm=data.comm.comm_world)
+                use_accel = True
+                # keeps track of the data that we are moving to device
+                self._staged_data = SetDict(
+                    {
+                        key: set()
+                        for key in ["global", "meta", "detdata", "shared", "intervals"]
+                    }
+                )
 
         if len(data.obs) == 0:
             # No observations for this group

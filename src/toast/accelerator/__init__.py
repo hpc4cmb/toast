@@ -16,5 +16,6 @@ from .accel import (
     accel_get_device,
     use_accel_jax,
     use_accel_omp,
+    use_hybrid_pipelines
 )
 from .kernel_registry import ImplementationType, kernel
