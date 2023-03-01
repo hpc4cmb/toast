@@ -147,8 +147,6 @@ class AcceleratorTest(MPITestCase):
 
         # Change host copy
         for tname, buffer in data.items():
-            # FIXME we are changing the host copy while data is on device
-            #       is it legal?!
             buffer[:] *= 2
 
         # Update device copy
