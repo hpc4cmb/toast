@@ -433,7 +433,7 @@ class ScanScale(Operator):
         return req
 
     def _provides(self):
-        prov = {"meta": list(), "shared": list(), "detdata": list()}
+        prov = {"meta": list(), "shared": list(), "detdata": [self.det_data]}
         return prov
 
     def _supports_accel(self):
