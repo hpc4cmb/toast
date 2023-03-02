@@ -77,18 +77,6 @@ class Pipeline(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=False, **kwargs):
-        """Perform a list of operations on a Data object.
-
-        Args:
-            data (toast.Data): The distributed data.
-            detectors (list): A list of detector names or indices.  
-                              If None, this indicates a list of all detectors.
-            use_accel (bool): If True, run on device and assumes that data movement is taken care of
-            use_hybrid (bool): If True, allows pipelines containing non accel enabled operators
-
-        Returns:
-            None
-        """
         log = Logger.get()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
@@ -200,7 +188,6 @@ class Pipeline(Operator):
                 self._staged_data -= requires
                 # runs operator on host
                 use_accel = False
-
         # runs operator
         op.exec(data, detectors=detectors, use_accel=use_accel)
 
@@ -304,7 +291,7 @@ class Pipeline(Operator):
 
     def _supports_accel_partial(self):
         """
-        Returns True if at least one of the operators is accelerator compatible.
+        Returns True if *at least one* of the operators is accelerator compatible.
         """
         for op in self.operators:
             if op.supports_accel():
