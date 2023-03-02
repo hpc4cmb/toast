@@ -247,6 +247,7 @@ class ConfigOperator(ops.Operator):
     def _provides(self):
         return dict()
 
+
 class ConfigTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]

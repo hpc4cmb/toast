@@ -125,7 +125,9 @@ class TemplateMatrix(Operator):
                 "You must call exec() once before applying preconditioners"
             )
         for tmpl in self.templates:
-            tmpl.apply_precond(amps_in[tmpl.name], amps_out[tmpl.name], use_accel=use_accel, **kwargs)
+            tmpl.apply_precond(
+                amps_in[tmpl.name], amps_out[tmpl.name], use_accel=use_accel, **kwargs
+            )
 
     def add_prior(self, amps_in, amps_out, use_accel=False, **kwargs):
         """Apply the noise prior from all templates to the amplitudes.
@@ -146,7 +148,9 @@ class TemplateMatrix(Operator):
                 "You must call exec() once before applying the noise prior"
             )
         for tmpl in self.templates:
-            tmpl.add_prior(amps_in[tmpl.name], amps_out[tmpl.name], use_accel=use_accel, **kwargs)
+            tmpl.add_prior(
+                amps_in[tmpl.name], amps_out[tmpl.name], use_accel=use_accel, **kwargs
+            )
 
     @property
     def n_enabled_templates(self):
@@ -232,7 +236,12 @@ class TemplateMatrix(Operator):
             for d in all_dets:
                 for tmpl in self.templates:
                     log.verbose(f"TemplateMatrix {d} project_signal {tmpl.name}")
-                    tmpl.project_signal(d, data[self.amplitudes][tmpl.name], use_accel=use_accel, **kwargs)
+                    tmpl.project_signal(
+                        d,
+                        data[self.amplitudes][tmpl.name],
+                        use_accel=use_accel,
+                        **kwargs,
+                    )
         else:
             if self.amplitudes not in data:
                 msg = f"Template amplitudes '{self.amplitudes}' do not exist in data"
@@ -259,7 +268,12 @@ class TemplateMatrix(Operator):
             for d in all_dets:
                 for tmpl in self.templates:
                     log.verbose(f"TemplateMatrix {d} add to signal {tmpl.name}")
-                    tmpl.add_to_signal(d, data[self.amplitudes][tmpl.name], use_accel=use_accel, **kwargs)
+                    tmpl.add_to_signal(
+                        d,
+                        data[self.amplitudes][tmpl.name],
+                        use_accel=use_accel,
+                        **kwargs,
+                    )
         return
 
     def _finalize(self, data, use_accel=False, **kwargs):

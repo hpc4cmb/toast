@@ -34,7 +34,10 @@ class Pipeline(Operator):
         help="List of detector sets.  ['ALL'] and ['SINGLE'] are also valid values.",
     )
 
-    use_hybrid = Bool(True, help="Should the pipeline be allowed to use the GPU when it has some cpu-only operators.")
+    use_hybrid = Bool(
+        True,
+        help="Should the pipeline be allowed to use the GPU when it has some cpu-only operators.",
+    )
 
     @traitlets.validate("detector_sets")
     def _check_detsets(self, proposal):
@@ -81,7 +84,9 @@ class Pipeline(Operator):
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
         if len(self.operators) == 0:
-            log.debug_rank("Pipeline has no operators, nothing to do", comm=data.comm.comm_world)
+            log.debug_rank(
+                "Pipeline has no operators, nothing to do", comm=data.comm.comm_world
+            )
             return
 
         # If the calling code passed use_accel=True, we assume that it will move the data for us
@@ -93,7 +98,9 @@ class Pipeline(Operator):
             # (they both default to True)
             use_hybrid = self.use_hybrid and use_hybrid_pipelines
             # can we run this pipelines on accelerator
-            supports_accel = self._supports_accel_partial() if use_hybrid else self._supports_accel()
+            supports_accel = (
+                self._supports_accel_partial() if use_hybrid else self._supports_accel()
+            )
             if supports_accel:
                 # some of our operators support using the accelerator
                 msg = f"{self} supports accelerators."
@@ -149,8 +156,10 @@ class Pipeline(Operator):
                 msg = f"{pstr} {self} detector set {selected_set}"
                 log.verbose(msg)
                 for op in self.operators:
-                    self._exec_operator(op, data, detectors=selected_set, use_accel=use_accel)
-        
+                    self._exec_operator(
+                        op, data, detectors=selected_set, use_accel=use_accel
+                    )
+
         # notify user of device->host data movements introduced by CPU operators
         if (self._unstaged_data is not None) and (not self._unstaged_data.is_empty()):
             cpu_ops = {str(op) for op in self.operators if not op.supports_accel()}
@@ -183,7 +192,7 @@ class Pipeline(Operator):
                 requires &= self._staged_data  # intersection
                 data.accel_update_host(requires)
                 # updates our record of data that had to come back from device
-                self._unstaged_data |= requires # union
+                self._unstaged_data |= requires  # union
                 # updates our record of data on device
                 self._staged_data -= requires
                 # runs operator on host

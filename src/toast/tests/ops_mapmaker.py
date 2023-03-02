@@ -138,7 +138,11 @@ class MapmakerTest(MPITestCase):
 
         # Check that we can also run in full-memory mode
         use_accel = False
-        if accel_enabled() and (pixels.supports_accel() and weights.supports_accel() and mapper.supports_accel()):
+        if accel_enabled() and (
+            pixels.supports_accel()
+            and weights.supports_accel()
+            and mapper.supports_accel()
+        ):
             use_accel = True
             data.accel_create(pixels.requires())
             data.accel_create(weights.requires())

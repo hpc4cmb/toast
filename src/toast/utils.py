@@ -778,6 +778,7 @@ def unit_conversion(source, target):
     scale.to(target)
     return scale.to(target).value
 
+
 class SetDict(UserDict):
     """
     Utility class representing a dictionary of sets with some inplace operations.
@@ -826,7 +827,7 @@ class SetDict(UserDict):
                 result += f"{k}:{list(v)} "
         result += "}"
         return result
-    
+
     def is_empty(self):
         """returns True if the container is empty or contains only None"""
         for (k, v) in self.items():
