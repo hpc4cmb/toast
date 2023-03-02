@@ -149,10 +149,6 @@ class PointingDetectorSimple(Operator):
 
             quat_indx = ob.detdata[self.quats].indices(dets)
 
-            if use_accel:
-                if not ob.detdata.accel_exists(self.quats):
-                    ob.detdata.accel_create(self.quats)
-
             if self.shared_flags is None:
                 flags = np.zeros(1, dtype=np.uint8)
             else:
@@ -186,7 +182,7 @@ class PointingDetectorSimple(Operator):
         req = {
             "meta": list(),
             "shared": [self.boresight],
-            "detdata": list(),
+            "detdata": [self.quats],
             "intervals": list(),
         }
         if self.shared_flags is not None:
