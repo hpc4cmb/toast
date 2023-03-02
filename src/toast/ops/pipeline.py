@@ -195,6 +195,7 @@ class Pipeline(Operator):
                 self._staged_data -= requires
                 # runs operator on host
                 use_accel = False
+
         # runs operator
         op.exec(data, detectors=detectors, use_accel=use_accel)
 
@@ -218,7 +219,9 @@ class Pipeline(Operator):
         result = list()
         if self.operators is not None:
             for op in self.operators:
-                result.append(op.finalize(data, use_accel=use_accel, **kwargs))
+                # did we set use_accel to true when running with this operator
+                use_accel_op = use_accel and op.supports_accel()
+                result.append(op.finalize(data, use_accel=use_accel_op, **kwargs))
 
         # get outputs back and clean up data
         # if we are in charge of the data movement

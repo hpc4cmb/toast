@@ -229,11 +229,6 @@ class TemplateMatrix(Operator):
                     # on the device and will be used there.
                     data[self.amplitudes].accel_create()
                     data[self.amplitudes].accel_update_device()
-            elif use_accel and (not data[self.amplitudes].accel_exists()):
-                # Our templates are using the accelerator to accumulate amplitudes.
-                # Ensure that the amplitudes are on the device.
-                data[self.amplitudes].accel_create()
-                data[self.amplitudes].accel_update_device()
             for d in all_dets:
                 for tmpl in self.templates:
                     log.verbose(f"TemplateMatrix {d} project_signal {tmpl.name}")
@@ -260,9 +255,6 @@ class TemplateMatrix(Operator):
 
                 for d in dets:
                     ob.detdata[self.det_data][d, :] = 0
-                if use_accel:
-                    if not ob.detdata.accel_exists(self.det_data):
-                        ob.detdata.accel_create(self.det_data)
 
             for d in all_dets:
                 for tmpl in self.templates:
@@ -287,20 +279,16 @@ class TemplateMatrix(Operator):
 
     def _requires(self):
         req = {
-            "global": list(),
+            "global": [self.amplitudes],
             "meta": list(),
             "shared": list(),
-            "detdata": list(),
+            "detdata": [self.det_data],
             "intervals": list(),
         }
         if self.view is not None:
             req["intervals"].append(self.view)
-        if self.transpose:
-            req["detdata"].append(self.det_data)
-            if self.det_flags is not None:
-                req["detdata"].append(self.det_flags)
-        else:
-            req["global"].append(self.amplitudes)
+        if self.transpose and (self.det_flags is not None):
+            req["detdata"].append(self.det_flags)
         return req
 
     def _provides(self):
@@ -332,7 +320,7 @@ class TemplateMatrix(Operator):
         for tmpl in self.templates:
             if not tmpl.supports_accel():
                 log = Logger.get()
-                msg = f"{self} does not support accel because of '{tmpl}'"
+                msg = f"{self} does not support accel because of '{tmpl.name}'"
                 log.debug(msg)
                 return False
         return True

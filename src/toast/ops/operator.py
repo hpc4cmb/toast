@@ -113,6 +113,7 @@ class Operator(TraitConfig):
 
     def requires(self):
         """Dictionary of Observation keys directly used by this Operator.
+        Including optional keys that will be created by the operator if they do not exist.
 
         This dictionary should have 5 keys, each containing a list of "global",
         "metadata", "detdata", "shared", and "intervals" fields.  Global keys are
