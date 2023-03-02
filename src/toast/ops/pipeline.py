@@ -101,7 +101,7 @@ class Pipeline(Operator):
         self._staged_data = None
         self._unstaged_data = None
         if (not use_accel) and accel_enabled():
-            # only allows hybrid pipelines if the environement variable and input agree to it
+            # only allows hybrid pipelines if the environement variable and pipeline agree to it
             # (they both default to True)
             use_hybrid = self.use_hybrid and use_hybrid_pipelines
             # can we run this pipelines on accelerator
@@ -111,7 +111,7 @@ class Pipeline(Operator):
                 msg = f"{self} supports accelerators."
                 log.verbose_rank(msg, comm=data.comm.comm_world)
                 use_accel = True
-                # keeps track of the data that we are moving to device
+                # keeps track of the data that is on device
                 self._staged_data = SetDict(
                     {
                         key: set()
