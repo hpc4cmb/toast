@@ -53,7 +53,7 @@ if use_accel_omp and use_accel_jax:
     raise RuntimeError(msg)
 
 use_hybrid_pipelines = True
-if ("TOAST_GPU_HYBRID" in os.environ) and (os.environ["TOAST_GPU_HYBRID"] in disable_vals):
+if ("TOAST_GPU_HYBRID_PIPELINES" in os.environ) and (os.environ["TOAST_GPU_HYBRID_PIPELINES"] in disable_vals):
     use_hybrid_pipelines = False
 
 # Wrapper functions that work with either numpy arrays mapped to omp device memory
