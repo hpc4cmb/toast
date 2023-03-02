@@ -162,16 +162,6 @@ class Operator(TraitConfig):
                 prov[key] = list()
         return prov
 
-    def _supports_accel(self):
-        return False
-
-    def supports_accel(self):
-        """Query whether the operator supports GPU computing
-        Returns:
-            (bool):  True if the operator can use GPU computing, else False.
-        """
-        return self._supports_accel()
-
     @classmethod
     def get_class_config_path(cls):
         return "/operators/{}".format(cls.__qualname__)
