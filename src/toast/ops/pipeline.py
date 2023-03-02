@@ -7,7 +7,7 @@ import traitlets
 from ..accelerator import ImplementationType, accel_enabled, use_hybrid_pipelines
 from ..data import Data
 from ..timing import function_timer
-from ..traits import Int, List, trait_docs
+from ..traits import Int, List, Bool, trait_docs
 from ..utils import Logger, SetDict
 from .operator import Operator
 
@@ -33,6 +33,8 @@ class Pipeline(Operator):
         ["ALL"],
         help="List of detector sets.  ['ALL'] and ['SINGLE'] are also valid values.",
     )
+
+    use_hybrid = Bool(True, help="Should the pipeline be allowed to use the GPU when it has some cpu-only operators.")
 
     @traitlets.validate("detector_sets")
     def _check_detsets(self, proposal):
@@ -67,11 +69,14 @@ class Pipeline(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # keeps track of the data that is on device
         self._staged_data = None
+        # keep track of the data that had to move back to host due to a cpu-only operator
+        # (for display / debugging purposes)
         self._unstaged_data = None
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, use_hybrid=True, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
         """Perform a list of operations on a Data object.
 
         Args:
@@ -98,7 +103,7 @@ class Pipeline(Operator):
         if (not use_accel) and accel_enabled():
             # only allows hybrid pipelines if the environement variable and input agree to it
             # (they both default to True)
-            use_hybrid = use_hybrid and use_hybrid_pipelines
+            use_hybrid = self.use_hybrid and use_hybrid_pipelines
             # can we run this pipelines on accelerator
             supports_accel = self._supports_accel_partial() if use_hybrid else self._supports_accel()
             if supports_accel:
@@ -160,7 +165,7 @@ class Pipeline(Operator):
         
         # notify user of device->host data movements introduced by CPU operators
         if (self._unstaged_data is not None) and (not self._unstaged_data.is_empty()):
-            cpu_ops = [str(op) for op in self.operators if not op.supports_accel()]
+            cpu_ops = {str(op) for op in self.operators if not op.supports_accel()}
             log.debug(
                 f"{pstr} {self}, had to move {self._unstaged_data} back to host as {cpu_ops} do not support accel."
             )
