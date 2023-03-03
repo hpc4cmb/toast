@@ -595,7 +595,7 @@ class ObserveAtmosphere(Operator):
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
         if self.weights is not None:
-            req["weights"].append(self.weights)
+            req["detdata"].append(self.weights)
         if self.view is not None:
             req["intervals"].append(self.view)
         return req

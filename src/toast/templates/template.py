@@ -208,7 +208,9 @@ class Template(TraitConfig):
 
         """
         if self._check_enabled(use_accel=use_accel):
-            self._add_prior(amplitudes_in, amplitudes_out, use_accel=use_accel, **kwargs)
+            self._add_prior(
+                amplitudes_in, amplitudes_out, use_accel=use_accel, **kwargs
+            )
 
     def _apply_precond(self, amplitudes_in, amplitudes_out, **kwargs):
         raise NotImplementedError("Derived class must implement _apply_precond()")
@@ -233,7 +235,9 @@ class Template(TraitConfig):
 
         """
         if self._check_enabled(use_accel=use_accel):
-            self._apply_precond(amplitudes_in, amplitudes_out, use_accel=use_accel, **kwargs)
+            self._apply_precond(
+                amplitudes_in, amplitudes_out, use_accel=use_accel, **kwargs
+            )
 
     @classmethod
     def get_class_config_path(cls):

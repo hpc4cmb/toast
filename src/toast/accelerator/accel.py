@@ -15,6 +15,7 @@ from .._libtoast import accel_update_device as omp_accel_update_device
 from .._libtoast import accel_update_host as omp_accel_update_host
 
 enable_vals = ["1", "yes", "true"]
+disable_vals = ["0", "no", "false"]
 
 use_accel_omp = False
 if "TOAST_GPU_OPENMP" in os.environ and os.environ["TOAST_GPU_OPENMP"] in enable_vals:
@@ -50,6 +51,12 @@ if use_accel_omp and use_accel_jax:
     msg = "OpenMP target offload and JAX cannot both be enabled at runtime."
     log.error(msg)
     raise RuntimeError(msg)
+
+use_hybrid_pipelines = True
+if ("TOAST_GPU_HYBRID_PIPELINES" in os.environ) and (
+    os.environ["TOAST_GPU_HYBRID_PIPELINES"] in disable_vals
+):
+    use_hybrid_pipelines = False
 
 # Wrapper functions that work with either numpy arrays mapped to omp device memory
 # or jax arrays.

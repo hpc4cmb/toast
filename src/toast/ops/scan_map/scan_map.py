@@ -297,8 +297,7 @@ class ScanMask(Operator):
         return req
 
     def _provides(self):
-        # TODO shouldn't self.det_flags be in provide rather than require since it can be created here?
-        prov = {"meta": list(), "shared": list(), "detdata": list()}
+        prov = {"meta": list(), "shared": list(), "detdata": [self.det_flags]}
         return prov
 
     def _supports_accel(self):
@@ -434,5 +433,8 @@ class ScanScale(Operator):
         return req
 
     def _provides(self):
-        prov = {"meta": list(), "shared": list(), "detdata": list()}
+        prov = {"meta": list(), "shared": list(), "detdata": [self.det_data]}
         return prov
+
+    def _supports_accel(self):
+        return True
