@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import re
 
 import ghapi.all
-
 from rich import print
 from rich.syntax import Syntax
-
 
 ENTRY = re.compile(
     r"""
@@ -34,8 +31,10 @@ issues = (issue for page in issues_pages for issue in page)
 missing = []
 
 for issue in issues:
-    changelog = ENTRY.findall(issue.body)
-    if changelog:
+    changelog = ENTRY.findall(issue.body or "")
+    if not changelog or not changelog[0]:
+        missing.append(issue)
+    else:
         (msg,) = changelog
         if not msg.startswith("* "):
             msg = "* " + msg
@@ -46,9 +45,6 @@ for issue in issues:
 
         print(Syntax(msg, "rst", theme="ansi_light", word_wrap=True))
         print()
-
-    else:
-        missing.append(issue)
 
 if missing:
     print()
