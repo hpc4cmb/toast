@@ -243,7 +243,7 @@ class OpSimConviqt(Operator):
             psi_uv = focalplane[det]["psi_uv_rad"]
         else:
             raise RuntimeError("focalplane[{}] does not include psi_uv".format(det))
-        return psipol
+        return psi_uv
 
     def _get_epsilon(self, focalplane, det):
         """Parse polarization leakage (epsilon) from the focalplane
