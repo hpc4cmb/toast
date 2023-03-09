@@ -443,11 +443,14 @@ class DetectorData(AcceleratorObject):
             # print(msg)
             return False
         if self.dtype == np.dtype(np.float64):
-            if not np.allclose(self.data, other.data, rtol=1.0e-8, atol=1.0e-8):
+            drange = np.amax(self.data) - np.amin(self.data)
+            rtol = 1.0e-12
+            atol = 10.0 * drange * 1.0e-15
+            if not np.allclose(self.data, other.data, rtol=rtol, atol=atol):
                 # indx = np.logical_not(
-                #     np.isclose(self.data, other.data, rtol=1.0e-8, atol=1.0e-8)
+                #     np.isclose(self.data, other.data, rtol=rtol, atol=atol)
                 # )
-                # msg = "DetectorData array not close:"
+                # msg = f"DetectorData array not close rtol={rtol}, atol={atol}:"
                 # for d in np.arange(self.data.shape[0]):
                 #     dname = self.detectors[d]
                 #     for s in np.arange(self.data.shape[1])[indx[d]]:
@@ -456,11 +459,14 @@ class DetectorData(AcceleratorObject):
                 # print(msg)
                 return False
         elif self.dtype == np.dtype(np.float32):
-            if not np.allclose(self.data, other.data, rtol=1.0e-6, atol=1.0e-5):
+            drange = np.amax(self.data) - np.amin(self.data)
+            rtol = 1.0e-6
+            atol = 10.0 * drange * 1.0e-6
+            if not np.allclose(self.data, other.data, rtol=rtol, atol=atol):
                 # indx = np.logical_not(
-                #     np.isclose(self.data, other.data, rtol=1.0e-6, atol=1.0e-5)
+                #     np.isclose(self.data, other.data, rtol=rtol, atol=atol)
                 # )
-                # msg = "DetectorData array not close:"
+                # msg = f"DetectorData array not close rtol={rtol}, atol={atol}:"
                 # for d in np.arange(self.data.shape[0]):
                 #     dname = self.detectors[d]
                 #     for s in np.arange(self.data.shape[1])[indx[d]]:
