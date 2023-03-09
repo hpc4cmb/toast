@@ -21,7 +21,7 @@ import toast
 from toast import PixelData, PixelDistribution
 from toast.covariance import covariance_apply, covariance_invert
 from toast.mpi import MPI, Comm, get_world
-from toast.ops.kernels import cov_apply_diag, cov_eigendecompose_diag
+from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
 from toast.pixels_io_healpix import (
     filename_is_fits,
     filename_is_hdf5,
@@ -38,8 +38,10 @@ def main():
     log = Logger.get()
     comm, ntask, rank = get_world()
     timer0 = Timer()
+    timer1 = Timer()
     timer = Timer()
     timer0.start()
+    timer1.start()
     timer.start()
 
     parser = argparse.ArgumentParser(description="Co-add HEALPix maps")
@@ -120,6 +122,7 @@ def main():
         try:
             with open(args.inmap[0], "r") as listfile:
                 infiles = listfile.readlines()
+            log.info_rank(f"Loaded {args.inmap[0]} in", timer=timer1, comm=comm)
         except UnicodeDecodeError:
             # Didn't work. Assume that user supplied a single map file
             infiles = args.inmap
@@ -136,6 +139,7 @@ def main():
             continue
         log.info(f"{prefix}Loading file {ifile + 1} / {nfile} : {infile_map}")
         inmap = read_healpix(infile_map, None, nest=True, dtype=float)
+        log.info_rank(f"{prefix}Loaded {infile_map} in", timer=timer1, comm=None)
         if nnz is None:
             nnz, npix = inmap.shape
         else:
@@ -162,6 +166,7 @@ def main():
         if os.path.isfile(infile_invcov):
             log.info(f"{prefix}Loading {infile_invcov}")
             invcov = read_healpix(infile_invcov, None, nest=True, dtype=float)
+            log.info_rank(f"{prefix}Loaded {infile_invcov} in", timer=timer1, comm=None)
         else:
             # Inverse covariance does not exist. Load and invert the
             # covariance matrix
@@ -173,6 +178,7 @@ def main():
                 raise RuntimeError(msg)
             log.info(f"{prefix}Loading {infile_cov}")
             cov = read_healpix(infile_cov, None, nest=True, dtype=float)
+            log.info_rank(f"{prefix}Loaded {infile_cov} in", timer=timer1, comm=None)
             nsubmap = npix
             npix_submap = 1
             rcond = np.zeros(npix, dtype=float)
@@ -182,6 +188,7 @@ def main():
                 nsubmap, npix_submap, nnz, cov, rcond, args.rcond_limit, True
             )
             invcov = cov.reshape(npix, -1).T.copy()
+            log.info_rank(f"{prefix}Inverted matrix in", timer=timer1, comm=None)
             del cov
 
         if not noiseweighted:
@@ -195,6 +202,7 @@ def main():
             cov_apply_diag(nsubmap, npix_submap, nnz, invcov.data, inmap.data)
             inmap = inmap.reshape(npix, -1).T.copy()
             invcov = invcov.reshape(npix, -1).T.copy()
+            log.info_rank(f"{prefix}Applied inverse matrix in", timer=timer1, comm=None)
 
         if nnz2 is None:
             nnz2, npix_test = invcov.shape
@@ -205,6 +213,7 @@ def main():
         else:
             noiseweighted_sum += inmap
             invcov_sum += invcov
+            log.info_rank(f"{prefix}Co-added maps in", timer=timer1, comm=None)
         del invcov
         del inmap
 
@@ -252,12 +261,17 @@ def main():
     log.info_rank("Inverting matrix", comm=comm)
     dist_rcond = PixelData(dist, float, n_value=1)
     covariance_invert(dist_cov, args.rcond_limit, rcond=dist_rcond, use_alltoallv=True)
-    log.info_rank(f"Inverted matrix", timer=timer, comm=comm)
+    log.info_rank(f"Inverted matrix in", timer=timer, comm=comm)
 
     if args.rcond is not None:
         log.info_rank(f"Writing {args.rcond}", comm=comm)
         if filename_is_fits(args.rcond):
-            write_healpix_fits(dist_rcond, args.rcond, nest=True)
+            write_healpix_fits(
+                dist_rcond,
+                args.rcond,
+                nest=True,
+                single_precision=not args.double_precision,
+            )
         else:
             write_healpix_hdf5(
                 dist_rcond,
@@ -278,7 +292,12 @@ def main():
         if args.scale is not None:
             dist_cov.data *= args.scale**2
         if filename_is_fits(args.cov):
-            write_healpix_fits(dist_cov, args.cov, nest=True)
+            write_healpix_fits(
+                dist_cov,
+                args.cov,
+                nest=True,
+                single_precision=not args.double_precision,
+            )
         else:
             write_healpix_hdf5(
                 dist_cov,
@@ -294,7 +313,12 @@ def main():
     if args.scale is not None:
         dist_map.data *= args.scale
     if filename_is_fits(args.outmap):
-        write_healpix_fits(dist_map, args.outmap, nest=True)
+        write_healpix_fits(
+            dist_map,
+            args.outmap,
+            nest=True,
+            single_precision=not args.double_precision,
+        )
     else:
         write_healpix_hdf5(
             dist_map,
