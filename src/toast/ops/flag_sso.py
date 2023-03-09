@@ -16,10 +16,13 @@ from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
+from ..traits import (Bool, Float, Instance, Int, List, Quantity, Unicode,
+                      trait_docs)
 from ..utils import Environment, Logger, Timer
 from .operator import Operator
 from .pipeline import Pipeline
+
+XAXIS, YAXIS, ZAXIS = np.eye(3)
 
 
 @trait_docs
@@ -153,20 +156,8 @@ class FlagSSO(Operator):
                 sso.compute(observer)
                 azvec[i] = sso.az
                 elvec[i] = sso.alt
-                # Did the SSO cross zero azimuth?
-                if i > 0 and np.abs(azvec[i - 1] - azvec[i]) > np.pi:
-                    # yes
-                    az1, az2 = azvec[i - 1], azvec[i]
-                    # unwind the angle
-                    if az1 < az2:
-                        az2 -= 2 * np.pi
-                    else:
-                        az2 += 2 * np.pi
-                    # Shift the second to last time stamp
-                    tvec[i - 1] = t
-                    azvec[i - 1] = az2
-                    elvec[i - 1] = sso.alt
-            sso_azs[isso] = np.interp(times, tvec, azvec)
+            azvec = np.unwrap(azvec)
+            sso_azs[isso] = np.interp(times, tvec, azvec) % (2 * np.pi)
             sso_els[isso] = np.interp(times, tvec, elvec)
         return sso_azs, sso_els
 
@@ -175,6 +166,7 @@ class FlagSSO(Operator):
         """
         Flag the SSO for each detector in tod
         """
+        log = Logger.get()
 
         exists_flags = obs.detdata.ensure(
             self.det_flags, dtype=np.uint8, detectors=dets
@@ -190,32 +182,23 @@ class FlagSSO(Operator):
                 self.detector_pointing.apply(obs_data, detectors=[det])
                 quats = obs.detdata[self.detector_pointing.quats][det]
 
-            # Convert Az/El quaternion of the detector into angles
-            theta, phi, _ = qa.to_iso_angles(quats)
-
-            # Azimuth is measured in the opposite direction
-            # than longitude
-            az = 2 * np.pi - phi
-            el = np.pi / 2 - theta
+            det_vec = qa.rotate(quats, ZAXIS)
 
             flags = obs.detdata[self.det_flags][det]
 
-            cosel = np.cos(el)
-            for sso_az, sso_el, sso_radius in zip(sso_azs, sso_els, self.sso_radii):
+            for sso_name, sso_az, sso_el, sso_radius in zip(
+                self.sso_names, sso_azs, sso_els, self.sso_radii
+            ):
                 radius = sso_radius.to_value(u.radian)
-                # Flag samples within search radius.
-                if radius > np.radians(15):
-                    # Exact formula for cosine of the angular distance
-                    rcos = np.sin(el) * np.sin(sso_el) + np.cos(el) * np.cos(
-                        sso_el
-                    ) * np.cos(az - sso_az)
-                    inside = rcos > np.cos(radius)
-                else:
-                    # This is the planar approximation for squared angular distance
-                    x = (az - sso_az) * cosel
-                    y = el - sso_el
-                    rsquared = x**2 + y**2
-                    inside = rsquared < radius**2
+                sso_vec = hp.dir2vec(np.pi / 2 - sso_el, -sso_az).T
+                dp = np.sum(det_vec * sso_vec, 1)
+                inside = dp > np.cos(radius)
+                frac = np.sum(inside) / inside.size
+                if frac > 0:
+                    log.debug(
+                        f"Flagged {frac * 100:.1f} % samples for "
+                        f"{det} due to {sso_name} in {obs.name}"
+                    )
                 flags[inside] |= self.det_flag_mask
 
         return
