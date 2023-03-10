@@ -423,21 +423,66 @@ class DetectorData(AcceleratorObject):
         return val
 
     def __eq__(self, other):
+        # Please leave the commented-out lines for ease of future
+        # debugging.
         if self.detectors != other.detectors:
+            # msg = f"DetectorData dets not equal {self.detectors} != {other.detectors}"
+            # print(msg)
             return False
         if self.dtype.char != other.dtype.char:
+            # msg = f"DetectorData dtype not equal {self.dtype.char} "
+            # msg += f"!= {other.dtype.char}"
+            # print(msg)
             return False
         if self.shape != other.shape:
+            # msg = f"DetectorData shape not equal {self.shape} != {other.shape}"
+            # print(msg)
             return False
         if self.units != other.units:
+            # msg = f"DetectorData dets not equal {self.units} != {other.units}"
+            # print(msg)
             return False
         if self.dtype == np.dtype(np.float64):
-            if not np.allclose(self.data, other.data, rtol=1.0e-5, atol=1.0e-8):
+            drange = np.amax(self.data) - np.amin(self.data)
+            rtol = 1.0e-12
+            atol = 10.0 * drange * 1.0e-15
+            if not np.allclose(self.data, other.data, rtol=rtol, atol=atol):
+                # indx = np.logical_not(
+                #     np.isclose(self.data, other.data, rtol=rtol, atol=atol)
+                # )
+                # msg = f"DetectorData array not close rtol={rtol}, atol={atol}:"
+                # for d in np.arange(self.data.shape[0]):
+                #     dname = self.detectors[d]
+                #     for s in np.arange(self.data.shape[1])[indx[d]]:
+                #         msg += f"\n {dname}, {s}:  {self.data[d, s]}"
+                #         msg += f" != {other.data[d, s]}"
+                # print(msg)
                 return False
         elif self.dtype == np.dtype(np.float32):
-            if not np.allclose(self.data, other.data, rtol=1.0e-4, atol=1.0e-7):
+            drange = np.amax(self.data) - np.amin(self.data)
+            rtol = 1.0e-6
+            atol = 10.0 * drange * 1.0e-6
+            if not np.allclose(self.data, other.data, rtol=rtol, atol=atol):
+                # indx = np.logical_not(
+                #     np.isclose(self.data, other.data, rtol=rtol, atol=atol)
+                # )
+                # msg = f"DetectorData array not close rtol={rtol}, atol={atol}:"
+                # for d in np.arange(self.data.shape[0]):
+                #     dname = self.detectors[d]
+                #     for s in np.arange(self.data.shape[1])[indx[d]]:
+                #         msg += f"\n {dname}, {s}:  {self.data[d, s]}"
+                #         msg += f" != {other.data[d, s]}"
+                # print(msg)
                 return False
         elif not np.array_equal(self.data, other.data):
+            # indx = np.where(self.data != other.data)[0]
+            # msg = "DetectorData array not equal:"
+            # for d in np.arange(self.data.shape[0]):
+            #     dname = self.detectors[d]
+            #     for s in np.arange(self.data.shape[1])[indx[d]]:
+            #         msg += f"\n {dname}, {s}:  {self.data[d, s]}"
+            #         msg += f" != {other.data[d, s]}"
+            # print(msg)
             return False
         return True
 
