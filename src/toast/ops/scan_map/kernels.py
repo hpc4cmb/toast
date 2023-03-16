@@ -6,11 +6,10 @@ import healpy as hp
 import numpy as np
 
 from ... import qarray as qa
-from ..._libtoast import AlignedF64, AlignedI64
-from ..._libtoast import scan_map_float32 as libtoast_scan_map_float32
-from ..._libtoast import scan_map_float64 as libtoast_scan_map_float64
-from ..._libtoast import scan_map_int32 as libtoast_scan_map_int32
-from ..._libtoast import scan_map_int64 as libtoast_scan_map_int64
+from ..._libtoast import ops_scan_map_float32 as libtoast_scan_map_float32
+from ..._libtoast import ops_scan_map_float64 as libtoast_scan_map_float64
+from ..._libtoast import ops_scan_map_int32 as libtoast_scan_map_int32
+from ..._libtoast import ops_scan_map_int64 as libtoast_scan_map_int64
 from ...accelerator import ImplementationType, kernel, use_accel_jax
 from .kernels_numpy import scan_map_numpy
 
@@ -64,7 +63,7 @@ def scan_map(
         None.
 
     """
-    return scan_map_pseudocompiled(
+    return scan_map_compiled(
         global2local,
         n_pix_submap,
         mapdata,
@@ -79,14 +78,15 @@ def scan_map(
         should_zero,
         should_subtract,
         should_scale,
-        use_accel)
+        use_accel,
+    )
+
 
 @kernel(impl=ImplementationType.COMPILED, name="scan_map")
 def scan_map_compiled(*args, use_accel=False):
-    return scan_map_pseudocompiled(*args, use_accel)
+    return scan_map_compiled(*args, use_accel)
 
-# FIXME:  This "compiled" kernel will migrate fully to the _libtoast extension.
-def scan_map_pseudocompiled(
+def scan_map_compiled(
     global2local,
     n_pix_submap,
     mapdata,
@@ -116,55 +116,20 @@ def scan_map_pseudocompiled(
         msg += f"type '{mapdata.dtype.char}'"
         raise NotImplementedError(msg)
 
-    nmap = 1
-    if len(weights.shape) > 2:
-        nmap = weights.shape[2]
-    for idet in range(len(det_data_index)):
-        pix = pixels[pixels_index[idet]]
-        wts = weights[weight_index[idet]]
-        tod = det_data[det_data_index[idet]]
-        for view in intervals:
-            view_samples = view.last + 1 - view.first
-            vslice = slice(view.first, view.last + 1)
-
-            # Temp buffers
-            local_tod_raw = AlignedF64.zeros(view_samples)
-            local_tod = local_tod_raw.array()
-            local_submap_pix_raw = AlignedI64.zeros(view_samples)
-            local_submap_pix = local_submap_pix_raw.array()
-            local_submap_pix[:] = -1
-            local_submap_raw = AlignedI64.zeros(view_samples)
-            local_submap = local_submap_raw.array()
-            local_submap[:] = -1
-
-            # Get local submaps and pixel indices within each submap
-            good = pix[vslice] >= 0
-            local_submap_pix[good] = pix[vslice][good] % n_pix_submap
-            local_submap[good] = global2local[pix[vslice][good] // n_pix_submap]
-
-            fcomp(
-                n_pix_submap,
-                nmap,
-                local_submap,
-                local_submap_pix,
-                mapdata.reshape((-1,)),
-                wts[vslice].reshape((-1,)),
-                local_tod,
-            )
-
-            # Accumulate
-            if should_zero:
-                tod[vslice] = 0
-            if should_subtract:
-                tod[vslice][good] -= local_tod[good]
-            elif should_scale:
-                tod[vslice][good] *= local_tod[good]
-            else:
-                tod[vslice][good] += local_tod[good]
-
-            del local_submap
-            del local_submap_raw
-            del local_submap_pix
-            del local_submap_pix_raw
-            del local_tod
-            del local_tod_raw
+    fcomp(
+        global2local,
+        n_pix_submap,
+        mapdata,
+        det_data,
+        det_data_index,
+        pixels,
+        pixels_index,
+        weights,
+        weight_index,
+        intervals,
+        data_scale,
+        should_zero,
+        should_subtract,
+        should_scale,
+        use_accel,
+    )

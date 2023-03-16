@@ -12,11 +12,62 @@
 #endif // ifdef _OPENMP
 
 
-// Declarations for OpenMP target offload helpers
+// Declarations for OpenMP target offload helpers.
 
-// This helper class stores a mapping between host and device pointers.
-// Once the OpenMP 5.1 standard is widely implemented across compilers,
-// We can use the omp_get_mapped_ptr() method.
+typedef struct {
+    // Pointers to the beginning and end of the block
+    void * start;
+    void * end;
+
+    // Size of the usable block in bytes, not including alignment padding.
+    size_t size;
+
+    // Size including alignment
+    size_t aligned_size;
+
+    // Whether that block has been freed
+    bool is_free;
+} OmpBlock;
+
+
+class OmpPoolResource {
+    public:
+
+        OmpPoolResource(int target, size_t size, size_t align = 256);
+        OmpPoolResource() : OmpPoolResource(-1, 0) {}
+
+        OmpPoolResource(int target) : OmpPoolResource(target, 0) {}
+
+        OmpPoolResource(OmpPoolResource const &) = delete;
+
+        ~OmpPoolResource();
+
+        void release();
+
+        void * allocate(std::size_t bytes);
+        void deallocate(void * p);
+
+    private:
+
+        int target_;
+        size_t pool_size_;
+        void * raw_;
+        size_t pool_used_;
+        size_t alignment_;
+
+        // Block handling
+        std::vector <OmpBlock> blocks_;
+        std::unordered_map <void *, size_t> ptr_to_block_;
+
+        void alloc();
+        bool verbose();
+        size_t block_index(void * ptr);
+        size_t compute_aligned_bytes(size_t bytes, size_t alignment);
+        void * shift_void_pointer(void * ptr, size_t offset_bytes);
+
+        // Remove free blocks
+        void garbage_collection();
+};
 
 
 class OmpManager {
@@ -24,7 +75,8 @@ class OmpManager {
 
         static OmpManager & get();
 
-        void assign_device(int node_procs, int node_rank, bool disabled = false);
+        void assign_device(int node_procs, int node_rank, float mem_gb,
+                           bool disabled = false);
         int get_device();
         bool device_is_host();
 
@@ -39,7 +91,17 @@ class OmpManager {
 
         ~OmpManager();
 
-        void * null;
+        template <typename T>
+        T * null_ptr() {
+            static T instance = T();
+            if (!present(static_cast <void *> (&instance), sizeof(T))) {
+                // Create device copy on demand
+                void * dummy = create(
+                    static_cast <void *> (&instance), sizeof(T)
+                );
+            }
+            return &instance;
+        }
 
         template <typename T>
         T * device_ptr(T * buffer) {
@@ -75,8 +137,6 @@ class OmpManager {
 
         OmpManager();
         void clear();
-        void allocate_dummy(int n_target);
-        void free_dummy();
 
         std::unordered_map <void *, size_t> mem_size_;
         std::unordered_map <void *, void *> mem_;
@@ -84,7 +144,8 @@ class OmpManager {
         int target_dev_;
         int node_procs_;
         int node_rank_;
-        void * dev_null_;
+
+        OmpPoolResource * pool_;
 };
 
 

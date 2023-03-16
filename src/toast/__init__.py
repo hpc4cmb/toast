@@ -26,6 +26,10 @@ TOAST_GPU_OPENMP=<value>
       target offload.
     * Requires compile-time support for OpenMP 5.x features.
 
+TOAST_GPU_MEM_GB=<value>
+    * Value in GB of memory to use for OpenMP on each GPU.
+    * Conservative default is 2GB.
+
 TOAST_GPU_JAX=<value>
     * Values "1", "true", or "yes" will enable runtime support for jax.
     * Requires jax to be available / importable.

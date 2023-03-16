@@ -12,6 +12,7 @@ from pshmem import MPIShared
 from .accelerator import (
     AcceleratorObject,
     accel_data_create,
+    accel_data_reset,
     accel_data_delete,
     accel_data_present,
     accel_data_update_device,
@@ -264,13 +265,13 @@ class DetectorData(AcceleratorObject):
             # move things to GPU if needed
             if should_update_GPU:
                 if use_accel_jax:
-                    # NOTE: we create an array of zeroes directly on GPU to avoid useless data movement
+                    # NOTE: we create an array of zeroes directly on GPU to avoid
+                    # useless data movement
                     self._data = MutableJaxArray(
                         self._data, gpu_data=jax.numpy.zeros_like(self._data)
                     )
-                else:
-                    # FIXME: Should we zero the device memory?
-                    pass
+                elif use_accel_omp:
+                    accel_data_reset(self._raw)
             realloced = False
         return realloced
 

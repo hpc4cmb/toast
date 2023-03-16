@@ -5,6 +5,8 @@
 
 #include <module.hpp>
 
+// FIXME:  This whole file should be removed and functionality placed
+// in ops_scan_map.cpp
 
 template <typename T>
 void register_scan_map(py::module & m, char const * name) {

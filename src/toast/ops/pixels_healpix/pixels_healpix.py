@@ -157,13 +157,7 @@ class PixelsHealpix(Operator):
             self._local_submaps = np.zeros(self._n_submap, dtype=np.uint8)
 
         # Expand detector pointing
-        if self.quats is not None:
-            quats_name = self.quats
-        else:
-            if self.detector_pointing.quats is not None:
-                quats_name = self.detector_pointing.quats
-            else:
-                quats_name = defaults.quats
+        quats_name = self.detector_pointing.quats
 
         view = self.view
         if view is None:
@@ -171,7 +165,6 @@ class PixelsHealpix(Operator):
             view = self.detector_pointing.view
 
         # Expand detector pointing
-        self.detector_pointing.quats = quats_name
         self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
         for ob in data.obs:
@@ -251,9 +244,9 @@ class PixelsHealpix(Operator):
                     ob.detdata.accel_create(self.pixels)
 
             # Get the flags if needed.  Use the same flags as
-            # detector pointing.  Use empty array in absence of flags
+            # detector pointing.
             if self.detector_pointing.shared_flags is None:
-                flags = np.array([], dtype=np.uint8)
+                flags = np.zeros(1, dtype=np.uint8)
             else:
                 flags = ob.shared[self.detector_pointing.shared_flags].data
 
@@ -322,11 +315,8 @@ class PixelsHealpix(Operator):
         return req
 
     def _provides(self):
-        # FIXME quats generated are keyed in self.detector_pointing.quats (and not self.quats)
-        prov = {
-            "detdata": [self.pixels, self.detector_pointing.quats],
-            "global": list(),
-        }
+        prov = self.detector_pointing.provides()
+        prov["detdata"].append(self.pixels)
         if self.create_dist is not None:
             prov["global"].append(self.create_dist)
         return prov
@@ -340,4 +330,9 @@ class PixelsHealpix(Operator):
         ]
 
     def _supports_accel(self):
-        return True
+        if (self.detector_pointing is not None) and (
+            self.detector_pointing.supports_accel()
+        ):
+            return True
+        else:
+            return False

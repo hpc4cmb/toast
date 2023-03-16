@@ -422,6 +422,8 @@ void init_ops_pointing_detector(py::module & m);
 void init_ops_stokes_weights(py::module & m);
 void init_ops_pixels_healpix(py::module & m);
 void init_ops_mapmaker_utils(py::module & m);
+void init_ops_noise_weight(py::module & m);
+void init_ops_scan_map(py::module & m);
 void init_io_compression_flac(py::module & m);
 
 #endif // ifndef LIBTOAST_HPP

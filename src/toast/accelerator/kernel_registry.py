@@ -80,7 +80,8 @@ def kernel(impl, name=None):
         if (
             (impl == ImplementationType.JAX) or (impl == ImplementationType.COMPILED)
         ) and accel_enabled():
-            registry[name][impl] = function_timer(function_datamovementtracker(f))
+            # registry[name][impl] = function_timer(function_datamovementtracker(f))
+            registry[name][impl] = function_timer(f)
         else:
             registry[name][impl] = function_timer(f)
 

@@ -243,7 +243,7 @@ class StokesWeights(Operator):
 
             if self.mode == "IQU":
                 if self.hwp_angle is None:
-                    hwp_data = np.zeros((0,), dtype=np.float64)
+                    hwp_data = np.zeros(1, dtype=np.float64)
                 else:
                     hwp_data = ob.shared[self.hwp_angle].data
                 stokes_weights_IQU(
@@ -295,4 +295,9 @@ class StokesWeights(Operator):
         ]
 
     def _supports_accel(self):
-        return True
+        if (self.detector_pointing is not None) and (
+            self.detector_pointing.supports_accel()
+        ):
+            return True
+        else:
+            return False

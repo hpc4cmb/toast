@@ -49,19 +49,22 @@ from .accelerator import accel_assign_device, use_accel_jax, use_accel_omp
 if use_accel_omp or use_accel_jax:
     node_procs = 1
     node_rank = 0
+    accel_gb = 2.0
+    if "TOAST_GPU_MEM_GB" in os.environ:
+        accel_gb = float(os.environ["TOAST_GPU_MEM_GB"])
     if use_mpi:
         # We need to compute which process goes to which device
         nodecomm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, 0)
         node_procs = nodecomm.size
         node_rank = nodecomm.rank
-        accel_assign_device(node_procs, node_rank, False)
+        accel_assign_device(node_procs, node_rank, accel_gb, False)
         nodecomm.Free()
         del nodecomm
     else:
-        accel_assign_device(node_procs, node_rank, False)
+        accel_assign_device(node_procs, node_rank, accel_gb, False)
 else:
     # Disabled == True
-    accel_assign_device(1, 0, True)
+    accel_assign_device(1, 0, 0.0, True)
 
 # We put other imports *after* the MPI check, since usually the MPI initialization
 # is time sensitive and may timeout the job if it does not happen quickly enough.

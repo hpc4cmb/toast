@@ -69,10 +69,13 @@ class NoiseWeight(Operator):
 
             # Compute the noise for each detector (using the correct units)
             noise = ob[self.noise_model]
-            detector_weights = [
-                noise.detector_weight(detector).to(data_invcov_units).value
-                for detector in dets
-            ]
+            detector_weights = np.array(
+                [
+                    noise.detector_weight(detector).to(data_invcov_units).value
+                    for detector in dets
+                ],
+                dtype=np.float64,
+            )
 
             # Multiply detectors by their respective noise weight
             intervals = ob.intervals[self.view].data

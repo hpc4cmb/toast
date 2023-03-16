@@ -268,12 +268,12 @@ def collect_healpix_submaps(pix, comm_bytes=10000000):
 
 @function_timer
 def write_healpix_fits(
-        pix,
-        path,
-        nest=True,
-        comm_bytes=10000000,
-        report_memory=False,
-        single_precision=False,
+    pix,
+    path,
+    nest=True,
+    comm_bytes=10000000,
+    report_memory=False,
+    single_precision=False,
 ):
     """Write pixel data to a HEALPix format FITS table.
 
