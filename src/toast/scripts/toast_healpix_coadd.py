@@ -191,6 +191,14 @@ def main():
             log.info_rank(f"{prefix}Inverted matrix in", timer=timer1, comm=None)
             del cov
 
+        # Optionally scale the maps
+        if args.scale is not None:
+            if noiseweighted:
+                inmap /= args.scale
+            else:
+                inmap *= args.scale
+            invcov /= args.scale**2
+
         if not noiseweighted:
             # Must reverse the multiplication with the
             # white noise covariance matrix
@@ -233,8 +241,6 @@ def main():
     if args.invcov is not None:
         log.info_rank(f"Writing {args.invcov}", comm=comm)
         if rank == 0:
-            if args.scale is not None:
-                invcov_sum /= args.scale**2
             write_healpix(
                 args.invcov, invcov_sum, nest=True, overwrite=True, dtype=dtype
             )
@@ -289,8 +295,6 @@ def main():
 
     if args.cov is not None:
         log.info_rank(f"Writing {args.cov}", comm=comm)
-        if args.scale is not None:
-            dist_cov.data *= args.scale**2
         if filename_is_fits(args.cov):
             write_healpix_fits(
                 dist_cov,
@@ -310,8 +314,6 @@ def main():
     del dist_cov
 
     log.info_rank(f"Writing {args.outmap}", comm=comm)
-    if args.scale is not None:
-        dist_map.data *= args.scale
     if filename_is_fits(args.outmap):
         write_healpix_fits(
             dist_map,
