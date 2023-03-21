@@ -30,6 +30,10 @@ TOAST_GPU_JAX=<value>
     * Values "1", "true", or "yes" will enable runtime support for jax.
     * Requires jax to be available / importable.
 
+TOAST_GPU_HYBRID_PIPELINES=<value>
+    * Values "0", "false", or "no" will disable runtime support for hybrid GPU pipelines.
+    * Requires TOAST_GPU_OPENMP or TOAST_GPU_JAX to be enabled.
+
 OMP_NUM_THREADS=<integer>
     * Toast uses OpenMP threading in several places and the concurrency is set by the
       usual environment variable.
