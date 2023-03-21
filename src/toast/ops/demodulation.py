@@ -588,7 +588,7 @@ class Demodulate(Operator):
                 demod_freqs[demod_det] = freq_out
                 demod_psds[demod_det] = psd_out
                 demod_indices[demod_det] = noise.index(det) * n_mode + indexoff
-                demod_weights[demod_det] = invvar
+                demod_weights[demod_det] = invvar / u.K**2
         demod_obs[self.noise_model] = Noise(
             detectors=demod_detectors,
             freqs=demod_freqs,
