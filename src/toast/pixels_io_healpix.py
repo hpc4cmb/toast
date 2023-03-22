@@ -267,7 +267,14 @@ def collect_healpix_submaps(pix, comm_bytes=10000000):
 
 
 @function_timer
-def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=False):
+def write_healpix_fits(
+        pix,
+        path,
+        nest=True,
+        comm_bytes=10000000,
+        report_memory=False,
+        single_precision=False,
+):
     """Write pixel data to a HEALPix format FITS table.
 
     The data across all processes is assumed to be synchronized (the data for a given
@@ -281,6 +288,7 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
         comm_bytes (int): The approximate message size to use.
         report_memory (bool): Report the amount of available memory on the root
             node just before writing out the map.
+        single_precision (bool): Cast float and integer maps to single precision.
 
     Returns:
         None
@@ -313,6 +321,12 @@ def write_healpix_fits(pix, path, nest=True, comm_bytes=10000000, report_memory=
         if os.path.isfile(path):
             os.remove(path)
         dtypes = [np.dtype(pix.dtype) for x in range(pix.n_value)]
+        if single_precision:
+            for i, dtype in enumerate(dtypes):
+                if dtype == np.float64:
+                    dtypes[i] = np.float32
+                elif dtype == np.int64:
+                    dtypes[i] = np.int32
         if report_memory:
             mem = memreport(msg="(root node)", silent=True)
             log.info_rank(f"About to write {path}:  {mem}")
