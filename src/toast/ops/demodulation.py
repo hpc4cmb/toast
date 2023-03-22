@@ -1,4 +1,4 @@
-# Copyright (c) 2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -407,6 +407,9 @@ class Demodulate(Operator):
         for name, ivals in obs.intervals.items():
             timespans = [[ival.start, ival.stop] for ival in ivals]
             demod_obs.intervals[name] = IntervalList(times, timespans=timespans)
+        # Force the creation of new "all" interval
+        del demod_obs.intervals[None]
+        return
 
     @function_timer
     def _demodulate_flag(self, flags, wkernel, offset):
