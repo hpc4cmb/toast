@@ -1,4 +1,4 @@
-# Copyright (c) 2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -407,6 +407,9 @@ class Demodulate(Operator):
         for name, ivals in obs.intervals.items():
             timespans = [[ival.start, ival.stop] for ival in ivals]
             demod_obs.intervals[name] = IntervalList(times, timespans=timespans)
+        # Force the creation of new "all" interval
+        del demod_obs.intervals[None]
+        return
 
     @function_timer
     def _demodulate_flag(self, flags, wkernel, offset):
@@ -588,7 +591,7 @@ class Demodulate(Operator):
                 demod_freqs[demod_det] = freq_out
                 demod_psds[demod_det] = psd_out
                 demod_indices[demod_det] = noise.index(det) * n_mode + indexoff
-                demod_weights[demod_det] = invvar
+                demod_weights[demod_det] = invvar / u.K**2
         demod_obs[self.noise_model] = Noise(
             detectors=demod_detectors,
             freqs=demod_freqs,
