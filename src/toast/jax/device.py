@@ -36,14 +36,16 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
     jax_local_device = devices_available[device_id]
     jax.config.update("jax_default_device", jax_local_device)
     # sets the size of the preallocated memory pool (if it is still possible)
-    default_mem_fraction = 0.99
+    # we work with integers first to insure rounding down by a percent
+    default_mem_percent = 90
     process_per_device = math.ceil(node_procs / nb_devices)
-    mem_fraction = min(default_mem_fraction, default_mem_fraction / process_per_device)
+    mem_percent = min(default_mem_percent, default_mem_percent // process_per_device)
+    mem_fraction = mem_percent / 100
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = f"{mem_fraction:.2f}"
     # displays information on the device picked
     log = Logger.get()
     log.debug(
-        f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({jax_local_device})"
+        f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({jax_local_device} mem_fraction:{mem_fraction:.2f})"
     )
 
 
