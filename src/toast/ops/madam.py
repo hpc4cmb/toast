@@ -59,6 +59,8 @@ def madam_params_from_mapmaker(mapmaker):
         "write_matrix": mapmaker.write_invcov,
         "write_wcov": mapmaker.write_cov,
         "write_mask": mapmaker.write_rcond,
+        "write_binmap": mapmaker.write_binmap,
+        "write_map": mapmaker.write_map,
         "info": 3,
         "iter_max": mapmaker.iter_max,
         "pixlim_cross": mapmaker.solve_rcond_threshold,
@@ -85,18 +87,12 @@ def madam_params_from_mapmaker(mapmaker):
         baselines = None
 
     if baselines is None or not baselines.enabled:
-        params.update(
-            {
-                "write_binmap": True,
-                "write_map": False,
-                "kfirst": False,
-            }
-        )
+        params["kfirst"] = False
+        if params["write_map"]:
+            params.update({"write_binmap": True, "write_map": False})
     else:
         params.update(
             {
-                "write_binmap": False,
-                "write_map": True,
                 "kfilter": baselines.use_noise_prior,
                 "kfirst": True,
                 "base_first": baselines.step_time.to_value(u.s),
