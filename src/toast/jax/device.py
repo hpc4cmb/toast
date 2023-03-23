@@ -3,17 +3,28 @@ import os
 import jax
 from .._libtoast import Logger
 
-def slurm_nb_devices():
+def get_environement_nb_devices():
     """
     Returns the number of devices available on this node.
     (without calling a Jax function)
+
+    FIXME: this function could be:
+    - replaced by future mpi4py functionality,
+    - moved to accel.py,
+    - have its output passed to accel_get_device functions.
     """
-    if 'SLURM_GPUS_ON_NODE' in os.environ:
-        return int(os.environ['SLURM_GPUS_ON_NODE'])
-    elif 'SLURM_GPUS_PER_NODE' in os.environ:
-        return int(os.environ['SLURM_GPUS_PER_NODE'])
-    else:
-        return 1
+    # tries slurm specific variables
+    for slurm_var in ['SLURM_GPUS_ON_NODE', 'SLURM_GPUS_PER_NODE']:
+        if slurm_var in os.environ:
+            nb_devices = int(os.environ[slurm_var])
+            return nb_devices
+    # tries device lists
+    for device_list in ['CUDA_VISIBLE_DEVICES', 'ROCR_VISIBLE_DEVICES', 'GPU_DEVICE_ORDINAL', 'HIP_VISIBLE_DEVICES']:
+        if device_list in os.environ:
+            nb_devices = len(os.environ[device_list].split(','))
+            return nb_devices
+    # defaults to 1 in the absence of further information
+    return 1
 
 
 def jax_accel_get_device():
@@ -44,7 +55,7 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
     """
     if (not disabled) and (node_procs > 1): 
         # gets id of device to be used by this process
-        nb_devices = slurm_nb_devices()
+        nb_devices = max(1, get_environement_nb_devices())
         device_id = node_rank % nb_devices
         process_per_device = math.ceil(node_procs / nb_devices)
         # sets the size of the preallocated memory pool
