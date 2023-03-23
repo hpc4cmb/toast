@@ -38,9 +38,10 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
 
     Returns:
         None: the device is stored in JAX internal state
+
+    WARNING: no Jax function should be called before the call to `initialize` inside this function.
     """
     if (not disabled) and (node_procs > 1): 
-        # WARNING: we cannot use a Jax function before the call to `initialize`
         # gets id of device to be used by this process
         nb_devices = slurm_nb_devices()
         device_id = node_rank % nb_devices
