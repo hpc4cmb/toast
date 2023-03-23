@@ -313,6 +313,10 @@ class FilterBin(Operator):
 
     write_obs_matrix = Bool(False, help="Write the observation matrix")
 
+    noiseweight_obs_matrix = Bool(
+        False, help="If True, observation matrix should match noise-weighted maps"
+    )
+
     output_dir = Unicode(
         ".",
         help="Write output data products to this directory",
@@ -658,15 +662,16 @@ class FilterBin(Operator):
         memreport.apply(data)
 
         if self.write_obs_matrix:
-            log.debug_rank(
-                "FilterBin: Noise-weighting observation matrix", comm=self.comm
-            )
-            self._noiseweight_obs_matrix(data)
-            log.debug_rank(
-                "FilterBin: Noise-weighted observation_matrix in",
-                comm=self.comm,
-                timer=timer2,
-            )
+            if not self.noiseweight_obs_matrix:
+                log.debug_rank(
+                    "FilterBin: De-weighting observation matrix", comm=self.comm
+                )
+                self._deweight_obs_matrix(data)
+                log.debug_rank(
+                    "FilterBin: De-weighted observation_matrix in",
+                    comm=self.comm,
+                    timer=timer2,
+                )
 
             log.info_rank("FilterBin: Collecting observation matrix", comm=self.comm)
             self._collect_obs_matrix()
@@ -1076,7 +1081,7 @@ class FilterBin(Operator):
         return
 
     @function_timer
-    def _noiseweight_obs_matrix(self, data):
+    def _deweight_obs_matrix(self, data):
         """Apply (P^T N^-1 P)^-1 to the cumulative part of the
         observation matrix, P^T N^-1 Z P.
         """
@@ -1202,7 +1207,12 @@ class FilterBin(Operator):
                 factor *= 2
 
             # Write out the observation matrix
-            fname = os.path.join(self.output_dir, f"{self.name}_obs_matrix")
+            if self.noiseweight_obs_matrix:
+                fname = os.path.join(
+                    self.output_dir, f"{self.name}_noiseweighted_obs_matrix"
+                )
+            else:
+                fname = os.path.join(self.output_dir, f"{self.name}_obs_matrix")
             fname += f".{row_start:012}.{row_stop:012}.{nrow_tot:012}"
             log.debug_rank(
                 f"FilterBin: Writing observation matrix to {fname}.npz",
