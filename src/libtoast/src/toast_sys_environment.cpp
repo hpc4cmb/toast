@@ -150,7 +150,10 @@ toast::Environment::Environment() {
     func_timers_ = false;
     envval = ::getenv("TOAST_FUNCTIME");
     if (envval != NULL) {
-        func_timers_ = true;
+        std::string envstring(envval);
+        if ((envstring == "1") || (envstring == "true") || (envstring == "yes")) {
+            func_timers_ = true;
+        }
     }
 
     // Select MKL threading layer

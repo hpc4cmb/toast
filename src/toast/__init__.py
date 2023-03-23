@@ -19,7 +19,7 @@ TOAST_LOGLEVEL=<value>
     * Controls logging of both C++ and Python code.
 
 TOAST_FUNCTIME=<value>
-    * Any non-empty value will enable python function timers in many parts of the code
+    * Values "1", "true", or "yes" will enable python function timers in many parts of the code.
 
 TOAST_GPU_OPENMP=<value>
     * Values "1", "true", or "yes" will enable runtime-support for OpenMP
@@ -29,6 +29,10 @@ TOAST_GPU_OPENMP=<value>
 TOAST_GPU_JAX=<value>
     * Values "1", "true", or "yes" will enable runtime support for jax.
     * Requires jax to be available / importable.
+
+TOAST_GPU_HYBRID_PIPELINES=<value>
+    * Values "0", "false", or "no" will disable runtime support for hybrid GPU pipelines.
+    * Requires TOAST_GPU_OPENMP or TOAST_GPU_JAX to be enabled.
 
 OMP_NUM_THREADS=<integer>
     * Toast uses OpenMP threading in several places and the concurrency is set by the
