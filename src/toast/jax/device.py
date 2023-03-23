@@ -15,6 +15,7 @@ def slurm_nb_devices():
     else:
         return 1
 
+
 def jax_accel_get_device():
     """Returns the device currenlty used by JAX."""
     # gets local device if it has been designated
@@ -60,5 +61,5 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
         local_device = jax_accel_get_device()
         log = Logger.get()
         log.debug(
-            f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({local_device} mem_fraction:{mem_fraction:.2f})"
+            f"JAX rank {node_rank}/{node_procs} uses {mem_percent}% of device {local_device} ({device_id+1}/{nb_devices})"
         )
