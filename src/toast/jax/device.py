@@ -53,7 +53,7 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
 
     WARNING: no Jax function should be called before the call to `initialize` inside this function.
     """
-    if (not disabled) and (node_procs > 1): 
+    if (not disabled) and (node_procs > 1) and (os.environ.get('JAX_PLATFORM_NAME', 'gpu') != 'cpu'): 
         # gets id of device to be used by this process
         nb_devices = max(1, get_environement_nb_devices())
         device_id = node_rank % nb_devices
@@ -71,6 +71,8 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
         # displays information on the device picked
         local_device = jax_accel_get_device()
         log = Logger.get()
-        log.debug(
-            f"JAX rank {node_rank}/{node_procs} uses {mem_percent}% of device {local_device} ({device_id+1}/{nb_devices})"
-        )
+        log.debug(f"JAX rank {node_rank}/{node_procs} uses {mem_percent}% of device {local_device} ({device_id+1}/{nb_devices})")
+    else:
+        local_device = jax_accel_get_device()
+        log = Logger.get()
+        log.debug(f"JAX rank {node_rank}/{node_procs} uses device {local_device}")        
