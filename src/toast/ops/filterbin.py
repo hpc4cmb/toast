@@ -17,6 +17,7 @@ from .._libtoast import (
     accumulate_observation_matrix,
     build_template_covariance,
     expand_matrix,
+    add_matrix,
     fourier,
     legendre,
 )
@@ -887,6 +888,35 @@ class FilterBin(Operator):
         return compressed_pixels, local_to_global.size, local_to_global
 
     @function_timer
+    def _add_matrix(self, local_obs_matrix, detweight):
+        """Add the local (per detector) observation matrix to the full
+        matrix
+        """
+        # Use scipy sparse implementation
+        # self.obs_matrix += local_obs_matrix * detweight
+        # Use our own compiled kernel
+        n = self.obs_matrix.nnz + local_obs_matrix.nnz
+        data = np.zeros(n, dtype=np.float64)
+        indices = np.zeros(n, dtype=np.int64)
+        indptr = np.zeros(self.npixtot + 1, dtype=np.int64)
+        add_matrix(
+            self.obs_matrix.data,
+            self.obs_matrix.indices,
+            self.obs_matrix.indptr,
+            local_obs_matrix.data * detweight,
+            local_obs_matrix.indices,
+            local_obs_matrix.indptr,
+            data,
+            indices,
+            indptr,
+        )
+        n = indptr[-1]
+        self.obs_matrix = scipy.sparse.csr_matrix(
+            (data[:n], indices[:n], indptr),
+            shape=(self.npixtot, self.npixtot),
+        )
+        return
+
     def _expand_matrix(self, compressed_matrix, local_to_global):
         """Expands a dense, compressed matrix into a sparse matrix with
         global indexing
@@ -1027,7 +1057,7 @@ class FilterBin(Operator):
         if self.grank == 0:
             log.debug(f"{self.group:4} : FilterBin:     Adding to global")
         detweight = obs[self.binning.noise_model].detector_weight(det)
-        self.obs_matrix += local_obs_matrix * detweight
+        self._add_matrix(local_obs_matrix, detweight)
         if self.grank == 0:
             log.debug(
                 f"{self.group:4} : FilterBin:     Added in {time() - t1:.2f} s",

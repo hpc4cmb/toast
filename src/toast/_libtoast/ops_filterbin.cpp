@@ -88,6 +88,88 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
     }
 }
 
+void add_matrix(
+		py::array_t <double> data1,
+		py::array_t <int64_t> indices1,
+		py::array_t <int64_t> indptr1,
+		py::array_t <double> data2,
+		py::array_t <int64_t> indices2,
+		py::array_t <int64_t> indptr2,
+		py::array_t <double> data3,
+		py::array_t <int64_t> indices3,
+		py::array_t <int64_t> indptr3
+) {
+  /* Compiled kernel to add two CSR matrices
+   */
+    auto fast_data1 = data1.unchecked <1>();
+    auto fast_indices1 = indices1.unchecked <1>();
+    auto fast_indptr1 = indptr1.unchecked <1>();
+    auto fast_data2 = data2.unchecked <1>();
+    auto fast_indices2 = indices2.unchecked <1>();
+    auto fast_indptr2 = indptr2.unchecked <1>();
+    auto fast_data3 = data3.mutable_unchecked <1>();
+    auto fast_indices3 = indices3.mutable_unchecked <1>();
+    auto fast_indptr3 = indptr3.mutable_unchecked <1>();
+
+    const size_t n1 = fast_data1.shape(0);
+    const size_t n2 = fast_data2.shape(0);
+    const size_t n3 = fast_data3.shape(0);
+    if (indptr1.shape(0) != indptr2.shape(0) ||
+	indptr1.shape(0) != indptr3.shape(0)) {
+        throw std::length_error("Input and output sizes do not agree");
+    }
+    const size_t nrow = indptr1.shape(0) - 1;
+
+    // Collect each row's data into vectors
+    std::vector <std::vector<double> > row_data(nrow);
+    std::vector <std::vector<int64_t> > row_indices(nrow);
+    #pragma omp parallel for schedule(static, 1)
+    for (size_t row=0; row < nrow; ++row) {
+        const size_t start1 = fast_indptr1[row];
+	const size_t stop1 = fast_indptr1[row + 1];
+	std::map <size_t, double> datamap;
+	// Entries from the first input always generate new entries
+	for (size_t ind1 = start1; ind1 < stop1; ++ind1) {
+	    const size_t col1 = fast_indices1[ind1];
+	    const double value1 = fast_data1[ind1];
+	    datamap[col1] = value1;
+        }
+	size_t start2 = fast_indptr2[row];
+	size_t stop2 = fast_indptr2[row + 1];
+	// Entries from the second input are either added or
+	// generate new entries
+	for (size_t ind2 = start2; ind2 < stop2; ++ind2) {
+	    const size_t col2 = fast_indices2[ind2];
+	    const double value2 = fast_data2[ind2];
+	    auto match = datamap.find(col2);
+	    if (match == datamap.end()) {
+	        datamap[col2] = value2;
+	    } else {
+	        match->second += value2;
+	    }
+	}
+	// Translate the map into column indices and values
+	// The entries are automatically iterated in column order
+	for (auto entry = datamap.begin(); entry != datamap.end(); ++entry) {
+	    row_indices[row].push_back(entry->first);
+	    row_data[row].push_back(entry->second);
+	}
+    }
+
+    // Pack the row vectors into the output arrays
+    size_t offset = 0;
+    fast_indptr3[0] = 0;
+    for (size_t row = 0; row < nrow; ++row) {
+        size_t nnz = row_data[row].size();
+	for (size_t i = 0; i < nnz; ++i) {
+	  fast_data3[offset] = row_data[row][i];
+	  fast_indices3[offset] = row_indices[row][i];
+	  ++offset;
+	}
+	fast_indptr3[row + 1] = offset;
+    }
+}
+
 void expand_matrix(py::array_t <double> compressed_matrix,
                    py::array_t <int64_t> local_to_global,
                    int64_t npix,
@@ -324,5 +406,6 @@ void init_todmap_mapmaker(py::module & m) {
     m.def("apply_flags_to_pixels", &apply_flags_to_pixels);
     m.def("accumulate_observation_matrix", &accumulate_observation_matrix);
     m.def("expand_matrix", &expand_matrix);
+    m.def("add_matrix", &add_matrix);
     m.def("build_template_covariance", &build_template_covariance);
 }
