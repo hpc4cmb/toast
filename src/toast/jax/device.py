@@ -4,6 +4,29 @@ import jax
 from .._libtoast import Logger
 
 
+def get_environement_nb_devices():
+    """
+    Returns the number of devices available on this node.
+    (without calling a Jax function)
+    FIXME: this function could be:
+    - replaced by future mpi4py functionality,
+    - moved to accel.py,
+    - have its output passed to accel_get_device functions.
+    """
+    # tries slurm specific variables
+    for slurm_var in ['SLURM_GPUS_ON_NODE', 'SLURM_GPUS_PER_NODE']:
+        if slurm_var in os.environ:
+            nb_devices = int(os.environ[slurm_var])
+            return nb_devices
+    # tries device lists
+    for device_list in ['CUDA_VISIBLE_DEVICES', 'ROCR_VISIBLE_DEVICES', 'GPU_DEVICE_ORDINAL', 'HIP_VISIBLE_DEVICES']:
+        if device_list in os.environ:
+            nb_devices = len(os.environ[device_list].split(','))
+            return nb_devices
+    # defaults to 1 in the absence of further information
+    return 1
+
+
 def jax_accel_get_device():
     """Returns the device currenlty used by JAX."""
     # gets local device if it has been designated
@@ -28,7 +51,7 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
     Returns:
         None: the device is stored in JAX internal state
 
-    WARNING: no Jax function should be called before this function.
+    WARNING: no Jax function should be called before the call to `initialize` in this function.
     """
     log = Logger.get()
     # allocates memory as needed instead of preallocating a large block all at once
@@ -39,14 +62,13 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
     os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     # picks device
     if (not disabled) and (node_procs > 1) and (os.environ.get('JAX_PLATFORM_NAME', 'gpu') != 'cpu'): 
-        devices_available = jax.local_devices()
         # gets id of device to be used by this process
-        nb_devices = len(devices_available)
+        nb_devices = max(1, get_environement_nb_devices())
         device_id = node_rank % nb_devices
-        # sets device as default
-        local_device = devices_available[device_id]
-        jax.config.update("jax_default_device", local_device)
-        # display information on the device picked
+        # associate the device to this process
+        jax.distributed.initialize(local_device_ids=[device_id])
+        # displays information on the device picked
+        local_device = jax_accel_get_device()
         log.debug(f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({local_device})")
     else:
         local_device = jax_accel_get_device()
