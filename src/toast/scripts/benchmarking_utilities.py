@@ -404,11 +404,11 @@ def select_case(
         cases_samples = {
             "heroic": 5000000000000,  # O(1000) TB RAM
             "xlarge": 500000000000,  # O(100) TB RAM
-            "large": 50000000000,  # O(10) TB RAM
+            "large":  50000000000,  # O(10) TB RAM
             "medium": 5000000000,  # O(1) TB RAM
-            "small": 500000000,  # O(100) GB RAM
+            "small":  500000000,  # O(100) GB RAM
             "xsmall": 50000000,  # O(10) GB RAM
-            "tiny": 5000000,  # O(1) GB RAM
+            "tiny":   5000000,  # O(1) GB RAM
         }
         # force use the case size suggested by the user
         max_samples = cases_samples[args.case]
