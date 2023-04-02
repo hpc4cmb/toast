@@ -3,11 +3,11 @@ import os
 import jax
 from .._libtoast import Logger
 
+
 def get_environement_nb_devices():
     """
     Returns the number of devices available on this node.
     (without calling a Jax function)
-
     FIXME: this function could be:
     - replaced by future mpi4py functionality,
     - moved to accel.py,
@@ -51,28 +51,25 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
     Returns:
         None: the device is stored in JAX internal state
 
-    WARNING: no Jax function should be called before the call to `initialize` inside this function.
+    WARNING: no Jax function should be called before the call to `initialize` in this function.
     """
+    log = Logger.get()
+    # allocates memory as needed instead of preallocating a large block all at once
+    # this is required to get multi-process / multi-node working properly
+    # this needs to be set before calling any JAX function
+    if 'XLA_PYTHON_CLIENT_PREALLOCATE' in os.environ:
+        log.warning(f"'XLA_PYTHON_CLIENT_PREALLOCATE' variable detected in environement. TOAST will overwrite it to 'false'.")
+    os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+    # picks device
     if (not disabled) and (node_procs > 1) and (os.environ.get('JAX_PLATFORM_NAME', 'gpu') != 'cpu'): 
         # gets id of device to be used by this process
         nb_devices = max(1, get_environement_nb_devices())
         device_id = node_rank % nb_devices
-        process_per_device = math.ceil(node_procs / nb_devices)
-        # sets the size of the preallocated memory pool
-        # (this will only work if Jax has not be initialized yet)
-        # we work with integers first to insure rounding down by a percent
-        default_mem_fraction = float(os.environ.get('XLA_PYTHON_CLIENT_MEM_FRACTION', 0.9))
-        default_mem_percent = int(100 * default_mem_fraction)
-        mem_percent = min(default_mem_percent, default_mem_percent // process_per_device)
-        mem_fraction = mem_percent / 100
-        os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = f"{mem_fraction:.2f}"
         # associate the device to this process
         jax.distributed.initialize(local_device_ids=[device_id])
         # displays information on the device picked
         local_device = jax_accel_get_device()
-        log = Logger.get()
-        log.debug(f"JAX rank {node_rank}/{node_procs} uses {mem_percent}% of device {local_device} ({device_id+1}/{nb_devices})")
+        log.debug(f"JAX rank {node_rank}/{node_procs} uses device number {device_id}/{nb_devices} ({local_device})")
     else:
         local_device = jax_accel_get_device()
-        log = Logger.get()
-        log.debug(f"JAX rank {node_rank}/{node_procs} uses device {local_device}")        
+        log.debug(f"JAX rank {node_rank}/{node_procs} uses device {local_device}")
