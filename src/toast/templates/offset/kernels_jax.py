@@ -121,8 +121,8 @@ def offset_add_to_signal_jax(
     offsets[0] = amp_offset
     offsets = np.cumsum(offsets)
     # prepare offsets intervals
-    offsets_start = offsets + intervals.first // step_length
-    offsets_end = offsets + intervals.last // step_length
+    offsets_start = offsets
+    offsets_end = offsets + (intervals.last - intervals.first) // step_length
     offsets_max_length = int(np.max(1 + offsets_end - offsets_start))
 
     # run computation
@@ -272,8 +272,8 @@ def offset_project_signal_jax(
     offsets[0] = amp_offset
     offsets = np.cumsum(offsets)
     # prepare offsets intervals
-    offsets_start = offsets + intervals.first // step_length
-    offsets_end = offsets + intervals.last // step_length
+    offsets_start = offsets
+    offsets_end = offsets + (intervals.last - intervals.first) // step_length
     offsets_max_length = int(np.max(1 + offsets_end - offsets_start))
 
     # run computation
