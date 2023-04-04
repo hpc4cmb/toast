@@ -55,16 +55,24 @@ def offset_add_to_signal_intervals(
 
     # pad the intervals to insure that are exactly nb_amplitudes*step_length long
     # meaning that we do not have to deal with leftovers
-    intervals_max_length = nb_amplitudes*step_length
+    intervals_max_length = nb_amplitudes * step_length
 
     # computes interval data
-    intervals = JaxIntervals(interval_starts, interval_ends + 1, intervals_max_length)  # end+1 as the interval is inclusive
-    offsets = JaxIntervals(offset_starts, offset_ends + 1, offsets_max_length)  # end+1 as the interval is inclusive
+    intervals = JaxIntervals(
+        interval_starts, interval_ends + 1, intervals_max_length
+    )  # end+1 as the interval is inclusive
+    offsets = JaxIntervals(
+        offset_starts, offset_ends + 1, offsets_max_length
+    )  # end+1 as the interval is inclusive
     amplitudes_interval = JaxIntervals.get(amplitudes, offsets)  # amplitudes[offsets]
-    det_data_interval = JaxIntervals.get(det_data, (data_index, intervals))  # det_data[data_index, intervals]
+    det_data_interval = JaxIntervals.get(
+        det_data, (data_index, intervals)
+    )  # det_data[data_index, intervals]
 
     # All but the last amplitude have step_length samples.
-    det_data_interval = jnp.reshape(det_data_interval, newshape=(nb_intervals, -1, step_length))
+    det_data_interval = jnp.reshape(
+        det_data_interval, newshape=(nb_intervals, -1, step_length)
+    )
     # det_data_interval += amplitudes[:, jnp.newaxis]
     det_data_interval = det_data_interval + amplitudes_interval[:, :, jnp.newaxis]
     det_data_interval = jnp.reshape(det_data_interval, newshape=(nb_intervals, -1))
@@ -189,27 +197,39 @@ def offset_project_signal_intervals(
 
     # pad the intervals to insure that are exactly nb_amplitudes*step_length long
     # meaning that we do not have to deal with leftovers
-    intervals_max_length = nb_amplitudes*step_length
+    intervals_max_length = nb_amplitudes * step_length
 
     # computes interval data
-    intervals = JaxIntervals(interval_starts, interval_ends + 1, intervals_max_length)  # end+1 as the interval is inclusive
-    offsets = JaxIntervals(offset_starts, offset_ends + 1, offsets_max_length)  # end+1 as the interval is inclusive
+    intervals = JaxIntervals(
+        interval_starts, interval_ends + 1, intervals_max_length
+    )  # end+1 as the interval is inclusive
+    offsets = JaxIntervals(
+        offset_starts, offset_ends + 1, offsets_max_length
+    )  # end+1 as the interval is inclusive
     amplitudes_interval = JaxIntervals.get(amplitudes, offsets)  # amplitudes[offsets]
-    det_data_interval = JaxIntervals.get(det_data, (data_index, intervals), padding_value=0.0) # det_data[data_index,intervals]
+    det_data_interval = JaxIntervals.get(
+        det_data, (data_index, intervals), padding_value=0.0
+    )  # det_data[data_index,intervals]
 
     # skip flagged samples
     if use_flag:
-        flags_interval = JaxIntervals.get(flag_data, (flag_index, intervals)) # flag_data[flag_index,intervals]
+        flags_interval = JaxIntervals.get(
+            flag_data, (flag_index, intervals)
+        )  # flag_data[flag_index,intervals]
         flagged = (flags_interval & flag_mask) != 0
         det_data_interval = jnp.where(flagged, 0.0, det_data_interval)
 
     # Reshape such that all amplitudes have step_length samples.
-    det_data_interval = jnp.reshape(det_data_interval, newshape=(nb_intervals, -1, step_length))
+    det_data_interval = jnp.reshape(
+        det_data_interval, newshape=(nb_intervals, -1, step_length)
+    )
     # amplitudes += np.sum(det_data_interval, axis=-1)
     amplitudes_interval = amplitudes_interval + jnp.sum(det_data_interval, axis=-1)
 
     # updates amplitudes and returns
-    amplitudes = JaxIntervals.set(amplitudes, offsets, amplitudes_interval) # amplitudes[offsets] = amplitudes_interval
+    amplitudes = JaxIntervals.set(
+        amplitudes, offsets, amplitudes_interval
+    )  # amplitudes[offsets] = amplitudes_interval
     return amplitudes
 
 

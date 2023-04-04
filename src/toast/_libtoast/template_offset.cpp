@@ -11,18 +11,17 @@
 
 // FIXME:  docstrings need to be updated if we keep these versions of the code.
 
-void init_template_offset(py::module &m)
-{
+void init_template_offset(py::module & m) {
     m.def(
         "template_offset_add_to_signal", [](
-                                             int64_t step_length,
-                                             int64_t amp_offset,
-                                             py::buffer n_amp_views,
-                                             py::buffer amplitudes,
-                                             int32_t data_index,
-                                             py::buffer det_data,
-                                             py::buffer intervals,
-                                             bool use_accel)
+            int64_t step_length,
+            int64_t amp_offset,
+            py::buffer n_amp_views,
+            py::buffer amplitudes,
+            int32_t data_index,
+            py::buffer det_data,
+            py::buffer intervals,
+            bool use_accel)
         {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
@@ -52,77 +51,80 @@ void init_template_offset(py::module &m)
             );
 
             if (offload) {
-#ifdef HAVE_OPENMP_TARGET
+                #ifdef HAVE_OPENMP_TARGET
 
                 double * dev_det_data = omgr.device_ptr(raw_det_data);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
-#pragma omp target data \
-device(dev)             \
-    map(to              \
-        : n_view,       \
-          n_samp,       \
-          data_index,   \
-          step_length,  \
-          amp_offset,   \
-          raw_n_amp_views)
+                # pragma omp target data \
+                device(dev)              \
+                map(to                   \
+                : n_view,                \
+                n_samp,                  \
+                data_index,              \
+                step_length,             \
+                amp_offset,              \
+                raw_n_amp_views)
                 {
                     int64_t offset = amp_offset;
-#pragma omp target teams distribute firstprivate(offset) \
-    is_device_ptr(                                       \
-        dev_amplitudes,                                  \
-        dev_det_data,                                    \
-        dev_intervals)
+                    # pragma omp target teams distribute firstprivate(offset) \
+                    is_device_ptr(                                            \
+                    dev_amplitudes,                                           \
+                    dev_det_data,                                             \
+                    dev_intervals)
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         int64_t first_samp = dev_intervals[iview].first;
-#pragma omp parallel for default(shared)
+                        # pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = dev_intervals[iview].first;
                             isamp <= dev_intervals[iview].last;
                             isamp++
                         ) {
                             int64_t d = data_index * n_samp + isamp;
-                            int64_t amp = offset + (int64_t)((isamp - first_samp) / step_length);
+                            int64_t amp = offset +
+                                          (int64_t)((isamp - first_samp) / step_length);
                             dev_det_data[d] += dev_amplitudes[amp];
                         }
                         offset += raw_n_amp_views[iview];
                     }
                 }
 
-#endif // ifdef HAVE_OPENMP_TARGET
+                #endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 int64_t offset = amp_offset;
                 for (int64_t iview = 0; iview < n_view; iview++) {
                     int64_t first_samp = raw_intervals[iview].first;
-#pragma omp parallel for default(shared)
+                    #pragma omp parallel for default(shared)
                     for (
                         int64_t isamp = raw_intervals[iview].first;
                         isamp <= raw_intervals[iview].last;
                         isamp++
                     ) {
                         int64_t d = data_index * n_samp + isamp;
-                        int64_t amp = offset + (int64_t)((isamp - first_samp) / step_length);
+                        int64_t amp = offset +
+                                      (int64_t)((isamp - first_samp) / step_length);
                         raw_det_data[d] += raw_amplitudes[amp];
                     }
                     offset += raw_n_amp_views[iview];
                 }
             }
-            return; });
+            return;
+        });
 
     m.def(
         "template_offset_project_signal", [](
-                                              int32_t data_index,
-                                              py::buffer det_data,
-                                              int32_t flag_index,
-                                              py::buffer flag_data,
-                                              uint8_t flag_mask,
-                                              int64_t step_length,
-                                              int64_t amp_offset,
-                                              py::buffer n_amp_views,
-                                              py::buffer amplitudes,
-                                              py::buffer intervals,
-                                              bool use_accel)
+            int32_t data_index,
+            py::buffer det_data,
+            int32_t flag_index,
+            py::buffer flag_data,
+            uint8_t flag_mask,
+            int64_t step_length,
+            int64_t amp_offset,
+            py::buffer n_amp_views,
+            py::buffer amplitudes,
+            py::buffer intervals,
+            bool use_accel)
         {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
@@ -162,42 +164,43 @@ device(dev)             \
             }
 
             if (offload) {
-#ifdef HAVE_OPENMP_TARGET
+                #ifdef HAVE_OPENMP_TARGET
 
                 double * dev_det_data = omgr.device_ptr(raw_det_data);
                 uint8_t * dev_det_flags = omgr.device_ptr(raw_det_flags);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
-#pragma omp target data    \
-device(dev)                \
-    map(to                 \
-        : n_view,          \
-          n_samp,          \
-          data_index,      \
-          flag_index,      \
-          step_length,     \
-          amp_offset,      \
-          raw_n_amp_views, \
-          use_flags)
+                # pragma omp target data \
+                device(dev)              \
+                map(to                   \
+                : n_view,                \
+                n_samp,                  \
+                data_index,              \
+                flag_index,              \
+                step_length,             \
+                amp_offset,              \
+                raw_n_amp_views,         \
+                use_flags)
                 {
                     int64_t offset = amp_offset;
-#pragma omp target teams distribute firstprivate(offset) \
-    is_device_ptr(                                       \
-        dev_amplitudes,                                  \
-        dev_det_data,                                    \
-        dev_det_flags,                                   \
-        dev_intervals)
+                    # pragma omp target teams distribute firstprivate(offset) \
+                    is_device_ptr(                                            \
+                    dev_amplitudes,                                           \
+                    dev_det_data,                                             \
+                    dev_det_flags,                                            \
+                    dev_intervals)
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         int64_t first_samp = dev_intervals[iview].first;
-#pragma omp parallel for default(shared)
+                        # pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = dev_intervals[iview].first;
                             isamp <= dev_intervals[iview].last;
                             isamp++
                         ) {
                             int64_t d = data_index * n_samp + isamp;
-                            int64_t amp = offset + (int64_t)((isamp - first_samp) / step_length);
+                            int64_t amp = offset +
+                                          (int64_t)((isamp - first_samp) / step_length);
                             double contrib = 0.0;
                             if (use_flags) {
                                 int64_t f = flag_index * n_samp + isamp;
@@ -208,56 +211,52 @@ device(dev)                \
                             } else {
                                 contrib = raw_det_data[d];
                             }
-#pragma omp atomic
+                            # pragma omp atomic
                             dev_amplitudes[amp] += contrib;
                         }
                         offset += raw_n_amp_views[iview];
                     }
                 }
 
-#endif // ifdef HAVE_OPENMP_TARGET
+                #endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 int64_t offset = amp_offset;
-                for (int64_t iview = 0; iview < n_view; iview++) 
-                {
+                for (int64_t iview = 0; iview < n_view; iview++) {
                     int64_t first_samp = raw_intervals[iview].first;
-#pragma omp parallel for default(shared)
+                    #pragma omp parallel for default(shared)
                     for (
                         int64_t isamp = raw_intervals[iview].first;
                         isamp <= raw_intervals[iview].last;
                         isamp++
-                    ) 
-                    {
+                    ) {
                         int64_t d = data_index * n_samp + isamp;
-                        int64_t amp = offset + (int64_t)((isamp - first_samp) / step_length);
+                        int64_t amp = offset +
+                                      (int64_t)((isamp - first_samp) / step_length);
                         double contrib = 0.0;
-                        if (use_flags) 
-                        {
+                        if (use_flags) {
                             int64_t f = flag_index * n_samp + isamp;
                             uint8_t check = raw_det_flags[f] & flag_mask;
-                            if (check == 0) 
-                            {
+                            if (check == 0) {
                                 contrib = raw_det_data[d];
                             }
-                        } 
-                        else 
-                        {
+                        } else {
                             contrib = raw_det_data[d];
                         }
-#pragma omp atomic
+                        #pragma omp atomic
                         raw_amplitudes[amp] += contrib;
                     }
                     offset += raw_n_amp_views[iview];
                 }
             }
-            return; });
+            return;
+        });
 
     m.def(
         "template_offset_apply_diag_precond", [](
-                                                  py::buffer offset_var,
-                                                  py::buffer amplitudes_in,
-                                                  py::buffer amplitudes_out,
-                                                  bool use_accel)
+            py::buffer offset_var,
+            py::buffer amplitudes_in,
+            py::buffer amplitudes_out,
+            bool use_accel)
         {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
@@ -280,24 +279,24 @@ device(dev)                \
             );
 
             if (offload) {
-#ifdef HAVE_OPENMP_TARGET
+                #ifdef HAVE_OPENMP_TARGET
 
                 double * dev_amp_in = omgr.device_ptr(raw_amp_in);
                 double * dev_amp_out = omgr.device_ptr(raw_amp_out);
                 double * dev_offset_var = omgr.device_ptr(raw_offset_var);
 
-#pragma omp target data \
-device(dev)             \
-    map(to              \
-        : n_amp)
+                # pragma omp target data \
+                device(dev)              \
+                map(to                   \
+                : n_amp)
                 {
-#pragma omp target \
-is_device_ptr(     \
-    dev_amp_in,    \
-    dev_amp_out,   \
-    dev_offset_var)
+                    # pragma omp target \
+                    is_device_ptr(      \
+                    dev_amp_in,         \
+                    dev_amp_out,        \
+                    dev_offset_var)
                     {
-#pragma omp parallel for default(shared)
+                        # pragma omp parallel for default(shared)
                         for (int64_t iamp = 0; iamp < n_amp; iamp++) {
                             dev_amp_out[iamp] = dev_amp_in[iamp];
                             dev_amp_out[iamp] *= dev_offset_var[iamp];
@@ -305,15 +304,16 @@ is_device_ptr(     \
                     }
                 }
 
-#endif // ifdef HAVE_OPENMP_TARGET
+                #endif // ifdef HAVE_OPENMP_TARGET
             } else {
-#pragma omp parallel for default(shared)
+                #pragma omp parallel for default(shared)
                 for (int64_t iamp = 0; iamp < n_amp; iamp++) {
                     raw_amp_out[iamp] = raw_amp_in[iamp];
                     raw_amp_out[iamp] *= raw_offset_var[iamp];
                 }
             }
-            return; });
+            return;
+        });
 
     // m.def(
     //     "template_offset_add_to_signal", [](int64_t step_length, py::buffer
