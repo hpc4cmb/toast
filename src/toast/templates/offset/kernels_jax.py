@@ -55,6 +55,10 @@ def offset_add_to_signal_intervals(
     nb_intervals = interval_starts.size
     nb_amplitudes = offsets_max_length
 
+    # pad the intervals to insure that are long enough
+    # TODO we could pad to have exactly nb_amplitudes*step_length and not have to deal with leftover
+    intervals_max_length = max(intervals_max_length, (nb_amplitudes-1)*step_length)
+
     # computes interval data
     intervals = JaxIntervals(
         interval_starts, interval_ends + 1, intervals_max_length
@@ -182,7 +186,7 @@ def offset_project_signal_intervals(
         data_index (int)
         det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
         use_flag (bool): should we use flags
-        flag_index (int), strictly negative in the absence of a detcetor flag
+        flag_index (int), strictly negative in the absence of a detector flag
         flag_data (array, bool) size n_all_det*n_samp
         flag_mask (int),
         step_length (int64):  The minimum number of samples for each offset.
@@ -204,6 +208,10 @@ def offset_project_signal_intervals(
     # gets interval information
     nb_amplitudes = offsets_max_length
     nb_intervals = interval_starts.size
+
+    # pad the intervals to insure that are long enough
+    # TODO we could pad to have exactly nb_amplitudes*step_length and not have to deal with leftover
+    intervals_max_length = max(intervals_max_length, (nb_amplitudes-1)*step_length)
 
     # computes interval data
     intervals = JaxIntervals(
@@ -227,9 +235,9 @@ def offset_project_signal_intervals(
 
     # split data to separate the final amplitude from the rest
     # as it is the only one that does not have step_length samples
-    data_first = det_data_interval[:, : (nb_amplitudes - 1) * step_length]
+    data_first = det_data_interval[:, : ((nb_amplitudes - 1) * step_length)]
     data_first = jnp.reshape(data_first, newshape=(nb_intervals, -1, step_length))
-    data_last = det_data_interval[:, (nb_amplitudes - 1) * step_length :]
+    data_last = det_data_interval[:, ((nb_amplitudes - 1) * step_length) :]
 
     # All but the last amplitude have step_length samples.
     # amplitudes[:-1] += np.sum(data_first, axis=1)
