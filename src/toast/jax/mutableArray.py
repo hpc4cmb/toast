@@ -60,6 +60,10 @@ class MutableJaxArray:
         elif isinstance(input, np.ndarray) or isinstance(input, jax.numpy.ndarray):
             # those types can be feed to JAX raw with no error or performance problems
             return input
+        elif isinstance(input, memoryview):
+            # viewed as a numpy array first
+            # FIXME: there might be a more efficient way to deal with this input type
+            return np.asarray(input)
         else:
             # errors-out on other datatypes
             # so that we can make sure we are using the most efficient convertion available

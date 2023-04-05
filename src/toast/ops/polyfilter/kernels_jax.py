@@ -84,7 +84,7 @@ filter_poly2D_coeffs = jax.jit(filter_poly2D_coeffs, static_argnames="ngroup")
 
 
 @kernel(impl=ImplementationType.JAX, name="filter_poly2D")
-def filter_poly2D_jax(det_groups, templates, signals, masks, coeff):
+def filter_poly2D_jax(det_groups, templates, signals, masks, coeff, use_accel):
     """
     Solves for 2D polynomial coefficients at each sample.
 
@@ -94,6 +94,7 @@ def filter_poly2D_jax(det_groups, templates, signals, masks, coeff):
         signals (numpy array, float64):  The N_sample x N_detector data.
         masks (numpy array, uint8):  The N_sample x N_detector mask.
         coeff (numpy array, float64):  The N_sample x N_group x N_mode output coefficients.
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None: The coefficients are updated in place.
@@ -176,7 +177,7 @@ filter_polynomial_interval = jax.jit(
 
 
 @kernel(impl=ImplementationType.JAX, name="filter_polynomial")
-def filter_polynomial_jax(order, flags, signals_list, starts, stops):
+def filter_polynomial_jax(order, flags, signals_list, starts, stops, use_accel):
     """
     Fit and subtract a polynomial from one or more signals.
 
@@ -186,6 +187,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops):
         signals_list (list of numpy array of double):  A list of float64 arrays containing the signals.
         starts (numpy array, int64):  The start samples of each scan.
         stops (numpy array, int64):  The stop samples of each scan.
+        use_accel (bool): should we use the accelerator
 
     Returns:
         None: The signals are updated in place.

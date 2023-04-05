@@ -36,7 +36,7 @@ class INTERVALS_JAX:
             return 1
         else:
             # end+1 as TOAST intervals are inclusive
-            return np.max(1 + intervals.last - intervals.first)
+            return 1 + np.max(intervals.last - intervals.first)
 
     def to_host(self):
         """copies data back into the original buffer and returns it"""
