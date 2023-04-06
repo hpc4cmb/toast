@@ -132,7 +132,9 @@ def offset_add_to_signal_jax(
     # prepare offsets intervals
     offsets_start = offsets
     offsets_end = offsets + (intervals.last - intervals.first) // step_length
-    offsets_max_length = 1 + int(np.max(offsets_end - offsets_start)) # end+1 as the interval is inclusive
+    offsets_max_length = 1 + int(
+        np.max(offsets_end - offsets_start)
+    )  # end+1 as the interval is inclusive
 
     # run computation
     det_data[:] = offset_add_to_signal_intervals(
@@ -295,7 +297,9 @@ def offset_project_signal_jax(
     # prepare offsets intervals
     offsets_start = offsets
     offsets_end = offsets + (intervals.last - intervals.first) // step_length
-    offsets_max_length = 1 + int(np.max(offsets_end - offsets_start)) # end+1 as the interval is inclusive
+    offsets_max_length = 1 + int(
+        np.max(offsets_end - offsets_start)
+    )  # end+1 as the interval is inclusive
 
     # run computation
     amplitudes[:] = offset_project_signal_intervals(

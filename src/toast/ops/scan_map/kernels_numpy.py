@@ -43,7 +43,9 @@ def scan_map_numpy(
             map_pixels = local_submap * n_pix_submap + local_submap_pix
 
             # Local scanned TOD
-            local_tod = data_scale * np.sum(local_map[map_pixels[good]] * wts[vslice][good], axis=1)
+            local_tod = data_scale * np.sum(
+                local_map[map_pixels[good]] * wts[vslice][good], axis=1
+            )
 
             # Accumulate
             if should_zero:
