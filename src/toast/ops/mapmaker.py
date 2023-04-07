@@ -212,7 +212,7 @@ class MapMaker(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
         timer = Timer()
         log_prefix = "MapMaker"
@@ -222,7 +222,7 @@ class MapMaker(Operator):
             memreport.enabled = False
 
         memreport.prefix = "Start of mapmaking"
-        memreport.apply(data)
+        memreport.apply(data, use_accel=use_accel)
 
         # The global communicator we are using (or None)
         comm = data.comm.comm_world
@@ -251,7 +251,7 @@ class MapMaker(Operator):
             reset_pix_dist=self.reset_pix_dist,
             report_memory=self.report_memory,
         )
-        amplitudes_solve.apply(data)
+        amplitudes_solve.apply(data, use_accel=use_accel)
 
         log.info_rank(
             f"{log_prefix}  finished template amplitude solve in",
@@ -332,7 +332,7 @@ class MapMaker(Operator):
                 save_pointing=map_binning.full_pointing,
             )
 
-            final_cov.apply(data, detectors=detectors)
+            final_cov.apply(data, detectors=detectors, use_accel=use_accel)
 
             log.info_rank(
                 f"{log_prefix}  finished build of final covariance in",
@@ -341,7 +341,7 @@ class MapMaker(Operator):
             )
 
             memreport.prefix = "After constructing final covariance and hits"
-            memreport.apply(data)
+            memreport.apply(data, use_accel=use_accel)
 
         if self.write_binmap:
             map_binning.det_data = self.det_data
@@ -351,7 +351,7 @@ class MapMaker(Operator):
                 f"{log_prefix} begin map binning",
                 comm=comm,
             )
-            map_binning.apply(data, detectors=detectors)
+            map_binning.apply(data, detectors=detectors, use_accel=use_accel)
             log.info_rank(
                 f"{log_prefix}  finished binning in",
                 comm=comm,
@@ -384,7 +384,7 @@ class MapMaker(Operator):
                 template_matrix=self.template_matrix,
                 output=out_cleaned,
             )
-            amplitudes_apply.apply(data)
+            amplitudes_apply.apply(data, use_accel=use_accel)
 
             log.info_rank(
                 f"{log_prefix}  finished apply template amplitudes in",
@@ -403,7 +403,7 @@ class MapMaker(Operator):
         )
 
         # Do the final binning
-        map_binning.apply(data, detectors=detectors)
+        map_binning.apply(data, detectors=detectors, use_accel=use_accel)
 
         log.info_rank(
             f"{log_prefix}  finished final binning in",
@@ -412,7 +412,7 @@ class MapMaker(Operator):
         )
 
         memreport.prefix = "After binning final map"
-        memreport.apply(data)
+        memreport.apply(data, use_accel=use_accel)
 
         # Write and delete the outputs
 
@@ -421,7 +421,7 @@ class MapMaker(Operator):
                 detdata=[
                     self.clean_name,
                 ]
-            ).apply(data)
+            ).apply(data, use_accel=use_accel)
 
         # FIXME:  This I/O technique assumes "known" types of pixel representations.
         # Instead, we should associate read / write functions to a particular pixel
@@ -476,7 +476,7 @@ class MapMaker(Operator):
                     del data[prod_key]
 
             memreport.prefix = f"After writing/deleting {prod_key}"
-            memreport.apply(data)
+            memreport.apply(data, use_accel=use_accel)
 
         log.info_rank(
             f"{log_prefix}  finished output write in",
@@ -485,7 +485,7 @@ class MapMaker(Operator):
         )
 
         memreport.prefix = "End of mapmaking"
-        memreport.apply(data)
+        memreport.apply(data, use_accel=use_accel)
 
         return
 

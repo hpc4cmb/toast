@@ -1007,7 +1007,7 @@ class ApplyAmplitudes(Operator):
         self._initialized = False
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Check if we have any templates
@@ -1036,7 +1036,7 @@ class ApplyAmplitudes(Operator):
 
         if self.output is not None:
             # We just copy the input here, since it will be overwritten
-            Copy(detdata=[(self.det_data, self.output)]).apply(data)
+            Copy(detdata=[(self.det_data, self.output)]).apply(data, use_accel=use_accel)
 
         # Projecting amplitudes to timestreams
         self.template_matrix.transpose = False
@@ -1061,7 +1061,7 @@ class ApplyAmplitudes(Operator):
                 combine,
             ],
         )
-        pipe.apply(data)
+        pipe.apply(data, use_accel=use_accel)
 
     def _finalize(self, data, **kwargs):
         return
