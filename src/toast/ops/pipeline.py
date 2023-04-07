@@ -79,7 +79,7 @@ class Pipeline(Operator):
         self._unstaged_data = None
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
         pstr = f"Proc ({data.comm.world_rank}, {data.comm.group_rank})"
 
@@ -93,7 +93,7 @@ class Pipeline(Operator):
         # otherwise, if possible / allowed, use the accelerator and deal with data movement ourselves
         self._staged_data = None
         self._unstaged_data = None
-        if (not use_accel) and accel_enabled():
+        if (use_accel is None) and accel_enabled():
             # only allows hybrid pipelines if the environement variable and pipeline agree to it
             # (they both default to True)
             use_hybrid = self.use_hybrid and use_hybrid_pipelines
@@ -195,13 +195,13 @@ class Pipeline(Operator):
                 self._unstaged_data |= requires  # union
                 # updates our record of data on device
                 self._staged_data -= requires
-                # runs operator on host
-                use_accel = False
+                # lets operator decide if it wants to move data and operate on device by itself
+                use_accel = None
         # runs operator
         op.exec(data, detectors=detectors, use_accel=use_accel)
 
     @function_timer
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, use_accel=None, **kwargs):
         # FIXME:  We need to clarify in documentation that if using the
         # accelerator in _finalize() to produce output products, these
         # outputs should remain on the device so that they can be copied

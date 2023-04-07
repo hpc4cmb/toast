@@ -191,6 +191,9 @@ class TemplateMatrix(Operator):
         # On the first call, we initialize all templates using the Data instance and
         # the fixed options for view, flagging, etc.
         if not self._initialized:
+            if use_accel:
+                # fail when a user tries to run the initialization pipeline on GPU
+                raise RuntimeError("You cannot currently initialize templates on device (please disable accel for this operator/pipeline).") 
             for tmpl in self.templates:
                 tmpl.view = self.view
                 tmpl.det_data_units = self.det_data_units
@@ -207,7 +210,6 @@ class TemplateMatrix(Operator):
 
         # We loop over detectors.  Internally, each template loops over observations
         # and ignores observations where the detector does not exist.
-
         all_dets = data.all_local_detectors(selection=detectors)
 
         if self.transpose:
@@ -233,6 +235,7 @@ class TemplateMatrix(Operator):
                     # on the device and will be used there.
                     data[self.amplitudes].accel_create()
                     data[self.amplitudes].accel_update_device()
+
             for d in all_dets:
                 for tmpl in self.templates:
                     log.verbose(f"TemplateMatrix {d} project_signal {tmpl.name}")

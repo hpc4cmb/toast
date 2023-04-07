@@ -804,7 +804,8 @@ def run_mapmaker(job_ops, args, tmpls, data):
     job_ops.mapmaker.output_dir = args.out_dir
 
     # Run the map making
-    job_ops.mapmaker.apply(data)
+    # NOTE: we set `use_accel=False` as templates cannot be initialized on device
+    job_ops.mapmaker.apply(data, use_accel=False)
 
 
 def run_madam(job_ops, args, tmpls, data):
