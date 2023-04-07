@@ -97,7 +97,7 @@ class BuildHitMap(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -317,7 +317,7 @@ class BuildInverseCovariance(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -609,7 +609,7 @@ class BuildNoiseWeighted(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -774,7 +774,7 @@ class BuildNoiseWeighted(Operator):
             zmap.data = zmap_data.reshape(zmap.data.shape)
         return
 
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, use_accel=None, **kwargs):
         if self.zmap in data:
             log = Logger.get()
             # We have called exec() at least once

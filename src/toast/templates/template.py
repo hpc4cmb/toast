@@ -84,7 +84,7 @@ class Template(TraitConfig):
         # computing the number of amplitudes) whenever the data changes.
         raise NotImplementedError("Derived class must implement _initialize()")
 
-    def _check_enabled(self, use_accel=False):
+    def _check_enabled(self, use_accel=None):
         if self.data is None:
             raise RuntimeError(
                 "You must set the data trait before calling template methods"
@@ -140,7 +140,7 @@ class Template(TraitConfig):
         raise NotImplementedError("Derived class must implement _add_to_signal()")
 
     @function_timer_stackskip
-    def add_to_signal(self, detector, amplitudes, use_accel=False, **kwargs):
+    def add_to_signal(self, detector, amplitudes, use_accel=None, **kwargs):
         """Accumulate the projected amplitudes to a timestream.
 
         This performs the operation:
@@ -165,7 +165,7 @@ class Template(TraitConfig):
         raise NotImplementedError("Derived class must implement _project_signal()")
 
     @function_timer_stackskip
-    def project_signal(self, detector, amplitudes, use_accel=False, **kwargs):
+    def project_signal(self, detector, amplitudes, use_accel=None, **kwargs):
         """Project a timestream into template amplitudes.
 
         This performs:
@@ -191,7 +191,7 @@ class Template(TraitConfig):
         return
 
     @function_timer_stackskip
-    def add_prior(self, amplitudes_in, amplitudes_out, use_accel=False, **kwargs):
+    def add_prior(self, amplitudes_in, amplitudes_out, use_accel=None, **kwargs):
         """Apply the inverse amplitude covariance as a prior.
 
         This performs:
@@ -216,7 +216,7 @@ class Template(TraitConfig):
         raise NotImplementedError("Derived class must implement _apply_precond()")
 
     @function_timer_stackskip
-    def apply_precond(self, amplitudes_in, amplitudes_out, use_accel=False, **kwargs):
+    def apply_precond(self, amplitudes_in, amplitudes_out, use_accel=None, **kwargs):
         """Apply the template preconditioner.
 
         Formally, the preconditioner "M" is an approximation to the "design matrix"

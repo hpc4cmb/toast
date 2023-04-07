@@ -106,7 +106,7 @@ class TemplateMatrix(Operator):
         ret._initialized = self._initialized
         return ret
 
-    def apply_precond(self, amps_in, amps_out, use_accel=False, **kwargs):
+    def apply_precond(self, amps_in, amps_out, use_accel=None, **kwargs):
         """Apply the preconditioner from all templates to the amplitudes.
 
         This can only be called after the operator has been used at least once so that
@@ -129,7 +129,7 @@ class TemplateMatrix(Operator):
                 amps_in[tmpl.name], amps_out[tmpl.name], use_accel=use_accel, **kwargs
             )
 
-    def add_prior(self, amps_in, amps_out, use_accel=False, **kwargs):
+    def add_prior(self, amps_in, amps_out, use_accel=None, **kwargs):
         """Apply the noise prior from all templates to the amplitudes.
 
         This can only be called after the operator has been used at least once so that
@@ -165,7 +165,7 @@ class TemplateMatrix(Operator):
         self._initialized = False
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -279,7 +279,7 @@ class TemplateMatrix(Operator):
                     )
         return
 
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, use_accel=None, **kwargs):
         if self.transpose:
             # move amplitudes to host as sync is CPU only
             if use_accel:
@@ -921,8 +921,9 @@ class SolveAmplitudes(Operator):
 
         self.template_matrix.det_flags = save_tmpl_flags
         self.template_matrix.det_flag_mask = save_tmpl_mask
-        if not self.mc_mode:
-            self.template_matrix.reset_templates()
+        # FIXME: this reset does not seem needed
+        #if not self.mc_mode:
+        #    self.template_matrix.reset_templates()
 
         memreport.prefix = "End of amplitude solve"
         memreport.apply(data)
