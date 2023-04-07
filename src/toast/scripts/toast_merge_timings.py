@@ -41,8 +41,8 @@ def load_csv_files(file_paths):
 
         # Replace row names ending with '_compiled', '_jax', or '_numpy' by '_kernel'
         df = df.rename(index=lambda x: x.replace('_compiled', '_kernel')
-                                            .replace('_jax', '_kernel')
-                                            .replace('_numpy', '_kernel'))
+                                        .replace('_jax', '_kernel')
+                                        .replace('_numpy', '_kernel'))
 
         # Rename the 'Mean Time' column to the folder name
         df = df.rename(columns={"Mean Time": folder_name})

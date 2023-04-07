@@ -33,11 +33,13 @@ def noise_weight(
         None
 
     """
-    return noise_weight_numpy(
+    # FIXME to be replaced by a *direct* call to libtoast_noise_weight once it is ported
+    return noise_weight(
         det_data,
         det_data_index,
         intervals,
         detector_weights,
+        impl=ImplementationType.NUMPY,
         use_accel=use_accel,
     )
 
