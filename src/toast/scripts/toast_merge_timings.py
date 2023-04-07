@@ -40,9 +40,12 @@ def load_csv_files(file_paths):
         df = pd.read_csv(file_path, index_col="Timer", usecols=["Timer", "Mean Time"])
 
         # Replace row names ending with '_compiled', '_jax', or '_numpy' by '_kernel'
+        # Remove useless prefix / sufix from row names
         df = df.rename(index=lambda x: x.replace('_compiled', '_kernel')
                                         .replace('_jax', '_kernel')
-                                        .replace('_numpy', '_kernel'))
+                                        .replace('_numpy', '_kernel')
+                                        .replace('(function) ', '')
+                                        .replace('._exec', ''))
 
         # Rename the 'Mean Time' column to the folder name
         df = df.rename(columns={"Mean Time": folder_name})
