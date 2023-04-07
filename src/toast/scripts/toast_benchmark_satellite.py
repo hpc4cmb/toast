@@ -21,6 +21,7 @@ from astropy import units as u
 
 import toast
 import toast.ops
+from toast.accelerator.data_localization import display_datamovement
 from toast.schedule_sim_satellite import create_satellite_schedule
 from toast.scripts.benchmarking_utilities import (
     compare_output_stats,
@@ -337,7 +338,6 @@ def main():
     )
 
     # dumps all the timing information
-
     timer.stop()
     timer.clear()
     timer.start()
@@ -350,6 +350,8 @@ def main():
     else:
         timer.stop()
 
+    # display information on GPU data movement when running in debug/verbose mode
+    display_datamovement()
 
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()

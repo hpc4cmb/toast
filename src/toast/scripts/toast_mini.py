@@ -271,7 +271,7 @@ def main():
     else:
         timer.stop()
 
-    # display information on GPU data movement
+    # display information on GPU data movement when running in debug/verbose mode
     display_datamovement()
 
 
