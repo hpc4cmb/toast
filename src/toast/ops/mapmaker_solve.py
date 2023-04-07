@@ -211,7 +211,8 @@ class SolverRHS(Operator):
 
         log.debug_rank("MapMaker   RHS begin run projection pipeline", comm=comm)
 
-        proj_pipe.apply(data, detectors=detectors)
+        # NOTE: we set `use_accel=False` as templates cannot be initialized on device
+        proj_pipe.apply(data, detectors=detectors, use_accel=False)
 
         log.debug_rank(
             "MapMaker   RHS projection pipeline finished in", comm=comm, timer=timer

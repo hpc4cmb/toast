@@ -44,7 +44,7 @@ class AccelOperator(ops.Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         for ob in data.obs:
             if use_accel:
                 # Base class has checked that data listed in our requirements
@@ -60,7 +60,7 @@ class AccelOperator(ops.Operator):
                 for d in ob.detdata[self.det_data].detectors:
                     ob.detdata[self.det_data][d] *= 4
 
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, use_accel=None, **kwargs):
         pass
 
     def _requires(self):

@@ -22,7 +22,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def exec(self, data, detectors=None, use_accel=None, **kwargs):
         """Perform operations on a Data object.
 
         If a list of detectors is specified, only process these detectors.  Any extra
@@ -59,7 +59,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def finalize(self, data, use_accel=False, **kwargs):
+    def finalize(self, data, use_accel=None, **kwargs):
         """Perform any final operations / communication.
 
         A call to this function indicates that all calls to the 'exec()' method are
@@ -84,7 +84,7 @@ class Operator(TraitConfig):
                 log.debug(msg)
 
     @function_timer_stackskip
-    def apply(self, data, detectors=None, use_accel=False, **kwargs):
+    def apply(self, data, detectors=None, use_accel=None, **kwargs):
         """Run exec() and finalize().
 
         This is a convenience wrapper that calls exec() exactly once with an optional

@@ -36,7 +36,7 @@ class INTERVALS_JAX:
             return 1
         else:
             # end+1 as TOAST intervals are inclusive
-            return np.max(1 + intervals.last - intervals.first)
+            return 1 + np.max(intervals.last - intervals.first)
 
     def to_host(self):
         """copies data back into the original buffer and returns it"""
@@ -122,6 +122,10 @@ class JaxIntervals:
         the result will be padded to keep the interval size constant
         we will use values from data to pad unless padding_value is not None
         we expect key to be a JaxIntervals or a tuple with at least one JaxIntervals member.
+
+        NOTE:
+        if you want to check whether padded data ends up in your final result, you can set `padding_value=np.nan` when testing
+        (do avoid nan in production as it will significantly decrease the GPU performance)
         """
         key, mask = JaxIntervals._interval_of_key(key)
         return (

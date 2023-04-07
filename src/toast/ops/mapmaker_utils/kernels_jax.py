@@ -115,11 +115,12 @@ def build_noise_weighted_interval(
     # masks padded value before applying the update
     update_masked = jnp.where(
         intervals.mask[jnp.newaxis, :, :, jnp.newaxis],
-        zmap[local_submap, isubpix, :],
+        0.0,
         update,
     )
 
     # updates zmap and returns
+    # NOTE: add is atomic
     zmap = zmap.at[local_submap, isubpix, :].add(update_masked)
     return zmap
 

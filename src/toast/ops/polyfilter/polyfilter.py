@@ -108,7 +108,7 @@ class PolyFilter2D(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         gt = GlobalTimers.get()
 
         # Kernel selection
@@ -489,7 +489,7 @@ class PolyFilter(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -742,7 +742,7 @@ class CommonModeFilter(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         """Apply the common mode filter to the signal.
 
         Args:

@@ -106,7 +106,7 @@ class TemplateMatrix(Operator):
         ret._initialized = self._initialized
         return ret
 
-    def apply_precond(self, amps_in, amps_out, use_accel=False, **kwargs):
+    def apply_precond(self, amps_in, amps_out, use_accel=None, **kwargs):
         """Apply the preconditioner from all templates to the amplitudes.
 
         This can only be called after the operator has been used at least once so that
@@ -129,7 +129,7 @@ class TemplateMatrix(Operator):
                 amps_in[tmpl.name], amps_out[tmpl.name], use_accel=use_accel, **kwargs
             )
 
-    def add_prior(self, amps_in, amps_out, use_accel=False, **kwargs):
+    def add_prior(self, amps_in, amps_out, use_accel=None, **kwargs):
         """Apply the noise prior from all templates to the amplitudes.
 
         This can only be called after the operator has been used at least once so that
@@ -165,7 +165,7 @@ class TemplateMatrix(Operator):
         self._initialized = False
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -191,6 +191,9 @@ class TemplateMatrix(Operator):
         # On the first call, we initialize all templates using the Data instance and
         # the fixed options for view, flagging, etc.
         if not self._initialized:
+            if use_accel:
+                # fail when a user tries to run the initialization pipeline on GPU
+                raise RuntimeError("You cannot currently initialize templates on device (please disable accel for this operator/pipeline).") 
             for tmpl in self.templates:
                 tmpl.view = self.view
                 tmpl.det_data_units = self.det_data_units
@@ -207,7 +210,6 @@ class TemplateMatrix(Operator):
 
         # We loop over detectors.  Internally, each template loops over observations
         # and ignores observations where the detector does not exist.
-
         all_dets = data.all_local_detectors(selection=detectors)
 
         if self.transpose:
@@ -233,6 +235,7 @@ class TemplateMatrix(Operator):
                     # on the device and will be used there.
                     data[self.amplitudes].accel_create()
                     data[self.amplitudes].accel_update_device()
+
             for d in all_dets:
                 for tmpl in self.templates:
                     log.verbose(f"TemplateMatrix {d} project_signal {tmpl.name}")
@@ -276,7 +279,7 @@ class TemplateMatrix(Operator):
                     )
         return
 
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, use_accel=None, **kwargs):
         if self.transpose:
             # move amplitudes to host as sync is CPU only
             if use_accel:
@@ -918,8 +921,9 @@ class SolveAmplitudes(Operator):
 
         self.template_matrix.det_flags = save_tmpl_flags
         self.template_matrix.det_flag_mask = save_tmpl_mask
-        if not self.mc_mode:
-            self.template_matrix.reset_templates()
+        # FIXME: this reset does not seem needed
+        #if not self.mc_mode:
+        #    self.template_matrix.reset_templates()
 
         memreport.prefix = "End of amplitude solve"
         memreport.apply(data)
@@ -1004,7 +1008,7 @@ class ApplyAmplitudes(Operator):
         self._initialized = False
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Check if we have any templates
@@ -1033,7 +1037,7 @@ class ApplyAmplitudes(Operator):
 
         if self.output is not None:
             # We just copy the input here, since it will be overwritten
-            Copy(detdata=[(self.det_data, self.output)]).apply(data)
+            Copy(detdata=[(self.det_data, self.output)]).apply(data, use_accel=use_accel)
 
         # Projecting amplitudes to timestreams
         self.template_matrix.transpose = False
@@ -1058,7 +1062,7 @@ class ApplyAmplitudes(Operator):
                 combine,
             ],
         )
-        pipe.apply(data)
+        pipe.apply(data, use_accel=use_accel)
 
     def _finalize(self, data, **kwargs):
         return

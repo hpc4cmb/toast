@@ -9,7 +9,6 @@
 
 #include <intervals.hpp>
 
-
 // FIXME:  docstrings need to be updated if we keep these versions of the code.
 
 void init_template_offset(py::module & m) {
@@ -22,8 +21,8 @@ void init_template_offset(py::module & m) {
             int32_t data_index,
             py::buffer det_data,
             py::buffer intervals,
-            bool use_accel
-        ) {
+            bool use_accel)
+        {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -60,23 +59,22 @@ void init_template_offset(py::module & m) {
 
                 # pragma omp target data \
                 device(dev)              \
-                map(to:                  \
-                n_view,                  \
+                map(to                   \
+                : n_view,                \
                 n_samp,                  \
                 data_index,              \
                 step_length,             \
                 amp_offset,              \
-                raw_n_amp_views          \
-                )
+                raw_n_amp_views)
                 {
                     int64_t offset = amp_offset;
                     # pragma omp target teams distribute firstprivate(offset) \
                     is_device_ptr(                                            \
                     dev_amplitudes,                                           \
                     dev_det_data,                                             \
-                    dev_intervals                                             \
-                    )
+                    dev_intervals)
                     for (int64_t iview = 0; iview < n_view; iview++) {
+                        int64_t first_samp = dev_intervals[iview].first;
                         # pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = dev_intervals[iview].first;
@@ -84,7 +82,8 @@ void init_template_offset(py::module & m) {
                             isamp++
                         ) {
                             int64_t d = data_index * n_samp + isamp;
-                            int64_t amp = offset + (int64_t)(isamp / step_length);
+                            int64_t amp = offset +
+                                          (int64_t)((isamp - first_samp) / step_length);
                             dev_det_data[d] += dev_amplitudes[amp];
                         }
                         offset += raw_n_amp_views[iview];
@@ -95,6 +94,7 @@ void init_template_offset(py::module & m) {
             } else {
                 int64_t offset = amp_offset;
                 for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t first_samp = raw_intervals[iview].first;
                     #pragma omp parallel for default(shared)
                     for (
                         int64_t isamp = raw_intervals[iview].first;
@@ -102,7 +102,8 @@ void init_template_offset(py::module & m) {
                         isamp++
                     ) {
                         int64_t d = data_index * n_samp + isamp;
-                        int64_t amp = offset + (int64_t)(isamp / step_length);
+                        int64_t amp = offset +
+                                      (int64_t)((isamp - first_samp) / step_length);
                         raw_det_data[d] += raw_amplitudes[amp];
                     }
                     offset += raw_n_amp_views[iview];
@@ -123,8 +124,8 @@ void init_template_offset(py::module & m) {
             py::buffer n_amp_views,
             py::buffer amplitudes,
             py::buffer intervals,
-            bool use_accel
-        ) {
+            bool use_accel)
+        {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -172,16 +173,15 @@ void init_template_offset(py::module & m) {
 
                 # pragma omp target data \
                 device(dev)              \
-                map(to:                  \
-                n_view,                  \
+                map(to                   \
+                : n_view,                \
                 n_samp,                  \
                 data_index,              \
                 flag_index,              \
                 step_length,             \
                 amp_offset,              \
                 raw_n_amp_views,         \
-                use_flags                \
-                )
+                use_flags)
                 {
                     int64_t offset = amp_offset;
                     # pragma omp target teams distribute firstprivate(offset) \
@@ -189,9 +189,9 @@ void init_template_offset(py::module & m) {
                     dev_amplitudes,                                           \
                     dev_det_data,                                             \
                     dev_det_flags,                                            \
-                    dev_intervals                                             \
-                    )
+                    dev_intervals)
                     for (int64_t iview = 0; iview < n_view; iview++) {
+                        int64_t first_samp = dev_intervals[iview].first;
                         # pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = dev_intervals[iview].first;
@@ -199,7 +199,8 @@ void init_template_offset(py::module & m) {
                             isamp++
                         ) {
                             int64_t d = data_index * n_samp + isamp;
-                            int64_t amp = offset + (int64_t)(isamp / step_length);
+                            int64_t amp = offset +
+                                          (int64_t)((isamp - first_samp) / step_length);
                             double contrib = 0.0;
                             if (use_flags) {
                                 int64_t f = flag_index * n_samp + isamp;
@@ -221,6 +222,7 @@ void init_template_offset(py::module & m) {
             } else {
                 int64_t offset = amp_offset;
                 for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t first_samp = raw_intervals[iview].first;
                     #pragma omp parallel for default(shared)
                     for (
                         int64_t isamp = raw_intervals[iview].first;
@@ -228,7 +230,8 @@ void init_template_offset(py::module & m) {
                         isamp++
                     ) {
                         int64_t d = data_index * n_samp + isamp;
-                        int64_t amp = offset + (int64_t)(isamp / step_length);
+                        int64_t amp = offset +
+                                      (int64_t)((isamp - first_samp) / step_length);
                         double contrib = 0.0;
                         if (use_flags) {
                             int64_t f = flag_index * n_samp + isamp;
@@ -253,8 +256,8 @@ void init_template_offset(py::module & m) {
             py::buffer offset_var,
             py::buffer amplitudes_in,
             py::buffer amplitudes_out,
-            bool use_accel
-        ) {
+            bool use_accel)
+        {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -284,16 +287,14 @@ void init_template_offset(py::module & m) {
 
                 # pragma omp target data \
                 device(dev)              \
-                map(to:                  \
-                n_amp                    \
-                )
+                map(to                   \
+                : n_amp)
                 {
                     # pragma omp target \
                     is_device_ptr(      \
                     dev_amp_in,         \
                     dev_amp_out,        \
-                    dev_offset_var      \
-                    )
+                    dev_offset_var)
                     {
                         # pragma omp parallel for default(shared)
                         for (int64_t iamp = 0; iamp < n_amp; iamp++) {

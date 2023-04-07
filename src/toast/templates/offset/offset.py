@@ -490,7 +490,7 @@ class Offset(Template):
         return int(stime * rate + 0.5)
 
     @function_timer
-    def _add_to_signal(self, detector, amplitudes, use_accel=False, **kwargs):
+    def _add_to_signal(self, detector, amplitudes, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -524,7 +524,7 @@ class Offset(Template):
             amp_offset += np.sum(n_amp_views)
 
     @function_timer
-    def _project_signal(self, detector, amplitudes, use_accel=False, **kwargs):
+    def _project_signal(self, detector, amplitudes, use_accel=None, **kwargs):
         log = Logger.get()
 
         # Kernel selection
@@ -567,7 +567,7 @@ class Offset(Template):
             amp_offset += np.sum(n_amp_views)
 
     @function_timer
-    def _add_prior(self, amplitudes_in, amplitudes_out, use_accel=False, **kwargs):
+    def _add_prior(self, amplitudes_in, amplitudes_out, use_accel=None, **kwargs):
         if not self.use_noise_prior:
             # Not using the noise prior term, nothing to accumulate to output.
             return
@@ -591,7 +591,7 @@ class Offset(Template):
                     offset += n_amp_view
 
     @function_timer
-    def _apply_precond(self, amplitudes_in, amplitudes_out, use_accel=False, **kwargs):
+    def _apply_precond(self, amplitudes_in, amplitudes_out, use_accel=None, **kwargs):
         if self.use_noise_prior:
             if use_accel:
                 raise NotImplementedError(

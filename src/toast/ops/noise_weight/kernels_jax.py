@@ -78,7 +78,7 @@ def noise_weight_jax(det_data, det_data_index, intervals, detector_weights, use_
         det_data (array, float): size ???*n_samp
         det_data_index (array, int): The indexes of the det_data (size n_det)
         intervals (array, Interval): The intervals to modify (size n_view)
-        detector_weights (list, double): The weight to be used for each detcetor (size n_det)
+        detector_weights (list, double): The weight to be used for each detector (size n_det)
         use_accel (bool): should we use an accelerator
 
     Returns:

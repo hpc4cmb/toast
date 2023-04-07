@@ -78,7 +78,7 @@ void build_noise_weighted_inner(
         for (int64_t iweight = 0; iweight < nnz; iweight++) {
             zmap_val[iweight] = scaled_data * weights[off_wt + iweight];
         }
-    } else {
+    } else   {
         (*zoff) = -1;
         for (int64_t iweight = 0; iweight < nnz; iweight++) {
             zmap_val[iweight] = 0.0;
@@ -285,6 +285,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                         {
                             double zmap_val[nnz];
                             int64_t zoff;
+                            
                             #pragma omp for
                             for (
                                 int64_t isamp = raw_intervals[iview].first;

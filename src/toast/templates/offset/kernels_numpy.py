@@ -38,7 +38,7 @@ def offset_add_to_signal_numpy(
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
         samples = slice(interval.first, interval.last + 1, 1)
-        sampidx = np.arange(interval.first, interval.last + 1, dtype=np.int64)
+        sampidx = np.arange(0, interval.last - interval.first + 1, dtype=np.int64)
         amp_vals = np.array([amplitudes[offset + x] for x in (sampidx // step_length)])
         det_data[data_index, samples] += amp_vals
         offset += view_offset
@@ -65,7 +65,7 @@ def offset_project_signal_numpy(
     Args:
         data_index (int)
         det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
-        flag_index (int), strictly negative in the absence of a detcetor flag
+        flag_index (int), strictly negative in the absence of a detector flag
         flag_data (array, bool) size n_all_det*n_samp
         flag_mask (int),
         step_length (int64):  The minimum number of samples for each offset.
@@ -83,7 +83,7 @@ def offset_project_signal_numpy(
         samples = slice(interval.first, interval.last + 1, 1)
         ampidx = (
             offset
-            + np.arange(interval.first, interval.last + 1, dtype=np.int64)
+            + np.arange(0, interval.last - interval.first + 1, dtype=np.int64)
             // step_length
         )
         ddata = det_data[data_index][samples]
@@ -92,7 +92,7 @@ def offset_project_signal_numpy(
             # We have detector flags
             ddata = np.array(
                 ((flag_data[flag_index] & flag_mask) == 0), dtype=np.float64
-            )
+            )[samples]
             ddata *= det_data[data_index][samples]
         # updates amplitude
         # using np.add to insure atomicity

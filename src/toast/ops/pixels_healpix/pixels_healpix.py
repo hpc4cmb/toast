@@ -143,7 +143,7 @@ class PixelsHealpix(Operator):
         self._local_submaps = None
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=False, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
 
@@ -278,7 +278,7 @@ class PixelsHealpix(Operator):
 
         return
 
-    def _finalize(self, data, use_accel=False, **kwargs):
+    def _finalize(self, data, use_accel=None, **kwargs):
         if self.create_dist is not None:
             if use_accel:
                 log = Logger.get()
