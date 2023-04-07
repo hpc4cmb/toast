@@ -35,14 +35,13 @@ def filter_polynomial(
         None
 
     """
-    return filter_polynomial(
+    return libtoast_filter_polynomial(
         order,
         flags,
         signals_list,
         starts,
         stops,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )
 
 
@@ -68,14 +67,13 @@ def filter_poly2D(
         None
 
     """
-    return filter_poly2D(
+    return libtoast_filter_poly2D(
         det_groups,
         templates,
         signals,
         masks,
         coeff,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )
 
 

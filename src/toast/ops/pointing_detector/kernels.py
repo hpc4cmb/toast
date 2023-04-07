@@ -41,7 +41,7 @@ def pointing_detector(
         None
 
     """
-    return pointing_detector(
+    return libtoast_pointing_detector(
         focalplane,
         boresight,
         quat_index,
@@ -49,8 +49,7 @@ def pointing_detector(
         intervals,
         shared_flags,
         shared_flag_mask,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )
 
 

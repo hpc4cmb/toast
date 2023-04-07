@@ -45,13 +45,12 @@ def stokes_weights_I(
         None
 
     """
-    return stokes_weights_I(
+    return libtoast_stokes_weights_I(
         weight_index,
         weights,
         intervals,
         cal,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )
 
 
@@ -86,7 +85,7 @@ def stokes_weights_IQU(
         None
 
     """
-    return stokes_weights_IQU(
+    return libtoast_stokes_weights_IQU(
         quat_index,
         quats,
         weight_index,
@@ -95,6 +94,5 @@ def stokes_weights_IQU(
         intervals,
         epsilon,
         cal,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )

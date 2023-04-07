@@ -33,12 +33,11 @@ def noise_weight(
         None
 
     """
-    return noise_weight(
+    return noise_weight_numpy(
         det_data,
         det_data_index,
         intervals,
         detector_weights,
-        impl=ImplementationType.NUMPY,
         use_accel=use_accel,
     )
 

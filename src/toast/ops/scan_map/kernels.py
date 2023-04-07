@@ -64,7 +64,7 @@ def scan_map(
         None.
 
     """
-    return scan_map(
+    return scan_map_compiled(
         global2local,
         n_pix_submap,
         mapdata,
@@ -75,12 +75,11 @@ def scan_map(
         weights,
         weight_index,
         intervals,
-        data_scale=1.0,
-        should_zero=should_zero,
-        should_subtract=should_subtract,
-        should_scale=should_scale,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        data_scale,
+        should_zero,
+        should_subtract,
+        should_scale,
+        use_accel,
     )
 
 
