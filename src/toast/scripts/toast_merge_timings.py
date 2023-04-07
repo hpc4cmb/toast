@@ -26,6 +26,26 @@ def find_csv_files(folder, file_pattern):
     """
     return glob.glob(os.path.join(folder, file_pattern), recursive=True)
 
+def process_row_name(s):
+    """
+    Remove occurrences of '_compiled', '_numpy', '_jax', '(function) ', and '._exec'
+    from the input string.If the resulting string contains '|dispatch|', add '_kernel'
+    to the end of the string.
+
+    :param s: Input string to process.
+    :return: Processed string.
+    """
+    new_string = (s.replace('_compiled', '')
+                   .replace('_numpy', '')
+                   .replace('_jax', '')
+                   .replace('(function) ', '')
+                   .replace('._exec', ''))
+
+    if '|dispatch|' in new_string:
+        new_string += '_kernel'
+
+    return new_string
+
 def load_csv_files(file_paths):
     """
     Load CSV files from the given file paths, keeping only the specified columns
@@ -39,16 +59,10 @@ def load_csv_files(file_paths):
         folder_name = os.path.basename(os.path.dirname(file_path))
         df = pd.read_csv(file_path, index_col="Timer", usecols=["Timer", "Mean Time"])
 
-        # Replace row names ending with '_compiled', '_jax', or '_numpy' by '_kernel'
-        # Remove useless prefix / sufix from row names
-        df = df.rename(index=lambda x: x.replace('_compiled', '_kernel')
-                                        .replace('_jax', '_kernel')
-                                        .replace('_numpy', '_kernel')
-                                        .replace('(function) ', '')
-                                        .replace('._exec', ''))
-
+        # Cleanup/unifies the row names
         # Rename the 'Mean Time' column to the folder name
-        df = df.rename(columns={"Mean Time": folder_name})
+        df = df.rename(index=process_row_name, columns={"Mean Time": folder_name})
+
         dataframes.append(df)
 
     return dataframes
