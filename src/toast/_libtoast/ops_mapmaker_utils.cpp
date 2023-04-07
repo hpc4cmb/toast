@@ -281,41 +281,41 @@ void init_ops_mapmaker_utils(py::module & m) {
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        #pragma omp parallel for default(shared)
-                        for (
-                            int64_t isamp = raw_intervals[iview].first;
-                            isamp <= raw_intervals[iview].last;
-                            isamp++
-                        ) {
+                        #pragma omp parallel default(shared)
+                        {
                             double zmap_val[nnz];
                             int64_t zoff;
-                            build_noise_weighted_inner(
-                                raw_pixel_index,
-                                raw_weight_index,
-                                raw_flag_index,
-                                raw_data_index,
-                                raw_global2local,
-                                raw_det_data,
-                                raw_det_flags,
-                                raw_shared_flags,
-                                raw_pixels,
-                                raw_weights,
-                                raw_det_scale,
-                                zmap_val,
-                                &zoff,
-                                isamp,
-                                n_samp,
-                                idet,
-                                nnz,
-                                det_flag_mask,
-                                shared_flag_mask,
-                                n_pix_submap,
-                                use_shared_flags,
-                                use_det_flags
-                            );
+                            #pragma omp for
+                            for (
+                                int64_t isamp = raw_intervals[iview].first;
+                                isamp <= raw_intervals[iview].last;
+                                isamp++
+                            ) {
+                                build_noise_weighted_inner(
+                                    raw_pixel_index,
+                                    raw_weight_index,
+                                    raw_flag_index,
+                                    raw_data_index,
+                                    raw_global2local,
+                                    raw_det_data,
+                                    raw_det_flags,
+                                    raw_shared_flags,
+                                    raw_pixels,
+                                    raw_weights,
+                                    raw_det_scale,
+                                    zmap_val,
+                                    &zoff,
+                                    isamp,
+                                    n_samp,
+                                    idet,
+                                    nnz,
+                                    det_flag_mask,
+                                    shared_flag_mask,
+                                    n_pix_submap,
+                                    use_shared_flags,
+                                    use_det_flags
+                                );
 
-                            // #pragma omp critical
-                            {
                                 for (int64_t iw = 0; iw < nnz; iw++) {
                                     #pragma omp atomic
                                     raw_zmap[zoff + iw] += zmap_val[iw];
