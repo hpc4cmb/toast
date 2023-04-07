@@ -508,7 +508,7 @@ class TraitConfig(HasTraits):
         """
         return self._supports_accel()
 
-    def select_kernels(self, use_accel=False):
+    def select_kernels(self, use_accel=None):
         """Return the currently selected kernel implementation.
 
         This returns the kernel implementation that should be used
