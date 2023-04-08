@@ -99,3 +99,14 @@ if __name__ == "__main__":
     output_file = "merged_timings.csv"
     merged_df.to_csv(output_file)
     print(f"\nMerged data saved to '{output_file}'")
+
+"""
+TODO
+produce an aditional merged_kernel_timings.csv file
+when importing individual kernels, add a kernel column that contains None/Jax/default/compiled/numpy/data_movement
+when merging, do a set union (or something similar)
+
+remove rows that are not data movement or different kernels
+extract kernel names
+group by (sum) kernel names
+"""

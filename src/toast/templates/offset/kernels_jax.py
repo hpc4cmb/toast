@@ -17,11 +17,11 @@ def offset_add_to_signal_intervals(
     amplitudes,
     data_index,
     det_data,
+    amp_offset,
+    n_amp_views,
     interval_starts,
     interval_ends,
-    offset_starts,
-    offset_ends,
-    offsets_max_length,
+    intervals_max_length,
 ):
     """
     Each amplitude value is accumulated to `step_length` number of samples.  The
@@ -35,11 +35,11 @@ def offset_add_to_signal_intervals(
         amplitudes (array, double): The float64 amplitude values (size n_amp)
         data_index (int)
         det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
+        amp_offset (int): starting offset
+        n_amp_views (array, int): subsequent offsets (size n_view)
         interval_starts (array, int): size n_view
         interval_ends (array, int): size n_view
-        offset_starts (array, int): size n_view
-        offset_ends (array, int): size n_view
-        offsets_max_length (int): maximum length of an interval
+        intervals_max_length (int): maximum length of an interval
 
     Returns:
         det_data
@@ -47,6 +47,17 @@ def offset_add_to_signal_intervals(
     # debugging information
     log = Logger.get()
     log.debug(f"offset_add_to_signal: jit-compiling.")
+
+    # computes offsets
+    # a cumulative sums of the n_amp_views starting at amp_offset
+    offsets = jnp.roll(n_amp_views, 1)
+    offsets = offsets.at[0].set(amp_offset)
+    offsets = jnp.cumsum(offsets)
+    # prepare offsets intervals
+    offset_starts = offsets
+    offset_ends = offsets + (interval_ends - interval_starts) // step_length
+    # end+1 as the interval is inclusive
+    offsets_max_length = 1 + (intervals_max_length - 1) // step_length
 
     # split data to separate the final amplitude from the rest
     # as it is the only one that does not have step_length samples
@@ -69,7 +80,7 @@ def offset_add_to_signal_intervals(
         det_data, (data_index, intervals)
     )  # det_data[data_index, intervals]
 
-    # All but the last amplitude have step_length samples.
+    # All amplitudes now have step_length samples.
     det_data_interval = jnp.reshape(
         det_data_interval, newshape=(nb_intervals, -1, step_length)
     )
@@ -86,7 +97,7 @@ def offset_add_to_signal_intervals(
 # jit compilation
 offset_add_to_signal_intervals = jax.jit(
     offset_add_to_signal_intervals,
-    static_argnames=["step_length", "offsets_max_length"],
+    static_argnames=["step_length", "intervals_max_length"],
     donate_argnums=[3],
 )  # det_data
 
@@ -122,19 +133,8 @@ def offset_add_to_signal_jax(
     # prepare inputs
     det_data_input = MutableJaxArray.to_array(det_data)
     amplitudes = MutableJaxArray.to_array(amplitudes)
-
-    # computes offsets
-    # a cumulative sums of the n_amp_views starting at amp_offset
-    offsets = np.roll(n_amp_views, 1)
-    offsets[0] = amp_offset
-    offsets = np.cumsum(offsets)
-
-    # prepare offsets intervals
-    offsets_start = offsets
-    offsets_end = offsets + (intervals.last - intervals.first) // step_length
-    offsets_max_length = 1 + int(
-        np.max(offsets_end - offsets_start)
-    )  # end+1 as the interval is inclusive
+    n_amp_views = MutableJaxArray.to_array(n_amp_views)
+    intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
 
     # run computation
     det_data[:] = offset_add_to_signal_intervals(
@@ -142,11 +142,11 @@ def offset_add_to_signal_jax(
         amplitudes,
         data_index,
         det_data_input,
+        amp_offset,
+        n_amp_views,
         intervals.first,
         intervals.last,
-        offsets_start,
-        offsets_end,
-        offsets_max_length,
+        intervals_max_length,
     )
 
 
@@ -159,11 +159,11 @@ def offset_project_signal_intervals(
     flag_mask,
     step_length,
     amplitudes,
+    amp_offset,
+    n_amp_views,
     interval_starts,
     interval_ends,
-    offset_starts,
-    offset_ends,
-    offsets_max_length,
+    intervals_max_length,
 ):
     """
     Chunks of `step_length` number of samples are accumulated into the offset
@@ -181,11 +181,11 @@ def offset_project_signal_intervals(
         flag_mask (int),
         step_length (int64):  The minimum number of samples for each offset.
         amplitudes (array, double): The float64 amplitude values (size n_amp)
+        amp_offset (int)
+        n_amp_views (array, int): size n_view
         interval_starts (array, int): size n_view
         interval_ends (array, int): size n_view
-        offset_starts (array, int): size n_view
-        offset_ends (array, int): size n_view
-        offsets_max_length (int): maximum length of an interval
+        intervals_max_length (int): maximum length of an interval
 
     Returns:
         amplitudes
@@ -193,6 +193,17 @@ def offset_project_signal_intervals(
     # debugging information
     log = Logger.get()
     log.debug(f"offset_project_signal: jit-compiling.")
+
+    # computes offsets
+    # a cumulative sums of the n_amp_views starting at amp_offset
+    offsets = jnp.roll(n_amp_views, 1)
+    offsets = offsets.at[0].set(amp_offset)
+    offsets = jnp.cumsum(offsets)
+    # prepare offsets intervals
+    offset_starts = offsets
+    offset_ends = offsets + (interval_ends - interval_starts) // step_length
+    # end+1 as the interval is inclusive
+    offsets_max_length = 1 + (intervals_max_length - 1) // step_length
 
     # gets interval information
     nb_amplitudes = offsets_max_length
@@ -243,7 +254,7 @@ offset_project_signal_intervals = jax.jit(
         "use_flag",
         "flag_mask",
         "step_length",
-        "offsets_max_length",
+        "intervals_max_length",
     ],
     donate_argnums=[7],
 )  # donate amplitude
@@ -288,18 +299,7 @@ def offset_project_signal_jax(
     det_data = MutableJaxArray.to_array(det_data)
     flag_data = MutableJaxArray.to_array(flag_data)
     amplitudes_input = MutableJaxArray.to_array(amplitudes)
-
-    # computes offsets
-    # a cumulative sums of the n_amp_views starting at amp_offset
-    offsets = np.roll(n_amp_views, 1)
-    offsets[0] = amp_offset
-    offsets = np.cumsum(offsets)
-    # prepare offsets intervals
-    offsets_start = offsets
-    offsets_end = offsets + (intervals.last - intervals.first) // step_length
-    offsets_max_length = 1 + int(
-        np.max(offsets_end - offsets_start)
-    )  # end+1 as the interval is inclusive
+    intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
 
     # run computation
     amplitudes[:] = offset_project_signal_intervals(
@@ -311,12 +311,11 @@ def offset_project_signal_jax(
         flag_mask,
         step_length,
         amplitudes_input,
+        amp_offset,
+        n_amp_views,
         intervals.first,
         intervals.last,
-        offsets_start,
-        offsets_end,
-        offsets_max_length,
-    )
+        intervals_max_length)
 
 
 @kernel(impl=ImplementationType.JAX, name="offset_apply_diag_precond")
