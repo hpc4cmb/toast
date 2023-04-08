@@ -261,9 +261,13 @@ class MapMaker(Operator):
 
         # Data names of outputs
 
-        mc_root = None
-        if self.mc_mode and self.mc_index is not None:
-            mc_root = "{}_{:05d}".format(self.name, self.mc_index)
+        if self.mc_mode:
+            if self.mc_root is None:
+                mc_root = self.name
+            else:
+                mc_root = self.mc_root
+            if self.mc_index is not None:
+                mc_root += f"_{self.mc_index:05d}"
         else:
             mc_root = self.name
 
@@ -287,7 +291,7 @@ class MapMaker(Operator):
         map_binning.pre_process = None
 
         map_binning.covariance = self.cov_name
-        if self.mc_mode:
+        if self.mc_mode and not self.reset_pix_dist:
             # Verify that our covariance and other products exist.
             if map_binning.pixel_dist not in data:
                 msg = "MC mode, pixel distribution '{}' does not exist".format(
@@ -470,7 +474,7 @@ class MapMaker(Operator):
                             report_memory=self.report_memory,
                         )
                 log.info_rank(f"Wrote {fname} in", comm=comm, timer=wtimer)
-            if not self.keep_final_products:
+            if not self.keep_final_products and not self.mc_mode:
                 if prod_key in data:
                     data[prod_key].clear()
                     del data[prod_key]
@@ -593,6 +597,8 @@ class Calibrate(Operator):
     mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
 
     mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
+
+    mc_root = Unicode(None, allow_node=True, help="Root name for Monte Carlo products")
 
     reset_pix_dist = Bool(
         False,
