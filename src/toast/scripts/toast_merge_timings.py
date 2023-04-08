@@ -26,25 +26,42 @@ def find_csv_files(folder, file_pattern):
     """
     return glob.glob(os.path.join(folder, file_pattern), recursive=True)
 
-def process_row_name(s):
+def process_timer_path(s):
     """
-    Remove occurrences of '_compiled', '_numpy', '_jax', '(function) ', and '._exec'
-    from the input string.If the resulting string contains '|dispatch|', add '_kernel'
-    to the end of the string.
+    Process the input string and return three strings: simplified path, kernel type,
+    and operation name.
 
     :param s: Input string to process.
-    :return: Processed string.
+    :return: A tuple containing the simplified path, kernel type, and operation name.
     """
-    new_string = (s.replace('_compiled', '')
-                   .replace('_numpy', '')
-                   .replace('_jax', '')
-                   .replace('(function) ', '')
-                   .replace('._exec', ''))
+    # Remove occurrences of '(function) ' and '._exec'
+    simplified_path = s.replace('(function) ', '').replace('._exec', '')
 
-    if '|dispatch|' in new_string:
-        new_string += '_kernel'
+    # Determine kernel type
+    if s.endswith('_jax'):
+        kernel_type = 'JAX'
+        simplified_path = simplified_path.replace('_jax', '')
+    elif s.endswith('_compiled'):
+        kernel_type = 'COMPILED'
+        simplified_path = simplified_path.replace('_compiled', '')
+    elif s.endswith('_numpy'):
+        kernel_type = 'NUMPY'
+        simplified_path = simplified_path.replace('_numpy', '')
+    elif 'accel_data' in simplified_path:
+        kernel_type = 'DATA_MOVEMENT'
+    elif '|dispatch|' in simplified_path:
+        kernel_type = 'DEFAULT'
+    else:
+        kernel_type = None
 
-    return new_string
+    # Extract operation name
+    operation_name = simplified_path.split('|')[-1]
+
+    # Add '_kernel' at the end of simplified_path if it contains '|dispatch|'
+    if '|dispatch|' in simplified_path:
+        simplified_path += '_kernel'
+
+    return simplified_path, kernel_type, operation_name
 
 def load_csv_files(file_paths):
     """
@@ -59,13 +76,38 @@ def load_csv_files(file_paths):
         folder_name = os.path.basename(os.path.dirname(file_path))
         df = pd.read_csv(file_path, index_col="Timer", usecols=["Timer", "Mean Time"])
 
-        # Cleanup/unifies the row names
+        # Process the index and extract simplified_path, kernel_type, and operation_name
+        processed_indices = list(map(process_timer_path, df.index))
+        simplified_paths, kernel_types, operation_names = zip(*processed_indices) # unzip
+
+        # Replace index with simplified_path
+        df.index = simplified_paths
+
+        # Add kernel_type and operation_name columns
+        df['kernel_type'] = kernel_types
+        df['operation_name'] = operation_names
+
         # Rename the 'Mean Time' column to the folder name
-        df = df.rename(index=process_row_name, columns={"Mean Time": folder_name})
+        df = df.rename(columns={"Mean Time": folder_name})
 
         dataframes.append(df)
 
     return dataframes
+
+def combine_kernel_types(k1, k2):
+    """
+    Combine two kernel types into a single kernel type,
+    returning 'MULTIPLE' if they differ.
+
+    :param k1: The first kernel type (string or None).
+    :param k2: The second kernel type (string or None).
+    :return: The combined kernel type (string).
+    """
+    if (k1 is None):
+        return k2 
+    if (k2 is None) or (k1 == k2):
+        return k1
+    return 'MULTIPLE'
 
 def merge_dataframes(dataframes):
     """
@@ -81,9 +123,36 @@ def merge_dataframes(dataframes):
 
     # Merge the remaining DataFrames one-by-one
     for df in dataframes[1:]:
-        merged_df = pd.merge(merged_df, df, left_index=True, right_index=True, how='outer')
+        merged_df = pd.merge(merged_df, df, left_index=True, right_index=True, how='outer', suffixes=('_1', '_2'))
+
+        # Combine kernel_type and operation_name columns
+        merged_df['kernel_type'] = merged_df['kernel_type_1'].combine(merged_df['kernel_type_2'], combine_kernel_types)
+        merged_df['operation_name'] = merged_df['operation_name_1'].combine_first(merged_df['operation_name_2'])
+
+        # Drop extra kernel_type and operation_name columns
+        merged_df.drop(columns=['kernel_type_1', 'kernel_type_2', 'operation_name_1', 'operation_name_2'], inplace=True)
 
     return merged_df
+
+def merge_kernel_rows(df):
+    """
+    Filters the input DataFrame to keep only rows where the `kernel_type` column is 'SEVERAL',
+    drops the `kernel_type` column, and groups the DataFrame by the `operation_name` column,
+    summing the values of rows that get collapsed together.
+
+    :param df: Input DataFrame to filter and group.
+    :return: A filtered and grouped DataFrame.
+    """
+    # Filter DataFrame to keep only rows where kernel_type is 'MULTIPLE' or 'DATA_MOVEMENT'
+    df_filtered = df[df['kernel_type'].isin(['MULTIPLE', 'DATA_MOVEMENT'])]
+
+    # Drop the kernel_type column
+    df_filtered = df_filtered.drop(columns=['kernel_type'])
+
+    # Group by operation_name and sum the values of rows that get collapsed together
+    df_grouped = df_filtered.groupby('operation_name').sum()
+
+    return df_grouped
 
 if __name__ == "__main__":
     folder = "."
@@ -91,22 +160,15 @@ if __name__ == "__main__":
     csv_file_paths = find_csv_files(folder, file_pattern)
     dataframes = load_csv_files(csv_file_paths)
     merged_df = merge_dataframes(dataframes)
+    merged_kernel_df = merge_kernel_rows(merged_df)
 
-    print("Merged data:")
-    print(merged_df)
+    # Save the merged kernel data to a CSV file
+    output_kernels_file = "merged_kernels_timings.csv"
+    merged_kernel_df.to_csv(output_kernels_file)
+    print(f"Merged kernel data saved to '{output_kernels_file}'")
 
     # Save the merged DataFrame to a CSV file
+    merged_df = merged_df.drop(columns=['kernel_type', 'operation_name'])
     output_file = "merged_timings.csv"
     merged_df.to_csv(output_file)
-    print(f"\nMerged data saved to '{output_file}'")
-
-"""
-TODO
-produce an aditional merged_kernel_timings.csv file
-when importing individual kernels, add a kernel column that contains None/Jax/default/compiled/numpy/data_movement
-when merging, do a set union (or something similar)
-
-remove rows that are not data movement or different kernels
-extract kernel names
-group by (sum) kernel names
-"""
+    print(f"Merged data saved to '{output_file}'")
