@@ -47,7 +47,7 @@ def process_timer_path(s):
     elif s.endswith('_numpy'):
         kernel_type = 'NUMPY'
         simplified_path = simplified_path.replace('_numpy', '')
-    elif 'accel_data' in simplified_path:
+    elif ('accel_data' in simplified_path) or ('INTERVALS_JAX' in simplified_path):
         kernel_type = 'DATA_MOVEMENT'
     elif '|dispatch|' in simplified_path:
         kernel_type = 'DEFAULT'
@@ -56,6 +56,12 @@ def process_timer_path(s):
 
     # Extract operation name
     operation_name = simplified_path.split('|')[-1]
+    if kernel_type == 'DATA_MOVEMENT':
+        # Name clean-up specific to INTERVALS_JAX data movement operations
+        if operation_name == 'INTERVALS_JAX.__init__':
+            operation_name = 'accel_data_update_device'
+        elif operation_name == 'INTERVALS_JAX.to_host':
+            operation_name = 'accel_data_update_host'
 
     # Add '_kernel' at the end of simplified_path if it contains '|dispatch|'
     if '|dispatch|' in simplified_path:
@@ -150,7 +156,10 @@ def merge_kernel_rows(df):
     df_filtered = df_filtered.drop(columns=['kernel_type'])
 
     # Group by operation_name and sum the values of rows that get collapsed together
-    df_grouped = df_filtered.groupby('operation_name').sum()
+    # Some columns contains None/nan, hence the need for numeric_only=False
+    df_grouped = df_filtered.groupby('operation_name').apply(lambda x: x.sum(numeric_only=False))
+    # Remove additional operation_name column added by the non-numeric-only summation
+    df_grouped.drop(columns=['operation_name'], inplace=True)
 
     return df_grouped
 

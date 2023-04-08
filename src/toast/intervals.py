@@ -372,6 +372,7 @@ class IntervalList(Sequence, AcceleratorObject):
             accel_data_create(self.data)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
+            # NOTE: this call is timed at the INTERVALS_JAX level
             self.data = INTERVALS_JAX(self.data)
 
     def _accel_update_device(self):
@@ -381,6 +382,7 @@ class IntervalList(Sequence, AcceleratorObject):
             _ = accel_data_update_device(self.data)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
+            # NOTE: this call is timed at the INTERVALS_JAX level
             self.data = INTERVALS_JAX(self.data)
 
     def _accel_update_host(self):
@@ -391,6 +393,7 @@ class IntervalList(Sequence, AcceleratorObject):
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
             # this moves the data back into a numpy array
+            # NOTE: this call is timed at the INTERVALS_JAX level
             self.data = self.data.to_host()
 
     def _accel_delete(self):

@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+from ..timing import function_timer
 
 # TODO we need to clean up the two very similar interval type names
 
@@ -14,6 +15,7 @@ class INTERVALS_JAX:
     each of the inner arrays is converted into a JAX array
     """
 
+    @function_timer
     def __init__(self, data):
         # otherwise
         self.size = data.size
@@ -38,6 +40,7 @@ class INTERVALS_JAX:
             # end+1 as TOAST intervals are inclusive
             return 1 + np.max(intervals.last - intervals.first)
 
+    @function_timer
     def to_host(self):
         """copies data back into the original buffer and returns it"""
         self.host_data.start[:] = self.start
