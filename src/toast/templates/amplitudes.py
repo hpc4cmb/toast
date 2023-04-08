@@ -698,13 +698,9 @@ class Amplitudes(AcceleratorObject):
         if use_accel_omp:
             accel_data_delete(self._raw)
             accel_data_delete(self._raw_flags)
-        elif use_accel_jax and self._accel_exists():
-            # insures local and local_flags have been properly reset
-            # if we observe that their types are still GPU types
-            # does NOT move data back from GPU
-            # using self._raw.array() and self._raw_flags.array() should be equivalent
-            self.local = self.local.host_data
-            self.local_flags = self.local_flags.host_data
+        elif use_accel_jax:
+            self.local = accel_data_delete(self.local)
+            self.local_flags = accel_data_delete(self.local_flags)
 
 
 class AmplitudesMap(MutableMapping, AcceleratorObject):
