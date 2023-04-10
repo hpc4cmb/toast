@@ -19,6 +19,7 @@ from astropy import units as u
 
 import toast
 import toast.ops
+from toast.accelerator.data_localization import display_datamovement
 from toast import spt3g as t3g
 from toast.schedule_sim_ground import run_scheduler
 from toast.scripts.benchmarking_utilities import (
@@ -558,6 +559,9 @@ def main():
         timer.report("toast_benchmark_ground (gathering and dumping timing info)")
     else:
         timer.stop()
+
+    # display information on GPU data movement when running in debug/verbose mode
+    display_datamovement()
 
 
 if __name__ == "__main__":

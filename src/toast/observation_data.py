@@ -532,12 +532,8 @@ class DetectorData(AcceleratorObject):
         log.verbose(f"DetectorData _accel_delete")
         if use_accel_omp:
             accel_data_delete(self._raw)
-        elif use_accel_jax and self._accel_exists():
-            # Ensures _data has been properly reset
-            # if we observe that its types is still a GPU types
-            # does NOT move data back from GPU
-            # using _raw should be equivalent
-            self._data = self._data.host_data
+        elif use_accel_jax:
+            self._data = accel_data_delete(self._data)
 
 
 class DetDataManager(MutableMapping):

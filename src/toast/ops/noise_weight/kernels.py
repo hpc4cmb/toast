@@ -33,6 +33,7 @@ def noise_weight(
         None
 
     """
+    # FIXME to be replaced by a *direct* call to libtoast_noise_weight once it is ported
     return noise_weight(
         det_data,
         det_data_index,

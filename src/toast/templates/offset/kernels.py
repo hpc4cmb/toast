@@ -55,17 +55,15 @@ def offset_add_to_signal(
         None
 
     """
-    return offset_add_to_signal(
+    return libtoast_offset_add_to_signal(
         step_length,
         amp_offset,
         n_amp_views,
         amplitudes,
         data_index,
         det_data,
-        intervals,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
-    )
+        intervals, 
+        use_accel)
 
 
 @kernel(impl=ImplementationType.DEFAULT)
@@ -105,7 +103,7 @@ def offset_project_signal(
         None
 
     """
-    return offset_project_signal(
+    return libtoast_offset_project_signal(
         data_index,
         det_data,
         flag_index,
@@ -116,8 +114,7 @@ def offset_project_signal(
         n_amp_views,
         amplitudes,
         intervals,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )
 
 
@@ -139,12 +136,11 @@ def offset_apply_diag_precond(
         None
 
     """
-    return offset_apply_diag_precond(
+    return libtoast_offset_apply_diag_precond(
         offset_var,
         amplitudes_in,
         amplitudes_out,
-        impl=ImplementationType.COMPILED,
-        use_accel=False,
+        use_accel,
     )
 
 

@@ -64,7 +64,7 @@ def scan_map(
         None.
 
     """
-    return scan_map(
+    return scan_map_pseudocompiled(
         global2local,
         n_pix_submap,
         mapdata,
@@ -75,20 +75,18 @@ def scan_map(
         weights,
         weight_index,
         intervals,
-        data_scale=1.0,
-        should_zero=should_zero,
-        should_subtract=should_subtract,
-        should_scale=should_scale,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
-    )
-
-
-# FIXME:  This "compiled" kernel will migrate fully to the _libtoast extension.
-
+        data_scale,
+        should_zero,
+        should_subtract,
+        should_scale,
+        use_accel)
 
 @kernel(impl=ImplementationType.COMPILED, name="scan_map")
-def scan_map_compiled(
+def scan_map_compiled(*args, use_accel=False):
+    return scan_map_pseudocompiled(*args, use_accel)
+
+# FIXME:  This "compiled" kernel will migrate fully to the _libtoast extension.
+def scan_map_pseudocompiled(
     global2local,
     n_pix_submap,
     mapdata,

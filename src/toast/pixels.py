@@ -430,11 +430,8 @@ class PixelDistribution(AcceleratorObject):
     def _accel_delete(self):
         if use_accel_omp:
             accel_data_delete(self._glob2loc)
-        elif use_accel_jax and self._accel_exists():
-            # insures glob2loc has been properly reset
-            # if we observe that its types is still a GPU types
-            # does NOT move data back from GPU
-            self._glob2loc = self._glob2loc.host_data
+        elif use_accel_jax:
+            self._glob2loc = accel_data_delete(self._glob2loc)
 
 
 class PixelData(AcceleratorObject):
@@ -1189,8 +1186,5 @@ class PixelData(AcceleratorObject):
     def _accel_delete(self):
         if use_accel_omp:
             accel_data_delete(self.raw)
-        elif use_accel_jax and self._accel_exists():
-            # insures data has been properly reset
-            # if we observe that its types is still a GPU types
-            # does NOT move data back from GPU
-            self.data = self.data.host_data
+        elif use_accel_jax:
+            self.data = accel_data_delete(self.data)

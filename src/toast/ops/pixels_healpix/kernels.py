@@ -57,7 +57,7 @@ def pixels_healpix(
         None
 
     """
-    return pixels_healpix(
+    return libtoast_pixels_healpix(
         quat_index,
         quats,
         shared_flags,
@@ -69,6 +69,5 @@ def pixels_healpix(
         n_pix_submap,
         nside,
         nest,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )

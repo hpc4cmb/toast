@@ -13,6 +13,7 @@ from .._libtoast import accel_get_device as omp_accel_get_device
 from .._libtoast import accel_present as omp_accel_present
 from .._libtoast import accel_update_device as omp_accel_update_device
 from .._libtoast import accel_update_host as omp_accel_update_host
+from ..timing import function_timer
 
 enable_vals = ["1", "yes", "true"]
 disable_vals = ["0", "no", "false"]
@@ -132,7 +133,7 @@ def accel_data_present(data):
         log.warning("Accelerator support not enabled, data not present")
         return False
 
-
+@function_timer
 def accel_data_create(data):
     """Create device buffers.
 
@@ -156,7 +157,7 @@ def accel_data_create(data):
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot create")
 
-
+@function_timer
 def accel_data_update_device(data):
     """Update device buffers.
 
@@ -181,7 +182,7 @@ def accel_data_update_device(data):
         log.warning("Accelerator support not enabled, not updating device")
         return None
 
-
+@function_timer
 def accel_data_update_host(data):
     """Update host buffers.
 
@@ -206,7 +207,7 @@ def accel_data_update_host(data):
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")
 
-
+@function_timer
 def accel_data_delete(data):
     """Delete device copy of the data.
 

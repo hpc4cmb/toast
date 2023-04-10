@@ -84,7 +84,7 @@ def build_noise_weighted(
         None
 
     """
-    return build_noise_weighted(
+    return libtoast_build_noise_weighted(
         global2local,
         zmap,
         pixel_index,
@@ -100,8 +100,7 @@ def build_noise_weighted(
         intervals,
         shared_flags,
         shared_flag_mask,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )
 
 
@@ -137,7 +136,7 @@ def cov_accum_diag_invnpp(
         None
 
     """
-    return cov_accum_diag_invnpp(
+    return libtoast_cov_accum_diag_invnpp(
         nsub,
         nsubpix,
         nnz,
@@ -146,8 +145,7 @@ def cov_accum_diag_invnpp(
         weights,
         scale,
         invnpp,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )
 
 
@@ -177,13 +175,12 @@ def cov_accum_diag_hits(
         None
 
     """
-    return cov_accum_diag_hits(
+    return libtoast_cov_accum_diag_hits(
         nsub,
         nsubpix,
         nnz,
         submap,
         subpix,
         hits,
-        impl=ImplementationType.COMPILED,
-        use_accel=use_accel,
+        use_accel,
     )
