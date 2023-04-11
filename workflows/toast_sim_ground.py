@@ -682,16 +682,16 @@ def reduce_data(job, args, data):
             obs_data._comm = new_comm
             ops.filterbin.reset_pix_dist = True
             ops.mapmaker.reset_pix_dist = True
+            ops.mapmaker.name = f"{orig_name_mapmaker}_{obs.name}"
+            ops.filterbin.name = f"{orig_name_filterbin}_{obs.name}"
             for det_data in det_data_keys:
                 ops.mapmaker.det_data = det_data
                 ops.filterbin.det_data = det_data
                 if len(det_data_keys) != 1:
                     ops.mapmaker.mc_mode = True
-                    ops.mapmaker.mc_root = f"{orig_name_mapmaker}_{det_data}_{obs.name}"
-                    ops.filterbin.name = f"{orig_name_filterbin}_{det_data}_{obs.name}"
-                else:
-                    ops.mapmaker.name = f"{orig_name_mapmaker}_{obs.name}"
-                    ops.filterbin.name = f"{orig_name_filterbin}_{obs.name}"
+                    ops.filterbin.mc_mode = True
+                    ops.mapmaker.mc_root = f"{det_data}"
+                    ops.filterbin.mc_root = f"{det_data}"
                 ops.mapmaker.apply(obs_data)
                 log.info_rank(
                     f"    {group} : Mapped {det_data} {obs.name} in",
@@ -707,8 +707,6 @@ def reduce_data(job, args, data):
                 # Additional signal flavors get to re-use pointing information
                 ops.mapmaker.reset_pix_dist = False
                 ops.filterbin.reset_pix_dist = False
-            ops.filterbin.reset_pix_dist = True
-            ops.mapmaker.reset_pix_dist = True
         log.info_rank(
             f"    {group} : Done mapping {len(data.obs)} observations.",
             comm=new_comm.comm_world,
@@ -717,15 +715,14 @@ def reduce_data(job, args, data):
     else:
         timer_key = toast.timing.Timer()
         timer_key.start()
-        ops.mapmaker.reset_pix_dist = True
-        ops.filterbin.reset_pix_dist = True
         for det_data in det_data_keys:
             ops.mapmaker.det_data = det_data
             ops.filterbin.det_data = det_data
             if len(det_data_keys) != 1:
                 ops.mapmaker.mc_mode = True
-                ops.mapmaker.mc_root = f"{orig_name_mapmaker}_{det_data}"
-                ops.filterbin.name = f"{orig_name_filterbin}_{det_data}"
+                ops.filterbin.mc_mode = True
+                ops.mapmaker.mc_root = f"{det_data}"
+                ops.filterbin.mc_root = f"{det_data}"
             ops.mapmaker.apply(data)
             ops.filterbin.apply(data)
             # Additional signal flavors get to re-use pointing information
