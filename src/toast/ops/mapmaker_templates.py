@@ -193,7 +193,9 @@ class TemplateMatrix(Operator):
         if not self._initialized:
             if use_accel:
                 # fail when a user tries to run the initialization pipeline on GPU
-                raise RuntimeError("You cannot currently initialize templates on device (please disable accel for this operator/pipeline).") 
+                raise RuntimeError(
+                    "You cannot currently initialize templates on device (please disable accel for this operator/pipeline)."
+                )
             for tmpl in self.templates:
                 tmpl.view = self.view
                 tmpl.det_data_units = self.det_data_units
@@ -922,7 +924,7 @@ class SolveAmplitudes(Operator):
         self.template_matrix.det_flags = save_tmpl_flags
         self.template_matrix.det_flag_mask = save_tmpl_mask
         # FIXME: this reset does not seem needed
-        #if not self.mc_mode:
+        # if not self.mc_mode:
         #    self.template_matrix.reset_templates()
 
         memreport.prefix = "End of amplitude solve"
@@ -1037,7 +1039,9 @@ class ApplyAmplitudes(Operator):
 
         if self.output is not None:
             # We just copy the input here, since it will be overwritten
-            Copy(detdata=[(self.det_data, self.output)]).apply(data, use_accel=use_accel)
+            Copy(detdata=[(self.det_data, self.output)]).apply(
+                data, use_accel=use_accel
+            )
 
         # Projecting amplitudes to timestreams
         self.template_matrix.transpose = False

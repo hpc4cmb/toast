@@ -86,6 +86,7 @@ def scan_map(
 def scan_map_compiled(*args, use_accel=False):
     return scan_map_compiled(*args, use_accel)
 
+
 def scan_map_compiled(
     global2local,
     n_pix_submap,

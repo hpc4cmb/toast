@@ -62,8 +62,9 @@ def offset_add_to_signal(
         amplitudes,
         data_index,
         det_data,
-        intervals, 
-        use_accel)
+        intervals,
+        use_accel,
+    )
 
 
 @kernel(impl=ImplementationType.DEFAULT)

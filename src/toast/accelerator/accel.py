@@ -138,6 +138,7 @@ def accel_data_present(data):
         log.warning("Accelerator support not enabled, data not present")
         return False
 
+
 @function_timer
 def accel_data_create(data):
     """Create device buffers.
@@ -162,6 +163,7 @@ def accel_data_create(data):
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot create")
 
+
 @function_timer
 def accel_data_reset(data):
     """Reset device buffers.
@@ -184,6 +186,7 @@ def accel_data_reset(data):
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot reset")
+
 
 @function_timer
 def accel_data_update_device(data):
@@ -210,6 +213,7 @@ def accel_data_update_device(data):
         log.warning("Accelerator support not enabled, not updating device")
         return None
 
+
 @function_timer
 def accel_data_update_host(data):
     """Update host buffers.
@@ -234,6 +238,7 @@ def accel_data_update_host(data):
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")
+
 
 @function_timer
 def accel_data_delete(data):

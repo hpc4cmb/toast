@@ -353,6 +353,7 @@ def main():
     # display information on GPU data movement when running in debug/verbose mode
     display_datamovement()
 
+
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()
     python_startup_time(rank)
