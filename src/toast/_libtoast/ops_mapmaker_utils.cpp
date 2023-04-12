@@ -24,7 +24,8 @@ void build_noise_weighted_inner(
     int64_t const * pixels,
     double const * weights,
     double const * det_scale,
-    double * zmap,
+    double * zmap_val,
+    int64_t * zoff,
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
@@ -49,7 +50,6 @@ void build_noise_weighted_inner(
     double scaled_data;
     int64_t local_submap;
     int64_t global_submap;
-    int64_t zoff;
 
     uint8_t det_check = 0;
     if (use_det_flags) {
@@ -71,15 +71,20 @@ void build_noise_weighted_inner(
         local_submap = global2local[global_submap];
 
         isubpix = pixels[off_p] - global_submap * n_pix_submap;
-        zoff = nnz * (local_submap * n_pix_submap + isubpix);
+        (*zoff) = nnz * (local_submap * n_pix_submap + isubpix);
 
         off_wt = nnz * off_w;
 
         scaled_data = data[off_d] * det_scale[idet];
 
         for (int64_t iweight = 0; iweight < nnz; iweight++) {
-            #pragma omp atomic
-            zmap[zoff + iweight] += scaled_data * weights[off_wt + iweight];
+            zmap_val[iweight] = scaled_data * weights[off_wt + iweight];
+        }
+    } else {
+        // Bad data, just accumulate zeros
+        (*zoff) = 0;
+        for (int64_t iweight = 0; iweight < nnz; iweight++) {
+            zmap_val[iweight] = 0.0;
         }
     }
     return;
@@ -195,6 +200,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                 double * dev_zmap = omgr.device_ptr(raw_zmap);
                 uint8_t * dev_shared_flags = omgr.device_ptr(raw_shared_flags);
                 uint8_t * dev_det_flags = omgr.device_ptr(raw_det_flags);
+                double * zmap_val = new double(nnz);
 
                 # pragma omp target data             \
                 device(dev)                          \
@@ -214,7 +220,8 @@ void init_ops_mapmaker_utils(py::module & m) {
                 shared_flag_mask,                    \
                 use_shared_flags,                    \
                 use_det_flags                        \
-                )
+                ) \
+                map(alloc: zmap_val[0:nnz])
                 {
                     # pragma omp target teams distribute collapse(2) \
                     is_device_ptr(                                   \
@@ -228,8 +235,9 @@ void init_ops_mapmaker_utils(py::module & m) {
                     )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            # pragma omp parallel default(shared)
+                            # pragma omp parallel default(shared) firstprivate(zmap_val)
                             {
+                                int64_t zoff;
                                 # pragma omp for nowait
                                 for (
                                     int64_t isamp = dev_intervals[iview].first;
@@ -248,7 +256,8 @@ void init_ops_mapmaker_utils(py::module & m) {
                                         dev_pixels,
                                         dev_weights,
                                         raw_det_scale,
-                                        dev_zmap,
+                                        zmap_val,
+                                        &zoff,
                                         isamp,
                                         n_samp,
                                         idet,
@@ -259,6 +268,10 @@ void init_ops_mapmaker_utils(py::module & m) {
                                         use_shared_flags,
                                         use_det_flags
                                     );
+                                    for (int64_t iweight = 0; iweight < nnz; iweight++) {
+                                        #pragma omp atomic update
+                                        dev_zmap[zoff + iweight] += zmap_val[iweight];
+                                    }
                                 }
                             }
                         }
@@ -267,12 +280,16 @@ void init_ops_mapmaker_utils(py::module & m) {
                     // # pragma omp taskwait
                 }
 
+                delete zmap_val;
+
                 #endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         #pragma omp parallel default(shared)
                         {
+                            int64_t zoff;
+                            double zmap_val[nnz];
                             #pragma omp for
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
@@ -291,7 +308,8 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     raw_pixels,
                                     raw_weights,
                                     raw_det_scale,
-                                    raw_zmap,
+                                    zmap_val,
+                                    &zoff,
                                     isamp,
                                     n_samp,
                                     idet,
@@ -302,6 +320,10 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     use_shared_flags,
                                     use_det_flags
                                 );
+                                for (int64_t iweight = 0; iweight < nnz; iweight++) {
+                                    #pragma omp atomic update
+                                    raw_zmap[zoff + iweight] += zmap_val[iweight];
+                                }
                             }
                         }
                     }

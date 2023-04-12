@@ -29,10 +29,10 @@ def scan_map(
     weights,
     weight_index,
     intervals,
-    data_scale=1.0,
-    should_zero=False,
-    should_subtract=False,
-    should_scale=False,
+    data_scale,
+    should_zero,
+    should_subtract,
+    should_scale,
     use_accel=False,
 ):
     """Kernel for scanning a map into timestreams.
@@ -78,7 +78,7 @@ def scan_map(
         should_zero,
         should_subtract,
         should_scale,
-        use_accel,
+        use_accel=use_accel,
     )
 
 
@@ -98,10 +98,10 @@ def scan_map_compiled(
     weights,
     weight_index,
     intervals,
-    data_scale=1.0,
-    should_zero=False,
-    should_subtract=False,
-    should_scale=False,
+    data_scale,
+    should_zero,
+    should_subtract,
+    should_scale,
     use_accel=False,
 ):
     if mapdata.dtype.char == "d":

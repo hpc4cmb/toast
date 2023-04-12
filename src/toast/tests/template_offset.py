@@ -9,7 +9,7 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops
-from ..accelerator import ImplementationType
+from ..accelerator import ImplementationType, accel_enabled
 from ..observation import default_values as defaults
 from ..templates import Offset
 from ..utils import rate_from_times
@@ -66,6 +66,89 @@ class TemplateOffsetTest(MPITestCase):
         for det in tmpl.detectors():
             for ob in data.obs:
                 tmpl.project_signal(det, amps)
+
+        # Verify
+        for ob in data.obs:
+            # Get the step boundaries
+            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
+                ob.shared[defaults.times]
+            )
+            step_samples = int(step_seconds * rate)
+            n_step = ob.n_local_samples // step_samples
+            slices = [
+                slice(x * step_samples, (x + 1) * step_samples, 1)
+                for x in range(n_step - 1)
+            ]
+            sizes = [step_samples for x in range(n_step - 1)]
+            slices.append(slice((n_step - 1) * step_samples, ob.n_local_samples, 1))
+            sizes.append(ob.n_local_samples - (n_step - 1) * step_samples)
+
+            for det in ob.local_detectors:
+                for slc, sz in zip(slices, sizes):
+                    np.testing.assert_equal(
+                        np.sum(ob.detdata[defaults.det_data][det, slc]), 1.0 * sz
+                    )
+
+        close_data(data)
+
+    def test_accel(self):
+        if not accel_enabled():
+            print("Accelerator use not enabled, skipping test")
+            return
+        
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create a default noise model
+        noise_model = ops.DefaultNoiseModel()
+        noise_model.apply(data)
+
+        # Use 1/10 of an observation as the baseline length.  Make it not evenly
+        # divisible in order to test handling of the final amplitude.
+        ob_time = (
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
+        )
+        step_seconds = float(int(ob_time / 10.0))
+
+        tmpl = Offset(
+            det_data=defaults.det_data,
+            times=defaults.times,
+            noise_model=noise_model.noise_model,
+            step_time=step_seconds * u.second,
+        )
+        # Set the data
+        tmpl.data = data
+
+        # Get some amplitudes and set to one
+        amps = tmpl.zeros()
+        amps.local[:] = 1.0
+
+        data_names = {
+            "detdata": [defaults.det_data],
+            "shared": [],
+            "global": [],
+            "meta": [],
+            "intervals": [None],
+        }
+
+        data.accel_create(data_names)
+        data.accel_update_device(data_names)
+        amps.accel_create()
+        amps.accel_update_device()
+
+        # Project.
+        for det in tmpl.detectors():
+            for ob in data.obs:
+                tmpl.add_to_signal(det, amps, use_accel=True)
+
+        # Accumulate amplitudes
+        for det in tmpl.detectors():
+            for ob in data.obs:
+                tmpl.project_signal(det, amps, use_accel=True)
+
+        data.accel_update_host(data_names)
+        amps.accel_update_host()
 
         # Verify
         for ob in data.obs:

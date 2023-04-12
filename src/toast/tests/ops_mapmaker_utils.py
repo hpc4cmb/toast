@@ -9,6 +9,7 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops as ops
+from ..accelerator import accel_enabled
 from ..mpi import MPI
 from ..noise import Noise
 from ..observation import default_values as defaults
@@ -272,6 +273,32 @@ class MapmakerUtilsTest(MPITestCase):
             build_zmap_corr.apply(data)
             zmap_corr[stype] = data[build_zmap_corr.zmap]
 
+        # Test one case on the accelerator if supported
+
+        build_zmap = ops.BuildNoiseWeighted(
+            pixel_dist="pixel_dist",
+            noise_model="noise_model",
+            det_data="noise",
+            zmap="zmap_gpu",
+            sync_type="allreduce",
+        )
+
+        use_accel = None
+        if accel_enabled() and (
+            pixels.supports_accel()
+            and weights.supports_accel()
+            and build_zmap.supports_accel()
+        ):
+            use_accel = True
+            data.accel_create(pixels.requires())
+            data.accel_create(weights.requires())
+            data.accel_create(build_zmap.requires())
+            data.accel_update_device(pixels.requires())
+            data.accel_update_device(weights.requires())
+            data.accel_update_device(build_zmap.requires())
+            build_zmap.apply(data)
+            zmap["gpu"] = data[build_zmap.zmap]
+
         # Manual check
 
         invnpp_units = 1.0 / (u.K**2)
@@ -338,6 +365,26 @@ class MapmakerUtilsTest(MPITestCase):
                             )
                             failed = True
 
+            if comm is not None:
+                failed = comm.allreduce(failed, op=MPI.LOR)
+            self.assertFalse(failed)
+
+        if "gpu" in zmap:
+            comm = zmap["gpu"].distribution.comm
+
+            failed = False
+            for sm in range(zmap["gpu"].distribution.n_local_submap):
+                for px in range(zmap["gpu"].distribution.n_pix_submap):
+                    if zmap["gpu"].data[sm, px, 0] != 0:
+                        if not np.allclose(
+                            zmap['gpu'].data[sm, px],
+                            check_zmap.data[sm, px],
+                            atol=1.0e-6,
+                        ):
+                            print(
+                                f"zmap(gpu)[{sm}, {px}] = {zmap['gpu'].data[sm, px]}, check = {check_zmap.data[sm, px]}"
+                            )
+                            failed = True
             if comm is not None:
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)
