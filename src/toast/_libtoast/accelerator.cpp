@@ -12,7 +12,9 @@
 
 OmpPoolResource::OmpPoolResource(int target, size_t size, size_t align) {
     if (target < 0) {
+        #ifdef HAVE_OPENMP_TARGET
         target_ = omp_get_num_devices() - 1;
+        #endif
     } else {
         target_ = target;
     }
@@ -58,7 +60,9 @@ void OmpPoolResource::release() {
             o << " at " << raw_;
             log.verbose(o.str().c_str());
         }
+        #ifdef HAVE_OPENMP_TARGET
         omp_target_free(raw_, target_);
+        #endif
     }
     return;
 }
@@ -141,7 +145,9 @@ void OmpPoolResource::alloc() {
         o << " bytes for default pool size";
         log.warning(o.str().c_str());
     }
+    #ifdef HAVE_OPENMP_TARGET
     raw_ = omp_target_alloc(pool_size_, target_);
+    #endif
     if (extra) {
         std::ostringstream o;
         auto log = toast::Logger::get();
