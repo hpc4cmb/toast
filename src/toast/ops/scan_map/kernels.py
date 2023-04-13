@@ -116,6 +116,14 @@ def scan_map_compiled(
         msg = f"Compiled version of scan_map does not support array "
         msg += f"type '{mapdata.dtype.char}'"
         raise NotImplementedError(msg)
+    
+    wt_view = weights
+    if len(weights.shape) == 2:
+        # One value per sample, but our kernel always assumes a
+        # 3D array.
+        wdets = weights.shape[0]
+        wsamps = weights.shape[1]
+        wt_view = weights.reshape((wdets, wsamps, 1))
 
     fcomp(
         global2local,
@@ -125,7 +133,7 @@ def scan_map_compiled(
         det_data_index,
         pixels,
         pixels_index,
-        weights,
+        wt_view,
         weight_index,
         intervals,
         data_scale,

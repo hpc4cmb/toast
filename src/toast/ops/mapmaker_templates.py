@@ -267,8 +267,13 @@ class TemplateMatrix(Operator):
                 )
                 ob.detdata[self.det_data].update_units(self.det_data_units)
 
-                for d in dets:
-                    ob.detdata[self.det_data][d, :] = 0
+                if use_accel:
+                    # We are running on the accelerator, so our output data must exist
+                    # on the device and will be used there.
+                    ob.detdata[self.det_data].accel_reset()
+                else:
+                    for d in dets:
+                        ob.detdata[self.det_data][d, :] = 0
 
             for d in all_dets:
                 for tmpl in self.templates:

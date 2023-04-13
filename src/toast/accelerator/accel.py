@@ -423,3 +423,23 @@ class AcceleratorObject(object):
             raise RuntimeError(msg)
         self._accel_delete()
         self._accel_used = False
+
+    def _accel_reset(self):
+        msg = f"The _accel_reset function was not defined for this class."
+        raise RuntimeError(msg)
+
+    def accel_reset(self):
+        """Reset to zero the data on the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if not self.accel_in_use():
+            log = Logger.get()
+            msg = f"Device data not in use, cannot reset"
+            log.error(msg)
+            raise RuntimeError(msg)
+        self._accel_reset()

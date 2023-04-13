@@ -264,14 +264,7 @@ class DetectorData(AcceleratorObject):
             self._data = self._flatdata.reshape(self._shape)
             # move things to GPU if needed
             if should_update_GPU:
-                if use_accel_jax:
-                    # NOTE: we create an array of zeroes directly on GPU to avoid
-                    # useless data movement
-                    self._data = MutableJaxArray(
-                        self._data, gpu_data=jax.numpy.zeros_like(self._data)
-                    )
-                elif use_accel_omp:
-                    accel_data_reset(self._raw)
+                self.accel_reset()
             realloced = False
         return realloced
 
@@ -535,6 +528,18 @@ class DetectorData(AcceleratorObject):
             accel_data_delete(self._raw)
         elif use_accel_jax:
             self._data = accel_data_delete(self._data)
+
+    def _accel_reset(self):
+        log = Logger.get()
+        log.verbose(f"DetectorData _accel_reset")
+        if use_accel_omp:
+            accel_data_reset(self._raw)
+        elif use_accel_jax:
+            # NOTE: we create an array of zeroes directly on GPU to avoid
+            # useless data movement
+            self._data = MutableJaxArray(
+                self._data, gpu_data=jax.numpy.zeros_like(self._data)
+            )
 
 
 class DetDataManager(MutableMapping):
