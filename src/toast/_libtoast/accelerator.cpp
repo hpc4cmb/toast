@@ -816,13 +816,14 @@ void init_accelerator(py::module & m) {
             uint8_t * p_dev = omgr.device_ptr <uint8_t> (
                 static_cast <uint8_t *> (p_host)
             );
-            #pragma omp target teams distribute \
+            #ifndef HAVE_OPENMP_TARGET
+            #pragma omp target teams distribute parallel for default(shared) \
             map(to: n_bytes)                    \
-            is_device_ptr(p_dev)                \
-            parallel for default(shared)
+            is_device_ptr(p_dev)
             for (size_t i = 0; i < n_bytes; ++i) {
                 p_dev[i] = 0;
             }
+            #endif // ifndef HAVE_OPENMP_TARGET
             o.str("");
             o << "reset device with host pointer " << p_host << " DONE";
             log.verbose(o.str().c_str());
