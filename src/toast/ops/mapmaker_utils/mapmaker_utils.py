@@ -788,12 +788,6 @@ class BuildNoiseWeighted(Operator):
                 data[self.zmap].sync_alltoallv()
             else:
                 data[self.zmap].sync_allreduce()
-            if use_accel:
-                log.verbose_rank(
-                    f"Operator {self.name} finalize calling zmap update device",
-                    comm=data.comm.comm_group,
-                )
-                data[self.zmap].accel_update_device()
 
             zmap_good = data[self.zmap].data[:, :, 0] != 0.0
             zmap_min = np.zeros((data[self.zmap].n_value), dtype=np.float64)
@@ -811,6 +805,13 @@ class BuildNoiseWeighted(Operator):
                 for m in range(data[self.zmap].n_value):
                     msg += f"    map {m} {zmap_min[m]:1.3e} ... {zmap_max[m]:1.3e}"
                 log.debug(msg)
+
+            if use_accel:
+                log.verbose_rank(
+                    f"Operator {self.name} finalize calling zmap update device",
+                    comm=data.comm.comm_group,
+                )
+                data[self.zmap].accel_update_device()
         return
 
     def _requires(self):
