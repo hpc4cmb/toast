@@ -377,7 +377,7 @@ class MapmakerUtilsTest(MPITestCase):
                 for px in range(zmap["gpu"].distribution.n_pix_submap):
                     if zmap["gpu"].data[sm, px, 0] != 0:
                         if not np.allclose(
-                            zmap['gpu'].data[sm, px],
+                            zmap["gpu"].data[sm, px],
                             check_zmap.data[sm, px],
                             atol=1.0e-6,
                         ):

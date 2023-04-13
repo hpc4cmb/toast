@@ -96,7 +96,7 @@ class TemplateOffsetTest(MPITestCase):
         if not accel_enabled():
             print("Accelerator use not enabled, skipping test")
             return
-        
+
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 

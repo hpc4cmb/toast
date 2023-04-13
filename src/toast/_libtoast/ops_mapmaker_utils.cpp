@@ -220,7 +220,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                 shared_flag_mask,                    \
                 use_shared_flags,                    \
                 use_det_flags                        \
-                ) \
+                )                                    \
                 map(alloc: zmap_val[0:nnz])
                 {
                     # pragma omp target teams distribute collapse(2) \
@@ -269,7 +269,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                                         use_det_flags
                                     );
                                     for (int64_t iweight = 0; iweight < nnz; iweight++) {
-                                        #pragma omp atomic update
+                                        # pragma omp atomic update
                                         dev_zmap[zoff + iweight] += zmap_val[iweight];
                                     }
                                 }

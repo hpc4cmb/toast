@@ -116,7 +116,7 @@ def scan_map_compiled(
         msg = f"Compiled version of scan_map does not support array "
         msg += f"type '{mapdata.dtype.char}'"
         raise NotImplementedError(msg)
-    
+
     wt_view = weights
     if len(weights.shape) == 2:
         # One value per sample, but our kernel always assumes a

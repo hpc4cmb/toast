@@ -409,10 +409,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
     for obs in range(obs_per_group):
         oname = "test-{}-{}".format(toastcomm.group, obs)
         oid = obs_per_group * toastcomm.group + obs
-        tele = create_boresight_telescope(
-            toastcomm.group_size, 
-            sample_rate=rate * u.Hz
-        )
+        tele = create_boresight_telescope(toastcomm.group_size, sample_rate=rate * u.Hz)
 
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
