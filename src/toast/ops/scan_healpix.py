@@ -37,10 +37,16 @@ class ScanHealpixMap(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    file = Unicode(None, allow_none=True, help="Path to healpix FITS file")
+    file = Unicode(
+        None,
+        allow_none=True,
+        help="Path to healpix FITS file.  Use ';' if providing multiple files"
+    )
 
     det_data = Unicode(
-        defaults.det_data, help="Observation detdata key for accumulating output"
+        defaults.det_data,
+        help="Observation detdata key for accumulating output.  Use ';' if different "
+        "files are applied to different flavors"
     )
 
     det_data_units = Unit(
@@ -109,8 +115,8 @@ class ScanHealpixMap(Operator):
         return weights
 
     def __init__(self, **kwargs):
+        self.map_names = []
         super().__init__(**kwargs)
-        self.map_name = "{}_map".format(self.name)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -119,6 +125,16 @@ class ScanHealpixMap(Operator):
         # Check that the file is set
         if self.file is None:
             raise RuntimeError("You must set the file trait before calling exec()")
+
+        # Split up the file and map names
+        self.file_names = self.file.split(';')
+        nmap = len(self.file_names)
+        self.det_data_keys = self.det_data.split(';')
+        nkey = len(self.det_data_keys)
+        if nkey != 1 and (nmap != nkey):
+            msg = "If multiple detdata keys are provided, each must have its own map"
+            raise RuntimeError(msg)
+        self.map_names = [f"{self.name}_map{i}" for i in range(nmap)]
 
         # Construct the pointing distribution if it does not already exist
 
@@ -134,7 +150,7 @@ class ScanHealpixMap(Operator):
         if not isinstance(dist, PixelDistribution):
             raise RuntimeError("The pixel_dist must be a PixelDistribution instance")
 
-        # Use the pixel odistribution and pointing configuration to allocate our
+        # Use the pixel distribution and pointing configuration to allocate our
         # map data and read it in.
         nnz = None
         if self.stokes_weights is None or self.stokes_weights.mode == "I":
@@ -142,28 +158,33 @@ class ScanHealpixMap(Operator):
         elif self.stokes_weights.mode == "IQU":
             nnz = 3
         else:
-            msg = "Unknown Stokes weights mode '{}'".format(self.stokes_weights.mode)
+            msg = f"Unknown Stokes weights mode '{self.stokes_weights.mode}'"
             raise RuntimeError(msg)
 
-        # Create our map to scan named after our own operator name.  Generally the
+        filenames = self.file.split(';')
+        detdata_keys = self.det_data.split(';')
+
+        # Create our map(s) to scan named after our own operator name.  Generally the
         # files on disk are stored as float32, but even if not there is no real benefit
         # to having higher precision to simulated map signal that is projected into
         # timestreams.
-        if self.map_name not in data:
-            data[self.map_name] = PixelData(
-                dist, dtype=np.float32, n_value=nnz, units=self.det_data_units
-            )
-            if filename_is_fits(self.file):
-                read_healpix_fits(
-                    data[self.map_name], self.file, nest=self.pixel_pointing.nest
+
+        for file_name, map_name in zip(self.file_names, self.map_names):
+            if map_name not in data:
+                data[map_name] = PixelData(
+                    dist, dtype=np.float32, n_value=nnz, units=self.det_data_units
                 )
-            elif filename_is_hdf5(self.file):
-                read_healpix_hdf5(
-                    data[self.map_name], self.file, nest=self.pixel_pointing.nest
-                )
-            else:
-                msg = f"Could not determine map format (HDF5 or FITS): {self.file}"
-                raise RuntimeError(msg)
+                if filename_is_fits(file_name):
+                    read_healpix_fits(
+                        data[map_name], file_name, nest=self.pixel_pointing.nest
+                    )
+                elif filename_is_hdf5(file_name):
+                    read_healpix_hdf5(
+                        data[map_name], file_name, nest=self.pixel_pointing.nest
+                    )
+                else:
+                    msg = f"Could not determine map format (HDF5 or FITS): {self.file}"
+                    raise RuntimeError(msg)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.
@@ -174,19 +195,20 @@ class ScanHealpixMap(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
-            # If our output detector data does not yet exist, create it
-            exists_data = ob.detdata.ensure(
-                self.det_data, detectors=dets, create_units=self.det_data_units
-            )
+            for key in self.det_data_keys:
+                # If our output detector data does not yet exist, create it
+                exists_data = ob.detdata.ensure(
+                    key, detectors=dets, create_units=self.det_data_units
+                )
 
         # Configure the low-level map scanning operator
 
         scanner = ScanMap(
-            det_data=self.det_data,
+            det_data=self.det_data_keys[0],
             det_data_units=self.det_data_units,
             pixels=self.pixel_pointing.pixels,
             weights=self.stokes_weights.weights,
-            map_key=self.map_name,
+            map_key=self.map_names[0],
             subtract=self.subtract,
             zero=self.zero,
         )
@@ -196,15 +218,29 @@ class ScanHealpixMap(Operator):
             detector_sets=["SINGLE"],
             operators=[self.pixel_pointing, self.stokes_weights, scanner],
         )
-        scan_pipe.apply(data, detectors=detectors)
 
+        for imap, map_name in enumerate(self.map_names):
+            if len(self.det_data_keys) == 1:
+                det_data_key = self.det_data_keys[0]
+            else:
+                det_data_key = self.det_data_keys[imap]
+
+            scanner.det_data = det_data_key
+            scanner.map_key = map_name
+            scan_pipe.apply(data, detectors=detectors)
+
+            # If we are accumulating on a single key, disable zeroing after first map
+            if len(self.det_data_keys) == 1:
+                scanner.zero = False
+
+        # Clean up our map, if needed
+        if not self.save_map:
+            for map_name in self.map_names:
+                data[map_name].clear()
+                del data[map_name]
         return
 
     def _finalize(self, data, **kwargs):
-        # Clean up our map, if needed
-        if not self.save_map:
-            data[self.map_name].clear()
-            del data[self.map_name]
         return
 
     def _requires(self):
@@ -215,7 +251,7 @@ class ScanHealpixMap(Operator):
     def _provides(self):
         prov = {"global": list(), "detdata": [self.det_data]}
         if self.save_map:
-            prov["global"] = [self.map_name]
+            prov["global"] = self.map_names
         return prov
 
 

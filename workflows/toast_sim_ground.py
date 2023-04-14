@@ -479,10 +479,24 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
     ops.mem_count.prefix = "After simulating scan-synchronous signal"
     ops.mem_count.apply(data)
 
-    # Apply a time constant
+    # We may apply systematics to a number of signal flavors
 
-    ops.convolve_time_constant.apply(data)
-    log.info_rank("  Convolved time constant in", comm=world_comm, timer=timer)
+    noise_key = ops.sim_noise.det_data
+    try:
+        det_data_keys = ops.scan_healpix_map.det_data_keys
+        if ops.sim_noise.enabled:
+            if noise_key not in det_data_keys:
+                det_data_keys.append(noise_key)
+    except:
+        det_data_keys = [noise_key]
+
+    for det_data in det_data_keys:
+        # Apply a time constant
+        ops.convolve_time_constant.det_data = det_data
+        ops.convolve_time_constant.apply(data)
+        log.info_rank(
+            f"  Convolved time constant with {det_data} in", comm=world_comm, timer=timer
+        )
 
     ops.mem_count.prefix = "After applying time constant"
     ops.mem_count.apply(data)
@@ -504,10 +518,13 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
 
     log.info_rank("Simulated data in", comm=world_comm, timer=timer_sim)
 
-    # Add gain errors
-
-    ops.gain_scrambler.apply(data)
-    log.info_rank("  Simulated gain errors in", comm=world_comm, timer=timer)
+    for det_data in det_data_keys:
+        # Add gain errors
+        ops.gain_scrambler.det_data = det_data
+        ops.gain_scrambler.apply(data)
+        log.info_rank(
+            f"  Simulated gain errors in {det_data} in", comm=world_comm, timer=timer
+        )
 
     # Optionally write out the data
     if ops.save_hdf5.volume is None:
@@ -582,33 +599,52 @@ def reduce_data(job, args, data):
     ops.mem_count.prefix = "After raw statistics"
     ops.mem_count.apply(data)
 
-    # Deconvolve a time constant
+    # We may apply the reduction to a number of signal flavors
 
-    ops.deconvolve_time_constant.apply(data)
-    log.info_rank("  Deconvolved time constant in", comm=world_comm, timer=timer)
+    noise_key = ops.sim_noise.det_data
+    try:
+        det_data_keys = ops.scan_healpix_map.det_data_keys
+        if ops.sim_noise.enabled:
+            if noise_key not in det_data_keys:
+                det_data_keys.append(noise_key)
+    except:
+        det_data_keys = [noise_key]
 
-    ops.mem_count.prefix = "After deconvolving time constant"
-    ops.mem_count.apply(data)
+    for det_data in det_data_keys:
 
-    # Apply the filter stack
+        # Deconvolve a time constant
 
-    timer_filter = toast.timing.Timer()
-    timer_filter.start()
-    log.info_rank("  Filtering signal", comm=world_comm)
-    ops.hwpfilter.apply(data)
-    log.info_rank("    Finished hwp-filtering in", comm=world_comm, timer=timer)
-    ops.groundfilter.apply(data)
-    log.info_rank("    Finished ground-filtering in", comm=world_comm, timer=timer)
-    ops.polyfilter1D.apply(data)
-    log.info_rank("    Finished 1D-poly-filtering in", comm=world_comm, timer=timer)
-    ops.polyfilter2D.apply(data)
-    log.info_rank("    Finished 2D-poly-filtering in", comm=world_comm, timer=timer)
-    ops.common_mode_filter.apply(data)
-    log.info_rank("    Finished common-mode-filtering in", comm=world_comm, timer=timer)
-    log.info_rank("  Finished filtering in", comm=world_comm, timer=timer_filter)
+        ops.deconvolve_time_constant.det_data = det_data
+        ops.deconvolve_time_constant.apply(data)
+        log.info_rank(f"  Deconvolved time constant in {det_data} in", comm=world_comm, timer=timer)
 
-    ops.mem_count.prefix = "After filtering"
-    ops.mem_count.apply(data)
+        ops.mem_count.prefix = "After deconvolving time constant"
+        ops.mem_count.apply(data)
+
+        # Apply the filter stack
+
+        timer_filter = toast.timing.Timer()
+        timer_filter.start()
+        log.info_rank("  Filtering signal", comm=world_comm)
+        ops.hwpfilter.det_data = det_data
+        ops.hwpfilter.apply(data)
+        log.info_rank(f"    Finished hwp-filtering {det_data} in", comm=world_comm, timer=timer)
+        ops.groundfilter.det_data = det_data
+        ops.groundfilter.apply(data)
+        log.info_rank(f"    Finished ground-filtering {det_data} in", comm=world_comm, timer=timer)
+        ops.polyfilter1D.det_data = det_data
+        ops.polyfilter1D.apply(data)
+        log.info_rank(f"    Finished 1D-poly-filtering {det_data} in", comm=world_comm, timer=timer)
+        ops.polyfilter2D.det_data = det_data
+        ops.polyfilter2D.apply(data)
+        log.info_rank(f"    Finished 2D-poly-filtering {det_data} in", comm=world_comm, timer=timer)
+        ops.common_mode_filter.det_data = det_data
+        ops.common_mode_filter.apply(data)
+        log.info_rank(f"    Finished common-mode-filtering {det_data} in", comm=world_comm, timer=timer)
+        log.info_rank("  Finished filtering in", comm=world_comm, timer=timer_filter)
+
+        ops.mem_count.prefix = "After filtering"
+        ops.mem_count.apply(data)
 
     # The map maker requires the the binning operators used for the solve and final,
     # the templates, and the noise model.
@@ -619,12 +655,13 @@ def reduce_data(job, args, data):
     ops.mapmaker.binning = ops.binner
     ops.mapmaker.template_matrix = toast.ops.TemplateMatrix(templates=[tmpls.baselines])
     ops.mapmaker.map_binning = ops.binner_final
-    ops.mapmaker.det_data = ops.sim_noise.det_data
     ops.mapmaker.output_dir = args.out_dir
 
     ops.filterbin.binning = ops.binner_final
-    ops.filterbin.det_data = ops.sim_noise.det_data
     ops.filterbin.output_dir = args.out_dir
+
+    orig_name_mapmaker = ops.mapmaker.name
+    orig_name_filterbin = ops.filterbin.name
 
     log.info_rank("  Making maps", comm=world_comm)
     if args.obsmaps:
@@ -632,8 +669,6 @@ def reduce_data(job, args, data):
         timer_obs = toast.timing.Timer()
         timer_obs.start()
         group = data.comm.group
-        orig_name = ops.mapmaker.name
-        orig_name_filterbin = ops.filterbin.name
         orig_comm = data.comm
         new_comm = Comm(world=data.comm.comm_group)
         for iobs, obs in enumerate(data.obs):
@@ -645,31 +680,56 @@ def reduce_data(job, args, data):
             obs_data = data.select(obs_uid=obs.uid)
             # Replace comm_world with the group communicator
             obs_data._comm = new_comm
-            ops.mapmaker.name = f"{orig_name}_{obs.name}"
-            ops.mapmaker.reset_pix_dist = True
-            ops.mapmaker.apply(obs_data)
-            log.info_rank(
-                f"    {group} : Mapped {obs.name} in",
-                comm=new_comm.comm_world,
-                timer=timer_obs,
-            )
-            ops.filterbin.name = f"{orig_name_filterbin}_{obs.name}"
             ops.filterbin.reset_pix_dist = True
-            ops.filterbin.apply(obs_data)
-            log.info_rank(
-                f"    {group} : Filter+binned {obs.name} in",
-                comm=new_comm.comm_world,
-                timer=timer_obs,
-            )
+            ops.mapmaker.reset_pix_dist = True
+            ops.mapmaker.name = f"{orig_name_mapmaker}_{obs.name}"
+            ops.filterbin.name = f"{orig_name_filterbin}_{obs.name}"
+            for det_data in det_data_keys:
+                ops.mapmaker.det_data = det_data
+                ops.filterbin.det_data = det_data
+                if len(det_data_keys) != 1:
+                    ops.mapmaker.mc_mode = True
+                    ops.filterbin.mc_mode = True
+                    ops.mapmaker.mc_root = f"{det_data}"
+                    ops.filterbin.mc_root = f"{det_data}"
+                ops.mapmaker.apply(obs_data)
+                log.info_rank(
+                    f"    {group} : Mapped {det_data} {obs.name} in",
+                    comm=new_comm.comm_world,
+                    timer=timer_obs,
+                )
+                ops.filterbin.apply(obs_data)
+                log.info_rank(
+                    f"    {group} : Filter+binned {det_data} {obs.name} in",
+                    comm=new_comm.comm_world,
+                    timer=timer_obs,
+                )
+                # Additional signal flavors get to re-use pointing information
+                ops.mapmaker.reset_pix_dist = False
+                ops.filterbin.reset_pix_dist = False
         log.info_rank(
             f"    {group} : Done mapping {len(data.obs)} observations.",
             comm=new_comm.comm_world,
         )
         data._comm = orig_comm
     else:
-        ops.mapmaker.apply(data)
-        ops.filterbin.apply(data)
-    log.info_rank("  Finished map-making in", comm=world_comm, timer=timer)
+        timer_key = toast.timing.Timer()
+        timer_key.start()
+        for det_data in det_data_keys:
+            ops.mapmaker.det_data = det_data
+            ops.filterbin.det_data = det_data
+            if len(det_data_keys) != 1:
+                ops.mapmaker.mc_mode = True
+                ops.filterbin.mc_mode = True
+                ops.mapmaker.mc_root = f"{det_data}"
+                ops.filterbin.mc_root = f"{det_data}"
+            ops.mapmaker.apply(data)
+            ops.filterbin.apply(data)
+            # Additional signal flavors get to re-use pointing information
+            ops.mapmaker.reset_pix_dist = False
+            ops.filterbin.reset_pix_dist = False
+        log.info_rank(f"  Finished map-making {det_data} in", comm=world_comm, timer=timer_key)
+    log.info_rank(f"  Finished map-making in", comm=world_comm, timer=timer)
 
     ops.mem_count.prefix = "After mapmaker"
     ops.mem_count.apply(data)

@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -336,6 +336,14 @@ class FilterBin(Operator):
 
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
 
+    keep_final_products = Bool(
+        False, help="If True, keep the map domain products in data after write"
+    )
+
+    mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
+
+    mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
+
     maskfile = Unicode(
         None,
         allow_none=True,
@@ -424,14 +432,16 @@ class FilterBin(Operator):
         # repeatedly with different data objects)
 
         binning = self.binning
-        pixel_dist = binning.pixel_dist
         if self.reset_pix_dist:
-            if pixel_dist in data:
-                del data[pixel_dist]
+            if binning.pixel_dist in data:
+                del data[binning.pixel_dist]
+            if binning.covariance in data:
+                # Cannot trust earlier covariance
+                del data[binning.covariance]
 
-        if pixel_dist not in data:
+        if binning.pixel_dist not in data:
             pix_dist = BuildPixelDistribution(
-                pixel_dist=pixel_dist,
+                pixel_dist=binning.pixel_dist,
                 pixel_pointing=binning.pixel_pointing,
                 shared_flags=binning.shared_flags,
                 shared_flag_mask=binning.shared_flag_mask,
@@ -441,7 +451,7 @@ class FilterBin(Operator):
                 "Cached pixel distribution in", comm=data.comm.comm_world, timer=timer
             )
 
-        self.npix = data[pixel_dist].n_pix
+        self.npix = data[binning.pixel_dist].n_pix
         self.nnz = len(self.binning.stokes_weights.mode)
 
         self.npixtot = self.npix * self.nnz
@@ -1244,43 +1254,59 @@ class FilterBin(Operator):
         self.binning.det_data_units = self._det_data_units
         self.binning.covariance = cov_name
 
-        cov = CovarianceAndHits(
-            pixel_dist=self.binning.pixel_dist,
-            covariance=self.binning.covariance,
-            inverse_covariance=invcov_name,
-            hits=hits_name,
-            rcond=rcond_name,
-            det_flags=self.binning.det_flags,
-            det_flag_mask=self.binning.det_flag_mask,
-            det_data_units=self._det_data_units,
-            shared_flags=self.binning.shared_flags,
-            shared_flag_mask=self.binning.shared_flag_mask,
-            pixel_pointing=self.binning.pixel_pointing,
-            stokes_weights=self.binning.stokes_weights,
-            noise_model=self.binning.noise_model,
-            rcond_threshold=self.rcond_threshold,
-            sync_type=self.binning.sync_type,
-            save_pointing=self.binning.full_pointing,
-        )
-
-        cov.apply(data, detectors=detectors)
+        if self.binning.covariance not in data:
+            cov = CovarianceAndHits(
+                pixel_dist=self.binning.pixel_dist,
+                covariance=self.binning.covariance,
+                inverse_covariance=invcov_name,
+                hits=hits_name,
+                rcond=rcond_name,
+                det_flags=self.binning.det_flags,
+                det_flag_mask=self.binning.det_flag_mask,
+                det_data_units=self._det_data_units,
+                shared_flags=self.binning.shared_flags,
+                shared_flag_mask=self.binning.shared_flag_mask,
+                pixel_pointing=self.binning.pixel_pointing,
+                stokes_weights=self.binning.stokes_weights,
+                noise_model=self.binning.noise_model,
+                rcond_threshold=self.rcond_threshold,
+                sync_type=self.binning.sync_type,
+                save_pointing=self.binning.full_pointing,
+            )
+            cov.apply(data, detectors=detectors)
 
         self.binning.apply(data, detectors=detectors)
 
-        binned = not filtered
-        for key, write, keep in [
-            (hits_name, self.write_hits and binned, False),
-            (rcond_name, self.write_rcond and binned, False),
-            (noiseweighted_map_name, self.write_noiseweighted_map, False),
-            (map_name, self.write_map, False),
-            (invcov_name, self.write_invcov and binned, False),
-            (cov_name, self.write_cov and binned, True),
+        mc_root = self.name
+        if self.mc_mode:
+            if self.mc_root is not None:
+                mc_root += f"_{self.mc_root}"
+            if self.mc_index is not None:
+                mc_root += f"_{self.mc_index:05d}"
+
+        binned = not filtered  # only write hits and covariance once
+        for key, write, keep, force, rootname in [
+            (hits_name, self.write_hits and binned, False, False, self.name),
+            (rcond_name, self.write_rcond and binned, False, False, self.name),
+            (noiseweighted_map_name, self.write_noiseweighted_map, False, True, mc_root),
+            (map_name, self.write_map, False, True, mc_root),
+            (invcov_name, self.write_invcov and binned, False, False, self.name),
+            (cov_name, self.write_cov and binned, True, False, self.name),
         ]:
             if write:
+                product = key.replace(f"{self.name}_", "")
                 try:
                     if self.write_hdf5:
                         # Non-standard HDF5 output
-                        fname = os.path.join(self.output_dir, f"{key}.h5")
+                        fname = os.path.join(
+                            self.output_dir, f"{rootname}_{product}.h5"
+                        )
+                        if self.mc_mode and not force:
+                            if os.path.isfile(fname):
+                                log.info_rank(
+                                    f"Skipping existing file: {fname}", comm=self.comm
+                                )
+                                continue
                         write_healpix_hdf5(
                             data[key],
                             fname,
@@ -1289,7 +1315,14 @@ class FilterBin(Operator):
                         )
                     else:
                         # Standard FITS output
-                        fname = os.path.join(self.output_dir, f"{key}.fits")
+                        fname = os.path.join(
+                            self.output_dir, f"{rootname}_{product}.fits")
+                        if self.mc_mode and not force:
+                            if os.path.isfile(fname):
+                                log.info_rank(
+                                    f"Skipping existing file: {fname}", comm=self.comm
+                                )
+                                continue
                         write_healpix_fits(
                             data[key], fname, nest=self.binning.pixel_pointing.nest
                         )
@@ -1297,9 +1330,10 @@ class FilterBin(Operator):
                     msg = f"ERROR: failed to write {fname} : {e}"
                     raise RuntimeError(msg)
                 log.info_rank(f"Wrote {fname} in", comm=self.comm, timer=timer)
-            if not keep and key in data:
-                data[key].clear()
-                del data[key]
+            if not keep and not self.mc_mode:
+                if key in data:
+                    data[key].clear()
+                    del data[key]
 
         return
 

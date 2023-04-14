@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -21,6 +21,7 @@ from .mapmaker_utils import CovarianceAndHits
 from .memory_counter import MemoryCounter
 from .operator import Operator
 from .pipeline import Pipeline
+from .pointing import BuildPixelDistribution
 from .scan_map import ScanMap, ScanMask
 
 
@@ -261,22 +262,16 @@ class MapMaker(Operator):
 
         # Data names of outputs
 
-        mc_root = None
-        if self.mc_mode and self.mc_index is not None:
-            mc_root = "{}_{:05d}".format(self.name, self.mc_index)
-        else:
-            mc_root = self.name
-
         self.hits_name = "{}_hits".format(self.name)
         self.cov_name = "{}_cov".format(self.name)
         self.invcov_name = "{}_invcov".format(self.name)
         self.rcond_name = "{}_rcond".format(self.name)
         self.det_flag_name = "{}_flags".format(self.name)
 
-        self.clean_name = "{}_cleaned".format(mc_root)
-        self.binmap_name = "{}_binmap".format(mc_root)
-        self.map_name = "{}_map".format(mc_root)
-        self.noiseweighted_map_name = "{}_noiseweighted_map".format(mc_root)
+        self.clean_name = "{}_cleaned".format(self.name)
+        self.binmap_name = "{}_binmap".format(self.name)
+        self.map_name = "{}_map".format(self.name)
+        self.noiseweighted_map_name = "{}_noiseweighted_map".format(self.name)
 
         # Check map binning
 
@@ -285,29 +280,36 @@ class MapMaker(Operator):
             # Use the same binning used in the solver.
             map_binning = self.binning
         map_binning.pre_process = None
-
         map_binning.covariance = self.cov_name
-        if self.mc_mode:
-            # Verify that our covariance and other products exist.
-            if map_binning.pixel_dist not in data:
-                msg = "MC mode, pixel distribution '{}' does not exist".format(
-                    map_binning.pixel_dist
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
-            if map_binning.covariance not in data:
-                msg = "MC mode, covariance '{}' does not exist".format(
-                    map_binning.covariance
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
+
+        if self.reset_pix_dist:
+            if map_binning.pixel_dist in data:
+                del data[map_binning.pixel_dist]
+            if map_binning.covariance in data:
+                # Cannot trust earlier covariance
+                del data[map_binning.covariance]
+
+        if map_binning.pixel_dist not in data:
             log.info_rank(
-                f"{log_prefix} MC mode, reusing covariance for final binning",
+                f"{log_prefix} Caching pixel distribution",
                 comm=comm,
             )
-        else:
-            # Construct the noise covariance, hits, and condition number mask for the
-            # final binned map.
+            pix_dist = BuildPixelDistribution(
+                pixel_dist=map_binning.pixel_dist,
+                pixel_pointing=map_binning.pixel_pointing,
+                shared_flags=map_binning.shared_flags,
+                shared_flag_mask=map_binning.shared_flag_mask,
+            )
+            pix_dist.apply(data)
+            log.info_rank(
+                f"{log_prefix}  finished build of pixel distribution in",
+                comm=comm,
+                timer=timer,
+            )
+
+        if map_binning.covariance not in data:
+            # Construct the noise covariance, hits, and condition number
+            # mask for the final binned map.
 
             log.info_rank(
                 f"{log_prefix} begin build of final binning covariance",
@@ -432,25 +434,47 @@ class MapMaker(Operator):
         if not is_pix_wcs:
             is_hpix_nest = map_binning.pixel_pointing.nest
 
+        mc_root = self.name
+        if self.mc_mode:
+            if self.mc_root is not None:
+                mc_root += f"_{self.mc_root}"
+            if self.mc_index is not None:
+                mc_root += f"_{self.mc_index:05d}"
+
         write_del = list()
-        write_del.append((self.hits_name, self.write_hits))
-        write_del.append((self.rcond_name, self.write_rcond))
-        write_del.append((self.noiseweighted_map_name, self.write_noiseweighted_map))
-        write_del.append((self.binmap_name, self.write_binmap))
-        write_del.append((self.map_name, self.write_map))
-        write_del.append((self.invcov_name, self.write_invcov))
-        write_del.append((self.cov_name, self.write_cov))
+        write_del.append((self.hits_name, self.write_hits, False, self.name))
+        write_del.append((self.rcond_name, self.write_rcond, False, self.name))
+        write_del.append(
+            (self.noiseweighted_map_name, self.write_noiseweighted_map, True, mc_root)
+        )
+        write_del.append((self.binmap_name, self.write_binmap, True, mc_root))
+        write_del.append((self.map_name, self.write_map, True, mc_root))
+        write_del.append((self.invcov_name, self.write_invcov, False, self.name))
+        write_del.append((self.cov_name, self.write_cov, False, self.name))
         wtimer = Timer()
         wtimer.start()
-        for prod_key, prod_write in write_del:
+        for prod_key, prod_write, force, rootname in write_del:
+            product = prod_key.replace(f"{self.name}_", "")
             if prod_write:
                 if is_pix_wcs:
-                    fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
+                    fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
+                    if self.mc_mode and not force:
+                        if os.path.isfile(fname):
+                            log.info_rank(
+                                f"Skipping existing file: {fname}", comm=comm
+                            )
+                            continue
                     write_wcs_fits(data[prod_key], fname)
                 else:
                     if self.write_hdf5:
                         # Non-standard HDF5 output
-                        fname = os.path.join(self.output_dir, "{}.h5".format(prod_key))
+                        fname = os.path.join(self.output_dir, f"{rootname}_{product}.h5")
+                        if self.mc_mode and not force:
+                            if os.path.isfile(fname):
+                                log.info_rank(
+                                    f"Skipping existing file: {fname}", comm=comm
+                                )
+                                continue
                         write_healpix_hdf5(
                             data[prod_key],
                             fname,
@@ -460,9 +484,13 @@ class MapMaker(Operator):
                         )
                     else:
                         # Standard FITS output
-                        fname = os.path.join(
-                            self.output_dir, "{}.fits".format(prod_key)
-                        )
+                        fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
+                        if self.mc_mode and not force:
+                            if os.path.isfile(fname):
+                                log.info_rank(
+                                    f"Skipping existing file: {fname}", comm=comm
+                                )
+                                continue
                         write_healpix_fits(
                             data[prod_key],
                             fname,
@@ -470,7 +498,7 @@ class MapMaker(Operator):
                             report_memory=self.report_memory,
                         )
                 log.info_rank(f"Wrote {fname} in", comm=comm, timer=wtimer)
-            if not self.keep_final_products:
+            if not self.keep_final_products and not self.mc_mode:
                 if prod_key in data:
                     data[prod_key].clear()
                     del data[prod_key]
@@ -593,6 +621,8 @@ class Calibrate(Operator):
     mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
 
     mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
+
+    mc_root = Unicode(None, allow_node=True, help="Root name for Monte Carlo products")
 
     reset_pix_dist = Bool(
         False,

@@ -99,7 +99,6 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
             dtype=[pix.dtype for x in range(pix.n_value)],
             memmap=True,
             nest=nest,
-            verbose=False,
         )
         if pix.n_value == 1:
             fdata = (fdata,)
