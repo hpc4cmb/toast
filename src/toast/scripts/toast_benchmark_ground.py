@@ -175,6 +175,8 @@ def parse_arguments():
             write_invcov=False,
             write_rcond=False,
             keep_final_products=True,
+            save_cleaned=True,
+            overwrite_cleaned=True,
         ),
         toast.ops.PixelsHealpix(name="pixels_final", view="scanning", enabled=False),
         toast.ops.BinMap(
