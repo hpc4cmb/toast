@@ -138,5 +138,6 @@ def function_datamovementtracker(f):
 
 def display_datamovement():
     """Displays all recorded data movement so far"""
-    log = Logger.get()
-    log.info(str(dataMovementTracker))
+    if use_debug_assert:
+        log = Logger.get()
+        log.debug(str(dataMovementTracker))
