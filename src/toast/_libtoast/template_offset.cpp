@@ -77,7 +77,7 @@ void init_template_offset(py::module & m) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         # pragma omp parallel
                         {
-                            # pragma omp for default(shared) nowait
+                            # pragma omp for default(shared)
                             for (
                                 int64_t isamp = dev_intervals[iview].first;
                                 isamp <= dev_intervals[iview].last;
@@ -198,7 +198,7 @@ void init_template_offset(py::module & m) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         # pragma omp parallel
                         {
-                            # pragma omp for default(shared) nowait
+                            # pragma omp for default(shared)
                             for (
                                 int64_t isamp = dev_intervals[iview].first;
                                 isamp <= dev_intervals[iview].last;
@@ -306,7 +306,7 @@ void init_template_offset(py::module & m) {
                     {
                         # pragma omp parallel
                         {
-                            # pragma omp for default(shared) nowait
+                            # pragma omp for default(shared)
                             for (int64_t iamp = 0; iamp < n_amp; iamp++) {
                                 dev_amp_out[iamp] = dev_amp_in[iamp];
                                 dev_amp_out[iamp] *= dev_offset_var[iamp];

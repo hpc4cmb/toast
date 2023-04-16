@@ -514,25 +514,27 @@ class TraitConfig(HasTraits):
         This returns the kernel implementation that should be used
 
         Returns:
-            (ImplementationType):  The implementation type.
+            (tuple):  The (ImplementationType, bool use_accel) switches.
 
         """
         impls = self.implementations()
-        if use_accel:
+        if use_accel is None:
+            return ImplementationType.DEFAULT, False
+        elif use_accel:
             if use_accel_jax:
                 if ImplementationType.JAX not in impls:
                     msg = f"JAX accelerator use is enabled, "
                     msg += f"but not supported by {self.name}"
                     raise RuntimeError(msg)
-                return ImplementationType.JAX
+                return ImplementationType.JAX, True
             else:
                 if ImplementationType.COMPILED not in impls:
                     msg = f"OpenMP accelerator use is enabled, "
                     msg += f"but not supported by {self.name}"
                     raise RuntimeError(msg)
-                return ImplementationType.COMPILED
+                return ImplementationType.COMPILED, True
         else:
-            return ImplementationType.DEFAULT
+            return ImplementationType.DEFAULT, False
 
     def __eq__(self, other):
         if len(self.traits()) != len(other.traits()):

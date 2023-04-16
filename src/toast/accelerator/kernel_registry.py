@@ -80,6 +80,8 @@ def kernel(impl, name=None):
         if (
             (impl == ImplementationType.JAX) or (impl == ImplementationType.COMPILED)
         ) and accel_enabled():
+            # FIXME:  disabled for now because it does not work for arbitrary
+            # data objects (e.g. scalars) when running with omp target offload.
             # registry[name][impl] = function_timer(function_datamovementtracker(f))
             registry[name][impl] = function_timer(f)
         else:

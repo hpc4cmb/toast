@@ -148,7 +148,7 @@ class PixelsHealpix(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")

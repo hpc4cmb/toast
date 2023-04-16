@@ -123,6 +123,9 @@ class SimAtmTest(MPITestCase):
             binning=binner,
             output_dir=self.outdir,
             keep_final_products=True,
+            solve_rcond_threshold=1.0e-2,
+            map_rcond_threshold=1.0e-2,
+            write_noiseweighted_map=True,
         )
         mapmaker.apply(data)
 
@@ -139,6 +142,39 @@ class SimAtmTest(MPITestCase):
             plt.close()
 
             mapfile = os.path.join(self.outdir, f"{mapmaker.name}_map.fits")
+            mdata = hp.read_map(mapfile, None, nest=False)
+            mdata[mdata == 0] = hp.UNSEEN
+
+            outfile = "{}.png".format(mapfile)
+            fig = plt.figure(figsize=[8 * 3, 12])
+            hp.gnomview(
+                mdata[0],
+                xsize=1600,
+                sub=[1, 3, 1],
+                rot=(42.0, -42.0),
+                reso=0.5,
+                nest=False,
+            )
+            hp.gnomview(
+                mdata[1],
+                xsize=1600,
+                sub=[1, 3, 2],
+                rot=(42.0, -42.0),
+                reso=0.5,
+                nest=False,
+            )
+            hp.gnomview(
+                mdata[2],
+                xsize=1600,
+                sub=[1, 3, 3],
+                rot=(42.0, -42.0),
+                reso=0.5,
+                nest=False,
+            )
+            plt.savefig(outfile)
+            plt.close()
+
+            mapfile = os.path.join(self.outdir, f"{mapmaker.name}_noiseweighted_map.fits")
             mdata = hp.read_map(mapfile, None, nest=False)
             mdata[mdata == 0] = hp.UNSEEN
 

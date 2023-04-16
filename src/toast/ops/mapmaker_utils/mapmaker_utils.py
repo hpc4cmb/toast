@@ -101,7 +101,7 @@ class BuildHitMap(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -321,7 +321,7 @@ class BuildInverseCovariance(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -613,7 +613,7 @@ class BuildNoiseWeighted(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -756,9 +756,7 @@ class BuildNoiseWeighted(Operator):
                 pix_indx,
                 ob.detdata[self.pixels].data,
                 weight_indx,
-                ob.detdata[self.weights].data.reshape(
-                    (n_weight_dets, ob.n_local_samples, -1)
-                ),
+                ob.detdata[self.weights].data,
                 data_indx,
                 ob.detdata[self.det_data].data,
                 flag_indx,

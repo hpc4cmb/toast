@@ -34,6 +34,7 @@ use_accel_jax = False
 if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_vals):
     try:
         import jax
+        import jax.numpy as jnp
 
         from ..jax.device import jax_accel_assign_device, jax_accel_get_device
         from ..jax.intervals import INTERVALS_JAX
@@ -182,7 +183,7 @@ def accel_data_reset(data):
     if use_accel_omp:
         omp_accel_reset(data)
     elif use_accel_jax:
-        pass
+        data.data = jnp.zeroes_like(data.data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot reset")

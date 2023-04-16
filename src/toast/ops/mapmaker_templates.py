@@ -168,9 +168,6 @@ class TemplateMatrix(Operator):
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
-        # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
-
         # Check that the detector data is set
         if self.det_data is None:
             raise RuntimeError("You must set the det_data trait before calling exec()")
@@ -1060,8 +1057,6 @@ class ApplyAmplitudes(Operator):
             combine.result = self.det_data
         else:
             combine.result = self.output
-
-        apply_input = np.array(data.obs[0].detdata[self.det_data][:])
 
         # Project and operate, one detector at a time
         pipe = Pipeline(

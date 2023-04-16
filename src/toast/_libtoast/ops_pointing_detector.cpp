@@ -159,7 +159,7 @@ void init_ops_pointing_detector(py::module & m) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel
                             {
-                                # pragma omp for default(shared) nowait
+                                # pragma omp for default(shared)
                                 for (
                                     int64_t isamp = dev_intervals[iview].first;
                                     isamp <= dev_intervals[iview].last;
@@ -181,8 +181,6 @@ void init_ops_pointing_detector(py::module & m) {
                             }
                         }
                     }
-
-                    // # pragma omp taskwait
                 }
 
                 #endif // ifdef HAVE_OPENMP_TARGET

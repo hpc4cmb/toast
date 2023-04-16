@@ -109,7 +109,7 @@ class SimDipoleTest(MPITestCase):
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
-            rcond_threshold=1.0e-6,
+            rcond_threshold=1.0e-2,
             sync_type="alltoallv",
         )
         cov_and_hits.apply(data)
@@ -153,7 +153,7 @@ class SimDipoleTest(MPITestCase):
             plt.close()
 
             mapfile = os.path.join(self.outdir, "toast_bin.fits")
-            mdata = hp.read_map(mapfile, nest=False)
+            mdata = hp.read_map(mapfile, field=0, nest=False)
 
             outfile = "{}.png".format(mapfile)
             hp.mollview(mdata, xsize=1600, nest=False)
@@ -165,11 +165,11 @@ class SimDipoleTest(MPITestCase):
 
             minmap = np.min(mdata)
             maxmap = np.max(mdata)
-            np.testing.assert_almost_equal(maxmap, self.dip_check, decimal=5)
-            np.testing.assert_almost_equal(minmap, -self.dip_check, decimal=5)
-
             minloc = np.argmin(mdata)
             maxloc = np.argmax(mdata)
+
+            np.testing.assert_almost_equal(maxmap, self.dip_check, decimal=5)
+            np.testing.assert_almost_equal(minmap, -self.dip_check, decimal=5)
             np.testing.assert_equal(minloc, self.dip_min_pix)
             np.testing.assert_equal(maxloc, self.dip_max_pix)
 

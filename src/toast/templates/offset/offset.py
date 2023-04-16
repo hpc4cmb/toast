@@ -494,7 +494,7 @@ class Offset(Template):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
@@ -528,7 +528,7 @@ class Offset(Template):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
@@ -642,7 +642,7 @@ class Offset(Template):
             # preconditioner is just the application of offset variance.
 
             # Kernel selection
-            implementation = self.select_kernels(use_accel=use_accel)
+            implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
             offset_apply_diag_precond(
                 self._offsetvar,

@@ -90,7 +90,7 @@ class PointingDetectorSimple(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         coord_rot = None
         if self.coord_in is None:

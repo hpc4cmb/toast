@@ -188,7 +188,7 @@ void init_ops_stokes_weights(py::module & m) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel
                             {
-                                # pragma omp for default(shared) nowait
+                                # pragma omp for default(shared)
                                 for (
                                     int64_t isamp = dev_intervals[iview].first;
                                     isamp <= dev_intervals[iview].last;
@@ -210,8 +210,6 @@ void init_ops_stokes_weights(py::module & m) {
                             }
                         }
                     }
-
-                    // # pragma omp taskwait
                 }
 
                 #endif // ifdef HAVE_OPENMP_TARGET
@@ -288,7 +286,8 @@ void init_ops_stokes_weights(py::module & m) {
                 raw_weight_index[0:n_det], \
                 n_view,                    \
                 n_det,                     \
-                n_samp                     \
+                n_samp,                    \
+                cal                        \
                 )
                 {
                     # pragma omp target teams distribute collapse(2) \
@@ -300,7 +299,7 @@ void init_ops_stokes_weights(py::module & m) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel
                             {
-                                # pragma omp for default(shared) nowait
+                                # pragma omp for default(shared)
                                 for (
                                     int64_t isamp = dev_intervals[iview].first;
                                     isamp <= dev_intervals[iview].last;

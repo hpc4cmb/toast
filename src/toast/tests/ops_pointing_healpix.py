@@ -10,7 +10,7 @@ import numpy as np
 from .. import ops as ops
 from .. import qarray as qa
 from .._libtoast import healpix_pixels, stokes_weights
-from ..accelerator import ImplementationType
+from ..accelerator import ImplementationType, accel_enabled
 from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
@@ -255,7 +255,7 @@ class PointingHealpixTest(MPITestCase):
             detector_pointing=detpointing,
         )
         weights = ops.StokesWeights(
-            mode="IQU",
+            mode="I",
             hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
@@ -291,6 +291,59 @@ class PointingHealpixTest(MPITestCase):
         if rank == 0:
             handle.close()
 
+        close_data(data)
+
+    def test_pixweight_accel(self):
+        if not accel_enabled():
+            print("Accelerator not enabled, skipping test")
+            return
+
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
+            mode="I",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+
+        pipe = ops.Pipeline(operators=[pixels, weights])
+
+        # Move data
+        # data.accel_create(pixels.requires())
+        # data.accel_create(weights.requires())
+        # data.accel_update_device(pixels.requires())
+        # data.accel_update_device(weights.requires())
+
+        # Compute
+        pipe.apply(data, use_accel=None)
+
+        # Move inputs back
+        data.accel_update_host(pixels.requires())
+        data.accel_update_host(weights.requires())
+
+        # Also make a copy using a python codepath
+        detpointing.kernel_implementation = ImplementationType.NUMPY
+        detpointing.quats = "pyquat"
+        pixels.kernel_implementation = ImplementationType.NUMPY
+        pixels.quats = "pyquat"
+        pixels.pixels = "pypixels"
+        pixels.apply(data)
+        weights.kernel_implementation = ImplementationType.NUMPY
+        weights.quats = "pyquat"
+        weights.weights = "pyweight"
+        weights.apply(data)
+
+        for ob in data.obs:
+            np.testing.assert_allclose(
+                ob.detdata[defaults.weights], ob.detdata["pyweight"]
+            )
+            np.testing.assert_equal(ob.detdata[defaults.pixels], ob.detdata["pypixels"])
         close_data(data)
 
     def test_hpix_interval(self):

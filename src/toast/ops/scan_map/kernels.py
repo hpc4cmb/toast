@@ -123,7 +123,7 @@ def scan_map_compiled(
         # 3D array.
         wdets = weights.shape[0]
         wsamps = weights.shape[1]
-        wt_view = weights.reshape((wdets, wsamps, 1))
+        wt_view = weights.reshape((wdets, wsamps, -1))
 
     fcomp(
         global2local,

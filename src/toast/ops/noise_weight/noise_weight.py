@@ -47,7 +47,7 @@ class NoiseWeight(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation

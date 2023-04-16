@@ -69,7 +69,7 @@ void init_ops_noise_weight(py::module & m) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             # pragma omp parallel
                             {
-                                # pragma omp for default(shared) nowait
+                                # pragma omp for default(shared)
                                 for (
                                     int64_t isamp = dev_intervals[iview].first;
                                     isamp <= dev_intervals[iview].last;

@@ -106,7 +106,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
               int dev = omgr.get_device();
               bool offload = (!omgr.device_is_host()) && use_accel;
 
-// This is used to return the actual shape of each buffer
+              // This is used to return the actual shape of each buffer
               std::vector <int64_t> temp_shape(3);
 
               int32_t * raw_pixel_index = extract_buffer <int32_t> (
@@ -123,10 +123,21 @@ void register_ops_scan_map(py::module & m, char const * name) {
                   weight_index, "weight_index", 1, temp_shape, {n_det}
               );
 
-              double * raw_weights = extract_buffer <double> (
-                  weights, "weights", 3, temp_shape, {-1, n_samp, -1}
-              );
-              int64_t nnz = temp_shape[2];
+              // Handle the case of either 2 or 3 dims
+              auto winfo = weights.request();
+              double * raw_weights;
+              int64_t nnz;
+              if (winfo.ndim == 2) {
+                  nnz = 1;
+                  raw_weights = extract_buffer <double> (
+                      weights, "weights", 2, temp_shape, {-1, n_samp}
+                  );
+              } else {
+                  raw_weights = extract_buffer <double> (
+                      weights, "weights", 3, temp_shape, {-1, n_samp, -1}
+                  );
+                  nnz = temp_shape[2];
+              }
 
               int32_t * raw_data_index = extract_buffer <int32_t> (
                   data_index, "data_index", 1, temp_shape, {n_det}
@@ -189,7 +200,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
                           for (int64_t iview = 0; iview < n_view; iview++) {
                               # pragma omp parallel
                               {
-                                  # pragma omp for default(shared) nowait
+                                  # pragma omp for default(shared)
                                   for (
                                       int64_t isamp = dev_intervals[iview].first;
                                       isamp <= dev_intervals[iview].last;
